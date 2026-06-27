@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { create } from "zustand";
 import provider from "../services/telemetry";
 import type { TelemetrySnapshot } from "../services/telemetry";

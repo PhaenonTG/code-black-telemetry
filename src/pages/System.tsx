@@ -1,4 +1,4 @@
-import { useSystem, usePower, useSensors, useEvents } from "../hooks/useTelemetry";
+import { useSystem, usePower } from "../hooks/useTelemetry";
 import { DashCard } from "../components/ui/DashCard";
 import { MetricRow } from "../components/ui/MetricRow";
 import { SensorHealthCard } from "../components/cards/SensorHealthCard";
