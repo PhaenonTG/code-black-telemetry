@@ -11,6 +11,12 @@ node_modules
 dist
 dist-ssr
 *.local
+android/app/src/main/res/values/mapbox_access_token.xml
+android/.gradle/
+android/app/build/
+android/tmp-*/
+native/**/target/
+.atlas-vite.*
 
 # Editor directories and files
 .vscode/*

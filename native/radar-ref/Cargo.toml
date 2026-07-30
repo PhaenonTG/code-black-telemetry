@@ -1,0 +1,25 @@
+[package]
+name = "codeblack-radar-ref"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT"
+publish = false
+
+[lib]
+name = "codeblack_radar"
+crate-type = ["cdylib"]
+
+[dependencies]
+chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
+jni = "0.21"
+nexrad-data = { version = "1.0.0-rc.7", default-features = false, features = ["nexrad-model"] }
+nexrad-model = { version = "1.0.0-rc.2", features = ["chrono"] }
+nexrad-render = "1.0.0-rc.4"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
