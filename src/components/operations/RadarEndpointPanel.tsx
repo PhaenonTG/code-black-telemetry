@@ -3,6 +3,7 @@ import { readAtlasDiagnostics } from "../../map/AtlasDiagnostics";
 import type { AtlasDiagnosticsSnapshot } from "../../map/types";
 import { configuredMapEngine, readMapRuntimeDiagnostics, setConfiguredMapEngine, type MapEngine, type MapRuntimeDiagnostics } from "../../services/mapTiles";
 import { clearRadarCache, getRadarCacheStatus, getRadarStatus, setRadarStormMotion, type RadarStatus } from "../../services/radar";
+import { readRadarLoopDiagnostics, type RadarLoopDiagnostics } from "../../services/radarLoop";
 
 type CacheStatus = {
   usedBytes: number;
@@ -23,6 +24,7 @@ export function RadarEnginePanel() {
   const [cache, setCache] = useState<CacheStatus | null>(null);
   const [mapDiagnostics, setMapDiagnostics] = useState<MapRuntimeDiagnostics | null>(null);
   const [atlasDiagnostics, setAtlasDiagnostics] = useState<AtlasDiagnosticsSnapshot | null>(null);
+  const [loopDiagnostics, setLoopDiagnostics] = useState<RadarLoopDiagnostics | null>(null);
   const [mapEngine, setMapEngine] = useState<MapEngine>(() => configuredMapEngine());
   const [message, setMessage] = useState("On-device radar engine starting.");
   const [motionDir, setMotionDir] = useState("245");
@@ -37,6 +39,7 @@ export function RadarEnginePanel() {
     setCache(nextCache);
     setMapDiagnostics(readMapRuntimeDiagnostics());
     setAtlasDiagnostics(readAtlasDiagnostics());
+    setLoopDiagnostics(readRadarLoopDiagnostics());
     setMapEngine(configuredMapEngine());
     setMessage(nextStatus.latestError || `${nextStatus.processingState}  - Level III products deferred`);
   };
@@ -98,6 +101,14 @@ export function RadarEnginePanel() {
           <div className="radar-engine-metric"><span>Atlas Instances</span><strong>{atlasDiagnostics ? `${atlasDiagnostics.mapInstanceCount}` : "--"}</strong></div>
           <div className="radar-engine-metric"><span>Atlas Radar</span><strong>{atlasDiagnostics?.radarLayerLoaded ? "LOADED" : "WAITING"}</strong></div>
           <div className="radar-engine-metric"><span>Atlas Error</span><strong>{atlasDiagnostics?.lastMapError || "NONE"}</strong></div>
+          <div className="radar-engine-metric"><span>Loop State</span><strong>{loopDiagnostics?.playbackState ?? "WAITING"}</strong></div>
+          <div className="radar-engine-metric"><span>Loop Speed</span><strong>{loopDiagnostics ? `${loopDiagnostics.playbackSpeed}X` : "--"}</strong></div>
+          <div className="radar-engine-metric"><span>Loop Frames</span><strong>{loopDiagnostics ? `${loopDiagnostics.activeFrameIndex + 1} / ${loopDiagnostics.frameCount}` : "--"}</strong></div>
+          <div className="radar-engine-metric"><span>Newest Scan</span><strong>{loopDiagnostics?.newestScanTimestamp ? new Date(loopDiagnostics.newestScanTimestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--"}</strong></div>
+          <div className="radar-engine-metric"><span>Oldest Scan</span><strong>{loopDiagnostics?.oldestScanTimestamp ? new Date(loopDiagnostics.oldestScanTimestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--"}</strong></div>
+          <div className="radar-engine-metric"><span>Live Edge</span><strong>{loopDiagnostics?.liveEdge ? "YES" : "NO"}</strong></div>
+          <div className="radar-engine-metric"><span>Loop Errors</span><strong>{loopDiagnostics?.lastPlaybackError || "NONE"}</strong></div>
+          <div className="radar-engine-metric"><span>Invalid Frames</span><strong>{loopDiagnostics?.skippedInvalidFrames ?? 0}</strong></div>
         </div>
         <div className="radar-engine-message">{message}</div>
         <div className="storm-motion-form">

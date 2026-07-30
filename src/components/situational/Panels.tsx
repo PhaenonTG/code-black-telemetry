@@ -17,6 +17,15 @@ import {
   type RadarSite,
   type RadarStatus,
 } from "../../services/radar";
+import {
+  buildFrameSeries,
+  nextHistoricalIndex,
+  nextPlaybackIndex,
+  playbackDelayMs,
+  previousHistoricalIndex,
+  writeRadarLoopDiagnostics,
+  type RadarPlaybackSpeed,
+} from "../../services/radarLoop";
 
 function Panel({ title, children, className = "", tone = "default" }: { title: string; children: React.ReactNode; className?: string; tone?: "default" | "red" | "spc" }) {
   const toneClass = tone === "red" ? "cb-panel--red" : tone === "spc" ? "cb-panel--spc" : "";
@@ -327,6 +336,8 @@ type MapRadarPanelProps = {
   allowExpand?: boolean;
   productOverride?: RadarProduct;
   onProductOverrideChange?: (product: RadarProduct) => void;
+  frameOverride?: RadarFrame | null;
+  playbackContext?: { playing: boolean; frameIndex: number; frameCount: number };
 };
 
 export function MapRadarPanel(props: MapRadarPanelProps) {
@@ -345,6 +356,8 @@ function AtlasMapRadarPanel({
   allowExpand = true,
   productOverride,
   onProductOverrideChange,
+  frameOverride,
+  playbackContext,
 }: MapRadarPanelProps) {
   const [radarVisible, setRadarVisible] = useState(true);
   const [internalProduct, setInternalProduct] = useState<RadarProduct>("REF");
@@ -357,6 +370,7 @@ function AtlasMapRadarPanel({
   const [status, setStatus] = useState<RadarStatus | null>(null);
   const [frameIndex, setFrameIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<RadarPlaybackSpeed>(1);
   const [opacity, setOpacity] = useState(() => defaultRadarOpacity(product));
   const [rangeRings, setRangeRings] = useState<"off" | "10" | "25" | "50" | "100">("off");
   const [expanded, setExpanded] = useState(false);
@@ -390,10 +404,11 @@ function AtlasMapRadarPanel({
         ]);
         if (!cancelled) {
           setStatus(nextStatus);
-          setFrames(nextFrames);
+          const orderedFrames = buildFrameSeries(product, nextFrames, null, "LIVE_EDGE", 1).frames.map((item) => item.frame);
+          setFrames(orderedFrames);
           setFrameIndex(0);
-          setFrame(nextFrames[0] ?? null);
-          setRadarError(nextFrames[0] ? "" : nextStatus.latestError || "");
+          setFrame(orderedFrames[0] ?? null);
+          setRadarError(orderedFrames[0] ? "" : nextStatus.latestError || "");
         }
       } catch (error) {
         if (!cancelled) setRadarError(error instanceof Error ? error.message : "ON-DEVICE RADAR UNAVAILABLE");
@@ -411,13 +426,47 @@ function AtlasMapRadarPanel({
     if (!playing || !frames.length || document.hidden) return;
     const timer = window.setInterval(() => {
       setFrameIndex((index) => {
-        const next = (index + 1) % frames.length;
+        const next = nextPlaybackIndex(index, frames.length);
         setFrame(frames[next]);
         return next;
       });
-    }, 900);
+    }, playbackDelayMs(playbackSpeed));
     return () => window.clearInterval(timer);
-  }, [playing, frames]);
+  }, [playing, frames, playbackSpeed]);
+
+  const displayFrame = frameOverride === undefined ? frame : frameOverride;
+  const activeFrame = displayFrame ?? frame;
+  const loopSeries = useMemo(
+    () => buildFrameSeries(product, frames, activeFrame?.frameId ?? null, playing ? "PLAYING" : "PAUSED", playbackSpeed),
+    [activeFrame?.frameId, frames, playbackSpeed, playing, product],
+  );
+
+  useEffect(() => {
+    writeRadarLoopDiagnostics({
+      loopEnabled: playing,
+      playbackState: loopSeries.playbackState,
+      playbackSpeed,
+      selectedProduct: product,
+      frameCount: loopSeries.frames.length,
+      activeFrameIndex: loopSeries.activeFrameIndex,
+      newestScanTimestamp: loopSeries.frames[0]?.scanTimestamp ?? null,
+      oldestScanTimestamp: loopSeries.frames[loopSeries.frames.length - 1]?.scanTimestamp ?? null,
+      activeScanTimestamp: activeFrame?.time ?? null,
+      activeFrameAgeSeconds: activeFrame?.ageSeconds ?? null,
+      liveEdge: loopSeries.liveEdge,
+      cacheDirectory: "APP_PRIVATE_RADAR_CACHE",
+      cacheDiskUsageBytes: null,
+      objectUrlCount: 0,
+      imageLoadRequestId: 0,
+      sourceUpdateCount: 0,
+      staleUpdateRejectionCount: 0,
+      activeTextureEstimateBytes: activeFrame?.imageUrl ? null : 0,
+      lastPlaybackError: radarError,
+      lastCacheError: "",
+      skippedInvalidFrames: loopSeries.frames.filter((item) => item.validityState !== "VALID").length,
+      updatedAt: Date.now(),
+    });
+  }, [activeFrame, frames, loopSeries, playbackSpeed, playing, product, radarError]);
 
   const applyProduct = (next: RadarProduct) => {
     setProduct(next);
@@ -426,23 +475,24 @@ function AtlasMapRadarPanel({
     if (next === "SRV" && !status?.stormMotion) setRadarError("SRV UNAVAILABLE - SET STORM MOTION");
   };
 
-  const radarLayerActive = radarVisible && frame && !radarError.includes("UNAVAILABLE");
-  const scanLabel = frame ? `SCAN ${localTime(frame.time)}  - AGE ${ageText(frame.ageSeconds)}` : radarError || "LOADING";
+  const radarLayerActive = radarVisible && activeFrame && !radarError.includes("UNAVAILABLE");
+  const historicalLabel = activeFrame && !loopSeries.liveEdge ? "HISTORICAL" : activeFrame?.freshness;
+  const scanLabel = activeFrame ? `SCAN ${localTime(activeFrame.time)}  - AGE ${ageText(activeFrame.ageSeconds)}` : radarError || "LOADING";
 
   return (
     <Panel title="Situational Map" className="map-panel map-panel--atlas">
       <div className="map-canvas atlas-host" data-map-gesture-zone="true">
         <AtlasMap
           gps={gps}
-          frame={radarLayerActive ? frame : null}
+          frame={radarLayerActive ? activeFrame : null}
           product={product}
           opacity={opacity}
           expanded={!allowExpand}
           rangeRings={rangeRings}
           onRangeRingsChange={setRangeRings}
           onOpenExpanded={allowExpand ? () => setExpanded(true) : undefined}
-          statusLabel={radarError ? `ATLAS  - ${radarError}` : frame ? `${product}  - ${frame.site.id}  - ${frame.sourceLevel}  - ${frame.freshness}` : "ATLAS  - RADAR LOADING"}
-          scanLabel={scanLabel}
+          statusLabel={radarError ? `ATLAS  - ${radarError}` : activeFrame ? `${product}  - ${activeFrame.site.id}  - ${activeFrame.sourceLevel}  - ${historicalLabel}` : "ATLAS  - RADAR LOADING"}
+          scanLabel={playbackContext?.playing ? `${scanLabel}  - LOOPING ${playbackContext.frameIndex + 1}/${playbackContext.frameCount}` : scanLabel}
         />
       </div>
       <div className="atlas-product-mini" aria-label="Radar product selector">
@@ -469,6 +519,8 @@ function AtlasMapRadarPanel({
           }}
           playing={playing}
           setPlaying={setPlaying}
+          playbackSpeed={playbackSpeed}
+          setPlaybackSpeed={setPlaybackSpeed}
           opacity={opacity}
           setOpacity={setOpacity}
           rangeRings={rangeRings === "10" || rangeRings === "100" ? "25" : rangeRings}
@@ -505,6 +557,7 @@ function LegacyMapRadarPanel({
   const [status, setStatus] = useState<RadarStatus | null>(null);
   const [frameIndex, setFrameIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<RadarPlaybackSpeed>(1);
   const [opacity, setOpacity] = useState(0.78);
   const [rangeRings, setRangeRings] = useState<"off" | "25" | "50">("off");
   const [expanded, setExpanded] = useState(false);
@@ -877,6 +930,8 @@ function LegacyMapRadarPanel({
           }}
           playing={playing}
           setPlaying={setPlaying}
+          playbackSpeed={playbackSpeed}
+          setPlaybackSpeed={setPlaybackSpeed}
           opacity={opacity}
           setOpacity={setOpacity}
           rangeRings={rangeRings}
@@ -905,6 +960,8 @@ function RadarExpandedView({
   setFrameIndex,
   playing,
   setPlaying,
+  playbackSpeed,
+  setPlaybackSpeed,
   opacity,
   setOpacity,
   rangeRings,
@@ -926,6 +983,8 @@ function RadarExpandedView({
   setFrameIndex: (index: number) => void;
   playing: boolean;
   setPlaying: (playing: boolean) => void;
+  playbackSpeed: RadarPlaybackSpeed;
+  setPlaybackSpeed: (speed: RadarPlaybackSpeed) => void;
   opacity: number;
   setOpacity: (opacity: number) => void;
   rangeRings: "off" | "25" | "50";
@@ -938,6 +997,16 @@ function RadarExpandedView({
   const [motionSpeed, setMotionSpeed] = useState("32");
   const [motionMessage, setMotionMessage] = useState("");
   const selectedSite = site === "AUTO" ? nearestSites[0]?.id ?? "KSRX" : site;
+  const loopSeries = useMemo(
+    () => buildFrameSeries(product, frames, frame?.frameId ?? null, playing ? "PLAYING" : "PAUSED", playbackSpeed),
+    [frame?.frameId, frames, playbackSpeed, playing, product],
+  );
+
+  const selectFrame = (index: number, pause = true) => {
+    const bounded = Math.min(Math.max(index, 0), Math.max(0, frames.length - 1));
+    if (pause) setPlaying(false);
+    setFrameIndex(bounded);
+  };
 
   useEffect(() => {
     if (!active) return;
@@ -967,7 +1036,7 @@ function RadarExpandedView({
           <button className="icon-button radar-expanded__close" onClick={onClose} aria-label="Close radar">X</button>
           <strong>{frame ? `${frame.site.id}  - ${frame.site.name}` : selectedSite}</strong>
           <span>{product}  - {frame?.sourceLevel ?? status?.sourceLevel ?? "RADAR"}  - {frame ? `SCAN ${localTime(frame.time)}  - AGE ${ageText(frame.ageSeconds)}` : "LOADING"}</span>
-          <em>{radarError || frame?.freshness || "CONNECTED"}</em>
+          <em>{radarError || (loopSeries.liveEdge ? "LIVE EDGE" : frame ? "HISTORICAL" : "CONNECTED")}</em>
         </header>
         <div className="radar-product-tabs">
           {(["REF", "VEL", "SRV", "CC"] as RadarProduct[]).map((item) => (
@@ -975,16 +1044,39 @@ function RadarExpandedView({
           ))}
         </div>
         <div className="radar-expanded__map">
-          <MapRadarPanel gps={gps} visible allowExpand={false} productOverride={product} onProductOverrideChange={setProduct} />
-          <div className="radar-expanded__overlay-note">{frame ? `${frame.product} ${frame.sourceLevel}  - ${frame.quality}  - ${localTime(frame.time)}` : radarError || "Waiting for radar frame"}</div>
+          <MapRadarPanel
+            gps={gps}
+            visible
+            allowExpand={false}
+            productOverride={product}
+            onProductOverrideChange={setProduct}
+            frameOverride={frame}
+            playbackContext={{ playing, frameIndex, frameCount: frames.length }}
+          />
+          <div className="radar-expanded__overlay-note">{frame ? `${frame.product} ${frame.sourceLevel}  - ${loopSeries.liveEdge ? "LIVE EDGE" : "HISTORICAL"}  - ${localTime(frame.time)}  - ${frameIndex + 1}/${Math.max(frames.length, 1)}` : radarError || "Waiting for radar frame"}</div>
         </div>
         <aside className="radar-expanded__controls">
-          <div>
+          <div className="radar-loop-control">
             <span>Loop</span>
             <button onClick={() => setPlaying(!playing)}>{playing ? "Pause" : "Play"}</button>
-            <button onClick={() => setFrameIndex(Math.min(frames.length - 1, frameIndex + 1))}>Prev</button>
-            <button onClick={() => setFrameIndex(Math.max(0, frameIndex - 1))}>Next</button>
-            <button onClick={() => setFrameIndex(0)}>Latest</button>
+            <button onClick={() => selectFrame(previousHistoricalIndex(frameIndex, frames.length))}>Prev</button>
+            <button onClick={() => selectFrame(nextHistoricalIndex(frameIndex, frames.length))}>Next</button>
+            <button onClick={() => selectFrame(0)}>Latest</button>
+            <input
+              type="range"
+              min="0"
+              max={Math.max(0, frames.length - 1)}
+              value={Math.max(0, frameIndex)}
+              onChange={(event) => selectFrame(Number(event.target.value))}
+              aria-label="Radar frame timeline"
+            />
+            <strong>{frames.length ? `${frameIndex + 1} / ${frames.length}` : "0 / 0"}</strong>
+            <em>{loopSeries.playbackState.replace("_", " ")}</em>
+            <div className="radar-loop-speed">
+              {([0.5, 1, 2] as RadarPlaybackSpeed[]).map((speed) => (
+                <button key={speed} className={playbackSpeed === speed ? "active" : ""} onClick={() => setPlaybackSpeed(speed)}>{speed}x</button>
+              ))}
+            </div>
           </div>
           <div>
             <span>Tilt</span>

@@ -134,7 +134,7 @@
 .radar-product-tabs {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -209,6 +209,41 @@
   color: var(--cb-muted);
   font: 900 10px / 1 "JetBrains Mono", Consolas, monospace;
   text-transform: uppercase;
+}
+
+.radar-loop-control {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+}
+
+.radar-loop-control > span,
+.radar-loop-control > input,
+.radar-loop-control > strong,
+.radar-loop-control > em,
+.radar-loop-speed {
+  grid-column: 1 / -1;
+}
+
+.radar-loop-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--cb-red);
+}
+
+.radar-loop-control strong,
+.radar-loop-control em {
+  color: var(--cb-text);
+  font: 900 10px / 1.2 "JetBrains Mono", Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.radar-loop-control em {
+  color: var(--cb-amber);
+}
+
+.radar-loop-speed {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
 }
 
 .radar-help {
