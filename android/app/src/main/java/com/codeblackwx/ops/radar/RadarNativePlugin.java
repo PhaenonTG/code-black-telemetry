@@ -42,6 +42,7 @@ public class RadarNativePlugin extends Plugin {
     private static final int DOWNLOAD_TIMEOUT_MS = 45_000;
     private static final int READ_TIMEOUT_MS = 90_000;
     private static final int RENDER_SIZE_PX = 1024;
+    private static final int DEFAULT_FRAME_HISTORY_LIMIT = 12;
 
     static {
         System.loadLibrary("codeblack_radar");
@@ -169,14 +170,17 @@ public class RadarNativePlugin extends Plugin {
         RadarSite radarSite = resolveSite(site);
         selectedSite = radarSite.id;
         selectedProduct = product;
-        RadarFrame frame = cachedFrame(radarSite.id, product);
-        if (frame != null) {
-            call.resolve(framesResult(frame));
+        int limit = Math.max(1, Math.min(12, call.getInt("limit", DEFAULT_FRAME_HISTORY_LIMIT)));
+        List<RadarFrame> cachedHistory = historyFrames(radarSite, product, limit);
+        if (!cachedHistory.isEmpty()) {
+            call.resolve(framesResult(cachedHistory));
             return;
         }
         radarExecutor.execute(() -> {
             RadarFrame ready = ensureLevel2Frame(radarSite, product);
-            call.resolve(ready == null ? framesResult(null) : framesResult(ready));
+            List<RadarFrame> history = historyFrames(radarSite, product, limit);
+            if (history.isEmpty() && ready != null) history.add(ready);
+            call.resolve(framesResult(history));
         });
     }
 
@@ -213,12 +217,13 @@ public class RadarNativePlugin extends Plugin {
     public void getCacheStatus(PluginCall call) {
         RadarFrame frame = latestFrame;
         JSObject result = new JSObject();
+        List<RadarFrame> history = latestFrame == null ? new ArrayList<>() : historyFrames(latestFrame.site, latestFrame.product, DEFAULT_FRAME_HISTORY_LIMIT);
         result.put("usedBytes", folderSize(radarRoot()));
         result.put("limitBytes", 250L * 1024L * 1024L);
-        result.put("sites", frame == null ? 0 : 1);
-        result.put("frames", frameCache.size());
-        result.put("oldestFrame", frame == null ? JSObject.NULL : frame.time);
-        result.put("newestFrame", frame == null ? JSObject.NULL : frame.time);
+        result.put("sites", countSiteCaches());
+        result.put("frames", countProcessedFrames());
+        result.put("oldestFrame", history.isEmpty() ? JSObject.NULL : history.get(history.size() - 1).time);
+        result.put("newestFrame", history.isEmpty() ? JSObject.NULL : history.get(0).time);
         result.put("lastDownloadBytes", lastDownloadBytes);
         result.put("lastDownloadDurationMs", lastDownloadDurationMs);
         call.resolve(result);
@@ -371,12 +376,12 @@ public class RadarNativePlugin extends Plugin {
         lastVolumeFilename = destination.getName();
     }
 
-    private JSObject framesResult(RadarFrame frame) {
+    private JSObject framesResult(List<RadarFrame> history) {
         JSObject result = new JSObject();
         JSArray frames = new JSArray();
-        if (frame != null) frames.put(frame.toJson());
+        for (RadarFrame frame : history) frames.put(frame.toJson());
         result.put("frames", frames);
-        result.put("cacheState", frame == null ? "EMPTY" : frame.product + "_CACHE_READY");
+        result.put("cacheState", history.isEmpty() ? "EMPTY" : history.get(0).product + "_HISTORY_READY");
         result.put("latestError", latestError);
         return result;
     }
@@ -396,7 +401,7 @@ public class RadarNativePlugin extends Plugin {
         result.put("currentFrameId", frame == null ? JSObject.NULL : frame.frameId);
         result.put("frameTime", frame == null ? JSObject.NULL : frame.time);
         result.put("dataAgeSeconds", frame == null ? JSObject.NULL : frame.ageSeconds);
-        result.put("frameCount", frame == null ? 0 : 1);
+        result.put("frameCount", frame == null ? 0 : historyFrames(frame.site, frame.product, DEFAULT_FRAME_HISTORY_LIMIT).size());
         result.put("cacheState", frame == null ? "EMPTY" : "LEVEL2_CACHE_READY");
         result.put("processingState", state);
         result.put("latestError", latestError);
@@ -429,6 +434,73 @@ public class RadarNativePlugin extends Plugin {
 
     private RadarFrame cachedFrame(String siteId, String product) {
         return frameCache.get(cacheKey(siteId, product));
+    }
+
+    private List<RadarFrame> historyFrames(RadarSite site, String product, int limit) {
+        List<RadarFrame> frames = new ArrayList<>();
+        File dir = new File(new File(radarRoot(), "sites/" + site.id), "processed");
+        File[] files = dir.listFiles((file) -> file.isFile() && file.getName().endsWith("-" + product + ".png"));
+        if (files == null) return frames;
+        java.util.Arrays.sort(files, (a, b) -> b.getName().compareTo(a.getName()));
+        RadarFrame template = cachedFrame(site.id, product);
+        for (File file : files) {
+            if (frames.size() >= limit) break;
+            RadarFrame frame = frameFromProcessedFile(site, product, file, template);
+            if (frame != null) frames.add(frame);
+        }
+        return frames;
+    }
+
+    private RadarFrame frameFromProcessedFile(RadarSite site, String product, File image, RadarFrame template) {
+        String name = image.getName();
+        Matcher matcher = Pattern.compile("^(" + site.id + ")(\\d{8})_(\\d{6})_V(\\d+)-" + product + "\\.png$").matcher(name);
+        if (!matcher.find()) return null;
+        String date = matcher.group(2);
+        String time = matcher.group(3);
+        String scanTime = date.substring(0, 4) + "-" + date.substring(4, 6) + "-" + date.substring(6, 8)
+            + "T" + time.substring(0, 2) + ":" + time.substring(2, 4) + ":" + time.substring(4, 6) + "Z";
+        long ageSeconds;
+        try {
+            ageSeconds = Math.max(0L, (System.currentTimeMillis() - Instant.parse(scanTime).toEpochMilli()) / 1000L);
+        } catch (Exception ignored) {
+            return null;
+        }
+        String freshness = ageSeconds <= 600 ? "LIVE" : ageSeconds <= 1800 ? "DELAYED" : "STALE";
+        int vcp = Integer.parseInt(matcher.group(4));
+        JSObject bounds = template != null && template.bounds != null ? template.bounds : estimatedBounds(site);
+        List<Double> tilts = template != null ? template.availableTilts : defaultTilts();
+        double elevation = template != null ? template.elevationAngle : 0.5;
+        int sweepCount = template != null ? template.sweepCount : 0;
+        int radialCount = template != null ? template.radialCount : 0;
+        int gateCount = template != null ? template.gateCount : 0;
+        double firstGateKm = template != null ? template.firstGateKm : 0;
+        double gateSpacingKm = template != null ? template.gateSpacingKm : 0;
+        double maxRangeKm = template != null ? template.maxRangeKm : 460;
+        long rawBytes = rawSizeForFrame(site.id, name.replace("-" + product + ".png", ""));
+        return new RadarFrame(name.replace(".png", ""), product, unitsForProduct(product), site, scanTime, ageSeconds, freshness, vcp, elevation, tilts, sweepCount, radialCount, gateCount, firstGateKm, gateSpacingKm, maxRangeKm, 0, 0, rawBytes, Uri.fromFile(image).toString(), bounds);
+    }
+
+    private long rawSizeForFrame(String site, String filename) {
+        File raw = rawFile(site, filename);
+        return raw.exists() ? raw.length() : 0L;
+    }
+
+    private JSObject estimatedBounds(RadarSite site) {
+        double rangeKm = 460.0;
+        double latDegrees = rangeKm / 111.0;
+        double lonDegrees = rangeKm / (111.0 * Math.max(0.25, Math.cos(Math.toRadians(site.lat))));
+        JSObject bounds = new JSObject();
+        bounds.put("west", site.lon - lonDegrees);
+        bounds.put("south", site.lat - latDegrees);
+        bounds.put("east", site.lon + lonDegrees);
+        bounds.put("north", site.lat + latDegrees);
+        return bounds;
+    }
+
+    private List<Double> defaultTilts() {
+        List<Double> tilts = new ArrayList<>();
+        tilts.add(0.5);
+        return tilts;
     }
 
     private String cacheKey(String siteId, String product) {
@@ -521,6 +593,25 @@ public class RadarNativePlugin extends Plugin {
         long total = 0L;
         File[] files = file.listFiles();
         if (files != null) for (File child : files) total += folderSize(child);
+        return total;
+    }
+
+    private int countSiteCaches() {
+        File sitesDir = new File(radarRoot(), "sites");
+        File[] dirs = sitesDir.listFiles(File::isDirectory);
+        return dirs == null ? 0 : dirs.length;
+    }
+
+    private int countProcessedFrames() {
+        File sitesDir = new File(radarRoot(), "sites");
+        File[] dirs = sitesDir.listFiles(File::isDirectory);
+        if (dirs == null) return 0;
+        int total = 0;
+        for (File siteDir : dirs) {
+            File processed = new File(siteDir, "processed");
+            File[] frames = processed.listFiles((file) -> file.isFile() && file.getName().endsWith(".png"));
+            if (frames != null) total += frames.length;
+        }
         return total;
     }
 
