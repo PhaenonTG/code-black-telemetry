@@ -39,21 +39,33 @@ function buildInitialSnapshot(): TelemetrySnapshot {
       gustMph: 14,
       directionDeg: 220,
       directionCardinal: "SW",
+      source: "simulator",
       updatedAt: Date.now(),
     },
     weather: {
       tempF: 72,
       dewpointF: 58,
       humidity: 62,
+      pressureMb: 1012.4,
+      pressureTrend: "steady",
+      rainRateInHr: 0,
+      rainTotalIn: 0.03,
+      source: "simulator",
+      sourceLabel: "SIMULATOR",
       updatedAt: Date.now(),
     },
     gps: {
       speedMph: 0,
       headingDeg: 180,
+      headingCardinal: "S",
+      elevationFt: 820,
+      accuracyM: 4,
+      hdop: 0.9,
       satellites: 9,
       hasFix: true,
       lat: 34.9514,
       lon: -81.9571,
+      source: "simulator",
       updatedAt: Date.now(),
     },
     sensors: [
@@ -77,6 +89,8 @@ function buildInitialSnapshot(): TelemetrySnapshot {
       apiLatencyMs: 12,
       dataAgeSeconds: 0,
       piOnline: true,
+      internetOnline: true,
+      mode: "simulator",
       updatedAt: Date.now(),
     },
     events: [
@@ -108,14 +122,14 @@ export class SimulatorProvider implements TelemetryProvider {
     const s = this.snapshot;
 
     // Wind — slow random walk
-    const windDir = (s.wind.directionDeg + (Math.random() - 0.5) * 6 + 360) % 360;
-    const windSpeed = walk(s.wind.speedMph, 0.8, 0, 40);
-    const windGust  = clamp(windSpeed + walk(s.wind.gustMph - s.wind.speedMph, 0.5, 0, 20), windSpeed, windSpeed + 20);
+    const windDir = ((s.wind.directionDeg ?? 0) + (Math.random() - 0.5) * 6 + 360) % 360;
+    const windSpeed = walk(s.wind.speedMph ?? 0, 0.8, 0, 40);
+    const windGust  = clamp(windSpeed + walk((s.wind.gustMph ?? windSpeed) - windSpeed, 0.5, 0, 20), windSpeed, windSpeed + 20);
 
     // GPS — simulate slow vehicle movement
-    const gpsSpeed = walk(s.gps.speedMph, 2, 0, 80);
-    const gpsHead  = (s.gps.headingDeg + (Math.random() - 0.5) * 4 + 360) % 360;
-    const sats     = clamp(Math.round(s.gps.satellites + (Math.random() > 0.9 ? (Math.random() > 0.5 ? 1 : -1) : 0)), 4, 12);
+    const gpsSpeed = walk(s.gps.speedMph ?? 0, 2, 0, 80);
+    const gpsHead  = ((s.gps.headingDeg ?? 0) + (Math.random() - 0.5) * 4 + 360) % 360;
+    const sats     = clamp(Math.round((s.gps.satellites ?? 8) + (Math.random() > 0.9 ? (Math.random() > 0.5 ? 1 : -1) : 0)), 4, 12);
 
     // System
     const cpu = walk(s.system.cpuPercent, 3, 5, 95);
@@ -144,13 +158,18 @@ export class SimulatorProvider implements TelemetryProvider {
     }
 
     this.snapshot = {
-      wind: { speedMph: windSpeed, gustMph: windGust, directionDeg: windDir, directionCardinal: cardinalFromDeg(windDir), updatedAt: now },
-      weather: { ...s.weather, humidity: clamp(Math.round(s.weather.humidity + (Math.random() - 0.5) * 0.5), 20, 100), updatedAt: now },
-      gps: { speedMph: gpsSpeed, headingDeg: gpsHead, satellites: sats, hasFix: sats >= 4, lat: s.gps.lat, lon: s.gps.lon, updatedAt: now },
+      wind: { speedMph: windSpeed, gustMph: windGust, directionDeg: windDir, directionCardinal: cardinalFromDeg(windDir), source: "simulator", updatedAt: now },
+      weather: {
+        ...s.weather,
+        humidity: clamp(Math.round((s.weather.humidity ?? 60) + (Math.random() - 0.5) * 0.5), 20, 100),
+        pressureMb: clamp((s.weather.pressureMb ?? 1012) + (Math.random() - 0.5) * 0.08, 980, 1045),
+        updatedAt: now,
+      },
+      gps: { ...s.gps, speedMph: gpsSpeed, headingDeg: gpsHead, headingCardinal: cardinalFromDeg(gpsHead), satellites: sats, hasFix: sats >= 4, lat: s.gps.lat, lon: s.gps.lon, updatedAt: now },
       sensors,
       power: { mainBatteryV: mainV, auxBatteryV: auxV, charging: mainV > 13.5, updatedAt: now },
       system: { cpuPercent: cpu, ramPercent: ram, storagePercent: s.system.storagePercent, uptimeSeconds: s.system.uptimeSeconds + 1, updatedAt: now },
-      status: { apiLatencyMs: latency, dataAgeSeconds: 0, piOnline: true, updatedAt: now },
+      status: { apiLatencyMs: latency, dataAgeSeconds: 0, piOnline: true, internetOnline: true, mode: "simulator", updatedAt: now },
       events,
     };
 

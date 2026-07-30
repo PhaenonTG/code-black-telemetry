@@ -15,14 +15,14 @@ const statusColor: Record<string, string> = {
 
 export function MetricRow({ label, value, unit, status = "ok", large = false }: MetricRowProps) {
   return (
-    <div className="flex items-baseline justify-between gap-2 py-1 border-b border-cb-border/50 last:border-0">
-      <span className="text-[11px] text-cb-secondary font-mono uppercase tracking-wide shrink-0">
+    <div className="metric-row">
+      <span>
         {label}
       </span>
-      <span className={`font-mono ${large ? "text-2xl font-bold" : "text-sm font-semibold"} ${statusColor[status]} tabular-nums`}>
+      <strong className={`${large ? "metric-row__value--large" : ""} ${statusColor[status]}`}>
         {value}
-        {unit && <span className="text-cb-muted text-[10px] ml-0.5 font-normal">{unit}</span>}
-      </span>
+        {unit && <em>{unit}</em>}
+      </strong>
     </div>
   );
 }

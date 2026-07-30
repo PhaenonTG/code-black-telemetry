@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useStatus, useSystem, usePower } from "../../hooks/useTelemetry";
+import { useGps, usePower, useStatus, useSystem } from "../../hooks/useTelemetry";
 import { StatusBadge } from "../ui/StatusBadge";
 
 function Clock() {
@@ -19,36 +19,42 @@ export function TopBar() {
   const status = useStatus();
   const system = useSystem();
   const power = usePower();
+  const gps = useGps();
 
   const cpuWarn = (system?.cpuPercent ?? 0) > 80;
   const battWarn = (power?.mainBatteryV ?? 13) < 12.0;
+  const gpsSource = gps?.source === "tablet" ? "Tablet GPS" : gps?.source === "vehicle" || gps?.source === "esp" ? "Pi GPS" : "Sim GPS";
+  const gpsQuality = gps?.hasFix ? `${gps.satellites ?? "--"} sats` : "No fix";
 
   return (
-    <div className="flex items-center justify-between px-4 h-10 bg-cb-panel border-b border-cb-border shrink-0">
-      {/* Left: Brand */}
-      <div className="flex items-center gap-3">
-        <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-cb-blue font-semibold">
-          Code Black
-        </span>
-        <span className="text-cb-border">|</span>
-        <span className="font-mono text-[11px] uppercase tracking-widest text-cb-secondary">
-          Telemetry
-        </span>
+    <header className="ops-header">
+      <div className="brand-lockup" aria-label="Code Black OPS">
+        <span className="brand-mark" aria-hidden="true" />
+        <div>
+          <div className="brand-title"><span>Code Black</span> <strong>OPS</strong></div>
+          <div className="brand-subtitle">Situational Awareness</div>
+        </div>
       </div>
 
-      {/* Center: Clock */}
-      <Clock />
-
-      {/* Right: Status */}
-      <div className="flex items-center gap-4">
-        <StatusBadge online={status?.piOnline ?? false} label="PI" pulse />
-        <span className="font-mono text-[11px] text-cb-secondary">
-          UNIT-01
-        </span>
-        <span className={`font-mono text-[11px] font-semibold ${cpuWarn || battWarn ? "text-cb-amber" : "text-cb-green"}`}>
-          {cpuWarn || battWarn ? "⚠ WARN" : "● NOMINAL"}
-        </span>
+      <div className="time-module">
+        <Clock />
+        <span>Local Time</span>
       </div>
-    </div>
+
+      <div className="header-status">
+        <div className="gps-strip">
+          <span className="gps-crosshair" aria-hidden="true" />
+          <span>{gpsSource}</span>
+          <strong>{gpsQuality}</strong>
+          <em>{gps?.accuracyM != null ? `${Math.round(gps.accuracyM)} m` : "-- m"}</em>
+        </div>
+        <div className="unit-strip">
+          <StatusBadge online={status?.piOnline ?? false} label="PI" pulse />
+          <span>UNIT-01</span>
+          <strong className={cpuWarn || battWarn ? "is-warn" : "is-ok"}>{cpuWarn || battWarn ? "WARN" : "NOMINAL"}</strong>
+          <em>{gps ? `${gps.lat.toFixed(5)} N  ${Math.abs(gps.lon).toFixed(5)} W` : "--"}</em>
+        </div>
+      </div>
+    </header>
   );
 }

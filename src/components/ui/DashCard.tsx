@@ -7,11 +7,11 @@ interface DashCardProps {
 
 export function DashCard({ title, children, className = "", accent = false }: DashCardProps) {
   return (
-    <div className={`flex flex-col bg-cb-panel border ${accent ? "border-cb-blue/30" : "border-cb-border"} rounded-sm overflow-hidden ${className}`}>
-      <div className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-widest ${accent ? "text-cb-blue" : "text-cb-muted"} border-b border-cb-border`}>
-        {title}
+    <div className={`cb-panel ${accent ? "cb-panel--spc" : ""} ${className}`}>
+      <div className="cb-panel__title">
+        <span className="panel-glyph" aria-hidden="true" />{title}
       </div>
-      <div className="flex-1 p-3">
+      <div className="dash-card-body">
         {children}
       </div>
     </div>

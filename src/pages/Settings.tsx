@@ -7,7 +7,7 @@ export function Settings() {
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="font-mono text-xs text-cb-secondary uppercase tracking-wide">Mode</span>
-            <span className="font-mono text-xs text-cb-amber">SIMULATOR</span>
+            <span className="font-mono text-xs text-cb-amber">DEVELOPMENT</span>
           </div>
           <p className="text-[11px] text-cb-muted leading-5">
             Running on simulated telemetry. To connect to the Raspberry Pi, update

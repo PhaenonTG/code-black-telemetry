@@ -1,0 +1,307 @@
+import { SimulatorProvider } from "./simulator";
+import type { GpsData, TabletLocationInput, TelemetryProvider, TelemetrySnapshot } from "./types";
+import { cardinalFromDeg, isFiniteNumber, readNumber, readString, readTimestamp } from "./quality";
+import { getPiEndpoint, loadPiEndpoint, subscribePiEndpoint } from "../settings";
+import { Preferences } from "@capacitor/preferences";
+
+const POLL_MS = 2000;
+const GPS_MAX_AGE_MS = 15_000;
+const LAST_SNAPSHOT_KEY = "codeblack.lastTelemetrySnapshot";
+const SIMULATOR_ALLOWED = import.meta.env.DEV && import.meta.env.VITE_ALLOW_SIMULATOR === "true";
+
+function validCoord(lat: number | null, lon: number | null) {
+  return isFiniteNumber(lat) && isFiniteNumber(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && !(lat === 0 && lon === 0);
+}
+
+function endpoint(path: string) {
+  const configured = getPiEndpoint();
+  const envBase = (import.meta.env.VITE_PI_API_BASE as string | undefined)?.replace(/\/$/, "") ?? "";
+  const base = configured || envBase;
+  return `${base}${path}`;
+}
+
+function withTimeout(url: string, timeoutMs: number) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { signal: controller.signal, cache: "no-store" }).finally(() => window.clearTimeout(timer));
+}
+
+function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: number): TelemetrySnapshot {
+  const source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const windRaw = (source.wind ?? source.weather ?? source.observation ?? source) as unknown;
+  const weatherRaw = (source.weather ?? source.observation ?? source) as unknown;
+  const gpsRaw = (source.gps ?? source.navigation ?? source.location ?? source) as unknown;
+  const systemRaw = (source.system ?? source.pi ?? source.health ?? source) as unknown;
+  const powerRaw = (source.power ?? source.vehiclePower ?? source) as unknown;
+  const now = Date.now();
+
+  const windSpeed = readNumber(windRaw, [
+    "speedMph",
+    "windSpeedMph",
+    "wind_speed_mph",
+    "wind_mph",
+    "speed_mph",
+    "speed",
+    "windSpeed",
+  ]);
+  const windGust = readNumber(windRaw, ["gustMph", "windGustMph", "wind_gust_mph", "gust_mph", "gust", "windGust"]);
+  const windDir = readNumber(windRaw, ["directionDeg", "windDirectionDeg", "wind_direction_deg", "direction_degrees", "dir", "direction"]);
+  const windUpdatedAt = readTimestamp(windRaw, ["updatedAt", "updated_at", "timestamp", "time"], now);
+
+  const lat = readNumber(gpsRaw, ["lat", "latitude"]);
+  const lon = readNumber(gpsRaw, ["lon", "lng", "longitude"]);
+  const gpsUpdatedAt = readTimestamp(gpsRaw, ["updatedAt", "updated_at", "timestamp", "time"], 0);
+  const gpsAge = now - gpsUpdatedAt;
+  const vehicleGpsValid = validCoord(lat, lon) && gpsAge <= GPS_MAX_AGE_MS && readString(gpsRaw, ["fix", "fixType"]) !== "none";
+  const gps: GpsData = vehicleGpsValid
+    ? {
+        speedMph: readNumber(gpsRaw, ["speedMph", "speed_mph", "groundSpeedMph"]) ?? fallback.gps.speedMph,
+        headingDeg: readNumber(gpsRaw, ["headingDeg", "heading_deg", "courseDeg", "trackDeg"]) ?? fallback.gps.headingDeg,
+        headingCardinal: cardinalFromDeg(readNumber(gpsRaw, ["headingDeg", "heading_deg", "courseDeg", "trackDeg"]) ?? fallback.gps.headingDeg),
+        elevationFt: readNumber(gpsRaw, ["elevationFt", "elevation_ft", "altitudeFt", "altitude_ft"]) ?? fallback.gps.elevationFt,
+        accuracyM: readNumber(gpsRaw, ["accuracyM", "accuracy_m", "eph"]) ?? fallback.gps.accuracyM,
+        hdop: readNumber(gpsRaw, ["hdop"]) ?? fallback.gps.hdop,
+        satellites: readNumber(gpsRaw, ["satellites", "sats", "numSatellites"]) ?? fallback.gps.satellites,
+        hasFix: true,
+        lat: lat!,
+        lon: lon!,
+        source: readString(gpsRaw, ["source"]) === "esp" ? "esp" : "vehicle",
+        updatedAt: gpsUpdatedAt,
+      }
+    : fallback.gps;
+
+  return {
+    wind: {
+      speedMph: windSpeed,
+      gustMph: windGust,
+      directionDeg: windDir,
+      directionCardinal: cardinalFromDeg(windDir),
+      source: windSpeed !== null || windGust !== null || windDir !== null ? "vehicle" : fallback.wind.source,
+      updatedAt: windSpeed !== null || windGust !== null || windDir !== null ? windUpdatedAt : fallback.wind.updatedAt,
+    },
+    weather: {
+      tempF: readNumber(weatherRaw, ["tempF", "temperatureF", "temperature_f", "temp_f"]) ?? fallback.weather.tempF,
+      dewpointF: readNumber(weatherRaw, ["dewpointF", "dewPointF", "dewpoint_f", "dew_point_f"]) ?? fallback.weather.dewpointF,
+      humidity: readNumber(weatherRaw, ["humidity", "relativeHumidity", "relative_humidity"]) ?? fallback.weather.humidity,
+      pressureMb: readNumber(weatherRaw, ["pressureMb", "pressure_mb", "barometerMb", "barometricPressureMb"]) ?? fallback.weather.pressureMb,
+      pressureTrend: (readString(weatherRaw, ["pressureTrend", "pressure_trend"]) as TelemetrySnapshot["weather"]["pressureTrend"]) ?? fallback.weather.pressureTrend,
+      rainRateInHr: readNumber(weatherRaw, ["rainRateInHr", "rain_rate_in_hr", "rainRate"]) ?? fallback.weather.rainRateInHr,
+      rainTotalIn: readNumber(weatherRaw, ["rainTotalIn", "rain_total_in", "rainAccumulationIn"]) ?? fallback.weather.rainTotalIn,
+      source: "vehicle",
+      sourceLabel: "VEHICLE",
+      updatedAt: readTimestamp(weatherRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
+    },
+    gps,
+    sensors: fallback.sensors,
+    power: {
+      mainBatteryV: readNumber(powerRaw, ["mainBatteryV", "main_battery_v", "batteryV"]) ?? fallback.power.mainBatteryV,
+      auxBatteryV: readNumber(powerRaw, ["auxBatteryV", "aux_battery_v"]) ?? fallback.power.auxBatteryV,
+      charging: Boolean((powerRaw as Record<string, unknown>)?.charging ?? fallback.power.charging),
+      updatedAt: readTimestamp(powerRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
+    },
+    system: {
+      cpuPercent: readNumber(systemRaw, ["cpuPercent", "cpu_percent", "cpu"]) ?? fallback.system.cpuPercent,
+      ramPercent: readNumber(systemRaw, ["ramPercent", "ram_percent", "memoryPercent"]) ?? fallback.system.ramPercent,
+      storagePercent: readNumber(systemRaw, ["storagePercent", "storage_percent", "diskPercent"]) ?? fallback.system.storagePercent,
+      uptimeSeconds: readNumber(systemRaw, ["uptimeSeconds", "uptime_seconds", "uptime"]) ?? fallback.system.uptimeSeconds,
+      updatedAt: readTimestamp(systemRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
+    },
+    status: {
+      apiLatencyMs: latency,
+      dataAgeSeconds: 0,
+      piOnline: true,
+      internetOnline: fallback.status.internetOnline,
+      mode: "pi",
+      updatedAt: now,
+    },
+    events: fallback.events,
+  };
+}
+
+export class HybridTelemetryProvider implements TelemetryProvider {
+  private fallback = new SimulatorProvider();
+  private snapshot = this.offlineSnapshot(this.fallback.getLatest(), "App started in standalone tablet mode");
+  private subscribers: Set<(s: TelemetrySnapshot) => void> = new Set();
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private tabletLocation: TabletLocationInput | null = null;
+  private paused = false;
+  private failureCount = 0;
+  private nextPollAt = 0;
+
+  constructor() {
+    void this.restoreLastSnapshot();
+    void loadPiEndpoint();
+    subscribePiEndpoint(() => {
+      this.failureCount = 0;
+      this.nextPollAt = 0;
+      void this.poll();
+    });
+    if (SIMULATOR_ALLOWED) {
+      this.fallback.subscribe((snapshot) => {
+        if (!this.snapshot.status.piOnline) {
+          this.publish(
+            this.applyTabletGps({
+              ...snapshot,
+              weather: { ...snapshot.weather, sourceLabel: "SIMULATOR", source: "simulator" },
+              wind: { ...snapshot.wind, source: "simulator" },
+              status: { ...snapshot.status, piOnline: false, mode: "simulator", updatedAt: Date.now() },
+            }),
+          );
+        }
+      });
+    }
+    this.pollTimer = setInterval(() => void this.poll(), POLL_MS);
+    void this.poll();
+  }
+
+  setTabletLocation(location: TabletLocationInput | null) {
+    this.tabletLocation = location;
+    this.publish(this.applyTabletGps(this.snapshot));
+  }
+
+  setPaused(paused: boolean) {
+    this.paused = paused;
+    if (!paused) {
+      this.failureCount = 0;
+      this.nextPollAt = 0;
+      void this.poll();
+    }
+  }
+
+  private applyTabletGps(snapshot: TelemetrySnapshot): TelemetrySnapshot {
+    const vehicleAge = Date.now() - snapshot.gps.updatedAt;
+    const vehicleValid =
+      (snapshot.gps.source === "vehicle" || snapshot.gps.source === "esp") &&
+      snapshot.gps.hasFix &&
+      validCoord(snapshot.gps.lat, snapshot.gps.lon) &&
+      vehicleAge < GPS_MAX_AGE_MS;
+    if (vehicleValid || !this.tabletLocation) return snapshot;
+    const tab = this.tabletLocation;
+    return {
+      ...snapshot,
+      gps: {
+        ...snapshot.gps,
+        lat: tab.lat,
+        lon: tab.lon,
+        speedMph: tab.speedMph,
+        headingDeg: tab.headingDeg,
+        headingCardinal: cardinalFromDeg(tab.headingDeg),
+        elevationFt: tab.elevationFt,
+        accuracyM: tab.accuracyM,
+        hdop: null,
+        satellites: null,
+        hasFix: true,
+        source: "tablet",
+        updatedAt: tab.updatedAt,
+      },
+      status: { ...snapshot.status, mode: snapshot.status.piOnline ? "pi" : "tablet" },
+    };
+  }
+
+  private publish(snapshot: TelemetrySnapshot) {
+    this.snapshot = snapshot;
+    this.subscribers.forEach((callback) => callback(snapshot));
+  }
+
+  private offlineSnapshot(snapshot: TelemetrySnapshot, message = "Pi API offline"): TelemetrySnapshot {
+    const now = Date.now();
+    const existingEvents = snapshot.events.filter((event) => !/sensor|sync|uptime|online/i.test(event.message));
+    const lastSameEvent = existingEvents.find((event) => event.message === message);
+    const shouldAddEvent = !lastSameEvent || now - lastSameEvent.timestamp > 60_000;
+    return {
+      ...snapshot,
+      wind: {
+        speedMph: null,
+        gustMph: null,
+        directionDeg: null,
+        directionCardinal: "--",
+        source: "unavailable",
+        updatedAt: 0,
+      },
+      weather: {
+        tempF: null,
+        dewpointF: null,
+        humidity: null,
+        pressureMb: null,
+        pressureTrend: null,
+        rainRateInHr: null,
+        rainTotalIn: null,
+        source: "unavailable",
+        sourceLabel: "UNAVAILABLE",
+        updatedAt: 0,
+      },
+      sensors: snapshot.sensors.map((sensor) => ({ ...sensor, online: false, packetRateHz: 0, lastPacketAt: 0 })),
+      power: { mainBatteryV: 0, auxBatteryV: 0, charging: false, updatedAt: 0 },
+      system: { cpuPercent: 0, ramPercent: 0, storagePercent: 0, uptimeSeconds: 0, updatedAt: 0 },
+      status: {
+        ...snapshot.status,
+        apiLatencyMs: 0,
+        dataAgeSeconds: Math.max(0, Math.round((now - snapshot.status.updatedAt) / 1000)),
+        piOnline: false,
+        mode: "tablet",
+        updatedAt: now,
+      },
+      events: [
+        ...(shouldAddEvent ? [{ id: `evt-${now}`, timestamp: now, level: "warn" as const, message }] : []),
+        ...existingEvents,
+      ].slice(0, 8),
+    };
+  }
+
+  private async restoreLastSnapshot() {
+    const saved = await Preferences.get({ key: LAST_SNAPSHOT_KEY });
+    if (!saved.value) return;
+    try {
+      const parsed = JSON.parse(saved.value) as TelemetrySnapshot;
+      this.publish(this.offlineSnapshot(parsed, "Loaded cached telemetry metadata"));
+    } catch {
+      // Ignore malformed persisted snapshots.
+    }
+  }
+
+  private persistLastSnapshot(snapshot: TelemetrySnapshot) {
+    void Preferences.set({ key: LAST_SNAPSHOT_KEY, value: JSON.stringify(snapshot) });
+  }
+
+  private async poll() {
+    if (this.paused) return;
+    const now = Date.now();
+    if (now < this.nextPollAt) return;
+    if (!getPiEndpoint() && !import.meta.env.VITE_PI_API_BASE) {
+      this.nextPollAt = now + 30_000;
+      this.publish(this.applyTabletGps(this.offlineSnapshot(this.snapshot, "Pi endpoint not configured")));
+      return;
+    }
+    const start = performance.now();
+    try {
+      const response = await withTimeout(endpoint("/api/latest"), 1500);
+      if (!response.ok) throw new Error(`Pi API ${response.status}`);
+      const data: unknown = await response.json();
+      const latency = Math.round(performance.now() - start);
+      this.failureCount = 0;
+      const normalized = this.applyTabletGps(normalizeSnapshot(data, this.snapshot, latency));
+      this.publish(normalized);
+      this.persistLastSnapshot(normalized);
+    } catch {
+      this.failureCount++;
+      this.nextPollAt = Date.now() + Math.min(30_000, 1000 * 2 ** Math.min(5, this.failureCount));
+      this.publish(this.applyTabletGps(this.offlineSnapshot(this.snapshot, "Pi API offline")));
+    }
+  }
+
+  subscribe(callback: (snapshot: TelemetrySnapshot) => void) {
+    this.subscribers.add(callback);
+    callback(this.snapshot);
+    return () => this.subscribers.delete(callback);
+  }
+
+  getLatest() {
+    return this.snapshot;
+  }
+
+  disconnect() {
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.fallback.disconnect();
+    this.subscribers.clear();
+  }
+}

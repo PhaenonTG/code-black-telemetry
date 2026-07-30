@@ -20,7 +20,7 @@ export function EventsCard({ className }: { className?: string }) {
   return (
     <DashCard title="Recent Events" className={className}>
       <div className="cb-scroll flex flex-col gap-1 max-h-36">
-        {events.map(ev => {
+        {events.slice(0, 8).map(ev => {
           const t = new Date(ev.timestamp);
           const ts = `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}:${String(t.getSeconds()).padStart(2,"0")}`;
           return (
