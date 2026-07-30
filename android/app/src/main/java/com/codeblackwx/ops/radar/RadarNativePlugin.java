@@ -172,12 +172,13 @@ public class RadarNativePlugin extends Plugin {
         selectedProduct = product;
         int limit = Math.max(1, Math.min(12, call.getInt("limit", DEFAULT_FRAME_HISTORY_LIMIT)));
         List<RadarFrame> cachedHistory = historyFrames(radarSite, product, limit);
-        if (!cachedHistory.isEmpty()) {
+        if (cachedHistory.size() >= 2) {
             call.resolve(framesResult(cachedHistory));
             return;
         }
         radarExecutor.execute(() -> {
             RadarFrame ready = ensureLevel2Frame(radarSite, product);
+            processCachedRawHistory(radarSite, product, limit);
             List<RadarFrame> history = historyFrames(radarSite, product, limit);
             if (history.isEmpty() && ready != null) history.add(ready);
             call.resolve(framesResult(history));
@@ -449,6 +450,34 @@ public class RadarNativePlugin extends Plugin {
             if (frame != null) frames.add(frame);
         }
         return frames;
+    }
+
+    private void processCachedRawHistory(RadarSite site, String product, int limit) {
+        File rawDir = new File(new File(radarRoot(), "sites/" + site.id), "raw");
+        File[] rawFiles = rawDir.listFiles((file) -> file.isFile() && !file.getName().endsWith(".tmp") && file.getName().startsWith(site.id));
+        if (rawFiles == null || rawFiles.length == 0) return;
+        java.util.Arrays.sort(rawFiles, (a, b) -> b.getName().compareTo(a.getName()));
+        int processed = 0;
+        for (File rawFile : rawFiles) {
+            if (processed >= Math.min(limit, 6)) break;
+            File output = processedFile(site.id, rawFile.getName() + "-" + safeName(product) + ".png");
+            if (output.exists() && output.length() > 0) {
+                processed += 1;
+                continue;
+            }
+            try {
+                String json = renderLevel2ProductNative(rawFile.getAbsolutePath(), output.getAbsolutePath(), site.id, site.lat, site.lon, RENDER_SIZE_PX, product, stormDirection, stormSpeed);
+                RadarFrame frame = parseFrame(json, site, rawFile.getName(), product, rawFile.length(), 0);
+                synchronized (lock) {
+                    frameCache.put(cacheKey(site.id, product), frame);
+                    if (latestFrame == null || frame.time.compareTo(latestFrame.time) >= 0) latestFrame = frame;
+                }
+                processed += 1;
+            } catch (Exception error) {
+                latestError = readableError(error);
+            }
+        }
+        cleanupSite(site.id);
     }
 
     private RadarFrame frameFromProcessedFile(RadarSite site, String product, File image, RadarFrame template) {

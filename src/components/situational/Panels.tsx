@@ -472,6 +472,10 @@ function AtlasMapRadarPanel({
     setProduct(next);
     setOpacity(defaultRadarOpacity(next));
     setPlaying(false);
+    setFrame(null);
+    setFrames([]);
+    setFrameIndex(0);
+    setRadarError("");
     if (next === "SRV" && !status?.stormMotion) setRadarError("SRV UNAVAILABLE - SET STORM MOTION");
   };
 
