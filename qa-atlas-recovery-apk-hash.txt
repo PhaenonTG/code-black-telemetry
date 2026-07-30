@@ -1,0 +1,9 @@
+
+
+Algorithm : SHA256
+Hash      : 3DFC2442F59A8B27F8FE1520C087AF2032FC731FBF311B7CBAD5296B401BAACF
+Path      : C:\Users\glenn\Documents\Code Black Telemetry\android\app\build\outputs\apk\debug\app-debug.apk
+
+
+
+
