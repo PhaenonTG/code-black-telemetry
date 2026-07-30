@@ -13,6 +13,32 @@ function validCoord(lat: number | null, lon: number | null) {
   return isFiniteNumber(lat) && isFiniteNumber(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && !(lat === 0 && lon === 0);
 }
 
+function unavailableGps(now = Date.now()): GpsData {
+  return {
+    speedMph: null,
+    headingDeg: null,
+    headingCardinal: "--",
+    elevationFt: null,
+    accuracyM: null,
+    hdop: null,
+    satellites: null,
+    hasFix: false,
+    lat: 0,
+    lon: 0,
+    source: "unavailable",
+    updatedAt: now,
+  };
+}
+
+function lastKnownGps(gps: GpsData, now = Date.now()): GpsData {
+  if (!gps.hasFix || gps.source === "simulator" || !validCoord(gps.lat, gps.lon)) return unavailableGps(now);
+  return {
+    ...gps,
+    source: "last-known",
+    hasFix: true,
+  };
+}
+
 function endpoint(path: string) {
   const configured = getPiEndpoint();
   const envBase = (import.meta.env.VITE_PI_API_BASE as string | undefined)?.replace(/\/$/, "") ?? "";
@@ -155,7 +181,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
   }
 
   setTabletLocation(location: TabletLocationInput | null) {
-    this.tabletLocation = location;
+    this.tabletLocation = location && validCoord(location.lat, location.lon) ? location : null;
     this.publish(this.applyTabletGps(this.snapshot));
   }
 
@@ -177,6 +203,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
       vehicleAge < GPS_MAX_AGE_MS;
     if (vehicleValid || !this.tabletLocation) return snapshot;
     const tab = this.tabletLocation;
+    if (!validCoord(tab.lat, tab.lon)) return snapshot;
     return {
       ...snapshot,
       gps: {
@@ -210,6 +237,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
     const shouldAddEvent = !lastSameEvent || now - lastSameEvent.timestamp > 60_000;
     return {
       ...snapshot,
+      gps: lastKnownGps(snapshot.gps, now),
       wind: {
         speedMph: null,
         gustMph: null,

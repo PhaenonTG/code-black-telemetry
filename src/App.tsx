@@ -23,12 +23,14 @@ import { useStatus } from "./hooks/useTelemetry";
 import { setTelemetryPaused } from "./services/telemetry";
 
 type PageKey = "weather" | "operations";
+export type CockpitMode = "normal" | "chase";
 
 const pages: Array<{ key: PageKey; label: string; path: string }> = [
   { key: "weather", label: "Weather", path: "/" },
   { key: "operations", label: "Operations", path: "/operations" },
 ];
 const PAGE_PREF_KEY = "codeblack.activePage";
+const COCKPIT_MODE_KEY = "codeblack.cockpitMode";
 
 function DockIcon({ type }: { type: "weather" | "operations" | "locate" | "alerts" | "settings" }) {
   const common = { viewBox: "0 0 24 24", "aria-hidden": true, focusable: false } as const;
@@ -47,10 +49,11 @@ function pathToPage(): PageKey {
 
 export default function App() {
   const [page, setPage] = useState<PageKey>(() => pathToPage());
+  const [cockpitMode, setCockpitMode] = useState<CockpitMode>("chase");
   const pagerRef = useRef<HTMLDivElement | null>(null);
-  const { gps, external, tabletPermission } = useSituationalData();
+  const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
   const status = useStatus();
-  const alertProducts = useAlertProducts(gps ? { lat: gps.lat, lon: gps.lon } : null);
+  const alertProducts = useAlertProducts(canonicalLocation.latitude != null && canonicalLocation.longitude != null ? { lat: canonicalLocation.latitude, lon: canonicalLocation.longitude } : null);
   const piState = status?.piOnline ? `ONLINE · ${status.apiLatencyMs} ms` : status?.updatedAt ? `OFFLINE · LAST CHECK ${new Date(status.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "OFFLINE";
   const serviceState = status?.piOnline ? "VIA PI · CHECK DASHBOARD" : "VIA PI · OFFLINE";
 
@@ -74,7 +77,15 @@ export default function App() {
     Preferences.get({ key: PAGE_PREF_KEY }).then(({ value }) => {
       if (value === "weather" || value === "operations") goToPage(value);
     });
+    Preferences.get({ key: COCKPIT_MODE_KEY }).then(({ value }) => {
+      if (value === "normal" || value === "chase") setCockpitMode(value);
+    });
   }, []);
+
+  const changeCockpitMode = (mode: CockpitMode) => {
+    setCockpitMode(mode);
+    void Preferences.set({ key: COCKPIT_MODE_KEY, value: mode });
+  };
 
   useEffect(() => {
     const pager = pagerRef.current;
@@ -146,11 +157,11 @@ export default function App() {
       <main className="page-viewport" ref={pagerRef} aria-label="Code Black dashboard pages">
         <section className="page page--weather" aria-label="Situational Awareness">
           <div className="page-grid page-grid--weather">
-            <LocationMotionPanel tabletPermission={tabletPermission} />
-            <WeatherObservationPanel external={external} />
-            <WindAwarenessPanel external={external} />
+            <LocationMotionPanel tabletPermission={tabletPermission} location={canonicalLocation} mode={cockpitMode} />
+            <WeatherObservationPanel external={external} mode={cockpitMode} />
+            <WindAwarenessPanel external={external} mode={cockpitMode} />
             <AlertsPanel products={alertProducts.products} error={alertProducts.error} />
-            <MapRadarPanel gps={gps ? { lat: gps.lat, lon: gps.lon, headingDeg: gps.headingDeg, speedMph: gps.speedMph, accuracyM: gps.accuracyM } : null} visible={page === "weather"} />
+            <MapRadarPanel gps={canonicalLocation.latitude != null && canonicalLocation.longitude != null ? { lat: canonicalLocation.latitude, lon: canonicalLocation.longitude, headingDeg: canonicalLocation.headingDeg, speedMph: canonicalLocation.speedMph, accuracyM: canonicalLocation.accuracyM } : null} visible={page === "weather"} />
             <StormThreatsPanel products={alertProducts.products} />
           </div>
         </section>
@@ -161,6 +172,10 @@ export default function App() {
               <div className="ops-mode">
                 <strong>{status?.mode === "pi" ? "PI CONNECTED" : status?.mode === "tablet" ? "STANDALONE TABLET" : "DEVELOPMENT SIMULATOR"}</strong>
                 <span>PI {status?.piOnline ? "ONLINE" : "OFFLINE"} | INTERNET {status?.internetOnline ? "AVAILABLE" : "UNKNOWN"}</span>
+                <div className="mode-toggle" aria-label="Cockpit information mode">
+                  <button className={cockpitMode === "normal" ? "active" : ""} onClick={() => changeCockpitMode("normal")}>Normal</button>
+                  <button className={cockpitMode === "chase" ? "active" : ""} onClick={() => changeCockpitMode("chase")}>Chase</button>
+                </div>
               </div>
             </section>
             <SensorHealthCard />
@@ -177,6 +192,9 @@ export default function App() {
                 <span>Wi-Fi</span><strong>SYSTEM NETWORK</strong>
                 <span>Starlink</span><strong>NOT CONFIGURED</strong>
                 <span>Native GPS</span><strong>{gps ? `${gps.source.toUpperCase()} · ${gps.accuracyM ? `${Math.round(gps.accuracyM)} m` : "ACTIVE"}` : "WAITING"}</strong>
+                <span>UI Mode</span><strong>{cockpitMode.toUpperCase()}</strong>
+                <span>Canonical GPS</span><strong>{canonicalLocation.validity} · {canonicalLocation.source.toUpperCase()}</strong>
+                <span>Resolved Place</span><strong>{canonicalLocation.resolvedCity ? `${canonicalLocation.resolvedCity}, ${canonicalLocation.resolvedState ?? ""}` : canonicalLocation.fallbackReason}</strong>
                 <span>Services</span><strong>{serviceState}</strong>
                 <span>Logs</span><strong>RECENT EVENTS</strong>
               </div>

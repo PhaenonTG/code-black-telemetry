@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { useGps, useWeather, useWind } from "../../hooks/useTelemetry";
+import { useWeather, useWind } from "../../hooks/useTelemetry";
 import { AtlasMap } from "../../map/AtlasMap";
 import { basemapProvider, basemapStatusLabel, basemapTileUrl, configuredMapEngine, mapboxDiagnostics, mapboxStyleId, probeMapboxRuntime, writeMapRuntimeDiagnostics, type MapEngine } from "../../services/mapTiles";
-import { getReverseLocality, type AlertProduct, type ExternalObservation, type LocalityResult } from "../../services/situational";
+import { type AlertProduct, type ExternalObservation } from "../../services/situational";
+import { sourceLabel, type CanonicalLocation } from "../../services/location";
 import { ageLabel, cardinalFromDeg, freshness, valueText } from "../../services/telemetry/quality";
 import {
   ageText,
@@ -26,6 +27,7 @@ import {
   writeRadarLoopDiagnostics,
   type RadarPlaybackSpeed,
 } from "../../services/radarLoop";
+import type { CockpitMode } from "../../App";
 
 function Panel({ title, children, className = "", tone = "default" }: { title: string; children: React.ReactNode; className?: string; tone?: "default" | "red" | "spc" }) {
   const toneClass = tone === "red" ? "cb-panel--red" : tone === "spc" ? "cb-panel--spc" : "";
@@ -60,56 +62,38 @@ function MetricTile({ icon, label, value, unit, accent = "default" }: { icon?: s
   );
 }
 
-function useLocality(gps: { lat: number; lon: number } | null) {
-  const [locality, setLocality] = useState<LocalityResult | null>(null);
-  const lat = gps?.lat;
-  const lon = gps?.lon;
-
-  useEffect(() => {
-    if (lat == null || lon == null) return;
-    const point = { lat, lon };
-    let cancelled = false;
-    getReverseLocality(point).then((result) => {
-      if (!cancelled) setLocality(result);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [lat, lon]);
-
-  return locality;
-}
-
-export function LocationMotionPanel({ tabletPermission }: { tabletPermission: string }) {
-  const gps = useGps();
-  const locality = useLocality(gps ? { lat: gps.lat, lon: gps.lon } : null);
-  if (!gps) return <Panel title="Location & Motion"><div className="cb-empty">GPS: LAST KNOWN UNAVAILABLE</div></Panel>;
-  const source = gps.source === "vehicle" || gps.source === "esp" ? "VEHICLE" : gps.source === "tablet" ? "TABLET" : gps.source === "last-known" ? "LAST KNOWN" : "UNAVAILABLE";
+export function LocationMotionPanel({ tabletPermission, location, mode }: { tabletPermission: string; location: CanonicalLocation; mode: CockpitMode }) {
+  const valid = location.validity === "VALID" && location.latitude != null && location.longitude != null;
+  const source = sourceLabel(location.source);
+  const title = location.resolvedCity && location.resolvedState ? `NEAR ${location.resolvedCity}, ${location.resolvedState}` : valid ? "CURRENT POSITION" : "GPS ACQUIRING";
+  const county = location.resolvedCounty ?? (valid ? "LOCALITY RESOLVING" : "NO CURRENT GPS FIX");
   return (
-    <Panel title="Location & Motion" className="loc-panel">
-      <div className="loc-head">
+    <Panel title="Location & Motion" className={`loc-panel cockpit-card cockpit-card--${mode}`}>
+      <div className="loc-head cockpit-head">
         <div>
-          <div className="loc-city">{locality?.displayName ?? "Current Position"}</div>
-          <div className="loc-county">{locality?.county ?? `Lat ${gps.lat.toFixed(5)} | Lon ${gps.lon.toFixed(5)}`}</div>
+          <div className="loc-city">{title}</div>
+          <div className="loc-county">{county}</div>
         </div>
-        <SourceBadge state={freshness(gps.updatedAt)}>GPS: {source}</SourceBadge>
+        <SourceBadge state={location.freshness}>GPS: {source}</SourceBadge>
       </div>
-      <div className="metric-grid metric-grid--motion">
-        <MetricTile label="Speed" value={valueText(gps.speedMph, 1)} unit="mph" />
-        <MetricTile label="Heading" value={gps.headingCardinal || cardinalFromDeg(gps.headingDeg)} unit={`${valueText(gps.headingDeg, 0)} deg`} />
-        <MetricTile label="Elevation" value={valueText(gps.elevationFt, 0)} unit="ft" />
+      <div className="cockpit-primary cockpit-primary--motion">
+        <MetricTile label="Speed" value={valueText(location.speedMph, 1)} unit="mph" />
+        <MetricTile label="Heading" value={location.headingCardinal || cardinalFromDeg(location.headingDeg)} unit={`${valueText(location.headingDeg, 0)} deg`} />
+        {mode === "normal" && <MetricTile label="Elevation" value={valueText(location.altitudeFt, 0)} unit="ft" />}
+        {mode === "chase" && <MetricTile label="GPS" value={location.fixState.replace("_", " ")} unit={location.accuracyM != null ? `${Math.round(location.accuracyM)} m` : location.freshness} />}
       </div>
-      <div className="loc-footer">
-        <div><span>Lat</span><strong>{gps.lat.toFixed(5)}</strong></div>
-        <div><span>Lon</span><strong>{gps.lon.toFixed(5)}</strong></div>
-        <div><span>GPS Source</span><strong>{source}</strong></div>
+      <div className="loc-footer cockpit-footer">
+        {mode === "normal" && <><div><span>Lat</span><strong>{valid ? location.latitude!.toFixed(5) : "--"}</strong></div><div><span>Lon</span><strong>{valid ? location.longitude!.toFixed(5) : "--"}</strong></div></>}
+        <div><span>Fix</span><strong>{location.fixState.replace("_", " ")}</strong></div>
+        <div><span>Age</span><strong>{location.timestamp ? ageLabel(location.timestamp) : "NO FIX"}</strong></div>
       </div>
       {tabletPermission === "denied" && <div className="cb-note cb-note--warn">Tablet GPS denied. Holding last valid source.</div>}
+      {!valid && <div className="cb-note cb-note--warn">{location.fallbackReason}</div>}
     </Panel>
   );
 }
 
-export function WeatherObservationPanel({ external }: { external: ExternalObservation | null }) {
+export function WeatherObservationPanel({ external, mode }: { external: ExternalObservation | null; mode: CockpitMode }) {
   const wx = useWeather();
   const source = wx?.source === "vehicle" ? "VEHICLE" : wx?.source === "simulator" ? "SIMULATOR  - DEV" : wx?.sourceLabel ?? "UNAVAILABLE";
   const obs = wx?.source !== "vehicle" && external ? external : null;
@@ -117,33 +101,34 @@ export function WeatherObservationPanel({ external }: { external: ExternalObserv
   const dew = wx?.source === "vehicle" ? wx.dewpointF : obs?.dewpointF ?? wx?.dewpointF;
   const humidity = wx?.source === "vehicle" ? wx.humidity : obs?.humidity ?? wx?.humidity;
   const pressure = wx?.source === "vehicle" ? wx.pressureMb : obs?.pressureMb ?? wx?.pressureMb;
+  const spread = temp != null && dew != null ? temp - dew : null;
+  const stationLabel = obs ? `${obs.station} · ${Number.isFinite(obs.distanceMi) ? `${obs.distanceMi.toFixed(0)} MI` : "DISTANCE UNKNOWN"}` : source;
+  const age = obs ? ageLabel(obs.updatedAt) : ageLabel(wx?.updatedAt);
   return (
-    <Panel title="Weather Observations" className="wx-panel">
-      <div className="panel-toolbar panel-toolbar--weather">
-        <SourceBadge state={obs ? "fallback" : freshness(wx?.updatedAt)}>SOURCE: {obs ? `${obs.station}  - ${Number.isFinite(obs.distanceMi) ? `${obs.distanceMi.toFixed(0)} MI` : "DISTANCE UNKNOWN"}` : source}</SourceBadge>
-        <span>{obs ? `UPDATED ${ageLabel(obs.updatedAt)}` : ageLabel(wx?.updatedAt)}</span>
+    <Panel title={mode === "chase" ? "Conditions" : "Weather Observations"} className={`wx-panel cockpit-card cockpit-card--${mode}`}>
+      <div className="panel-toolbar panel-toolbar--weather cockpit-toolbar">
+        <SourceBadge state={obs ? "fallback" : freshness(wx?.updatedAt)}>SOURCE: {stationLabel}</SourceBadge>
+        <span>{age}</span>
       </div>
-      <div className="metric-grid metric-grid--wx wx-observation-grid">
-        <MetricTile icon="T" label="Temperature" value={valueText(temp, 1)} unit="deg F" accent="red" />
-        <MetricTile icon="D" label="Dewpoint" value={dew == null ? "--" : dew.toFixed(0)} unit="deg F" accent="blue" />
-        <MetricTile icon="%" label="Humidity" value={valueText(humidity, 0)} unit="%" accent="blue" />
-        <MetricTile icon="P" label="Pressure" value={valueText(pressure, 1)} unit="mb" accent="blue" />
-        <MetricTile icon="B" label="Trend" value={wx?.pressureTrend?.toUpperCase() ?? "--"} unit="baro" />
-        <MetricTile icon="R" label="Rain Rate" value={valueText(wx?.rainRateInHr, 2)} unit="in/hr" accent="blue" />
-        <MetricTile icon="R" label="Rain Total" value={valueText(wx?.rainTotalIn, 2)} unit="in" />
-        <MetricTile icon="B" label="Press Trend" value={wx?.pressureTrend?.toUpperCase() ?? "--"} unit="change" accent={wx?.pressureTrend === "rising" ? "green" : "default"} />
-        <MetricTile icon="W" label="Wind Source" value={obs?.station ?? wx?.sourceLabel ?? source} unit="source" accent="green" />
-        <MetricTile icon="O" label="Last Obs" value={obs ? ageLabel(obs.updatedAt) : ageLabel(wx?.updatedAt)} unit="updated" />
-        <MetricTile icon="L" label="Lightning" value="--" unit="reserved" accent="amber" />
-        <MetricTile icon="UV" label="Extra Slot" value="--" unit="not reported" accent="amber" />
+      <div className="cockpit-primary cockpit-primary--conditions">
+        <MetricTile icon="T" label="Temp" value={valueText(temp, 1)} unit="deg F" accent="red" />
+        <MetricTile icon="D" label="Dew" value={dew == null ? "--" : dew.toFixed(0)} unit="deg F" accent="blue" />
+        {mode === "chase" ? <MetricTile icon="S" label="Spread" value={valueText(spread, 0)} unit="deg" accent="amber" /> : <MetricTile icon="%" label="RH" value={valueText(humidity, 0)} unit="%" accent="blue" />}
+        <MetricTile icon="P" label={mode === "chase" ? "P Trend" : "Pressure"} value={mode === "chase" ? wx?.pressureTrend?.toUpperCase() ?? "--" : valueText(pressure, 1)} unit={mode === "chase" ? "baro" : "mb"} accent={wx?.pressureTrend === "rising" ? "green" : "blue"} />
+      </div>
+      <div className="cockpit-secondary cockpit-secondary--conditions">
+        <MetricTile label="RH" value={valueText(humidity, 0)} unit="%" />
+        <MetricTile label="Rain" value={valueText(wx?.rainRateInHr, 2)} unit="in/hr" />
+        {mode === "normal" && <MetricTile label="Total" value={valueText(wx?.rainTotalIn, 2)} unit="in" />}
+        <MetricTile label="Age" value={age.replace(" AGO", "")} unit="obs" />
       </div>
     </Panel>
   );
 }
 
-export function WindAwarenessPanel({ external }: { external: ExternalObservation | null }) {
+export function WindAwarenessPanel({ external, mode }: { external: ExternalObservation | null; mode: CockpitMode }) {
   const wind = useWind();
-  const useExternal = (!wind || wind.speedMph === null || wind.source === "simulator" || wind.source === "unavailable") && external?.windSpeedMph !== null;
+  const useExternal = (!wind || wind.speedMph === null || wind.source === "simulator" || wind.source === "unavailable") && external?.windSpeedMph != null;
   const speed = useExternal ? external?.windSpeedMph ?? null : wind?.speedMph ?? null;
   const gust = useExternal ? external?.windGustMph ?? null : wind?.gustMph ?? null;
   const direction = useExternal ? external?.windDirectionDeg ?? null : wind?.directionDeg ?? null;
@@ -151,17 +136,17 @@ export function WindAwarenessPanel({ external }: { external: ExternalObservation
   const stateText = speed === null ? "TREND UNAVAILABLE" : useExternal ? `${external?.station}  - ${external && Number.isFinite(external.distanceMi) ? `${external.distanceMi.toFixed(0)} MI` : "DISTANCE UNKNOWN"}  - ${ageLabel(external?.updatedAt)}` : ageLabel(wind?.updatedAt);
   const windSource = useExternal ? `USING ${external?.station}` : wind?.source === "vehicle" ? "VEHICLE SENSOR" : wind?.source === "last-known" ? "LAST VALID WIND" : "VEHICLE SENSOR OFFLINE";
   return (
-    <Panel title="Wind" className="wind-panel" tone="red">
-      <div className="wind-compass" style={{ ["--wind-rot" as string]: `${direction ?? 0}deg` }}>
+    <Panel title="Wind" className={`wind-panel cockpit-card cockpit-card--${mode}`} tone="red">
+      <div className="wind-compass wind-compass--compact" title="Meteorological wind direction: direction wind is coming from" style={{ ["--wind-rot" as string]: `${direction ?? 0}deg` }}>
         <div className="wind-ring" aria-hidden="true" />
         <div className="wind-arrow" />
         <span>{cardinal}<em>{direction == null ? "--" : `${direction.toFixed(0)} deg`}</em></span>
       </div>
       <div className="wind-readout">
-        <strong>{speed === null ? "--" : speed.toFixed(1)}</strong>
+        <strong>{speed === null ? "--" : Math.round(speed)}</strong>
         <span>mph sustained</span>
-        <div>GUST {gust == null ? "--" : gust.toFixed(1)} mph</div>
-        <div className="wind-trend-label">Wind trend (last 5 min)</div>
+        <div>GUST {gust == null ? "--" : Math.round(gust)} mph</div>
+        <div className="wind-trend-label">{mode === "chase" ? "5 min trend" : "Wind trend (last 5 min)"}</div>
         <svg className="wind-spark" viewBox="0 0 160 44" aria-hidden="true">
           {speed === null ? <text x="18" y="27">TREND UNAVAILABLE</text> : <path d="M0 36 L14 30 L28 33 L42 25 L56 28 L70 18 L84 22 L98 11 L112 18 L126 24 L140 19 L160 12" />}
         </svg>

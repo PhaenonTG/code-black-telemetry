@@ -31,6 +31,210 @@
   text-rendering: geometricPrecision;
 }
 
+/* Operation Cockpit: mode-aware top-row information hierarchy. */
+.page-grid--weather {
+  grid-template-columns: repeat(100, minmax(0, 1fr));
+}
+
+.loc-panel { grid-column: 1 / 30 !important; grid-row: 1 !important; }
+.wx-panel { grid-column: 30 / 72 !important; grid-row: 1 !important; }
+.wind-panel { grid-column: 72 / 101 !important; grid-row: 1 !important; }
+
+.cockpit-card,
+.cockpit-card > :not(.cb-panel__title) {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cockpit-head,
+.cockpit-toolbar {
+  min-height: 42px;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.loc-city {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 0.95;
+}
+
+.loc-county {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cockpit-primary,
+.cockpit-secondary {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.cockpit-primary--motion { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cockpit-primary--conditions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cockpit-secondary--conditions {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 0.5rem;
+}
+
+.cockpit-card--chase .cockpit-secondary--conditions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-tile,
+.metric-grid div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.metric-tile strong,
+.metric-grid strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cockpit-primary .metric-tile strong { font-size: clamp(1.35rem, 1.55vw, 2rem); }
+.cockpit-secondary .metric-tile strong { font-size: clamp(1rem, 1.05vw, 1.3rem); }
+
+.cockpit-primary .metric-tile span,
+.cockpit-secondary .metric-tile span,
+.cockpit-primary .metric-tile em,
+.cockpit-secondary .metric-tile em {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cockpit-footer {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 0.55rem;
+}
+
+.cockpit-card--chase .cockpit-footer {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wx-panel .panel-toolbar--weather {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 0.5rem;
+}
+
+.wx-panel .panel-toolbar--weather .cb-badge,
+.wx-panel .panel-toolbar--weather > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wind-panel {
+  display: grid;
+  grid-template-columns: minmax(84px, 0.85fr) minmax(0, 1.4fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  column-gap: 0.8rem;
+  align-items: center;
+}
+
+.wind-panel .cb-panel__title {
+  grid-column: 1 / -1;
+}
+
+.wind-compass--compact {
+  grid-column: 1;
+  grid-row: 2;
+  width: min(100%, 132px);
+  aspect-ratio: 1;
+  min-height: 0;
+  margin: 0 auto;
+}
+
+.wind-compass--compact span {
+  font-size: clamp(1.5rem, 2.2vw, 2.55rem);
+  line-height: 0.9;
+}
+
+.wind-compass--compact span em {
+  font-size: clamp(0.72rem, 0.75vw, 0.95rem);
+  margin-top: 0.35rem;
+}
+
+.wind-readout {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  align-self: center;
+}
+
+.wind-readout > strong {
+  display: block;
+  font-size: clamp(2.2rem, 4.1vw, 4.6rem);
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+.wind-readout > span,
+.wind-readout > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wind-spark {
+  width: 100%;
+  max-height: 44px;
+}
+
+.wind-toolbar {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.wind-toolbar > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mode-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-top: 1rem;
+  max-width: 240px;
+}
+
+.mode-toggle button {
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.045);
+  color: #d8dde7;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font: inherit;
+}
+
+.mode-toggle button.active {
+  border-color: rgba(255, 47, 64, 0.75);
+  background: rgba(255, 47, 64, 0.18);
+  color: #ff3044;
+}
+
+@media (max-width: 1450px) {
+  .loc-panel { grid-column: 1 / 31 !important; }
+  .wx-panel { grid-column: 31 / 71 !important; }
+  .wind-panel { grid-column: 71 / 101 !important; }
+  .cockpit-primary .metric-tile strong { font-size: clamp(1.15rem, 1.4vw, 1.65rem); }
+  .wind-readout > strong { font-size: clamp(2rem, 3.6vw, 3.7rem); }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1440,6 +1644,120 @@ button {
 
   .bottom-dock {
     width: min(1080px, calc(100vw - 24px)) !important;
+  }
+}
+
+/* Operation Cockpit final hierarchy overrides. These intentionally sit last
+   because older sprint CSS defines wind/card styles more than once. */
+.cockpit-card .metric-tile,
+.cockpit-card .metric-grid div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cockpit-card .metric-tile strong,
+.cockpit-card .metric-grid strong {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.cockpit-card .metric-tile span,
+.cockpit-card .metric-tile em {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.loc-panel .metric-tile strong {
+  font-size: clamp(20px, 1.45vw, 30px);
+}
+
+.loc-panel .metric-tile span {
+  line-height: 1.16;
+}
+
+.wx-panel .metric-tile strong {
+  font-size: clamp(18px, 1.25vw, 25px);
+}
+
+.wx-panel .metric-tile span {
+  line-height: 1.14;
+}
+
+.wind-panel.cockpit-card {
+  grid-template-columns: minmax(145px, 0.72fr) minmax(0, 1.28fr) !important;
+  align-items: center;
+}
+
+.wind-panel.cockpit-card .wind-compass--compact {
+  width: min(18dvh, 178px) !important;
+  margin-inline: auto;
+}
+
+.wind-panel.cockpit-card .wind-compass--compact span {
+  font-size: clamp(28px, 2.05vw, 42px) !important;
+}
+
+.wind-panel.cockpit-card .wind-compass--compact span em {
+  font-size: clamp(10px, 0.82vw, 14px) !important;
+  margin-top: 8px;
+}
+
+.wind-panel.cockpit-card .wind-readout {
+  min-width: 0;
+  padding: 14px 18px 10px 6px !important;
+}
+
+.wind-panel.cockpit-card .wind-readout strong {
+  font-size: clamp(48px, 4.2vw, 74px) !important;
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.wind-panel.cockpit-card .wind-readout > span,
+.wind-panel.cockpit-card .wind-readout > div {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wind-panel.cockpit-card .wind-trend-label {
+  margin-top: 10px !important;
+}
+
+.wind-panel.cockpit-card .wind-spark {
+  height: 54px !important;
+  margin-top: 8px;
+}
+
+.wind-panel.cockpit-card .wind-toolbar {
+  min-width: 0;
+}
+
+.wind-panel.cockpit-card .wind-toolbar > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (orientation: portrait) {
+  .loc-panel,
+  .wx-panel,
+  .wind-panel {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+  }
+
+  .wind-panel {
+    grid-template-columns: minmax(96px, 0.8fr) minmax(0, 1.3fr);
+  }
+
+  .wind-compass--compact {
+    width: min(100%, 116px);
   }
 }
 

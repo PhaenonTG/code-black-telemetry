@@ -86,7 +86,7 @@ export interface TelemetrySnapshot {
 }
 
 export type TelemetrySource = "vehicle" | "external" | "last-known" | "simulator" | "unavailable";
-export type GpsSource = "vehicle" | "esp" | "tablet" | "last-known" | "simulator";
+export type GpsSource = "vehicle" | "esp" | "tablet" | "last-known" | "simulator" | "unavailable";
 export type FreshnessState = "LIVE" | "RECENT" | "STALE" | "FALLBACK" | "OFFLINE";
 
 export interface TabletLocationInput {

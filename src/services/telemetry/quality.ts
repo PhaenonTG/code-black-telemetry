@@ -51,7 +51,7 @@ export function valueText(value: number | null | undefined, digits = 0, fallback
 }
 
 export function ageSeconds(updatedAt: number | null | undefined, now = Date.now()): number | null {
-  if (!isFiniteNumber(updatedAt)) return null;
+  if (!isFiniteNumber(updatedAt) || updatedAt <= 0) return null;
   return Math.max(0, Math.round((now - updatedAt) / 1000));
 }
 
@@ -86,4 +86,3 @@ export function distanceMiles(a: { lat: number; lon: number }, b: { lat: number;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
   return 2 * r * Math.asin(Math.sqrt(h));
 }
-

@@ -23,8 +23,9 @@ export function TopBar() {
 
   const cpuWarn = (system?.cpuPercent ?? 0) > 80;
   const battWarn = (power?.mainBatteryV ?? 13) < 12.0;
-  const gpsSource = gps?.source === "tablet" ? "Tablet GPS" : gps?.source === "vehicle" || gps?.source === "esp" ? "Pi GPS" : "Sim GPS";
-  const gpsQuality = gps?.hasFix ? `${gps.satellites ?? "--"} sats` : "No fix";
+  const gpsSource = gps?.source === "tablet" ? "Tablet GPS" : gps?.source === "vehicle" || gps?.source === "esp" ? "Pi GPS" : gps?.source === "last-known" ? "Last Known GPS" : "GPS Acquiring";
+  const gpsQuality = gps?.hasFix && gps.source !== "unavailable" && gps.source !== "simulator" ? `${gps.satellites ?? "--"} sats` : "No fix";
+  const validGps = Boolean(gps?.hasFix && gps.source !== "unavailable" && gps.source !== "simulator" && Math.abs(gps.lat) <= 90 && Math.abs(gps.lon) <= 180 && !(gps.lat === 0 && gps.lon === 0));
 
   return (
     <header className="ops-header">
@@ -52,7 +53,7 @@ export function TopBar() {
           <StatusBadge online={status?.piOnline ?? false} label="PI" pulse />
           <span>UNIT-01</span>
           <strong className={cpuWarn || battWarn ? "is-warn" : "is-ok"}>{cpuWarn || battWarn ? "WARN" : "NOMINAL"}</strong>
-          <em>{gps ? `${gps.lat.toFixed(5)} N  ${Math.abs(gps.lon).toFixed(5)} W` : "--"}</em>
+          <em>{validGps && gps ? `${gps.lat.toFixed(5)} N  ${Math.abs(gps.lon).toFixed(5)} W` : "--"}</em>
         </div>
       </div>
     </header>
