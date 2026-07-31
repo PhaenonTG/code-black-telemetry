@@ -1687,6 +1687,11 @@ button {
   line-height: 1.14;
 }
 
+.wx-panel .metric-tile--age strong,
+.wx-panel .metric-tile--pressure strong {
+  font-size: clamp(17px, 1.08vw, 22px);
+}
+
 .wind-panel.cockpit-card {
   grid-template-columns: minmax(145px, 0.72fr) minmax(0, 1.28fr) !important;
   align-items: center;

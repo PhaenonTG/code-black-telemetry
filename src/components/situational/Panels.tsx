@@ -85,7 +85,7 @@ export function LocationMotionPanel({ tabletPermission, location, mode }: { tabl
       <div className="loc-footer cockpit-footer">
         {mode === "normal" && <><div><span>Lat</span><strong>{valid ? location.latitude!.toFixed(5) : "--"}</strong></div><div><span>Lon</span><strong>{valid ? location.longitude!.toFixed(5) : "--"}</strong></div></>}
         <div><span>Fix</span><strong>{location.fixState.replace("_", " ")}</strong></div>
-        <div><span>Age</span><strong>{location.timestamp ? ageLabel(location.timestamp) : "NO FIX"}</strong></div>
+        {mode === "chase" && <div><span>Age</span><strong>{location.timestamp ? ageLabel(location.timestamp) : "NO FIX"}</strong></div>}
       </div>
       {tabletPermission === "denied" && <div className="cb-note cb-note--warn">Tablet GPS denied. Holding last valid source.</div>}
       {!valid && <div className="cb-note cb-note--warn">{location.fallbackReason}</div>}
@@ -114,13 +114,13 @@ export function WeatherObservationPanel({ external, mode }: { external: External
         <MetricTile icon="T" label="Temp" value={valueText(temp, 1)} unit="deg F" accent="red" />
         <MetricTile icon="D" label="Dew" value={dew == null ? "--" : dew.toFixed(0)} unit="deg F" accent="blue" />
         {mode === "chase" ? <MetricTile icon="S" label="Spread" value={valueText(spread, 0)} unit="deg" accent="amber" /> : <MetricTile icon="%" label="RH" value={valueText(humidity, 0)} unit="%" accent="blue" />}
-        <MetricTile icon="P" label={mode === "chase" ? "P Trend" : "Pressure"} value={mode === "chase" ? wx?.pressureTrend?.toUpperCase() ?? "--" : valueText(pressure, 1)} unit={mode === "chase" ? "baro" : "mb"} accent={wx?.pressureTrend === "rising" ? "green" : "blue"} />
+        <MetricTile icon="P" label={mode === "chase" ? "P Trend" : "Pressure"} value={mode === "chase" ? wx?.pressureTrend?.toUpperCase() ?? "--" : valueText(pressure, 0)} unit={mode === "chase" ? "baro" : "mb"} accent={wx?.pressureTrend === "rising" ? "green" : "blue"} />
       </div>
       <div className="cockpit-secondary cockpit-secondary--conditions">
         <MetricTile label="RH" value={valueText(humidity, 0)} unit="%" />
         <MetricTile label="Rain" value={valueText(wx?.rainRateInHr, 2)} unit="in/hr" />
         {mode === "normal" && <MetricTile label="Total" value={valueText(wx?.rainTotalIn, 2)} unit="in" />}
-        <MetricTile label="Age" value={age.replace(" AGO", "")} unit="obs" />
+        <MetricTile label="Age" value={age.replace(" AGO", "").replace(" MIN", "M").replace(" SEC", "S")} unit="obs" />
       </div>
     </Panel>
   );
