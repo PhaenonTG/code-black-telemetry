@@ -26,8 +26,17 @@ $fileName = "Code-Black-OPS_${safeOperation}_${timestamp}.png"
 $remoteName = "/sdcard/$fileName"
 $localPath = Join-Path $outputDir $fileName
 
-adb -s $DeviceSerial shell screencap -p $remoteName | Out-Null
-adb -s $DeviceSerial pull $remoteName $localPath | Out-Null
+& adb -s $DeviceSerial shell screencap -p $remoteName 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "Screenshot capture failed on device $DeviceSerial."
+}
+
+& adb -s $DeviceSerial pull $remoteName $localPath 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "Screenshot pull failed from device $DeviceSerial."
+}
+
+& adb -s $DeviceSerial shell rm $remoteName 2>&1 | Out-Null
 
 if (-not (Test-Path -LiteralPath $localPath)) {
   throw "Screenshot capture failed: $localPath was not created."

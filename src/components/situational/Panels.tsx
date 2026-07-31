@@ -50,6 +50,15 @@ function localTime(value: string | number | null | undefined) {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+function compactAge(value: number | null | undefined) {
+  return ageLabel(value)
+    .replace(" AGO", "")
+    .replace(" MIN", "M")
+    .replace(" SEC", "S")
+    .replace(" HR", "H")
+    .replace(" HOUR", "H");
+}
+
 function MetricTile({ icon, label, value, unit, accent = "default" }: { icon?: string; label: string; value: React.ReactNode; unit?: React.ReactNode; accent?: "default" | "red" | "blue" | "amber" | "green" }) {
   const labelClass = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return (
@@ -65,27 +74,31 @@ function MetricTile({ icon, label, value, unit, accent = "default" }: { icon?: s
 export function LocationMotionPanel({ tabletPermission, location, mode }: { tabletPermission: string; location: CanonicalLocation; mode: CockpitMode }) {
   const valid = location.validity === "VALID" && location.latitude != null && location.longitude != null;
   const source = sourceLabel(location.source);
-  const title = location.resolvedCity && location.resolvedState ? `NEAR ${location.resolvedCity}, ${location.resolvedState}` : valid ? "CURRENT POSITION" : "GPS ACQUIRING";
+  const place = location.resolvedCity && location.resolvedState ? `${location.resolvedCity}, ${location.resolvedState}` : valid ? "CURRENT POSITION" : "GPS ACQUIRING";
   const county = location.resolvedCounty ?? (valid ? "LOCALITY RESOLVING" : "NO CURRENT GPS FIX");
+  const fixValue = location.fixState === "FIX_3D" ? "3D FIX" : location.fixState === "FIX_2D" ? "2D FIX" : location.fixState.replace("_", " ");
+  const fixHero = location.fixState === "FIX_3D" ? "3D" : location.fixState === "FIX_2D" ? "2D" : location.fixState.replace("_", " ");
+  const altitudeValue = location.altitudeFt == null ? "--" : location.altitudeFt >= 1000 ? `${Math.round(location.altitudeFt / 1000)}K` : location.altitudeFt.toFixed(0);
   return (
     <Panel title="Location & Motion" className={`loc-panel cockpit-card cockpit-card--${mode}`}>
       <div className="loc-head cockpit-head">
         <div>
-          <div className="loc-city">{title}</div>
+          <div className="loc-kicker">{mode === "chase" && valid ? "NEAR" : valid ? "LOCALITY" : "STATUS"}</div>
+          <div className="loc-city">{place}</div>
           <div className="loc-county">{county}</div>
         </div>
-        <SourceBadge state={location.freshness}>GPS: {source}</SourceBadge>
+        <SourceBadge state={location.freshness}>{source} · {location.timestamp ? compactAge(location.timestamp) : "NO FIX"}</SourceBadge>
       </div>
       <div className="cockpit-primary cockpit-primary--motion">
         <MetricTile label="Speed" value={valueText(location.speedMph, 1)} unit="mph" />
         <MetricTile label="Heading" value={location.headingCardinal || cardinalFromDeg(location.headingDeg)} unit={`${valueText(location.headingDeg, 0)} deg`} />
-        {mode === "normal" && <MetricTile label="Elevation" value={valueText(location.altitudeFt, 0)} unit="ft" />}
-        {mode === "chase" && <MetricTile label="GPS" value={location.fixState.replace("_", " ")} unit={location.accuracyM != null ? `${Math.round(location.accuracyM)} m` : location.freshness} />}
+        {mode === "normal" && <MetricTile label="Elevation" value={altitudeValue} unit="ft" />}
+        {mode === "chase" && <MetricTile label="GPS" value={fixHero} unit={location.accuracyM != null ? `FIX +/-${Math.round(location.accuracyM)} m` : location.freshness} />}
       </div>
       <div className="loc-footer cockpit-footer">
         {mode === "normal" && <><div><span>Lat</span><strong>{valid ? location.latitude!.toFixed(5) : "--"}</strong></div><div><span>Lon</span><strong>{valid ? location.longitude!.toFixed(5) : "--"}</strong></div></>}
-        <div><span>Fix</span><strong>{location.fixState.replace("_", " ")}</strong></div>
-        {mode === "chase" && <div><span>Age</span><strong>{location.timestamp ? ageLabel(location.timestamp) : "NO FIX"}</strong></div>}
+        <div><span>Fix</span><strong>{fixValue}</strong></div>
+        {mode === "chase" && <div><span>Accuracy</span><strong>{location.accuracyM != null ? `+/-${Math.round(location.accuracyM)} M` : location.freshness}</strong></div>}
       </div>
       {tabletPermission === "denied" && <div className="cb-note cb-note--warn">Tablet GPS denied. Holding last valid source.</div>}
       {!valid && <div className="cb-note cb-note--warn">{location.fallbackReason}</div>}
@@ -103,24 +116,24 @@ export function WeatherObservationPanel({ external, mode }: { external: External
   const pressure = wx?.source === "vehicle" ? wx.pressureMb : obs?.pressureMb ?? wx?.pressureMb;
   const spread = temp != null && dew != null ? temp - dew : null;
   const stationLabel = obs ? `${obs.station} · ${Number.isFinite(obs.distanceMi) ? `${obs.distanceMi.toFixed(0)} MI` : "DISTANCE UNKNOWN"}` : source;
-  const age = obs ? ageLabel(obs.updatedAt) : ageLabel(wx?.updatedAt);
+  const age = obs ? compactAge(obs.updatedAt) : compactAge(wx?.updatedAt);
+  const limited = dew == null && humidity == null && wx?.rainRateInHr == null;
   return (
     <Panel title={mode === "chase" ? "Conditions" : "Weather Observations"} className={`wx-panel cockpit-card cockpit-card--${mode}`}>
       <div className="panel-toolbar panel-toolbar--weather cockpit-toolbar">
-        <SourceBadge state={obs ? "fallback" : freshness(wx?.updatedAt)}>SOURCE: {stationLabel}</SourceBadge>
-        <span>{age}</span>
+        <SourceBadge state={obs ? "fallback" : freshness(wx?.updatedAt)}>{limited && temp != null ? "TEMPERATURE ONLY" : "STATION OBSERVATION"}</SourceBadge>
       </div>
       <div className="cockpit-primary cockpit-primary--conditions">
-        <MetricTile icon="T" label="Temp" value={valueText(temp, 1)} unit="deg F" accent="red" />
+        <MetricTile icon="T" label="Temp" value={mode === "chase" && temp != null ? temp.toFixed(0) : valueText(temp, 1)} unit="deg F" accent="red" />
         <MetricTile icon="D" label="Dew" value={dew == null ? "--" : dew.toFixed(0)} unit="deg F" accent="blue" />
         {mode === "chase" ? <MetricTile icon="S" label="Spread" value={valueText(spread, 0)} unit="deg" accent="amber" /> : <MetricTile icon="%" label="RH" value={valueText(humidity, 0)} unit="%" accent="blue" />}
         <MetricTile icon="P" label={mode === "chase" ? "P Trend" : "Pressure"} value={mode === "chase" ? wx?.pressureTrend?.toUpperCase() ?? "--" : valueText(pressure, 0)} unit={mode === "chase" ? "baro" : "mb"} accent={wx?.pressureTrend === "rising" ? "green" : "blue"} />
       </div>
-      <div className="cockpit-secondary cockpit-secondary--conditions">
-        <MetricTile label="RH" value={valueText(humidity, 0)} unit="%" />
-        <MetricTile label="Rain" value={valueText(wx?.rainRateInHr, 2)} unit="in/hr" />
-        {mode === "normal" && <MetricTile label="Total" value={valueText(wx?.rainTotalIn, 2)} unit="in" />}
-        <MetricTile label="Age" value={age.replace(" AGO", "").replace(" MIN", "M").replace(" SEC", "S")} unit="obs" />
+      <div className="conditions-strip">
+        <span>RH <strong>{humidity == null ? "--" : `${Math.round(humidity)}%`}</strong></span>
+        {(mode === "normal" || wx?.rainRateInHr != null) && <span>RAIN <strong>{wx?.rainRateInHr == null ? "--" : `${wx.rainRateInHr.toFixed(2)} IN/HR`}</strong></span>}
+        {mode === "normal" && <span>TOTAL <strong>{wx?.rainTotalIn == null ? "--" : `${wx.rainTotalIn.toFixed(2)} IN`}</strong></span>}
+        <span className="conditions-strip__source">{stationLabel} - {age}</span>
       </div>
     </Panel>
   );
@@ -133,8 +146,8 @@ export function WindAwarenessPanel({ external, mode }: { external: ExternalObser
   const gust = useExternal ? external?.windGustMph ?? null : wind?.gustMph ?? null;
   const direction = useExternal ? external?.windDirectionDeg ?? null : wind?.directionDeg ?? null;
   const cardinal = cardinalFromDeg(direction);
-  const stateText = speed === null ? "TREND UNAVAILABLE" : useExternal ? `${external?.station}  - ${external && Number.isFinite(external.distanceMi) ? `${external.distanceMi.toFixed(0)} MI` : "DISTANCE UNKNOWN"}  - ${ageLabel(external?.updatedAt)}` : ageLabel(wind?.updatedAt);
-  const windSource = useExternal ? `USING ${external?.station}` : wind?.source === "vehicle" ? "VEHICLE SENSOR" : wind?.source === "last-known" ? "LAST VALID WIND" : "VEHICLE SENSOR OFFLINE";
+  const stateText = speed === null ? "NO TRUSTED WIND" : useExternal ? `${external?.station} - ${external && Number.isFinite(external.distanceMi) ? `${external.distanceMi.toFixed(0)} MI` : "DISTANCE UNKNOWN"} - ${compactAge(external?.updatedAt)}` : compactAge(wind?.updatedAt);
+  const windSource = useExternal ? "STATION WIND" : wind?.source === "vehicle" ? "VEHICLE WIND" : wind?.source === "last-known" ? "LAST VALID WIND" : "VEHICLE WIND OFFLINE";
   return (
     <Panel title="Wind" className={`wind-panel cockpit-card cockpit-card--${mode}`} tone="red">
       <div className="wind-compass wind-compass--compact" title="Meteorological wind direction: direction wind is coming from" style={{ ["--wind-rot" as string]: `${direction ?? 0}deg` }}>
@@ -144,15 +157,15 @@ export function WindAwarenessPanel({ external, mode }: { external: ExternalObser
       </div>
       <div className="wind-readout">
         <strong>{speed === null ? "--" : Math.round(speed)}</strong>
-        <span>mph sustained</span>
-        <div>GUST {gust == null ? "--" : Math.round(gust)} mph</div>
+        <span>MPH<br />SUSTAINED</span>
+        <div className={gust == null ? "wind-gust wind-gust--missing" : "wind-gust"}>{gust == null ? "NO GUST REPORTED" : `GUST ${Math.round(gust)} MPH`}</div>
         <div className="wind-trend-label">{mode === "chase" ? "5 min trend" : "Wind trend (last 5 min)"}</div>
         <svg className="wind-spark" viewBox="0 0 160 44" aria-hidden="true">
           {speed === null ? <text x="18" y="27">TREND UNAVAILABLE</text> : <path d="M0 36 L14 30 L28 33 L42 25 L56 28 L70 18 L84 22 L98 11 L112 18 L126 24 L140 19 L160 12" />}
         </svg>
       </div>
       <div className="panel-toolbar wind-toolbar">
-        <SourceBadge state={useExternal ? "fallback" : freshness(wind?.updatedAt)}>WIND {windSource}</SourceBadge>
+        <SourceBadge state={useExternal ? "fallback" : freshness(wind?.updatedAt)}>{windSource}</SourceBadge>
         <span>{stateText}</span>
       </div>
     </Panel>
@@ -173,7 +186,7 @@ export function AlertsPanel({ products, error }: { products: AlertProduct[]; err
             <em>{product.expires ? `Expires ${product.expires}` : product.source}</em>
           </button>
         ))}
-        {products.length === 1 && <div className="calm-card calm-card--secondary">NO ADDITIONAL LOCAL PRODUCTS</div>}
+        {products.length === 1 && <div className="calm-card calm-card--secondary">NO OTHER LOCAL PRODUCTS</div>}
         <button className="view-all-button" onClick={() => undefined}>View All Alerts</button>
       </div>
       {selected && <ProductModal product={selected} onClose={() => setSelected(null)} />}
@@ -196,7 +209,7 @@ export function StormThreatsPanel({ products }: { products: AlertProduct[] }) {
             <em>Valid until {watch.expires || "--"}</em>
           </button>
         ) : (
-          <div className="threat-card threat-card--watch threat-card--empty"><span>Watch Status</span><strong>No active local watch</strong><em>NWS/SPC source</em></div>
+          <div className="threat-card threat-card--watch threat-card--empty"><span>Watch Status</span><strong>No local watch</strong><em>NWS/SPC source</em></div>
         )}
         {md ? (
           <button className="threat-card threat-card--md" onClick={() => setSelected(md)}>
@@ -205,7 +218,7 @@ export function StormThreatsPanel({ products }: { products: AlertProduct[] }) {
             <em>{md.expires ? `Expires ${md.expires}` : "SPC mesoscale discussion"}</em>
           </button>
         ) : (
-          <div className="threat-card threat-card--md threat-card--empty"><span>Mesoscale Discussion</span><strong>No active local MD</strong><em>Current location clear</em></div>
+          <div className="threat-card threat-card--md threat-card--empty"><span>Mesoscale Discussion</span><strong>No local MD</strong><em>Current location clear</em></div>
         )}
         {warning ? (
           <button className={`threat-card threat-card--${warning.severity}`} onClick={() => setSelected(warning)}>
@@ -214,7 +227,7 @@ export function StormThreatsPanel({ products }: { products: AlertProduct[] }) {
             <em>{warning.expires ? `Expires ${warning.expires}` : warning.source}</em>
           </button>
         ) : (
-          <div className="threat-card threat-card--risk threat-card--empty"><span>SPC Outlook</span><strong>No current local SPC threat data</strong><em>Source: SPC</em></div>
+          <div className="threat-card threat-card--risk threat-card--empty"><span>SPC Outlook</span><strong>No local SPC outlook</strong><em>Source: SPC</em></div>
         )}
         <button className="view-all-button" onClick={() => undefined}>View All Products</button>
       </div>
@@ -467,6 +480,8 @@ function AtlasMapRadarPanel({
   const radarLayerActive = radarVisible && activeFrame && !radarError.includes("UNAVAILABLE");
   const historicalLabel = activeFrame && !loopSeries.liveEdge ? "HISTORICAL" : activeFrame?.freshness;
   const scanLabel = activeFrame ? `SCAN ${localTime(activeFrame.time)}  - AGE ${ageText(activeFrame.ageSeconds)}` : radarError || "LOADING";
+  const mapStatusLabel = radarError ? `ATLAS - ${radarError}` : activeFrame ? `${activeFrame.site.id} - ${product} - ${ageText(activeFrame.ageSeconds)} OLD` : "ATLAS - RADAR LOADING";
+  const mapScanLabel = activeFrame ? `${activeFrame.sourceLevel} - ${historicalLabel}` : scanLabel;
 
   return (
     <Panel title="Situational Map" className="map-panel map-panel--atlas">
@@ -480,8 +495,8 @@ function AtlasMapRadarPanel({
           rangeRings={rangeRings}
           onRangeRingsChange={setRangeRings}
           onOpenExpanded={allowExpand ? () => setExpanded(true) : undefined}
-          statusLabel={radarError ? `ATLAS  - ${radarError}` : activeFrame ? `${product}  - ${activeFrame.site.id}  - ${activeFrame.sourceLevel}  - ${historicalLabel}` : "ATLAS  - RADAR LOADING"}
-          scanLabel={playbackContext?.playing ? `${scanLabel}  - LOOPING ${playbackContext.frameIndex + 1}/${playbackContext.frameCount}` : scanLabel}
+          statusLabel={mapStatusLabel}
+          scanLabel={playbackContext?.playing ? `${mapScanLabel} - LOOPING ${playbackContext.frameIndex + 1}/${playbackContext.frameCount}` : mapScanLabel}
         />
       </div>
       <div className="atlas-product-mini" aria-label="Radar product selector">
@@ -801,6 +816,7 @@ function LegacyMapRadarPanel({
 
   const radarLayerActive = radarVisible && frame && !radarError.includes("UNAVAILABLE");
   const scanLabel = frame ? `SCAN ${localTime(frame.time)}  - AGE ${ageText(frame.ageSeconds)}` : radarError || "LOADING";
+  const compactRadarStatus = radarError ? `${basemapStatusLabel(provider)} - ${radarError}` : frame ? `${frame.site.id} - ${product} - ${ageText(frame.ageSeconds)} OLD` : `${basemapStatusLabel(provider)} - RADAR LOADING`;
 
   return (
     <Panel title="Situational Map" className="map-panel">
@@ -881,8 +897,8 @@ function LegacyMapRadarPanel({
         )}
         <div className="radar-strip">
           <button onClick={() => applyProduct(product === "REF" ? "VEL" : product === "VEL" ? "SRV" : product === "SRV" ? "CC" : "REF")}>{product}</button>
-          <span>{frame ? `${frame.site.id}  - ${frame.sourceLevel}  - ${frame.freshness}` : "ON DEVICE"}</span>
-          <em>{scanLabel}</em>
+          <span>{compactRadarStatus}</span>
+          <em>{frame ? `${frame.sourceLevel} - ${frame.freshness}` : scanLabel}</em>
           <button aria-label="Toggle radar visibility" onClick={(event) => { event.stopPropagation(); setRadarVisible((value) => !value); }}>{radarVisible ? "RADAR" : "HIDDEN"}</button>
           {allowExpand && <button aria-label="Open expanded radar" onPointerDown={(event) => { event.stopPropagation(); setExpanded(true); }} onClick={(event) => { event.stopPropagation(); setExpanded(true); }}>OPEN</button>}
         </div>
@@ -897,7 +913,7 @@ function LegacyMapRadarPanel({
           {frame?.legend.units && <span>{frame.legend.units}</span>}
         </div>
         <div className="map-status">
-          {radarError ? `${basemapStatusLabel(provider)}  - ${radarError}` : frame ? `${product}  - ${frame.site.id}  - ${frame.sourceLevel}  - ${frame.freshness}` : `${basemapStatusLabel(provider)}  - RADAR LOADING`}
+          {compactRadarStatus}
           <span className="sr-only">{`Mapbox token present ${mapboxState.tokenPresent ? "yes" : "no"} prefix ${mapboxState.prefix} length ${mapboxState.tokenLength}`}</span>
         </div>
       </div>

@@ -363,7 +363,6 @@ export function AtlasMap({
 
   const visibleError = mapError && mapState !== "READY" ? mapError : "";
   const canvasCount = containerRef.current?.querySelectorAll("canvas").length ?? 0;
-  const radarStatus = radarError || (radarState === "FRAME_MISSING" ? "NO RADAR FRAME" : radarState.replace(/_/g, " "));
   const atlasStateLabel = ATLAS_DIAGNOSTICS_ENABLED
     ? `${mapState}${loaded ? "" : " LOADING"} c${canvasCount} r${renderCount} i${idleCount} ${pixelSample}`
     : `${mapState}${loaded ? "" : " LOADING"}`;
@@ -373,7 +372,7 @@ export function AtlasMap({
       <div ref={containerRef} className="atlas-map" data-camera-mode={cameraMode} />
       {visibleError && <div className="atlas-map-error">{visibleError}</div>}
       <div className="radar-strip atlas-radar-strip">
-        <span>{frame ? `${frame.site.id}  - ${frame.sourceLevel}  - ${frame.freshness}` : "ATLAS MAPBOX GL"}</span>
+        <span>{statusLabel}</span>
         <em>{scanLabel}</em>
         {onOpenExpanded && <button type="button" onClick={(event) => { event.stopPropagation(); onOpenExpanded(); }}>OPEN</button>}
       </div>
@@ -383,7 +382,7 @@ export function AtlasMap({
         <button type="button" aria-label="Toggle follow mode" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{cameraMode === "FOLLOW_HEADING" ? "HDG" : cameraMode === "FREE" ? "REC" : "NUP"}</button>
         <button type="button" aria-label="Toggle range rings" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RNG</button>
       </div>
-      <div className="map-status atlas-map-status">{visibleError || `${statusLabel}  - ${radarStatus}  - ${atlasStateLabel}`}</div>
+      <div className="map-status atlas-map-status">{visibleError || (ATLAS_DIAGNOSTICS_ENABLED ? `${statusLabel} - ${atlasStateLabel}` : statusLabel)}</div>
     </div>
   );
 }

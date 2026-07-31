@@ -30,7 +30,7 @@ export function TopBar() {
   return (
     <header className="ops-header">
       <div className="brand-lockup" aria-label="Code Black OPS">
-        <span className="brand-mark" aria-hidden="true" />
+        <span className="brand-mark brand-mark--codeblack" aria-hidden="true"><span /></span>
         <div>
           <div className="brand-title"><span>Code Black</span> <strong>OPS</strong></div>
           <div className="brand-subtitle">Situational Awareness</div>
