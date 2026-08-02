@@ -64,8 +64,8 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
       source: VEHICLE_SOURCE,
       paint: {
         "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 8, 11, 32],
-        "circle-color": "rgba(20, 167, 255, 0.12)",
-        "circle-stroke-color": "rgba(20, 167, 255, 0.35)",
+        "circle-color": "rgba(255, 45, 53, 0.12)",
+        "circle-stroke-color": "rgba(255, 45, 53, 0.35)",
         "circle-stroke-width": 1,
       },
     });
@@ -78,7 +78,7 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
       type: "line",
       source: VEHICLE_HEADING_SOURCE,
       paint: {
-        "line-color": "#14a7ff",
+        "line-color": "#ff2d35",
         "line-width": 4,
         "line-blur": 1,
         "line-opacity": 0.9,
@@ -94,8 +94,8 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
       source: VEHICLE_SOURCE,
       paint: {
         "circle-radius": 9,
-        "circle-color": "#14a7ff",
-        "circle-stroke-color": "#e9fbff",
+        "circle-color": "#ff2d35",
+        "circle-stroke-color": "#fff4f4",
         "circle-stroke-width": 2,
       },
     });
