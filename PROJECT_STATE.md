@@ -314,6 +314,32 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
     reads it instead of a hardcoded `CHASER_RADIUS_MILES = 100` constant. New "Nearby Chasers"
     panel in Settings with a number input + Save button. Verified end-to-end on-device: saving
     persists, an out-of-range value (5000) correctly clamps to 500 on save.
+15. **Radar reflectivity noise fix** (`native/radar-ref/src/lib.rs`, a Rust crate compiled to
+    `libcodeblack_radar.so` over JNI — see the "Native radar renderer" section above, this is not
+    in `src/`). The vendored `nexrad-render` crate's stock color scale painted everything below
+    5 dBZ (including all negative-dBZ returns, most of what real ground clutter/biological scatter
+    reads as) opaque black instead of transparent. Replaced with a custom scale, same colors above
+    5 dBZ, transparent below. Also added dual-pol correlation-coefficient (CC) filtering on top,
+    masking low-CC gates before rendering — built and deployed, but its real-world impact was
+    inconclusive on the quiet-weather day it was tested against; needs a real storm to confirm.
+16. **Spotter Network severe report submission** — moved to its own dedicated page (dock icon
+    "RPT") rather than a modal on the Nearby card, plus a shortcut button at the bottom of the
+    Alerts page, after the owner asked for the Nearby card to never scroll. Full form (hazard
+    checkboxes, hail/wind conditionals, narrative, NWSChat/Twitter toggles), GPS auto-filled,
+    gated behind sign-in. `src/components/situational/ReportPage.tsx`.
+17. **Nearby card refinements**: hospital match now requires OSM's `emergency=yes` tag (a plain
+    "hospital" match can be a rehab/specialty facility with no ER — confirmed live via Overpass
+    that this is a real gap, not hypothetical) and is labeled "ER" instead of "Hospital". Category
+    selection was reworked from "pick the closest" to a ranked scoring model: confirmed-open beats
+    typical-open beats unknown beats closed, with bed count as a secondary tiebreak for ER
+    (capability proxy, since OSM has no rating system) and distance only as the final tiebreaker.
+    Verified live on-device — Gas and Lodging both correctly swapped from a closer
+    "typically open"/unknown pick to a farther confirmed-open one.
+18. **Wind card typography fix + charging icon**: Wind's hero numbers had a bespoke
+    `clamp(28px, 2.8vw, 42px)` independent of the shared metric-tile sizing Location/Conditions
+    use, making it read oversized next to its row neighbors — matched to Conditions' exact
+    per-mode clamp. `useBattery()` now also exposes `isCharging`; the header battery chip shows a
+    small amber lightning-bolt icon when charging.
 
 All of the above were built, `npm run build` typechecked clean, synced/compiled/installed to the
 physical tablet, and screenshot-verified on-device before being considered done.
@@ -372,11 +398,14 @@ physical tablet, and screenshot-verified on-device before being considered done.
    existing alias-parsing design. Requires iOS support (see #5) if Nick's device is an iPad.
    **Distinct from the owner's own vehicle**, which already has 3 ESP32s feeding its Pi as
    normal — no change needed there.
-7. **Typography consistency pass** — owner flagged Wind's numbers as too bold relative to
-   Conditions', which reads too small, plus wants a general font-size/weight balance check across
-   the whole dashboard. Not started.
+7. **Typography consistency pass** — DONE for Wind vs. Conditions specifically: Wind's hero numbers
+   had a bespoke `clamp(28px, 2.8vw, 42px)` independent of the shared metric-tile sizing, matched
+   to Conditions' exact per-mode clamp instead. A broader dashboard-wide font audit beyond this one
+   flagged pair has not been done.
 8. **Wind card redesign** — owner says it has "too much missing space" but doesn't have a concrete
-   design in mind ("I'll know it when I see it") — wants a proposal, not just a tweak. Paired with:
+   design in mind ("I'll know it when I see it") — wants a proposal, not just a tweak. Typography
+   is now fixed (see #7); the structural "too much empty space" layout redesign is still open.
+   Paired with:
 9. **Peak-hold wind gust** — track the highest gust seen (session-scoped, not persisted across app
    restarts — gusts are event-specific), display it held until tapped to reset. Owner's idea,
    confirmed as a good one — it maps directly onto the severe-report form's `windspeed` +
