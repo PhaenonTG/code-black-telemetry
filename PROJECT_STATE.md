@@ -372,5 +372,59 @@ physical tablet, and screenshot-verified on-device before being considered done.
    existing alias-parsing design. Requires iOS support (see #5) if Nick's device is an iPad.
    **Distinct from the owner's own vehicle**, which already has 3 ESP32s feeding its Pi as
    normal — no change needed there.
-7. Task backlog item from earlier in the project, still open: "Capture final screenshot and
-   upload to Drive" (a one-off housekeeping task, not blocking).
+7. **Typography consistency pass** — owner flagged Wind's numbers as too bold relative to
+   Conditions', which reads too small, plus wants a general font-size/weight balance check across
+   the whole dashboard. Not started.
+8. **Wind card redesign** — owner says it has "too much missing space" but doesn't have a concrete
+   design in mind ("I'll know it when I see it") — wants a proposal, not just a tweak. Paired with:
+9. **Peak-hold wind gust** — track the highest gust seen (session-scoped, not persisted across app
+   restarts — gusts are event-specific), display it held until tapped to reset. Owner's idea,
+   confirmed as a good one — it maps directly onto the severe-report form's `windspeed` +
+   `windmeasure` (exact vs. estimated) fields now that report submission exists, since a peak-hold
+   reading is exactly "exact, measured" data. Worth wiring the two together when built.
+10. **Radar: real-storm verification needed** — the CC-based clutter filter (see above) showed no
+    clear visual improvement on today's quiet-day data, and the raw CC product view itself looked
+    unusually chaotic rather than the smooth pattern real precip normally shows. Not clear yet
+    whether that's correct behavior (today's returns genuinely low-correlation) or a bug in the
+    gate-alignment logic. Needs testing against an actual storm, and worth re-checking the
+    `apply_correlation_filter` gate-matching logic in `native/radar-ref/src/lib.rs` if it still
+    looks wrong then.
+11. **Multi-radar mosaic** (owner's idea, discussed, not started) — legitimate technique, same as
+    NWS's MRMS national mosaic. Recommended approach if built: **max-value compositing** on a
+    reprojected common grid for REF/CC (take the strongest/best-angle value per pixel across
+    nearby radars, not an average — averaging would weaken real signal against distant-radar
+    overshoot). Velocity is much harder to composite correctly (radially relative to each radar's
+    own position; real blending needs dual-Doppler wind synthesis) — recommended to keep VEL as
+    single-best-radar rather than attempting to blend it. Promising sign: the `nexrad-model` crate
+    already vendored here includes a `CartesianField` type built for exactly the polar-to-common-
+    grid reprojection this would need.
+12. **PC/desktop "big board" app** (owner's idea, discussed, not started) — a second, non-driving
+    target distinct from the tablet cockpit: animated radar loop with a choreographed camera cycle
+    (close zoom ~8-12s → normal ~30s → regional-wide → normal ~2min → repeat), a toggleable "my
+    team" position layer, and ideally a proper Level III multi-radar mosaic. This bundles three
+    projects of very different sizes — recommended NOT to build them together:
+    - Cinematic auto-cycling camera: small, self-contained, no new data pipeline, buildable on the
+      existing tablet map today (`AtlasCameraController.ts` is the natural home for it). Mapbox
+      GL's `easeTo()`/`flyTo()` already supports exactly this kind of keyframed camera animation.
+    - Team position toggle layer: small-medium, same shape as the Spotter Network pins/toggle
+      already scoped for the map-overlays feature — either filter the existing Spotter Network
+      feed to known team members, or build a simple shared-position endpoint over the team's
+      existing Tailscale network (avoids depending on Spotter Network for internal team tracking).
+    - PC packaging + Level III + mosaic: the big one. The existing React/Mapbox GL frontend is
+      largely platform-agnostic and could plausibly run under Electron/Tauri with real but modest
+      porting effort; the Rust radar decoder (`native/radar-ref`) is not Android-specific code, so
+      recompiling it for a desktop OS target is tractable — but Level III decode and the mosaic
+      compositing (#11) are both still fully unbuilt subsystems. Treat as its own dedicated
+      initiative to scope separately, not a quick add-on.
+13. **Pulsing "my position" dot + breadcrumb trail** (owner's idea, discussed, not started) —
+    pulse via an animated circle-radius/opacity paint property (standard Mapbox GL pattern, no new
+    infra needed) so the vehicle marker reads as "mine" at a glance. Trail: a fading-opacity
+    breadcrumb of recent positions, capped to the last 2-3 hours, with a "Clear Trail" control.
+    Owner's own stated future plan (not asked for now): eventually persist/sync the trail to a
+    server. Vehicle marker color was already fixed from blue to red this session
+    (`AtlasVehicleLayer.ts`) — good foundation for this.
+14. **Discord posting on report submission** — owner is planning to stand up a Discord for the
+    Code Black team and wants a "post to Discord" toggle added next to the existing NWSChat/
+    Twitter toggles on the severe report form (`ReportModal` in `NearbyPanel.tsx`) once that
+    Discord exists. Explicitly flagged as future-only, not to build yet — no webhook URL or server
+    exists to wire up.
