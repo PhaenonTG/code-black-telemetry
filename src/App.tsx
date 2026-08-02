@@ -19,6 +19,7 @@ import {
   MapRadarPanel,
   WeatherObservationPanel,
 } from "./components/situational/Panels";
+import { ReportPage } from "./components/situational/ReportPage";
 import { WindCard } from "./components/situational/WindCard";
 import { useAlertProducts } from "./hooks/useAlertProducts";
 import { useNearbyPlaces } from "./hooks/useNearbyPlaces";
@@ -28,7 +29,7 @@ import { useStatus } from "./hooks/useTelemetry";
 import { setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, startCodeBlackSoundPlayer } from "./services/sound";
 import { setTelemetryPaused } from "./services/telemetry";
 
-type PageKey = "weather" | "operations" | "locate" | "alerts" | "settings";
+type PageKey = "weather" | "operations" | "locate" | "alerts" | "report" | "settings";
 export type CockpitMode = "normal" | "chase";
 
 const pages: Array<{ key: PageKey; label: string; path: string }> = [
@@ -36,17 +37,19 @@ const pages: Array<{ key: PageKey; label: string; path: string }> = [
   { key: "operations", label: "Operations", path: "/operations" },
   { key: "locate", label: "Locate", path: "/locate" },
   { key: "alerts", label: "Alerts", path: "/alerts" },
+  { key: "report", label: "Report", path: "/report" },
   { key: "settings", label: "Settings", path: "/settings" },
 ];
 const PAGE_PREF_KEY = "codeblack.activePage";
 const COCKPIT_MODE_KEY = "codeblack.cockpitMode";
 
-function DockIcon({ type }: { type: "weather" | "operations" | "locate" | "alerts" | "settings" }) {
+function DockIcon({ type }: { type: "weather" | "operations" | "locate" | "alerts" | "report" | "settings" }) {
   const common = { viewBox: "0 0 24 24", "aria-hidden": true, focusable: false } as const;
   if (type === "weather") return <svg {...common}><path d="M7.4 17.4h7.8a4.1 4.1 0 0 0 .7-8.1 5.7 5.7 0 0 0-11 1.6A3.4 3.4 0 0 0 7.4 17.4Z" /><path d="m13.3 12.2-2.1 4.1h3l-1.5 4.3 4.1-5.9h-3l1.6-2.5h-2.1Z" /></svg>;
   if (type === "operations") return <svg {...common}><path d="M5 4h14v10H5z" /><path d="M9 20h6M12 14v6" /></svg>;
   if (type === "locate") return <svg {...common}><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></svg>;
   if (type === "alerts") return <svg {...common}><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 8v5M12 17h.01" /></svg>;
+  if (type === "report") return <svg {...common}><path d="M6 3h9l3 3v15H6z" /><path d="M9 8h7M9 12h7M9 16h4" /></svg>;
   return <svg {...common}><circle cx="12" cy="12" r="3.2" /><path d="M12 2.8v3M12 18.2v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.8 12h3M18.2 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>;
 }
 
@@ -198,7 +201,7 @@ export default function App() {
             <WindCard external={external} mode={cockpitMode} />
             <AlertsPanel products={alertProducts.products} error={alertProducts.error} />
             <MapRadarPanel gps={mapGps} visible={page === "weather"} />
-            <NearbyPanel places={nearby.places} error={nearby.error} spotters={spotters.spotters} spottersError={spotters.error} gps={gpsPoint} />
+            <NearbyPanel places={nearby.places} error={nearby.error} spotters={spotters.spotters} spottersError={spotters.error} />
           </div>
         </section>
         <section className="page page--operations" aria-label="Operations">
@@ -240,7 +243,12 @@ export default function App() {
         </section>
         <section className="page page--alerts" aria-label="Alerts">
           <div className="page-grid page-grid--alerts">
-            <AlertsFullPanel products={alertProducts.products} error={alertProducts.error} />
+            <AlertsFullPanel products={alertProducts.products} error={alertProducts.error} onOpenReport={() => goToPage("report")} />
+          </div>
+        </section>
+        <section className="page page--report" aria-label="Submit Report">
+          <div className="page-grid page-grid--report">
+            <ReportPage gps={gpsPoint} />
           </div>
         </section>
         <section className="page page--settings" aria-label="Settings">
@@ -262,6 +270,7 @@ export default function App() {
         <button className={page === "operations" ? "active" : ""} onClick={() => goToPage("operations")}><DockIcon type="operations" /><span>OPS</span><em>Operations</em></button>
         <button className={page === "locate" ? "active" : ""} onClick={() => { goToPage("locate"); window.dispatchEvent(new Event("codeblack:center-map")); }}><DockIcon type="locate" /><span>LOC</span><em>Locate</em></button>
         <button className={page === "alerts" ? "active" : ""} onClick={() => goToPage("alerts")}><DockIcon type="alerts" /><span>Alerts</span><em>Products</em></button>
+        <button className={page === "report" ? "active" : ""} onClick={() => goToPage("report")}><DockIcon type="report" /><span>RPT</span><em>Report</em></button>
         <button className={page === "settings" ? "active" : ""} onClick={() => goToPage("settings")}><DockIcon type="settings" /><span>SET</span><em>Settings</em></button>
         <div className="dock-signature" aria-hidden="true"><strong>CODE BLACK</strong><span>Weather. Data. Dominance.</span></div>
       </nav>

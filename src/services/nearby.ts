@@ -11,7 +11,7 @@ export interface NearbyPlace {
   lon: number;
   address: string;
   phone: string;
-  hoursStatus: "open" | "closed" | "unknown";
+  hoursStatus: "open" | "closed" | "unknown" | "typical-open";
   hoursText: string;
 }
 
@@ -101,6 +101,31 @@ function resolveOpeningHours(raw: string | undefined, now: Date): { status: "ope
   return { status: openNow ? "open" : "closed", text: raw };
 }
 
+// OSM's opening_hours tag is frequently just missing for real, well-known businesses — confirmed
+// live against Overpass for a tagged "Walmart" fuel station near a test location: brand and name
+// present, opening_hours absent entirely. Rather than a paid places API (Google/Foursquare), which
+// this project has deliberately steered away from, fill two narrow, defensible gaps for free:
+// hospitals (the ER is categorically always accessible, this isn't a guess) and a short list of
+// national chains that are near-universally 24 hours. Everything else still falls back to
+// "unknown" rather than a confident wrong guess — this is explicitly labeled "typical" in the UI,
+// distinct from a real OSM-confirmed "open", so the source of the claim stays honest.
+const TWENTY_FOUR_HOUR_BRANDS = [
+  "walmart", "wal-mart", "quiktrip", "qt", "kum & go", "kum and go", "casey's", "caseys",
+  "love's", "loves travel stop", "pilot", "flying j", "racetrac", "circle k", "7-eleven",
+  "speedway", "sheetz", "wawa", "buc-ee's", "buc-ees",
+];
+
+function inferTypicalHours(category: NearbyCategory, tags: Record<string, string>): { status: "typical-open"; text: string } | null {
+  if (category === "hospital") return { status: "typical-open", text: "Emergency dept. typically 24 hours" };
+  if (category === "gas") {
+    const brand = (tags.brand || tags.name || "").toLowerCase();
+    if (TWENTY_FOUR_HOUR_BRANDS.some((known) => brand.includes(known))) {
+      return { status: "typical-open", text: "Typically open 24 hours" };
+    }
+  }
+  return null;
+}
+
 function categoryFor(tags: Record<string, string>): NearbyCategory | null {
   if (tags.amenity === "fuel") return "gas";
   if (tags.amenity === "hospital") return "hospital";
@@ -133,7 +158,8 @@ export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<
       const distance = distanceMiles(pos, { lat: node.lat, lon: node.lon });
       const existing = closest[category];
       if (existing && existing.distanceMiles <= distance) continue;
-      const hours = resolveOpeningHours(tags.opening_hours, now);
+      const resolved = resolveOpeningHours(tags.opening_hours, now);
+      const hours = resolved.status === "unknown" ? (inferTypicalHours(category, tags) ?? resolved) : resolved;
       closest[category] = {
         id: `${node.id}`,
         category,

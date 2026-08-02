@@ -145,7 +145,7 @@ export function AlertsPanel({ products, error }: { products: AlertProduct[]; err
 // Alerts is the one unified alerts destination now — this used to be split across two compact
 // Weather-page cards (Alerts + Storm Threats). The Watch/MD/SPC-outlook summary row below is what
 // Storm Threats used to show; the full pill list below that is what Alerts used to show, uncapped.
-export function AlertsFullPanel({ products, error }: { products: AlertProduct[]; error: string }) {
+export function AlertsFullPanel({ products, error, onOpenReport }: { products: AlertProduct[]; error: string; onOpenReport: () => void }) {
   const [selected, setSelected] = useState<AlertProduct | null>(null);
   const watch = products.find((product) => product.type === "watch");
   const md = products.find((product) => product.type === "md");
@@ -191,6 +191,9 @@ export function AlertsFullPanel({ products, error }: { products: AlertProduct[];
             <em>{product.expires ? `Expires ${product.expires}` : product.source}</em>
           </button>
         ))}
+      </div>
+      <div className="alerts-full-panel__footer">
+        <button className="settings-action" onClick={onOpenReport}>Submit Report</button>
       </div>
       {selected && <ProductModal product={selected} onClose={() => setSelected(null)} />}
     </Panel>

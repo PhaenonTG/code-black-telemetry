@@ -4417,7 +4417,7 @@ body {
   position: relative;
   width: min(1240px, calc(100vw - 22px));
   height: calc(var(--dock-h) - 12px);
-  grid-template-columns: repeat(5, minmax(115px, 1fr)) minmax(150px, 0.9fr);
+  grid-template-columns: repeat(6, minmax(98px, 1fr)) minmax(130px, 0.9fr);
   gap: 4px;
   padding: 8px;
   margin-bottom: 6px;
@@ -5538,6 +5538,10 @@ body {
   color: var(--muted, #8b949e);
 }
 
+.nearby-hours--typical-open {
+  color: var(--amber, #f59e0b);
+}
+
 .nearby-detail p {
   margin: 0 0 10px;
   color: var(--secondary, #b6bec8);
@@ -5829,9 +5833,69 @@ body {
   letter-spacing: 0.04em;
 }
 
-/* Nearby list can now hold up to 6 rows (4 amenities + Chasers + Submit Report) — more than the
-   card's fixed grid-row height can always show without clipping the last row. Scroll internally
-   instead, same fix as the Radar Engine panel earlier. */
+/* Submit Report moved to its own page (see App.tsx), so Nearby is back to its permanent max of
+   5 rows (4 amenities + Chasers) — deliberately no scroll here. The owner wants everything on the
+   main dashboard visible at a glance, never requiring a touch to see; overflow:hidden (not auto)
+   is intentional so any future regression clips visibly instead of silently becoming scrollable. */
 .nearby-list {
-  overflow-y: auto !important;
+  overflow: hidden !important;
+}
+
+/* Report page: a full page (not a modal) so the form has room to breathe — same 1-panel-fills-
+   the-page pattern as Alerts/Settings. */
+.page-grid--report {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.report-page-panel {
+  overflow: hidden;
+}
+
+.report-page-scroll {
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.report-page-actions {
+  margin-top: 12px;
+}
+
+.alerts-full-panel__footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 14px 14px;
+}
+
+.alerts-full-panel__footer .settings-action {
+  border-color: rgba(255, 45, 53, 0.4);
+  color: var(--red, #ff2d35);
+}
+
+/* Dock: added a 6th page (Report) this session. There are many older .bottom-dock
+   grid-template-columns rules scattered across media-query breakpoints throughout this file
+   (established archaeology in this project — see PROJECT_STATE.md), several still hardcoded to
+   5 nav buttons + signature and some with !important, so a single earlier edit isn't guaranteed
+   to win at every viewport. Force 6 nav buttons + signature here, unconditionally, last in file. */
+.bottom-dock {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) minmax(130px, 0.85fr) !important;
+}
+
+.bottom-dock button span {
+  font-size: clamp(11px, 1.1vw, 15px) !important;
+}
+
+.dock-signature {
+  display: grid !important;
+}
+
+.dock-signature strong {
+  color: var(--red, #ff2d35) !important;
+  font-size: clamp(13px, 1.2vw, 20px) !important;
+}
+
+.dock-signature span {
+  color: var(--muted, #8b949e) !important;
+  font-size: 8px !important;
 }
