@@ -5,8 +5,13 @@ import { incrementAtlasCounter } from "./AtlasDiagnostics";
 const VEHICLE_SOURCE = "atlas-vehicle";
 const VEHICLE_HEADING_SOURCE = "atlas-vehicle-heading";
 const VEHICLE_ACCURACY_LAYER = "atlas-vehicle-accuracy";
+const VEHICLE_PULSE_LAYER = "atlas-vehicle-pulse";
 const VEHICLE_LAYER = "atlas-vehicle-marker";
 const VEHICLE_HEADING_LAYER = "atlas-vehicle-heading";
+const PULSE_CYCLE_MS = 1800;
+const PULSE_MIN_RADIUS = 9;
+const PULSE_MAX_RADIUS = 26;
+const PULSE_START_OPACITY = 0.5;
 
 function destinationPoint(lat: number, lon: number, bearingDeg: number, miles: number) {
   const radiusMiles = 3958.7613;
@@ -72,6 +77,24 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
     incrementAtlasCounter("layerCreations");
   }
 
+  // A rider on the accuracy circle: this is what actually pulses (see startAtlasVehiclePulse
+  // below). Added here, before the heading/main-dot layers, so paint order stays fixed:
+  // accuracy (bottom) -> pulse (animated) -> heading -> main dot (top, never obscured).
+  if (!map.getLayer(VEHICLE_PULSE_LAYER)) {
+    map.addLayer({
+      id: VEHICLE_PULSE_LAYER,
+      type: "circle",
+      source: VEHICLE_SOURCE,
+      paint: {
+        "circle-radius": PULSE_MIN_RADIUS,
+        "circle-color": "#ff2d35",
+        "circle-opacity": PULSE_START_OPACITY,
+        "circle-stroke-width": 0,
+      },
+    });
+    incrementAtlasCounter("layerCreations");
+  }
+
   if (!map.getLayer(VEHICLE_HEADING_LAYER)) {
     map.addLayer({
       id: VEHICLE_HEADING_LAYER,
@@ -101,4 +124,24 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
     });
     incrementAtlasCounter("layerCreations");
   }
+}
+
+// Grows and fades on a loop so "my dot" reads at a glance without having to think about it, per
+// the original ask. Safe to start before the vehicle layer itself exists (e.g. before a first GPS
+// fix arrives) -- each tick just no-ops until updateAtlasVehicleLayer has created the pulse layer.
+export function startAtlasVehiclePulse(map: Map): () => void {
+  const startedAt = performance.now();
+  let frameId = requestAnimationFrame(function tick(now) {
+    if (map.getLayer(VEHICLE_PULSE_LAYER)) {
+      const t = ((now - startedAt) % PULSE_CYCLE_MS) / PULSE_CYCLE_MS;
+      try {
+        map.setPaintProperty(VEHICLE_PULSE_LAYER, "circle-radius", PULSE_MIN_RADIUS + t * (PULSE_MAX_RADIUS - PULSE_MIN_RADIUS));
+        map.setPaintProperty(VEHICLE_PULSE_LAYER, "circle-opacity", PULSE_START_OPACITY * (1 - t));
+      } catch {
+        // Style can be mid-reload for a frame or two; skip and try again next tick.
+      }
+    }
+    frameId = requestAnimationFrame(tick);
+  });
+  return () => cancelAnimationFrame(frameId);
 }

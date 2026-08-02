@@ -3,12 +3,15 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagnostics } from "../services/mapTiles";
 import type { RadarFrame, RadarProduct } from "../services/radar";
+import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcrumbTrail";
+import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
 import { applyAtlasCamera } from "./AtlasCameraController";
 import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstances, incrementAtlasCounter, incrementAtlasMapInstances, writeAtlasDiagnostics } from "./AtlasDiagnostics";
+import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
 import { updateAtlasRadarLayer, ATLAS_RADAR_LAYER, ATLAS_RADAR_SOURCE } from "./AtlasRadarLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
 import { tuneAtlasStyle } from "./AtlasStyleManager";
-import { updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
+import { startAtlasVehiclePulse, updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRadarState, AtlasRangeRingMode } from "./types";
 
 type AtlasMapProps = {
@@ -93,8 +96,10 @@ export function AtlasMap({
   const renderCountRef = useRef(0);
   const idleCountRef = useRef(0);
   const lastGpsAppliedRef = useRef<{ gps: AtlasGpsPoint; at: number } | null>(null);
+  const stopPulseRef = useRef<(() => void) | null>(null);
   const [loaded, setLoaded] = useState(false);
   const styleUri = atlasStyleUri();
+  const trail = useBreadcrumbTrail();
 
   latestRef.current = { gps, frame, opacity, rangeRings, expanded };
 
@@ -219,11 +224,13 @@ export function AtlasMap({
         setMapState("READY");
         if (latest.gps) {
           updateAtlasVehicleLayer(map, latest.gps);
+          recordBreadcrumbPoint(latest.gps.lat, latest.gps.lon);
           const camera = applyAtlasCamera(map, latest.gps, "FOLLOW_NORTH", latest.expanded, latest.gps.headingDeg ?? 0);
           setBearing(camera.bearing);
           setPitch(camera.pitch);
           setCameraMode("FOLLOW_NORTH");
         }
+        stopPulseRef.current = startAtlasVehiclePulse(map);
         const radar = updateAtlasRadarLayer(map, latest.frame, latest.opacity, styleInfoRef.current.firstSymbolLayerId);
         setRadarState(radar.state);
         if (!radar.loaded && radar.error) setRadarError(radar.error);
@@ -239,6 +246,8 @@ export function AtlasMap({
     }
 
     return () => {
+      stopPulseRef.current?.();
+      stopPulseRef.current = null;
       const map = mapRef.current;
       if (map) {
         map.remove();
@@ -262,12 +271,19 @@ export function AtlasMap({
     if (!shouldApplyGpsUpdate(lastGpsAppliedRef.current, gps, now)) return;
     lastGpsAppliedRef.current = { gps, at: now };
     updateAtlasVehicleLayer(map, gps);
+    recordBreadcrumbPoint(gps.lat, gps.lon, now);
     if (cameraMode === "FOLLOW_NORTH" || cameraMode === "FOLLOW_HEADING" || cameraMode === "RECENTERING") {
       const camera = applyAtlasCamera(map, gps, cameraMode, expanded, bearing);
       setBearing(camera.bearing);
       setPitch(camera.pitch);
     }
   }, [bearing, cameraMode, expanded, gps, loaded]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    updateAtlasBreadcrumbLayer(map, trail);
+  }, [loaded, trail]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -382,6 +398,7 @@ export function AtlasMap({
         <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>-</button>
         <button type="button" aria-label="Toggle follow mode" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{cameraMode === "FOLLOW_HEADING" ? "HDG" : cameraMode === "FREE" ? "REC" : "NUP"}</button>
         <button type="button" aria-label="Toggle range rings" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RNG</button>
+        <button type="button" aria-label="Clear position trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLR</button>
       </div>
       {(visibleError || ATLAS_DIAGNOSTICS_ENABLED) && (
         <div className="map-status atlas-map-status">{visibleError || `${statusLines.join(" - ")} - ${atlasStateLabel}`}</div>

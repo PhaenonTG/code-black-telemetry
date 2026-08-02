@@ -2313,52 +2313,6 @@ button {
   font-size: clamp(17px, 1.08vw, 22px);
 }
 
-.wind-panel.cockpit-card {
-  grid-template-columns: minmax(145px, 0.72fr) minmax(0, 1.28fr) !important;
-  align-items: center;
-}
-
-.wind-panel.cockpit-card .wind-compass--compact {
-  width: min(18dvh, 178px) !important;
-  margin-inline: auto;
-}
-
-.wind-panel.cockpit-card .wind-compass--compact span {
-  font-size: clamp(28px, 2.05vw, 42px) !important;
-}
-
-.wind-panel.cockpit-card .wind-compass--compact span em {
-  font-size: clamp(10px, 0.82vw, 14px) !important;
-  margin-top: 8px;
-}
-
-.wind-panel.cockpit-card .wind-readout {
-  min-width: 0;
-  padding: 14px 18px 10px 6px !important;
-}
-
-.wind-panel.cockpit-card .wind-readout strong {
-  font-size: clamp(48px, 4.2vw, 74px) !important;
-  line-height: 0.95;
-  letter-spacing: 0;
-}
-
-.wind-panel.cockpit-card .wind-readout > span,
-.wind-panel.cockpit-card .wind-readout > div {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.wind-panel.cockpit-card .wind-trend-label {
-  margin-top: 10px !important;
-}
-
-.wind-panel.cockpit-card .wind-spark {
-  height: 54px !important;
-  margin-top: 8px;
-}
-
 .wind-panel.cockpit-card .wind-toolbar {
   min-width: 0;
 }
@@ -5898,4 +5852,17 @@ body {
 .dock-signature span {
   color: var(--muted, #8b949e) !important;
   font-size: 8px !important;
+}
+
+.map-controls button:disabled {
+  opacity: 0.4 !important;
+  cursor: default !important;
+}
+
+.report-suggest {
+  align-self: flex-start !important;
+  padding: 6px 12px !important;
+  border-color: rgba(255, 190, 60, 0.4) !important;
+  color: var(--amber, #f59e0b) !important;
+  font-size: 10px !important;
 }

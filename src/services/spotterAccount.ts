@@ -31,7 +31,9 @@ export function getSpotterAccount() {
 export function subscribeSpotterAccount(listener: (account: SpotterAccount | null) => void) {
   listeners.add(listener);
   listener(currentAccount);
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export async function clearSpotterAccount() {

@@ -93,3 +93,69 @@ export async function getNearbySpotters(origin: Position): Promise<{ spotters: S
   }
 }
 
+interface RawSpotterPosition {
+  report_at?: string;
+  lat?: string;
+  lon?: string;
+  callsign?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  ham?: string | null;
+  twitter?: string | null;
+  web?: string | null;
+  first?: string | null;
+  last?: string | null;
+  marker?: string;
+}
+
+// Official JSON API (https://spotternetwork.docs.apiary.io, "Spotter Positions" -> "Get Spotters'
+// Positions"), confirmed live against the Apiary docs 2026-08-02 -- richer than the anonymous
+// GRLevelX feed above (real phone/email/ham/twitter/web fields instead of whatever free text a
+// spotter typed into their GR2Analyst tooltip), but requires a signed-in account's id. Every
+// position field in the response is a string even when it looks numeric (lat/lon/elev/dir/unix);
+// most contact fields can be `null` when a spotter hasn't shared them.
+export async function getAuthenticatedSpotterPositions(accountId: string, origin: Position): Promise<{ spotters: Spotter[]; error: string }> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch("https://www.spotternetwork.org/positions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: accountId }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const body = (await response.json()) as { positions?: RawSpotterPosition[] };
+    const spotters = (body.positions ?? [])
+      .map((p): Spotter | null => {
+        const lat = Number(p.lat);
+        const lon = Number(p.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+        const name = [p.first, p.last].filter(Boolean).join(" ").trim() || p.callsign || "Unnamed Spotter";
+        const contact: SpotterContactField[] = [];
+        if (p.phone) contact.push({ label: "Phone", value: p.phone });
+        if (p.email) contact.push({ label: "Email", value: p.email });
+        if (p.ham) contact.push({ label: "Ham", value: p.ham });
+        if (p.twitter) contact.push({ label: "Twitter", value: p.twitter });
+        if (p.web) contact.push({ label: "Web", value: p.web });
+        return {
+          id: p.marker || `${lat.toFixed(4)},${lon.toFixed(4)}`,
+          name,
+          lat,
+          lon,
+          distanceMiles: distanceMiles(origin, { lat, lon }),
+          updatedAtText: p.report_at ?? "",
+          status: "",
+          contact,
+        };
+      })
+      .filter((spotter): spotter is Spotter => spotter !== null)
+      .sort((a, b) => a.distanceMiles - b.distanceMiles);
+    return { spotters, error: "" };
+  } catch (error) {
+    return { spotters: [], error: error instanceof Error ? error.message : "Spotter positions fetch failed" };
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+

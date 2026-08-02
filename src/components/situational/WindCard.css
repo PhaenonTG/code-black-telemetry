@@ -1,16 +1,28 @@
 /* WindCard — self-contained styles. Deliberately narrow (width is set on .wind-panel's grid-area
    in the shared page grid, matching the Alerts card below it) and deliberately plain: no red
-   accent stripe, no compass graphic. Speed and Direction are both hero values; Gust is secondary. */
+   accent stripe, no compass graphic. Speed/Direction stack on the left; Peak Gust (session-held
+   high, tap to reset) fills the right column — that column used to just be empty card padding. */
 
+/* The Wind card has been rebuilt into this hero-grid layout several times over the project's
+   history, and the pre-redesign compass/readout CSS from those earlier passes was never fully
+   purged from index.css -- several `.wind-panel { display: grid; grid-template-columns... }`
+   blocks (some !important, some inside media queries) are still floating around and were
+   clamping this card's content into a leftover 2-column compass|readout split. Rather than
+   chase every historical occurrence across a 5800-line file, force the correct box model here,
+   at maximum specificity+importance, same fix pattern already proven for .bottom-dock/.dock-signature. */
 .wind-panel.cockpit-card {
+  display: flex !important;
+  flex-direction: column !important;
   border-color: rgba(255, 255, 255, 0.09) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
 }
 
 .wind-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  flex: 1;
+  gap: 8px 4px;
   padding: 12px var(--glance-card-pad-x, 14px) 0;
 }
 
@@ -18,6 +30,52 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+}
+
+.wind-hero__item--speed {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.wind-hero__item--direction {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.wind-hero__item--peak {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-items: flex-start;
+  position: relative;
+  margin: 0;
+  padding: 0 0 0 16px;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  appearance: none;
+  cursor: pointer;
+}
+
+.wind-hero__item--peak:disabled {
+  cursor: default;
+}
+
+.wind-hero__item--peak:not(:disabled):active {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.wind-hero__reset-hint {
+  margin-top: 8px;
+  color: var(--muted, #8b949e);
+  font: 700 8px/1 Consolas, "JetBrains Mono", monospace;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
 }
 
 .wind-hero__item strong {
@@ -57,24 +115,6 @@
   margin-left: 6px;
   color: var(--secondary, #b6bec8);
   font-style: normal;
-  text-transform: none;
-}
-
-.wind-gust-line {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 6px;
-  padding: 0 var(--glance-card-pad-x, 14px);
-  color: var(--muted, #8b949e);
-  font: 700 clamp(9px, 0.72vw, 11px) / 1.1 Consolas, "JetBrains Mono", monospace;
-  text-transform: uppercase;
-}
-
-.wind-gust-line strong {
-  color: var(--text, #f8fafc);
-  font-size: clamp(13px, 1.1vw, 17px);
-  font-variant-numeric: tabular-nums;
   text-transform: none;
 }
 

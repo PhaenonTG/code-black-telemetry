@@ -49,7 +49,7 @@ components/
   ErrorBoundary.tsx
 hooks/                          — one hook per data source (useTelemetry, useNearbyPlaces,
                                    useSpotters, useTabletLocation, useSituationalData,
-                                   useAlertProducts, useBattery)
+                                   useAlertProducts, useBattery, useBreadcrumbTrail)
 services/
   telemetry/                    — the Pi data pipeline: types.ts, api-provider.ts (polls Pi,
                                    normalizes payload, last-known fallback), simulator.ts (dev
@@ -61,13 +61,16 @@ services/
   spotterAccount.ts             — Spotter Network login + local credential storage (new)
   location.ts                   — canonical GPS resolution (tablet GPS vs Pi GPS), speed floor
   settings.ts                   — Pi endpoint URL persistence
+  breadcrumbTrail.ts             — session-scoped vehicle position trail (module singleton,
+                                   subscribe/notify, same shape as settings.ts) — new
   sound.ts                      — audible alert tone playback
   mapTiles.ts                    — Mapbox style/token helpers (Legacy map engine was deleted)
   radar.ts, radarLoop.ts         — NEXRAD fetch/decode
 map/                             — Mapbox GL wrapper: AtlasMap.tsx (main component),
-                                   AtlasCameraController, AtlasRadarLayer, AtlasVehicleLayer,
-                                   AtlasRangeRingLayer, AtlasStyleManager, AtlasReconGlPage
-                                   (full-screen expanded radar view)
+                                   AtlasCameraController, AtlasRadarLayer, AtlasVehicleLayer
+                                   (vehicle dot + pulse animation), AtlasBreadcrumbLayer (trail
+                                   line, new), AtlasRangeRingLayer, AtlasStyleManager,
+                                   AtlasReconGlPage (full-screen expanded radar view)
 native/radar-ref/                — Rust source for the ACTUAL radar decoder/renderer — see
                                    "Native radar renderer" section below before touching anything
                                    radar-related. This is not obvious from src/ alone.
@@ -340,9 +343,91 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
     use, making it read oversized next to its row neighbors — matched to Conditions' exact
     per-mode clamp. `useBattery()` now also exposes `isCharging`; the header battery chip shows a
     small amber lightning-bolt icon when charging.
+19. **Wind card structural redesign + peak-hold gust** (`WindCard.tsx`/`WindCard.css`): the card
+    used to stack Speed/Direction in a single column, leaving the whole right half of the card
+    empty except a floating "GUST --" label — exactly the "too much missing space" complaint.
+    Reworked into a 2-column grid: Speed/Direction stacked on the left, a new **Peak Gust** tile
+    (session-scoped high-water-mark, tap to reset, small "now X" live-gust annotation) filling the
+    right column that used to be dead space. While building this, found and fixed a much older bug:
+    ~7 separate leftover `.wind-panel { display: grid; grid-template-columns... }` blocks (plus
+    dozens of `.wind-compass`/`.wind-readout`/`.wind-spark` rules) from a pre-rebuild compass-based
+    Wind card design were still scattered across `index.css` and clamping the new layout into a
+    stale 2-column split, causing severe text truncation. Confirmed via grep that none of those
+    class names exist in any `.tsx` file anymore (100% dead). Rather than hunt every occurrence in
+    a 5800-line file under time pressure, applied the same proven fix pattern as `.bottom-dock`/
+    `.dock-signature` below: a definitive `display: flex !important; flex-direction: column
+    !important;` override in `WindCard.css`. The full dead-CSS purge is flagged as a separate
+    follow-up task (spawned, not yet run) rather than rushed inline.
+20. **Nearby card resilience fix** (`hooks/useNearbyPlaces.ts`): a real-world incident — the card
+    got stuck showing "NEARBY LOOKUP UNAVAILABLE" after a transient network blip (during a USB
+    cable swap, tablet has its own WiFi so this was unrelated to that) — exposed two gaps in the
+    existing polling hook: (1) it only retried every 10 minutes flat, even on failure, so one bad
+    request could leave the card stuck for up to 10 min; (2) on any fetch error it wrote `{}` into
+    state, wiping the last successfully-fetched places instead of keeping them, inconsistent with
+    the "always visible, last-known over blank" pattern used everywhere else in this app (the
+    earlier telemetry-fallback work). Fixed both: failures now retry with a 30s-doubling backoff
+    capped at the normal 10-min cadence, and a failed fetch keeps whatever places were last shown
+    instead of blanking the card.
+21. **Pulsing vehicle dot + breadcrumb trail** (owner's idea from a prior discussion, now built):
+    - `map/AtlasVehicleLayer.ts` gained a `atlas-vehicle-pulse` circle layer, animated via a
+      `requestAnimationFrame` loop (`startAtlasVehiclePulse`) that grows the radius and fades the
+      opacity on a ~1.8s cycle so "my dot" reads at a glance. Started once in `AtlasMap.tsx`'s
+      `initializeStyle` and stopped on unmount; the tick function no-ops safely if the layer
+      doesn't exist yet (e.g. before a first GPS fix).
+    - New `services/breadcrumbTrail.ts`: a module-level singleton (same subscribe/notify shape as
+      `services/settings.ts`) tracking `{lat, lon, at}` points, capped at 3 hours, recording a new
+      point only every ≥15m of movement to keep the array bounded over a multi-hour drive.
+      Deliberately in-memory only, no Preferences persistence (a trail from a prior chase shouldn't
+      linger into today's) and no server sync (owner explicitly flagged that as future work, not
+      asked for now). Built as a shared singleton rather than per-component state because
+      `AtlasMap` can be mounted more than once simultaneously (Weather page's map card + Locate
+      page both render it) and must show one continuous trail, not one each.
+    - New `map/AtlasBreadcrumbLayer.ts` renders it as a semi-transparent (`line-opacity: 0.32`) red
+      line under the vehicle marker. New `hooks/useBreadcrumbTrail.ts` is the thin React wrapper.
+    - A new "CLR" button was added to `AtlasMap`'s existing zoom/follow/range-ring control cluster,
+      disabled when the trail is empty, calling `clearBreadcrumbTrail()`.
+    - Verified structurally in the browser preview (both concurrently-mounted map instances show
+      the same disabled CLR button with an empty trail, no console errors after the pulse rAF loop
+      ran for several seconds with no vehicle layer yet); full visual verification needs a real GPS
+      fix on-device, not yet done as of this writing.
+22. **Peak-hold gust wired into the severe report form**: the Wind card's peak-gust tracking moved
+    from local component state into a new `services/peakGust.ts` module singleton (same
+    subscribe/notify shape as `breadcrumbTrail.ts`/`settings.ts`) so `ReportPage.tsx` can read the
+    same value. When the Wind hazard checkbox is on and the Wind Speed field is still empty,
+    `ReportPage.tsx` shows a small amber "Use Peak Gust (N mph)" suggestion button next to the
+    input — tapping it fills the field and sets Measured (not Estimated). Deliberately a tap-to-fill
+    suggestion, not a silent auto-fill, so it never overwrites something the owner already typed.
 
-All of the above were built, `npm run build` typechecked clean, synced/compiled/installed to the
-physical tablet, and screenshot-verified on-device before being considered done.
+23. **Chasers feed switched to the official Spotter Network JSON API when signed in**
+    (`services/spotters.ts`'s new `getAuthenticatedSpotterPositions()`, wired into
+    `hooks/useSpotters.ts`). Response shape was pulled live from the Apiary interactive docs (not
+    guessed from memory) before writing any parsing code — confirmed
+    `POST https://www.spotternetwork.org/positions` with body `{id}` returns
+    `{positions: [{report_at, lat, lon, callsign, email, phone, ham, twitter, web, first, last,
+    marker, ...}]}`, every field a string even when numeric-looking, most contact fields nullable.
+    `useSpotters.ts` now subscribes to the signed-in account and prefers this endpoint when an `id`
+    exists, falling back to the anonymous GRLevelX feed on any error (network blip, revoked id) or
+    when signed out — never just shows nothing. Richer contact data (real phone/email/ham/twitter/
+    web instead of whatever free text a spotter typed into a GR2Analyst tooltip).
+    - Along the way, found and fixed the same latent bug in two other new module singletons this
+      session (`breadcrumbTrail.ts`, `spotterAccount.ts`): a `subscribeX()` returning
+      `() => set.delete(listener)` directly types as `() => boolean`, which fails when that
+      function is returned straight from a `useEffect` callback (`Destructor` must be `void`).
+      `services/settings.ts`'s existing `subscribeChaserRadiusMiles`/`subscribePiEndpoint` have the
+      identical shape but happened to avoid the error because their call sites wrap the unsubscribe
+      call rather than return it directly — not broken today, but the same latent footgun.
+
+All of the above (items 1-23) were built, `npm run build` typechecked clean, and have now been
+synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
+Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
+a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
+pixel diff around the vehicle dot confirming the pulse animation is actually running on-device (not
+just in the browser preview); the report form correctly *not* showing the "Use Peak Gust" suggestion
+when no gust has been recorded yet (confirms the conditional gating, not just its presence); and the
+Chasers card returning live results while signed in. Not yet exercised: the breadcrumb trail's
+actual line rendering (needs the tablet to physically move — a stationary vehicle correctly
+produces a single point and no line, which is expected, not a bug) and the Nearby retry-on-failure
+path (needs a real or simulated network outage to trigger).
 
 ## Open discussion threads (not yet built, owner said "just thoughts" / asked for a recommendation)
 
@@ -376,12 +461,10 @@ physical tablet, and screenshot-verified on-device before being considered done.
    Operations/Locate/Alerts/Settings pages haven't had the same pixel-level pass yet. (In
    progress as of this writing — the owner asked for a full OCD-level pass across the entire
    dashboard and a written report.)
-2. **Wire Spotter Network report submission** — build the UI for `POST /report/severe` (storm
-   type checkboxes, hail size, wind speed, narrative, NWSChat/Twitter toggles) using the signed-in
-   account's `id`. This is the owner's actual stated goal for the Spotter Network integration.
-3. **Switch the Chasers feed to the official JSON positions endpoint** (`POST /positions`) once
-   signed in — richer data (real phone/email/ham/twitter fields) than the current GRLevelX scrape,
-   which stays as the anonymous/no-login fallback.
+2. **Wire Spotter Network report submission** — DONE (`ReportPage.tsx`, see Recent Work #16, #22).
+3. **Switch the Chasers feed to the official JSON positions endpoint** — DONE (see Recent Work
+   #23). Anonymous GRLevelX feed stays as the fallback (signed-out, or the authenticated call
+   fails). Not yet tested against a real signed-in account on-device.
 4. **OTA web-bundle updater** — owner wants to patch the app remotely over Tailscale without
    physically touching the tablet or the chase partner's device. Plan discussed but not built:
    host a `version.json` + zipped `dist/` build reachable over Tailscale, app checks on launch and
@@ -402,23 +485,21 @@ physical tablet, and screenshot-verified on-device before being considered done.
    had a bespoke `clamp(28px, 2.8vw, 42px)` independent of the shared metric-tile sizing, matched
    to Conditions' exact per-mode clamp instead. A broader dashboard-wide font audit beyond this one
    flagged pair has not been done.
-8. **Wind card redesign** — owner says it has "too much missing space" but doesn't have a concrete
-   design in mind ("I'll know it when I see it") — wants a proposal, not just a tweak. Typography
-   is now fixed (see #7); the structural "too much empty space" layout redesign is still open.
-   Paired with:
-9. **Peak-hold wind gust** — track the highest gust seen (session-scoped, not persisted across app
-   restarts — gusts are event-specific), display it held until tapped to reset. Owner's idea,
-   confirmed as a good one — it maps directly onto the severe-report form's `windspeed` +
-   `windmeasure` (exact vs. estimated) fields now that report submission exists, since a peak-hold
-   reading is exactly "exact, measured" data. Worth wiring the two together when built.
-10. **Radar: real-storm verification needed** — the CC-based clutter filter (see above) showed no
+8. **Wind card redesign** — DONE (see Recent Work #19): 2-column grid, Peak Gust tile fills the
+   space that used to be empty. Still open: wiring the peak-hold value to auto-suggest the severe
+   report form's `windspeed`/`windmeasure` (exact vs. estimated) fields — a peak-hold reading is
+   exactly "exact, measured" data, this was the original reasoning for pairing the two features but
+   the report-form wiring itself hasn't been built. Also open: purging the ~7 confirmed-dead legacy
+   `.wind-panel`/`.wind-compass` CSS blocks found in `index.css` during this work (a background
+   task was spawned for this, not yet run).
+9. **Radar: real-storm verification needed** — the CC-based clutter filter (see above) showed no
     clear visual improvement on today's quiet-day data, and the raw CC product view itself looked
     unusually chaotic rather than the smooth pattern real precip normally shows. Not clear yet
     whether that's correct behavior (today's returns genuinely low-correlation) or a bug in the
     gate-alignment logic. Needs testing against an actual storm, and worth re-checking the
     `apply_correlation_filter` gate-matching logic in `native/radar-ref/src/lib.rs` if it still
     looks wrong then.
-11. **Multi-radar mosaic** (owner's idea, discussed, not started) — legitimate technique, same as
+10. **Multi-radar mosaic** (owner's idea, discussed, not started) — legitimate technique, same as
     NWS's MRMS national mosaic. Recommended approach if built: **max-value compositing** on a
     reprojected common grid for REF/CC (take the strongest/best-angle value per pixel across
     nearby radars, not an average — averaging would weaken real signal against distant-radar
@@ -427,7 +508,7 @@ physical tablet, and screenshot-verified on-device before being considered done.
     single-best-radar rather than attempting to blend it. Promising sign: the `nexrad-model` crate
     already vendored here includes a `CartesianField` type built for exactly the polar-to-common-
     grid reprojection this would need.
-12. **PC/desktop "big board" app** (owner's idea, discussed, not started) — a second, non-driving
+11. **PC/desktop "big board" app** (owner's idea, discussed, not started) — a second, non-driving
     target distinct from the tablet cockpit: animated radar loop with a choreographed camera cycle
     (close zoom ~8-12s → normal ~30s → regional-wide → normal ~2min → repeat), a toggleable "my
     team" position layer, and ideally a proper Level III multi-radar mosaic. This bundles three
@@ -443,16 +524,14 @@ physical tablet, and screenshot-verified on-device before being considered done.
       largely platform-agnostic and could plausibly run under Electron/Tauri with real but modest
       porting effort; the Rust radar decoder (`native/radar-ref`) is not Android-specific code, so
       recompiling it for a desktop OS target is tractable — but Level III decode and the mosaic
-      compositing (#11) are both still fully unbuilt subsystems. Treat as its own dedicated
+      compositing (#10) are both still fully unbuilt subsystems. Treat as its own dedicated
       initiative to scope separately, not a quick add-on.
-13. **Pulsing "my position" dot + breadcrumb trail** (owner's idea, discussed, not started) —
-    pulse via an animated circle-radius/opacity paint property (standard Mapbox GL pattern, no new
-    infra needed) so the vehicle marker reads as "mine" at a glance. Trail: a fading-opacity
-    breadcrumb of recent positions, capped to the last 2-3 hours, with a "Clear Trail" control.
-    Owner's own stated future plan (not asked for now): eventually persist/sync the trail to a
-    server. Vehicle marker color was already fixed from blue to red this session
-    (`AtlasVehicleLayer.ts`) — good foundation for this.
-14. **Discord posting on report submission** — owner is planning to stand up a Discord for the
+12. **Pulsing "my position" dot + breadcrumb trail** — DONE (see Recent Work #21): animated pulse
+    ring on the vehicle marker, a session-scoped 3-hour breadcrumb trail with a "CLR" clear button.
+    Still open: on-device visual verification (built browser-side against no live GPS fix, needs a
+    real drive/walk test), and the owner's own stated future step of syncing the trail to a server
+    for team visibility — not asked for yet, don't build until requested.
+13. **Discord posting on report submission** — owner is planning to stand up a Discord for the
     Code Black team and wants a "post to Discord" toggle added next to the existing NWSChat/
     Twitter toggles on the severe report form (`ReportModal` in `NearbyPanel.tsx`) once that
     Discord exists. Explicitly flagged as future-only, not to build yet — no webhook URL or server

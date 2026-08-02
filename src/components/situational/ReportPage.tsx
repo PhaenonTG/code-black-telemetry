@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Panel } from "./Panel";
+import { usePeakGust } from "../../hooks/usePeakGust";
 import { loadSpotterAccount, subscribeSpotterAccount, submitSevereReport, type SevereReportInput, type SpotterAccount } from "../../services/spotterAccount";
 
 const HAZARD_FIELDS: Array<{ key: keyof Pick<SevereReportInput, "tornado" | "funnelCloud" | "wallCloud" | "rotation" | "hail" | "wind" | "flood" | "flashFlood" | "other">; label: string }> = [
@@ -46,6 +47,7 @@ export function ReportPage({ gps }: { gps: { lat: number; lon: number } | null }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
+  const peakGust = usePeakGust();
 
   useEffect(() => {
     const unsubscribe = subscribeSpotterAccount(setAccount);
@@ -151,6 +153,15 @@ export function ReportPage({ gps }: { gps: { lat: number; lon: number } | null }
                 onChange={(event) => setReport((prev) => ({ ...prev, windSpeedMph: event.target.value === "" ? null : Number(event.target.value) }))}
               />
             </label>
+            {peakGust != null && report.windSpeedMph == null && (
+              <button
+                type="button"
+                className="settings-action report-suggest"
+                onClick={() => setReport((prev) => ({ ...prev, windSpeedMph: Math.round(peakGust), windMeasured: true }))}
+              >
+                Use Peak Gust ({Math.round(peakGust)} mph)
+              </button>
+            )}
             <div className="mode-toggle" aria-label="Wind measurement">
               <button className={!report.windMeasured ? "active" : ""} onClick={() => setReport((prev) => ({ ...prev, windMeasured: false }))}>Estimated</button>
               <button className={report.windMeasured ? "active" : ""} onClick={() => setReport((prev) => ({ ...prev, windMeasured: true }))}>Measured</button>

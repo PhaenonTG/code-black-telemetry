@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { getNearbySpotters, type Spotter } from "../services/spotters";
+import { getAuthenticatedSpotterPositions, getNearbySpotters, type Spotter } from "../services/spotters";
+import { getSpotterAccount, subscribeSpotterAccount } from "../services/spotterAccount";
 
 type GpsPoint = { lat: number; lon: number };
 
@@ -11,12 +12,19 @@ const REFRESH_MS = 2 * 60_000;
 export function useSpotters(gps: GpsPoint | null) {
   const [spotters, setSpotters] = useState<Spotter[]>([]);
   const [error, setError] = useState("");
+  const [accountId, setAccountId] = useState(() => getSpotterAccount()?.id ?? null);
+
+  useEffect(() => subscribeSpotterAccount((account) => setAccountId(account?.id ?? null)), []);
 
   useEffect(() => {
     if (!gps) return;
     let cancelled = false;
     const load = async () => {
-      const result = await getNearbySpotters(gps);
+      // Prefer the official JSON positions endpoint when signed in — richer contact data than the
+      // anonymous feed. If it fails for any reason (network blip, revoked id), fall back to the
+      // anonymous feed rather than showing nothing; a signed-out user always uses the fallback.
+      let result = accountId ? await getAuthenticatedSpotterPositions(accountId, gps) : await getNearbySpotters(gps);
+      if (accountId && result.error) result = await getNearbySpotters(gps);
       if (!cancelled) {
         setSpotters(result.spotters);
         setError(result.error);
@@ -28,7 +36,7 @@ export function useSpotters(gps: GpsPoint | null) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [gps == null]);
+  }, [accountId, gps == null]);
 
   return { spotters, error };
 }
