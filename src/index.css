@@ -5745,3 +5745,93 @@ body {
   width: 64px;
   text-align: center;
 }
+
+.nearby-card--report {
+  border-color: rgba(255, 45, 53, 0.28);
+  background: rgba(255, 45, 53, 0.06);
+}
+
+.nearby-card--report span {
+  color: var(--red, #ff2d35);
+}
+
+.report-modal {
+  max-width: 480px;
+}
+
+.report-form .mode-toggle {
+  width: 100%;
+}
+
+.report-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.report-form .cb-panel__title + .report-section,
+.report-form .modal-scroll > .report-section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.report-section > strong {
+  color: var(--text);
+  font: 700 12px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.report-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+}
+
+.report-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--secondary);
+  font: 600 13px / 1.2 Inter, sans-serif;
+}
+
+.report-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--red, #ff2d35);
+}
+
+.report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report-field span {
+  color: var(--muted);
+  font: 700 10px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.report-narrative {
+  resize: vertical;
+  min-height: 60px;
+  font-family: Inter, sans-serif;
+}
+
+.report-gps-line {
+  color: var(--muted);
+  font: 700 11px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.04em;
+}
+
+/* Nearby list can now hold up to 6 rows (4 amenities + Chasers + Submit Report) — more than the
+   card's fixed grid-row height can always show without clipping the last row. Scroll internally
+   instead, same fix as the Radar Engine panel earlier. */
+.nearby-list {
+  overflow-y: auto !important;
+}

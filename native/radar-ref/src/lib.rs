@@ -174,6 +174,40 @@ fn codeblack_reflectivity_scale() -> ColorScale {
     .into()
 }
 
+// Cutting the color scale off below 5 dBZ (see codeblack_reflectivity_scale above) only removes
+// the weakest returns. Ground clutter, AP, and biological scatter (birds/insects) routinely read
+// well above 5 dBZ -- often 10-25 dBZ, squarely in the "light precipitation" cyan/blue/green band
+// -- so a lot of what still renders there isn't real precip. Dual-pol correlation coefficient
+// (CC) is the standard discriminator for this: real hydrometeors are highly self-similar in shape
+// pulse-to-pulse (CC > ~0.90-0.95), while non-meteorological scatter is not (CC noticeably lower).
+// REF and CC are collected on the same elevation cut in dual-pol VCPs, so if this sweep carries a
+// CC moment, mask out REF gates below the threshold before rendering; if it doesn't (e.g. legacy
+// non-dual-pol data), this is a no-op and REF renders exactly as before.
+const CORRELATION_CLUTTER_THRESHOLD: f32 = 0.85;
+
+fn apply_correlation_filter(reflectivity: &mut SweepField, sweep: &Sweep) {
+    let Some(correlation) = SweepField::from_radials(sweep.radials(), Product::CorrelationCoefficient) else {
+        return;
+    };
+    if correlation.azimuth_count() != reflectivity.azimuth_count()
+        || correlation.gate_count() != reflectivity.gate_count()
+    {
+        return;
+    }
+    for azimuth_idx in 0..reflectivity.azimuth_count() {
+        for gate_idx in 0..reflectivity.gate_count() {
+            let (ref_value, ref_status) = reflectivity.get(azimuth_idx, gate_idx);
+            if ref_status != GateStatus::Valid {
+                continue;
+            }
+            let (cc_value, cc_status) = correlation.get(azimuth_idx, gate_idx);
+            if cc_status != GateStatus::Valid || cc_value < CORRELATION_CLUTTER_THRESHOLD {
+                reflectivity.set(azimuth_idx, gate_idx, ref_value, GateStatus::NoData);
+            }
+        }
+    }
+}
+
 fn scale_for_code(code: &str) -> ColorScale {
     match code.to_ascii_uppercase().as_str() {
         "REF" => codeblack_reflectivity_scale(),
@@ -267,6 +301,9 @@ fn render_level2_product(
         Some(field) => field,
         None => return error_json(format!("{product_code} FIELD EXTRACTION FAILED")),
     };
+    if product_code == "REF" {
+        apply_correlation_filter(&mut field, sweep);
+    }
     if product_code == "VEL" || product_code == "SRV" {
         convert_velocity_to_knots(&mut field);
     }
