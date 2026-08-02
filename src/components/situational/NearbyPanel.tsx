@@ -8,7 +8,7 @@ import { loadChaserRadiusMiles, subscribeChaserRadiusMiles } from "../../service
 
 const CATEGORY_LABEL: Record<NearbyCategory, string> = {
   gas: "Gas",
-  hospital: "Hospital",
+  hospital: "ER",
   lodging: "Lodging",
   food: "Food",
 };

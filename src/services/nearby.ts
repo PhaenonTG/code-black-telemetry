@@ -20,9 +20,15 @@ type Position = { lat: number; lon: number };
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 const SEARCH_RADIUS_METERS = 40_000; // ~25 miles
 
+// Hospital: restrict to amenity=hospital nodes explicitly tagged emergency=yes. A plain "hospital"
+// match can be misleading in the field -- confirmed live against Overpass near a test location:
+// a rehab hospital and a couple of others are tagged emergency=no, meaning no ER, while most
+// full-service hospitals nearby (11 of 14 checked) do carry emergency=yes. Untagged/unconfirmed
+// hospitals are deliberately excluded rather than guessed at -- the point of this filter is to
+// stop showing a non-ER facility as "the hospital" during what might be a real emergency.
 const CATEGORY_QUERIES: Record<NearbyCategory, string[]> = {
   gas: ['node["amenity"="fuel"]'],
-  hospital: ['node["amenity"="hospital"]'],
+  hospital: ['node["amenity"="hospital"]["emergency"="yes"]'],
   lodging: ['node["tourism"="hotel"]', 'node["tourism"="motel"]'],
   food: ['node["amenity"="fast_food"]', 'node["amenity"="restaurant"]'],
 };
@@ -116,7 +122,9 @@ const TWENTY_FOUR_HOUR_BRANDS = [
 ];
 
 function inferTypicalHours(category: NearbyCategory, tags: Record<string, string>): { status: "typical-open"; text: string } | null {
-  if (category === "hospital") return { status: "typical-open", text: "Emergency dept. typically 24 hours" };
+  // Only OSM-confirmed emergency=yes facilities reach this point (see CATEGORY_QUERIES) -- EDs
+  // are near-universally 24/7, but "typically" stays honest against rare diversion/closure.
+  if (category === "hospital") return { status: "typical-open", text: "Emergency dept. — typically open 24 hours" };
   if (category === "gas") {
     const brand = (tags.brand || tags.name || "").toLowerCase();
     if (TWENTY_FOUR_HOUR_BRANDS.some((known) => brand.includes(known))) {
