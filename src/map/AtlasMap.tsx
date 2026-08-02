@@ -20,8 +20,7 @@ type AtlasMapProps = {
   rangeRings: AtlasRangeRingMode;
   onRangeRingsChange: (mode: AtlasRangeRingMode) => void;
   onOpenExpanded?: () => void;
-  statusLabel: string;
-  scanLabel: string;
+  statusLines: string[];
 };
 
 const EMPTY_MODIFIERS = { modifiedLayers: 0, firstSymbolLayerId: undefined as string | undefined, lastMapError: "" };
@@ -74,8 +73,7 @@ export function AtlasMap({
   rangeRings,
   onRangeRingsChange,
   onOpenExpanded,
-  statusLabel,
-  scanLabel,
+  statusLines,
 }: AtlasMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -372,17 +370,22 @@ export function AtlasMap({
       <div ref={containerRef} className="atlas-map" data-camera-mode={cameraMode} />
       {visibleError && <div className="atlas-map-error">{visibleError}</div>}
       <div className="radar-strip atlas-radar-strip">
-        <span>{statusLabel}</span>
-        <em>{scanLabel}</em>
-        {onOpenExpanded && <button type="button" onClick={(event) => { event.stopPropagation(); onOpenExpanded(); }}>OPEN</button>}
+        {statusLines.map((line, index) => <span key={index}>{line}</span>)}
       </div>
+      {onOpenExpanded && (
+        <button type="button" className="atlas-expand-button" aria-label="Expand radar" onClick={(event) => { event.stopPropagation(); onOpenExpanded(); }}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" /></svg>
+        </button>
+      )}
       <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
         <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) + 0.5, duration: 260 })}>+</button>
         <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>-</button>
         <button type="button" aria-label="Toggle follow mode" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{cameraMode === "FOLLOW_HEADING" ? "HDG" : cameraMode === "FREE" ? "REC" : "NUP"}</button>
         <button type="button" aria-label="Toggle range rings" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RNG</button>
       </div>
-      <div className="map-status atlas-map-status">{visibleError || (ATLAS_DIAGNOSTICS_ENABLED ? `${statusLabel} - ${atlasStateLabel}` : statusLabel)}</div>
+      {(visibleError || ATLAS_DIAGNOSTICS_ENABLED) && (
+        <div className="map-status atlas-map-status">{visibleError || `${statusLines.join(" - ")} - ${atlasStateLabel}`}</div>
+      )}
     </div>
   );
 }

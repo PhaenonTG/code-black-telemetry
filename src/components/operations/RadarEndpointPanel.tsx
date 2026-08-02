@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { readAtlasDiagnostics } from "../../map/AtlasDiagnostics";
 import type { AtlasDiagnosticsSnapshot } from "../../map/types";
-import { configuredMapEngine, readMapRuntimeDiagnostics, setConfiguredMapEngine, type MapEngine, type MapRuntimeDiagnostics } from "../../services/mapTiles";
+import { readMapRuntimeDiagnostics, type MapRuntimeDiagnostics } from "../../services/mapTiles";
 import { clearRadarCache, getRadarCacheStatus, getRadarStatus, setRadarStormMotion, type RadarStatus } from "../../services/radar";
 import { readRadarLoopDiagnostics, type RadarLoopDiagnostics } from "../../services/radarLoop";
 
@@ -25,7 +25,6 @@ export function RadarEnginePanel() {
   const [mapDiagnostics, setMapDiagnostics] = useState<MapRuntimeDiagnostics | null>(null);
   const [atlasDiagnostics, setAtlasDiagnostics] = useState<AtlasDiagnosticsSnapshot | null>(null);
   const [loopDiagnostics, setLoopDiagnostics] = useState<RadarLoopDiagnostics | null>(null);
-  const [mapEngine, setMapEngine] = useState<MapEngine>(() => configuredMapEngine());
   const [message, setMessage] = useState("On-device radar engine starting.");
   const [motionDir, setMotionDir] = useState("245");
   const [motionSpeed, setMotionSpeed] = useState("32");
@@ -40,7 +39,6 @@ export function RadarEnginePanel() {
     setMapDiagnostics(readMapRuntimeDiagnostics());
     setAtlasDiagnostics(readAtlasDiagnostics());
     setLoopDiagnostics(readRadarLoopDiagnostics());
-    setMapEngine(configuredMapEngine());
     setMessage(nextStatus.latestError || `${nextStatus.processingState}  - Level III products deferred`);
   };
 
@@ -62,12 +60,6 @@ export function RadarEnginePanel() {
     await refresh();
   };
 
-  const switchMapEngine = (engine: MapEngine) => {
-    setConfiguredMapEngine(engine);
-    setMapEngine(engine);
-    setMessage(`Map engine set to ${engine.toUpperCase()}. Return to Page 1 to validate.`);
-  };
-
   return (
     <section className="cb-panel endpoint-panel radar-endpoint-panel">
       <div className="cb-panel__title">Radar Engine</div>
@@ -86,7 +78,6 @@ export function RadarEnginePanel() {
           <div className="radar-engine-metric"><span>Cache</span><strong>{cache ? `${sizeLabel(cache.usedBytes)} / ${sizeLabel(cache.limitBytes)}` : "LOADING"}</strong></div>
           <div className="radar-engine-metric"><span>Frames</span><strong>{cache ? `${cache.frames}` : "--"}</strong></div>
           <div className="radar-engine-metric"><span>Background</span><strong>OFF</strong></div>
-          <div className="radar-engine-metric"><span>Active Engine</span><strong>{mapEngine.toUpperCase()}</strong></div>
           <div className="radar-engine-metric"><span>Map Renderer</span><strong>{mapDiagnostics?.renderer ?? "WAITING"}</strong></div>
           <div className="radar-engine-metric"><span>Map Style</span><strong>{mapDiagnostics?.styleUri.replace("mapbox://styles/", "") ?? "UNKNOWN"}</strong></div>
           <div className="radar-engine-metric"><span>Style Layers</span><strong>{mapDiagnostics ? `${mapDiagnostics.modifiedLayers} MODIFIED` : "--"}</strong></div>
@@ -117,8 +108,6 @@ export function RadarEnginePanel() {
           <input value={motionSpeed} onChange={(event) => setMotionSpeed(event.target.value)} inputMode="numeric" aria-label="Storm motion speed knots" />
           <button onClick={applyMotion}>Apply</button>
           <button onClick={clearCache}>Clear Cache</button>
-          <button onClick={() => switchMapEngine("legacy")}>Legacy Map</button>
-          <button onClick={() => switchMapEngine("atlas")}>Atlas Map</button>
         </div>
       </div>
     </section>

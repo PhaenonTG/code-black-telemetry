@@ -1,0 +1,157 @@
+import { distanceMiles } from "./telemetry/quality";
+
+export type NearbyCategory = "gas" | "hospital" | "lodging" | "food";
+
+export interface NearbyPlace {
+  id: string;
+  category: NearbyCategory;
+  name: string;
+  distanceMiles: number;
+  lat: number;
+  lon: number;
+  address: string;
+  phone: string;
+  hoursStatus: "open" | "closed" | "unknown";
+  hoursText: string;
+}
+
+type Position = { lat: number; lon: number };
+
+const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+const SEARCH_RADIUS_METERS = 40_000; // ~25 miles
+
+const CATEGORY_QUERIES: Record<NearbyCategory, string[]> = {
+  gas: ['node["amenity"="fuel"]'],
+  hospital: ['node["amenity"="hospital"]'],
+  lodging: ['node["tourism"="hotel"]', 'node["tourism"="motel"]'],
+  food: ['node["amenity"="fast_food"]', 'node["amenity"="restaurant"]'],
+};
+
+interface OverpassNode {
+  id: number;
+  lat: number;
+  lon: number;
+  tags?: Record<string, string>;
+}
+
+function buildQuery(pos: Position): string {
+  const around = `(around:${SEARCH_RADIUS_METERS},${pos.lat.toFixed(5)},${pos.lon.toFixed(5)})`;
+  const clauses = (Object.values(CATEGORY_QUERIES).flat()).map((prefix) => `${prefix}${around};`).join("\n  ");
+  return `[out:json][timeout:20];\n(\n  ${clauses}\n);\nout body;`;
+}
+
+function formatAddress(tags: Record<string, string>): string {
+  const parts = [
+    [tags["addr:housenumber"], tags["addr:street"]].filter(Boolean).join(" "),
+    tags["addr:city"],
+    tags["addr:state"],
+    tags["addr:postcode"],
+  ].filter(Boolean);
+  return parts.join(", ");
+}
+
+// OSM opening_hours is a rich free-text grammar (seasonal rules, holiday exceptions, comments).
+// Rather than partially interpret it and risk a confident-but-wrong OPEN/CLOSED claim, this only
+// resolves the common case (semicolon-separated day-range + single time-range clauses, or 24/7).
+// Anything else falls back to displaying the raw tag text so the human makes the final call.
+const DAY_CODES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function expandDayRange(token: string): number[] | null {
+  const match = token.match(/^(Mo|Tu|We|Th|Fr|Sa|Su)(?:-(Mo|Tu|We|Th|Fr|Sa|Su))?$/);
+  if (!match) return null;
+  const start = DAY_CODES.indexOf(match[1]);
+  const end = match[2] ? DAY_CODES.indexOf(match[2]) : start;
+  if (start < 0 || end < 0) return null;
+  const days: number[] = [];
+  let day = start;
+  while (true) {
+    days.push(day);
+    if (day === end) break;
+    day = (day + 1) % 7;
+    if (days.length > 7) return null;
+  }
+  return days;
+}
+
+function resolveOpeningHours(raw: string | undefined, now: Date): { status: "open" | "closed" | "unknown"; text: string } {
+  if (!raw) return { status: "unknown", text: "Hours unknown" };
+  const trimmed = raw.trim();
+  if (trimmed === "24/7") return { status: "open", text: "Open 24 hours" };
+
+  const clauses = trimmed.split(";").map((clause) => clause.trim()).filter(Boolean);
+  const currentDay = now.getDay();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  let matchedTodayClause = false;
+  let openNow = false;
+
+  for (const clause of clauses) {
+    const match = clause.match(/^((?:Mo|Tu|We|Th|Fr|Sa|Su)(?:-(?:Mo|Tu|We|Th|Fr|Sa|Su))?(?:,(?:Mo|Tu|We|Th|Fr|Sa|Su)(?:-(?:Mo|Tu|We|Th|Fr|Sa|Su))?)*)\s+(\d{2}):(\d{2})-(\d{2}):(\d{2})$/);
+    if (!match) return { status: "unknown", text: raw };
+    const dayTokens = match[1].split(",");
+    const days = dayTokens.flatMap((token) => expandDayRange(token) ?? []);
+    if (days.length === 0) return { status: "unknown", text: raw };
+    if (!days.includes(currentDay)) continue;
+    matchedTodayClause = true;
+    const startMinutes = Number(match[2]) * 60 + Number(match[3]);
+    const endMinutes = Number(match[4]) * 60 + Number(match[5]);
+    if (currentMinutes >= startMinutes && currentMinutes < endMinutes) openNow = true;
+  }
+
+  if (!matchedTodayClause) return { status: "closed", text: raw };
+  return { status: openNow ? "open" : "closed", text: raw };
+}
+
+function categoryFor(tags: Record<string, string>): NearbyCategory | null {
+  if (tags.amenity === "fuel") return "gas";
+  if (tags.amenity === "hospital") return "hospital";
+  if (tags.tourism === "hotel" || tags.tourism === "motel") return "lodging";
+  if (tags.amenity === "fast_food" || tags.amenity === "restaurant") return "food";
+  return null;
+}
+
+export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<Record<NearbyCategory, NearbyPlace>>; error: string }> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(OVERPASS_URL, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(buildQuery(pos))}`,
+    });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const data = (await response.json()) as { elements?: OverpassNode[] };
+    const now = new Date();
+    const closest: Partial<Record<NearbyCategory, NearbyPlace>> = {};
+
+    for (const node of data.elements ?? []) {
+      const tags = node.tags ?? {};
+      const name = tags.name;
+      if (!name) continue;
+      const category = categoryFor(tags);
+      if (!category) continue;
+      const distance = distanceMiles(pos, { lat: node.lat, lon: node.lon });
+      const existing = closest[category];
+      if (existing && existing.distanceMiles <= distance) continue;
+      const hours = resolveOpeningHours(tags.opening_hours, now);
+      closest[category] = {
+        id: `${node.id}`,
+        category,
+        name,
+        distanceMiles: distance,
+        lat: node.lat,
+        lon: node.lon,
+        address: formatAddress(tags),
+        phone: tags.phone || tags["contact:phone"] || "",
+        hoursStatus: hours.status,
+        hoursText: hours.text,
+      };
+    }
+
+    return { places: closest, error: "" };
+  } catch (error) {
+    return { places: {}, error: error instanceof Error ? error.message : "Nearby lookup failed" };
+  } finally {
+    window.clearTimeout(timer);
+  }
+}

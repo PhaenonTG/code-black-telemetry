@@ -47,6 +47,7 @@ export interface PowerData {
   mainBatteryV: number;
   auxBatteryV: number;
   charging: boolean;
+  source: TelemetrySource;
   updatedAt: number;
 }
 
@@ -55,6 +56,7 @@ export interface SystemData {
   ramPercent: number;
   storagePercent: number;
   uptimeSeconds: number;
+  source: TelemetrySource;
   updatedAt: number;
 }
 

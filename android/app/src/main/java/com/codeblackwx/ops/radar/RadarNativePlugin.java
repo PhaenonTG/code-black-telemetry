@@ -41,8 +41,13 @@ public class RadarNativePlugin extends Plugin {
     private static final String LEVEL2_BUCKET = "https://unidata-nexrad-level2.s3.amazonaws.com/";
     private static final int DOWNLOAD_TIMEOUT_MS = 45_000;
     private static final int READ_TIMEOUT_MS = 90_000;
-    private static final int RENDER_SIZE_PX = 1024;
+    private static final int RENDER_SIZE_PX = 2048;
     private static final int DEFAULT_FRAME_HISTORY_LIMIT = 12;
+    // NEXRAD volumes typically land every ~5-10 min. If our newest on-disk frame is older than
+    // this, getFrames() must fall through to a fresh S3 check instead of serving the cache
+    // forever (the bug: getFrames() previously served *any* cached history without ever
+    // re-checking for a newer volume once 2+ frames existed on disk).
+    private static final long RADAR_CACHE_FRESHNESS_MS = 6 * 60 * 1000L;
 
     static {
         System.loadLibrary("codeblack_radar");
@@ -172,7 +177,7 @@ public class RadarNativePlugin extends Plugin {
         selectedProduct = product;
         int limit = Math.max(1, Math.min(12, call.getInt("limit", DEFAULT_FRAME_HISTORY_LIMIT)));
         List<RadarFrame> cachedHistory = historyFrames(radarSite, product, limit);
-        if (cachedHistory.size() >= 2) {
+        if (cachedHistory.size() >= 2 && isVolumeCacheFresh(cachedHistory.get(0))) {
             call.resolve(framesResult(cachedHistory));
             return;
         }
@@ -435,6 +440,16 @@ public class RadarNativePlugin extends Plugin {
 
     private RadarFrame cachedFrame(String siteId, String product) {
         return frameCache.get(cacheKey(siteId, product));
+    }
+
+    private boolean isVolumeCacheFresh(RadarFrame frame) {
+        if (frame == null || frame.time == null) return false;
+        try {
+            long ageMs = System.currentTimeMillis() - Instant.parse(frame.time).toEpochMilli();
+            return ageMs >= 0 && ageMs <= RADAR_CACHE_FRESHNESS_MS;
+        } catch (Exception error) {
+            return false;
+        }
     }
 
     private List<RadarFrame> historyFrames(RadarSite site, String product, int limit) {

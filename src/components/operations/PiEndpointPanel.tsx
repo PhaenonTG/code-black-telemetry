@@ -51,7 +51,7 @@ export function PiEndpointPanel() {
   };
 
   return (
-    <section className="cb-panel endpoint-panel">
+    <section className="cb-panel pi-endpoint-panel">
       <div className="cb-panel__title">Pi Endpoint</div>
       <div className="endpoint-form">
         <label>

@@ -1,6 +1,8 @@
 import { useStatus, useSystem } from "../../hooks/useTelemetry";
+import { ageLabel } from "../../services/telemetry/quality";
 import { DashCard } from "../ui/DashCard";
 import { MetricRow } from "../ui/MetricRow";
+import { SourceBadge } from "../ui/SourceBadge";
 
 function pctStatus(v: number): "ok" | "warn" | "critical" {
   if (v > 90) return "critical";
@@ -18,20 +20,20 @@ export function SystemCard({ className }: { className?: string }) {
   const sys = useSystem();
   const status = useStatus();
   if (!sys) return null;
-  if (!status?.piOnline) {
-    return (
-      <DashCard title="Pi System" className={className}>
-        <div className="cb-empty cb-empty--compact">NO LIVE PI SYSTEM DATA</div>
-      </DashCard>
-    );
-  }
+  const known = sys.source !== "unavailable";
+  const live = status?.piOnline ?? false;
 
   return (
     <DashCard title="Pi System" className={className}>
-      <MetricRow label="CPU"     value={`${sys.cpuPercent.toFixed(0)}%`}     status={pctStatus(sys.cpuPercent)} />
-      <MetricRow label="RAM"     value={`${sys.ramPercent.toFixed(0)}%`}     status={pctStatus(sys.ramPercent)} />
-      <MetricRow label="Storage" value={`${sys.storagePercent.toFixed(0)}%`} status={pctStatus(sys.storagePercent)} />
-      <MetricRow label="Uptime"  value={uptime(sys.uptimeSeconds)} status="muted" />
+      {!live && (
+        <SourceBadge state={known ? "fallback" : "offline"}>
+          {known ? `LAST KNOWN · ${ageLabel(sys.updatedAt)}` : "NO DATA EVER RECEIVED"}
+        </SourceBadge>
+      )}
+      <MetricRow label="CPU"     value={known ? `${sys.cpuPercent.toFixed(0)}%` : "--"}     status={known ? pctStatus(sys.cpuPercent) : "muted"} />
+      <MetricRow label="RAM"     value={known ? `${sys.ramPercent.toFixed(0)}%` : "--"}     status={known ? pctStatus(sys.ramPercent) : "muted"} />
+      <MetricRow label="Storage" value={known ? `${sys.storagePercent.toFixed(0)}%` : "--"} status={known ? pctStatus(sys.storagePercent) : "muted"} />
+      <MetricRow label="Uptime"  value={known ? uptime(sys.uptimeSeconds) : "--"} status="muted" />
     </DashCard>
   );
 }

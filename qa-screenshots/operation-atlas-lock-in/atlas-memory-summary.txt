@@ -1,0 +1,30 @@
+﻿Atlas Memory Summary - Operation Atlas Lock-In
+
+Canonical stress run: atlas-memory-timeline-expanded-corrected.csv copied to atlas-memory-timeline.csv
+Duration: 30 minutes + 120 second idle cooldown
+Actions: 1200 product taps, 150 expanded open/close cycles, 300 follow/recenter transitions, 50 background/resume cycles
+
+PSS KB:
+start 529933
+t0 active 690952
+5 min 667127
+10 min 666473
+15 min 559322
+20 min 679048
+25 min 679981
+30 min 541536
+idle +120s 514111
+
+Graphics KB:
+start 316260
+t0 active 465780
+5 min 452332
+10 min 453496
+15 min 352744
+20 min 468184
+25 min 466276
+30 min 337205
+idle +120s 307256
+
+Conclusion: high but bounded plateau under expanded/product stress; no monotonic retained growth. Live post-close state returned to one Mapbox map, one canvas, one WebGL context.
+Final production launch: PSS 464923 KB, Graphics 168112 KB, one WebView, one map/canvas/context, basemap visible, radar state FRAME_MISSING for current simulator/GPS site.

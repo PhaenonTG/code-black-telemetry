@@ -76,6 +76,7 @@ function buildInitialSnapshot(): TelemetrySnapshot {
       mainBatteryV: 12.6,
       auxBatteryV: 12.4,
       charging: false,
+      source: "simulator",
       updatedAt: Date.now(),
     },
     system: {
@@ -83,6 +84,7 @@ function buildInitialSnapshot(): TelemetrySnapshot {
       ramPercent: 34,
       storagePercent: 42,
       uptimeSeconds: 3600,
+      source: "simulator",
       updatedAt: Date.now(),
     },
     status: {
@@ -167,8 +169,8 @@ export class SimulatorProvider implements TelemetryProvider {
       },
       gps: { ...s.gps, speedMph: gpsSpeed, headingDeg: gpsHead, headingCardinal: cardinalFromDeg(gpsHead), satellites: sats, hasFix: sats >= 4, lat: s.gps.lat, lon: s.gps.lon, updatedAt: now },
       sensors,
-      power: { mainBatteryV: mainV, auxBatteryV: auxV, charging: mainV > 13.5, updatedAt: now },
-      system: { cpuPercent: cpu, ramPercent: ram, storagePercent: s.system.storagePercent, uptimeSeconds: s.system.uptimeSeconds + 1, updatedAt: now },
+      power: { mainBatteryV: mainV, auxBatteryV: auxV, charging: mainV > 13.5, source: "simulator", updatedAt: now },
+      system: { cpuPercent: cpu, ramPercent: ram, storagePercent: s.system.storagePercent, uptimeSeconds: s.system.uptimeSeconds + 1, source: "simulator", updatedAt: now },
       status: { apiLatencyMs: latency, dataAgeSeconds: 0, piOnline: true, internetOnline: true, mode: "simulator", updatedAt: now },
       events,
     };

@@ -8,26 +8,35 @@ import { PowerCard } from "./components/cards/PowerCard";
 import { SensorHealthCard } from "./components/cards/SensorHealthCard";
 import { SystemCard } from "./components/cards/SystemCard";
 import { TopBar } from "./components/layout/TopBar";
+import { PiEndpointPanel } from "./components/operations/PiEndpointPanel";
 import { RadarEnginePanel } from "./components/operations/RadarEndpointPanel";
+import { SettingsPage } from "./components/settings/SettingsPage";
+import { NearbyPanel } from "./components/situational/NearbyPanel";
 import {
+  AlertsFullPanel,
   AlertsPanel,
   LocationMotionPanel,
   MapRadarPanel,
-  StormThreatsPanel,
   WeatherObservationPanel,
-  WindAwarenessPanel,
 } from "./components/situational/Panels";
+import { WindCard } from "./components/situational/WindCard";
 import { useAlertProducts } from "./hooks/useAlertProducts";
+import { useNearbyPlaces } from "./hooks/useNearbyPlaces";
 import { useSituationalData } from "./hooks/useSituationalData";
+import { useSpotters } from "./hooks/useSpotters";
 import { useStatus } from "./hooks/useTelemetry";
+import { setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, startCodeBlackSoundPlayer } from "./services/sound";
 import { setTelemetryPaused } from "./services/telemetry";
 
-type PageKey = "weather" | "operations";
+type PageKey = "weather" | "operations" | "locate" | "alerts" | "settings";
 export type CockpitMode = "normal" | "chase";
 
 const pages: Array<{ key: PageKey; label: string; path: string }> = [
   { key: "weather", label: "Weather", path: "/" },
   { key: "operations", label: "Operations", path: "/operations" },
+  { key: "locate", label: "Locate", path: "/locate" },
+  { key: "alerts", label: "Alerts", path: "/alerts" },
+  { key: "settings", label: "Settings", path: "/settings" },
 ];
 const PAGE_PREF_KEY = "codeblack.activePage";
 const COCKPIT_MODE_KEY = "codeblack.cockpitMode";
@@ -42,9 +51,9 @@ function DockIcon({ type }: { type: "weather" | "operations" | "locate" | "alert
 }
 
 function pathToPage(): PageKey {
-  return window.location.pathname === "/operations" || window.location.pathname === "/system" || window.location.pathname === "/settings"
-    ? "operations"
-    : "weather";
+  const match = pages.find((item) => item.path === window.location.pathname);
+  if (match) return match.key;
+  return window.location.pathname === "/system" ? "operations" : "weather";
 }
 
 export default function App() {
@@ -53,9 +62,15 @@ export default function App() {
   const pagerRef = useRef<HTMLDivElement | null>(null);
   const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
   const status = useStatus();
-  const alertProducts = useAlertProducts(canonicalLocation.latitude != null && canonicalLocation.longitude != null ? { lat: canonicalLocation.latitude, lon: canonicalLocation.longitude } : null);
+  const gpsPoint = canonicalLocation.latitude != null && canonicalLocation.longitude != null
+    ? { lat: canonicalLocation.latitude, lon: canonicalLocation.longitude }
+    : null;
+  const alertProducts = useAlertProducts(gpsPoint);
+  const nearby = useNearbyPlaces(gpsPoint);
+  const spotters = useSpotters(gpsPoint);
   const piState = status?.piOnline ? `ONLINE · ${status.apiLatencyMs} ms` : status?.updatedAt ? `OFFLINE · LAST CHECK ${new Date(status.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "OFFLINE";
   const serviceState = status?.piOnline ? "VIA PI · CHECK DASHBOARD" : "VIA PI · OFFLINE";
+  const mapGps = gpsPoint ? { ...gpsPoint, headingDeg: canonicalLocation.headingDeg, speedMph: canonicalLocation.speedMph, accuracyM: canonicalLocation.accuracyM } : null;
 
   const goToPage = (next: PageKey) => {
     const index = pages.findIndex((item) => item.key === next);
@@ -75,16 +90,30 @@ export default function App() {
   useEffect(() => {
     requestAnimationFrame(() => syncPageImmediately(pathToPage()));
     Preferences.get({ key: PAGE_PREF_KEY }).then(({ value }) => {
-      if (value === "weather" || value === "operations") goToPage(value);
+      if (value && pages.some((item) => item.key === value)) goToPage(value as PageKey);
     });
     Preferences.get({ key: COCKPIT_MODE_KEY }).then(({ value }) => {
       if (value === "normal" || value === "chase") setCockpitMode(value);
+    });
+    startCodeBlackSoundPlayer();
+    Preferences.get({ key: SOUND_ENABLED_PREF_KEY }).then(({ value }) => {
+      setCodeBlackSoundEnabled(value !== "false");
     });
   }, []);
 
   const changeCockpitMode = (mode: CockpitMode) => {
     setCockpitMode(mode);
     void Preferences.set({ key: COCKPIT_MODE_KEY, value: mode });
+  };
+
+  const focusPanel = (selector: string) => {
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(selector);
+      if (!el) return;
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      el.classList.add("cb-focus-pulse");
+      window.setTimeout(() => el.classList.remove("cb-focus-pulse"), 1600);
+    });
   };
 
   useEffect(() => {
@@ -101,6 +130,12 @@ export default function App() {
     pager.addEventListener("scroll", handleScroll, { passive: true });
     return () => pager.removeEventListener("scroll", handleScroll);
   }, [page]);
+
+  useEffect(() => {
+    const handleViewAllAlerts = () => goToPage("alerts");
+    window.addEventListener("codeblack:view-all-alerts", handleViewAllAlerts);
+    return () => window.removeEventListener("codeblack:view-all-alerts", handleViewAllAlerts);
+  }, []);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -121,7 +156,7 @@ export default function App() {
         closeButton.click();
         return;
       }
-      if (page === "operations") {
+      if (page !== "weather") {
         goToPage("weather");
         return;
       }
@@ -134,12 +169,13 @@ export default function App() {
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "ArrowRight") goToPage("operations");
-      if (event.key === "ArrowLeft") goToPage("weather");
+      const index = pages.findIndex((item) => item.key === page);
+      if (event.key === "ArrowRight" && index < pages.length - 1) goToPage(pages[index + 1].key);
+      if (event.key === "ArrowLeft" && index > 0) goToPage(pages[index - 1].key);
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     const handleResize = () => goToPage(page);
@@ -159,10 +195,10 @@ export default function App() {
           <div className="page-grid page-grid--weather">
             <LocationMotionPanel tabletPermission={tabletPermission} location={canonicalLocation} mode={cockpitMode} />
             <WeatherObservationPanel external={external} mode={cockpitMode} />
-            <WindAwarenessPanel external={external} mode={cockpitMode} />
+            <WindCard external={external} mode={cockpitMode} />
             <AlertsPanel products={alertProducts.products} error={alertProducts.error} />
-            <MapRadarPanel gps={canonicalLocation.latitude != null && canonicalLocation.longitude != null ? { lat: canonicalLocation.latitude, lon: canonicalLocation.longitude, headingDeg: canonicalLocation.headingDeg, speedMph: canonicalLocation.speedMph, accuracyM: canonicalLocation.accuracyM } : null} visible={page === "weather"} />
-            <StormThreatsPanel products={alertProducts.products} />
+            <MapRadarPanel gps={mapGps} visible={page === "weather"} />
+            <NearbyPanel places={nearby.places} error={nearby.error} spotters={spotters.spotters} spottersError={spotters.error} />
           </div>
         </section>
         <section className="page page--operations" aria-label="Operations">
@@ -172,25 +208,21 @@ export default function App() {
               <div className="ops-mode">
                 <strong>{status?.mode === "pi" ? "PI CONNECTED" : status?.mode === "tablet" ? "STANDALONE TABLET" : "DEVELOPMENT SIMULATOR"}</strong>
                 <span>PI {status?.piOnline ? "ONLINE" : "OFFLINE"} | INTERNET {status?.internetOnline ? "AVAILABLE" : "UNKNOWN"}</span>
-                <div className="mode-toggle" aria-label="Cockpit information mode">
-                  <button className={cockpitMode === "normal" ? "active" : ""} onClick={() => changeCockpitMode("normal")}>Normal</button>
-                  <button className={cockpitMode === "chase" ? "active" : ""} onClick={() => changeCockpitMode("chase")}>Chase</button>
-                </div>
+                <span className="ops-mode__hint">Cockpit display mode moved to Settings.</span>
               </div>
             </section>
             <SensorHealthCard />
             <SystemCard />
             <PowerCard />
             <RadarEnginePanel />
+            <PiEndpointPanel />
             <EventsCard className="events-ops" />
             <section className="cb-panel diagnostics-panel">
               <div className="cb-panel__title">Diagnostics</div>
               <div className="diagnostic-grid">
                 <span>PI API</span><strong>{piState}</strong>
                 <span>Radar Engine</span><strong>ON DEVICE</strong>
-                <span>BLE</span><strong>WATCHING</strong>
-                <span>Wi-Fi</span><strong>SYSTEM NETWORK</strong>
-                <span>Starlink</span><strong>NOT CONFIGURED</strong>
+                <span>Internet</span><strong>{status?.internetOnline ? "AVAILABLE" : "UNAVAILABLE"}</strong>
                 <span>Native GPS</span><strong>{gps ? `${gps.source.toUpperCase()} · ${gps.accuracyM ? `${Math.round(gps.accuracyM)} m` : "ACTIVE"}` : "WAITING"}</strong>
                 <span>UI Mode</span><strong>{cockpitMode.toUpperCase()}</strong>
                 <span>Canonical GPS</span><strong>{canonicalLocation.validity} · {canonicalLocation.source.toUpperCase()}</strong>
@@ -201,6 +233,26 @@ export default function App() {
             </section>
           </div>
         </section>
+        <section className="page page--locate" aria-label="Locate">
+          <div className="page-grid page-grid--locate">
+            <MapRadarPanel gps={mapGps} visible={page === "locate"} />
+          </div>
+        </section>
+        <section className="page page--alerts" aria-label="Alerts">
+          <div className="page-grid page-grid--alerts">
+            <AlertsFullPanel products={alertProducts.products} error={alertProducts.error} />
+          </div>
+        </section>
+        <section className="page page--settings" aria-label="Settings">
+          <SettingsPage
+            cockpitMode={cockpitMode}
+            onChangeCockpitMode={changeCockpitMode}
+            onOpenPiConnection={() => {
+              goToPage("operations");
+              focusPanel(".pi-endpoint-panel");
+            }}
+          />
+        </section>
       </main>
       <div className="page-dots" aria-label="Page indicator">
         {pages.map((item) => <button key={item.key} aria-label={item.label} className={item.key === page ? "active" : ""} onClick={() => goToPage(item.key)} />)}
@@ -208,9 +260,9 @@ export default function App() {
       <nav className="bottom-dock" aria-label="Dashboard dock">
         <button className={page === "weather" ? "active" : ""} onClick={() => goToPage("weather")}><DockIcon type="weather" /><span>WX</span><em>Weather</em></button>
         <button className={page === "operations" ? "active" : ""} onClick={() => goToPage("operations")}><DockIcon type="operations" /><span>OPS</span><em>Operations</em></button>
-        <button onClick={() => window.dispatchEvent(new Event("codeblack:center-map"))}><DockIcon type="locate" /><span>LOC</span><em>Locate</em></button>
-        <button onClick={() => document.querySelector(".alerts-panel")?.scrollIntoView({ block: "nearest", behavior: "smooth" })}><DockIcon type="alerts" /><span>Alerts</span><em>Products</em></button>
-        <button onClick={() => goToPage("operations")}><DockIcon type="settings" /><span>SET</span><em>Settings</em></button>
+        <button className={page === "locate" ? "active" : ""} onClick={() => { goToPage("locate"); window.dispatchEvent(new Event("codeblack:center-map")); }}><DockIcon type="locate" /><span>LOC</span><em>Locate</em></button>
+        <button className={page === "alerts" ? "active" : ""} onClick={() => goToPage("alerts")}><DockIcon type="alerts" /><span>Alerts</span><em>Products</em></button>
+        <button className={page === "settings" ? "active" : ""} onClick={() => goToPage("settings")}><DockIcon type="settings" /><span>SET</span><em>Settings</em></button>
         <div className="dock-signature" aria-hidden="true"><strong>CODE BLACK</strong><span>Weather. Data. Dominance.</span></div>
       </nav>
     </div>

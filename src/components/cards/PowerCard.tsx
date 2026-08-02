@@ -1,6 +1,8 @@
 import { usePower, useStatus } from "../../hooks/useTelemetry";
+import { ageLabel } from "../../services/telemetry/quality";
 import { DashCard } from "../ui/DashCard";
 import { MetricRow } from "../ui/MetricRow";
+import { SourceBadge } from "../ui/SourceBadge";
 
 function battStatus(v: number): "ok" | "warn" | "critical" {
   if (v < 11.8) return "critical";
@@ -12,19 +14,19 @@ export function PowerCard({ className }: { className?: string }) {
   const power = usePower();
   const status = useStatus();
   if (!power) return null;
-  if (!status?.piOnline) {
-    return (
-      <DashCard title="Vehicle Power" className={className}>
-        <div className="cb-empty cb-empty--compact">NO LIVE VEHICLE POWER DATA</div>
-      </DashCard>
-    );
-  }
+  const known = power.source !== "unavailable";
+  const live = status?.piOnline ?? false;
 
   return (
     <DashCard title="Vehicle Power" className={className}>
-      <MetricRow label="Main Batt"  value={power.mainBatteryV.toFixed(2)} unit="V" status={battStatus(power.mainBatteryV)} />
-      <MetricRow label="Aux Batt"   value={power.auxBatteryV.toFixed(2)}  unit="V" status={battStatus(power.auxBatteryV)} />
-      <MetricRow label="Charging"   value={power.charging ? "YES" : "NO"} status={power.charging ? "ok" : "muted"} />
+      {!live && (
+        <SourceBadge state={known ? "fallback" : "offline"}>
+          {known ? `LAST KNOWN · ${ageLabel(power.updatedAt)}` : "NO DATA EVER RECEIVED"}
+        </SourceBadge>
+      )}
+      <MetricRow label="Main Batt" value={known ? power.mainBatteryV.toFixed(2) : "--"} unit="V" status={known ? battStatus(power.mainBatteryV) : "muted"} />
+      <MetricRow label="Aux Batt"  value={known ? power.auxBatteryV.toFixed(2) : "--"}  unit="V" status={known ? battStatus(power.auxBatteryV) : "muted"} />
+      <MetricRow label="Charging" value={known ? (power.charging ? "YES" : "NO") : "--"} status={known && power.charging ? "ok" : "muted"} />
     </DashCard>
   );
 }

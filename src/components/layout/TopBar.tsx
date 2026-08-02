@@ -1,36 +1,60 @@
 import { useEffect, useState } from "react";
-import { useGps, usePower, useStatus, useSystem } from "../../hooks/useTelemetry";
-import { StatusBadge } from "../ui/StatusBadge";
+import codeblackShield from "../../assets/codeblack-shield.png";
+import { useStatus } from "../../hooks/useTelemetry";
+import { useBattery } from "../../hooks/useBattery";
+import "./TopBar.css";
 
-function Clock() {
-  const [time, setTime] = useState(() => new Date());
+function batteryState(level: number): "good" | "warn" | "bad" {
+  if (level > 65) return "good";
+  if (level >= 35) return "warn";
+  return "bad";
+}
+
+function BatteryChip({ level }: { level: number | null }) {
+  if (level == null) return null;
+  const state = batteryState(level);
+  const fillWidth = Math.max(1, Math.round((level / 100) * 12));
+  return (
+    <div className={`battery-chip battery-chip--${state}`} aria-label={`Tablet battery ${level} percent`}>
+      <svg className="battery-chip__icon" viewBox="0 0 18 10" aria-hidden="true">
+        <rect x="0.5" y="0.5" width="15" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1" />
+        <rect x="16" y="3" width="1.5" height="4" rx="0.5" fill="currentColor" />
+        <rect x="2" y="2" width={fillWidth} height="6" rx="0.5" fill="currentColor" />
+      </svg>
+      <span>{level}%</span>
+    </div>
+  );
+}
+
+function useNow() {
+  const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000);
+    const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
-  return (
-    <span className="font-mono text-sm tabular-nums text-white">
-      {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
-    </span>
-  );
+  return now;
+}
+
+// Real signal, not decorative: piOnline drives good/bad, apiLatencyMs drives a "degraded but
+// connected" middle state. This is the initial wiring the user asked to have in place for future
+// refinement — not a fabricated value, both inputs already come from the live telemetry status.
+function piLinkState(piOnline: boolean | undefined, apiLatencyMs: number | undefined): "good" | "degraded" | "bad" {
+  if (!piOnline) return "bad";
+  if ((apiLatencyMs ?? 0) > 800) return "degraded";
+  return "good";
 }
 
 export function TopBar() {
   const status = useStatus();
-  const system = useSystem();
-  const power = usePower();
-  const gps = useGps();
-
-  const cpuWarn = (system?.cpuPercent ?? 0) > 80;
-  const battWarn = (power?.mainBatteryV ?? 13) < 12.0;
-  const gpsSource = gps?.source === "tablet" ? "Tablet GPS" : gps?.source === "vehicle" || gps?.source === "esp" ? "Pi GPS" : gps?.source === "last-known" ? "Last Known GPS" : "GPS Acquiring";
-  const gpsQuality = gps?.hasFix && gps.source !== "unavailable" && gps.source !== "simulator" ? `${gps.satellites ?? "--"} sats` : "No fix";
-  const validGps = Boolean(gps?.hasFix && gps.source !== "unavailable" && gps.source !== "simulator" && Math.abs(gps.lat) <= 90 && Math.abs(gps.lon) <= 180 && !(gps.lat === 0 && gps.lon === 0));
+  const batteryLevel = useBattery();
+  const now = useNow();
+  const linkState = piLinkState(status?.piOnline, status?.apiLatencyMs);
+  const dateLabel = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
 
   return (
     <header className="ops-header">
       <div className="brand-lockup" aria-label="Code Black OPS">
-        <span className="brand-mark brand-mark--codeblack" aria-hidden="true"><span /></span>
+        <img className="brand-mark brand-mark--codeblack" src={codeblackShield} alt="Code Black" />
         <div>
           <div className="brand-title"><span>Code Black</span> <strong>OPS</strong></div>
           <div className="brand-subtitle">Situational Awareness</div>
@@ -38,23 +62,19 @@ export function TopBar() {
       </div>
 
       <div className="time-module">
-        <Clock />
+        <span className="font-mono text-sm tabular-nums text-white">
+          {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+        </span>
         <span>Local Time</span>
       </div>
 
       <div className="header-status">
-        <div className="gps-strip">
-          <span className="gps-crosshair" aria-hidden="true" />
-          <span>{gpsSource}</span>
-          <strong>{gpsQuality}</strong>
-          <em>{gps?.accuracyM != null ? `${Math.round(gps.accuracyM)} m` : "-- m"}</em>
+        <div className="header-date">{dateLabel}</div>
+        <div className="pi-link">
+          <span className={`pi-link__dot pi-link__dot--${linkState}`} aria-hidden="true" />
+          <span>Pi Link</span>
         </div>
-        <div className="unit-strip">
-          <StatusBadge online={status?.piOnline ?? false} label="PI" pulse />
-          <span>UNIT-01</span>
-          <strong className={cpuWarn || battWarn ? "is-warn" : "is-ok"}>{cpuWarn || battWarn ? "WARN" : "NOMINAL"}</strong>
-          <em>{validGps && gps ? `${gps.lat.toFixed(5)} N  ${Math.abs(gps.lon).toFixed(5)} W` : "--"}</em>
-        </div>
+        <BatteryChip level={batteryLevel} />
       </div>
     </header>
   );

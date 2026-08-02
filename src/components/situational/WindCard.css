@@ -1,0 +1,80 @@
+/* WindCard — self-contained styles. Deliberately narrow (width is set on .wind-panel's grid-area
+   in the shared page grid, matching the Alerts card below it) and deliberately plain: no red
+   accent stripe, no compass graphic. Speed and Direction are both hero values; Gust is secondary. */
+
+.wind-panel.cockpit-card {
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+.wind-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px var(--glance-card-pad-x, 14px) 0;
+}
+
+.wind-hero__item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wind-hero__item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text, #f8fafc);
+  font-size: clamp(28px, 2.8vw, 42px);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.wind-hero__item span {
+  margin-top: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted, #8b949e);
+  font: 700 clamp(9px, 0.72vw, 11px) / 1.2 Consolas, "JetBrains Mono", monospace;
+  text-transform: uppercase;
+}
+
+.wind-hero__item span em {
+  margin-left: 6px;
+  color: var(--secondary, #b6bec8);
+  font-style: normal;
+  text-transform: none;
+}
+
+.wind-gust-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 0 var(--glance-card-pad-x, 14px);
+  color: var(--muted, #8b949e);
+  font: 700 clamp(9px, 0.72vw, 11px) / 1.1 Consolas, "JetBrains Mono", monospace;
+  text-transform: uppercase;
+}
+
+.wind-gust-line strong {
+  color: var(--text, #f8fafc);
+  font-size: clamp(13px, 1.1vw, 17px);
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+}
+
+.wind-panel .wind-toolbar {
+  min-height: 40px;
+  margin-top: auto;
+}
+
+.wind-panel .wind-toolbar > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,965 @@
+07-29 20:20:03.252 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.252 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.253 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645302, pluginId: Preferences, methodName: set
+07-29 20:20:03.253 10326 10326 V Capacitor: callback: 63645302, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.253 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645303, pluginId: Preferences, methodName: set
+07-29 20:20:03.253 10326 10326 V Capacitor: callback: 63645303, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.254 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.254 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.255 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.257 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.257 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.258 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645304, pluginId: Preferences, methodName: set
+07-29 20:20:03.258 10326 10326 V Capacitor: callback: 63645304, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.258 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645305, pluginId: Preferences, methodName: set
+07-29 20:20:03.258 10326 10326 V Capacitor: callback: 63645305, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.259 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.259 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.262 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.262 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.263 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645306, pluginId: Preferences, methodName: set
+07-29 20:20:03.263 10326 10326 V Capacitor: callback: 63645306, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.263 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645307, pluginId: Preferences, methodName: set
+07-29 20:20:03.263 10326 10326 V Capacitor: callback: 63645307, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.264 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.264 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.266 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.267 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.268 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.268 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645308, pluginId: Preferences, methodName: set
+07-29 20:20:03.268 10326 10326 V Capacitor: callback: 63645308, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.268 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645309, pluginId: Preferences, methodName: set
+07-29 20:20:03.269 10326 10326 V Capacitor: callback: 63645309, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.269 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.270 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.273 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.273 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.274 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645310, pluginId: Preferences, methodName: set
+07-29 20:20:03.274 10326 10326 V Capacitor: callback: 63645310, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.274 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645311, pluginId: Preferences, methodName: set
+07-29 20:20:03.274 10326 10326 V Capacitor: callback: 63645311, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.275 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.275 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.277 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.278 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.278 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.279 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645312, pluginId: Preferences, methodName: set
+07-29 20:20:03.279 10326 10326 V Capacitor: callback: 63645312, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.279 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645313, pluginId: Preferences, methodName: set
+07-29 20:20:03.279 10326 10326 V Capacitor: callback: 63645313, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.280 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.281 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.284 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.284 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.284 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645314, pluginId: Preferences, methodName: set
+07-29 20:20:03.284 10326 10326 V Capacitor: callback: 63645314, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.285 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645315, pluginId: Preferences, methodName: set
+07-29 20:20:03.285 10326 10326 V Capacitor: callback: 63645315, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.285 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.286 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.288 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.289 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.289 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.289 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645316, pluginId: Preferences, methodName: set
+07-29 20:20:03.290 10326 10326 V Capacitor: callback: 63645316, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.290 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645317, pluginId: Preferences, methodName: set
+07-29 20:20:03.290 10326 10326 V Capacitor: callback: 63645317, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.291 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.292 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.295 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.295 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.295 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645318, pluginId: Preferences, methodName: set
+07-29 20:20:03.295 10326 10326 V Capacitor: callback: 63645318, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.295 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645319, pluginId: Preferences, methodName: set
+07-29 20:20:03.296 10326 10326 V Capacitor: callback: 63645319, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.296 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.297 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.299 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.300 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.300 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.300 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645320, pluginId: Preferences, methodName: set
+07-29 20:20:03.300 10326 10326 V Capacitor: callback: 63645320, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.301 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645321, pluginId: Preferences, methodName: set
+07-29 20:20:03.301 10326 10326 V Capacitor: callback: 63645321, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.302 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.302 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.306 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.306 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.306 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645322, pluginId: Preferences, methodName: set
+07-29 20:20:03.306 10326 10326 V Capacitor: callback: 63645322, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.307 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645323, pluginId: Preferences, methodName: set
+07-29 20:20:03.307 10326 10326 V Capacitor: callback: 63645323, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.307 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.308 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.310 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.311 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.311 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.311 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645324, pluginId: Preferences, methodName: set
+07-29 20:20:03.311 10326 10326 V Capacitor: callback: 63645324, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.312 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645325, pluginId: Preferences, methodName: set
+07-29 20:20:03.312 10326 10326 V Capacitor: callback: 63645325, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.313 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.314 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.318 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.318 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.318 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645326, pluginId: Preferences, methodName: set
+07-29 20:20:03.318 10326 10326 V Capacitor: callback: 63645326, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.319 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645327, pluginId: Preferences, methodName: set
+07-29 20:20:03.319 10326 10326 V Capacitor: callback: 63645327, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.319 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.320 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.321 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.323 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.323 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.324 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645328, pluginId: Preferences, methodName: set
+07-29 20:20:03.324 10326 10326 V Capacitor: callback: 63645328, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.324 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645329, pluginId: Preferences, methodName: set
+07-29 20:20:03.324 10326 10326 V Capacitor: callback: 63645329, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.325 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.325 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.328 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.329 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.329 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645330, pluginId: Preferences, methodName: set
+07-29 20:20:03.329 10326 10326 V Capacitor: callback: 63645330, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.329 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645331, pluginId: Preferences, methodName: set
+07-29 20:20:03.329 10326 10326 V Capacitor: callback: 63645331, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.330 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.330 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.332 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.333 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.334 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.335 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645332, pluginId: Preferences, methodName: set
+07-29 20:20:03.335 10326 10326 V Capacitor: callback: 63645332, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.335 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645333, pluginId: Preferences, methodName: set
+07-29 20:20:03.335 10326 10326 V Capacitor: callback: 63645333, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.336 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.336 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.339 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.339 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.340 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645334, pluginId: Preferences, methodName: set
+07-29 20:20:03.340 10326 10326 V Capacitor: callback: 63645334, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.340 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645335, pluginId: Preferences, methodName: set
+07-29 20:20:03.340 10326 10326 V Capacitor: callback: 63645335, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.341 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.341 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.343 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.344 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.344 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.345 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645336, pluginId: Preferences, methodName: set
+07-29 20:20:03.345 10326 10326 V Capacitor: callback: 63645336, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.345 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645337, pluginId: Preferences, methodName: set
+07-29 20:20:03.345 10326 10326 V Capacitor: callback: 63645337, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.347 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.347 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.350 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.350 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.351 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645338, pluginId: Preferences, methodName: set
+07-29 20:20:03.351 10326 10326 V Capacitor: callback: 63645338, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.351 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645339, pluginId: Preferences, methodName: set
+07-29 20:20:03.351 10326 10326 V Capacitor: callback: 63645339, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.352 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.352 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.354 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.356 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.356 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645340, pluginId: Preferences, methodName: set
+07-29 20:20:03.356 10326 10326 V Capacitor: callback: 63645340, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.357 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.358 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645341, pluginId: Preferences, methodName: set
+07-29 20:20:03.358 10326 10326 V Capacitor: callback: 63645341, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.358 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.359 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.362 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.362 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.363 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645342, pluginId: Preferences, methodName: set
+07-29 20:20:03.363 10326 10326 V Capacitor: callback: 63645342, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.363 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645343, pluginId: Preferences, methodName: set
+07-29 20:20:03.363 10326 10326 V Capacitor: callback: 63645343, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.364 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.364 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.365 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.367 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.368 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.368 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645344, pluginId: Preferences, methodName: set
+07-29 20:20:03.368 10326 10326 V Capacitor: callback: 63645344, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.368 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645345, pluginId: Preferences, methodName: set
+07-29 20:20:03.368 10326 10326 V Capacitor: callback: 63645345, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.369 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.370 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.373 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.373 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.374 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645346, pluginId: Preferences, methodName: set
+07-29 20:20:03.374 10326 10326 V Capacitor: callback: 63645346, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.374 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645347, pluginId: Preferences, methodName: set
+07-29 20:20:03.374 10326 10326 V Capacitor: callback: 63645347, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.375 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.375 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.376 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.378 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.379 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.379 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645348, pluginId: Preferences, methodName: set
+07-29 20:20:03.379 10326 10326 V Capacitor: callback: 63645348, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.379 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645349, pluginId: Preferences, methodName: set
+07-29 20:20:03.379 10326 10326 V Capacitor: callback: 63645349, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.381 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.382 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.384 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.384 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.384 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645350, pluginId: Preferences, methodName: set
+07-29 20:20:03.385 10326 10326 V Capacitor: callback: 63645350, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.385 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645351, pluginId: Preferences, methodName: set
+07-29 20:20:03.385 10326 10326 V Capacitor: callback: 63645351, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.386 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.386 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.387 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.389 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.389 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.390 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645352, pluginId: Preferences, methodName: set
+07-29 20:20:03.390 10326 10326 V Capacitor: callback: 63645352, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.390 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645353, pluginId: Preferences, methodName: set
+07-29 20:20:03.390 10326 10326 V Capacitor: callback: 63645353, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.391 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.391 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.395 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.395 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.395 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645354, pluginId: Preferences, methodName: set
+07-29 20:20:03.396 10326 10326 V Capacitor: callback: 63645354, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.396 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645355, pluginId: Preferences, methodName: set
+07-29 20:20:03.396 10326 10326 V Capacitor: callback: 63645355, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.398 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.399 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.399 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.402 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.402 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.402 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645356, pluginId: Preferences, methodName: set
+07-29 20:20:03.402 10326 10326 V Capacitor: callback: 63645356, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.403 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645357, pluginId: Preferences, methodName: set
+07-29 20:20:03.403 10326 10326 V Capacitor: callback: 63645357, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.404 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.404 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.407 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.407 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.408 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645358, pluginId: Preferences, methodName: set
+07-29 20:20:03.408 10326 10326 V Capacitor: callback: 63645358, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.408 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645359, pluginId: Preferences, methodName: set
+07-29 20:20:03.408 10326 10326 V Capacitor: callback: 63645359, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.409 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.411 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.411 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.412 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.412 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.413 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645360, pluginId: Preferences, methodName: set
+07-29 20:20:03.413 10326 10326 V Capacitor: callback: 63645360, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.413 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645361, pluginId: Preferences, methodName: set
+07-29 20:20:03.413 10326 10326 V Capacitor: callback: 63645361, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.414 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.415 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.418 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.418 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.418 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645362, pluginId: Preferences, methodName: set
+07-29 20:20:03.418 10326 10326 V Capacitor: callback: 63645362, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.419 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645363, pluginId: Preferences, methodName: set
+07-29 20:20:03.419 10326 10326 V Capacitor: callback: 63645363, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.420 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.421 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.421 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.422 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.423 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.423 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645364, pluginId: Preferences, methodName: set
+07-29 20:20:03.423 10326 10326 V Capacitor: callback: 63645364, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.424 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645365, pluginId: Preferences, methodName: set
+07-29 20:20:03.424 10326 10326 V Capacitor: callback: 63645365, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.425 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.425 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.427 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.428 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.428 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645366, pluginId: Preferences, methodName: set
+07-29 20:20:03.428 10326 10326 V Capacitor: callback: 63645366, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.429 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645367, pluginId: Preferences, methodName: set
+07-29 20:20:03.429 10326 10326 V Capacitor: callback: 63645367, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.429 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.430 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.431 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.433 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.433 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.434 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645368, pluginId: Preferences, methodName: set
+07-29 20:20:03.434 10326 10326 V Capacitor: callback: 63645368, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.434 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645369, pluginId: Preferences, methodName: set
+07-29 20:20:03.434 10326 10326 V Capacitor: callback: 63645369, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.435 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.435 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.439 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.439 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.439 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645370, pluginId: Preferences, methodName: set
+07-29 20:20:03.439 10326 10326 V Capacitor: callback: 63645370, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.440 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645371, pluginId: Preferences, methodName: set
+07-29 20:20:03.440 10326 10326 V Capacitor: callback: 63645371, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.440 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.441 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.442 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.444 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.444 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.445 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645372, pluginId: Preferences, methodName: set
+07-29 20:20:03.445 10326 10326 V Capacitor: callback: 63645372, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.445 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645373, pluginId: Preferences, methodName: set
+07-29 20:20:03.445 10326 10326 V Capacitor: callback: 63645373, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.446 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.446 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.449 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.450 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.450 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645374, pluginId: Preferences, methodName: set
+07-29 20:20:03.450 10326 10326 V Capacitor: callback: 63645374, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.450 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645375, pluginId: Preferences, methodName: set
+07-29 20:20:03.450 10326 10326 V Capacitor: callback: 63645375, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.451 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.451 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.453 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.454 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.455 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.455 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645376, pluginId: Preferences, methodName: set
+07-29 20:20:03.455 10326 10326 V Capacitor: callback: 63645376, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.455 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645377, pluginId: Preferences, methodName: set
+07-29 20:20:03.455 10326 10326 V Capacitor: callback: 63645377, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.456 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.457 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.460 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.460 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.461 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645378, pluginId: Preferences, methodName: set
+07-29 20:20:03.461 10326 10326 V Capacitor: callback: 63645378, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.461 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645379, pluginId: Preferences, methodName: set
+07-29 20:20:03.461 10326 10326 V Capacitor: callback: 63645379, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.462 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.462 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.464 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.465 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.465 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645380, pluginId: Preferences, methodName: set
+07-29 20:20:03.465 10326 10326 V Capacitor: callback: 63645380, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.466 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.467 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645381, pluginId: Preferences, methodName: set
+07-29 20:20:03.467 10326 10326 V Capacitor: callback: 63645381, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.467 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.468 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.471 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.471 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.472 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645382, pluginId: Preferences, methodName: set
+07-29 20:20:03.472 10326 10326 V Capacitor: callback: 63645382, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.472 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645383, pluginId: Preferences, methodName: set
+07-29 20:20:03.472 10326 10326 V Capacitor: callback: 63645383, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.473 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.473 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.475 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.477 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.477 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.478 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645384, pluginId: Preferences, methodName: set
+07-29 20:20:03.478 10326 10326 V Capacitor: callback: 63645384, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.478 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645385, pluginId: Preferences, methodName: set
+07-29 20:20:03.478 10326 10326 V Capacitor: callback: 63645385, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.482 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.482 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.486 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.487 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.487 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.488 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645386, pluginId: Preferences, methodName: set
+07-29 20:20:03.488 10326 10326 V Capacitor: callback: 63645386, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.488 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645387, pluginId: Preferences, methodName: set
+07-29 20:20:03.488 10326 10326 V Capacitor: callback: 63645387, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.490 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.490 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.494 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.494 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.495 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645388, pluginId: Preferences, methodName: set
+07-29 20:20:03.495 10326 10326 V Capacitor: callback: 63645388, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.495 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645389, pluginId: Preferences, methodName: set
+07-29 20:20:03.495 10326 10326 V Capacitor: callback: 63645389, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.496 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.496 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.497 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.499 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.499 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.500 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645390, pluginId: Preferences, methodName: set
+07-29 20:20:03.500 10326 10326 V Capacitor: callback: 63645390, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.500 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645391, pluginId: Preferences, methodName: set
+07-29 20:20:03.500 10326 10326 V Capacitor: callback: 63645391, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.502 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.503 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.507 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.507 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.507 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645392, pluginId: Preferences, methodName: set
+07-29 20:20:03.507 10326 10326 V Capacitor: callback: 63645392, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.508 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.509 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645393, pluginId: Preferences, methodName: set
+07-29 20:20:03.509 10326 10326 V Capacitor: callback: 63645393, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.510 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.512 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.514 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.514 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.515 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645394, pluginId: Preferences, methodName: set
+07-29 20:20:03.515 10326 10326 V Capacitor: callback: 63645394, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.515 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645395, pluginId: Preferences, methodName: set
+07-29 20:20:03.515 10326 10326 V Capacitor: callback: 63645395, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.516 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.517 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.519 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.520 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.520 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.521 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645396, pluginId: Preferences, methodName: set
+07-29 20:20:03.521 10326 10326 V Capacitor: callback: 63645396, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.521 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645397, pluginId: Preferences, methodName: set
+07-29 20:20:03.521 10326 10326 V Capacitor: callback: 63645397, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.524 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.524 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.527 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.527 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.528 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645398, pluginId: Preferences, methodName: set
+07-29 20:20:03.528 10326 10326 V Capacitor: callback: 63645398, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.528 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645399, pluginId: Preferences, methodName: set
+07-29 20:20:03.528 10326 10326 V Capacitor: callback: 63645399, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.529 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.529 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.530 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.532 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.532 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.533 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645400, pluginId: Preferences, methodName: set
+07-29 20:20:03.533 10326 10326 V Capacitor: callback: 63645400, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.533 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645401, pluginId: Preferences, methodName: set
+07-29 20:20:03.533 10326 10326 V Capacitor: callback: 63645401, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.535 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.535 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.539 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.539 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.539 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645402, pluginId: Preferences, methodName: set
+07-29 20:20:03.540 10326 10326 V Capacitor: callback: 63645402, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.540 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645403, pluginId: Preferences, methodName: set
+07-29 20:20:03.540 10326 10326 V Capacitor: callback: 63645403, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.541 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.542 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.544 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.546 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.546 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.547 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645404, pluginId: Preferences, methodName: set
+07-29 20:20:03.547 10326 10326 V Capacitor: callback: 63645404, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.547 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645405, pluginId: Preferences, methodName: set
+07-29 20:20:03.547 10326 10326 V Capacitor: callback: 63645405, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.548 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.549 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.552 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.553 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.553 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.554 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645406, pluginId: Preferences, methodName: set
+07-29 20:20:03.554 10326 10326 V Capacitor: callback: 63645406, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.554 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645407, pluginId: Preferences, methodName: set
+07-29 20:20:03.554 10326 10326 V Capacitor: callback: 63645407, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.556 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.556 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.559 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.560 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.560 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645408, pluginId: Preferences, methodName: set
+07-29 20:20:03.560 10326 10326 V Capacitor: callback: 63645408, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.560 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645409, pluginId: Preferences, methodName: set
+07-29 20:20:03.560 10326 10326 V Capacitor: callback: 63645409, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.562 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.562 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.563 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.567 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.568 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.568 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645410, pluginId: Preferences, methodName: set
+07-29 20:20:03.568 10326 10326 V Capacitor: callback: 63645410, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.569 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645411, pluginId: Preferences, methodName: set
+07-29 20:20:03.569 10326 10326 V Capacitor: callback: 63645411, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.571 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.571 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.575 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.576 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.576 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.577 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645412, pluginId: Preferences, methodName: set
+07-29 20:20:03.577 10326 10326 V Capacitor: callback: 63645412, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.577 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645413, pluginId: Preferences, methodName: set
+07-29 20:20:03.577 10326 10326 V Capacitor: callback: 63645413, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.579 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.579 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.582 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.583 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.583 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645414, pluginId: Preferences, methodName: set
+07-29 20:20:03.583 10326 10326 V Capacitor: callback: 63645414, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.583 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645415, pluginId: Preferences, methodName: set
+07-29 20:20:03.583 10326 10326 V Capacitor: callback: 63645415, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.585 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.586 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.589 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.592 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.592 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.593 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645416, pluginId: Preferences, methodName: set
+07-29 20:20:03.593 10326 10326 V Capacitor: callback: 63645416, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.593 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645417, pluginId: Preferences, methodName: set
+07-29 20:20:03.593 10326 10326 V Capacitor: callback: 63645417, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.594 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.595 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.596 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.598 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.598 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.599 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645418, pluginId: Preferences, methodName: set
+07-29 20:20:03.599 10326 10326 V Capacitor: callback: 63645418, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.599 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645419, pluginId: Preferences, methodName: set
+07-29 20:20:03.599 10326 10326 V Capacitor: callback: 63645419, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.601 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.601 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.605 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.605 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.606 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645420, pluginId: Preferences, methodName: set
+07-29 20:20:03.606 10326 10326 V Capacitor: callback: 63645420, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.606 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645421, pluginId: Preferences, methodName: set
+07-29 20:20:03.606 10326 10326 V Capacitor: callback: 63645421, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.607 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.608 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.609 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.612 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.612 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.612 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645422, pluginId: Preferences, methodName: set
+07-29 20:20:03.613 10326 10326 V Capacitor: callback: 63645422, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.613 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645423, pluginId: Preferences, methodName: set
+07-29 20:20:03.613 10326 10326 V Capacitor: callback: 63645423, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.614 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.615 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.619 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.620 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.620 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.620 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645424, pluginId: Preferences, methodName: set
+07-29 20:20:03.620 10326 10326 V Capacitor: callback: 63645424, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.621 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645425, pluginId: Preferences, methodName: set
+07-29 20:20:03.621 10326 10326 V Capacitor: callback: 63645425, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.623 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.624 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.627 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.627 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.628 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645426, pluginId: Preferences, methodName: set
+07-29 20:20:03.628 10326 10326 V Capacitor: callback: 63645426, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.628 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645427, pluginId: Preferences, methodName: set
+07-29 20:20:03.628 10326 10326 V Capacitor: callback: 63645427, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.630 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.630 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.633 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.634 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.635 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.635 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645428, pluginId: Preferences, methodName: set
+07-29 20:20:03.635 10326 10326 V Capacitor: callback: 63645428, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.636 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645429, pluginId: Preferences, methodName: set
+07-29 20:20:03.636 10326 10326 V Capacitor: callback: 63645429, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.637 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.638 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.641 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.642 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.642 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.643 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645430, pluginId: Preferences, methodName: set
+07-29 20:20:03.643 10326 10326 V Capacitor: callback: 63645430, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.643 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645431, pluginId: Preferences, methodName: set
+07-29 20:20:03.643 10326 10326 V Capacitor: callback: 63645431, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.646 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.646 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.648 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.648 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.649 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645432, pluginId: Preferences, methodName: set
+07-29 20:20:03.649 10326 10326 V Capacitor: callback: 63645432, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.649 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645433, pluginId: Preferences, methodName: set
+07-29 20:20:03.649 10326 10326 V Capacitor: callback: 63645433, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.651 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.651 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.652 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.654 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.654 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.655 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645434, pluginId: Preferences, methodName: set
+07-29 20:20:03.655 10326 10326 V Capacitor: callback: 63645434, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.655 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645435, pluginId: Preferences, methodName: set
+07-29 20:20:03.655 10326 10326 V Capacitor: callback: 63645435, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.660 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.660 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.663 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.664 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.664 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.664 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645436, pluginId: Preferences, methodName: set
+07-29 20:20:03.665 10326 10326 V Capacitor: callback: 63645436, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.665 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645437, pluginId: Preferences, methodName: set
+07-29 20:20:03.665 10326 10326 V Capacitor: callback: 63645437, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.667 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.667 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.671 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.671 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.672 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645438, pluginId: Preferences, methodName: set
+07-29 20:20:03.672 10326 10326 V Capacitor: callback: 63645438, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.672 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645439, pluginId: Preferences, methodName: set
+07-29 20:20:03.672 10326 10326 V Capacitor: callback: 63645439, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.673 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.675 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.675 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.678 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.679 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.680 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645440, pluginId: Preferences, methodName: set
+07-29 20:20:03.680 10326 10326 V Capacitor: callback: 63645440, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.680 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645441, pluginId: Preferences, methodName: set
+07-29 20:20:03.680 10326 10326 V Capacitor: callback: 63645441, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.681 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.682 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.684 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.685 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.686 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.686 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645442, pluginId: Preferences, methodName: set
+07-29 20:20:03.686 10326 10326 V Capacitor: callback: 63645442, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.687 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645443, pluginId: Preferences, methodName: set
+07-29 20:20:03.687 10326 10326 V Capacitor: callback: 63645443, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.689 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.689 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.692 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.693 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.693 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645444, pluginId: Preferences, methodName: set
+07-29 20:20:03.693 10326 10326 V Capacitor: callback: 63645444, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.693 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645445, pluginId: Preferences, methodName: set
+07-29 20:20:03.693 10326 10326 V Capacitor: callback: 63645445, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.694 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.695 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.696 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.698 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.698 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.698 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645446, pluginId: Preferences, methodName: set
+07-29 20:20:03.699 10326 10326 V Capacitor: callback: 63645446, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.699 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645447, pluginId: Preferences, methodName: set
+07-29 20:20:03.699 10326 10326 V Capacitor: callback: 63645447, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.701 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.701 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.704 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.705 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.705 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645448, pluginId: Preferences, methodName: set
+07-29 20:20:03.705 10326 10326 V Capacitor: callback: 63645448, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.705 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645449, pluginId: Preferences, methodName: set
+07-29 20:20:03.705 10326 10326 V Capacitor: callback: 63645449, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.706 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.708 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.708 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.711 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.711 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.712 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645450, pluginId: Preferences, methodName: set
+07-29 20:20:03.712 10326 10326 V Capacitor: callback: 63645450, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.712 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645451, pluginId: Preferences, methodName: set
+07-29 20:20:03.712 10326 10326 V Capacitor: callback: 63645451, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.714 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.714 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.717 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.718 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.719 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.719 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645452, pluginId: Preferences, methodName: set
+07-29 20:20:03.719 10326 10326 V Capacitor: callback: 63645452, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.720 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645453, pluginId: Preferences, methodName: set
+07-29 20:20:03.720 10326 10326 V Capacitor: callback: 63645453, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.722 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.722 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.725 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.725 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.725 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645454, pluginId: Preferences, methodName: set
+07-29 20:20:03.725 10326 10326 V Capacitor: callback: 63645454, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.726 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645455, pluginId: Preferences, methodName: set
+07-29 20:20:03.726 10326 10326 V Capacitor: callback: 63645455, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.729 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.730 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.730 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.732 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.733 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.733 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645456, pluginId: Preferences, methodName: set
+07-29 20:20:03.733 10326 10326 V Capacitor: callback: 63645456, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.734 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645457, pluginId: Preferences, methodName: set
+07-29 20:20:03.734 10326 10326 V Capacitor: callback: 63645457, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.736 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.737 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.740 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.740 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.741 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.741 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645458, pluginId: Preferences, methodName: set
+07-29 20:20:03.741 10326 10326 V Capacitor: callback: 63645458, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.742 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645459, pluginId: Preferences, methodName: set
+07-29 20:20:03.742 10326 10326 V Capacitor: callback: 63645459, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.744 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.744 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.747 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.747 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.747 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645460, pluginId: Preferences, methodName: set
+07-29 20:20:03.747 10326 10326 V Capacitor: callback: 63645460, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.748 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645461, pluginId: Preferences, methodName: set
+07-29 20:20:03.748 10326 10326 V Capacitor: callback: 63645461, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.749 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.751 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.752 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.754 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.754 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.754 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645462, pluginId: Preferences, methodName: set
+07-29 20:20:03.754 10326 10326 V Capacitor: callback: 63645462, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.755 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645463, pluginId: Preferences, methodName: set
+07-29 20:20:03.755 10326 10326 V Capacitor: callback: 63645463, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.756 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.756 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.759 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.760 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.760 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645464, pluginId: Preferences, methodName: set
+07-29 20:20:03.760 10326 10326 V Capacitor: callback: 63645464, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.761 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645465, pluginId: Preferences, methodName: set
+07-29 20:20:03.761 10326 10326 V Capacitor: callback: 63645465, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.762 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.764 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.764 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.767 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.767 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.768 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645466, pluginId: Preferences, methodName: set
+07-29 20:20:03.768 10326 10326 V Capacitor: callback: 63645466, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.768 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645467, pluginId: Preferences, methodName: set
+07-29 20:20:03.768 10326 10326 V Capacitor: callback: 63645467, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.769 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.770 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.774 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.775 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.775 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.776 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645468, pluginId: Preferences, methodName: set
+07-29 20:20:03.776 10326 10326 V Capacitor: callback: 63645468, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.776 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645469, pluginId: Preferences, methodName: set
+07-29 20:20:03.776 10326 10326 V Capacitor: callback: 63645469, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.777 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.779 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.782 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.782 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.783 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645470, pluginId: Preferences, methodName: set
+07-29 20:20:03.783 10326 10326 V Capacitor: callback: 63645470, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.783 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645471, pluginId: Preferences, methodName: set
+07-29 20:20:03.783 10326 10326 V Capacitor: callback: 63645471, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.784 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.787 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.787 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.789 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.789 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.790 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645472, pluginId: Preferences, methodName: set
+07-29 20:20:03.790 10326 10326 V Capacitor: callback: 63645472, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.790 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645473, pluginId: Preferences, methodName: set
+07-29 20:20:03.790 10326 10326 V Capacitor: callback: 63645473, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.793 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.793 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.795 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.797 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.798 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.798 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645474, pluginId: Preferences, methodName: set
+07-29 20:20:03.798 10326 10326 V Capacitor: callback: 63645474, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.799 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645475, pluginId: Preferences, methodName: set
+07-29 20:20:03.799 10326 10326 V Capacitor: callback: 63645475, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.801 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.801 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.804 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.804 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.805 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645476, pluginId: Preferences, methodName: set
+07-29 20:20:03.805 10326 10326 V Capacitor: callback: 63645476, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.805 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645477, pluginId: Preferences, methodName: set
+07-29 20:20:03.805 10326 10326 V Capacitor: callback: 63645477, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.806 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.808 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.808 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.811 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.811 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.812 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645478, pluginId: Preferences, methodName: set
+07-29 20:20:03.812 10326 10326 V Capacitor: callback: 63645478, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.812 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645479, pluginId: Preferences, methodName: set
+07-29 20:20:03.812 10326 10326 V Capacitor: callback: 63645479, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.813 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.814 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.817 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.818 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.819 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.819 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645480, pluginId: Preferences, methodName: set
+07-29 20:20:03.819 10326 10326 V Capacitor: callback: 63645480, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.820 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645481, pluginId: Preferences, methodName: set
+07-29 20:20:03.820 10326 10326 V Capacitor: callback: 63645481, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.822 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.822 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.825 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.826 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.826 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645482, pluginId: Preferences, methodName: set
+07-29 20:20:03.826 10326 10326 V Capacitor: callback: 63645482, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.827 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645483, pluginId: Preferences, methodName: set
+07-29 20:20:03.827 10326 10326 V Capacitor: callback: 63645483, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.828 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.830 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.830 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.834 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.834 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.835 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645484, pluginId: Preferences, methodName: set
+07-29 20:20:03.835 10326 10326 V Capacitor: callback: 63645484, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.835 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645485, pluginId: Preferences, methodName: set
+07-29 20:20:03.835 10326 10326 V Capacitor: callback: 63645485, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.836 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.836 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.839 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.840 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.841 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.841 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645486, pluginId: Preferences, methodName: set
+07-29 20:20:03.841 10326 10326 V Capacitor: callback: 63645486, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.841 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645487, pluginId: Preferences, methodName: set
+07-29 20:20:03.842 10326 10326 V Capacitor: callback: 63645487, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.846 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.846 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.851 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.852 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.852 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.853 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645488, pluginId: Preferences, methodName: set
+07-29 20:20:03.853 10326 10326 V Capacitor: callback: 63645488, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.853 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645489, pluginId: Preferences, methodName: set
+07-29 20:20:03.853 10326 10326 V Capacitor: callback: 63645489, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.855 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.855 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.858 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.858 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.859 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645490, pluginId: Preferences, methodName: set
+07-29 20:20:03.859 10326 10326 V Capacitor: callback: 63645490, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.859 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645491, pluginId: Preferences, methodName: set
+07-29 20:20:03.859 10326 10326 V Capacitor: callback: 63645491, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.861 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.862 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.862 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.865 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.865 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.866 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645492, pluginId: Preferences, methodName: set
+07-29 20:20:03.866 10326 10326 V Capacitor: callback: 63645492, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.866 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645493, pluginId: Preferences, methodName: set
+07-29 20:20:03.866 10326 10326 V Capacitor: callback: 63645493, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.867 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.868 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.870 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.870 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.871 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645494, pluginId: Preferences, methodName: set
+07-29 20:20:03.871 10326 10326 V Capacitor: callback: 63645494, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.871 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645495, pluginId: Preferences, methodName: set
+07-29 20:20:03.871 10326 10326 V Capacitor: callback: 63645495, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.872 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.874 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.874 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.877 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.877 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.878 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645496, pluginId: Preferences, methodName: set
+07-29 20:20:03.878 10326 10326 V Capacitor: callback: 63645496, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.878 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645497, pluginId: Preferences, methodName: set
+07-29 20:20:03.878 10326 10326 V Capacitor: callback: 63645497, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.879 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.879 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.883 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.884 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.884 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.885 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645498, pluginId: Preferences, methodName: set
+07-29 20:20:03.885 10326 10326 V Capacitor: callback: 63645498, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.885 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645499, pluginId: Preferences, methodName: set
+07-29 20:20:03.885 10326 10326 V Capacitor: callback: 63645499, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.888 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.888 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.892 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.892 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.893 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645500, pluginId: Preferences, methodName: set
+07-29 20:20:03.893 10326 10326 V Capacitor: callback: 63645500, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.893 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645501, pluginId: Preferences, methodName: set
+07-29 20:20:03.893 10326 10326 V Capacitor: callback: 63645501, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.894 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.898 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.898 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.900 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.900 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.900 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645502, pluginId: Preferences, methodName: set
+07-29 20:20:03.900 10326 10326 V Capacitor: callback: 63645502, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.901 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645503, pluginId: Preferences, methodName: set
+07-29 20:20:03.901 10326 10326 V Capacitor: callback: 63645503, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.902 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.903 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.905 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.906 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.906 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.907 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645504, pluginId: Preferences, methodName: set
+07-29 20:20:03.907 10326 10326 V Capacitor: callback: 63645504, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.907 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645505, pluginId: Preferences, methodName: set
+07-29 20:20:03.907 10326 10326 V Capacitor: callback: 63645505, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.909 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.910 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.916 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.916 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.917 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645506, pluginId: Preferences, methodName: set
+07-29 20:20:03.917 10326 10326 V Capacitor: callback: 63645506, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.919 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.921 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645507, pluginId: Preferences, methodName: set
+07-29 20:20:03.921 10326 10326 V Capacitor: callback: 63645507, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.932 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.934 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.937 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.939 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.940 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.941 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.941 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645508, pluginId: Preferences, methodName: set
+07-29 20:20:03.941 10326 10326 V Capacitor: callback: 63645508, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.942 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645509, pluginId: Preferences, methodName: set
+07-29 20:20:03.942 10326 10326 V Capacitor: callback: 63645509, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.944 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.944 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.947 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.947 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.948 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645510, pluginId: Preferences, methodName: set
+07-29 20:20:03.948 10326 10326 V Capacitor: callback: 63645510, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.948 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645511, pluginId: Preferences, methodName: set
+07-29 20:20:03.948 10326 10326 V Capacitor: callback: 63645511, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.949 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.953 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.953 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.956 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.957 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.957 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645512, pluginId: Preferences, methodName: set
+07-29 20:20:03.957 10326 10326 V Capacitor: callback: 63645512, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.958 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645513, pluginId: Preferences, methodName: set
+07-29 20:20:03.958 10326 10326 V Capacitor: callback: 63645513, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.959 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.960 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.962 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.963 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.964 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645514, pluginId: Preferences, methodName: set
+07-29 20:20:03.964 10326 10326 V Capacitor: callback: 63645514, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.964 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.965 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645515, pluginId: Preferences, methodName: set
+07-29 20:20:03.965 10326 10326 V Capacitor: callback: 63645515, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.966 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.970 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.971 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.973 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.974 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.974 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645516, pluginId: Preferences, methodName: set
+07-29 20:20:03.974 10326 10326 V Capacitor: callback: 63645516, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.975 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645517, pluginId: Preferences, methodName: set
+07-29 20:20:03.975 10326 10326 V Capacitor: callback: 63645517, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.976 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.977 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.980 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.980 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.980 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645518, pluginId: Preferences, methodName: set
+07-29 20:20:03.980 10326 10326 V Capacitor: callback: 63645518, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.981 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645519, pluginId: Preferences, methodName: set
+07-29 20:20:03.981 10326 10326 V Capacitor: callback: 63645519, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.982 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.985 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.985 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.987 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.988 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.988 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645520, pluginId: Preferences, methodName: set
+07-29 20:20:03.988 10326 10326 V Capacitor: callback: 63645520, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:03.988 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645521, pluginId: Preferences, methodName: set
+07-29 20:20:03.988 10326 10326 V Capacitor: callback: 63645521, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:03.990 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.994 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:03.995 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:03.998 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.999 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:03.999 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645522, pluginId: Preferences, methodName: set
+07-29 20:20:03.999 10326 10326 V Capacitor: callback: 63645522, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:04.000 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645523, pluginId: Preferences, methodName: set
+07-29 20:20:04.000 10326 10326 V Capacitor: callback: 63645523, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:04.002 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:04.002 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:04.004 10326 10326 I View    : setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{583da52 VFEDHVC.. .F...... 0,0-1200,1920 #7f0800e8 app:id/webview aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 WV.xf.p:1 WV.wg.h:117 WV.wg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+07-29 20:20:04.006 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:04.006 10326 10326 I Capacitor/Console: File:  - Line 349 - Msg: [object Object]
+07-29 20:20:04.006 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645524, pluginId: Preferences, methodName: set
+07-29 20:20:04.006 10326 10326 V Capacitor: callback: 63645524, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastAlerts","value":"[]"}
+07-29 20:20:04.007 10326 10326 V Capacitor/Plugin: To native (Capacitor plugin): callbackId: 63645525, pluginId: Preferences, methodName: set
+07-29 20:20:04.007 10326 10326 V Capacitor: callback: 63645525, pluginId: Preferences, methodName: set, methodData: {"key":"codeblack.lastMesoscaleDiscussions","value":"[]"}
+07-29 20:20:04.009 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined
+07-29 20:20:04.011 10326 10326 I Capacitor/Console: File:  - Line 333 - Msg: undefined

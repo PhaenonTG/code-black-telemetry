@@ -1,0 +1,6 @@
+A. production source/configuration required for Atlas: 107
+B. radar implementation source required by the application: 10
+C. QA documentation worth preserving: 275
+D. generated build output that should remain uncommitted: 1293
+E. local secret/environment configuration: 1
+F. unrelated or uncertain prior work: 2

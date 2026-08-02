@@ -6,6 +6,43 @@ const DEFAULT_PI_ENDPOINT = "";
 let currentPiEndpoint = DEFAULT_PI_ENDPOINT;
 const listeners = new Set<(endpoint: string) => void>();
 
+const CHASER_RADIUS_KEY = "codeblack.chaserRadiusMiles";
+export const DEFAULT_CHASER_RADIUS_MILES = 100;
+const MIN_CHASER_RADIUS_MILES = 5;
+const MAX_CHASER_RADIUS_MILES = 500;
+
+let currentChaserRadiusMiles = DEFAULT_CHASER_RADIUS_MILES;
+const chaserRadiusListeners = new Set<(radiusMiles: number) => void>();
+
+function clampChaserRadius(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_CHASER_RADIUS_MILES;
+  return Math.min(MAX_CHASER_RADIUS_MILES, Math.max(MIN_CHASER_RADIUS_MILES, Math.round(value)));
+}
+
+export async function loadChaserRadiusMiles() {
+  const saved = await Preferences.get({ key: CHASER_RADIUS_KEY });
+  currentChaserRadiusMiles = saved.value ? clampChaserRadius(Number(saved.value)) : DEFAULT_CHASER_RADIUS_MILES;
+  chaserRadiusListeners.forEach((listener) => listener(currentChaserRadiusMiles));
+  return currentChaserRadiusMiles;
+}
+
+export async function saveChaserRadiusMiles(value: number) {
+  currentChaserRadiusMiles = clampChaserRadius(value);
+  await Preferences.set({ key: CHASER_RADIUS_KEY, value: String(currentChaserRadiusMiles) });
+  chaserRadiusListeners.forEach((listener) => listener(currentChaserRadiusMiles));
+  return currentChaserRadiusMiles;
+}
+
+export function getChaserRadiusMiles() {
+  return currentChaserRadiusMiles;
+}
+
+export function subscribeChaserRadiusMiles(listener: (radiusMiles: number) => void) {
+  chaserRadiusListeners.add(listener);
+  listener(currentChaserRadiusMiles);
+  return () => chaserRadiusListeners.delete(listener);
+}
+
 function normalizeEndpoint(value: string) {
   const trimmed = value.trim().replace(/\/$/, "");
   if (!trimmed) return "";

@@ -3177,7 +3177,7 @@ button {
 }
 
 .threat-card--watch { color: var(--cb-amber); border-color: rgba(244,182,35,0.28); background-color: rgba(90,66,8,0.14); }
-.threat-card--md { color: var(--cb-blue); border-color: rgba(18,168,255,0.32); background-color: rgba(7,50,80,0.18); }
+.threat-card--md { color: var(--cb-text); border-color: rgba(244,246,250,0.32); background-color: rgba(244,246,250,0.08); }
 .threat-card--risk { color: var(--cb-orange); border-color: rgba(255,122,26,0.28); background-color: rgba(89,39,8,0.14); }
 .threat-card--tornado,
 .threat-card--pds,
@@ -3814,6 +3814,10 @@ body {
   color: var(--amber) !important;
 }
 
+.is-offline {
+  color: var(--red) !important;
+}
+
 .page {
   padding: var(--gap);
 }
@@ -3863,7 +3867,7 @@ body {
 }
 
 .cb-panel--spc {
-  border-color: rgba(20, 167, 255, 0.26);
+  border-color: rgba(244, 246, 250, 0.22);
 }
 
 .cb-panel__title,
@@ -4976,4 +4980,768 @@ body {
     white-space: normal !important;
     line-height: 1.05 !important;
   }
+}
+
+/* Header styling now lives in src/components/layout/TopBar.css (modularized). */
+
+/* Top row columns are pinned to EXACTLY match the bottom row's columns (Location=Alerts,
+   Conditions=Map, Wind=Threats) so the whole page reads as one aligned grid, not two
+   independently-proportioned rows. Conditions/Map stay the widest (visual anchor); Wind/Threats
+   stay the narrowest. */
+@media (orientation: landscape) {
+  .loc-panel { grid-area: 1 / 1 / 2 / 26 !important; }
+  .wx-panel { grid-area: 1 / 26 / 2 / 73 !important; }
+  .wind-panel { grid-area: 1 / 73 / 2 / 101 !important; }
+}
+
+/* Top-row cards: consistent footer band across Location / Conditions / Wind. */
+.loc-footer,
+.conditions-strip,
+.wind-toolbar {
+  min-height: 40px;
+}
+
+/* Wind card: the trend graph is gone — MPH is the hero, the compass only supports it. Cleanest card on the dashboard. */
+.wind-panel {
+  grid-template-columns: minmax(72px, 0.55fr) minmax(0, 1.6fr) !important;
+  row-gap: 14px !important;
+}
+
+.wind-panel .wind-compass--compact {
+  width: min(11dvh, 92px) !important;
+}
+
+.wind-panel .wind-readout {
+  padding-block: 6px;
+}
+
+.wind-panel .wind-gust {
+  margin-top: 10px;
+}
+
+/* Map: stacked, concise status — site / product / state — instead of one bullet-joined line plus a text button. */
+.atlas-radar-strip {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 2px !important;
+  border-radius: 8px !important;
+  padding: 7px 10px !important;
+  width: auto !important;
+  max-width: calc(100% - 56px) !important;
+}
+
+.atlas-expand-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  background: rgba(3, 5, 7, 0.78);
+  color: #f8fafc;
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.5);
+}
+
+.atlas-expand-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.atlas-expand-button:active {
+  color: #ff2d35;
+  border-color: rgba(255, 45, 53, 0.42);
+}
+
+/* Alerts: idle state centers too, instead of leaving dead space below the button. */
+.alert-list:not(:has(.alert-pill)) {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  height: 100%;
+  gap: 16px;
+}
+
+/* Alerts: a single active alert should occupy the space instead of leaving an empty second box. */
+.alert-list:has(.alert-pill):not(:has(.alert-pill ~ .alert-pill)) {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  height: 100%;
+  gap: 16px;
+}
+
+.alert-list:has(.alert-pill):not(:has(.alert-pill ~ .alert-pill)) .alert-pill {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 22px 18px !important;
+}
+
+.alert-list:has(.alert-pill):not(:has(.alert-pill ~ .alert-pill)) .view-all-button {
+  margin-top: 4px;
+}
+
+/* Storm threats: typography-only tightening, no structural change. */
+.threats-panel .threat-card span {
+  letter-spacing: 0.08em;
+}
+
+.threats-panel .threat-card strong {
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+
+.threats-panel .threat-list {
+  gap: 8px !important;
+}
+
+.threats-panel .threat-card {
+  padding-block: 9px !important;
+}
+
+/* Bottom nav: five buttons as one mathematically centered group — no phantom signature column. */
+@media (orientation: landscape) {
+  .bottom-dock {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+
+  .dock-signature {
+    display: none !important;
+  }
+}
+
+.bottom-dock button {
+  text-align: center;
+}
+
+.bottom-dock button span,
+.bottom-dock button em {
+  text-align: center;
+}
+
+/* OPERATION OEM POLISH */
+
+/* Location card: consistent baseline across Speed / Heading / GPS regardless of trailing unit line. */
+.loc-panel .cockpit-primary--motion .metric-tile {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+/* Conditions card, chase mode: fixed 4-up grid (Temp/DP/Spread/Pressure always render now —
+   the old auto-fit reflow was for when tiles hid on missing data, which no longer happens). */
+.cockpit-card--chase .cockpit-primary--conditions {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.cockpit-card--chase .cockpit-primary--conditions .metric-tile {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Operations page: Pi Endpoint panel gets its own row — it previously shared .endpoint-panel
+   with the Radar Engine panel, which put both in the same grid cell and overlapped them. */
+@media (orientation: landscape) {
+  .page-grid--operations {
+    grid-template-rows: minmax(0, 0.33fr) minmax(0, 0.4fr) minmax(0, 0.27fr) !important;
+  }
+}
+
+.pi-endpoint-panel {
+  grid-column: 1 / 13 !important;
+  grid-row: 3 !important;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pi-endpoint-panel .endpoint-form {
+  min-height: 0;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  grid-template-rows: auto auto auto;
+  align-items: end;
+  gap: 6px 14px;
+  padding: 8px 14px !important;
+}
+
+.pi-endpoint-panel .endpoint-form label {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.pi-endpoint-panel .endpoint-actions {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.pi-endpoint-panel .endpoint-state {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-height: 0;
+}
+
+.pi-endpoint-panel .endpoint-presets {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-height: 0;
+}
+
+.pi-endpoint-panel .endpoint-form input {
+  padding: 8px 10px;
+}
+
+.pi-endpoint-panel .endpoint-actions button,
+.pi-endpoint-panel .endpoint-presets button {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+/* OPERATION: rigorous left-edge alignment across all six Page-1 cards.
+   Location/Conditions content already inset at --glance-card-pad-x (14px); Alert/Threat lists
+   and the Wind card's compass were using a different, smaller inset (8-12px) — a real, measurable
+   misalignment down the left edge of the page. Pin everything to the same 14px line. */
+.alert-list,
+.threat-list {
+  padding: var(--glance-card-pad-x) !important;
+}
+
+.wind-panel .wind-compass--compact {
+  margin: 0 0 0 var(--glance-card-pad-x) !important;
+}
+
+/* Conditions card: pressure trend arrow — small glyph riding next to the inHg value, not a
+   separate tile. Green = rising, red = falling, muted = steady/unknown. */
+.pressure-trend {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 0.55em;
+  line-height: 1;
+  vertical-align: middle;
+  transform: translateY(-0.05em);
+}
+
+.pressure-trend--rising {
+  color: var(--green, #3cdc82);
+}
+
+.pressure-trend--falling {
+  color: var(--red, #ff2d35);
+}
+
+.pressure-trend--steady {
+  color: var(--secondary, #8b949e);
+}
+
+/* Dock buttons (LOC/Alerts/SET) that jump to a panel on another page give it a brief highlight
+   pulse so the destination is obvious instead of the tap seeming to do nothing. */
+.cb-focus-pulse {
+  animation: cb-focus-pulse-anim 1.6s ease-out;
+}
+
+/* Map engine (mapbox-gl) now loads as its own chunk — this fills the canvas while it parses. */
+.atlas-map-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--muted, #8b949e);
+  background: rgba(3, 5, 7, 0.6);
+  font: 800 11px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes cb-focus-pulse-anim {
+  0% { box-shadow: 0 0 0 2px rgba(255, 45, 53, 0.85), 0 0 24px rgba(255, 45, 53, 0.5); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 45, 53, 0); }
+}
+
+/* Settings — a page like Weather/Operations now (not a modal). Each section is its own .cb-panel
+   via the shared Panel component, so it inherits the same card chrome as the rest of the app. */
+.page-grid--settings {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.cb-panel__title + .settings-row {
+  border-top: 0;
+}
+
+.settings-row > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings-row strong {
+  color: var(--text);
+  font: 700 13px / 1.2 Inter, sans-serif;
+}
+
+.settings-row span {
+  color: var(--muted);
+  font: 600 11px / 1.4 Inter, sans-serif;
+}
+
+.settings-action {
+  flex-shrink: 0;
+  padding: 9px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  background: #171717;
+  color: var(--text);
+  font: 800 11px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.settings-action:disabled {
+  opacity: 0.4;
+}
+
+.ops-mode__hint {
+  margin-top: 2px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Locate page: the same MapRadarPanel used compactly on Weather, given the whole page instead of
+   a grid cell. Its .map-panel positioning rules are grid-area/column/row values tuned for the
+   Weather page's specific column math — neutralize them here so it just fills this page's single
+   cell instead of trying to span line numbers that don't exist in a 1x1 grid. */
+.page-grid--locate {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.page--locate .map-panel {
+  grid-area: auto !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  width: 100%;
+  height: 100%;
+}
+
+/* Alerts page: the same pill list as the compact Alerts card, uncapped, given the whole page. */
+.page-grid--alerts {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.alerts-full-panel .alert-list--full {
+  overflow-y: auto;
+  align-content: start;
+}
+
+/* Crash screen (ErrorBoundary) — deliberately minimal since the rest of the app failed to render;
+   no dependency on any component that might itself be the thing that crashed. */
+.cb-crash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #050505;
+}
+
+.cb-crash-card {
+  width: min(480px, 100%);
+  padding: 24px;
+  border: 1px solid rgba(255, 45, 53, 0.4);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(24, 26, 30, 0.96), rgba(5, 5, 6, 0.96));
+  text-align: center;
+}
+
+.cb-crash-title {
+  color: var(--red, #ff2d35);
+  font: 900 20px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.1em;
+}
+
+.cb-crash-message {
+  margin: 14px 0;
+  color: var(--secondary, #b6bec8);
+  font: 600 13px / 1.5 Inter, sans-serif;
+}
+
+.cb-crash-detail {
+  margin: 0 0 18px;
+  padding: 10px;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--muted, #8b949e);
+  font: 600 11px / 1.4 Consolas, monospace;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.cb-crash-reload {
+  padding: 12px 24px;
+  border: 1px solid rgba(255, 45, 53, 0.5);
+  border-radius: 7px;
+  background: rgba(255, 45, 53, 0.14);
+  color: var(--text, #f8fafc);
+  font: 800 12px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Alerts page: the Watch/MD/SPC-outlook summary (formerly the separate Storm Threats card) reads
+   as a 3-across row up top on the full-width page instead of the compact card's single column. */
+.alerts-full-panel .threat-list--summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  margin-bottom: 14px;
+}
+
+/* Location card: OCD pass — bordered/backgrounded metric boxes read "blocky" at a glance;
+   a flat instrument-cluster readout with thin dividers reads faster while driving. Mirrors the
+   plain-markup treatment already used on the Wind card. */
+.loc-panel .cockpit-primary--motion {
+  gap: 0 !important;
+}
+
+.loc-panel .cockpit-primary--motion .metric-tile {
+  min-height: 0 !important;
+  padding: 2px 16px !important;
+  border: none !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.09) !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+.loc-panel .cockpit-primary--motion .metric-tile:first-child {
+  border-left: none !important;
+  padding-left: var(--glance-card-pad-x, 14px) !important;
+}
+
+.loc-panel .loc-footer {
+  padding: 0 var(--glance-card-pad-x, 14px) !important;
+  align-items: center !important;
+}
+
+.loc-panel .loc-footer div {
+  min-height: 0 !important;
+  padding: 0 16px 0 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  gap: 3px !important;
+}
+
+.loc-panel .loc-footer div + div {
+  padding-left: 16px !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.09) !important;
+}
+
+/* Nearby panel — replaces the old compact Storm Threats card slot (reuses .threats-panel for
+   grid positioning, matching width/placement, but the content itself is informational rather
+   than a threat, so it gets its own calm blue accent instead of the amber/red threat palette. */
+.nearby-list {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  padding: var(--glance-card-pad-x, 14px);
+  overflow: hidden;
+}
+
+.nearby-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(244, 246, 250, 0.16);
+  border-radius: 7px;
+  background: rgba(244, 246, 250, 0.05);
+  text-align: left;
+}
+
+.nearby-card span {
+  grid-column: 1;
+  color: var(--secondary, #b6bec8);
+  font: 900 9px / 1 "Consolas", monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nearby-card strong {
+  grid-column: 1;
+  grid-row: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text, #f8fafc);
+  font: 700 clamp(13px, 1.05vw, 16px) / 1.2 Inter, sans-serif;
+  text-transform: uppercase;
+}
+
+.nearby-card em {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  color: var(--muted, #8b949e);
+  font: 800 11px / 1 "Consolas", monospace;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.nearby-hours {
+  font: 800 9px / 1 "Consolas", monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nearby-hours--open {
+  color: var(--green, #3cdc82);
+}
+
+.nearby-hours--closed {
+  color: var(--red, #ff2d35);
+}
+
+.nearby-hours--unknown {
+  color: var(--muted, #8b949e);
+}
+
+.nearby-detail p {
+  margin: 0 0 10px;
+  color: var(--secondary, #b6bec8);
+  font: 600 clamp(13px, 1vw, 15px) / 1.5 Inter, sans-serif;
+}
+
+.nearby-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.nearby-actions .settings-action {
+  text-decoration: none;
+  text-align: center;
+}
+
+/* Conditions card: removed the "PARTIAL WEATHER DATA"/"LIMITED OBSERVATION" toolbar row entirely
+   (it was redundant with the footer source line) — the reading tiles grow into the freed space
+   and match Location card's hero-number sizing exactly, so the two cards read as one consistent
+   system instead of two different scales. */
+.wx-panel .cockpit-primary--conditions-full .metric-tile {
+  min-height: 118px !important;
+}
+
+.wx-panel.cockpit-card--chase .cockpit-primary--conditions-full .metric-tile strong,
+.wx-panel.cockpit-card--chase .cockpit-primary--conditions-full .metric-tile--temp strong {
+  font-size: clamp(27px, 1.72vw, 36px) !important;
+}
+
+.wx-panel.cockpit-card--normal .cockpit-primary--conditions-full .metric-tile strong,
+.wx-panel.cockpit-card--normal .cockpit-primary--conditions-full .metric-tile--temp strong {
+  font-size: clamp(28px, 1.82vw, 38px) !important;
+}
+
+/* Nearby panel: Chasers row (Spotter Network) — reuses .nearby-card's span/strong/em structure
+   for visual consistency with the amenity rows above it, just with a count + closest-name instead
+   of a name + distance/hours. */
+.nearby-card--chasers em {
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+}
+
+.spotter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spotter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(244, 246, 250, 0.14);
+  border-radius: 7px;
+  background: rgba(244, 246, 250, 0.04);
+  text-align: left;
+}
+
+.spotter-row strong {
+  color: var(--text, #f8fafc);
+  font: 700 14px / 1.2 Inter, sans-serif;
+}
+
+.spotter-row span {
+  flex-shrink: 0;
+  color: var(--muted, #8b949e);
+  font: 800 11px / 1 "Consolas", monospace;
+}
+
+.nearby-detail p strong {
+  color: var(--text, #f8fafc);
+}
+
+/* Move map zoom/follow/range-ring controls to the bottom-left corner so they never
+   sit under the top-left radar status chip, which can grow to 3 lines while loading
+   and was fully covering the "+" button. */
+.atlas-map-controls {
+  top: auto !important;
+  bottom: 12px !important;
+  left: 12px !important;
+}
+
+.settings-row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.settings-input {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  background: #101012;
+  color: var(--text);
+  font: 600 13px / 1.2 Inter, sans-serif;
+}
+
+.settings-input::placeholder {
+  color: var(--muted);
+}
+
+.settings-row--stack .settings-action {
+  align-self: flex-end;
+}
+
+.settings-spotter-panel .settings-row {
+  padding: 8px 0;
+}
+
+.settings-spotter-panel .cb-panel__title + .settings-row {
+  padding-top: 6px;
+}
+
+/* Radar Engine panel has ~30 diagnostic rows plus a storm-motion form — genuinely too much
+   content for any fixed card height, unlike the other Operations cards. Scroll it internally
+   instead of clipping the Apply/Clear Cache controls off the bottom. */
+.radar-endpoint-panel {
+  overflow-y: auto;
+}
+
+/* Nearby card grid: column 1 (label+count) is minmax(0,1fr) with no floor, so a long closest-
+   chaser name in column 2 (auto-width) could starve it and truncate the count instead — the
+   count is the more important number of the two, so cap column 2 and let IT ellipsis instead. */
+.nearby-card {
+  grid-template-columns: minmax(84px, 1fr) minmax(0, auto) !important;
+}
+
+.nearby-card--chasers em {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+/* Missing panel-title glyph on Operations cards that hand-roll their title div instead of using
+   the shared <Panel> component — restore the same red diamond every other panel has. */
+.ops-summary .cb-panel__title::before,
+.radar-endpoint-panel .cb-panel__title::before,
+.diagnostics-panel .cb-panel__title::before,
+.pi-endpoint-panel .cb-panel__title::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  transform: rotate(45deg);
+  color: var(--red);
+  box-shadow: 0 0 8px rgba(255, 45, 53, 0.35);
+  vertical-align: middle;
+}
+
+/* Alerts page empty state: .alert-list--full is a grid with align-content:start, so a single
+   .calm-card with nothing else to show sits pinned to the top of a tall page-height card,
+   leaving a few hundred px of dead space below it. Center it instead when there are no pills. */
+.alerts-full-panel .alert-list--full:not(:has(.alert-pill)) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* Palette: red/white/black + amber for severe-warning use only, no blue. Every var(--blue) /
+   var(--cb-blue) reference throughout this file (metric-tile accents, MD threat card, nearby
+   card fallbacks) resolves from these two custom properties, so redefining them here — last in
+   cascade order — recolors every usage at once without hunting down each call site. */
+:root {
+  --blue: var(--cb-text, #f4f6fa);
+  --cb-blue: var(--cb-text, #f4f6fa);
+}
+
+/* City name: .loc-city has accumulated close to a dozen conflicting rules across this file's
+   history, gated behind different device-width media queries, some allowing wrap and some
+   truncating. Lock down one guaranteed behavior regardless of viewport bucket or city name
+   length — always a clean single-line ellipsis, never a wrap that could get clipped by the
+   card's fixed height. */
+.loc-city {
+  max-width: 100% !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.settings-radius-control {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.settings-radius-control span {
+  color: var(--muted);
+  font: 800 11px / 1 "JetBrains Mono", Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.settings-input--radius {
+  width: 64px;
+  text-align: center;
 }

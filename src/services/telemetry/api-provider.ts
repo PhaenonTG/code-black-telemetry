@@ -1,6 +1,6 @@
 import { SimulatorProvider } from "./simulator";
-import type { GpsData, TabletLocationInput, TelemetryProvider, TelemetrySnapshot } from "./types";
-import { cardinalFromDeg, isFiniteNumber, readNumber, readString, readTimestamp } from "./quality";
+import type { GpsData, PowerData, SystemData, TabletLocationInput, TelemetryProvider, TelemetrySnapshot, WeatherData, WindData } from "./types";
+import { cardinalFromDeg, isFiniteNumber, readEvents, readNumber, readSensors, readString, readTimestamp } from "./quality";
 import { getPiEndpoint, loadPiEndpoint, subscribePiEndpoint } from "../settings";
 import { Preferences } from "@capacitor/preferences";
 
@@ -37,6 +37,64 @@ function lastKnownGps(gps: GpsData, now = Date.now()): GpsData {
     source: "last-known",
     hasFix: true,
   };
+}
+
+// updatedAt is deliberately 0 (not "now") for the never-had-data case: ageSeconds()/freshness()
+// in quality.ts treat updatedAt<=0 as "no timestamp", which is what lets the UI tell "no data
+// ever received" apart from "just went stale."
+function unavailableWind(): WindData {
+  return {
+    speedMph: null,
+    gustMph: null,
+    directionDeg: null,
+    directionCardinal: "--",
+    source: "unavailable",
+    updatedAt: 0,
+  };
+}
+
+function lastKnownWind(wind: WindData): WindData {
+  const hasData = wind.speedMph !== null || wind.gustMph !== null || wind.directionDeg !== null;
+  if (!hasData || wind.source === "simulator" || wind.source === "unavailable") return unavailableWind();
+  return { ...wind, source: "last-known" };
+}
+
+function unavailableWeather(): WeatherData {
+  return {
+    tempF: null,
+    dewpointF: null,
+    humidity: null,
+    pressureMb: null,
+    pressureTrend: null,
+    rainRateInHr: null,
+    rainTotalIn: null,
+    source: "unavailable",
+    sourceLabel: "UNAVAILABLE",
+    updatedAt: 0,
+  };
+}
+
+function lastKnownWeather(weather: WeatherData): WeatherData {
+  if (weather.tempF === null || weather.source === "simulator" || weather.source === "unavailable") return unavailableWeather();
+  return { ...weather, source: "last-known", sourceLabel: "LAST KNOWN" };
+}
+
+function unavailablePower(): PowerData {
+  return { mainBatteryV: 0, auxBatteryV: 0, charging: false, source: "unavailable", updatedAt: 0 };
+}
+
+function lastKnownPower(power: PowerData): PowerData {
+  if (power.source === "unavailable" || power.source === "simulator") return unavailablePower();
+  return { ...power, source: "last-known" };
+}
+
+function unavailableSystem(): SystemData {
+  return { cpuPercent: 0, ramPercent: 0, storagePercent: 0, uptimeSeconds: 0, source: "unavailable", updatedAt: 0 };
+}
+
+function lastKnownSystem(system: SystemData): SystemData {
+  if (system.source === "unavailable" || system.source === "simulator") return unavailableSystem();
+  return { ...system, source: "last-known" };
 }
 
 function endpoint(path: string) {
@@ -118,11 +176,12 @@ function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: n
       updatedAt: readTimestamp(weatherRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
     },
     gps,
-    sensors: fallback.sensors,
+    sensors: readSensors(source, fallback.sensors),
     power: {
       mainBatteryV: readNumber(powerRaw, ["mainBatteryV", "main_battery_v", "batteryV"]) ?? fallback.power.mainBatteryV,
       auxBatteryV: readNumber(powerRaw, ["auxBatteryV", "aux_battery_v"]) ?? fallback.power.auxBatteryV,
       charging: Boolean((powerRaw as Record<string, unknown>)?.charging ?? fallback.power.charging),
+      source: "vehicle",
       updatedAt: readTimestamp(powerRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
     },
     system: {
@@ -130,6 +189,7 @@ function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: n
       ramPercent: readNumber(systemRaw, ["ramPercent", "ram_percent", "memoryPercent"]) ?? fallback.system.ramPercent,
       storagePercent: readNumber(systemRaw, ["storagePercent", "storage_percent", "diskPercent"]) ?? fallback.system.storagePercent,
       uptimeSeconds: readNumber(systemRaw, ["uptimeSeconds", "uptime_seconds", "uptime"]) ?? fallback.system.uptimeSeconds,
+      source: "vehicle",
       updatedAt: readTimestamp(systemRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
     },
     status: {
@@ -140,7 +200,7 @@ function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: n
       mode: "pi",
       updatedAt: now,
     },
-    events: fallback.events,
+    events: readEvents(source, fallback.events),
   };
 }
 
@@ -238,29 +298,11 @@ export class HybridTelemetryProvider implements TelemetryProvider {
     return {
       ...snapshot,
       gps: lastKnownGps(snapshot.gps, now),
-      wind: {
-        speedMph: null,
-        gustMph: null,
-        directionDeg: null,
-        directionCardinal: "--",
-        source: "unavailable",
-        updatedAt: 0,
-      },
-      weather: {
-        tempF: null,
-        dewpointF: null,
-        humidity: null,
-        pressureMb: null,
-        pressureTrend: null,
-        rainRateInHr: null,
-        rainTotalIn: null,
-        source: "unavailable",
-        sourceLabel: "UNAVAILABLE",
-        updatedAt: 0,
-      },
-      sensors: snapshot.sensors.map((sensor) => ({ ...sensor, online: false, packetRateHz: 0, lastPacketAt: 0 })),
-      power: { mainBatteryV: 0, auxBatteryV: 0, charging: false, updatedAt: 0 },
-      system: { cpuPercent: 0, ramPercent: 0, storagePercent: 0, uptimeSeconds: 0, updatedAt: 0 },
+      wind: lastKnownWind(snapshot.wind),
+      weather: lastKnownWeather(snapshot.weather),
+      sensors: snapshot.sensors.map((sensor) => ({ ...sensor, online: false, packetRateHz: 0 })),
+      power: lastKnownPower(snapshot.power),
+      system: lastKnownSystem(snapshot.system),
       status: {
         ...snapshot.status,
         apiLatencyMs: 0,

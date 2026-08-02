@@ -80,6 +80,11 @@ function parseDisplayName(displayName: string, fallbackState: string) {
   };
 }
 
+// Stationary GPS speed jitters in the 0.1-0.8 mph range from position drift alone, even parked
+// with a clean fix — confirmed on-device sitting still. Floor anything under this to a clean 0
+// rather than showing false motion.
+const GPS_SPEED_NOISE_FLOOR_MPH = 1.5;
+
 export function buildCanonicalLocation(gps: GpsData | null | undefined, locality: LocalityResult | null): CanonicalLocation {
   const valid = Boolean(gps?.hasFix && isValidLocation(gps.lat, gps.lon) && gps.source !== "simulator" && gps.source !== "unavailable");
   const staleSimulator = gps?.source === "simulator";
@@ -88,11 +93,13 @@ export function buildCanonicalLocation(gps: GpsData | null | undefined, locality
   const parsed = acceptedLocality ? parseDisplayName(acceptedLocality.displayName, acceptedLocality.state) : null;
   const source = gps ? sourceFromGps(gps.source) : "unavailable";
   const hasAltitude = gps?.elevationFt != null;
+  const rawSpeed = valid ? gps!.speedMph : null;
+  const speedMph = rawSpeed != null && rawSpeed < GPS_SPEED_NOISE_FLOOR_MPH ? 0 : rawSpeed;
   return {
     latitude: valid ? gps!.lat : null,
     longitude: valid ? gps!.lon : null,
     altitudeFt: valid ? gps!.elevationFt : null,
-    speedMph: valid ? gps!.speedMph : null,
+    speedMph,
     headingDeg: valid ? gps!.headingDeg : null,
     headingCardinal: valid ? gps!.headingCardinal || cardinalFromDeg(gps!.headingDeg) : "--",
     accuracyM: valid ? gps!.accuracyM : null,

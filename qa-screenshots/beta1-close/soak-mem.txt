@@ -1,0 +1,62 @@
+Soak started 2026-07-29T07:56:39.9314101-05:00
+
+=== minute 0 2026-07-29T07:56:39.9780664-05:00 ===
+27974
+  Native Heap    51712    51684       12       49    53188    73844    61109     7795
+  Dalvik Heap     4530     4500        0      103     6124    10476     4332     6144
+         Native Heap:    51684                          53188
+            Graphics:    79336                          79336
+           TOTAL PSS:   247334            TOTAL RSS:   363408       TOTAL SWAP PSS:      261
+4	./cache/WebView/Crashpad/new
+4	./cache/WebView/Crashpad/pending
+4	./cache/WebView/Crashpad/completed
+4	./cache/WebView/Crashpad/attachments
+18	./cache/WebView/Crashpad
+4	./cache/WebView/SafeBrowsing
+8	./cache/WebView/Default/HTTP Cache/Code Cache/js/index-dir
+59	./cache/WebView/Default/HTTP Cache/Code Cache/js
+8	./cache/WebView/Default/HTTP Cache/Code Cache/wasm/index-dir
+15	./cache/WebView/Default/HTTP Cache/Code Cache/wasm
+78	./cache/WebView/Default/HTTP Cache/Code Cache
+8	./cache/WebView/Default/HTTP Cache/Cache_Data/index-dir
+1544	./cache/WebView/Default/HTTP Cache/Cache_Data
+12	./cache/WebView/Default/HTTP Cache/No_Vary_Search
+1636	./cache/WebView/Default/HTTP Cache
+1640	./cache/WebView/Default
+4	./cache/WebView/Crash Reports
+1700	./cache/WebView
+24	./cache/Crash Reports/ANR Variations
+27	./cache/Crash Reports
+1730	./cache
+20	./shared_prefs
+24	./app_webview/Default/Local Storage/leveldb
+27	./app_webview/Default/Local Storage
+4	./app_webview/Default/PersistentOriginTrials
+8	./app_webview/Default/Shared Dictionary/cache/index-dir
+15	./app_webview/Default/Shared Dictionary/cache
+67	./app_webview/Default/Shared Dictionary
+20	./app_webview/Default/Session Storage
+40	./app_webview/Default/shared_proto_db/metadata
+59	./app_webview/Default/shared_proto_db
+4	./app_webview/Default/blob_storage/a94da55a-1e46-4f7f-bced-7ef385ebe023
+7	./app_webview/Default/blob_storage
+210	./app_webview/Default
+238	./app_webview
+4	./app_textures
+4104	./no_backup/.webview
+4107	./no_backup
+22692	./files/radar/sites/KSRX/raw
+356	./files/radar/sites/KSRX/processed
+23051	./files/radar/sites/KSRX
+17280	./files/radar/sites/KLZK/raw
+592	./files/radar/sites/KLZK/processed
+17875	./files/radar/sites/KLZK
+25300	./files/radar/sites/KSGF/raw
+2864	./files/radar/sites/KSGF/processed
+28167	./files/radar/sites/KSGF
+69095	./files/radar/sites
+69099	./files/radar
+69106	./files
+4	./code_cache
+75211	.
+0

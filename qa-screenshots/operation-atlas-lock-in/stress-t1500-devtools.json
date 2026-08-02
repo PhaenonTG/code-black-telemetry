@@ -1,0 +1,117 @@
+{
+  "href": "https://localhost/",
+  "title": "Code Black OPS",
+  "dpr": 1.5,
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "atlas": {
+    "renderer": "mapbox-gl-js",
+    "engine": "atlas",
+    "mapboxVersion": "3.27.0",
+    "styleUri": "mapbox://styles/mapbox/navigation-night-v1",
+    "styleLoaded": true,
+    "mapState": "READY",
+    "radarState": "LIVE",
+    "mapInitialized": true,
+    "mapInstanceCount": 1,
+    "canvasCount": 1,
+    "webglContextCount": 1,
+    "lifecycle": {
+      "reactMounts": 127,
+      "reactUnmounts": 126,
+      "mapConstructors": 127,
+      "mapRemoves": 126,
+      "styleLoads": 127,
+      "sourceCreations": 508,
+      "layerCreations": 635,
+      "sourceUpdates": 5042,
+      "radarImageUpdates": 1106,
+      "radarObjectUrlsCreated": 0,
+      "radarObjectUrlsRevoked": 0
+    },
+    "cameraMode": "FOLLOW_HEADING",
+    "zoom": 8.2,
+    "bearing": 0,
+    "pitch": 0,
+    "center": {
+      "lat": 36.45793,
+      "lon": -94.1305
+    },
+    "gps": {
+      "lat": 36.45793,
+      "lon": -94.130505,
+      "headingDeg": 134.1872,
+      "speedMph": 0.02420720950662,
+      "accuracyM": 18.6
+    },
+    "selectedProduct": "CC",
+    "radarSourceLoaded": true,
+    "radarLayerLoaded": true,
+    "radarOpacity": 0.7,
+    "radarBounds": {
+      "west": -96.78754236418487,
+      "south": 34.53740342661132,
+      "east": -90.01329992097138,
+      "north": 39.93307081655276
+    },
+    "radarFrameId": "KSGF20260729_212754_V06-CC",
+    "radarImageUrlType": "http",
+    "canvas": {
+      "cssWidth": 538,
+      "cssHeight": 257,
+      "backingWidth": 808,
+      "backingHeight": 387,
+      "devicePixelRatio": 1.5
+    },
+    "canvasPixelSample": "rgba(36,39,63,255)",
+    "sourceCount": 7,
+    "layerCount": 123,
+    "lastMapError": "",
+    "fallbackState": "ATLAS_ACTIVE",
+    "updatedAt": 1785364595852
+  },
+  "map": {
+    "renderer": "mapbox-gl-js",
+    "styleUri": "mapbox://styles/mapbox/navigation-night-v1",
+    "styleLoaded": true,
+    "modifiedLayers": 92,
+    "missingTargetLayers": [],
+    "zoom": 8.2,
+    "bearing": 0,
+    "pitch": 0,
+    "cameraMode": "FOLLOW_HEADING",
+    "gpsAccuracyM": 18.6,
+    "speedMph": 0.02420720950662,
+    "radarOpacity": 0.7,
+    "product": "CC",
+    "provider": "mapbox",
+    "updatedAt": 1785364595852
+  },
+  "engine": "atlas",
+  "expandedActive": false,
+  "legacyMapMounted": false,
+  "atlasMapMounted": true,
+  "canvasCount": 1,
+  "canvases": [
+    {
+      "className": "mapboxgl-canvas",
+      "width": 808,
+      "height": 387,
+      "rect": {
+        "x": 339,
+        "y": 388,
+        "width": 538,
+        "height": 257
+      },
+      "glInfo": {
+        "drawingBufferWidth": 808,
+        "drawingBufferHeight": 387
+      }
+    }
+  ],
+  "mapboxMaps": 1,
+  "screenshotBytesRetained": 0,
+  "timestamp": 1785364595855
+}

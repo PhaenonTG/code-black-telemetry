@@ -1,0 +1,66 @@
+On branch master
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   .gitignore
+	modified:   index.html
+	modified:   package-lock.json
+	modified:   package.json
+	modified:   src/App.tsx
+	modified:   src/components/cards/EventsCard.tsx
+	modified:   src/components/cards/GpsCard.tsx
+	modified:   src/components/cards/PowerCard.tsx
+	modified:   src/components/cards/SensorHealthCard.tsx
+	modified:   src/components/cards/SystemCard.tsx
+	modified:   src/components/cards/WeatherCard.tsx
+	modified:   src/components/cards/WindCard.tsx
+	modified:   src/components/layout/TopBar.tsx
+	modified:   src/components/ui/DashCard.tsx
+	modified:   src/components/ui/MetricRow.tsx
+	modified:   src/components/ui/StatusBadge.tsx
+	modified:   src/index.css
+	modified:   src/main.tsx
+	modified:   src/pages/GPS.tsx
+	modified:   src/pages/Settings.tsx
+	modified:   src/pages/Weather.tsx
+	modified:   src/pages/Wind.tsx
+	modified:   src/services/telemetry/index.ts
+	modified:   src/services/telemetry/simulator.ts
+	modified:   src/services/telemetry/types.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.atlas-vite.err
+	.atlas-vite.out
+	.atlas-vite.pid
+	android/
+	capacitor.config.ts
+	docs/
+	install-codeblack-ops.ps1
+	native/
+	public/atlas-fixture-ref.svg
+	public/manifest.webmanifest
+	public/sw.js
+	qa-atlas-recon-tag.txt
+	qa-atlas-recovery-apk-hash.txt
+	qa-atlas-recovery-commit.txt
+	qa-atlas-recovery-tag.txt
+	qa-screenshots/
+	radar-worker/
+	src/components/operations/
+	src/components/situational/
+	src/hooks/useAlertProducts.ts
+	src/hooks/useSituationalData.ts
+	src/hooks/useTabletLocation.ts
+	src/map/
+	src/services/mapTiles.ts
+	src/services/radar.ts
+	src/services/settings.ts
+	src/services/situational.ts
+	src/services/sound.ts
+	src/services/telemetry/api-provider.ts
+	src/services/telemetry/quality.ts
+	start-radar-worker.ps1
+	start-radar-worker.sh
+
+no changes added to commit (use "git add" and/or "git commit -a")

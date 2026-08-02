@@ -1,0 +1,8 @@
+﻿
+07-29 12:03:46.786  1641  2005 V SemWifiScanPool: updateScanResult, full scan:2 configKeys: 1 notifyconfigKeys: 1 
+pool_bssid:6 pool_configKeys:5
+07-29 12:03:46.787  1641  2005 D WifiConnectivityMonitor: onScanResultUpdated
+07-29 12:03:47.294  5551  5567 I [CE]_IndoorLocationManager: onNewScanResults - Update: 1
+07-29 12:03:47.679  3000  3142 E frs     : Failed to open /sys/kernel/thermal/frs_nl_id: No such file or directory
+
+
