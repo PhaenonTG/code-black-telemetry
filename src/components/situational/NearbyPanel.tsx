@@ -146,6 +146,7 @@ function NearbyDetailModal({ place, onClose }: { place: NearbyPlace; onClose: ()
         <div className="modal-scroll nearby-detail">
           <p>{place.address || "Address not available from map data."}</p>
           {place.phone && <p>{place.phone}</p>}
+          {place.beds != null && <p>{place.beds} beds</p>}
           <div className="nearby-actions">
             {mapProviderLinks(place).map((link) => (
               <a key={link.label} className="settings-action" href={link.href}>{link.label}</a>

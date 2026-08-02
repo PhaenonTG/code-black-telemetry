@@ -143,6 +143,14 @@
   flex-shrink: 0;
 }
 
+.battery-chip__bolt {
+  width: 9px;
+  height: auto;
+  flex-shrink: 0;
+  color: var(--amber);
+  filter: drop-shadow(0 0 3px rgba(255, 190, 60, 0.7));
+}
+
 .battery-chip--good {
   color: var(--green);
 }

@@ -10,12 +10,17 @@ function batteryState(level: number): "good" | "warn" | "bad" {
   return "bad";
 }
 
-function BatteryChip({ level }: { level: number | null }) {
+function BatteryChip({ level, isCharging }: { level: number | null; isCharging: boolean }) {
   if (level == null) return null;
   const state = batteryState(level);
   const fillWidth = Math.max(1, Math.round((level / 100) * 12));
   return (
-    <div className={`battery-chip battery-chip--${state}`} aria-label={`Tablet battery ${level} percent`}>
+    <div className={`battery-chip battery-chip--${state}`} aria-label={`Tablet battery ${level} percent${isCharging ? ", charging" : ""}`}>
+      {isCharging && (
+        <svg className="battery-chip__bolt" viewBox="0 0 10 14" aria-hidden="true">
+          <path d="M5.6 0 0 8h3.4L2.6 14 9 5H5.4Z" fill="currentColor" />
+        </svg>
+      )}
       <svg className="battery-chip__icon" viewBox="0 0 18 10" aria-hidden="true">
         <rect x="0.5" y="0.5" width="15" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1" />
         <rect x="16" y="3" width="1.5" height="4" rx="0.5" fill="currentColor" />
@@ -46,7 +51,7 @@ function piLinkState(piOnline: boolean | undefined, apiLatencyMs: number | undef
 
 export function TopBar() {
   const status = useStatus();
-  const batteryLevel = useBattery();
+  const battery = useBattery();
   const now = useNow();
   const linkState = piLinkState(status?.piOnline, status?.apiLatencyMs);
   const dateLabel = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
@@ -74,7 +79,7 @@ export function TopBar() {
           <span className={`pi-link__dot pi-link__dot--${linkState}`} aria-hidden="true" />
           <span>Pi Link</span>
         </div>
-        <BatteryChip level={batteryLevel} />
+        <BatteryChip level={battery.level} isCharging={battery.isCharging} />
       </div>
     </header>
   );

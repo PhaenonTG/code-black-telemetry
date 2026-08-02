@@ -26,9 +26,20 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text, #f8fafc);
-  font-size: clamp(28px, 2.8vw, 42px);
+  font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+/* Match the Conditions card's hero-number size exactly (same row, same "primary reading" role) --
+   Wind previously had its own steeper clamp (2.8vw vs ~1.7-1.8vw here) that made its numbers read
+   noticeably larger/bolder than its row neighbors even at the same font-weight. */
+.wind-panel.cockpit-card--chase .wind-hero__item strong {
+  font-size: clamp(27px, 1.72vw, 36px);
+}
+
+.wind-panel.cockpit-card--normal .wind-hero__item strong {
+  font-size: clamp(28px, 1.82vw, 38px);
 }
 
 .wind-hero__item span {

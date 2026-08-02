@@ -13,6 +13,7 @@ export interface NearbyPlace {
   phone: string;
   hoursStatus: "open" | "closed" | "unknown" | "typical-open";
   hoursText: string;
+  beds: number | null;
 }
 
 type Position = { lat: number; lon: number };
@@ -142,6 +143,35 @@ function categoryFor(tags: Record<string, string>): NearbyCategory | null {
   return null;
 }
 
+// Picking "closest" alone can surface a closed gas station over an open one a mile farther, or a
+// 15-bed critical-access ER over a 400-bed trauma center a few miles out. Rank candidates instead:
+// confirmed-open beats everything (owner: "confirmed open is like ideal ideal"), closed is worst
+// (showing a closed business as the pick is actively unhelpful), and for hospitals specifically,
+// bed count breaks ties as a free, defensible proxy for capability -- OSM has no rating system,
+// but larger facilities reported via the `beds` tag are a reasonable "more capable" signal.
+// Distance is always the final tiebreaker within a tier, so this never sends someone dramatically
+// out of their way chasing a marginal upgrade.
+const HOURS_RANK: Record<NearbyPlace["hoursStatus"], number> = {
+  open: 0,
+  "typical-open": 1,
+  unknown: 2,
+  closed: 3,
+};
+
+function bestCandidate(category: NearbyCategory, candidates: NearbyPlace[]): NearbyPlace | null {
+  if (candidates.length === 0) return null;
+  const sorted = [...candidates].sort((a, b) => {
+    const hoursDelta = HOURS_RANK[a.hoursStatus] - HOURS_RANK[b.hoursStatus];
+    if (hoursDelta !== 0) return hoursDelta;
+    if (category === "hospital") {
+      const bedsDelta = (b.beds ?? 0) - (a.beds ?? 0);
+      if (bedsDelta !== 0) return bedsDelta;
+    }
+    return a.distanceMiles - b.distanceMiles;
+  });
+  return sorted[0];
+}
+
 export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<Record<NearbyCategory, NearbyPlace>>; error: string }> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 15_000);
@@ -155,7 +185,7 @@ export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const data = (await response.json()) as { elements?: OverpassNode[] };
     const now = new Date();
-    const closest: Partial<Record<NearbyCategory, NearbyPlace>> = {};
+    const candidatesByCategory: Record<NearbyCategory, NearbyPlace[]> = { gas: [], hospital: [], lodging: [], food: [] };
 
     for (const node of data.elements ?? []) {
       const tags = node.tags ?? {};
@@ -164,11 +194,10 @@ export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<
       const category = categoryFor(tags);
       if (!category) continue;
       const distance = distanceMiles(pos, { lat: node.lat, lon: node.lon });
-      const existing = closest[category];
-      if (existing && existing.distanceMiles <= distance) continue;
       const resolved = resolveOpeningHours(tags.opening_hours, now);
       const hours = resolved.status === "unknown" ? (inferTypicalHours(category, tags) ?? resolved) : resolved;
-      closest[category] = {
+      const beds = Number(tags.beds);
+      candidatesByCategory[category].push({
         id: `${node.id}`,
         category,
         name,
@@ -179,10 +208,17 @@ export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<
         phone: tags.phone || tags["contact:phone"] || "",
         hoursStatus: hours.status,
         hoursText: hours.text,
-      };
+        beds: Number.isFinite(beds) && beds > 0 ? beds : null,
+      });
     }
 
-    return { places: closest, error: "" };
+    const places: Partial<Record<NearbyCategory, NearbyPlace>> = {};
+    for (const category of Object.keys(candidatesByCategory) as NearbyCategory[]) {
+      const best = bestCandidate(category, candidatesByCategory[category]);
+      if (best) places[category] = best;
+    }
+
+    return { places, error: "" };
   } catch (error) {
     return { places: {}, error: error instanceof Error ? error.message : "Nearby lookup failed" };
   } finally {
