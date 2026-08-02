@@ -416,8 +416,40 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       `services/settings.ts`'s existing `subscribeChaserRadiusMiles`/`subscribePiEndpoint` have the
       identical shape but happened to avoid the error because their call sites wrap the unsubscribe
       call rather than return it directly — not broken today, but the same latent footgun.
+24. **Wide-area mosaic context layer + cinematic intro zoom**. The owner initially asked for a
+    custom multi-radar mosaic (composite 2-3 NEXRAD sites in native Rust, reprojecting onto a
+    shared grid). Researched it thoroughly (two Explore agents covering the JS/Android data flow
+    and the vendored `nexrad-model`/`nexrad-render` crates) and confirmed it's buildable but a
+    genuinely large native-code project — see the plan file for the full writeup if this ever gets
+    revisited. Talking it through surfaced the actual need: the owner will keep using RadarScope as
+    the primary chase/analysis tool (that's where hook-echo-level detail and color-scheme control
+    matter), and this app just needs situational awareness — "where am I relative to the storm, my
+    team, and other spotters." That doesn't need custom-composited super-res data. **Dropped the
+    native compositing plan entirely** and instead wired in RainViewer's free public tile mosaic
+    (`services/situational.ts`'s `getRadarTileTemplate()` already existed for this, fetched, never
+    used anywhere — confirmed via grep) as a new `map/AtlasMosaicLayer.ts` raster layer, toggled by
+    a new "MSC" button in the map controls, defaulting **on** (owner's explicit call: "mosaic on by
+    default... don't delete atlas" — the single-site view stays fully intact as the manual
+    fallback, its own color scale/CC filter untouched).
+    - Hit a real bug during device verification: RainViewer's documented max zoom is 7, but this
+      app's map operates at zoom 7.25-9.2, so Mapbox was requesting tiles beyond what exists and
+      getting back a "Zoom Level Not Supported" placeholder image baked right into the tile. Fixed
+      with `maxzoom: 7` on the raster source (standard Mapbox behavior: stop requesting past that
+      zoom, over-zoom/upscale the z7 tile instead) — confirmed fixed via before/after screenshots.
+    - Also added a "premium" cinematic intro: the map now constructs at a wide establishing zoom
+      (4.5) and `flyTo()`s down to the real operating zoom on cold launch, reusing the same
+      ease-out-cubic curve (`1 - (1-t)**3`, "starts fast, slows to a stop") already used for normal
+      recentering elsewhere in `AtlasCameraController.ts`, just with a longer (2.8s) duration.
+      Confirmed via a mid-flight screenshot (map still wide/loading) vs. the settled end state.
+    - Verified on-device: MSC toggles cleanly on/off with no stray rendering left behind (checked
+      with the single-site radar layer also toggled off, to see the mosaic layer in isolation).
+      Couldn't visually confirm actual radar echoes render correctly, though — no precipitation in
+      range on the day this was tested, same "needs a real storm" caveat already logged for the CC
+      clutter filter. The plumbing is confirmed correct (no placeholder/error tiles, toggle works,
+      tile fetch returns real data when called directly); only the "does colored precip actually
+      show up" part is unconfirmed.
 
-All of the above (items 1-23) were built, `npm run build` typechecked clean, and have now been
+All of the above (items 1-24) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -433,13 +465,19 @@ path (needs a real or simulated network outage to trigger).
 
 - **Map overlays**: owner wants warning polygons, SPC Mesoscale Discussion polygons, and Spotter
   Network position pins on the map (`AtlasMap.tsx`), each independently toggleable so the map
-  doesn't get cluttered. Recommended approach (not yet built): warning polygons are nearly free —
-  `api.weather.gov/alerts/active` (already polled for the Alerts page) carries a GeoJSON `geometry`
-  per feature that's currently discarded; spotter pins reuse existing position data; MD polygons
-  need a new fetch from SPC's own GeoJSON service (format not yet confirmed). For the toggle UI,
-  recommended a single small "Layers" icon button (opposite corner from the existing expand
-  button) opening a compact checkbox popover, rather than adding 3 more chips to the already-dense
-  zoom/product-select control clusters.
+  doesn't get cluttered. Owner confirmed this is next after the mosaic work above. Recommended
+  approach (not yet built): warning polygons are nearly free — `api.weather.gov/alerts/active`
+  (already polled for the Alerts page) carries a GeoJSON `geometry` per feature that's currently
+  discarded; spotter pins reuse existing position data. **Correction to an earlier note**: MD
+  polygons do NOT need a new/unconfirmed fetch — `services/situational.ts`'s
+  `getActiveMesoscaleDiscussions()` already successfully queries SPC's own GeoJSON service
+  (`mapservices.weather.noaa.gov/.../spc_mesoscale_discussion/MapServer/0/query`) for point-in-
+  polygon checks and just discards the geometry afterward; reuse that, don't build a new fetch.
+  For the toggle UI, recommended a single small "Layers" icon button (opposite corner from the
+  existing expand button) opening a compact checkbox popover, rather than adding 3 more chips to
+  the already-dense zoom/product-select control clusters. `AtlasMosaicLayer.ts`'s z-order pattern
+  (check if a layer already exists before choosing `beforeLayerId`) is a directly reusable
+  precedent for inserting these without fighting the existing radar/vehicle/breadcrumb layers.
 - **Nearby card hours filtering**: owner asked whether to only list confirmed-open (e.g. 24-hour)
   places. Recommended against a hard filter — OSM/Overpass hours data is frequently missing
   entirely (matches what's already observed: most places show "HOURS UNKNOWN"), so filtering to
@@ -486,12 +524,9 @@ path (needs a real or simulated network outage to trigger).
    to Conditions' exact per-mode clamp instead. A broader dashboard-wide font audit beyond this one
    flagged pair has not been done.
 8. **Wind card redesign** — DONE (see Recent Work #19): 2-column grid, Peak Gust tile fills the
-   space that used to be empty. Still open: wiring the peak-hold value to auto-suggest the severe
-   report form's `windspeed`/`windmeasure` (exact vs. estimated) fields — a peak-hold reading is
-   exactly "exact, measured" data, this was the original reasoning for pairing the two features but
-   the report-form wiring itself hasn't been built. Also open: purging the ~7 confirmed-dead legacy
-   `.wind-panel`/`.wind-compass` CSS blocks found in `index.css` during this work (a background
-   task was spawned for this, not yet run).
+   space that used to be empty. Peak-gust-to-report-form wiring is also DONE (Recent Work #22).
+   Still open: purging the ~7 confirmed-dead legacy `.wind-panel`/`.wind-compass` CSS blocks found
+   in `index.css` during this work (a background task was spawned for this, not yet run).
 9. **Radar: real-storm verification needed** — the CC-based clutter filter (see above) showed no
     clear visual improvement on today's quiet-day data, and the raw CC product view itself looked
     unusually chaotic rather than the smooth pattern real precip normally shows. Not clear yet
@@ -499,7 +534,13 @@ path (needs a real or simulated network outage to trigger).
     gate-alignment logic. Needs testing against an actual storm, and worth re-checking the
     `apply_correlation_filter` gate-matching logic in `native/radar-ref/src/lib.rs` if it still
     looks wrong then.
-10. **Multi-radar mosaic** (owner's idea, discussed, not started) — legitimate technique, same as
+10. **Multi-radar mosaic on the tablet, custom native compositing** — DECIDED AGAINST for the
+    tablet app (see Recent Work #24): researched thoroughly (buildable, ~moderate new Rust code on
+    top of correct vendored primitives), but the owner will keep using RadarScope as the real
+    chase/analysis tool, so a free pre-composited tile mosaic (now built) covers the actual need
+    without native-code risk. The technique below is still legitimate and would still apply if this
+    ever gets revisited for the *PC big-board* idea (#11) specifically, where custom compositing
+    would be worth it for a non-driving analysis display: legitimate technique, same as
     NWS's MRMS national mosaic. Recommended approach if built: **max-value compositing** on a
     reprojected common grid for REF/CC (take the strongest/best-angle value per pixel across
     nearby radars, not an average — averaging would weaken real signal against distant-radar
@@ -526,13 +567,23 @@ path (needs a real or simulated network outage to trigger).
       recompiling it for a desktop OS target is tractable — but Level III decode and the mosaic
       compositing (#10) are both still fully unbuilt subsystems. Treat as its own dedicated
       initiative to scope separately, not a quick add-on.
-12. **Pulsing "my position" dot + breadcrumb trail** — DONE (see Recent Work #21): animated pulse
-    ring on the vehicle marker, a session-scoped 3-hour breadcrumb trail with a "CLR" clear button.
-    Still open: on-device visual verification (built browser-side against no live GPS fix, needs a
-    real drive/walk test), and the owner's own stated future step of syncing the trail to a server
-    for team visibility — not asked for yet, don't build until requested.
+12. **Pulsing "my position" dot + breadcrumb trail** — DONE and on-device verified (pulse
+    confirmed via a real frame-to-frame pixel diff around the dot; CLR button confirmed present and
+    enabled). Still open: seeing the trail actually draw a line (needs the tablet to physically
+    move more than 15m — correctly shows zero line while stationary, that's not a bug), and the
+    owner's own stated future step of syncing the trail to a server for team visibility — not
+    asked for yet, don't build until requested.
 13. **Discord posting on report submission** — owner is planning to stand up a Discord for the
     Code Black team and wants a "post to Discord" toggle added next to the existing NWSChat/
     Twitter toggles on the severe report form (`ReportModal` in `NearbyPanel.tsx`) once that
     Discord exists. Explicitly flagged as future-only, not to build yet — no webhook URL or server
     exists to wire up.
+14. **Wide-area mosaic tile layer** — DONE (see Recent Work #24). Confirmed the plumbing is
+    correct (toggle works cleanly, no error/placeholder tiles, tile fetch returns real data) but
+    couldn't confirm actual colored precipitation renders correctly — no precip in range on a quiet
+    weather day. Worth a quick visual recheck next time there's real rain/storms anywhere in the
+    national coverage area.
+15. **Single-site radar mode needs a fine-tuning pass** — owner's own words, right after the mosaic
+    work: "not fully happy with it yet." No specifics given yet on what's wrong with it — this
+    needs a follow-up conversation to scope (typography? color scale? controls? something else?)
+    before touching it, rather than guessing.

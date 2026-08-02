@@ -3,16 +3,23 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagnostics } from "../services/mapTiles";
 import type { RadarFrame, RadarProduct } from "../services/radar";
+import { getRadarTileTemplate } from "../services/situational";
 import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcrumbTrail";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
-import { applyAtlasCamera } from "./AtlasCameraController";
+import { applyAtlasCamera, zoomForSpeed } from "./AtlasCameraController";
 import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstances, incrementAtlasCounter, incrementAtlasMapInstances, writeAtlasDiagnostics } from "./AtlasDiagnostics";
 import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
+import { updateAtlasMosaicLayer } from "./AtlasMosaicLayer";
 import { updateAtlasRadarLayer, ATLAS_RADAR_LAYER, ATLAS_RADAR_SOURCE } from "./AtlasRadarLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
 import { tuneAtlasStyle } from "./AtlasStyleManager";
 import { startAtlasVehiclePulse, updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRadarState, AtlasRangeRingMode } from "./types";
+
+const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
+// the real operating zoom for a "swoop to position" open on cold launch, rather than snapping.
+const INTRO_DURATION_MS = 2800;
+const MOSAIC_REFRESH_MS = 10 * 60_000; // RainViewer's public frames update roughly every 10 min.
 
 type AtlasMapProps = {
   gps: AtlasGpsPoint | null;
@@ -100,6 +107,8 @@ export function AtlasMap({
   const [loaded, setLoaded] = useState(false);
   const styleUri = atlasStyleUri();
   const trail = useBreadcrumbTrail();
+  const [mosaicVisible, setMosaicVisible] = useState(true);
+  const [mosaicTileTemplate, setMosaicTileTemplate] = useState<string | null>(null);
 
   latestRef.current = { gps, frame, opacity, rangeRings, expanded };
 
@@ -135,7 +144,7 @@ export function AtlasMap({
         container: containerRef.current,
         style: styleUri,
         center: initial.gps ? [initial.gps.lon, initial.gps.lat] : [-94.13, 36.45],
-        zoom: initial.expanded ? 8.8 : 8,
+        zoom: INTRO_START_ZOOM,
         bearing: 0,
         pitch: 0,
         minTileCacheSize: 4,
@@ -225,9 +234,16 @@ export function AtlasMap({
         if (latest.gps) {
           updateAtlasVehicleLayer(map, latest.gps);
           recordBreadcrumbPoint(latest.gps.lat, latest.gps.lon);
-          const camera = applyAtlasCamera(map, latest.gps, "FOLLOW_NORTH", latest.expanded, latest.gps.headingDeg ?? 0);
-          setBearing(camera.bearing);
-          setPitch(camera.pitch);
+          const introZoom = zoomForSpeed(latest.gps.speedMph, latest.expanded);
+          map.flyTo({
+            center: [latest.gps.lon, latest.gps.lat],
+            zoom: introZoom,
+            duration: INTRO_DURATION_MS,
+            easing: (t) => 1 - (1 - t) ** 3,
+            essential: true,
+          });
+          setBearing(0);
+          setPitch(0);
           setCameraMode("FOLLOW_NORTH");
         }
         stopPulseRef.current = startAtlasVehiclePulse(map);
@@ -284,6 +300,27 @@ export function AtlasMap({
     if (!map || !loaded) return;
     updateAtlasBreadcrumbLayer(map, trail);
   }, [loaded, trail]);
+
+  useEffect(() => {
+    if (!mosaicVisible) return;
+    let cancelled = false;
+    const load = async () => {
+      const template = await getRadarTileTemplate();
+      if (!cancelled) setMosaicTileTemplate(template);
+    };
+    void load();
+    const timer = window.setInterval(load, MOSAIC_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [mosaicVisible]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    updateAtlasMosaicLayer(map, mosaicTileTemplate, mosaicVisible, styleInfoRef.current.firstSymbolLayerId);
+  }, [loaded, mosaicTileTemplate, mosaicVisible]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -399,6 +436,7 @@ export function AtlasMap({
         <button type="button" aria-label="Toggle follow mode" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{cameraMode === "FOLLOW_HEADING" ? "HDG" : cameraMode === "FREE" ? "REC" : "NUP"}</button>
         <button type="button" aria-label="Toggle range rings" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RNG</button>
         <button type="button" aria-label="Clear position trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLR</button>
+        <button type="button" aria-label="Toggle wide-area mosaic layer" className={mosaicVisible ? "active" : ""} onClick={() => setMosaicVisible((value) => !value)}>MSC</button>
       </div>
       {(visibleError || ATLAS_DIAGNOSTICS_ENABLED) && (
         <div className="map-status atlas-map-status">{visibleError || `${statusLines.join(" - ")} - ${atlasStateLabel}`}</div>

@@ -5859,6 +5859,12 @@ body {
   cursor: default !important;
 }
 
+.map-controls button.active {
+  border-color: rgba(255, 47, 64, 0.75) !important;
+  background: rgba(255, 47, 64, 0.18) !important;
+  color: #ff3044 !important;
+}
+
 .report-suggest {
   align-self: flex-start !important;
   padding: 6px 12px !important;
