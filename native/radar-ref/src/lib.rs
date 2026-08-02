@@ -7,8 +7,8 @@ use nexrad_model::data::{GateStatus, Product, Sweep, SweepField};
 use nexrad_model::geo::{GeoExtent, RadarCoordinateSystem};
 use nexrad_model::meta::Site;
 use nexrad_render::{
-    correlation_coefficient_scale, nws_reflectivity_scale, render_sweep, Color, ColorScale,
-    ColorScaleLevel, DiscreteColorScale, RenderOptions,
+    correlation_coefficient_scale, render_sweep, Color, ColorScale, ColorScaleLevel,
+    DiscreteColorScale, RenderOptions,
 };
 use serde::Serialize;
 use std::fs;
@@ -144,12 +144,42 @@ fn velocity_knots_scale() -> ColorScale {
     .into()
 }
 
+// nexrad_render's stock nws_reflectivity_scale() paints everything from its lowest bucket
+// (below 5 dBZ, including all negative-dBZ returns) as opaque black rather than leaving it
+// transparent. Real super-res reflectivity is full of weak, non-precip returns in that range
+// (ground clutter, biological scatter, noise floor) that then render as widespread dark speckle
+// across the whole sweep circle — the "noisy" look. Same color stops/values as the stock NWS
+// scale above 5 dBZ (so the palette still reads as standard NWS reflectivity), just with that
+// bottom bucket made fully transparent so only actual precipitation returns show, matching the
+// clean look of consumer radar viewers like RadarScope.
+fn codeblack_reflectivity_scale() -> ColorScale {
+    DiscreteColorScale::new(vec![
+        ColorScaleLevel::new(0.0, Color::rgba(0.0, 0.0, 0.0, 0.0)),
+        ColorScaleLevel::new(5.0, Color::rgb(0.0000, 1.0000, 1.0000)),
+        ColorScaleLevel::new(10.0, Color::rgb(0.5294, 0.8078, 0.9216)),
+        ColorScaleLevel::new(15.0, Color::rgb(0.0000, 0.0000, 1.0000)),
+        ColorScaleLevel::new(20.0, Color::rgb(0.0000, 1.0000, 0.0000)),
+        ColorScaleLevel::new(25.0, Color::rgb(0.1961, 0.8039, 0.1961)),
+        ColorScaleLevel::new(30.0, Color::rgb(0.1333, 0.5451, 0.1333)),
+        ColorScaleLevel::new(35.0, Color::rgb(0.9333, 0.9333, 0.0000)),
+        ColorScaleLevel::new(40.0, Color::rgb(0.9333, 0.8627, 0.5098)),
+        ColorScaleLevel::new(45.0, Color::rgb(0.9333, 0.4627, 0.1294)),
+        ColorScaleLevel::new(50.0, Color::rgb(1.0000, 0.1882, 0.1882)),
+        ColorScaleLevel::new(55.0, Color::rgb(0.6902, 0.1882, 0.3765)),
+        ColorScaleLevel::new(60.0, Color::rgb(0.6902, 0.1882, 0.3765)),
+        ColorScaleLevel::new(65.0, Color::rgb(0.7294, 0.3333, 0.8275)),
+        ColorScaleLevel::new(70.0, Color::rgb(1.0000, 0.0000, 1.0000)),
+        ColorScaleLevel::new(75.0, Color::rgb(1.0000, 1.0000, 1.0000)),
+    ])
+    .into()
+}
+
 fn scale_for_code(code: &str) -> ColorScale {
     match code.to_ascii_uppercase().as_str() {
-        "REF" => ColorScale::from(nws_reflectivity_scale()),
+        "REF" => codeblack_reflectivity_scale(),
         "VEL" | "SRV" => velocity_knots_scale(),
         "CC" => ColorScale::from(correlation_coefficient_scale()),
-        _ => ColorScale::from(nws_reflectivity_scale()),
+        _ => codeblack_reflectivity_scale(),
     }
 }
 

@@ -68,7 +68,66 @@ map/                             — Mapbox GL wrapper: AtlasMap.tsx (main compo
                                    AtlasCameraController, AtlasRadarLayer, AtlasVehicleLayer,
                                    AtlasRangeRingLayer, AtlasStyleManager, AtlasReconGlPage
                                    (full-screen expanded radar view)
+native/radar-ref/                — Rust source for the ACTUAL radar decoder/renderer — see
+                                   "Native radar renderer" section below before touching anything
+                                   radar-related. This is not obvious from src/ alone.
 ```
+
+## Native radar renderer — read this before touching radar rendering/colors
+
+This tripped up an entire investigation this session, so it's worth stating plainly: **the code
+that actually decodes NEXRAD data and paints radar pixels is not in `src/` and not in
+`radar-worker/worker.cjs`.** Both of those either don't run on the shipped app or are
+dead/prototype code (`radar-worker/worker.cjs` is a Node.js script with its own `pngjs` +
+`nexrad-level-2-data`-based renderer that is **not invoked anywhere** in the shipped
+app — confirmed via a repo-wide grep, nothing in `src/` imports those packages. Don't assume
+editing it does anything on-device).
+
+The real pipeline, confirmed by tracing `RadarNativePlugin.getFrames()` end to end:
+
+1. **`android/app/src/main/java/com/codeblackwx/ops/radar/RadarNativePlugin.java`** — Capacitor
+   plugin. Downloads raw Level II volumes directly from
+   `https://unidata-nexrad-level2.s3.amazonaws.com/`, manages the on-disk raw/processed file
+   cache, and calls a JNI `native` function (`renderLevel2ProductNative`) to do the actual
+   decode+render. It has zero color/pixel logic itself — don't look here for that.
+2. **`native/radar-ref/src/lib.rs`** — the JNI implementation, a Rust crate (`codeblack-radar-ref`,
+   crate-type `cdylib`) built for `aarch64-linux-android` and compiled to
+   `libcodeblack_radar.so`. This is the file that actually decodes the volume (via the
+   `nexrad-data`/`nexrad-model` crates) and rasterizes it to a PNG (via the `nexrad-render`
+   crate's `render_sweep()`), including the dBZ/velocity **color scale** — this is where any
+   "what colors/thresholds does radar use" question actually gets answered or fixed.
+3. The rendered PNG is written to `getFilesDir()/radar/sites/<site>/processed/`, and
+   `RadarNativePlugin` returns its file path as `imageUrl`, converted via
+   `Capacitor.convertFileSrc()`. `AtlasRadarLayer.ts` just drops it into Mapbox GL as a plain
+   **image source** (`type: "image"`) covering `frame.bounds` — no tiling, no client-side
+   rendering, no color logic on the JS side at all.
+
+**Build/deploy loop for native/radar-ref changes** (documented in `native/radar-ref/README.md`,
+confirmed working this session):
+```powershell
+$env:Path="$env:USERPROFILE\.cargo\bin;$env:Path"
+$ndk="$env:LOCALAPPDATA\Android\Sdk\ndk\28.2.13676358"
+$env:CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ndk\toolchains\llvm\prebuilt\windows-x86_64\bin\aarch64-linux-android35-clang.cmd"
+cd native/radar-ref
+cargo +stable-x86_64-pc-windows-gnu build --target aarch64-linux-android --release
+Copy-Item target\aarch64-linux-android\release\libcodeblack_radar.so ..\..\android\app\src\main\jniLibs\arm64-v8a\libcodeblack_radar.so -Force
+```
+Then the normal `npx cap sync android && cd android && ./gradlew.bat assembleDebug` + install —
+Gradle's `mergeDebugNativeLibs` picks up the new `.so` automatically. **Important**: the plugin
+caches rendered PNGs on-device keyed by volume filename, not by renderer version — after changing
+the native renderer, use the "Clear Cache" button on the Operations page's Radar Engine panel (or
+the underlying `clearRadarCache()`) to force fresh renders through the new code, or old frames
+will keep showing until a new volume scan naturally arrives.
+
+**Fixed this session**: the crate's stock `nws_reflectivity_scale()` paints its lowest bucket
+(everything below 5 dBZ, including all negative-dBZ returns, which is most of what real super-res
+reflectivity contains away from actual precip — ground clutter, biological scatter, noise floor)
+as **opaque black** rather than transparent, so the whole sweep circle was covered in dark
+speckle. Replaced with `codeblack_reflectivity_scale()` in `lib.rs` — identical color stops above
+5 dBZ (still reads as standard NWS reflectivity), but that bottom bucket is now fully transparent
+(`Color::rgba(0,0,0,0)`), matching the clean look of consumer viewers like RadarScope. Verified
+via side-by-side on-device screenshots: same location, dense speckle across the whole frame
+before, clean with only plausible actual-precip areas showing after.
 
 ## The 5 pages (App.tsx pager)
 
