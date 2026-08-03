@@ -5476,7 +5476,7 @@ body {
 
 .map-controls button.active {
   border-color: rgba(255, 47, 64, 0.75) !important;
-  background: rgba(255, 47, 64, 0.18) !important;
+  background: rgba(34, 4, 6, 0.9) !important;
   color: #ff3044 !important;
 }
 
@@ -5718,4 +5718,171 @@ body {
   letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.55);
   text-transform: uppercase;
+}
+
+/* Animated boot splash -- overlays the dashboard on launch while it loads underneath,
+   then fades out. Base color matches capacitor.config.ts SplashScreen.backgroundColor
+   (#070707) so there's no visible color-shift handing off from the native splash. */
+.cb-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: radial-gradient(circle at 50% 42%, rgba(255, 45, 53, 0.16), transparent 60%), #070707;
+  cursor: pointer;
+  transition: opacity 380ms ease, transform 380ms ease;
+}
+
+.cb-splash--exiting {
+  opacity: 0;
+  transform: scale(1.03);
+  pointer-events: none;
+}
+
+.cb-splash__ring {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 45, 53, 0.22);
+  animation: cb-splash-ring-pulse 2.2s ease-out infinite;
+}
+
+.cb-splash__ring::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(255, 45, 53, 0.55) 26deg, transparent 60deg);
+  animation: cb-splash-sweep 2.6s linear infinite;
+  mask: radial-gradient(circle, transparent 62%, black 63%, black 100%);
+  -webkit-mask: radial-gradient(circle, transparent 62%, black 63%, black 100%);
+}
+
+@keyframes cb-splash-sweep {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cb-splash-ring-pulse {
+  0% { transform: scale(0.9); opacity: 0.9; }
+  70%, 100% { transform: scale(1.14); opacity: 0; }
+}
+
+.cb-splash__logo {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  object-fit: contain;
+  opacity: 0;
+  transform: scale(0.72);
+  filter: drop-shadow(0 0 22px rgba(255, 45, 53, 0.45));
+  animation: cb-splash-logo-in 640ms cubic-bezier(0.2, 0.9, 0.25, 1.15) 80ms forwards;
+}
+
+@keyframes cb-splash-logo-in {
+  0% { opacity: 0; transform: scale(0.72); }
+  60% { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.cb-splash__title {
+  font: 900 30px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.08em;
+  color: var(--cb-text, #f4f6fa);
+  opacity: 0;
+  transform: translateY(10px);
+  animation: cb-splash-rise 520ms ease-out 560ms forwards;
+}
+
+.cb-splash__title em {
+  font-style: normal;
+  color: var(--cb-red, #ff2d35);
+}
+
+.cb-splash__tagline {
+  font: 700 11px / 1 Inter, sans-serif;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--cb-muted, #8b929f);
+  opacity: 0;
+  transform: translateY(10px);
+  animation: cb-splash-rise 520ms ease-out 720ms forwards;
+}
+
+@keyframes cb-splash-rise {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cb-splash__status {
+  position: absolute;
+  bottom: 13%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+  animation: cb-splash-rise 480ms ease-out 900ms forwards;
+}
+
+.cb-splash__status span {
+  font: 700 10px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cb-dim, #59606b);
+  min-height: 10px;
+}
+
+.cb-splash__bar {
+  width: 168px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.cb-splash__bar em {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--cb-red-deep, #4c080c), var(--cb-red, #ff2d35));
+  border-radius: 999px;
+  animation: cb-splash-fill 1.7s ease-in-out 900ms forwards;
+}
+
+@keyframes cb-splash-fill {
+  to { width: 100%; }
+}
+
+.cb-splash__hint {
+  position: absolute;
+  bottom: 5%;
+  font: 600 9px / 1 Inter, sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cb-dim, #59606b);
+  opacity: 0;
+  animation: cb-splash-rise 400ms ease-out 1400ms forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-splash__ring,
+  .cb-splash__logo,
+  .cb-splash__title,
+  .cb-splash__tagline,
+  .cb-splash__status,
+  .cb-splash__bar em,
+  .cb-splash__hint {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    width: 100% !important;
+  }
+
+  .cb-splash__ring::before {
+    animation: none !important;
+  }
 }

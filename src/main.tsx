@@ -1,9 +1,10 @@
-import { lazy, StrictMode, Suspense } from 'react'
+import { lazy, StrictMode, Suspense, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { SplashScreen } from './components/SplashScreen.tsx'
 
 // Debug-only recon screen, opted into via a build-time env var — statically importing it here
 // would drag mapbox-gl (and everything under src/map/) into the normal app's main chunk even
@@ -13,12 +14,24 @@ const AtlasReconGlPage = lazy(() => import('./map/AtlasReconGlPage.tsx').then((m
 const reconScreen = (import.meta.env.VITE_RECON_SCREEN as string | undefined)?.trim().toLowerCase()
 const Root = reconScreen === "atlas-gl" ? AtlasReconGlPage : App
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
+// Splash overlays the real app while it mounts underneath (not gating data fetch on it) —
+// purely cosmetic cover for the native-splash-to-WebView handoff. Skipped for the recon screen.
+function RootWithSplash({ enableSplash }: { enableSplash: boolean }) {
+  const [showSplash, setShowSplash] = useState(enableSplash)
+  return (
+    <>
+      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
       <Suspense fallback={null}>
         <Root />
       </Suspense>
+    </>
+  )
+}
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <ErrorBoundary>
+      <RootWithSplash enableSplash={reconScreen !== "atlas-gl"} />
     </ErrorBoundary>
   </StrictMode>,
 )

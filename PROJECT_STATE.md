@@ -1,8 +1,8 @@
 # Code Black OPS — Project State
 
-Last updated: 2026-08-02 (dead-CSS cleanup, item #27). Written so a fresh AI assistant (or a human)
-can pick this project up
-cold, with no prior conversation history, and know exactly what exists, why, and what's next.
+Last updated: 2026-08-03 (app-wide evaluation + animated splash screen, item #34+). Written so a
+fresh AI assistant (or a human) can pick this project up cold, with no prior conversation history,
+and know exactly what exists, why, and what's next.
 
 ## What this is
 
@@ -45,17 +45,29 @@ components/
     NearbyPanel.tsx             — amenities + Spotter Network "Chasers" card, both detail modals
   cards/                        — Operations-page cards: Power, System, SensorHealth, Events
   operations/                   — PiEndpointPanel (configure Pi IP), RadarEndpointPanel (diag)
-  settings/SettingsPage.tsx     — Display/Alerts/Pi Connection/Spotter Network/About
+  settings/SettingsPage.tsx     — Display (Cockpit Mode, Night Vision) / Alerts / Pi Connection /
+                                   Spotter Network / Nearby Chasers / Team Roster / Map Pins /
+                                   Interior Lighting / About — 9 panels, see the page-grid sizing
+                                   pitfall in "Established conventions" before adding a 10th
   ui/                            — SourceBadge, StatusBadge, DashCard, MetricRow
-  ErrorBoundary.tsx
+  ErrorBoundary.tsx               — now auto-reloads on crash after an 8s countdown, with a
+                                   sessionStorage crash-loop guard (3+ reloads/2min disables
+                                   auto-reload) -- was previously a manual-tap-only reload screen
+  SevereFlashOverlay.tsx          — full-screen red pulse on a new tornado/PDS alert, new
 hooks/                          — one hook per data source (useTelemetry, useNearbyPlaces,
                                    useSpotters, useTabletLocation, useSituationalData,
-                                   useAlertProducts, useBattery, useBreadcrumbTrail)
+                                   useAlertProducts, useBattery, useBreadcrumbTrail,
+                                   useResumeTick — forces an immediate refetch on Capacitor
+                                   foreground resume, new)
 services/
-  telemetry/                    — the Pi data pipeline: types.ts, api-provider.ts (polls Pi,
-                                   normalizes payload, last-known fallback), simulator.ts (dev
+  telemetry/                    — the Pi data pipeline: types.ts, api-provider.ts (polls Pi via
+                                   HTTP, normalizes payload, last-known fallback, now ALSO merges
+                                   in BLE telemetry and prefers it when fresh), simulator.ts (dev
                                    fake data), quality.ts (freshness/age/alias-parsing helpers),
-                                   fallback.ts (merges vehicle vs NWS station data)
+                                   fallback.ts (merges vehicle vs NWS station data),
+                                   ble-client.ts (new — see "Raspberry Pi backend" section below,
+                                   this is the primary Pi link now, not HTTP)
+  severeFlash.ts                  — module singleton, triggers SevereFlashOverlay, new
   situational.ts                — NWS alerts + nearest station observation (ExternalObservation)
   nearby.ts                     — Overpass API amenities (gas/hospital/lodging/food)
   spotters.ts                   — Spotter Network GRLevelX feed parser (anonymous, read-only)
@@ -133,6 +145,94 @@ speckle. Replaced with `codeblack_reflectivity_scale()` in `lib.rs` — identica
 via side-by-side on-device screenshots: same location, dense speckle across the whole frame
 before, clean with only plausible actual-precip areas showing after.
 
+## The Raspberry Pi backend ("PiWX") — read this before touching anything Pi/BLE-related
+
+**This is a separate, mature codebase that does not live in this repo.** It lives on the actual
+Pi at `~/CodeBlack` (hostname `raspberrypi.local`, SSH user `codeblack`, not `pi` — the default-user
+assumption cost real time this session). It's a full Flask app + BLE bridge + lighting controller
++ ESP32 serial bridge, built independently (by the owner's own sessions running Claude/Codex
+directly on the Pi, evidenced by `.claude`/`.codex` dirs in `~/CodeBlack`) — this tablet app is
+one client of it, not the only thing that exists. Do not assume "not in src/" means "not built."
+
+- **SSH access**: `ssh codeblack@raspberrypi.local` (Pi must be on the same WiFi/LAN as whoever's
+  connecting; there is no way to reach it from outside that network without something like
+  Tailscale). Public key auth was set up this session — if it stops working, the fallback is
+  having the owner add a new key to `~/.ssh/authorized_keys` (never send/use a password directly,
+  see Credential Handling below).
+- **What's there** (`~/CodeBlack`): `dashboard/app.py` (Flask, port 5000, `http://pidash.local:5000`
+  or `http://<pi-ip>:5000`), `codeblack_ble/` (the BLE bridge to the tablet, see below),
+  `esp_bridge/` (reads ESP32 sensor JSON over serial), `lighting/` (Govee H7090 interior light
+  control, its own BLE connection to the lamp, unrelated to the tablet's BLE link), `integrations/`
+  (NWS alerts, Spotter Network, storm motion — the Pi has its OWN copies of some of the same
+  external-API integrations this tablet app has, built independently; they are not the same code
+  and don't need to match). Extensive docs already exist there: `STATUS.md`, `CHANGELOG.md`,
+  `docs/BLE_PROTOCOL.md`, `docs/BLE_ARCHITECTURE.md` — read those on the Pi itself before making
+  Pi-side changes, don't just infer from this file.
+- **Vehicle identity mismatch, unresolved**: the Pi's own `STATUS.md` self-identifies as
+  `Vehicle ID: spencer-charger` / `Operator: Spencer Tucker` — not obviously the owner's own
+  vehicle identity used elsewhere in this tablet app. Never confirmed whether this is stale
+  default/demo config or a real distinct identity. Flag this to the owner before assuming either
+  way if it matters for a future feature.
+
+### BLE link (tablet <-> Pi), built this session
+
+The owner wants the Pi link to work over **Bluetooth specifically, not WiFi/HTTP** — deliberately,
+so it doesn't depend on Starlink/a hotspot being powered in the vehicle. The tablet's existing
+HTTP-based `PiEndpointPanel`/`api-provider.ts` path still exists and still works if configured, but
+BLE is now the **primary** path and HTTP is a secondary/legacy fallback.
+
+- **Protocol** (`~/CodeBlack/docs/BLE_PROTOCOL.md` on the Pi is the source of truth, not this
+  file): service UUID `8f2a0000-6d6f-4f9f-9d8b-0c0d2b4c0001`, advertised name `CodeBlack-OPS`.
+  Live telemetry notifies on `8f2a0003-...` as compact JSON, fragmented into `telemetry_fragment`
+  frames (keyed by `seq`/`i`/`n`) when the payload exceeds `CB_BLE_MAX_PAYLOAD_BYTES` (180 by
+  default — a real telemetry payload is ~435 bytes, so fragmentation into ~6 frames is the normal
+  case, not an edge case).
+- **Tablet side**: `src/services/telemetry/ble-client.ts` (`bleTelemetryClient` singleton) owns
+  scan/connect/subscribe/reconnect. `api-provider.ts`'s `HybridTelemetryProvider` prefers a fresh
+  BLE notification over its own HTTP poll (`poll()` skips entirely while BLE has published within
+  the last 6s) and maps the compact BLE schema onto the same `TelemetrySnapshot` shape the HTTP
+  path already produced, so nothing downstream (UI components, `useStatus()`, etc.) needed to
+  change. BLE pauses/resumes with the same Capacitor `appStateChange` listener the HTTP path
+  already used (`setTelemetryPaused`).
+- **Reconnect backoff**: the scan/connect retry loop uses exponential backoff (5s -> 90s cap),
+  not a flat interval — a flat interval was shipped first and produced near-continuous active BLE
+  scanning (one of the most power-hungry radio ops on Android) whenever the Pi was unreachable,
+  which is the most likely explanation for a battery-drain report the same day. Don't regress this
+  back to a flat retry interval.
+- **Command channel** (write to `8f2a0006-...`, response on `8f2a0007-...`, matched by a client-
+  generated `req_id`): token-authenticated (`CB_BLE_COMMAND_TOKEN`, set only in the Pi's
+  `/etc/codeblack/codeblack-ble.env`, never in source control), strict allowlist, rate-limited
+  (0.5s/command). Tablet side: `bleTelemetryClient.sendCommand(cmd, extra)` in `ble-client.ts`,
+  token entered once in Settings -> Interior Lighting -> Command Token (stored via
+  `services/settings.ts`'s `bleCommandToken`, plain Preferences, matches how `piEndpoint` is
+  stored — this is a shared secret for controlling vehicle hardware, not a personal credential, so
+  the plaintext-storage precedent from Spotter Network applies the same reasoning). Allowlisted
+  commands: `get_snapshot` (live), `set_lighting` (live — power/profile/color, relays to the Pi's
+  own local `/api/local/lighting/*` Flask endpoints), `set_storm_mode` (live — switches to one of
+  the Pi's alert-severity lighting profiles), `start_chase_session`/`end_chase_session` (live —
+  switches lighting profile to `chase`/`standby`), `ack_alert` (live but audit-log-only by design —
+  does not touch the Pi's own automatic alert-driven lighting automation, which is safety-relevant
+  and wasn't touched without explicit direction).
+- **Interior Lighting** (Settings page): power on/off, profile quick-select, 6 color presets
+  matching the Pi's own `lighting/api.py` `PRESET_COLORS` exactly. A real Govee H7090 lamp is
+  already paired to the Pi (`D7:C1:83:C6:47:7C`) on its own separate BLE connection (`hci0`, not
+  the tablet's `hci1` — confirmed no adapter conflict, `lighting.json`'s
+  `allow_codeblack_ble_adapter_share` was already `true` from a prior Pi-side session). The lamp
+  itself may not always be connected/in-range; that's a normal `state: OFFLINE` response from the
+  Pi, not an error — the command still round-trips successfully.
+- **Fixed a Pi-side bug that predates this session**: `/run/codeblack` was `root:root` mode `755`
+  because `codeblack-ble.service` runs as root and recreates that `RuntimeDirectory` on every
+  restart — the Flask dashboard (`mobile-mesonet-dashboard.service`, runs as user `codeblack`)
+  could never write `lighting-commands.jsonl` into it, silently breaking lighting control **for
+  the whole Pi**, not just via BLE. Fixed permanently in the systemd unit (`Group=codeblack` +
+  `RuntimeDirectoryMode=0775`), not just chmod'd by hand (which would've reverted on next restart).
+- **Not yet done**: pairing/trusted-device policy beyond the shared token (the Pi's own foundation
+  report flags this explicitly); real behavior tied to actual chase-session/storm-mode semantics
+  beyond "switch a lighting profile" (that's genuinely all `start_chase_session`/`set_storm_mode`
+  do today — there's no other session-state concept on either side yet); a tablet-side UI for
+  triggering `start_chase_session`/`end_chase_session`/`set_storm_mode` (only `sendCommand()` the
+  plumbing exists — no button calls them yet, only Interior Lighting's controls are wired to UI).
+
 ## The 5 pages (App.tsx pager)
 
 1. **Weather** (`/`, default) — 2x3 grid: Location & Motion, Conditions (WeatherObservationPanel),
@@ -143,8 +243,10 @@ before, clean with only plausible actual-precip areas showing after.
    instance).
 4. **Alerts** (`/alerts`) — `AlertsFullPanel`: uncapped product list + Storm Threat summary cards
    (watch/MD/warning) — these two were merged into one component this session.
-5. **Settings** (`/settings`) — Display (cockpit mode toggle), Alerts (sound on/off + test),
-   Pi Connection (opens the Operations panel), Spotter Network (sign in/out — new), About.
+5. **Settings** (`/settings`) — 9 panels now: Display (cockpit mode + Night Vision toggle),
+   Alerts (sound on/off + test), Pi Connection, Spotter Network (sign in/out), Nearby Chasers
+   (search radius), Team Roster, Map Pins (color/shape pickers), Interior Lighting (Govee control
+   over BLE), About. See "Established conventions" below for a real bug this grew into.
 
 Cockpit mode is global (`normal` | `chase`), persisted via Capacitor Preferences, toggled from
 Settings. Chase mode shows a reduced field set for glancing while driving; Normal shows full
@@ -234,6 +336,28 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
   ~2 retries silently — ask the user to check the physical connection/cable.
 - **Don't scope-creep bug fixes** — the owner wants tight, single-purpose diffs. A visual fix
   shouldn't turn into a refactor of surrounding code.
+- **CSS Grid page containers sized for a fixed panel count are a real, recurring bug class.**
+  `.page-grid--settings` was hand-written for 4 panels (`grid-template-rows: repeat(2,
+  minmax(0,1fr))`) and silently grew to 9 over several sessions without anyone updating that rule.
+  CSS Grid gives content-sized *implicit* rows their full natural height first; if that already
+  consumes all the container's available space, the *explicit* `1fr` rows get squeezed to their
+  minimum (0, since `minmax(0, 1fr)` allows it) — the first 4 panels (Display/Alerts/Pi Connection/
+  Spotter Network) were rendering at **zero height and were completely inaccessible**, not just
+  visually off. Found by accident while debugging an unrelated new panel's own layout; could have
+  gone unnoticed indefinitely since the page still "looked fine" (just short by 4 panels). Fixed
+  by switching to `grid-auto-rows: minmax(0, auto)` + `overflow-y: auto` on the grid, so it scrolls
+  instead of squeezing. **If any other `page-grid--*` variant grows panels over time, check whether
+  its `grid-template-rows` still matches the actual panel count** — `page-grid--operations` in
+  particular already has quite a few cards and hasn't been audited for this specific failure mode.
+- **`overflow-y: auto` on a flex-column panel doesn't stop its children from shrinking below
+  content size** — `min-height: auto` computes to `0` for flex items inside a scroll container
+  (a well-known CSS spec gotcha), so adding `overflow-y: auto` alone to a `.cb-panel` with too much
+  content can squeeze its `.settings-row` children into overlapping garbage instead of actually
+  scrolling. The fix used throughout Settings this session: `overflow-y: auto` on the panel *and*
+  `flex-shrink: 0` on its `.settings-row` children. Copy both together, not just the overflow rule
+  — `.radar-endpoint-panel`'s original fix (Operations page) predates this discovery and only has
+  the overflow half; it happens to not need the shrink fix today, but if its content ever grows,
+  check for the same symptom.
 
 ## Recent work (most recent session, chronological)
 
@@ -529,7 +653,81 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
     clean, device-verified (Wind card, the shared Location/Conditions/Wind footer band, and the
     Atlas radar strip all render identically to before).
 
-All of the above (items 1-27) were built, `npm run build` typechecked clean, and have now been
+28. **Dashboard polish + reliability pass**: fixed the map's control-button stack (7 buttons in a
+    single column) overlapping the radar status strip on the compact dashboard card — switched to
+    a 2-column grid, also bumped from 36px to 44px touch targets. Bumped spotter/team pin markers
+    from 14px to 20px with a glow ring — the old size was functionally invisible at a glance
+    against the map (confirmed the underlying data/rendering was fine; it was a pure visibility
+    problem). Fixed a duplicate-event-ID bug in `api-provider.ts`'s `offlineSnapshot()`
+    (`evt-${now}` collided when two offline events landed in the same millisecond, dropping
+    Operations-page Events entries). Added `useResumeTick` + wired it into
+    `useAlertProducts`/`useNearbyPlaces`/`useSpotters` — `App.tsx` already dispatched a
+    `codeblack:resume` event on Capacitor foreground but nothing listened for it, so those three
+    sources could sit stale for their full poll interval after the tablet was backgrounded;
+    telemetry already self-healed correctly via `setPaused`, this brings the rest in line.
+    Hardened `ErrorBoundary` to auto-reload after an 8s countdown (with a crash-loop guard) instead
+    of requiring someone to reach over and tap a button — appropriate for a dashboard mounted in a
+    moving vehicle.
+29. **BLE telemetry bridge to the Pi** — see "The Raspberry Pi backend" section above for the full
+    writeup. Summary: the Pi already had a live, tested BLE peripheral
+    (`codeblack-ble.service`/`codeblack_ble/server.py`) that nothing on the tablet consumed. Built
+    `src/services/telemetry/ble-client.ts` and wired it into `api-provider.ts` as the *primary*
+    Pi link (HTTP stays as fallback). Verified end-to-end on real hardware: PI LINK indicator went
+    green, Wind/Location cards populated from the Pi's data, fragment reassembly confirmed correct
+    for a real 6-frame/435-byte payload.
+30. **BLE battery-drain fix** — the reconnect loop from item 29 had no backoff (10s active scan
+    every 5s, forever, whenever the Pi was unreachable, including while backgrounded) — flagged
+    after a same-day battery-drain report and fixed with exponential backoff (5s -> 90s cap) plus
+    pausing BLE entirely on Capacitor background. Not fully attributable as *the* original cause
+    (drain onset predated this code), but a real, confirmed problem in code from this session
+    regardless. A longer idle `dumpsys batterystats` check is still owed.
+31. **BLE command channel locked down + wired to real features** — see "The Raspberry Pi backend"
+    section above. Token auth, strict allowlist, rate limiting, and an audit log on the Pi side
+    (`codeblack_ble/server.py`); `sendCommand()` + a new Interior Lighting Settings panel on the
+    tablet side. Found and fixed a Pi-side bug along the way (`/run/codeblack` permissions) that
+    had been silently breaking lighting control Pi-wide, not just over BLE.
+32. **Severe-flash overlay + Night Vision mode**: `SevereFlashOverlay.tsx` — a brief (5s or tap-to-
+    dismiss) full-screen red pulse with the alert headline whenever `useAlertProducts` detects a
+    new tornado/PDS warning in the GPS-scoped feed, alongside the existing audio tone. Night Vision
+    — a new Display-panel toggle applying a CSS filter chain (`grayscale -> sepia -> hue-rotate ->
+    saturate -> brightness`) across the whole app root to dim everything toward deep red/black for
+    night chases; verified live on-device (screenshot confirms the full-app tint).
+33. **Critical Settings page bug found and fixed**: `.page-grid--settings` was hand-written for 4
+    panels and silently grew to 9 over several sessions — the first 4 panels (Display, Alerts, Pi
+    Connection, Spotter Network) were rendering at **zero height and were completely inaccessible**
+    (not just visually broken — Cockpit Mode, Night Vision, Audible Alerts, and Spotter Network
+    sign-in/out were all unreachable). See "Established conventions" above for the root cause and
+    the general pattern to watch for elsewhere. Confirmed fixed: all 9 panels now render and
+    function correctly on-device.
+34. **App-wide bug/design evaluation** — full sweep of Weather (both cockpit modes), Operations,
+    Locate, Alerts, Report, Settings via live device screenshots. Found and fixed one real bug:
+    `.map-controls button.active` (line ~5477 in `index.css`) had `background: rgba(255, 47, 64,
+    0.18)` — 82% transparent, *more* see-through than a resting-state button's `rgba(3, 5, 7,
+    0.78)`. On the Situational Map this let map road lines bleed straight through the highlighted
+    MSC/LYR buttons, most visible as a stray diagonal line crossing the button stack. Fixed to
+    `rgba(34, 4, 6, 0.9)` — matches the existing `:active` tap-state color family, stays opaque.
+    Verified via on-device zoomed screenshot before/after. Also confirmed `.page-grid--operations`
+    (flagged as unaudited in pending item #18) does NOT exhibit the Settings zero-height bug —
+    `PiEndpointPanel` renders correctly in an auto-placed implicit row. One design inconsistency
+    found and deliberately NOT auto-fixed, flagged for the owner instead: Weather Observations
+    panel shows pressure in `inHg` (converted via `mbToInHg()`) in Chase mode but raw `mb` in Normal
+    mode (`Panels.tsx` lines ~79-113) — confirmed via source read this is two intentional, separate
+    render branches, not an accidental bug, so left as a question rather than silently changed.
+35. **Animated splash/loading screen** — new `src/components/SplashScreen.tsx`, wired into
+    `main.tsx` via a `RootWithSplash` wrapper that mounts the real `App` underneath immediately (so
+    data fetching starts right away) while the splash overlays on top and self-dismisses — cosmetic
+    only, never gates real app readiness. Sequence: shield logo scales/glows in with a rotating
+    radar-sweep ring behind it, "CODE BLACK OPS" wordmark and tagline rise in, then a boot-message
+    line (`LINKING TELEMETRY` -> `CALIBRATING RADAR` -> `SITUATIONAL AWARENESS ONLINE`) cycles above
+    a filling progress bar. Auto-dismisses at 2.5s, tap-anywhere-to-skip at any time, exits with a
+    380ms fade+scale. Respects `prefers-reduced-motion` (skips to a static 500ms showing, no
+    animation). Base background color (`#070707`) intentionally matches
+    `capacitor.config.ts`'s `SplashScreen.backgroundColor` so there's no color-shift handoff from
+    Android's native launch splash. Skipped entirely for the debug `VITE_RECON_SCREEN=atlas-gl`
+    path. Verified via a burst of on-device screenshots timed across the launch sequence (native
+    splash -> mid-animation -> fully assembled state with all elements visible -> dashboard).
+
+All of the above (items 1-35) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -676,3 +874,27 @@ path (needs a real or simulated network outage to trigger).
     precip/warnings on the day this was tested), and the owner's own future plan to replace the
     Team roster's Spotter-Network-filter fallback with a real Pi/ESP32-based position feed once
     that infrastructure exists — not asked for yet, don't build until requested.
+17. **BLE bridge to the Pi** — DONE (see Recent Work #29-31): telemetry, lighting control, and a
+    locked-down command channel all verified live against real hardware. Still open: tablet-side
+    UI buttons for `start_chase_session`/`end_chase_session`/`set_storm_mode` (the commands work,
+    nothing calls them yet besides Interior Lighting's own controls); pairing/trusted-device policy
+    beyond the shared token; a longer `dumpsys batterystats` idle check to properly confirm the
+    backoff fix (item #30) resolved the drain report, not just that it fixed a real bug in
+    isolation.
+18. **Audit other `.page-grid--*` variants for the same fixed-row-count bug** that broke Settings
+    (item #33) — DONE (see Recent Work #34): `.page-grid--operations` checked and confirmed NOT
+    affected, `PiEndpointPanel` renders correctly. No other `.page-grid--*` variant has this many
+    panels, so nothing else needs the same check right now — but re-check any page-grid before
+    adding more panels to it, per the "Established conventions" writeup above.
+19. **Ryan's Spotter Network info** — owner brought this up, then said "forget it, I misunderstood."
+    Nothing to do here; not a real pending item, just documented so a future session doesn't assume
+    it's still owed.
+20. **Pressure unit inconsistency, flagged not fixed** (see Recent Work #34) — Weather Observations
+    shows `inHg` in Chase mode, raw `mb` in Normal mode. Deliberate separate code paths, not a bug.
+    Ask the owner whether this should be unified (and to which unit) before touching it.
+21. **iPad-worthy splash isn't a stand-in for a real loading gate** — the new animated splash
+    (Recent Work #35) is purely cosmetic and always dismisses on its own timer; it does NOT wait for
+    GPS fix, Pi/BLE connection, or first telemetry poll. If the owner later wants the splash to
+    reflect real startup progress (e.g. hold on "LINKING TELEMETRY" until BLE actually connects)
+    that's a deliberate follow-up, not a bug — not built that way now on purpose, to avoid ever
+    blocking the dashboard behind a flaky connection.
