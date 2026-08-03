@@ -448,8 +448,30 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       clutter filter. The plumbing is confirmed correct (no placeholder/error tiles, toggle works,
       tile fetch returns real data when called directly); only the "does colored precip actually
       show up" part is unconfirmed.
+25. **Animated the mosaic layer** — owner asked for it to loop through recent history (10-20
+    frames) 3-4 times, hold on the latest frame for ~20s, then repeat, with the earlier maxzoom fix
+    guaranteed to survive every frame transition. `getRadarTileTemplate()` became
+    `getRadarMosaicFrames()`, returning RainViewer's full `radar.past` array (13 frames on the day
+    this was tested) instead of just the latest. `AtlasMosaicLayer.ts` gained
+    `startAtlasMosaicAnimation()` — a self-contained imperative loop (same ref-driven pattern as
+    the vehicle pulse, not React state, to avoid a re-render every ~400ms) using Mapbox's
+    `RasterTileSource.setTiles()` to swap the active tile template in place. `maxzoom` is set once
+    on the source itself at creation, not per-frame, so it survives every `setTiles()` call by
+    construction.
+    - Verified with a temporary debug `console.log` (added, confirmed, then removed before commit)
+      captured live via `adb logcat` — the established method in this project for on-device JS
+      console output. Directly confirmed: all 13 frames cycle through in order and correctly wrap
+      back to frame 1 for the next loop; measured a **19.8-second gap** between the last frame of a
+      loop and the first frame of the next cycle, matching the intended 20s hold almost exactly.
+      This is airtight verification of the actual mechanism (not blocked by the "no precip today"
+      visual-confirmation gap that affects whether real echoes render correctly in the tiles
+      themselves — that part is still only confirmed via item 24's plumbing-level check).
+    - Hit real friction verifying this in the browser dev preview: repeated HMR reloads across many
+      edits this session exhausted the browser's WebGL context budget (`WEBGL_CONTEXT_LOST`),
+      unrelated to the code itself — the physical device never showed this. Don't read a dev-preview
+      WebGL error as a code regression without also checking the device.
 
-All of the above (items 1-24) were built, `npm run build` typechecked clean, and have now been
+All of the above (items 1-25) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -578,12 +600,21 @@ path (needs a real or simulated network outage to trigger).
     Twitter toggles on the severe report form (`ReportModal` in `NearbyPanel.tsx`) once that
     Discord exists. Explicitly flagged as future-only, not to build yet — no webhook URL or server
     exists to wire up.
-14. **Wide-area mosaic tile layer** — DONE (see Recent Work #24). Confirmed the plumbing is
-    correct (toggle works cleanly, no error/placeholder tiles, tile fetch returns real data) but
-    couldn't confirm actual colored precipitation renders correctly — no precip in range on a quiet
-    weather day. Worth a quick visual recheck next time there's real rain/storms anywhere in the
-    national coverage area.
+14. **Wide-area mosaic tile layer, animated loop** — DONE (see Recent Work #24, #25): static layer
+    plus the play-3x/hold-20s/repeat animation the owner asked for right after. Toggle, z-order,
+    maxzoom-survives-frame-swap, and the loop/wrap/hold timing are all confirmed correct (the loop
+    mechanics via `adb logcat`, everything else via device screenshots). The one thing still
+    unconfirmed is whether real colored precipitation actually renders right in the tiles
+    themselves — no precip in range on the day this was tested. Worth a quick visual recheck next
+    time there's real rain/storms anywhere in the national coverage area.
 15. **Single-site radar mode needs a fine-tuning pass** — owner's own words, right after the mosaic
     work: "not fully happy with it yet." No specifics given yet on what's wrong with it — this
     needs a follow-up conversation to scope (typography? color scale? controls? something else?)
-    before touching it, rather than guessing.
+    before touching it, rather than guessing. Owner explicitly said to leave this for later.
+16. **Map overlays** — owner confirmed this is next, right after the mosaic work (see the "Map
+    overlays" entry under Open Discussion Threads above for the full recommended approach — MD
+    polygon fetch is already confirmed working via `getActiveMesoscaleDiscussions()`, warning
+    polygons just need `api.weather.gov/alerts/active`'s already-discarded geometry field kept,
+    spotter pins reuse existing position data, and `AtlasMosaicLayer.ts`'s z-order pattern is a
+    directly reusable precedent for inserting new layers without fighting the existing ones). Not
+    started yet.
