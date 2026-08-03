@@ -333,10 +333,13 @@ export class HybridTelemetryProvider implements TelemetryProvider {
 
   setPaused(paused: boolean) {
     this.paused = paused;
-    if (!paused) {
+    if (paused) {
+      bleTelemetryClient.pause();
+    } else {
       this.failureCount = 0;
       this.nextPollAt = 0;
       void this.poll();
+      bleTelemetryClient.resume();
     }
   }
 
