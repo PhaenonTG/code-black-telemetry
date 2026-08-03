@@ -132,63 +132,6 @@
   white-space: nowrap;
 }
 
-.wind-panel {
-  display: grid;
-  grid-template-columns: minmax(84px, 0.85fr) minmax(0, 1.4fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  column-gap: 0.8rem;
-  align-items: center;
-}
-
-.wind-panel .cb-panel__title {
-  grid-column: 1 / -1;
-}
-
-.wind-compass--compact {
-  grid-column: 1;
-  grid-row: 2;
-  width: min(100%, 132px);
-  aspect-ratio: 1;
-  min-height: 0;
-  margin: 0 auto;
-}
-
-.wind-compass--compact span {
-  font-size: clamp(1.5rem, 2.2vw, 2.55rem);
-  line-height: 0.9;
-}
-
-.wind-compass--compact span em {
-  font-size: clamp(0.72rem, 0.75vw, 0.95rem);
-  margin-top: 0.35rem;
-}
-
-.wind-readout {
-  grid-column: 2;
-  grid-row: 2;
-  min-width: 0;
-  align-self: center;
-}
-
-.wind-readout > strong {
-  display: block;
-  font-size: clamp(2.2rem, 4.1vw, 4.6rem);
-  line-height: 0.9;
-  font-variant-numeric: tabular-nums;
-}
-
-.wind-readout > span,
-.wind-readout > div {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.wind-spark {
-  width: 100%;
-  max-height: 44px;
-}
-
 .wind-toolbar {
   grid-column: 1 / -1;
   grid-row: 3;
@@ -232,7 +175,6 @@
   .wx-panel { grid-column: 31 / 71 !important; }
   .wind-panel { grid-column: 71 / 101 !important; }
   .cockpit-primary .metric-tile strong { font-size: clamp(1.15rem, 1.4vw, 1.65rem); }
-  .wind-readout > strong { font-size: clamp(2rem, 3.6vw, 3.7rem); }
 }
 
 .sr-only {
@@ -867,75 +809,6 @@ button {
 
 .wx-panel .metric-grid strong {
   font-size: clamp(18px, 1.45vw, 27px);
-}
-
-.wind-panel {
-  display: grid;
-  grid-template-columns: minmax(88px, 0.8fr) minmax(0, 1.2fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.wind-panel .cb-panel__title,
-.wind-panel .panel-toolbar {
-  grid-column: 1 / -1;
-}
-
-.wind-compass {
-  position: relative;
-  align-self: center;
-  justify-self: center;
-  width: min(18dvh, 130px);
-  aspect-ratio: 1;
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: radial-gradient(circle, rgba(239, 68, 68, 0.12), rgba(0, 0, 0, 0.18));
-}
-
-.wind-compass span {
-  color: var(--red);
-  font: 900 clamp(18px, 1.9vw, 30px) / 1 Consolas, monospace;
-}
-
-.wind-arrow {
-  position: absolute;
-  inset: 16%;
-  transform: rotate(var(--wind-rot));
-  transition: transform 500ms cubic-bezier(.2,.8,.2,1);
-}
-
-.wind-arrow::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 0;
-  width: 0;
-  height: 0;
-  transform: translateX(-50%);
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-bottom: 28px solid var(--red);
-}
-
-.wind-readout {
-  align-self: center;
-  padding-right: 14px;
-}
-
-.wind-readout strong {
-  display: block;
-  color: var(--text);
-  font: 900 clamp(42px, 4.3vw, 74px) / 0.85 Consolas, monospace;
-  font-variant-numeric: tabular-nums;
-}
-
-.wind-readout span,
-.wind-readout div {
-  display: block;
-  color: var(--secondary);
-  font: 800 clamp(9px, 0.85vw, 13px) / 1.3 Consolas, monospace;
-  text-transform: uppercase;
 }
 
 .alert-list {
@@ -2093,108 +1966,6 @@ button {
     color: var(--cb-amber);
   }
 
-  .wind-panel {
-    grid-template-columns: minmax(138px, 0.52fr) minmax(0, 1.48fr) !important;
-    grid-template-rows: auto minmax(0, 1fr) auto !important;
-    column-gap: 18px !important;
-    align-items: center !important;
-  }
-
-  .wind-panel .cb-panel__title {
-    grid-column: 1 / -1 !important;
-  }
-
-  .wind-compass--compact {
-    width: min(21dvh, 168px) !important;
-    margin-left: var(--glance-card-pad-x) !important;
-    background: radial-gradient(circle, rgba(255,45,53,0.08) 0 38%, rgba(255,255,255,0.04) 39% 42%, transparent 43%) !important;
-  }
-
-  .wind-ring {
-    background:
-      repeating-conic-gradient(from 0deg, rgba(255,255,255,0.46) 0 1deg, transparent 1deg 15deg),
-      radial-gradient(circle, transparent 0 66%, rgba(255,255,255,0.13) 67% 69%, transparent 70%) !important;
-    opacity: 0.56 !important;
-    animation: none !important;
-  }
-
-  .wind-ring::before,
-  .wind-ring::after {
-    opacity: 0.72 !important;
-  }
-
-  .wind-arrow {
-    inset: 18% !important;
-  }
-
-  .wind-arrow::before {
-    bottom: 13% !important;
-    border-left-width: 8px !important;
-    border-right-width: 8px !important;
-    border-bottom-width: 30px !important;
-    filter: drop-shadow(0 0 8px rgba(255, 45, 53, 0.7)) !important;
-  }
-
-  .wind-compass--compact span {
-    transform: translateY(18px);
-    color: var(--cb-text) !important;
-    font: 900 clamp(19px, 1.55vw, 30px) / 0.9 "Consolas", monospace !important;
-    letter-spacing: 0.04em !important;
-  }
-
-  .wind-compass--compact span em {
-    margin-top: 7px !important;
-    color: var(--cb-muted) !important;
-    font-size: clamp(10px, 0.7vw, 13px) !important;
-  }
-
-  .wind-readout {
-    display: grid !important;
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
-    align-items: center;
-    column-gap: 14px;
-    row-gap: 5px;
-    padding: 8px 22px 6px 0 !important;
-  }
-
-  .wind-readout > strong {
-    grid-row: 1 / 3;
-    font-size: clamp(58px, 4.6vw, 88px) !important;
-    line-height: 0.82 !important;
-  }
-
-  .wind-readout > span {
-    align-self: end;
-    font-size: clamp(12px, 0.86vw, 15px) !important;
-    line-height: 1.18 !important;
-  }
-
-  .wind-gust {
-    color: var(--cb-text) !important;
-    font-size: clamp(14px, 1vw, 18px) !important;
-  }
-
-  .wind-gust--missing {
-    color: var(--cb-muted) !important;
-    font-size: clamp(11px, 0.78vw, 13px) !important;
-  }
-
-  .wind-trend-label {
-    grid-column: 1 / 3;
-    margin-top: 6px !important;
-    font-size: clamp(9px, 0.66vw, 11px) !important;
-  }
-
-  .wind-spark {
-    grid-column: 1 / 3;
-    width: min(100%, 260px) !important;
-    height: 42px !important;
-    margin-top: 0 !important;
-    padding: 6px !important;
-    justify-self: start;
-  }
-
   .wind-toolbar {
     display: grid !important;
     grid-template-columns: auto minmax(0, 1fr) !important;
@@ -2332,13 +2103,6 @@ button {
     grid-row: auto !important;
   }
 
-  .wind-panel {
-    grid-template-columns: minmax(96px, 0.8fr) minmax(0, 1.3fr);
-  }
-
-  .wind-compass--compact {
-    width: min(100%, 116px);
-  }
 }
 
 .atlas-recon-page {
@@ -2990,64 +2754,6 @@ button {
   font-family: "Consolas", "JetBrains Mono", monospace;
 }
 
-.wind-panel {
-  grid-template-columns: minmax(190px, 0.95fr) minmax(0, 1.2fr);
-}
-
-.wind-compass {
-  width: min(26dvh, 250px);
-}
-
-.wind-ring::before {
-  content: "N";
-  position: absolute;
-  top: 7%;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #d3d7df;
-  font: 900 12px / 1 "Consolas", monospace;
-}
-
-.wind-ring::after {
-  content: "W                         E";
-  position: absolute;
-  top: 50%;
-  left: 8%;
-  right: 8%;
-  transform: translateY(-50%);
-  color: #d3d7df;
-  white-space: pre;
-  font: 900 12px / 1 "Consolas", monospace;
-}
-
-.wind-compass span {
-  font-size: clamp(37px, 3.4vw, 60px);
-}
-
-.wind-readout {
-  padding: 20px 20px 14px 4px;
-}
-
-.wind-readout strong {
-  font-size: clamp(68px, 5.8vw, 104px);
-}
-
-.wind-trend-label {
-  margin-top: 16px;
-  color: var(--cb-muted) !important;
-  font-size: 10px !important;
-}
-
-.wind-spark {
-  width: min(100%, 320px);
-  height: clamp(48px, 6.8dvh, 74px);
-}
-
-.wind-spark text {
-  fill: var(--cb-muted);
-  font: 900 10px / 1 "Consolas", monospace;
-}
-
 .wind-toolbar {
   padding-bottom: 10px;
 }
@@ -3294,14 +3000,6 @@ button {
     font-size: clamp(16px, 1.18vw, 21px);
   }
 
-  .wind-compass {
-    width: min(24dvh, 180px);
-  }
-
-  .wind-readout strong {
-    font-size: clamp(52px, 5.1vw, 76px);
-  }
-
   .alert-pill {
     min-height: 54px;
   }
@@ -3536,14 +3234,6 @@ button {
 
   .metric-grid em {
     margin-top: 2px;
-  }
-
-  .wind-compass {
-    width: min(16dvh, 96px);
-  }
-
-  .wind-readout strong {
-    font-size: clamp(38px, 4vw, 58px);
   }
 
   .alert-list {
@@ -3963,101 +3653,6 @@ body {
 
 .metric-tile--red i {
   color: var(--red);
-}
-
-.wind-panel {
-  grid-template-columns: minmax(150px, 0.82fr) minmax(0, 1.2fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.wind-compass {
-  width: min(26dvh, 205px);
-  border: 0;
-  background: radial-gradient(circle, #050505 0 46%, rgba(255, 45, 53, 0.13) 47%, transparent 48% 100%);
-}
-
-.wind-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background:
-    repeating-conic-gradient(from 0deg, rgba(255,255,255,0.65) 0 1deg, transparent 1deg 7deg),
-    radial-gradient(circle, transparent 0 61%, rgba(255,255,255,0.1) 62% 63%, transparent 64%),
-    radial-gradient(circle, transparent 0 76%, rgba(255,45,53,0.48) 77% 78%, transparent 79%);
-  opacity: 0.72;
-  animation: compass-breathe 4s ease-in-out infinite;
-}
-
-.wind-compass span {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  color: var(--red);
-  font: 900 clamp(30px, 3vw, 52px) / 0.9 "Rajdhani", "Inter", sans-serif;
-  letter-spacing: 0.08em;
-}
-
-.wind-compass span em {
-  margin-top: 9px;
-  color: var(--secondary);
-  font: 800 clamp(14px, 1vw, 18px) / 1 "JetBrains Mono", Consolas, monospace;
-  font-style: normal;
-}
-
-.wind-arrow {
-  z-index: 2;
-  inset: 12%;
-  transform: rotate(var(--wind-rot));
-  transition: transform 620ms cubic-bezier(.16,.9,.24,1);
-}
-
-.wind-arrow::before {
-  left: 50%;
-  top: auto;
-  bottom: 9%;
-  transform: translateX(-50%);
-  border-left-width: 10px;
-  border-right-width: 10px;
-  border-bottom-width: 36px;
-  filter: drop-shadow(0 0 12px rgba(255, 45, 53, 0.72));
-}
-
-.wind-readout {
-  position: relative;
-  z-index: 1;
-  padding: 18px 18px 14px 4px;
-}
-
-.wind-readout strong {
-  font: 800 clamp(58px, 5.4vw, 96px) / 0.78 "JetBrains Mono", Consolas, monospace;
-  letter-spacing: 0.04em;
-}
-
-.wind-readout span,
-.wind-readout div {
-  color: var(--secondary);
-  font: 800 clamp(11px, 0.85vw, 14px) / 1.35 "JetBrains Mono", Consolas, monospace;
-  letter-spacing: 0.06em;
-}
-
-.wind-spark {
-  width: min(100%, 260px);
-  height: 58px;
-  margin-top: 12px;
-  padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  background: linear-gradient(180deg, rgba(255, 45, 53, 0.1), rgba(255, 45, 53, 0.025));
-}
-
-.wind-spark path {
-  fill: none;
-  stroke: var(--red);
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 0 6px rgba(255, 45, 53, 0.6));
 }
 
 .alert-list {
@@ -4550,11 +4145,6 @@ body {
   animation: pulse-dot 1.8s ease-in-out infinite;
 }
 
-@keyframes compass-breathe {
-  0%, 100% { opacity: 0.62; transform: rotate(0deg); }
-  50% { opacity: 0.9; transform: rotate(1.5deg); }
-}
-
 @keyframes warning-edge {
   0%, 100% { box-shadow: inset 0 0 0 rgba(255, 45, 53, 0), 0 0 0 rgba(255, 45, 53, 0); }
   50% { box-shadow: inset 0 0 18px rgba(255, 45, 53, 0.16), 0 0 16px rgba(255, 45, 53, 0.16); }
@@ -4612,14 +4202,6 @@ body {
   .wx-panel .metric-tile strong,
   .wx-panel .metric-grid strong {
     font-size: clamp(20px, 1.45vw, 26px);
-  }
-
-  .wind-compass {
-    width: min(22dvh, 150px);
-  }
-
-  .wind-readout strong {
-    font-size: clamp(48px, 4.8vw, 72px);
   }
 
   .bottom-dock {
@@ -4682,14 +4264,6 @@ body {
       "weather"
       "loc"
       "map";
-  }
-
-  .wind-panel {
-    grid-template-columns: minmax(150px, 0.45fr) minmax(0, 0.55fr);
-  }
-
-  .wind-compass {
-    width: min(28vw, 210px);
   }
 
   .metric-grid--wx,
@@ -4955,24 +4529,6 @@ body {
   min-height: 40px;
 }
 
-/* Wind card: the trend graph is gone — MPH is the hero, the compass only supports it. Cleanest card on the dashboard. */
-.wind-panel {
-  grid-template-columns: minmax(72px, 0.55fr) minmax(0, 1.6fr) !important;
-  row-gap: 14px !important;
-}
-
-.wind-panel .wind-compass--compact {
-  width: min(11dvh, 92px) !important;
-}
-
-.wind-panel .wind-readout {
-  padding-block: 6px;
-}
-
-.wind-panel .wind-gust {
-  margin-top: 10px;
-}
-
 /* Map: stacked, concise status — site / product / state — instead of one bullet-joined line plus a text button. */
 .atlas-radar-strip {
   flex-direction: column !important;
@@ -5168,10 +4724,6 @@ body {
 .alert-list,
 .threat-list {
   padding: var(--glance-card-pad-x) !important;
-}
-
-.wind-panel .wind-compass--compact {
-  margin: 0 0 0 var(--glance-card-pad-x) !important;
 }
 
 /* Conditions card: pressure trend arrow — small glyph riding next to the inHg value, not a
