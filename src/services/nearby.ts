@@ -192,12 +192,27 @@ const HOURS_RANK: Record<NearbyPlace["hoursStatus"], number> = {
   unknown: 2,
   closed: 3,
 };
+// For gas specifically, a real OSM opening_hours tag confirming "open" and this app's own
+// "typically 24hr" brand inference are close enough in confidence that they shouldn't out-rank
+// distance the way hospital-ER confidence should. Confirmed live this needed its own tier, not
+// just the hospital beds-tiebreak gate: a Walmart 1.2 miles out (inferred typical-open, no
+// explicit tag) lost to a Sam's Club 7.4 miles out that happened to carry a real opening_hours tag
+// resolving to "open right now" -- correct per the strict tiering below, but not what "closest
+// gas" should mean when the inferred pick is a 24-hour chain that's essentially certain to be
+// open too. Hospitals keep the strict tiering: "confirmed open ER" is worth real distance there.
+const GAS_HOURS_RANK: Record<NearbyPlace["hoursStatus"], number> = {
+  open: 0,
+  "typical-open": 0,
+  unknown: 1,
+  closed: 2,
+};
 const HOSPITAL_BEDS_TIEBREAK_MILES = 3;
 
 function bestCandidate(category: NearbyCategory, candidates: NearbyPlace[]): NearbyPlace | null {
   if (candidates.length === 0) return null;
+  const rank = category === "gas" ? GAS_HOURS_RANK : HOURS_RANK;
   const sorted = [...candidates].sort((a, b) => {
-    const hoursDelta = HOURS_RANK[a.hoursStatus] - HOURS_RANK[b.hoursStatus];
+    const hoursDelta = rank[a.hoursStatus] - rank[b.hoursStatus];
     if (hoursDelta !== 0) return hoursDelta;
     if (category === "hospital" && Math.abs(a.distanceMiles - b.distanceMiles) <= HOSPITAL_BEDS_TIEBREAK_MILES) {
       const bedsDelta = (b.beds ?? 0) - (a.beds ?? 0);
