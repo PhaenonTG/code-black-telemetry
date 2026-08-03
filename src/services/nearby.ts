@@ -23,7 +23,20 @@ type Position = { lat: number; lon: number };
 // mirror as fallback turns that into a same-attempt recovery instead of waiting out the retry
 // backoff in useNearbyPlaces.ts for a server that was never going to answer this round anyway.
 const OVERPASS_URLS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
-const SEARCH_RADIUS_METERS = 40_000; // ~25 miles
+// Gas/food don't need the same reach as hospital/lodging (nobody's driving 25 miles for fast
+// food, but a rural ER search genuinely can need that range) -- confirmed live this also matters
+// for reliability, not just relevance: the combined single request across all 4 categories at a
+// flat 25mi pulled in 100+ gas candidates and enough restaurants to make the query itself so heavy
+// it 504'd on the primary Overpass instance AND blew through this client's own 15s timeout on the
+// fallback mirror, so the whole card failed even though 3 of 4 categories would've resolved fine
+// on their own. Split into one lighter request per category (below) so a slow/failed category
+// doesn't take the other three down with it.
+const CATEGORY_RADIUS_METERS: Record<NearbyCategory, number> = {
+  gas: 16_000, // ~10 mi
+  hospital: 40_000, // ~25 mi
+  lodging: 40_000, // ~25 mi
+  food: 16_000, // ~10 mi
+};
 
 // Hospital: restrict to amenity=hospital elements explicitly tagged emergency=yes. A plain
 // "hospital" match can be misleading in the field -- confirmed live against Overpass near a test
@@ -56,15 +69,14 @@ interface OverpassNode {
   tags?: Record<string, string>;
 }
 
-function buildQuery(pos: Position): string {
-  const around = `(around:${SEARCH_RADIUS_METERS},${pos.lat.toFixed(5)},${pos.lon.toFixed(5)})`;
-  const clauses = Object.values(CATEGORY_FILTERS)
-    .flat()
+function buildCategoryQuery(category: NearbyCategory, pos: Position): string {
+  const around = `(around:${CATEGORY_RADIUS_METERS[category]},${pos.lat.toFixed(5)},${pos.lon.toFixed(5)})`;
+  const clauses = CATEGORY_FILTERS[category]
     .flatMap((filter) => [`node${filter}${around};`, `way${filter}${around};`])
     .join("\n  ");
   // "center" gives ways/relations a computed lat/lon (a plain node already has one); "body"
   // brings the tags needed to name/categorize/rank each result.
-  return `[out:json][timeout:20];\n(\n  ${clauses}\n);\nout body center;`;
+  return `[out:json][timeout:15];\n(\n  ${clauses}\n);\nout body center;`;
 }
 
 function formatAddress(tags: Record<string, string>): string {
@@ -198,7 +210,7 @@ function bestCandidate(category: NearbyCategory, candidates: NearbyPlace[]): Nea
 
 async function fetchOverpassElements(url: string, query: string): Promise<OverpassNode[]> {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 15_000);
+  const timer = window.setTimeout(() => controller.abort(), 12_000);
   try {
     const response = await fetch(url, {
       method: "POST",
@@ -214,60 +226,82 @@ async function fetchOverpassElements(url: string, query: string): Promise<Overpa
   }
 }
 
-export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<Record<NearbyCategory, NearbyPlace>>; error: string }> {
-  const query = buildQuery(pos);
-  let elements: OverpassNode[] | null = null;
-  let lastError = "";
+function elementsToPlace(category: NearbyCategory, pos: Position, elements: OverpassNode[]): NearbyPlace | null {
+  const now = new Date();
+  const candidates: NearbyPlace[] = [];
+  for (const node of elements) {
+    const tags = node.tags ?? {};
+    const name = tags.name;
+    if (!name) continue;
+    if (categoryFor(tags) !== category) continue;
+    // Nodes carry lat/lon directly; ways/relations only have it via the "center" output modifier.
+    const point = node.lat != null && node.lon != null ? { lat: node.lat, lon: node.lon } : node.center;
+    if (!point) continue;
+    const resolved = resolveOpeningHours(tags.opening_hours, now);
+    const hours = resolved.status === "unknown" ? (inferTypicalHours(category, tags) ?? resolved) : resolved;
+    const beds = Number(tags.beds);
+    candidates.push({
+      id: `${node.type}/${node.id}`,
+      category,
+      name,
+      distanceMiles: distanceMiles(pos, point),
+      lat: point.lat,
+      lon: point.lon,
+      address: formatAddress(tags),
+      phone: tags.phone || tags["contact:phone"] || "",
+      hoursStatus: hours.status,
+      hoursText: hours.text,
+      beds: Number.isFinite(beds) && beds > 0 ? beds : null,
+    });
+  }
+  return bestCandidate(category, candidates);
+}
+
+async function fetchCategoryPlace(category: NearbyCategory, pos: Position): Promise<NearbyPlace | null> {
+  const query = buildCategoryQuery(category, pos);
+  let lastError: unknown;
   for (const url of OVERPASS_URLS) {
     try {
-      elements = await fetchOverpassElements(url, query);
-      break;
+      const elements = await fetchOverpassElements(url, query);
+      return elementsToPlace(category, pos, elements);
     } catch (error) {
-      lastError = error instanceof Error ? error.message : "Nearby lookup failed";
+      lastError = error;
     }
   }
-  if (elements == null) return { places: {}, error: lastError || "Nearby lookup failed" };
+  throw lastError instanceof Error ? lastError : new Error("Nearby lookup failed");
+}
 
-  try {
-    const now = new Date();
-    const candidatesByCategory: Record<NearbyCategory, NearbyPlace[]> = { gas: [], hospital: [], lodging: [], food: [] };
+const REQUEST_STAGGER_MS = 350; // overpass-api.de's own usage policy caps concurrent requests per
+// IP at 2 -- four truly simultaneous requests were confirmed live to make some of them fail
+// outright (not slow, just rejected) even though each one alone succeeds fine. A short stagger
+// keeps this under that ceiling without meaningfully lengthening the total wait.
 
-    for (const node of elements) {
-      const tags = node.tags ?? {};
-      const name = tags.name;
-      if (!name) continue;
-      const category = categoryFor(tags);
-      if (!category) continue;
-      // Nodes carry lat/lon directly; ways/relations only have it via the "center" output modifier.
-      const point = node.lat != null && node.lon != null ? { lat: node.lat, lon: node.lon } : node.center;
-      if (!point) continue;
-      const distance = distanceMiles(pos, point);
-      const resolved = resolveOpeningHours(tags.opening_hours, now);
-      const hours = resolved.status === "unknown" ? (inferTypicalHours(category, tags) ?? resolved) : resolved;
-      const beds = Number(tags.beds);
-      candidatesByCategory[category].push({
-        id: `${node.type}/${node.id}`,
-        category,
-        name,
-        distanceMiles: distance,
-        lat: point.lat,
-        lon: point.lon,
-        address: formatAddress(tags),
-        phone: tags.phone || tags["contact:phone"] || "",
-        hoursStatus: hours.status,
-        hoursText: hours.text,
-        beds: Number.isFinite(beds) && beds > 0 ? beds : null,
-      });
+export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<Record<NearbyCategory, NearbyPlace>>; error: string }> {
+  const categories = Object.keys(CATEGORY_FILTERS) as NearbyCategory[];
+  const pending = categories.map((category, index) =>
+    new Promise<NearbyPlace | null>((resolve, reject) => {
+      window.setTimeout(() => {
+        fetchCategoryPlace(category, pos).then(resolve, reject);
+      }, index * REQUEST_STAGGER_MS);
+    }),
+  );
+  const results = await Promise.allSettled(pending);
+
+  const places: Partial<Record<NearbyCategory, NearbyPlace>> = {};
+  let lastError = "";
+  let successCount = 0;
+  results.forEach((result, index) => {
+    const category = categories[index];
+    if (result.status === "fulfilled") {
+      successCount += 1;
+      if (result.value) places[category] = result.value;
+    } else {
+      lastError = result.reason instanceof Error ? result.reason.message : "Nearby lookup failed";
     }
+  });
 
-    const places: Partial<Record<NearbyCategory, NearbyPlace>> = {};
-    for (const category of Object.keys(candidatesByCategory) as NearbyCategory[]) {
-      const best = bestCandidate(category, candidatesByCategory[category]);
-      if (best) places[category] = best;
-    }
-
-    return { places, error: "" };
-  } catch (error) {
-    return { places: {}, error: error instanceof Error ? error.message : "Nearby lookup failed" };
-  }
+  // Partial success is still useful (e.g. gas/food resolve fine, hospital times out) -- only
+  // surface an error, and only then discard everything, if every category failed outright.
+  if (successCount === 0) return { places: {}, error: lastError || "Nearby lookup failed" };
+  return { places, error: "" };
 }
