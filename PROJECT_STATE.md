@@ -470,8 +470,49 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       edits this session exhausted the browser's WebGL context budget (`WEBGL_CONTEXT_LOST`),
       unrelated to the code itself — the physical device never showed this. Don't read a dev-preview
       WebGL error as a code regression without also checking the device.
+26. **Map overlays: warning/MD polygons + personalizable Team/Chaser pins**. Researched first
+    (confirmed `api.weather.gov/alerts/active`'s `geometry` field is nullable — most watches/
+    statements are zone-based with no polygon at all, only storm-based warnings carry one — and
+    that `getActiveMesoscaleDiscussions()` already fetched and correctly parsed MD polygon geometry,
+    just discarded it after a point-in-polygon check). `AlertProduct` gained a `geometry` field, now
+    kept instead of discarded in both `getNwsAlerts()` and `getActiveMesoscaleDiscussions()`.
+    - New `map/AtlasAlertsLayer.ts`: fill+outline for storm-based warnings (red), separate dashed
+      muted-white outline-only layer for MDs (a discussion, not yet a warning — deliberately
+      distinct from a real warning at a glance).
+    - Expanded scope mid-build per the owner: a **Team** pin layer, visually distinct from generic
+      Spotter Network "Chaser" pins, with **fully personalizable color + shape** for both (native
+      `<input type="color">` plus 5 shape choices, confirmed via `AskUserQuestion` — the owner
+      explicitly wanted real color freedom over a curated palette, "I'm all about personalization").
+      Shape choice ruled out plain Mapbox `circle` layers (GL circles are, definitionally, circles)
+      without generating per-color/per-shape canvas icon images — used `mapboxgl.Marker` with a
+      CSS-styled DOM element instead (new `map/AtlasPinMarkers.ts`, a genuinely new pattern for this
+      codebase's map layers, which are otherwise all GL sources/layers, not DOM markers).
+    - "Team" has no dedicated data source yet — the owner's own vehicle's Pi/ESP32 GPS could
+      eventually report positions directly (e.g. over Tailscale) but that's unbuilt infrastructure.
+      Confirmed interim approach: a Settings-managed roster (`services/teamPositions.ts`'s
+      `resolveTeamPositions()`, a pure function) filters the *already-fetched* Spotter Network feed
+      into Team vs. Chasers by name/marker-ID match — deliberately isolated so swapping in a real
+      position feed later only touches this one function, not the map layer or its styling.
+    - New Settings sections: "Team Roster" (add/remove list of names/marker IDs) and "Map Pins"
+      (color picker + shape row for both Team and Chaser pins, `services/settings.ts` extended with
+      the same get/save/subscribe-triplet pattern already used for `chaserRadiusMiles`/`piEndpoint`,
+      changes apply live with no separate "Apply" step — same as the rest of this app's settings).
+    - New "LYR" button on the map opens a small popover with three independent checkboxes (Alerts,
+      Team, Chasers), all defaulting **on** — same "default visible, opt out if it's too busy"
+      philosophy as the mosaic's MSC toggle.
+    - **Verified end-to-end on-device**, not just piece-by-piece: added a real nearby spotter
+      ("Douglas Keck," visible via the Chasers card) to the Team roster from Settings, then
+      confirmed his actual map pin switched live from the default Chaser style (white circle) to
+      the default Team style (green diamond) at the same real-world position — proves the full
+      pipeline (Settings -> Preferences -> subscribe -> `resolveTeamPositions` split -> layer
+      render) is correct with real data, not just each piece in isolation. Also confirmed: the
+      Layers popover opens/toggles correctly (browser + device), Settings color/shape pickers
+      repaint the map live, no console errors with empty alerts/spotters arrays (the common case).
+      Not confirmed: whether warning/MD polygons actually render correctly, since there were no
+      active alerts with geometry on the day this was tested — same "needs real weather" gap
+      logged for the CC filter and the mosaic tiles earlier.
 
-All of the above (items 1-25) were built, `npm run build` typechecked clean, and have now been
+All of the above (items 1-26) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -611,10 +652,10 @@ path (needs a real or simulated network outage to trigger).
     work: "not fully happy with it yet." No specifics given yet on what's wrong with it — this
     needs a follow-up conversation to scope (typography? color scale? controls? something else?)
     before touching it, rather than guessing. Owner explicitly said to leave this for later.
-16. **Map overlays** — owner confirmed this is next, right after the mosaic work (see the "Map
-    overlays" entry under Open Discussion Threads above for the full recommended approach — MD
-    polygon fetch is already confirmed working via `getActiveMesoscaleDiscussions()`, warning
-    polygons just need `api.weather.gov/alerts/active`'s already-discarded geometry field kept,
-    spotter pins reuse existing position data, and `AtlasMosaicLayer.ts`'s z-order pattern is a
-    directly reusable precedent for inserting new layers without fighting the existing ones). Not
-    started yet.
+16. **Map overlays** — DONE (see Recent Work #26): warning/MD polygons, plus a Team/Chaser pin
+    system that grew bigger than originally scoped (personalizable color/shape, Settings-managed
+    team roster) per the owner's requests mid-build. End-to-end verified on-device with real data.
+    Still open: confirming polygons actually render correctly against a real active alert (no
+    precip/warnings on the day this was tested), and the owner's own future plan to replace the
+    Team roster's Spotter-Network-filter fallback with a real Pi/ESP32-based position feed once
+    that infrastructure exists — not asked for yet, don't build until requested.
