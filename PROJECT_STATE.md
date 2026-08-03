@@ -1,6 +1,7 @@
 # Code Black OPS — Project State
 
-Last updated: 2026-08-02. Written so a fresh AI assistant (or a human) can pick this project up
+Last updated: 2026-08-02 (dead-CSS cleanup, item #27). Written so a fresh AI assistant (or a human)
+can pick this project up
 cold, with no prior conversation history, and know exactly what exists, why, and what's next.
 
 ## What this is
@@ -512,7 +513,23 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       active alerts with geometry on the day this was tested — same "needs real weather" gap
       logged for the CC filter and the mosaic tiles earlier.
 
-All of the above (items 1-26) were built, `npm run build` typechecked clean, and have now been
+27. **Purged the dead compass-era Wind card CSS from `index.css`** — the pre-redesign compass gauge
+    layout (`.wind-compass`, `.wind-ring`, `.wind-arrow`, `.wind-readout`, `.wind-trend-label`,
+    `.wind-spark`, `.wind-gust`/`.wind-gust--missing`) left ~15 scattered dead rule blocks plus
+    several superseded `.wind-panel { display: grid; ... }` internal-layout blocks (fully
+    superseded by `WindCard.css`'s `.wind-panel.cockpit-card { display: flex !important; ... }`
+    override from item #19) still sitting in the file, confirmed via grep to have zero remaining
+    references in any `.tsx` file. Worked through the file region-by-region, deleting only the
+    confirmed-dead internal-layout rules while explicitly preserving live page-positioning rules
+    using the same `.wind-panel` selector (`grid-column`/`grid-row`/`grid-area` placement within
+    `page-grid--weather`) and the still-live `.wind-toolbar` class. Also removed the now-orphaned
+    `@keyframes compass-breathe` (only referenced by the deleted `.wind-ring` rule). Net: 448 lines
+    deleted, zero live rules touched (caught and fixed one near-miss over-deletion of
+    `.wind-toolbar { padding-bottom: 10px; }` before it was ever built/committed). `npm run build`
+    clean, device-verified (Wind card, the shared Location/Conditions/Wind footer band, and the
+    Atlas radar strip all render identically to before).
+
+All of the above (items 1-27) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -588,8 +605,8 @@ path (needs a real or simulated network outage to trigger).
    flagged pair has not been done.
 8. **Wind card redesign** — DONE (see Recent Work #19): 2-column grid, Peak Gust tile fills the
    space that used to be empty. Peak-gust-to-report-form wiring is also DONE (Recent Work #22).
-   Still open: purging the ~7 confirmed-dead legacy `.wind-panel`/`.wind-compass` CSS blocks found
-   in `index.css` during this work (a background task was spawned for this, not yet run).
+   The dead legacy `.wind-panel`/`.wind-compass` CSS purge flagged here is also DONE (Recent Work
+   #27) — nothing left open on this item.
 9. **Radar: real-storm verification needed** — the CC-based clutter filter (see above) showed no
     clear visual improvement on today's quiet-day data, and the raw CC product view itself looked
     unusually chaotic rather than the smooth pattern real precip normally shows. Not clear yet
