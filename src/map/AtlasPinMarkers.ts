@@ -1,6 +1,7 @@
 import mapboxgl from "mapbox-gl";
 import type { Map as MapboxMap, Marker, Popup } from "mapbox-gl";
 import type { PinShape, PinStyle } from "../services/settings";
+import { spotterAgeText } from "../services/spotters";
 
 export interface PinPoint {
   id: string;
@@ -47,7 +48,10 @@ const activePopups = new WeakMap<MapboxMap, Popup>();
 function showPinPopup(map: MapboxMap, point: PinPoint) {
   activePopups.get(map)?.remove();
   if (!point.name) return;
-  const html = `<strong>${escapeHtml(point.name)}</strong><span>${point.updatedAtText ? `Last ping ${escapeHtml(point.updatedAtText)}` : "No recent ping data"}</span>`;
+  // Computed fresh at click time (not whenever the marker last synced) so it's accurate to the
+  // moment the popup is actually being read, not stale by however long since the last data poll.
+  const age = point.updatedAtText ? spotterAgeText(point.updatedAtText) : "";
+  const html = `<strong>${escapeHtml(point.name)}</strong><span>${age ? `Last ping: ${escapeHtml(age)}` : "No recent ping data"}</span>`;
   const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, offset: 16, className: "atlas-pin-popup" })
     .setLngLat([point.lon, point.lat])
     .setHTML(html)

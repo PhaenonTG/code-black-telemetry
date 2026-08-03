@@ -155,7 +155,6 @@ fn velocity_knots_scale() -> ColorScale {
 fn codeblack_reflectivity_scale() -> ColorScale {
     DiscreteColorScale::new(vec![
         ColorScaleLevel::new(0.0, Color::rgba(0.0, 0.0, 0.0, 0.0)),
-        ColorScaleLevel::new(5.0, Color::rgb(0.0000, 1.0000, 1.0000)),
         ColorScaleLevel::new(10.0, Color::rgb(0.5294, 0.8078, 0.9216)),
         ColorScaleLevel::new(15.0, Color::rgb(0.0000, 0.0000, 1.0000)),
         ColorScaleLevel::new(20.0, Color::rgb(0.0000, 1.0000, 0.0000)),
@@ -174,16 +173,24 @@ fn codeblack_reflectivity_scale() -> ColorScale {
     .into()
 }
 
-// Cutting the color scale off below 5 dBZ (see codeblack_reflectivity_scale above) only removes
-// the weakest returns. Ground clutter, AP, and biological scatter (birds/insects) routinely read
-// well above 5 dBZ -- often 10-25 dBZ, squarely in the "light precipitation" cyan/blue/green band
-// -- so a lot of what still renders there isn't real precip. Dual-pol correlation coefficient
-// (CC) is the standard discriminator for this: real hydrometeors are highly self-similar in shape
-// pulse-to-pulse (CC > ~0.90-0.95), while non-meteorological scatter is not (CC noticeably lower).
+// Cutting the color scale off below 10 dBZ (see codeblack_reflectivity_scale above -- raised from
+// 5 dBZ, confirmed live that plenty of clear-day noise still rendered in the 5-10 dBZ band) only
+// removes the weakest returns. Ground clutter, AP, and biological scatter (birds/insects)
+// routinely read well above 10 dBZ -- often 10-25 dBZ, squarely in the "light precipitation"
+// cyan/blue/green band -- so a lot of what still renders there isn't real precip. Dual-pol
+// correlation coefficient (CC) is the standard discriminator for this: real hydrometeors are
+// highly self-similar in shape pulse-to-pulse (CC > ~0.90-0.95), while non-meteorological scatter
+// is not (CC noticeably lower). Raised from 0.85 to 0.95 -- 0.85 sits inside the range where
+// biological scatter and light/mixed-phase precip overlap and wasn't discriminating well; 0.95
+// only keeps gates confidently identified as real hydrometeors, matching the literature range this
+// same comment already called out as the target. This still won't remove hard ground clutter or
+// AP (both routinely read CC just as high as real precip -- self-similar pulse-to-pulse the same
+// way rain is -- so CC structurally can't separate them; that needs a different technique, e.g. a
+// static clutter map or a velocity/spectrum-width check, not attempted here).
 // REF and CC are collected on the same elevation cut in dual-pol VCPs, so if this sweep carries a
 // CC moment, mask out REF gates below the threshold before rendering; if it doesn't (e.g. legacy
 // non-dual-pol data), this is a no-op and REF renders exactly as before.
-const CORRELATION_CLUTTER_THRESHOLD: f32 = 0.85;
+const CORRELATION_CLUTTER_THRESHOLD: f32 = 0.95;
 
 fn apply_correlation_filter(reflectivity: &mut SweepField, sweep: &Sweep) {
     let Some(correlation) = SweepField::from_radials(sweep.radials(), Product::CorrelationCoefficient) else {

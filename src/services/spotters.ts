@@ -18,6 +18,26 @@ export interface Spotter {
 
 type Position = { lat: number; lon: number };
 
+// Both feeds hand back a raw absolute timestamp (free-text from a GR2Analyst tooltip on the public
+// feed, `report_at` on the authenticated one) -- neither is "how long ago," which is what actually
+// matters for judging a spotter's position live on the map. Confirmed against the real public feed
+// that Spotter Network does NOT appear to auto-expire stale entries on any short window: a single
+// fetch returned spotters ranging from under a minute to nearly 3 hours old, so there's no "assume
+// everyone shown is currently active" shortcut available from the feed itself -- this is the one
+// place that age gets computed, so a future staleness cue (e.g. dimming very old pins) would hook
+// in here.
+export function spotterAgeText(rawTimestamp: string): string {
+  if (!rawTimestamp) return "";
+  const then = new Date(rawTimestamp).getTime();
+  if (!Number.isFinite(then)) return rawTimestamp;
+  const minutes = (Date.now() - then) / 60_000;
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const hours = minutes / 60;
+  if (hours < 48) return `${hours.toFixed(1)} hrs`;
+  return `${(hours / 24).toFixed(1)} days`;
+}
+
 // Public, non-commercial, no-auth GRLevelX overlay feed — the same one GR2Analyst/RadarScope
 // plot spotters from. Format is NOT JSON: repeated "Object: lat,lon" / "Icon: ...,\"tooltip\"" /
 // "Text: ..." / "End:" blocks. The tooltip is a quoted string with literal "\n" (backslash-n, not
