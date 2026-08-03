@@ -314,6 +314,9 @@ function AtlasMapRadarPanel({
           setFrameIndex(0);
           setFrame(orderedFrames[0] ?? null);
           setRadarError(orderedFrames[0] ? "" : nextStatus.latestError || "");
+          // Splash screen listens for this to know real radar data has actually loaded, not just
+          // that the request resolved -- harmless no-op once the splash has unmounted its listener.
+          if (orderedFrames[0]) window.dispatchEvent(new Event("codeblack:radar-first-frame"));
         }
       } catch (error) {
         if (!cancelled) setRadarError(error instanceof Error ? error.message : "ON-DEVICE RADAR UNAVAILABLE");
