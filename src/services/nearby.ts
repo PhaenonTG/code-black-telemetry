@@ -18,33 +18,53 @@ export interface NearbyPlace {
 
 type Position = { lat: number; lon: number };
 
-const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+// The main public instance (overpass-api.de) is shared, free, and confirmed live to occasionally
+// 504 under load ("The server is probably too busy to handle your request") -- a second public
+// mirror as fallback turns that into a same-attempt recovery instead of waiting out the retry
+// backoff in useNearbyPlaces.ts for a server that was never going to answer this round anyway.
+const OVERPASS_URLS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
 const SEARCH_RADIUS_METERS = 40_000; // ~25 miles
 
-// Hospital: restrict to amenity=hospital nodes explicitly tagged emergency=yes. A plain "hospital"
-// match can be misleading in the field -- confirmed live against Overpass near a test location:
-// a rehab hospital and a couple of others are tagged emergency=no, meaning no ER, while most
-// full-service hospitals nearby (11 of 14 checked) do carry emergency=yes. Untagged/unconfirmed
-// hospitals are deliberately excluded rather than guessed at -- the point of this filter is to
-// stop showing a non-ER facility as "the hospital" during what might be a real emergency.
-const CATEGORY_QUERIES: Record<NearbyCategory, string[]> = {
-  gas: ['node["amenity"="fuel"]'],
-  hospital: ['node["amenity"="hospital"]["emergency"="yes"]'],
-  lodging: ['node["tourism"="hotel"]', 'node["tourism"="motel"]'],
-  food: ['node["amenity"="fast_food"]', 'node["amenity"="restaurant"]'],
+// Hospital: restrict to amenity=hospital elements explicitly tagged emergency=yes. A plain
+// "hospital" match can be misleading in the field -- confirmed live against Overpass near a test
+// location: a rehab hospital and a couple of others are tagged emergency=no, meaning no ER, while
+// most full-service hospitals nearby (11 of 14 checked) do carry emergency=yes. Untagged/
+// unconfirmed hospitals are deliberately excluded rather than guessed at -- the point of this
+// filter is to stop showing a non-ER facility as "the hospital" during what might be a real
+// emergency.
+//
+// Filters (not full node[...] query strings) so buildQuery can search both node AND way for each
+// -- confirmed live via Overpass that real, major, well-known hospitals get mapped as a `way`
+// (the building footprint) rather than a point node just as often as smaller ones get mapped as a
+// node. A node-only query was silently dropping those from consideration entirely (e.g. a real
+// 200-bed hospital never showing up as a candidate, losing out to a 25-bed one 8 miles farther
+// away purely because of how each happened to be digitized in OSM, not because of anything about
+// the hospitals themselves).
+const CATEGORY_FILTERS: Record<NearbyCategory, string[]> = {
+  gas: ['["amenity"="fuel"]'],
+  hospital: ['["amenity"="hospital"]["emergency"="yes"]'],
+  lodging: ['["tourism"="hotel"]', '["tourism"="motel"]'],
+  food: ['["amenity"="fast_food"]', '["amenity"="restaurant"]'],
 };
 
 interface OverpassNode {
+  type: "node" | "way" | "relation";
   id: number;
-  lat: number;
-  lon: number;
+  lat?: number;
+  lon?: number;
+  center?: { lat: number; lon: number };
   tags?: Record<string, string>;
 }
 
 function buildQuery(pos: Position): string {
   const around = `(around:${SEARCH_RADIUS_METERS},${pos.lat.toFixed(5)},${pos.lon.toFixed(5)})`;
-  const clauses = (Object.values(CATEGORY_QUERIES).flat()).map((prefix) => `${prefix}${around};`).join("\n  ");
-  return `[out:json][timeout:20];\n(\n  ${clauses}\n);\nout body;`;
+  const clauses = Object.values(CATEGORY_FILTERS)
+    .flat()
+    .flatMap((filter) => [`node${filter}${around};`, `way${filter}${around};`])
+    .join("\n  ");
+  // "center" gives ways/relations a computed lat/lon (a plain node already has one); "body"
+  // brings the tags needed to name/categorize/rank each result.
+  return `[out:json][timeout:20];\n(\n  ${clauses}\n);\nout body center;`;
 }
 
 function formatAddress(tags: Record<string, string>): string {
@@ -147,23 +167,27 @@ function categoryFor(tags: Record<string, string>): NearbyCategory | null {
 // 15-bed critical-access ER over a 400-bed trauma center a few miles out. Rank candidates instead:
 // confirmed-open beats everything (owner: "confirmed open is like ideal ideal"), closed is worst
 // (showing a closed business as the pick is actively unhelpful), and for hospitals specifically,
-// bed count breaks ties as a free, defensible proxy for capability -- OSM has no rating system,
-// but larger facilities reported via the `beds` tag are a reasonable "more capable" signal.
-// Distance is always the final tiebreaker within a tier, so this never sends someone dramatically
-// out of their way chasing a marginal upgrade.
+// bed count breaks a genuine near-tie in distance as a free, defensible proxy for capability --
+// OSM has no rating system, but larger facilities reported via the `beds` tag are a reasonable
+// "more capable" signal. Confirmed live this needs a real gate, not just "checked before
+// distance": with beds unconditionally ahead of distance, a 400-bed hospital 24 miles out beat a
+// 200-bed hospital 10 miles out for "closest ER" -- the opposite of what a critical, time-sensitive
+// lookup should ever do. Beds only breaks a tie when the distance gap is genuinely small; beyond
+// that, closer always wins outright.
 const HOURS_RANK: Record<NearbyPlace["hoursStatus"], number> = {
   open: 0,
   "typical-open": 1,
   unknown: 2,
   closed: 3,
 };
+const HOSPITAL_BEDS_TIEBREAK_MILES = 3;
 
 function bestCandidate(category: NearbyCategory, candidates: NearbyPlace[]): NearbyPlace | null {
   if (candidates.length === 0) return null;
   const sorted = [...candidates].sort((a, b) => {
     const hoursDelta = HOURS_RANK[a.hoursStatus] - HOURS_RANK[b.hoursStatus];
     if (hoursDelta !== 0) return hoursDelta;
-    if (category === "hospital") {
+    if (category === "hospital" && Math.abs(a.distanceMiles - b.distanceMiles) <= HOSPITAL_BEDS_TIEBREAK_MILES) {
       const bedsDelta = (b.beds ?? 0) - (a.beds ?? 0);
       if (bedsDelta !== 0) return bedsDelta;
     }
@@ -172,38 +196,62 @@ function bestCandidate(category: NearbyCategory, candidates: NearbyPlace[]): Nea
   return sorted[0];
 }
 
-export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<Record<NearbyCategory, NearbyPlace>>; error: string }> {
+async function fetchOverpassElements(url: string, query: string): Promise<OverpassNode[]> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 15_000);
   try {
-    const response = await fetch(OVERPASS_URL, {
+    const response = await fetch(url, {
       method: "POST",
       signal: controller.signal,
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `data=${encodeURIComponent(buildQuery(pos))}`,
+      body: `data=${encodeURIComponent(query)}`,
     });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const data = (await response.json()) as { elements?: OverpassNode[] };
+    return data.elements ?? [];
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<Record<NearbyCategory, NearbyPlace>>; error: string }> {
+  const query = buildQuery(pos);
+  let elements: OverpassNode[] | null = null;
+  let lastError = "";
+  for (const url of OVERPASS_URLS) {
+    try {
+      elements = await fetchOverpassElements(url, query);
+      break;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Nearby lookup failed";
+    }
+  }
+  if (elements == null) return { places: {}, error: lastError || "Nearby lookup failed" };
+
+  try {
     const now = new Date();
     const candidatesByCategory: Record<NearbyCategory, NearbyPlace[]> = { gas: [], hospital: [], lodging: [], food: [] };
 
-    for (const node of data.elements ?? []) {
+    for (const node of elements) {
       const tags = node.tags ?? {};
       const name = tags.name;
       if (!name) continue;
       const category = categoryFor(tags);
       if (!category) continue;
-      const distance = distanceMiles(pos, { lat: node.lat, lon: node.lon });
+      // Nodes carry lat/lon directly; ways/relations only have it via the "center" output modifier.
+      const point = node.lat != null && node.lon != null ? { lat: node.lat, lon: node.lon } : node.center;
+      if (!point) continue;
+      const distance = distanceMiles(pos, point);
       const resolved = resolveOpeningHours(tags.opening_hours, now);
       const hours = resolved.status === "unknown" ? (inferTypicalHours(category, tags) ?? resolved) : resolved;
       const beds = Number(tags.beds);
       candidatesByCategory[category].push({
-        id: `${node.id}`,
+        id: `${node.type}/${node.id}`,
         category,
         name,
         distanceMiles: distance,
-        lat: node.lat,
-        lon: node.lon,
+        lat: point.lat,
+        lon: point.lon,
         address: formatAddress(tags),
         phone: tags.phone || tags["contact:phone"] || "",
         hoursStatus: hours.status,
@@ -221,7 +269,5 @@ export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<
     return { places, error: "" };
   } catch (error) {
     return { places: {}, error: error instanceof Error ? error.message : "Nearby lookup failed" };
-  } finally {
-    window.clearTimeout(timer);
   }
 }
