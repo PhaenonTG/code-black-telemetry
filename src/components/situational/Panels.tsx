@@ -9,6 +9,7 @@ import { useWeather } from "../../hooks/useTelemetry";
 const AtlasMap = lazy(() => import("../../map/AtlasMap").then((mod) => ({ default: mod.AtlasMap })));
 import { type AlertProduct, type ExternalObservation } from "../../services/situational";
 import { type Spotter } from "../../services/spotters";
+import { subscribeAlertFocus } from "../../services/mapFocusAlert";
 import { sourceLabel, type CanonicalLocation } from "../../services/location";
 import { cardinalFromDeg, compactAge, mbToInHg, valueText } from "../../services/telemetry/quality";
 import { resolveWeatherWithFallback } from "../../services/telemetry/fallback";
@@ -148,6 +149,17 @@ export function AlertsPanel({ products, error }: { products: AlertProduct[]; err
 // Storm Threats used to show; the full pill list below that is what Alerts used to show, uncapped.
 export function AlertsFullPanel({ products, error, onOpenReport }: { products: AlertProduct[]; error: string; onOpenReport: () => void }) {
   const [selected, setSelected] = useState<AlertProduct | null>(null);
+  // Tapping a watch/warning/MD polygon on the map requests focus by id (mapFocusAlert.ts) and
+  // separately fires the existing view-all-alerts navigation event -- this just needs to open the
+  // matching product's modal once it lands here. If nothing matches (e.g. a watch polygon whose
+  // area technically doesn't include this device's point-based alert fetch), it's a silent no-op
+  // rather than a fabricated modal for a product this page never actually received.
+  useEffect(() => {
+    return subscribeAlertFocus((alertId) => {
+      const match = products.find((product) => product.id === alertId);
+      if (match) setSelected(match);
+    });
+  }, [products]);
   const watch = products.find((product) => product.type === "watch");
   const md = products.find((product) => product.type === "md");
   const warning = products.find((product) => product.type === "warning");

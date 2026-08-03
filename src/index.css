@@ -5588,6 +5588,62 @@ body {
   padding: 2px 6px;
 }
 
+/* Tap a watch/warning/MD polygon -> minimal popup -> "View Details" jumps to the full Alerts page
+   with that exact product opened. Same dark-panel styling as the pin popup above, plus a button. */
+.atlas-alert-popup .mapboxgl-popup-content {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 45, 53, 0.35);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(23, 25, 29, 0.97), rgba(7, 8, 10, 0.98));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+
+.atlas-alert-popup__body strong {
+  color: var(--text, #f8fafc);
+  font: 800 12px / 1.2 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.atlas-alert-popup__body span {
+  color: var(--muted, #8b949e);
+  font: 600 11px / 1.3 Inter, sans-serif;
+}
+
+.atlas-alert-popup__body em {
+  color: var(--cb-amber, #f4b623);
+  font: 700 10px / 1.2 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-style: normal;
+}
+
+.atlas-alert-popup__button {
+  margin-top: 4px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 45, 53, 0.5);
+  border-radius: 6px;
+  background: rgba(255, 45, 53, 0.14);
+  color: var(--cb-red, #ff2d35);
+  font: 800 10px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.atlas-alert-popup .mapboxgl-popup-tip {
+  border-top-color: rgba(23, 25, 29, 0.97) !important;
+  border-bottom-color: rgba(23, 25, 29, 0.97) !important;
+}
+
+.atlas-alert-popup .mapboxgl-popup-close-button {
+  color: var(--muted, #8b949e);
+  font-size: 16px;
+  padding: 2px 6px;
+}
+
 .settings-roster-list {
   display: flex;
   flex-wrap: wrap;

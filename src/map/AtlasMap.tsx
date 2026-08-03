@@ -7,6 +7,7 @@ import { getRadarMosaicFrames, type AlertProduct } from "../services/situational
 import type { Spotter } from "../services/spotters";
 import { resolveTeamPositions } from "../services/teamPositions";
 import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcrumbTrail";
+import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, subscribeChaserRadiusMiles } from "../services/settings";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
 import { useTeamRoster } from "../hooks/useTeamRoster";
 import { useChaserPinStyle, useTeamPinStyle } from "../hooks/usePinStyle";
@@ -21,12 +22,17 @@ import { updateAtlasSpotterLayer } from "./AtlasSpotterLayer";
 import { tuneAtlasStyle } from "./AtlasStyleManager";
 import { updateAtlasTeamLayer } from "./AtlasTeamLayer";
 import { startAtlasVehiclePulse, updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
+import { updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRadarState, AtlasRangeRingMode } from "./types";
+import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
 // the real operating zoom for a "swoop to position" open on cold launch, rather than snapping.
 const INTRO_DURATION_MS = 2800;
 const MOSAIC_REFRESH_MS = 10 * 60_000; // RainViewer's public frames update roughly every 10 min.
+const WATCHES_REFRESH_MS = 5 * 60_000; // Watches are issued/canceled far less often than radar
+// updates, but a new one mid-chase matters -- 5 min keeps this current without hammering NWS's
+// service.
 // Owner-specified: manually moving the map pauses auto-follow and the mosaic loop for 2 minutes,
 // then both resume on their own -- long enough to actually look at something without fighting the
 // vehicle's own movement, short enough that walking away doesn't strand the map wherever it was left.
@@ -47,6 +53,11 @@ type AtlasMapProps = {
 };
 
 const EMPTY_MODIFIERS = { modifiedLayers: 0, firstSymbolLayerId: undefined as string | undefined, lastMapError: "" };
+// Stable references for the default-prop case -- a fresh `[]` literal in the destructured default
+// would otherwise be recreated on every render, changing identity and re-firing every effect keyed
+// off `alerts`/`spotters` even though nothing actually changed.
+const EMPTY_ALERTS: AlertProduct[] = [];
+const EMPTY_SPOTTERS: Spotter[] = [];
 const ATLAS_STYLE_TUNING_DISABLED = import.meta.env.VITE_ATLAS_DISABLE_STYLE_TUNE === "1";
 const ATLAS_DIAGNOSTICS_ENABLED = import.meta.env.VITE_ATLAS_DIAGNOSTICS === "1";
 const GPS_REFRESH_MAX_AGE_MS = 5_000;
@@ -97,8 +108,8 @@ export function AtlasMap({
   onRangeRingsChange,
   onOpenExpanded,
   statusLines,
-  alerts = [],
-  spotters = [],
+  alerts = EMPTY_ALERTS,
+  spotters = EMPTY_SPOTTERS,
 }: AtlasMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -135,17 +146,28 @@ export function AtlasMap({
   const mosaicFramesRef = useRef<string[]>([]);
   mosaicVisibleRef.current = mosaicVisible;
   const [alertsVisible, setAlertsVisible] = useState(true);
+  const [watches, setWatches] = useState<WatchPolygon[]>([]);
   const [teamVisible, setTeamVisible] = useState(true);
   const [chasersVisible, setChasersVisible] = useState(true);
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
   const roster = useTeamRoster();
   const teamPinStyle = useTeamPinStyle();
   const chaserPinStyle = useChaserPinStyle();
+  const [chaserRadiusMiles, setChaserRadiusMiles] = useState(DEFAULT_CHASER_RADIUS_MILES);
+  useEffect(() => {
+    const unsubscribe = subscribeChaserRadiusMiles(setChaserRadiusMiles);
+    void loadChaserRadiusMiles();
+    return () => { unsubscribe(); };
+  }, []);
   const teamPositions = useMemo(() => resolveTeamPositions(spotters, roster), [spotters, roster]);
   const chaserSpotters = useMemo(() => {
     const teamIds = new Set(teamPositions.map((member) => member.id));
-    return spotters.filter((spotter) => !teamIds.has(spotter.id));
-  }, [spotters, teamPositions]);
+    // Team is a small, deliberately-curated roster -- always shown regardless of distance. Chasers
+    // is the raw nationwide Spotter Network feed with no server-side radius filter, so without this
+    // bound every active spotter in the country renders as a pin, burying everything else on the map
+    // (including the watch/warning polygons underneath) once you zoom out even slightly.
+    return spotters.filter((spotter) => !teamIds.has(spotter.id) && spotter.distanceMiles <= chaserRadiusMiles);
+  }, [spotters, teamPositions, chaserRadiusMiles]);
 
   latestRef.current = { gps, frame, opacity, rangeRings, expanded };
 
@@ -388,6 +410,27 @@ export function AtlasMap({
   }, [alerts, alertsVisible, loaded]);
 
   useEffect(() => {
+    if (!alertsVisible) return;
+    let cancelled = false;
+    const load = async () => {
+      const polygons = await getActiveWatchPolygons();
+      if (!cancelled) setWatches(polygons);
+    };
+    void load();
+    const timer = window.setInterval(load, WATCHES_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [alertsVisible]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    updateAtlasWatchesLayer(map, watches, alerts, alertsVisible, styleInfoRef.current.firstSymbolLayerId);
+  }, [watches, alerts, alertsVisible, loaded]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
     updateAtlasTeamLayer(map, teamPositions, teamPinStyle, teamVisible);
@@ -530,7 +573,7 @@ export function AtlasMap({
             <div className="atlas-layers-popover__title">Layers</div>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={alertsVisible} onChange={() => setAlertsVisible((value) => !value)} />
-              Alerts (warnings + MD)
+              Alerts (watches + warnings + MD)
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={teamVisible} onChange={() => setTeamVisible((value) => !value)} />

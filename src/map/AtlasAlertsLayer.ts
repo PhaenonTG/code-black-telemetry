@@ -1,6 +1,7 @@
-import type { GeoJSONSource, Map } from "mapbox-gl";
+import type { GeoJSONSource, Map, MapMouseEvent } from "mapbox-gl";
 import type { AlertProduct } from "../services/situational";
 import { incrementAtlasCounter } from "./AtlasDiagnostics";
+import { showAlertPopup } from "./AtlasAlertPopup";
 
 const ATLAS_ALERTS_SOURCE = "atlas-alerts";
 const ATLAS_ALERTS_FILL_LAYER = "atlas-alerts-fill";
@@ -17,6 +18,34 @@ const RED = "#ff2d35";
 const AMBER = "#f4b623";
 const MD_COLOR = "#f4f6fa";
 
+// Latest alert data per map, keyed off the same id embedded in each GeoJSON feature's properties
+// -- the click handler below is attached once and reads this fresh on every click rather than
+// closing over whatever `alerts` was at attach time.
+const latestAlertsById = new WeakMap<Map, Record<string, AlertProduct>>();
+const clickHandlerAttached = new WeakSet<Map>();
+
+function attachAlertClickHandler(map: Map) {
+  if (clickHandlerAttached.has(map)) return;
+  clickHandlerAttached.add(map);
+  const handleClick = (event: MapMouseEvent) => {
+    const features = event.features as Array<{ properties?: Record<string, unknown> }> | undefined;
+    const id = features?.[0]?.properties?.id as string | undefined;
+    const alert = id ? latestAlertsById.get(map)?.[id] : undefined;
+    if (!alert) return;
+    showAlertPopup(map, [event.lngLat.lng, event.lngLat.lat], {
+      id: alert.id,
+      title: alert.title,
+      headline: alert.headline,
+      expires: alert.expires,
+    });
+  };
+  for (const layerId of [ATLAS_ALERTS_FILL_LAYER, ATLAS_ALERTS_LINE_LAYER, ATLAS_MD_LINE_LAYER]) {
+    map.on("click", layerId, handleClick as (event: MapMouseEvent) => void);
+    map.on("mouseenter", layerId, () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", layerId, () => { map.getCanvas().style.cursor = ""; });
+  }
+}
+
 function toFeatureCollection(alerts: AlertProduct[]) {
   return {
     type: "FeatureCollection",
@@ -32,6 +61,7 @@ function toFeatureCollection(alerts: AlertProduct[]) {
 
 export function updateAtlasAlertsLayer(map: Map, alerts: AlertProduct[], visible: boolean, beforeLayerId?: string) {
   const collection = toFeatureCollection(alerts);
+  latestAlertsById.set(map, Object.fromEntries(alerts.map((alert) => [alert.id, alert])));
 
   const source = map.getSource(ATLAS_ALERTS_SOURCE) as GeoJSONSource | undefined;
   if (source) {
@@ -84,6 +114,8 @@ export function updateAtlasAlertsLayer(map: Map, alerts: AlertProduct[], visible
     }, beforeLayerId);
     incrementAtlasCounter("layerCreations");
   }
+
+  attachAlertClickHandler(map);
 
   const visibility = visible ? "visible" : "none";
   for (const layerId of [ATLAS_ALERTS_FILL_LAYER, ATLAS_ALERTS_LINE_LAYER, ATLAS_MD_LINE_LAYER]) {
