@@ -14,6 +14,6 @@ export function updateAtlasSpotterLayer(map: MapboxMap, spotters: Spotter[], sty
     markers = {};
     spotterMarkers.set(map, markers);
   }
-  const points = spotters.map((spotter) => ({ id: spotter.id, lat: spotter.lat, lon: spotter.lon }));
+  const points = spotters.map((spotter) => ({ id: spotter.id, lat: spotter.lat, lon: spotter.lon, name: spotter.name, updatedAtText: spotter.updatedAtText }));
   syncAtlasPinMarkers(map, markers, points, style, visible);
 }

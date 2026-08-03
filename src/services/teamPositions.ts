@@ -5,6 +5,7 @@ export interface TeamPosition {
   name: string;
   lat: number;
   lon: number;
+  updatedAtText: string;
 }
 
 // Interim data source: filters the already-fetched Spotter Network feed against a user-managed
@@ -18,5 +19,5 @@ export function resolveTeamPositions(spotters: Spotter[], roster: string[]): Tea
   const normalizedRoster = new Set(roster.map((entry) => entry.trim().toLowerCase()).filter(Boolean));
   return spotters
     .filter((spotter) => normalizedRoster.has(spotter.name.trim().toLowerCase()) || normalizedRoster.has(spotter.id.trim().toLowerCase()))
-    .map((spotter) => ({ id: spotter.id, name: spotter.name, lat: spotter.lat, lon: spotter.lon }));
+    .map((spotter) => ({ id: spotter.id, name: spotter.name, lat: spotter.lat, lon: spotter.lon, updatedAtText: spotter.updatedAtText }));
 }
