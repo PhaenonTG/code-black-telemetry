@@ -21,12 +21,31 @@ const SHAPE_CLIP_PATH: Partial<Record<PinShape, string>> = {
   star: "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)",
 };
 
-function applyPinStyle(el: HTMLDivElement, style: PinStyle) {
-  el.style.width = "20px";
-  el.style.height = "20px";
+// Nationwide zoom-out (checking the whole country at a glance) used to render every pin at the same
+// 20px size as a close-in chase view, which -- combined with hundreds of active nationwide spotters
+// -- turned into a wall of solid dots. Pins now shrink continuously with zoom: full size at the
+// zoom level you'd actually be chasing at, down to a small dot for a nationwide overview, with the
+// border/glow scaled down proportionally so they don't dominate the shrunken dot.
+const MIN_PIN_SIZE_PX = 7;
+const MAX_PIN_SIZE_PX = 20;
+const ZOOM_AT_MIN_SIZE = 3; // world/nationwide overview
+const ZOOM_AT_MAX_SIZE = 9; // local chase-range view
+
+function pinSizeForZoom(zoom: number) {
+  const t = (zoom - ZOOM_AT_MIN_SIZE) / (ZOOM_AT_MAX_SIZE - ZOOM_AT_MIN_SIZE);
+  const clamped = Math.min(1, Math.max(0, t));
+  return MIN_PIN_SIZE_PX + clamped * (MAX_PIN_SIZE_PX - MIN_PIN_SIZE_PX);
+}
+
+function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number) {
+  const size = pinSizeForZoom(zoom);
+  const borderWidth = Math.max(1, size / 10);
+  const glowBlur = Math.max(3, size / 2);
+  el.style.width = `${size}px`;
+  el.style.height = `${size}px`;
   el.style.backgroundColor = style.color;
-  el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
-  el.style.boxShadow = `0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 10px 2px ${style.color}`;
+  el.style.border = `${borderWidth}px solid rgba(0, 0, 0, 0.65)`;
+  el.style.boxShadow = `0 0 0 ${borderWidth}px rgba(0, 0, 0, 0.35), 0 0 ${glowBlur}px ${borderWidth}px ${style.color}`;
   el.style.borderRadius = style.shape === "circle" ? "50%" : style.shape === "square" ? "2px" : "0";
   el.style.clipPath = SHAPE_CLIP_PATH[style.shape] ?? "";
   el.style.cursor = "pointer";
@@ -63,6 +82,11 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
 // attached once at marker-creation time can still read fresh name/updatedAtText on every click
 // instead of whatever was true the moment the marker was first created.
 const latestPointsByMarkers = new WeakMap<Record<string, Marker>, Record<string, PinPoint>>();
+// Zoom changes fire continuously during a pinch/drag gesture -- resizing markers is handled by a
+// single listener per markers record (attached once, guarded by this WeakSet) rather than routed
+// through React state, so a zoom gesture never triggers a component re-render just to resize dots.
+const latestStyleByMarkers = new WeakMap<Record<string, Marker>, PinStyle>();
+const zoomListenerAttached = new WeakSet<Record<string, Marker>>();
 
 // Adds/updates/removes mapboxgl.Marker instances to match `points`, keyed by id in the caller-owned
 // `markers` record (a ref in AtlasMap.tsx) so existing markers are repositioned in place rather than
@@ -71,11 +95,13 @@ const latestPointsByMarkers = new WeakMap<Record<string, Marker>, Record<string,
 // change from Settings repaint the map immediately without any extra plumbing. Tapping a pin shows
 // its name and last-ping age in a popup.
 export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Marker>, points: PinPoint[], style: PinStyle, visible: boolean) {
+  latestStyleByMarkers.set(markers, style);
   let latestPoints = latestPointsByMarkers.get(markers);
   if (!latestPoints) {
     latestPoints = {};
     latestPointsByMarkers.set(markers, latestPoints);
   }
+  const zoom = map.getZoom();
   const seen = new Set<string>();
   if (visible) {
     for (const point of points) {
@@ -94,7 +120,7 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
       } else {
         marker.setLngLat([point.lon, point.lat]);
       }
-      applyPinStyle(marker.getElement() as HTMLDivElement, style);
+      applyPinStyle(marker.getElement() as HTMLDivElement, style, zoom);
     }
   }
   for (const id of Object.keys(markers)) {
@@ -103,5 +129,17 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
       delete markers[id];
       delete latestPoints[id];
     }
+  }
+
+  if (!zoomListenerAttached.has(markers)) {
+    zoomListenerAttached.add(markers);
+    map.on("zoom", () => {
+      const currentStyle = latestStyleByMarkers.get(markers);
+      if (!currentStyle) return;
+      const currentZoom = map.getZoom();
+      for (const id of Object.keys(markers)) {
+        applyPinStyle(markers[id].getElement() as HTMLDivElement, currentStyle, currentZoom);
+      }
+    });
   }
 }
