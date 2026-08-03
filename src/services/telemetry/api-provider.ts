@@ -3,11 +3,86 @@ import type { GpsData, PowerData, SystemData, TabletLocationInput, TelemetryProv
 import { cardinalFromDeg, isFiniteNumber, readEvents, readNumber, readSensors, readString, readTimestamp } from "./quality";
 import { getPiEndpoint, loadPiEndpoint, subscribePiEndpoint } from "../settings";
 import { Preferences } from "@capacitor/preferences";
+import { bleTelemetryClient, type BleTelemetryPayload } from "./ble-client";
 
 const POLL_MS = 2000;
 const GPS_MAX_AGE_MS = 15_000;
 const LAST_SNAPSHOT_KEY = "codeblack.lastTelemetrySnapshot";
 const SIMULATOR_ALLOWED = import.meta.env.DEV && import.meta.env.VITE_ALLOW_SIMULATOR === "true";
+// BLE server-side ticks telemetry every ~1s (codeblack-ble.service, CB_BLE_TELEMETRY_SECONDS=1) --
+// a window a few ticks wide tolerates a missed notification or two without falling through to the
+// HTTP poll, which is usually unconfigured anyway since avoiding a WiFi/Starlink dependency is the
+// entire point of the BLE link.
+const BLE_FRESH_WINDOW_MS = 6_000;
+const BLE_UNHEALTHY_STATUSES = new Set(["OFFLINE", "UNAVAILABLE", "UNTRUSTED"]);
+
+function celsiusToFahrenheit(value: number | null): number | null {
+  return value == null ? null : (value * 9) / 5 + 32;
+}
+
+function bleFieldOk(status: string | null | undefined): boolean {
+  return status != null && !BLE_UNHEALTHY_STATUSES.has(status.toUpperCase());
+}
+
+function normalizeBleSnapshot(payload: BleTelemetryPayload, fallback: TelemetrySnapshot, now: number): TelemetrySnapshot {
+  const gpsOk = bleFieldOk(payload.gps?.st) && validCoord(payload.gps?.lat ?? null, payload.gps?.lon ?? null);
+  const wxOk = bleFieldOk(payload.wx?.st);
+  const windOk = bleFieldOk(payload.wind?.st);
+  return {
+    wind: windOk
+      ? {
+          speedMph: payload.wind.spd,
+          gustMph: payload.wind.gust,
+          directionDeg: payload.wind.dir,
+          directionCardinal: cardinalFromDeg(payload.wind.dir),
+          source: "vehicle",
+          updatedAt: now,
+        }
+      : fallback.wind,
+    weather: wxOk
+      ? {
+          tempF: celsiusToFahrenheit(payload.wx.t_c),
+          dewpointF: celsiusToFahrenheit(payload.wx.dp_c),
+          humidity: payload.wx.rh,
+          pressureMb: fallback.weather.pressureMb,
+          pressureTrend: fallback.weather.pressureTrend,
+          rainRateInHr: fallback.weather.rainRateInHr,
+          rainTotalIn: fallback.weather.rainTotalIn,
+          source: "vehicle",
+          sourceLabel: "VEHICLE (BLE)",
+          updatedAt: now,
+        }
+      : fallback.weather,
+    gps: gpsOk
+      ? {
+          speedMph: payload.gps.spd,
+          headingDeg: payload.gps.hdg,
+          headingCardinal: cardinalFromDeg(payload.gps.hdg),
+          elevationFt: fallback.gps.elevationFt,
+          accuracyM: fallback.gps.accuracyM,
+          hdop: fallback.gps.hdop,
+          satellites: fallback.gps.satellites,
+          hasFix: true,
+          lat: payload.gps.lat as number,
+          lon: payload.gps.lon as number,
+          source: "vehicle",
+          updatedAt: now,
+        }
+      : fallback.gps,
+    sensors: fallback.sensors,
+    power: fallback.power,
+    system: fallback.system,
+    status: {
+      apiLatencyMs: 0,
+      dataAgeSeconds: payload.age ?? 0,
+      piOnline: payload.health !== "BACKEND_OFFLINE",
+      internetOnline: fallback.status.internetOnline,
+      mode: "pi",
+      updatedAt: now,
+    },
+    events: fallback.events,
+  };
+}
 
 function validCoord(lat: number | null, lon: number | null) {
   return isFiniteNumber(lat) && isFiniteNumber(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && !(lat === 0 && lon === 0);
@@ -213,6 +288,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
   private paused = false;
   private failureCount = 0;
   private nextPollAt = 0;
+  private lastBleAt = 0;
 
   constructor() {
     void this.restoreLastSnapshot();
@@ -222,6 +298,16 @@ export class HybridTelemetryProvider implements TelemetryProvider {
       this.nextPollAt = 0;
       void this.poll();
     });
+    // BLE is the primary link to the Pi (no WiFi/Starlink dependency); HTTP polling below stays as
+    // a fallback for whenever BLE isn't connected. Whichever is currently fresh wins -- see the
+    // guard at the top of poll().
+    bleTelemetryClient.subscribe((payload) => {
+      if (!payload) return;
+      const now = Date.now();
+      this.lastBleAt = now;
+      this.publish(this.applyTabletGps(normalizeBleSnapshot(payload, this.snapshot, now)));
+    });
+    bleTelemetryClient.start();
     if (SIMULATOR_ALLOWED) {
       this.fallback.subscribe((snapshot) => {
         if (!this.snapshot.status.piOnline) {
@@ -336,6 +422,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
   private async poll() {
     if (this.paused) return;
     const now = Date.now();
+    if (now - this.lastBleAt < BLE_FRESH_WINDOW_MS) return;
     if (now < this.nextPollAt) return;
     if (!getPiEndpoint() && !import.meta.env.VITE_PI_API_BASE) {
       this.nextPollAt = now + 30_000;
@@ -372,6 +459,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
   disconnect() {
     if (this.pollTimer) clearInterval(this.pollTimer);
     this.fallback.disconnect();
+    bleTelemetryClient.stop();
     this.subscribers.clear();
   }
 }
