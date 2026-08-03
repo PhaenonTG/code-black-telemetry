@@ -5858,7 +5858,7 @@ body {
   width: 0%;
   background: linear-gradient(90deg, var(--cb-red-deep, #4c080c), var(--cb-red, #ff2d35));
   border-radius: 999px;
-  animation: cb-splash-fill 8s cubic-bezier(0.1, 0.6, 0.25, 1) 400ms forwards;
+  animation: cb-splash-fill 10.5s cubic-bezier(0.1, 0.6, 0.25, 1) 400ms forwards;
 }
 
 @keyframes cb-splash-fill {

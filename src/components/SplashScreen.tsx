@@ -8,9 +8,9 @@ import { bleTelemetryClient } from "../services/telemetry/ble-client";
 // Every stage still has its own timeout so a tablet with no Pi in range (standalone mode, the
 // common case away from the vehicle) never hangs waiting for a signal that will never come.
 const MIN_DISPLAY_MS = 1800;
-const MAX_DISPLAY_MS = 9000;
+const MAX_DISPLAY_MS = 11000;
 const BLE_TIMEOUT_MS = 4000;
-const RADAR_TIMEOUT_MS = 7000;
+const RADAR_TIMEOUT_MS = 9000;
 const EXIT_DURATION_MS = 380;
 const REDUCED_MOTION_MS = 500;
 
