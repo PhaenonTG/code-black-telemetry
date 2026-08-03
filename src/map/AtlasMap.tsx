@@ -27,6 +27,10 @@ const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (be
 // the real operating zoom for a "swoop to position" open on cold launch, rather than snapping.
 const INTRO_DURATION_MS = 2800;
 const MOSAIC_REFRESH_MS = 10 * 60_000; // RainViewer's public frames update roughly every 10 min.
+// Owner-specified: manually moving the map pauses auto-follow and the mosaic loop for 2 minutes,
+// then both resume on their own -- long enough to actually look at something without fighting the
+// vehicle's own movement, short enough that walking away doesn't strand the map wherever it was left.
+const INTERACTION_PAUSE_MS = 2 * 60_000;
 
 type AtlasMapProps = {
   gps: AtlasGpsPoint | null;
@@ -116,6 +120,13 @@ export function AtlasMap({
   const lastGpsAppliedRef = useRef<{ gps: AtlasGpsPoint; at: number } | null>(null);
   const stopPulseRef = useRef<(() => void) | null>(null);
   const stopMosaicRef = useRef<(() => void) | null>(null);
+  // Manual pan/zoom/rotate pauses auto-follow and the mosaic loop rather than fighting the user's
+  // own drag -- Infinity while actively interacting (never "expires" mid-gesture), a real
+  // timestamp once they let go so both this component and the mosaic loop can check "are we still
+  // in the post-interaction cooldown" without needing interaction state threaded through props.
+  const interactionResumeAtRef = useRef(0);
+  const interactionResumeTimerRef = useRef<number | null>(null);
+  const autoModeRef = useRef<AtlasCameraMode>("FOLLOW_NORTH");
   const [loaded, setLoaded] = useState(false);
   const styleUri = atlasStyleUri();
   const trail = useBreadcrumbTrail();
@@ -148,12 +159,26 @@ export function AtlasMap({
   const recenter = useCallback((mode: AtlasCameraMode = "FOLLOW_NORTH") => {
     const map = mapRef.current;
     if (!map || !gps) return;
+    if (interactionResumeTimerRef.current != null) {
+      window.clearTimeout(interactionResumeTimerRef.current);
+      interactionResumeTimerRef.current = null;
+    }
+    interactionResumeAtRef.current = 0;
     setCameraMode("RECENTERING");
     const camera = applyAtlasCamera(map, gps, mode, expanded, bearing);
     setBearing(camera.bearing);
     setPitch(camera.pitch);
     window.setTimeout(() => setCameraMode(mode), 650);
   }, [bearing, expanded, gps]);
+
+  // The interaction listeners below are attached once at map-construction time (mapbox instances
+  // aren't re-created on every render), so they close over whatever `recenter`/`cameraMode` were at
+  // that moment -- reading through refs instead keeps them current without re-attaching listeners.
+  const recenterRef = useRef(recenter);
+  recenterRef.current = recenter;
+  useEffect(() => {
+    if (cameraMode === "FOLLOW_NORTH" || cameraMode === "FOLLOW_HEADING") autoModeRef.current = cameraMode;
+  }, [cameraMode]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -193,8 +218,24 @@ export function AtlasMap({
         const originalEvent = typeof event === "object" && event !== null && "originalEvent" in event ? (event as { originalEvent?: Event }).originalEvent : undefined;
         if (!originalEvent) return;
         setCameraMode("USER_INTERACTING");
+        // Actively dragging counts as "paused" indefinitely -- the real 2-minute countdown starts
+        // once they let go (markFree), not while their finger/mouse is still on the map.
+        if (interactionResumeTimerRef.current != null) {
+          window.clearTimeout(interactionResumeTimerRef.current);
+          interactionResumeTimerRef.current = null;
+        }
+        interactionResumeAtRef.current = Infinity;
       };
-      const markFree = () => setCameraMode((mode) => mode === "USER_INTERACTING" ? "FREE" : mode);
+      const markFree = () => {
+        setCameraMode((mode) => mode === "USER_INTERACTING" ? "FREE" : mode);
+        interactionResumeAtRef.current = Date.now() + INTERACTION_PAUSE_MS;
+        if (interactionResumeTimerRef.current != null) window.clearTimeout(interactionResumeTimerRef.current);
+        interactionResumeTimerRef.current = window.setTimeout(() => {
+          interactionResumeAtRef.current = 0;
+          interactionResumeTimerRef.current = null;
+          recenterRef.current(autoModeRef.current);
+        }, INTERACTION_PAUSE_MS);
+      };
       map.on("dragstart", markUserInteraction);
       map.on("zoomstart", markUserInteraction);
       map.on("rotatestart", markUserInteraction);
@@ -278,6 +319,7 @@ export function AtlasMap({
           () => mosaicFramesRef.current,
           () => mosaicVisibleRef.current,
           styleInfoRef.current.firstSymbolLayerId,
+          () => Date.now() < interactionResumeAtRef.current,
         );
         const radar = updateAtlasRadarLayer(map, latest.frame, latest.opacity, styleInfoRef.current.firstSymbolLayerId);
         setRadarState(radar.state);
@@ -298,6 +340,10 @@ export function AtlasMap({
       stopPulseRef.current = null;
       stopMosaicRef.current?.();
       stopMosaicRef.current = null;
+      if (interactionResumeTimerRef.current != null) {
+        window.clearTimeout(interactionResumeTimerRef.current);
+        interactionResumeTimerRef.current = null;
+      }
       const map = mapRef.current;
       if (map) {
         map.remove();
@@ -464,47 +510,51 @@ export function AtlasMap({
     ? `${mapState}${loaded ? "" : " LOADING"} c${canvasCount} r${renderCount} i${idleCount} ${pixelSample}`
     : `${mapState}${loaded ? "" : " LOADING"}`;
 
+  const followLabel = cameraMode === "FOLLOW_HEADING" ? "HEADING UP" : cameraMode === "FREE" ? "RECENTER" : "NORTH UP";
+
   return (
     <div className="atlas-map-shell">
-      <div ref={containerRef} className="atlas-map" data-camera-mode={cameraMode} />
-      {visibleError && <div className="atlas-map-error">{visibleError}</div>}
-      <div className="radar-strip atlas-radar-strip">
-        {statusLines.map((line, index) => <span key={index}>{line}</span>)}
-      </div>
-      {onOpenExpanded && (
-        <button type="button" className="atlas-expand-button" aria-label="Expand radar" onClick={(event) => { event.stopPropagation(); onOpenExpanded(); }}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" /></svg>
-        </button>
-      )}
-      <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
-        <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) + 0.5, duration: 260 })}>+</button>
-        <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>-</button>
-        <button type="button" aria-label="Toggle follow mode" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{cameraMode === "FOLLOW_HEADING" ? "HDG" : cameraMode === "FREE" ? "REC" : "NUP"}</button>
-        <button type="button" aria-label="Toggle range rings" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RNG</button>
-        <button type="button" aria-label="Clear position trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLR</button>
-        <button type="button" aria-label="Toggle wide-area mosaic layer" className={mosaicVisible ? "active" : ""} onClick={() => setMosaicVisible((value) => !value)}>MSC</button>
-        <button type="button" aria-label="Map layers" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LYR</button>
-      </div>
-      {layersPopoverOpen && (
-        <div className="atlas-layers-popover" role="dialog" aria-label="Map layers">
-          <div className="atlas-layers-popover__title">Layers</div>
-          <label className="atlas-layers-popover__row">
-            <input type="checkbox" checked={alertsVisible} onChange={() => setAlertsVisible((value) => !value)} />
-            Alerts (warnings + MD)
-          </label>
-          <label className="atlas-layers-popover__row">
-            <input type="checkbox" checked={teamVisible} onChange={() => setTeamVisible((value) => !value)} />
-            Team
-          </label>
-          <label className="atlas-layers-popover__row">
-            <input type="checkbox" checked={chasersVisible} onChange={() => setChasersVisible((value) => !value)} />
-            Chasers
-          </label>
+      <div className="atlas-map-canvas-area">
+        <div ref={containerRef} className="atlas-map" data-camera-mode={cameraMode} />
+        {visibleError && <div className="atlas-map-error">{visibleError}</div>}
+        <div className="radar-strip atlas-radar-strip">
+          {statusLines.map((line, index) => <span key={index}>{line}</span>)}
         </div>
-      )}
-      {(visibleError || ATLAS_DIAGNOSTICS_ENABLED) && (
-        <div className="map-status atlas-map-status">{visibleError || `${statusLines.join(" - ")} - ${atlasStateLabel}`}</div>
-      )}
+        {onOpenExpanded && (
+          <button type="button" className="atlas-expand-button" aria-label="Expand radar" onClick={(event) => { event.stopPropagation(); onOpenExpanded(); }}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" /></svg>
+          </button>
+        )}
+        {layersPopoverOpen && (
+          <div className="atlas-layers-popover" role="dialog" aria-label="Map layers">
+            <div className="atlas-layers-popover__title">Layers</div>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={alertsVisible} onChange={() => setAlertsVisible((value) => !value)} />
+              Alerts (warnings + MD)
+            </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={teamVisible} onChange={() => setTeamVisible((value) => !value)} />
+              Team
+            </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={chasersVisible} onChange={() => setChasersVisible((value) => !value)} />
+              Chasers
+            </label>
+          </div>
+        )}
+        {(visibleError || ATLAS_DIAGNOSTICS_ENABLED) && (
+          <div className="map-status atlas-map-status">{visibleError || `${statusLines.join(" - ")} - ${atlasStateLabel}`}</div>
+        )}
+      </div>
+      <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
+        <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) + 0.5, duration: 260 })}>ZOOM+</button>
+        <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>ZOOM−</button>
+        <button type="button" aria-label="Toggle follow mode" title="Cycles between North-up, Heading-up, and Recenter" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
+        <button type="button" aria-label="Toggle range rings" title="Distance rings around your position" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RINGS{rangeRings !== "off" ? ` ${rangeRings}NM` : ""}</button>
+        <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
+        <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, animated" className={mosaicVisible ? "active" : ""} onClick={() => setMosaicVisible((value) => !value)}>MOSAIC</button>
+        <button type="button" aria-label="Map layers" title="Toggle alerts, team, and chaser pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
+      </div>
     </div>
   );
 }

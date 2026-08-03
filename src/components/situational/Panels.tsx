@@ -395,10 +395,14 @@ function AtlasMapRadarPanel({
   // latency — this gives a realistic margin without ever calling truly stale data "LIVE".
   const frameAgeSeconds = activeFrame ? (Date.now() - new Date(activeFrame.time).getTime()) / 1000 : null;
   const liveState = loopSeries.liveEdge && frameAgeSeconds != null && frameAgeSeconds < 900 ? "LIVE" : "CACHED";
+  // Owner: "no way of knowing if what I'm seeing is from 2 weeks ago or 2 mins ago" -- LIVE/CACHED
+  // alone doesn't say how old "cached" actually is, so the scan age is always shown alongside it,
+  // not just in the expanded radar view (which already had AGE via this same ageText helper).
+  const freshnessLine = frameAgeSeconds != null ? `${liveState} - SCAN ${ageText(Math.round(frameAgeSeconds))} AGO` : liveState;
   const mapStatusLines = radarError
     ? [activeSite, radarError]
     : activeFrame
-      ? [activeFrame.site.id, product, playbackContext?.playing ? `LOOP ${playbackContext.frameIndex + 1}/${playbackContext.frameCount}` : liveState]
+      ? [activeFrame.site.id, product, playbackContext?.playing ? `LOOP ${playbackContext.frameIndex + 1}/${playbackContext.frameCount}` : freshnessLine]
       : [activeSite, product, "LOADING"];
 
   return (
