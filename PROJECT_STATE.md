@@ -1,6 +1,7 @@
 # Code Black OPS — Project State
 
-Last updated: 2026-08-03 (chase-session/storm-mode UI, item #34+). Written so a fresh AI assistant
+Last updated: 2026-08-03 (map card closeout: watches layer, click-to-detail, chaser pin radius +
+zoom-scaling fixes, item #37). Written so a fresh AI assistant
 (or a human) can pick this project up cold, with no prior conversation history, and know exactly
 what exists, why, and what's next.
 
@@ -742,7 +743,58 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
     via scroll-within-panel (slow swipe registers, a fast one doesn't — same gesture quirk noted
     for Night Vision during the Settings bug fix).
 
-All of the above (items 1-36) were built, `npm run build` typechecked clean, and have now been
+37. **Map card closeout: NWS watch polygons, click-to-detail, and a real pin-clutter bug fix**. This
+    closes every item from the owner's original "map card" complaint list and the priority order
+    they gave afterward ("Map card first, settings redesign second, gas/food/poi layer third...").
+    - New `services/watches.ts` fetches Tornado/Severe Thunderstorm Watch polygons from NWS's own
+      ArcGIS `WWA/watch_warn_adv` service — needed because `api.weather.gov/alerts/active` returns
+      `geometry: null` for every watch-type product (confirmed live: 0 of several dozen active
+      watches carried geometry; this is documented upstream behavior, not a bug — a watch's
+      *official* area has been a county/zone list since 2006, not a polygon). The ArcGIS layer's
+      `cap_id` field exactly matches `AlertProduct.id`'s CAP URN from `api.weather.gov`, so the two
+      sources cross-reference cleanly. New `map/AtlasWatchesLayer.ts` renders it (amber fill +
+      dashed outline, same 0.16 fill-opacity as the existing warnings layer for consistent visual
+      weight), refreshed every 5 min.
+    - New generalized click-to-detail pattern, used by watches AND retrofitted onto the existing
+      warnings/MD layer (which previously had zero click interactivity): `services/mapFocusAlert.ts`
+      (tiny pub/sub singleton, same shape as `severeFlash.ts`) + `map/AtlasAlertPopup.ts` (shared
+      minimal popup with a "View Details" button). Tapping a polygon shows type + time-to-expiry;
+      "View Details" jumps to the Alerts page and auto-opens that product's modal if it's in the
+      page's own (point-scoped) product list — a silent no-op if not, rather than fabricating a
+      modal for a product the Alerts page never actually fetched (matches this project's established
+      honesty-over-guessing convention).
+    - **Real bug found and fixed while debugging why the watches layer appeared to render nothing**:
+      the layer WAS rendering correctly the whole time (confirmed via `adb logcat` debug counters
+      and a raw ArcGIS query cross-check) — it was being completely visually buried under the
+      Chaser/Team pin layers, which had **no radius bound** on the map specifically (unlike the
+      Nearby card, which already used `chaserRadiusMiles`). Zoomed out even slightly, every active
+      Spotter Network position nationwide rendered as a pin — confirmed via screenshot: 200+
+      overlapping red dots blanketing the entire eastern US. Fixed by filtering `chaserSpotters` in
+      `AtlasMap.tsx` through the existing `chaserRadiusMiles` setting (Team stays unbounded — it's a
+      small, deliberately-curated roster, not the noisy nationwide feed). Confirmed fixed: with
+      Team/Chasers toggled off, the amber watch cluster over MN/ND was clearly visible at a
+      nationwide zoom; with the radius fix in place, re-enabling pins no longer buried it.
+    - Owner asked for one more pass after seeing this on-device: pins were still a fixed 20px
+      regardless of zoom, so even the now-radius-bounded set looked oversized zoomed out.
+      `map/AtlasPinMarkers.ts` now interpolates pin size continuously with `map.getZoom()` — full
+      20px at local chase-range zoom (9+), down to 7px at a world/nationwide overview (zoom 3),
+      border/glow scaled proportionally. Applied via a single `map.on("zoom", ...)` listener per
+      markers record (imperative, guarded by a WeakSet so it's attached once) rather than routed
+      through React state, so a zoom gesture never triggers a component re-render just to resize
+      dots — matches the project's existing preference for imperative Mapbox-layer updates over
+      React-state-driven ones (same reasoning as the vehicle pulse and mosaic animation loops).
+    - Also fixed, found along the way: `AtlasMap`'s `alerts`/`spotters` props defaulted to inline
+      `[]` literals, which JS re-creates on every call — since these feed several `useEffect`
+      dependency arrays, every render (not just real data changes) was re-running those effects.
+      Hoisted to module-level `EMPTY_ALERTS`/`EMPTY_SPOTTERS` constants.
+    - Device-verified end to end: watch polygon renders at its real geometry (confirmed against a
+      live MN/ND Severe Thunderstorm Watch on the day this was tested), tap-to-popup shows correct
+      type + expiry countdown, "View Details" navigates to the Alerts page (correctly a no-op modal
+      since that specific watch wasn't in this device's point-scoped Alerts fetch — expected, not a
+      bug), chaser pin count now respects the radius setting at every zoom level, pin size visibly
+      shrinks between a local chase-range screenshot and a regional zoomed-out one.
+
+All of the above (items 1-37) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -882,13 +934,32 @@ path (needs a real or simulated network outage to trigger).
     work: "not fully happy with it yet." No specifics given yet on what's wrong with it — this
     needs a follow-up conversation to scope (typography? color scale? controls? something else?)
     before touching it, rather than guessing. Owner explicitly said to leave this for later.
-16. **Map overlays** — DONE (see Recent Work #26): warning/MD polygons, plus a Team/Chaser pin
-    system that grew bigger than originally scoped (personalizable color/shape, Settings-managed
-    team roster) per the owner's requests mid-build. End-to-end verified on-device with real data.
-    Still open: confirming polygons actually render correctly against a real active alert (no
-    precip/warnings on the day this was tested), and the owner's own future plan to replace the
-    Team roster's Spotter-Network-filter fallback with a real Pi/ESP32-based position feed once
-    that infrastructure exists — not asked for yet, don't build until requested.
+16. **Map overlays** — DONE (see Recent Work #26 + #37): warning/MD polygons, watch polygons,
+    click-to-detail on all three, a Team/Chaser pin system that grew bigger than originally scoped
+    (personalizable color/shape, Settings-managed team roster, zoom-based size scaling), and a real
+    pin-clutter bug fix (chaser pins now radius-bounded on the map like they already were on the
+    Nearby card). End-to-end verified on-device with real data, including a real active watch
+    polygon rendering at its correct geometry — the "needs a real active alert" gap from Recent Work
+    #26 is now closed. Still open: the owner's own future plan to replace the Team roster's
+    Spotter-Network-filter fallback with a real Pi/ESP32-based position feed once that
+    infrastructure exists — not asked for yet, don't build until requested.
+22. **Map card, in full** — DONE (see Recent Work #24-28, #37). This was the first item in the
+    owner's explicit priority order given 2026-08-03: "Map card first, settings redesign second,
+    gas/food/poi layer third, full page layer config screen fourth, custom teams/groups with per
+    member contact info fifth, dashboard polish pass sixth, themes seventh, custom vehicle dot
+    eighth." Every complaint from the owner's original map-card list is now resolved: controls
+    relocated below the map with full-word labels, radar scan-age visibility, mosaic
+    animation/pause-resume fix, single-site radar clutter fix, spotter pin tap-for-name/last-ping,
+    a watches layer, and click-to-detail generalized across all alert layers. **Next per the
+    owner's own order: Settings redesign into swipeable sub-pages** (owner confirmed this approach
+    via `AskUserQuestion` on 2026-08-03) — not yet started. After that: gas/food/POI layer (owner
+    wants Love's/Buc-ee's/Taco Bell/Braum's-style categorization, manageable from Settings), a
+    full-page layer config screen (replacing the "CODE BLACK/DATA/DOMINANCE" dock corner), custom
+    teams/groups with per-member contact info, a dashboard polish pass, themes, and a custom vehicle
+    dot (color/icon/image upload) last. Police-reports layer was investigated partway (owner
+    referenced Google/Apple having something similar) then explicitly deprioritized by the owner's
+    own later instruction and does not appear in this priority list — treat as dropped, not pending,
+    unless the owner brings it back up.
 17. **BLE bridge to the Pi** — DONE (see Recent Work #29-31, #36): telemetry, lighting control, a
     locked-down command channel, and now tablet-side UI for `start_chase_session`/
     `end_chase_session`/`set_storm_mode` all verified live against real hardware. Still open:
