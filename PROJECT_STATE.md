@@ -1,8 +1,8 @@
 # Code Black OPS — Project State
 
-Last updated: 2026-08-03 (app-wide evaluation + animated splash screen, item #34+). Written so a
-fresh AI assistant (or a human) can pick this project up cold, with no prior conversation history,
-and know exactly what exists, why, and what's next.
+Last updated: 2026-08-03 (chase-session/storm-mode UI, item #34+). Written so a fresh AI assistant
+(or a human) can pick this project up cold, with no prior conversation history, and know exactly
+what exists, why, and what's next.
 
 ## What this is
 
@@ -726,8 +726,23 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
     Android's native launch splash. Skipped entirely for the debug `VITE_RECON_SCREEN=atlas-gl`
     path. Verified via a burst of on-device screenshots timed across the launch sequence (native
     splash -> mid-animation -> fully assembled state with all elements visible -> dashboard).
+36. **Chase-session/storm-mode UI wired up** — closes pending item #17's "nothing calls them yet"
+    gap. `start_chase_session`, `end_chase_session`, and `set_storm_mode` already worked Pi-side
+    (this session's earlier BLE work) but had no tablet UI. New "Chase Session" panel in Settings:
+    Start/End toggle, plus 5 storm-mode preset buttons (`STORM_MODE_PRESETS` in
+    `SettingsPage.tsx`) matching `server.py`'s `STORM_MODE_PROFILES` set exactly (checked via SSH
+    against the live Pi source, not guessed) — tornado watch/severe thunderstorm warning/flash
+    flood warning/tornado warning/pds tornado warning. Both wrap the same `sendCommand` pattern
+    Interior Lighting already uses (token-gated, disabled when BLE isn't connected). Found two more
+    overflow bugs building this, both fixed: `.mode-toggle` had no `flex-shrink: 0`, so a long
+    settings-row label squeezed it until the "START"/"END" button text clipped (fixed by adding
+    `flex-shrink: 0` + `min-width: 150px`); and the new panel's content exceeds the settings grid's
+    auto row height the same way Interior Lighting's does, needing the same `overflow-y: auto` +
+    `flex-shrink: 0` combo. Verified on-device: Storm Mode buttons render fully and are reachable
+    via scroll-within-panel (slow swipe registers, a fast one doesn't — same gesture quirk noted
+    for Night Vision during the Settings bug fix).
 
-All of the above (items 1-35) were built, `npm run build` typechecked clean, and have now been
+All of the above (items 1-36) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -874,13 +889,12 @@ path (needs a real or simulated network outage to trigger).
     precip/warnings on the day this was tested), and the owner's own future plan to replace the
     Team roster's Spotter-Network-filter fallback with a real Pi/ESP32-based position feed once
     that infrastructure exists — not asked for yet, don't build until requested.
-17. **BLE bridge to the Pi** — DONE (see Recent Work #29-31): telemetry, lighting control, and a
-    locked-down command channel all verified live against real hardware. Still open: tablet-side
-    UI buttons for `start_chase_session`/`end_chase_session`/`set_storm_mode` (the commands work,
-    nothing calls them yet besides Interior Lighting's own controls); pairing/trusted-device policy
-    beyond the shared token; a longer `dumpsys batterystats` idle check to properly confirm the
-    backoff fix (item #30) resolved the drain report, not just that it fixed a real bug in
-    isolation.
+17. **BLE bridge to the Pi** — DONE (see Recent Work #29-31, #36): telemetry, lighting control, a
+    locked-down command channel, and now tablet-side UI for `start_chase_session`/
+    `end_chase_session`/`set_storm_mode` all verified live against real hardware. Still open:
+    pairing/trusted-device policy beyond the shared token; a longer `dumpsys batterystats` idle
+    check to properly confirm the backoff fix (item #30) resolved the drain report, not just that
+    it fixed a real bug in isolation.
 18. **Audit other `.page-grid--*` variants for the same fixed-row-count bug** that broke Settings
     (item #33) — DONE (see Recent Work #34): `.page-grid--operations` checked and confirmed NOT
     affected, `PiEndpointPanel` renders correctly. No other `.page-grid--*` variant has this many
