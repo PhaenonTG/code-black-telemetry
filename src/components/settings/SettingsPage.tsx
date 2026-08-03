@@ -4,9 +4,34 @@ import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { Panel } from "../situational/Panel";
 import type { CockpitMode } from "../../App";
-import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, saveChaserRadiusMiles, subscribeChaserRadiusMiles, subscribePiEndpoint } from "../../services/settings";
+import {
+  DEFAULT_CHASER_RADIUS_MILES,
+  loadChaserPinStyle,
+  loadChaserRadiusMiles,
+  loadTeamPinStyle,
+  loadTeamRoster,
+  saveChaserPinStyle,
+  saveChaserRadiusMiles,
+  saveTeamPinStyle,
+  saveTeamRoster,
+  subscribeChaserPinStyle,
+  subscribeChaserRadiusMiles,
+  subscribePiEndpoint,
+  subscribeTeamPinStyle,
+  subscribeTeamRoster,
+  type PinShape,
+  type PinStyle,
+} from "../../services/settings";
 import { emitCodeBlackSound, setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, subscribeCodeBlackSoundEnabled } from "../../services/sound";
 import { clearSpotterAccount, loadSpotterAccount, spotterNetworkLogin, subscribeSpotterAccount, type SpotterAccount } from "../../services/spotterAccount";
+
+const PIN_SHAPES: Array<{ shape: PinShape; glyph: string }> = [
+  { shape: "circle", glyph: "●" },
+  { shape: "diamond", glyph: "◆" },
+  { shape: "triangle", glyph: "▲" },
+  { shape: "star", glyph: "★" },
+  { shape: "square", glyph: "■" },
+];
 
 interface SettingsPageProps {
   cockpitMode: CockpitMode;
@@ -26,6 +51,10 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [chaserRadiusMiles, setChaserRadiusMiles] = useState(DEFAULT_CHASER_RADIUS_MILES);
   const [chaserRadiusInput, setChaserRadiusInput] = useState(String(DEFAULT_CHASER_RADIUS_MILES));
   const [chaserRadiusSaved, setChaserRadiusSaved] = useState(false);
+  const [teamRoster, setTeamRoster] = useState<string[]>([]);
+  const [teamRosterInput, setTeamRosterInput] = useState("");
+  const [teamPinStyle, setTeamPinStyle] = useState<PinStyle>({ color: "#3ddc70", shape: "diamond" });
+  const [chaserPinStyle, setChaserPinStyle] = useState<PinStyle>({ color: "#c7ccd6", shape: "circle" });
 
   useEffect(() => {
     const unsubscribe = subscribePiEndpoint(setPiEndpoint);
@@ -66,6 +95,24 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     }
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = subscribeTeamRoster(setTeamRoster);
+    void loadTeamRoster();
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeTeamPinStyle(setTeamPinStyle);
+    void loadTeamPinStyle();
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeChaserPinStyle(setChaserPinStyle);
+    void loadChaserPinStyle();
+    return unsubscribe;
+  }, []);
+
   const toggleSound = (next: boolean) => {
     setCodeBlackSoundEnabled(next);
     void Preferences.set({ key: SOUND_ENABLED_PREF_KEY, value: String(next) });
@@ -96,6 +143,17 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     setChaserRadiusInput(String(saved));
     setChaserRadiusSaved(true);
     window.setTimeout(() => setChaserRadiusSaved(false), 1600);
+  };
+
+  const addTeamMember = () => {
+    const trimmed = teamRosterInput.trim();
+    if (!trimmed || teamRoster.includes(trimmed)) return;
+    void saveTeamRoster([...teamRoster, trimmed]);
+    setTeamRosterInput("");
+  };
+
+  const removeTeamMember = (name: string) => {
+    void saveTeamRoster(teamRoster.filter((entry) => entry !== name));
   };
 
   return (
@@ -207,6 +265,66 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
             />
             <span>mi</span>
             <button className="settings-action" onClick={() => void saveRadius()}>{chaserRadiusSaved ? "Saved" : "Save"}</button>
+          </div>
+        </div>
+      </Panel>
+
+      <Panel title="Team Roster" className="settings-team-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Team Members</strong>
+            <span>Spotter Network names/marker IDs to show as "Team" (a distinct pin) instead of generic Chasers on the map. Interim source until a direct vehicle-to-vehicle position feed exists.</span>
+          </div>
+        </div>
+        <div className="settings-row settings-row--stack">
+          <input
+            className="settings-input"
+            placeholder="Name or marker ID"
+            value={teamRosterInput}
+            onChange={(event) => setTeamRosterInput(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") addTeamMember(); }}
+          />
+          <button className="settings-action" disabled={!teamRosterInput.trim()} onClick={addTeamMember}>Add</button>
+        </div>
+        {teamRoster.length > 0 && (
+          <div className="settings-roster-list">
+            {teamRoster.map((name) => (
+              <div key={name} className="settings-roster-chip">
+                <span>{name}</span>
+                <button type="button" aria-label={`Remove ${name}`} onClick={() => removeTeamMember(name)}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
+      <Panel title="Map Pins" className="settings-pins-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Team Pin</strong>
+            <span>Color and shape for teammates on the Situational Map.</span>
+          </div>
+          <div className="settings-pin-control">
+            <input type="color" value={teamPinStyle.color} onChange={(event) => void saveTeamPinStyle({ ...teamPinStyle, color: event.target.value })} />
+            <div className="settings-shape-row" aria-label="Team pin shape">
+              {PIN_SHAPES.map(({ shape, glyph }) => (
+                <button key={shape} type="button" className={teamPinStyle.shape === shape ? "active" : ""} onClick={() => void saveTeamPinStyle({ ...teamPinStyle, shape })}>{glyph}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Chaser Pin</strong>
+            <span>Color and shape for nearby Spotter Network chasers on the map.</span>
+          </div>
+          <div className="settings-pin-control">
+            <input type="color" value={chaserPinStyle.color} onChange={(event) => void saveChaserPinStyle({ ...chaserPinStyle, color: event.target.value })} />
+            <div className="settings-shape-row" aria-label="Chaser pin shape">
+              {PIN_SHAPES.map(({ shape, glyph }) => (
+                <button key={shape} type="button" className={chaserPinStyle.shape === shape ? "active" : ""} onClick={() => void saveChaserPinStyle({ ...chaserPinStyle, shape })}>{glyph}</button>
+              ))}
+            </div>
           </div>
         </div>
       </Panel>

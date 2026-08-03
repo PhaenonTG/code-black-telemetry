@@ -8,6 +8,7 @@ import { useWeather } from "../../hooks/useTelemetry";
 // deferring it to its own chunk keeps it out of the JS the app has to parse before first paint.
 const AtlasMap = lazy(() => import("../../map/AtlasMap").then((mod) => ({ default: mod.AtlasMap })));
 import { type AlertProduct, type ExternalObservation } from "../../services/situational";
+import { type Spotter } from "../../services/spotters";
 import { sourceLabel, type CanonicalLocation } from "../../services/location";
 import { cardinalFromDeg, compactAge, mbToInHg, valueText } from "../../services/telemetry/quality";
 import { resolveWeatherWithFallback } from "../../services/telemetry/fallback";
@@ -244,6 +245,8 @@ type MapRadarPanelProps = {
   onProductOverrideChange?: (product: RadarProduct) => void;
   frameOverride?: RadarFrame | null;
   playbackContext?: { playing: boolean; frameIndex: number; frameCount: number };
+  alerts?: AlertProduct[];
+  spotters?: Spotter[];
 };
 
 export function MapRadarPanel(props: MapRadarPanelProps) {
@@ -258,6 +261,8 @@ function AtlasMapRadarPanel({
   onProductOverrideChange,
   frameOverride,
   playbackContext,
+  alerts = [],
+  spotters = [],
 }: MapRadarPanelProps) {
   const [radarVisible, setRadarVisible] = useState(true);
   const [internalProduct, setInternalProduct] = useState<RadarProduct>("REF");
@@ -407,6 +412,8 @@ function AtlasMapRadarPanel({
             onRangeRingsChange={setRangeRings}
             onOpenExpanded={allowExpand ? () => setExpanded(true) : undefined}
             statusLines={mapStatusLines}
+            alerts={alerts}
+            spotters={spotters}
           />
         </Suspense>
       </div>

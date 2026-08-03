@@ -5872,3 +5872,112 @@ body {
   color: var(--amber, #f59e0b) !important;
   font-size: 10px !important;
 }
+
+.atlas-layers-popover {
+  position: absolute !important;
+  left: 60px !important;
+  bottom: 12px !important;
+  z-index: 15 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  min-width: 160px !important;
+  padding: 10px 12px !important;
+  border: 1px solid rgba(255, 45, 53, 0.35) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(180deg, rgba(23, 25, 29, 0.97), rgba(7, 8, 10, 0.98)) !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5) !important;
+}
+
+.atlas-layers-popover__title {
+  color: var(--muted, #8b949e);
+  font: 700 10px / 1.1 Consolas, "JetBrains Mono", monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.atlas-layers-popover__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text, #f8fafc);
+  font: 700 11px / 1.2 Consolas, "JetBrains Mono", monospace;
+  cursor: pointer;
+}
+
+.atlas-layers-popover__row input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--red, #ff2d35);
+}
+
+.settings-roster-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0 12px;
+}
+
+.settings-roster-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: #101012;
+  color: var(--text);
+  font: 700 11px / 1 "JetBrains Mono", Consolas, monospace;
+}
+
+.settings-roster-chip button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 45, 53, 0.16);
+  color: var(--red, #ff2d35);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.settings-pin-control {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-pin-control input[type="color"] {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  background: none;
+}
+
+.settings-shape-row {
+  display: flex;
+  gap: 4px;
+}
+
+.settings-shape-row button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: #101012;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settings-shape-row button.active {
+  border-color: rgba(255, 47, 64, 0.75);
+  background: rgba(255, 47, 64, 0.18);
+  color: #ff3044;
+}

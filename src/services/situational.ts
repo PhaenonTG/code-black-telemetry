@@ -2,6 +2,13 @@ import { distanceMiles, readNumber } from "./telemetry/quality";
 import { Preferences } from "@capacitor/preferences";
 import { mapboxReverseGeocodeUrl } from "./mapTiles";
 
+// Minimal local shape rather than pulling in @types/geojson for two field types -- Mapbox GL
+// consumes plain duck-typed GeoJSON objects, it doesn't need the official package's types.
+export interface AlertGeometry {
+  type: "Polygon" | "MultiPolygon";
+  coordinates: number[][][] | number[][][][];
+}
+
 export interface AlertProduct {
   id: string;
   type: "warning" | "watch" | "statement" | "md";
@@ -18,6 +25,10 @@ export interface AlertProduct {
   watchProbability?: string;
   relatedWatch?: string;
   insideText?: string;
+  // Present for storm-based polygon warnings (Tornado/Severe Thunderstorm/Flash Flood Warning) and
+  // MDs; absent/null for zone-based products (most watches/statements/advisories don't carry a
+  // precise shape from NWS at all -- this is normal, not a fetch failure).
+  geometry?: AlertGeometry | null;
 }
 
 export interface ExternalObservation {
@@ -107,7 +118,7 @@ function classifyAlert(event = "", headline = ""): AlertProduct["severity"] {
 export async function getNwsAlerts(pos: Position): Promise<AlertProduct[]> {
   const url = `https://api.weather.gov/alerts/active?point=${pos.lat.toFixed(4)},${pos.lon.toFixed(4)}`;
   try {
-    const data = await fetchJson<{ features?: Array<{ id: string; properties?: Record<string, string> }> }>(url);
+    const data = await fetchJson<{ features?: Array<{ id: string; properties?: Record<string, string>; geometry?: AlertGeometry | null }> }>(url);
     const products = (data.features ?? []).map((feature) => {
       const p = feature.properties ?? {};
       const severity = classifyAlert(p.event, p.headline);
@@ -128,6 +139,7 @@ export async function getNwsAlerts(pos: Position): Promise<AlertProduct[]> {
         sent: p.sent ?? "",
         expires: p.expires ?? p.ends ?? "",
         source: "NWS",
+        geometry: feature.geometry ?? null,
       } satisfies AlertProduct;
     }).filter((alert) => ["tornado", "severe", "flash-flood", "pds", "watch", "other"].includes(alert.severity)).slice(0, 8);
     await saveNativeCache(LAST_ALERTS_KEY, products);
@@ -162,11 +174,12 @@ export async function getActiveMesoscaleDiscussions(pos: Position): Promise<Aler
   const url =
     "https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/spc_mesoscale_discussion/MapServer/0/query?where=1%3D1&outFields=*&f=geojson";
   try {
-    const data = await fetchJson<{ features?: Array<{ geometry?: { coordinates?: unknown }; properties?: Record<string, unknown> }> }>(url);
+    const data = await fetchJson<{ features?: Array<{ geometry?: AlertGeometry | null; properties?: Record<string, unknown> }> }>(url);
     const matches = (data.features ?? []).filter((feature) => pointInPolygon(pos, feature.geometry?.coordinates));
     const products = await Promise.all(
     matches.slice(0, 6).map(async (feature, index) => {
       const props = feature.properties ?? {};
+      const geometry = feature.geometry ?? null;
       const number = mdNumber(props) || String(index + 1);
       const title = String(props.CONCERNING ?? props.concerning ?? props.TITLE ?? props.label ?? `Mesoscale Discussion ${number}`);
       const issued = String(props.ISSUE ?? props.ISSUED ?? props.issue ?? props.VALID ?? "");
@@ -196,6 +209,7 @@ export async function getActiveMesoscaleDiscussions(pos: Position): Promise<Aler
         watchProbability: String(props.WATCH_PROB ?? props.watch_prob ?? ""),
         relatedWatch: String(props.WATCH ?? props.watch ?? ""),
         insideText: `YOU ARE INSIDE MD ${number}`,
+        geometry,
       } satisfies AlertProduct;
     }),
     );

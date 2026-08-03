@@ -43,6 +43,119 @@ export function subscribeChaserRadiusMiles(listener: (radiusMiles: number) => vo
   return () => chaserRadiusListeners.delete(listener);
 }
 
+export type PinShape = "circle" | "diamond" | "triangle" | "star" | "square";
+
+export interface PinStyle {
+  color: string;
+  shape: PinShape;
+}
+
+const TEAM_ROSTER_KEY = "codeblack.teamRoster";
+const TEAM_PIN_STYLE_KEY = "codeblack.teamPinStyle";
+const CHASER_PIN_STYLE_KEY = "codeblack.chaserPinStyle";
+// Green is unclaimed anywhere else in this app's palette and conventionally reads as
+// "friendly/team" on a tactical map -- distinct from red (warnings + your own vehicle) and amber
+// (watches). Chasers default to a muted, informational white/grey. Both are just starting points;
+// full override lives in Settings.
+const DEFAULT_TEAM_PIN_STYLE: PinStyle = { color: "#3ddc70", shape: "diamond" };
+const DEFAULT_CHASER_PIN_STYLE: PinStyle = { color: "#c7ccd6", shape: "circle" };
+
+let currentTeamRoster: string[] = [];
+const teamRosterListeners = new Set<(roster: string[]) => void>();
+let currentTeamPinStyle: PinStyle = DEFAULT_TEAM_PIN_STYLE;
+const teamPinStyleListeners = new Set<(style: PinStyle) => void>();
+let currentChaserPinStyle: PinStyle = DEFAULT_CHASER_PIN_STYLE;
+const chaserPinStyleListeners = new Set<(style: PinStyle) => void>();
+
+export async function loadTeamRoster() {
+  const saved = await Preferences.get({ key: TEAM_ROSTER_KEY });
+  try {
+    currentTeamRoster = saved.value ? (JSON.parse(saved.value) as string[]) : [];
+  } catch {
+    currentTeamRoster = [];
+  }
+  teamRosterListeners.forEach((listener) => listener(currentTeamRoster));
+  return currentTeamRoster;
+}
+
+export async function saveTeamRoster(roster: string[]) {
+  currentTeamRoster = roster.map((entry) => entry.trim()).filter(Boolean);
+  await Preferences.set({ key: TEAM_ROSTER_KEY, value: JSON.stringify(currentTeamRoster) });
+  teamRosterListeners.forEach((listener) => listener(currentTeamRoster));
+  return currentTeamRoster;
+}
+
+export function getTeamRoster() {
+  return currentTeamRoster;
+}
+
+export function subscribeTeamRoster(listener: (roster: string[]) => void) {
+  teamRosterListeners.add(listener);
+  listener(currentTeamRoster);
+  return () => {
+    teamRosterListeners.delete(listener);
+  };
+}
+
+function loadPinStyleFactory(key: string, fallback: PinStyle, currentSetter: (style: PinStyle) => void, listeners: Set<(style: PinStyle) => void>) {
+  return async () => {
+    const saved = await Preferences.get({ key });
+    let next = fallback;
+    if (saved.value) {
+      try {
+        const parsed = JSON.parse(saved.value) as Partial<PinStyle>;
+        if (parsed.color && parsed.shape) next = { color: parsed.color, shape: parsed.shape };
+      } catch {
+        next = fallback;
+      }
+    }
+    currentSetter(next);
+    listeners.forEach((listener) => listener(next));
+    return next;
+  };
+}
+
+export const loadTeamPinStyle = loadPinStyleFactory(TEAM_PIN_STYLE_KEY, DEFAULT_TEAM_PIN_STYLE, (style) => { currentTeamPinStyle = style; }, teamPinStyleListeners);
+export const loadChaserPinStyle = loadPinStyleFactory(CHASER_PIN_STYLE_KEY, DEFAULT_CHASER_PIN_STYLE, (style) => { currentChaserPinStyle = style; }, chaserPinStyleListeners);
+
+export async function saveTeamPinStyle(style: PinStyle) {
+  currentTeamPinStyle = style;
+  await Preferences.set({ key: TEAM_PIN_STYLE_KEY, value: JSON.stringify(style) });
+  teamPinStyleListeners.forEach((listener) => listener(style));
+  return style;
+}
+
+export async function saveChaserPinStyle(style: PinStyle) {
+  currentChaserPinStyle = style;
+  await Preferences.set({ key: CHASER_PIN_STYLE_KEY, value: JSON.stringify(style) });
+  chaserPinStyleListeners.forEach((listener) => listener(style));
+  return style;
+}
+
+export function getTeamPinStyle() {
+  return currentTeamPinStyle;
+}
+
+export function getChaserPinStyle() {
+  return currentChaserPinStyle;
+}
+
+export function subscribeTeamPinStyle(listener: (style: PinStyle) => void) {
+  teamPinStyleListeners.add(listener);
+  listener(currentTeamPinStyle);
+  return () => {
+    teamPinStyleListeners.delete(listener);
+  };
+}
+
+export function subscribeChaserPinStyle(listener: (style: PinStyle) => void) {
+  chaserPinStyleListeners.add(listener);
+  listener(currentChaserPinStyle);
+  return () => {
+    chaserPinStyleListeners.delete(listener);
+  };
+}
+
 function normalizeEndpoint(value: string) {
   const trimmed = value.trim().replace(/\/$/, "");
   if (!trimmed) return "";

@@ -1,18 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagnostics } from "../services/mapTiles";
 import type { RadarFrame, RadarProduct } from "../services/radar";
-import { getRadarMosaicFrames } from "../services/situational";
+import { getRadarMosaicFrames, type AlertProduct } from "../services/situational";
+import type { Spotter } from "../services/spotters";
+import { resolveTeamPositions } from "../services/teamPositions";
 import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcrumbTrail";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
+import { useTeamRoster } from "../hooks/useTeamRoster";
+import { useChaserPinStyle, useTeamPinStyle } from "../hooks/usePinStyle";
 import { applyAtlasCamera, zoomForSpeed } from "./AtlasCameraController";
 import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstances, incrementAtlasCounter, incrementAtlasMapInstances, writeAtlasDiagnostics } from "./AtlasDiagnostics";
+import { updateAtlasAlertsLayer } from "./AtlasAlertsLayer";
 import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
 import { startAtlasMosaicAnimation } from "./AtlasMosaicLayer";
 import { updateAtlasRadarLayer, ATLAS_RADAR_LAYER, ATLAS_RADAR_SOURCE } from "./AtlasRadarLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
+import { updateAtlasSpotterLayer } from "./AtlasSpotterLayer";
 import { tuneAtlasStyle } from "./AtlasStyleManager";
+import { updateAtlasTeamLayer } from "./AtlasTeamLayer";
 import { startAtlasVehiclePulse, updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRadarState, AtlasRangeRingMode } from "./types";
 
@@ -31,6 +38,8 @@ type AtlasMapProps = {
   onRangeRingsChange: (mode: AtlasRangeRingMode) => void;
   onOpenExpanded?: () => void;
   statusLines: string[];
+  alerts?: AlertProduct[];
+  spotters?: Spotter[];
 };
 
 const EMPTY_MODIFIERS = { modifiedLayers: 0, firstSymbolLayerId: undefined as string | undefined, lastMapError: "" };
@@ -84,6 +93,8 @@ export function AtlasMap({
   onRangeRingsChange,
   onOpenExpanded,
   statusLines,
+  alerts = [],
+  spotters = [],
 }: AtlasMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -112,6 +123,18 @@ export function AtlasMap({
   const mosaicVisibleRef = useRef(mosaicVisible);
   const mosaicFramesRef = useRef<string[]>([]);
   mosaicVisibleRef.current = mosaicVisible;
+  const [alertsVisible, setAlertsVisible] = useState(true);
+  const [teamVisible, setTeamVisible] = useState(true);
+  const [chasersVisible, setChasersVisible] = useState(true);
+  const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
+  const roster = useTeamRoster();
+  const teamPinStyle = useTeamPinStyle();
+  const chaserPinStyle = useChaserPinStyle();
+  const teamPositions = useMemo(() => resolveTeamPositions(spotters, roster), [spotters, roster]);
+  const chaserSpotters = useMemo(() => {
+    const teamIds = new Set(teamPositions.map((member) => member.id));
+    return spotters.filter((spotter) => !teamIds.has(spotter.id));
+  }, [spotters, teamPositions]);
 
   latestRef.current = { gps, frame, opacity, rangeRings, expanded };
 
@@ -313,6 +336,24 @@ export function AtlasMap({
   }, [loaded, trail]);
 
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    updateAtlasAlertsLayer(map, alerts, alertsVisible, styleInfoRef.current.firstSymbolLayerId);
+  }, [alerts, alertsVisible, loaded]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    updateAtlasTeamLayer(map, teamPositions, teamPinStyle, teamVisible);
+  }, [teamPositions, teamPinStyle, teamVisible, loaded]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    updateAtlasSpotterLayer(map, chaserSpotters, chaserPinStyle, chasersVisible);
+  }, [chaserSpotters, chaserPinStyle, chasersVisible, loaded]);
+
+  useEffect(() => {
     if (!mosaicVisible) return;
     let cancelled = false;
     const load = async () => {
@@ -442,7 +483,25 @@ export function AtlasMap({
         <button type="button" aria-label="Toggle range rings" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RNG</button>
         <button type="button" aria-label="Clear position trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLR</button>
         <button type="button" aria-label="Toggle wide-area mosaic layer" className={mosaicVisible ? "active" : ""} onClick={() => setMosaicVisible((value) => !value)}>MSC</button>
+        <button type="button" aria-label="Map layers" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LYR</button>
       </div>
+      {layersPopoverOpen && (
+        <div className="atlas-layers-popover" role="dialog" aria-label="Map layers">
+          <div className="atlas-layers-popover__title">Layers</div>
+          <label className="atlas-layers-popover__row">
+            <input type="checkbox" checked={alertsVisible} onChange={() => setAlertsVisible((value) => !value)} />
+            Alerts (warnings + MD)
+          </label>
+          <label className="atlas-layers-popover__row">
+            <input type="checkbox" checked={teamVisible} onChange={() => setTeamVisible((value) => !value)} />
+            Team
+          </label>
+          <label className="atlas-layers-popover__row">
+            <input type="checkbox" checked={chasersVisible} onChange={() => setChasersVisible((value) => !value)} />
+            Chasers
+          </label>
+        </div>
+      )}
       {(visibleError || ATLAS_DIAGNOSTICS_ENABLED) && (
         <div className="map-status atlas-map-status">{visibleError || `${statusLines.join(" - ")} - ${atlasStateLabel}`}</div>
       )}
