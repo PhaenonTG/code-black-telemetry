@@ -19,11 +19,11 @@ const SHAPE_CLIP_PATH: Partial<Record<PinShape, string>> = {
 };
 
 function applyPinStyle(el: HTMLDivElement, style: PinStyle) {
-  el.style.width = "14px";
-  el.style.height = "14px";
+  el.style.width = "20px";
+  el.style.height = "20px";
   el.style.backgroundColor = style.color;
-  el.style.border = "2px solid rgba(0, 0, 0, 0.55)";
-  el.style.boxShadow = "0 0 4px rgba(0, 0, 0, 0.6)";
+  el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
+  el.style.boxShadow = `0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 10px 2px ${style.color}`;
   el.style.borderRadius = style.shape === "circle" ? "50%" : style.shape === "square" ? "2px" : "0";
   el.style.clipPath = SHAPE_CLIP_PATH[style.shape] ?? "";
 }

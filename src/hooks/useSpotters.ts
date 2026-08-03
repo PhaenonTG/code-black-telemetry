@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getAuthenticatedSpotterPositions, getNearbySpotters, type Spotter } from "../services/spotters";
 import { getSpotterAccount, subscribeSpotterAccount } from "../services/spotterAccount";
+import { useResumeTick } from "./useResumeTick";
 
 type GpsPoint = { lat: number; lon: number };
 
@@ -13,6 +14,7 @@ export function useSpotters(gps: GpsPoint | null) {
   const [spotters, setSpotters] = useState<Spotter[]>([]);
   const [error, setError] = useState("");
   const [accountId, setAccountId] = useState(() => getSpotterAccount()?.id ?? null);
+  const resumeTick = useResumeTick();
 
   useEffect(() => subscribeSpotterAccount((account) => setAccountId(account?.id ?? null)), []);
 
@@ -36,7 +38,7 @@ export function useSpotters(gps: GpsPoint | null) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [accountId, gps == null]);
+  }, [accountId, gps == null, resumeTick]);
 
   return { spotters, error };
 }

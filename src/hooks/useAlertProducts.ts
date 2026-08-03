@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getActiveMesoscaleDiscussions, getNwsAlerts, type AlertProduct } from "../services/situational";
 import { emitCodeBlackSound } from "../services/sound";
+import { useResumeTick } from "./useResumeTick";
 
 type GpsPoint = { lat: number; lon: number };
 
@@ -10,6 +11,7 @@ export function useAlertProducts(gps: GpsPoint | null) {
   const [products, setProducts] = useState<AlertProduct[]>([]);
   const [error, setError] = useState("");
   const seenSevereIds = useRef<Set<string>>(new Set());
+  const resumeTick = useResumeTick();
 
   useEffect(() => {
     if (!gps) return;
@@ -36,7 +38,7 @@ export function useAlertProducts(gps: GpsPoint | null) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [gps]);
+  }, [gps, resumeTick]);
 
   return { products, error };
 }

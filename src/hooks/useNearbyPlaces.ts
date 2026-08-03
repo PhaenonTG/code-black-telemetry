@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getNearbyPlaces, type NearbyCategory, type NearbyPlace } from "../services/nearby";
+import { useResumeTick } from "./useResumeTick";
 
 type GpsPoint = { lat: number; lon: number };
 
@@ -11,6 +12,7 @@ const RETRY_BASE_MS = 30_000; // A failed fetch backs off from here, doubling up
 export function useNearbyPlaces(gps: GpsPoint | null) {
   const [places, setPlaces] = useState<Partial<Record<NearbyCategory, NearbyPlace>>>({});
   const [error, setError] = useState("");
+  const resumeTick = useResumeTick();
 
   useEffect(() => {
     if (!gps) return;
@@ -42,7 +44,7 @@ export function useNearbyPlaces(gps: GpsPoint | null) {
     // Re-fetching on every minor GPS jitter would hammer Overpass; only whether a fix exists at
     // all (not its exact value) is in the dependency array, so refreshes come from the schedule
     // above, not from every GPS coordinate update.
-  }, [gps == null]);
+  }, [gps == null, resumeTick]);
 
   return { places, error };
 }

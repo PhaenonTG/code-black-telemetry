@@ -312,7 +312,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
         updatedAt: now,
       },
       events: [
-        ...(shouldAddEvent ? [{ id: `evt-${now}`, timestamp: now, level: "warn" as const, message }] : []),
+        ...(shouldAddEvent ? [{ id: `evt-${now}-${Math.random().toString(36).slice(2, 8)}`, timestamp: now, level: "warn" as const, message }] : []),
         ...existingEvents,
       ].slice(0, 8),
     };
