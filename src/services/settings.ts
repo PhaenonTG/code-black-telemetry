@@ -156,6 +156,66 @@ export function subscribeChaserPinStyle(listener: (style: PinStyle) => void) {
   };
 }
 
+const BLE_COMMAND_TOKEN_KEY = "codeblack.bleCommandToken";
+let currentBleCommandToken = "";
+const bleCommandTokenListeners = new Set<(token: string) => void>();
+
+export async function loadBleCommandToken() {
+  const saved = await Preferences.get({ key: BLE_COMMAND_TOKEN_KEY });
+  currentBleCommandToken = saved.value ?? "";
+  bleCommandTokenListeners.forEach((listener) => listener(currentBleCommandToken));
+  return currentBleCommandToken;
+}
+
+export async function saveBleCommandToken(value: string) {
+  currentBleCommandToken = value.trim();
+  await Preferences.set({ key: BLE_COMMAND_TOKEN_KEY, value: currentBleCommandToken });
+  bleCommandTokenListeners.forEach((listener) => listener(currentBleCommandToken));
+  return currentBleCommandToken;
+}
+
+export function getBleCommandToken() {
+  return currentBleCommandToken;
+}
+
+export function subscribeBleCommandToken(listener: (token: string) => void) {
+  bleCommandTokenListeners.add(listener);
+  listener(currentBleCommandToken);
+  return () => {
+    bleCommandTokenListeners.delete(listener);
+  };
+}
+
+const NIGHT_VISION_KEY = "codeblack.nightVisionEnabled";
+let currentNightVisionEnabled = false;
+const nightVisionListeners = new Set<(enabled: boolean) => void>();
+
+export async function loadNightVisionEnabled() {
+  const saved = await Preferences.get({ key: NIGHT_VISION_KEY });
+  currentNightVisionEnabled = saved.value === "true";
+  nightVisionListeners.forEach((listener) => listener(currentNightVisionEnabled));
+  return currentNightVisionEnabled;
+}
+
+export async function saveNightVisionEnabled(enabled: boolean) {
+  currentNightVisionEnabled = enabled;
+  await Preferences.set({ key: NIGHT_VISION_KEY, value: String(enabled) });
+  nightVisionListeners.forEach((listener) => listener(currentNightVisionEnabled));
+  return currentNightVisionEnabled;
+}
+
+export function getNightVisionEnabled() {
+  return currentNightVisionEnabled;
+}
+
+export function subscribeNightVisionEnabled(listener: (enabled: boolean) => void) {
+  nightVisionListeners.add(listener);
+  listener(currentNightVisionEnabled);
+  return () => {
+    nightVisionListeners.delete(listener);
+  };
+}
+
 function normalizeEndpoint(value: string) {
   const trimmed = value.trim().replace(/\/$/, "");
   if (!trimmed) return "";

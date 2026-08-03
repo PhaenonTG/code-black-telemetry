@@ -4776,9 +4776,17 @@ body {
 
 /* Settings — a page like Weather/Operations now (not a modal). Each section is its own .cb-panel
    via the shared Panel component, so it inherits the same card chrome as the rest of the app. */
+/* This grid was designed for 4 panels (2 explicit 1fr rows). Settings has grown to 9 panels since
+   -- CSS Grid gives content-sized implicit rows (5-9) their full natural height FIRST, leaving
+   nothing for the two explicit 1fr rows to distribute, so panels 1-4 (Display/Alerts/Pi
+   Connection/Spotter Network) were silently collapsing to 0px height and were completely
+   inaccessible. Switching every row to auto-sized (matching how the implicit rows already work)
+   plus a page-level scroll fixes it without needing to touch individual panels. */
 .page-grid--settings {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, auto);
+  overflow-y: auto;
+  align-content: start;
 }
 
 .settings-row {
@@ -5152,8 +5160,14 @@ body {
   left: 12px !important;
   display: grid !important;
   grid-auto-flow: column !important;
-  grid-template-rows: repeat(4, 36px) !important;
+  grid-template-rows: repeat(4, 44px) !important;
   gap: 6px !important;
+}
+
+/* 44px touch target, up from 36px -- these get tapped in a moving vehicle, not on a desk. */
+.atlas-map-controls button {
+  width: 44px !important;
+  height: 44px !important;
 }
 
 .settings-row--stack {
@@ -5192,6 +5206,34 @@ body {
    instead of clipping the Apply/Clear Cache controls off the bottom. */
 .radar-endpoint-panel {
   overflow-y: auto;
+}
+
+/* Interior Lighting panel has more rows (token, power, profile, color, result note) than the
+   fixed-height Settings grid cell -- same overflow fix as .radar-endpoint-panel above. overflow-y
+   alone isn't enough here though: .cb-panel is itself a flex column, and flex items default to
+   min-height:auto which computes to 0 in a scroll container -- without flex-shrink:0, the browser
+   was squeezing each row down below its content's natural height to force-fit the fixed track,
+   while the row's children (input/button/toggle) kept rendering at full size and visually spilled
+   into neighboring rows. flex-shrink:0 keeps every row at its real height and lets the panel
+   actually scroll instead. */
+.settings-lighting-panel {
+  overflow-y: auto;
+}
+
+.settings-lighting-panel .settings-row {
+  flex-shrink: 0;
+}
+
+/* Display panel gained a second row (Night Vision) alongside Cockpit Mode -- same scroll-within-
+   the-panel fix as .settings-lighting-panel above (see that comment for why overflow-y alone
+   needs flex-shrink:0 on the rows too). Scroll to see Night Vision, same as Interior Lighting's
+   Profile/Color rows. */
+.settings-display-panel {
+  overflow-y: auto;
+}
+
+.settings-display-panel .settings-row {
+  flex-shrink: 0;
 }
 
 /* Nearby card grid: column 1 (label+count) is minmax(0,1fr) with no floor, so a long closest-
@@ -5553,4 +5595,127 @@ body {
   border-color: rgba(255, 47, 64, 0.75);
   background: rgba(255, 47, 64, 0.18);
   color: #ff3044;
+}
+
+.settings-lighting-profiles {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.settings-lighting-profiles button {
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: #101012;
+  color: var(--text);
+  font: 700 11px / 1 "JetBrains Mono", Consolas, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings-lighting-profiles button:disabled,
+.settings-lighting-swatches button:disabled {
+  opacity: 0.4;
+}
+
+.settings-lighting-swatches {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-lighting-swatches button {
+  width: 30px;
+  height: 30px;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+}
+
+.settings-lighting-swatches button:active {
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Night vision: dims the whole rendered app toward deep red/black, aviation-cockpit-style, so
+   glancing at the dashboard on a night chase doesn't blow out night-adapted eyes. A single CSS
+   filter chain on the app root covers everything underneath it, including the Mapbox GL canvas --
+   grayscale strips existing color first so sepia+hue-rotate+saturate lands on a consistent red
+   rather than fighting each card's own hue, then brightness/contrast pull the whole thing down. */
+.app-shell--night-vision {
+  filter: grayscale(1) sepia(1) hue-rotate(-50deg) saturate(6) brightness(0.5) contrast(1.15);
+}
+
+/* Severe flash overlay: a brief, unmissable full-screen takeover the moment a new tornado/PDS
+   warning appears in the GPS-scoped alert feed (which already means "you're in it," not just
+   "one exists somewhere"). Auto-dismisses after 5s or on tap -- a driver shouldn't need to
+   interact with it to get the road back, the audio tone (already existing) plus this brief flash
+   is the notification, not a modal that demands attention. z-index sits below the crash screen
+   (999) since an app crash is a more fundamental problem than a weather alert. */
+.severe-flash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px;
+  text-align: center;
+  background: #1a0000;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.severe-flash-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(255, 0, 0, 0.55), rgba(120, 0, 0, 0.15) 70%);
+  animation: severe-flash-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes severe-flash-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.severe-flash-overlay__badge,
+.severe-flash-overlay__title,
+.severe-flash-overlay__headline,
+.severe-flash-overlay__hint {
+  position: relative;
+  z-index: 1;
+}
+
+.severe-flash-overlay__badge {
+  font: 900 15px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.12em;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  padding: 6px 18px;
+  text-transform: uppercase;
+}
+
+.severe-flash-overlay__title {
+  font: 900 clamp(28px, 6vw, 48px) / 1.15 Inter, sans-serif;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+  max-width: 90vw;
+}
+
+.severe-flash-overlay__headline {
+  font: 600 clamp(14px, 2.4vw, 18px) / 1.4 Inter, sans-serif;
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 80vw;
+}
+
+.severe-flash-overlay__hint {
+  margin-top: 8px;
+  font: 700 11px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
 }

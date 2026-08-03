@@ -6,16 +6,22 @@ import { Panel } from "../situational/Panel";
 import type { CockpitMode } from "../../App";
 import {
   DEFAULT_CHASER_RADIUS_MILES,
+  getBleCommandToken,
+  loadBleCommandToken,
   loadChaserPinStyle,
   loadChaserRadiusMiles,
+  loadNightVisionEnabled,
   loadTeamPinStyle,
   loadTeamRoster,
+  saveBleCommandToken,
   saveChaserPinStyle,
   saveChaserRadiusMiles,
+  saveNightVisionEnabled,
   saveTeamPinStyle,
   saveTeamRoster,
   subscribeChaserPinStyle,
   subscribeChaserRadiusMiles,
+  subscribeNightVisionEnabled,
   subscribePiEndpoint,
   subscribeTeamPinStyle,
   subscribeTeamRoster,
@@ -24,6 +30,7 @@ import {
 } from "../../services/settings";
 import { emitCodeBlackSound, setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, subscribeCodeBlackSoundEnabled } from "../../services/sound";
 import { clearSpotterAccount, loadSpotterAccount, spotterNetworkLogin, subscribeSpotterAccount, type SpotterAccount } from "../../services/spotterAccount";
+import { bleTelemetryClient } from "../../services/telemetry/ble-client";
 
 const PIN_SHAPES: Array<{ shape: PinShape; glyph: string }> = [
   { shape: "circle", glyph: "●" },
@@ -31,6 +38,23 @@ const PIN_SHAPES: Array<{ shape: PinShape; glyph: string }> = [
   { shape: "triangle", glyph: "▲" },
   { shape: "star", glyph: "★" },
   { shape: "square", glyph: "■" },
+];
+
+// Mirrors lighting/api.py's PRESET_COLORS on the Pi -- same names, same swatches, so a preset here
+// maps to exactly one accepted preset string server-side rather than sending raw RGB that could
+// drift from what the Pi actually supports.
+const LIGHTING_COLOR_PRESETS: Array<{ preset: string; label: string; swatch: string }> = [
+  { preset: "code_black_red", label: "Code Black Red", swatch: "#ff0000" },
+  { preset: "dim_red", label: "Dim Red", swatch: "#8c0000" },
+  { preset: "amber", label: "Amber", swatch: "#ff9600" },
+  { preset: "white", label: "White", swatch: "#ffffff" },
+  { preset: "green", label: "Green", swatch: "#00b43c" },
+  { preset: "blue", label: "Blue", swatch: "#0050ff" },
+];
+const LIGHTING_PROFILE_PRESETS: Array<{ profile: string; label: string }> = [
+  { profile: "chase", label: "Chase" },
+  { profile: "standby", label: "Standby" },
+  { profile: "off", label: "Off" },
 ];
 
 interface SettingsPageProps {
@@ -55,6 +79,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [teamRosterInput, setTeamRosterInput] = useState("");
   const [teamPinStyle, setTeamPinStyle] = useState<PinStyle>({ color: "#3ddc70", shape: "diamond" });
   const [chaserPinStyle, setChaserPinStyle] = useState<PinStyle>({ color: "#c7ccd6", shape: "circle" });
+  const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
+  const [bleTokenInput, setBleTokenInput] = useState("");
+  const [bleTokenSaved, setBleTokenSaved] = useState(false);
+  const [bleConnected, setBleConnected] = useState(false);
+  const [lightingBusy, setLightingBusy] = useState(false);
+  const [lightingResult, setLightingResult] = useState("");
 
   useEffect(() => {
     const unsubscribe = subscribePiEndpoint(setPiEndpoint);
@@ -113,6 +143,22 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = subscribeNightVisionEnabled(setNightVisionEnabled);
+    void loadNightVisionEnabled();
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    void loadBleCommandToken().then((token) => {
+      setBleTokenInput(token);
+    });
+  }, []);
+
+  useEffect(() => {
+    return bleTelemetryClient.subscribe((_payload, connected) => setBleConnected(connected));
+  }, []);
+
   const toggleSound = (next: boolean) => {
     setCodeBlackSoundEnabled(next);
     void Preferences.set({ key: SOUND_ENABLED_PREF_KEY, value: String(next) });
@@ -156,6 +202,38 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     void saveTeamRoster(teamRoster.filter((entry) => entry !== name));
   };
 
+  const toggleNightVision = (enabled: boolean) => {
+    void saveNightVisionEnabled(enabled);
+  };
+
+  const saveBleToken = async () => {
+    await saveBleCommandToken(bleTokenInput);
+    setBleTokenSaved(true);
+    window.setTimeout(() => setBleTokenSaved(false), 1600);
+  };
+
+  const sendLighting = async (action: "power" | "brightness" | "color" | "profile", params: Record<string, unknown>) => {
+    if (!getBleCommandToken()) {
+      setLightingResult("Set the command token above first.");
+      return;
+    }
+    setLightingBusy(true);
+    setLightingResult("");
+    try {
+      const response = await bleTelemetryClient.sendCommand("set_lighting", { action, params });
+      if (response.status === "OK") {
+        const state = typeof response.state === "string" ? response.state : "";
+        setLightingResult(state === "OFFLINE" ? "Sent — lamp not currently connected to the Pi." : `Sent — ${state || "ok"}.`);
+      } else {
+        setLightingResult(`Rejected: ${response.reason || response.status}`);
+      }
+    } catch (error) {
+      setLightingResult(error instanceof Error ? error.message : "Command failed.");
+    } finally {
+      setLightingBusy(false);
+    }
+  };
+
   return (
     <div className="page-grid page-grid--settings">
       <Panel title="Display" className="settings-display-panel">
@@ -167,6 +245,16 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           <div className="mode-toggle" aria-label="Cockpit information mode">
             <button className={cockpitMode === "normal" ? "active" : ""} onClick={() => onChangeCockpitMode("normal")}>Normal</button>
             <button className={cockpitMode === "chase" ? "active" : ""} onClick={() => onChangeCockpitMode("chase")}>Chase</button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Night Vision</strong>
+            <span>Dims the whole dashboard toward deep red/black to preserve night vision during night chases.</span>
+          </div>
+          <div className="mode-toggle" aria-label="Night vision mode">
+            <button className={nightVisionEnabled ? "" : "active"} onClick={() => toggleNightVision(false)}>Off</button>
+            <button className={nightVisionEnabled ? "active" : ""} onClick={() => toggleNightVision(true)}>On</button>
           </div>
         </div>
       </Panel>
@@ -327,6 +415,68 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
             </div>
           </div>
         </div>
+      </Panel>
+
+      <Panel title="Interior Lighting" className="settings-lighting-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Command Token</strong>
+            <span>Shared secret configured on the Pi (CB_BLE_COMMAND_TOKEN). Required before any lighting command will be accepted.</span>
+          </div>
+        </div>
+        <div className="settings-row settings-row--stack">
+          <input
+            className="settings-input"
+            placeholder="Command token"
+            type="password"
+            autoCapitalize="none"
+            autoCorrect="off"
+            value={bleTokenInput}
+            onChange={(event) => setBleTokenInput(event.target.value)}
+          />
+          <button className="settings-action" onClick={() => void saveBleToken()}>{bleTokenSaved ? "Saved" : "Save"}</button>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Govee H7090 (via Pi over BLE)</strong>
+            <span>{bleConnected ? "Pi link connected." : "Pi link not connected — commands will fail until the tablet reconnects."}</span>
+          </div>
+          <div className="mode-toggle" aria-label="Lighting power">
+            <button disabled={lightingBusy || !bleConnected} onClick={() => void sendLighting("power", { power: false })}>Off</button>
+            <button disabled={lightingBusy || !bleConnected} onClick={() => void sendLighting("power", { power: true })}>On</button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Profile</strong>
+            <span>Chase brightens for driving; Standby is the default resting state.</span>
+          </div>
+          <div className="settings-lighting-profiles" aria-label="Lighting profile">
+            {LIGHTING_PROFILE_PRESETS.map(({ profile, label }) => (
+              <button key={profile} type="button" disabled={lightingBusy || !bleConnected} onClick={() => void sendLighting("profile", { profile })}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Color</strong>
+            <span>Matches the presets already available on the Pi's own lighting API.</span>
+          </div>
+          <div className="settings-lighting-swatches" aria-label="Lighting color preset">
+            {LIGHTING_COLOR_PRESETS.map(({ preset, label, swatch }) => (
+              <button
+                key={preset}
+                type="button"
+                aria-label={label}
+                title={label}
+                disabled={lightingBusy || !bleConnected}
+                style={{ backgroundColor: swatch }}
+                onClick={() => void sendLighting("color", { preset })}
+              />
+            ))}
+          </div>
+        </div>
+        {lightingResult && <div className="cb-note">{lightingResult}</div>}
       </Panel>
 
       <Panel title="About" className="settings-about-panel">

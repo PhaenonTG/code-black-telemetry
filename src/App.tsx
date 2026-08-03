@@ -20,6 +20,7 @@ import {
   WeatherObservationPanel,
 } from "./components/situational/Panels";
 import { ReportPage } from "./components/situational/ReportPage";
+import { SevereFlashOverlay } from "./components/SevereFlashOverlay";
 import { WindCard } from "./components/situational/WindCard";
 import { useAlertProducts } from "./hooks/useAlertProducts";
 import { useNearbyPlaces } from "./hooks/useNearbyPlaces";
@@ -27,6 +28,7 @@ import { useSituationalData } from "./hooks/useSituationalData";
 import { useSpotters } from "./hooks/useSpotters";
 import { useStatus } from "./hooks/useTelemetry";
 import { setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, startCodeBlackSoundPlayer } from "./services/sound";
+import { loadNightVisionEnabled, subscribeNightVisionEnabled } from "./services/settings";
 import { setTelemetryPaused } from "./services/telemetry";
 
 type PageKey = "weather" | "operations" | "locate" | "alerts" | "report" | "settings";
@@ -62,6 +64,7 @@ function pathToPage(): PageKey {
 export default function App() {
   const [page, setPage] = useState<PageKey>(() => pathToPage());
   const [cockpitMode, setCockpitMode] = useState<CockpitMode>("chase");
+  const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
   const pagerRef = useRef<HTMLDivElement | null>(null);
   const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
   const status = useStatus();
@@ -89,6 +92,12 @@ export default function App() {
     pagerRef.current?.scrollTo({ left: index * pagerRef.current.clientWidth, behavior: "auto" });
     window.history.replaceState(null, "", pages[index].path);
   };
+
+  useEffect(() => {
+    const unsubscribe = subscribeNightVisionEnabled(setNightVisionEnabled);
+    void loadNightVisionEnabled();
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     requestAnimationFrame(() => syncPageImmediately(pathToPage()));
@@ -191,7 +200,8 @@ export default function App() {
   }, [page]);
 
   return (
-    <div className="app-shell">
+    <div className={nightVisionEnabled ? "app-shell app-shell--night-vision" : "app-shell"}>
+      <SevereFlashOverlay />
       <TopBar />
       <main className="page-viewport" ref={pagerRef} aria-label="Code Black dashboard pages">
         <section className="page page--weather" aria-label="Situational Awareness">

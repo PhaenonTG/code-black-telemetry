@@ -1,10 +1,14 @@
-import { BleClient, dataViewToText, type BleDevice } from "@capacitor-community/bluetooth-le";
+import { BleClient, dataViewToText, textToDataView, type BleDevice } from "@capacitor-community/bluetooth-le";
+import { getBleCommandToken } from "../settings";
 
 // Protocol contract lives on the Pi at ~/CodeBlack/docs/BLE_PROTOCOL.md (codeblack_ble/payloads.py
 // is the source of truth). Compact JSON over a notify characteristic, fragmented into
 // telemetry_fragment frames keyed by seq/i/n when the payload exceeds CB_BLE_MAX_PAYLOAD_BYTES.
 const SERVICE_UUID = "8f2a0000-6d6f-4f9f-9d8b-0c0d2b4c0001";
 const TELEMETRY_CHARACTERISTIC_UUID = "8f2a0003-6d6f-4f9f-9d8b-0c0d2b4c0001";
+const COMMANDS_CHARACTERISTIC_UUID = "8f2a0006-6d6f-4f9f-9d8b-0c0d2b4c0001";
+const COMMAND_RESPONSES_CHARACTERISTIC_UUID = "8f2a0007-6d6f-4f9f-9d8b-0c0d2b4c0001";
+const COMMAND_TIMEOUT_MS = 5_000;
 const SCAN_TIMEOUT_MS = 10_000;
 // Active BLE scanning is one of the most power-hungry radio operations on Android -- a flat 5s
 // gap between 10s scans means ~67% duty cycle forever whenever the Pi is out of range or off.
@@ -29,6 +33,15 @@ export interface BleTelemetryPayload {
   nodes: { nav: string; wx: string; wind: string };
   net: string;
   backend: string;
+}
+
+export interface BleCommandResponse {
+  status: "OK" | "NOT_IMPLEMENTED" | "REJECTED";
+  reason?: string;
+  req_id?: string;
+  last_command?: string | null;
+  ts?: string;
+  [key: string]: unknown;
 }
 
 type Listener = (payload: BleTelemetryPayload | null, connected: boolean) => void;
@@ -89,6 +102,55 @@ class BleTelemetryClient {
 
   isConnected(): boolean {
     return this.connected;
+  }
+
+  // Writes to the commands characteristic and waits for the matching req_id on command_responses.
+  // The token comes from Settings automatically (never passed by callers) so every call site can't
+  // forget it or accidentally log it. Throws on disconnect, timeout, or a write failure -- callers
+  // (Settings lighting controls today) are expected to catch and surface REJECTED/timeout distinctly
+  // from a successful OK/NOT_IMPLEMENTED response.
+  async sendCommand(cmd: string, extra: Record<string, unknown> = {}): Promise<BleCommandResponse> {
+    const deviceId = this.deviceId;
+    if (!this.connected || !deviceId) throw new Error("BLE not connected");
+    const reqId = Math.random().toString(36).slice(2, 10);
+    const body = JSON.stringify({ cmd, req_id: reqId, token: getBleCommandToken(), ...extra });
+
+    return new Promise<BleCommandResponse>((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        window.clearTimeout(timeoutId);
+        BleClient.stopNotifications(deviceId, SERVICE_UUID, COMMAND_RESPONSES_CHARACTERISTIC_UUID).catch(() => {});
+      };
+      const timeoutId = window.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error("Command timed out"));
+      }, COMMAND_TIMEOUT_MS);
+
+      BleClient.startNotifications(deviceId, SERVICE_UUID, COMMAND_RESPONSES_CHARACTERISTIC_UUID, (value) => {
+        if (settled) return;
+        let parsed: BleCommandResponse;
+        try {
+          parsed = JSON.parse(dataViewToText(value)) as BleCommandResponse;
+        } catch {
+          return;
+        }
+        // command_responses also re-emits the last response on every ~2s heartbeat tick -- only
+        // resolve for the notification that actually matches this call's req_id.
+        if (parsed.req_id !== reqId) return;
+        settled = true;
+        cleanup();
+        resolve(parsed);
+      })
+        .then(() => BleClient.write(deviceId, SERVICE_UUID, COMMANDS_CHARACTERISTIC_UUID, textToDataView(body)))
+        .catch((error: unknown) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
+    });
   }
 
   private clearRetryTimer() {

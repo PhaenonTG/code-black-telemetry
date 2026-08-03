@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getActiveMesoscaleDiscussions, getNwsAlerts, type AlertProduct } from "../services/situational";
 import { emitCodeBlackSound } from "../services/sound";
+import { triggerSevereFlash } from "../services/severeFlash";
 import { useResumeTick } from "./useResumeTick";
 
 type GpsPoint = { lat: number; lon: number };
@@ -22,8 +23,14 @@ export function useAlertProducts(gps: GpsPoint | null) {
         if (!cancelled) {
           const next = [...alerts, ...mds].slice(0, 10);
           const currentSevere = next.filter((product) => SEVERE_SEVERITIES.includes(product.severity));
-          const hasNewSevere = currentSevere.some((product) => !seenSevereIds.current.has(product.id));
-          if (hasNewSevere) emitCodeBlackSound("warning");
+          const newSevere = currentSevere.filter((product) => !seenSevereIds.current.has(product.id));
+          if (newSevere.length > 0) {
+            emitCodeBlackSound("warning");
+            // PDS outranks a plain tornado warning when both are new in the same poll -- flash the
+            // more urgent one.
+            const toFlash = newSevere.find((product) => product.severity === "pds") ?? newSevere[0];
+            triggerSevereFlash(toFlash);
+          }
           seenSevereIds.current = new Set(currentSevere.map((product) => product.id));
           setProducts(next);
           setError("");
