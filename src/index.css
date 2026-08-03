@@ -148,10 +148,12 @@
 
 .mode-toggle {
   display: grid;
+  flex-shrink: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.45rem;
   margin-top: 1rem;
   max-width: 240px;
+  min-width: 150px;
 }
 
 .mode-toggle button {
@@ -5221,6 +5223,15 @@ body {
 }
 
 .settings-lighting-panel .settings-row {
+  flex-shrink: 0;
+}
+
+.settings-chase-panel {
+  overflow-y: auto;
+}
+
+.settings-chase-panel .settings-row,
+.settings-chase-panel .settings-lighting-profiles {
   flex-shrink: 0;
 }
 

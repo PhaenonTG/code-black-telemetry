@@ -57,6 +57,16 @@ const LIGHTING_PROFILE_PRESETS: Array<{ profile: string; label: string }> = [
   { profile: "off", label: "Off" },
 ];
 
+// Mirrors server.py's STORM_MODE_PROFILES exactly -- set_storm_mode REJECTS anything outside this
+// set, so this list can't drift from what the Pi actually accepts without both sides breaking.
+const STORM_MODE_PRESETS: Array<{ mode: string; label: string }> = [
+  { mode: "tornado_watch", label: "Tornado Watch" },
+  { mode: "severe_thunderstorm_warning", label: "Severe TStorm" },
+  { mode: "flash_flood_warning", label: "Flash Flood" },
+  { mode: "tornado_warning", label: "Tornado Warning" },
+  { mode: "pds_tornado_warning", label: "PDS Tornado" },
+];
+
 interface SettingsPageProps {
   cockpitMode: CockpitMode;
   onChangeCockpitMode: (mode: CockpitMode) => void;
@@ -85,6 +95,8 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [bleConnected, setBleConnected] = useState(false);
   const [lightingBusy, setLightingBusy] = useState(false);
   const [lightingResult, setLightingResult] = useState("");
+  const [chaseBusy, setChaseBusy] = useState(false);
+  const [chaseResult, setChaseResult] = useState("");
 
   useEffect(() => {
     const unsubscribe = subscribePiEndpoint(setPiEndpoint);
@@ -231,6 +243,28 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
       setLightingResult(error instanceof Error ? error.message : "Command failed.");
     } finally {
       setLightingBusy(false);
+    }
+  };
+
+  const sendChaseCommand = async (cmd: "start_chase_session" | "end_chase_session" | "set_storm_mode", extra: Record<string, unknown> = {}) => {
+    if (!getBleCommandToken()) {
+      setChaseResult("Set the command token below first.");
+      return;
+    }
+    setChaseBusy(true);
+    setChaseResult("");
+    try {
+      const response = await bleTelemetryClient.sendCommand(cmd, extra);
+      if (response.status === "OK") {
+        const profile = typeof response.active_profile === "string" ? response.active_profile : "";
+        setChaseResult(profile ? `Sent — lighting now ${profile}.` : "Sent.");
+      } else {
+        setChaseResult(`Rejected: ${response.reason || response.status}`);
+      }
+    } catch (error) {
+      setChaseResult(error instanceof Error ? error.message : "Command failed.");
+    } finally {
+      setChaseBusy(false);
     }
   };
 
@@ -415,6 +449,31 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
             </div>
           </div>
         </div>
+      </Panel>
+
+      <Panel title="Chase Session" className="settings-chase-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Session</strong>
+            <span>Tells the Pi you're actively chasing vs. standby, switching interior lighting to match.</span>
+          </div>
+          <div className="mode-toggle" aria-label="Chase session">
+            <button disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("end_chase_session")}>End</button>
+            <button disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("start_chase_session")}>Start</button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Storm Mode</strong>
+            <span>Manually declares the current threat level — switches interior lighting the same way the Pi's own automatic alert-driven profile selection would.</span>
+          </div>
+        </div>
+        <div className="settings-lighting-profiles" aria-label="Storm mode">
+          {STORM_MODE_PRESETS.map(({ mode, label }) => (
+            <button key={mode} type="button" disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("set_storm_mode", { mode })}>{label}</button>
+          ))}
+        </div>
+        {chaseResult && <div className="cb-note">{chaseResult}</div>}
       </Panel>
 
       <Panel title="Interior Lighting" className="settings-lighting-panel">
