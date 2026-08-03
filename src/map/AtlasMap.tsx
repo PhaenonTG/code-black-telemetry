@@ -3,13 +3,13 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagnostics } from "../services/mapTiles";
 import type { RadarFrame, RadarProduct } from "../services/radar";
-import { getRadarTileTemplate } from "../services/situational";
+import { getRadarMosaicFrames } from "../services/situational";
 import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcrumbTrail";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
 import { applyAtlasCamera, zoomForSpeed } from "./AtlasCameraController";
 import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstances, incrementAtlasCounter, incrementAtlasMapInstances, writeAtlasDiagnostics } from "./AtlasDiagnostics";
 import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
-import { updateAtlasMosaicLayer } from "./AtlasMosaicLayer";
+import { startAtlasMosaicAnimation } from "./AtlasMosaicLayer";
 import { updateAtlasRadarLayer, ATLAS_RADAR_LAYER, ATLAS_RADAR_SOURCE } from "./AtlasRadarLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
 import { tuneAtlasStyle } from "./AtlasStyleManager";
@@ -104,11 +104,14 @@ export function AtlasMap({
   const idleCountRef = useRef(0);
   const lastGpsAppliedRef = useRef<{ gps: AtlasGpsPoint; at: number } | null>(null);
   const stopPulseRef = useRef<(() => void) | null>(null);
+  const stopMosaicRef = useRef<(() => void) | null>(null);
   const [loaded, setLoaded] = useState(false);
   const styleUri = atlasStyleUri();
   const trail = useBreadcrumbTrail();
   const [mosaicVisible, setMosaicVisible] = useState(true);
-  const [mosaicTileTemplate, setMosaicTileTemplate] = useState<string | null>(null);
+  const mosaicVisibleRef = useRef(mosaicVisible);
+  const mosaicFramesRef = useRef<string[]>([]);
+  mosaicVisibleRef.current = mosaicVisible;
 
   latestRef.current = { gps, frame, opacity, rangeRings, expanded };
 
@@ -247,6 +250,12 @@ export function AtlasMap({
           setCameraMode("FOLLOW_NORTH");
         }
         stopPulseRef.current = startAtlasVehiclePulse(map);
+        stopMosaicRef.current = startAtlasMosaicAnimation(
+          map,
+          () => mosaicFramesRef.current,
+          () => mosaicVisibleRef.current,
+          styleInfoRef.current.firstSymbolLayerId,
+        );
         const radar = updateAtlasRadarLayer(map, latest.frame, latest.opacity, styleInfoRef.current.firstSymbolLayerId);
         setRadarState(radar.state);
         if (!radar.loaded && radar.error) setRadarError(radar.error);
@@ -264,6 +273,8 @@ export function AtlasMap({
     return () => {
       stopPulseRef.current?.();
       stopPulseRef.current = null;
+      stopMosaicRef.current?.();
+      stopMosaicRef.current = null;
       const map = mapRef.current;
       if (map) {
         map.remove();
@@ -305,8 +316,8 @@ export function AtlasMap({
     if (!mosaicVisible) return;
     let cancelled = false;
     const load = async () => {
-      const template = await getRadarTileTemplate();
-      if (!cancelled) setMosaicTileTemplate(template);
+      const frames = await getRadarMosaicFrames();
+      if (!cancelled && frames.length > 0) mosaicFramesRef.current = frames;
     };
     void load();
     const timer = window.setInterval(load, MOSAIC_REFRESH_MS);
@@ -315,12 +326,6 @@ export function AtlasMap({
       window.clearInterval(timer);
     };
   }, [mosaicVisible]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !loaded) return;
-    updateAtlasMosaicLayer(map, mosaicTileTemplate, mosaicVisible, styleInfoRef.current.firstSymbolLayerId);
-  }, [loaded, mosaicTileTemplate, mosaicVisible]);
 
   useEffect(() => {
     const map = mapRef.current;
