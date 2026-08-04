@@ -1,7 +1,7 @@
 # Code Black OPS — Project State
 
-Last updated: 2026-08-03 (full-page Layer Configuration screen, replacing the dock corner, item
-#40). Written so a fresh AI assistant
+Last updated: 2026-08-03 (real teams/groups with per-member contact info, item #41). Written so a
+fresh AI assistant
 (or a human) can pick this project up cold, with no prior conversation history, and know exactly
 what exists, why, and what's next.
 
@@ -911,7 +911,31 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       updates the full-page screen's toggle the same way. This is a genuine two-way sync test, not
       just each surface working in isolation.
 
-All of the above (items 1-40) were built, `npm run build` typechecked clean, and have now been
+41. **Real teams/groups with per-member contact info**. Fifth item in the owner's priority order.
+    The Team Roster (`services/settings.ts`) was a flat `string[]` of names/marker IDs with no way
+    to organize members into groups or store contact info — upgraded to `teamMembers:
+    TeamMember[]` (`{ id, name, group, phone, email }`), same get/save/subscribe pattern as every
+    other persisted setting in this app. New Preferences key (`codeblack.teamMembers`) rather than
+    migrating the old `codeblack.teamRoster` string data — personal, single-team use with no
+    distribution, so a clean cutover is simpler than writing a migration path for a handful of
+    names. `hooks/useTeamRoster.ts` kept its name (still "give me the roster") but now returns
+    `TeamMember[]`.
+    - `services/teamPositions.ts`'s `resolveTeamPositions()` still matches by name/marker-ID
+      against the live Spotter Network feed exactly as before — group/phone/email are metadata, not
+      used for matching — but now carries them through onto each `TeamPosition` so the map pin
+      popup can display them.
+    - Extended `map/AtlasPinMarkers.ts`'s `PinPoint` interface and `showPinPopup()` to render an
+      amber group tag plus phone/email lines when present. Chaser pins never carry this data (only
+      Team pins do, via `AtlasTeamLayer.ts`), so nothing changes for them.
+    - Settings' "Team Roster" subpage is now "Teams": a 4-field add form (name required, group/
+      phone/email optional) plus a chip list showing `Name (Group)`, with phone/email available via
+      a tooltip on the chip (kept the existing compact pill-chip layout rather than redesigning it
+      for multi-line contact info).
+    - Device-verified: added a member with all 4 fields filled in (name, group, phone, email), the
+      chip rendered correctly as "DouglasKeck (Alpha)", and the panel still fit without scrolling
+      despite the form growing from 1 input (the old flat roster) to 4 plus a submit button.
+
+All of the above (items 1-41) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -1078,11 +1102,9 @@ path (needs a real or simulated network outage to trigger).
     4. **Full-page layer config screen** — DONE (Recent Work #40). Replaces the "CODE
        BLACK/DATA/DOMINANCE" dock corner; layer visibility moved to a shared, persisted store so
        it works correctly across both map instances.
-    5. **Custom teams/groups with per-member contact info** — NOT STARTED. This is the next item.
-       Note this is a step up from the existing Team Roster (item #26/Recent Work), which is just a
-       flat name/marker-ID list with no contact fields — this item wants real per-member contact
-       info, implying a richer data model than what's there today.
-    6. **Dashboard polish pass** — NOT STARTED.
+    5. **Custom teams/groups with per-member contact info** — DONE (Recent Work #41). Team Roster
+       became `TeamMember[]` (name/group/phone/email), map pin popups show the contact info.
+    6. **Dashboard polish pass** — NOT STARTED. This is the next item.
     7. **Themes** — NOT STARTED.
     8. **Custom vehicle dot (color/icon/image upload)** — NOT STARTED.
     Police-reports layer was investigated partway (owner referenced Google/Apple having something
