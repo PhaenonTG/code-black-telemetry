@@ -1,17 +1,55 @@
-import type { GeoJSONSource, Map } from "mapbox-gl";
+import mapboxgl from "mapbox-gl";
+import type { GeoJSONSource, Map, Marker } from "mapbox-gl";
 import type { AtlasGpsPoint } from "./types";
+import type { VehicleMarkerShape, VehicleMarkerStyle } from "../services/settings";
 import { incrementAtlasCounter } from "./AtlasDiagnostics";
 
 const VEHICLE_SOURCE = "atlas-vehicle";
 const VEHICLE_HEADING_SOURCE = "atlas-vehicle-heading";
 const VEHICLE_ACCURACY_LAYER = "atlas-vehicle-accuracy";
 const VEHICLE_PULSE_LAYER = "atlas-vehicle-pulse";
-const VEHICLE_LAYER = "atlas-vehicle-marker";
 const VEHICLE_HEADING_LAYER = "atlas-vehicle-heading";
 const PULSE_CYCLE_MS = 1800;
 const PULSE_MIN_RADIUS = 9;
 const PULSE_MAX_RADIUS = 26;
 const PULSE_START_OPACITY = 0.5;
+const DEFAULT_VEHICLE_COLOR = "#ff2d35";
+
+// The main dot moved from a GL circle layer to a mapboxgl.Marker (DOM element) so it can take an
+// arbitrary color/shape/uploaded-image, the same reasoning AtlasPinMarkers.ts documents for Team/
+// Chaser pins: GL circles are definitionally circles, and generating per-color/per-shape/per-image
+// canvas icons is a lot more machinery than a styled div. The accuracy ring, pulse, and heading line
+// stay GL layers -- DOM markers render above the WebGL canvas by default, so the dot still reads as
+// "on top" without needing the old fixed GL paint-order trick.
+const VEHICLE_MARKER_SIZE_PX = 22;
+const SHAPE_CLIP_PATH: Partial<Record<VehicleMarkerShape, string>> = {
+  diamond: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+  triangle: "polygon(50% 0%, 100% 100%, 0% 100%)",
+  star: "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)",
+};
+
+function applyVehicleMarkerStyle(el: HTMLDivElement, style: VehicleMarkerStyle) {
+  el.style.width = `${VEHICLE_MARKER_SIZE_PX}px`;
+  el.style.height = `${VEHICLE_MARKER_SIZE_PX}px`;
+  el.style.cursor = "default";
+  if (style.shape === "custom" && style.imageDataUrl) {
+    el.style.backgroundImage = `url(${style.imageDataUrl})`;
+    el.style.backgroundSize = "cover";
+    el.style.backgroundPosition = "center";
+    el.style.backgroundColor = "";
+    el.style.borderRadius = "6px";
+    el.style.clipPath = "";
+  } else {
+    el.style.backgroundImage = "";
+    el.style.backgroundColor = style.color;
+    el.style.borderRadius = style.shape === "circle" ? "50%" : style.shape === "square" ? "3px" : "0";
+    el.style.clipPath = SHAPE_CLIP_PATH[style.shape] ?? "";
+  }
+  el.style.border = "2px solid #fff4f4";
+  el.style.boxShadow = `0 0 10px 2px ${style.color}`;
+}
+
+const vehicleMarkers = new WeakMap<Map, Marker>();
 
 function destinationPoint(lat: number, lon: number, bearingDeg: number, miles: number) {
   const radiusMiles = 3958.7613;
@@ -24,7 +62,7 @@ function destinationPoint(lat: number, lon: number, bearingDeg: number, miles: n
   return [((((lon2 * 180) / Math.PI) + 540) % 360) - 180, (lat2 * 180) / Math.PI] as [number, number];
 }
 
-export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
+export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null, style: VehicleMarkerStyle = { color: DEFAULT_VEHICLE_COLOR, shape: "circle" }) {
   if (!gps) return;
   const point = {
     type: "FeatureCollection",
@@ -69,8 +107,12 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
       source: VEHICLE_SOURCE,
       paint: {
         "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 8, 11, 32],
-        "circle-color": "rgba(255, 45, 53, 0.12)",
-        "circle-stroke-color": "rgba(255, 45, 53, 0.35)",
+        // Color and alpha kept as separate paint props (rather than baked into one rgba string)
+        // so the color can be updated live from the vehicle marker style without string-hacking.
+        "circle-color": DEFAULT_VEHICLE_COLOR,
+        "circle-opacity": 0.12,
+        "circle-stroke-color": DEFAULT_VEHICLE_COLOR,
+        "circle-stroke-opacity": 0.35,
         "circle-stroke-width": 1,
       },
     });
@@ -78,8 +120,9 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
   }
 
   // A rider on the accuracy circle: this is what actually pulses (see startAtlasVehiclePulse
-  // below). Added here, before the heading/main-dot layers, so paint order stays fixed:
-  // accuracy (bottom) -> pulse (animated) -> heading -> main dot (top, never obscured).
+  // below). Added here, before the heading layer, so paint order stays fixed: accuracy (bottom) ->
+  // pulse (animated) -> heading. The main dot itself is a DOM marker (see applyVehicleMarkerStyle
+  // above) and always renders above all of this since DOM markers sit above the WebGL canvas.
   if (!map.getLayer(VEHICLE_PULSE_LAYER)) {
     map.addLayer({
       id: VEHICLE_PULSE_LAYER,
@@ -87,7 +130,7 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
       source: VEHICLE_SOURCE,
       paint: {
         "circle-radius": PULSE_MIN_RADIUS,
-        "circle-color": "#ff2d35",
+        "circle-color": DEFAULT_VEHICLE_COLOR,
         "circle-opacity": PULSE_START_OPACITY,
         "circle-stroke-width": 0,
       },
@@ -101,7 +144,7 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
       type: "line",
       source: VEHICLE_HEADING_SOURCE,
       paint: {
-        "line-color": "#ff2d35",
+        "line-color": DEFAULT_VEHICLE_COLOR,
         "line-width": 4,
         "line-blur": 1,
         "line-opacity": 0.9,
@@ -110,20 +153,24 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null) {
     incrementAtlasCounter("layerCreations");
   }
 
-  if (!map.getLayer(VEHICLE_LAYER)) {
-    map.addLayer({
-      id: VEHICLE_LAYER,
-      type: "circle",
-      source: VEHICLE_SOURCE,
-      paint: {
-        "circle-radius": 9,
-        "circle-color": "#ff2d35",
-        "circle-stroke-color": "#fff4f4",
-        "circle-stroke-width": 2,
-      },
-    });
-    incrementAtlasCounter("layerCreations");
+  // Re-applied every call (cheap -- one vehicle) so a live color change from Settings repaints the
+  // accuracy ring/pulse/heading immediately, the same "just re-apply, it's cheap" approach
+  // AtlasPinMarkers.ts uses for Team/Chaser pins.
+  map.setPaintProperty(VEHICLE_ACCURACY_LAYER, "circle-color", style.color);
+  map.setPaintProperty(VEHICLE_ACCURACY_LAYER, "circle-stroke-color", style.color);
+  map.setPaintProperty(VEHICLE_PULSE_LAYER, "circle-color", style.color);
+  map.setPaintProperty(VEHICLE_HEADING_LAYER, "line-color", style.color);
+
+  let marker = vehicleMarkers.get(map);
+  if (!marker) {
+    const el = document.createElement("div");
+    el.className = "atlas-vehicle-marker";
+    marker = new mapboxgl.Marker({ element: el }).setLngLat([gps.lon, gps.lat]).addTo(map);
+    vehicleMarkers.set(map, marker);
+  } else {
+    marker.setLngLat([gps.lon, gps.lat]);
   }
+  applyVehicleMarkerStyle(marker.getElement() as HTMLDivElement, style);
 }
 
 // Grows and fades on a loop so "my dot" reads at a glance without having to think about it, per

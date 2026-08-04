@@ -1009,7 +1009,56 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       Fix/Accuracy pair; Pi System's Uptime row and all 8 Diagnostics rows are now fully visible with
       no clipping.
 
-All of the above (items 1-43) were built, `npm run build` typechecked clean, and have now been
+44. **Custom vehicle dot: color/shape/photo upload**. Eighth (final) item in the owner's priority
+    order (see item 22's tracker). Item 7 "Themes" was deferred by the owner's own choice after
+    reviewing the tradeoff with existing alert severity colors, so this was next; proceeded per the
+    standing "continue autonomously" instruction.
+    - The vehicle's main dot moved from a Mapbox GL `circle` layer (`AtlasVehicleLayer.ts`) to a
+      `mapboxgl.Marker` DOM element, the same reasoning already documented in `AtlasPinMarkers.ts`
+      for Team/Chaser pins: GL circles are definitionally circles, and per-color/per-shape/per-image
+      canvas icon generation is more machinery than a styled div. The accuracy ring, pulse animation,
+      and heading line stay GL layers (still driven by the same `atlas-vehicle` source) — DOM markers
+      render above the WebGL canvas by default, so the dot still reads as "on top" without the old
+      fixed GL paint-order trick.
+    - New `services/settings.ts` type `VehicleMarkerStyle` (`{ color, shape: PinShape | "custom",
+      imageDataUrl? }`) + get/save/subscribe triplet under `codeblack.vehicleMarkerStyle`, default
+      `{ color: "#ff2d35", shape: "circle" }` — matches the current hardcoded look exactly, so
+      nothing changes visually until the owner customizes it. New `useVehicleMarkerStyle()` hook
+      alongside the existing `useTeamPinStyle`/`useChaserPinStyle` in `hooks/usePinStyle.ts`.
+    - Settings gained a third "Vehicle" row in the existing "Map Pins" panel (color swatch + the
+      same 5 shape buttons as Team/Chaser, plus a 6th "IMG" button that opens the native photo
+      picker via a hidden `<input type="file" accept="image/*">`). Uploaded photos are downscaled
+      client-side to a 96x96 cover-fit-cropped JPEG (canvas-based, `services/settings.ts` never
+      sees a raw multi-MB file) before being stored as a data URL in Preferences — a full-res phone
+      photo would be needlessly large for a marker that only ever renders at 22px on the map, and
+      Preferences persists as a plain string (native SharedPreferences on Android).
+    - `AtlasMap.tsx` threads the style through: `updateAtlasVehicleLayer(map, gps, style)` now
+      takes a third argument, called from both the initial-style-load path and the throttled
+      GPS-update effect (via a ref, to avoid a stale closure in the once-only style-init callback),
+      plus a new dedicated effect that repaints immediately on a style change without waiting for
+      the next (throttled) GPS tick — a deliberate color/shape change is a rare user action, not
+      GPS noise, and shouldn't feel laggy.
+    - The accuracy ring, pulse, and heading line now read `style.color` live (previously hardcoded
+      `#ff2d35`) so the whole "you are here" cluster stays visually coherent when the color changes,
+      not just the dot itself. Accuracy-ring paint properties were split from one baked `rgba(255,
+      45, 53, 0.12)` string into separate `circle-color`/`circle-opacity` props specifically so the
+      color could be swapped live without string-hacking rgba alpha channels.
+    - Found and fixed a self-inflicted regression during device verification: the new 3-row "Map
+      Pins" panel initially grew tall enough to shrink the two-tier settings layout's heavy-panels
+      block, clipping "Interior Lighting"'s Profile/Color rows below the fold again. Fixed by
+      shortening the new row's label ("Vehicle Pin" → "Vehicle", which was wrapping to 2 lines at
+      this column width where "Chaser Pin" barely fit on one) and description text to match
+      siblings' length — restored the original balance (confirmed via the same scrollHeight/
+      clientHeight check used in item 43, 1px over on Interior Lighting, imperceptible).
+    - Device-verified end to end: default red circle renders correctly on first launch; changed
+      shape to diamond in Settings and confirmed the Locate page's map updated live to a diamond;
+      changed color to green and confirmed the dot, its pulse, and its accuracy ring all turned
+      green together; tapped the IMG button and confirmed the native Android photo picker opens
+      correctly (backed out without selecting a photo — not this session's place to browse the
+      owner's personal photo library); reverted the test styling back to the default red circle
+      before finishing.
+
+All of the above (items 1-44) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -1197,8 +1246,14 @@ path (needs a real or simulated network outage to trigger).
        the owner raising it again.** If revisited, the open question is still on the table: chrome-
        only recolor (safe, subtler), full recolor with Amber dropped, or a real `--cb-brand` vs
        `--cb-severe` variable split (bigger refactor, cleanly separates the two forever).
-    8. **Custom vehicle dot (color/icon/image upload)** — NOT STARTED. This is the next item, unless
-       the owner says otherwise.
+    8. **Custom vehicle dot (color/icon/image upload)** — DONE (Recent Work #44). Main dot converted
+       from a GL circle layer to a DOM marker (same pattern as Team/Chaser pins) so it can take any
+       color, any of the 5 existing pin shapes, or an uploaded/downscaled photo; accuracy ring, pulse,
+       and heading line now follow the chosen color too. Device-verified: shape change, color change,
+       and the native photo picker opening all confirmed live on the map; reverted to the default red
+       circle before finishing. **This was the last item in the owner's original 8-item priority
+       list** (item 7 "Themes" deferred by the owner's own choice — see above). Nothing further is
+       queued from this list; ask the owner what's next rather than inventing new work.
     Police-reports layer was investigated partway (owner referenced Google/Apple having something
     similar) then explicitly deprioritized by the owner's own later instruction and does not appear
     in this priority list — treat as dropped, not pending, unless the owner brings it back up.

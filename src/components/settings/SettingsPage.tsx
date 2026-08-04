@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { App as CapApp, type AppInfo } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
@@ -14,6 +14,7 @@ import {
   loadNightVisionEnabled,
   loadTeamMembers,
   loadTeamPinStyle,
+  loadVehicleMarkerStyle,
   saveBleCommandToken,
   saveChaserPinStyle,
   saveChaserRadiusMiles,
@@ -21,6 +22,7 @@ import {
   saveNightVisionEnabled,
   saveTeamMembers,
   saveTeamPinStyle,
+  saveVehicleMarkerStyle,
   subscribeChaserPinStyle,
   subscribeChaserRadiusMiles,
   subscribeFavoriteBrands,
@@ -28,9 +30,11 @@ import {
   subscribePiEndpoint,
   subscribeTeamMembers,
   subscribeTeamPinStyle,
+  subscribeVehicleMarkerStyle,
   type PinShape,
   type PinStyle,
   type TeamMember,
+  type VehicleMarkerStyle,
 } from "../../services/settings";
 import { emitCodeBlackSound, setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, subscribeCodeBlackSoundEnabled } from "../../services/sound";
 import { clearSpotterAccount, loadSpotterAccount, spotterNetworkLogin, subscribeSpotterAccount, type SpotterAccount } from "../../services/spotterAccount";
@@ -98,6 +102,8 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [favoriteBrandsInput, setFavoriteBrandsInput] = useState("");
   const [teamPinStyle, setTeamPinStyle] = useState<PinStyle>({ color: "#3ddc70", shape: "diamond" });
   const [chaserPinStyle, setChaserPinStyle] = useState<PinStyle>({ color: "#c7ccd6", shape: "circle" });
+  const [vehicleMarkerStyle, setVehicleMarkerStyle] = useState<VehicleMarkerStyle>({ color: "#ff2d35", shape: "circle" });
+  const vehicleImageInputRef = useRef<HTMLInputElement>(null);
   const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
   const [bleTokenInput, setBleTokenInput] = useState("");
   const [bleTokenSaved, setBleTokenSaved] = useState(false);
@@ -161,6 +167,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   useEffect(() => {
     const unsubscribe = subscribeTeamPinStyle(setTeamPinStyle);
     void loadTeamPinStyle();
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeVehicleMarkerStyle(setVehicleMarkerStyle);
+    void loadVehicleMarkerStyle();
     return unsubscribe;
   }, []);
 
@@ -248,6 +260,48 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
 
   const removeFavoriteBrand = (brand: string) => {
     void saveFavoriteBrands(favoriteBrands.filter((entry) => entry !== brand));
+  };
+
+  // Downscaled to a small square before it ever touches storage -- Preferences persists as a plain
+  // string (native SharedPreferences on Android), and a full-resolution phone photo would be
+  // megabytes of base64 for a marker that only ever renders at 22px on the map. Cover-fit crop to
+  // a centered square keeps the subject framed regardless of the source photo's aspect ratio.
+  const VEHICLE_IMAGE_SIZE_PX = 96;
+  function downscaleImageToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = VEHICLE_IMAGE_SIZE_PX;
+        canvas.height = VEHICLE_IMAGE_SIZE_PX;
+        const ctx = canvas.getContext("2d");
+        URL.revokeObjectURL(objectUrl);
+        if (!ctx) { reject(new Error("Canvas unavailable")); return; }
+        const scale = Math.max(VEHICLE_IMAGE_SIZE_PX / img.width, VEHICLE_IMAGE_SIZE_PX / img.height);
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        ctx.drawImage(img, (VEHICLE_IMAGE_SIZE_PX - drawWidth) / 2, (VEHICLE_IMAGE_SIZE_PX - drawHeight) / 2, drawWidth, drawHeight);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Image load failed"));
+      };
+      img.src = objectUrl;
+    });
+  }
+
+  const handleVehicleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const imageDataUrl = await downscaleImageToDataUrl(file);
+      await saveVehicleMarkerStyle({ ...vehicleMarkerStyle, shape: "custom", imageDataUrl });
+    } catch {
+      // Unreadable/corrupt file -- leave the existing marker style untouched rather than saving a broken image.
+    }
   };
 
   const toggleNightVision = (enabled: boolean) => {
@@ -454,6 +508,30 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
               {PIN_SHAPES.map(({ shape, glyph }) => (
                 <button key={shape} type="button" className={chaserPinStyle.shape === shape ? "active" : ""} onClick={() => void saveChaserPinStyle({ ...chaserPinStyle, shape })}>{glyph}</button>
               ))}
+            </div>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Vehicle</strong>
+            <span>Color/shape/photo for your dot.</span>
+          </div>
+          <div className="settings-pin-control">
+            <input type="color" value={vehicleMarkerStyle.color} onChange={(event) => void saveVehicleMarkerStyle({ ...vehicleMarkerStyle, color: event.target.value })} />
+            <div className="settings-shape-row" aria-label="Vehicle pin shape">
+              {PIN_SHAPES.map(({ shape, glyph }) => (
+                <button key={shape} type="button" className={vehicleMarkerStyle.shape === shape ? "active" : ""} onClick={() => void saveVehicleMarkerStyle({ ...vehicleMarkerStyle, shape })}>{glyph}</button>
+              ))}
+              <button
+                type="button"
+                className={vehicleMarkerStyle.shape === "custom" ? "active settings-shape-custom" : "settings-shape-custom"}
+                aria-label="Upload custom vehicle image"
+                style={vehicleMarkerStyle.imageDataUrl ? { backgroundImage: `url(${vehicleMarkerStyle.imageDataUrl})` } : undefined}
+                onClick={() => vehicleImageInputRef.current?.click()}
+              >
+                {!vehicleMarkerStyle.imageDataUrl && "IMG"}
+              </button>
+              <input ref={vehicleImageInputRef} type="file" accept="image/*" className="settings-file-input" onChange={(event) => void handleVehicleImageUpload(event)} />
             </div>
           </div>
         </div>

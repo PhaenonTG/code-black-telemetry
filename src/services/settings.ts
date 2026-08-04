@@ -170,6 +170,59 @@ export function subscribeChaserPinStyle(listener: (style: PinStyle) => void) {
   };
 }
 
+// Vehicle marker adds a sixth "custom" shape on top of the five PinShape options -- an uploaded,
+// downscaled-to-a-small-square photo/icon instead of a solid color shape. `imageDataUrl` only means
+// anything when shape is "custom"; `color` still applies to the accuracy ring/pulse/heading line
+// regardless of shape, so switching to a custom image doesn't lose the color identity.
+export type VehicleMarkerShape = PinShape | "custom";
+
+export interface VehicleMarkerStyle {
+  color: string;
+  shape: VehicleMarkerShape;
+  imageDataUrl?: string;
+}
+
+const VEHICLE_MARKER_STYLE_KEY = "codeblack.vehicleMarkerStyle";
+const DEFAULT_VEHICLE_MARKER_STYLE: VehicleMarkerStyle = { color: "#ff2d35", shape: "circle" };
+
+let currentVehicleMarkerStyle: VehicleMarkerStyle = DEFAULT_VEHICLE_MARKER_STYLE;
+const vehicleMarkerStyleListeners = new Set<(style: VehicleMarkerStyle) => void>();
+
+export async function loadVehicleMarkerStyle() {
+  const saved = await Preferences.get({ key: VEHICLE_MARKER_STYLE_KEY });
+  let next = DEFAULT_VEHICLE_MARKER_STYLE;
+  if (saved.value) {
+    try {
+      const parsed = JSON.parse(saved.value) as Partial<VehicleMarkerStyle>;
+      if (parsed.color && parsed.shape) next = { color: parsed.color, shape: parsed.shape, imageDataUrl: parsed.imageDataUrl };
+    } catch {
+      next = DEFAULT_VEHICLE_MARKER_STYLE;
+    }
+  }
+  currentVehicleMarkerStyle = next;
+  vehicleMarkerStyleListeners.forEach((listener) => listener(next));
+  return next;
+}
+
+export async function saveVehicleMarkerStyle(style: VehicleMarkerStyle) {
+  currentVehicleMarkerStyle = style;
+  await Preferences.set({ key: VEHICLE_MARKER_STYLE_KEY, value: JSON.stringify(style) });
+  vehicleMarkerStyleListeners.forEach((listener) => listener(style));
+  return style;
+}
+
+export function getVehicleMarkerStyle() {
+  return currentVehicleMarkerStyle;
+}
+
+export function subscribeVehicleMarkerStyle(listener: (style: VehicleMarkerStyle) => void) {
+  vehicleMarkerStyleListeners.add(listener);
+  listener(currentVehicleMarkerStyle);
+  return () => {
+    vehicleMarkerStyleListeners.delete(listener);
+  };
+}
+
 const BLE_COMMAND_TOKEN_KEY = "codeblack.bleCommandToken";
 let currentBleCommandToken = "";
 const bleCommandTokenListeners = new Set<(token: string) => void>();

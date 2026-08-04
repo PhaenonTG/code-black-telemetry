@@ -5860,6 +5860,17 @@ body {
   color: #ff3044;
 }
 
+.settings-shape-custom {
+  background-size: cover !important;
+  background-position: center !important;
+  font-size: 8px !important;
+  letter-spacing: 0.02em;
+}
+
+.settings-file-input {
+  display: none;
+}
+
 .settings-lighting-profiles {
   display: flex;
   gap: 6px;

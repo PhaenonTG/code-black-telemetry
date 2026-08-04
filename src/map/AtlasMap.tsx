@@ -11,7 +11,7 @@ import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcr
 import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, loadFavoriteBrands, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeFavoriteBrands, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
 import { useTeamRoster } from "../hooks/useTeamRoster";
-import { useChaserPinStyle, useTeamPinStyle } from "../hooks/usePinStyle";
+import { useChaserPinStyle, useTeamPinStyle, useVehicleMarkerStyle } from "../hooks/usePinStyle";
 import { applyAtlasCamera, zoomForSpeed } from "./AtlasCameraController";
 import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstances, incrementAtlasCounter, incrementAtlasMapInstances, writeAtlasDiagnostics } from "./AtlasDiagnostics";
 import { updateAtlasAlertsLayer } from "./AtlasAlertsLayer";
@@ -169,6 +169,9 @@ export function AtlasMap({
   const roster = useTeamRoster();
   const teamPinStyle = useTeamPinStyle();
   const chaserPinStyle = useChaserPinStyle();
+  const vehicleMarkerStyle = useVehicleMarkerStyle();
+  const vehicleMarkerStyleRef = useRef(vehicleMarkerStyle);
+  vehicleMarkerStyleRef.current = vehicleMarkerStyle;
   const [chaserRadiusMiles, setChaserRadiusMiles] = useState(DEFAULT_CHASER_RADIUS_MILES);
   useEffect(() => {
     const unsubscribe = subscribeChaserRadiusMiles(setChaserRadiusMiles);
@@ -343,7 +346,7 @@ export function AtlasMap({
         setLoaded(true);
         setMapState("READY");
         if (latest.gps) {
-          updateAtlasVehicleLayer(map, latest.gps);
+          updateAtlasVehicleLayer(map, latest.gps, vehicleMarkerStyleRef.current);
           recordBreadcrumbPoint(latest.gps.lat, latest.gps.lon);
           const introZoom = zoomForSpeed(latest.gps.speedMph, latest.expanded);
           map.flyTo({
@@ -410,7 +413,7 @@ export function AtlasMap({
     const now = Date.now();
     if (!shouldApplyGpsUpdate(lastGpsAppliedRef.current, gps, now)) return;
     lastGpsAppliedRef.current = { gps, at: now };
-    updateAtlasVehicleLayer(map, gps);
+    updateAtlasVehicleLayer(map, gps, vehicleMarkerStyleRef.current);
     recordBreadcrumbPoint(gps.lat, gps.lon, now);
     if (cameraMode === "FOLLOW_NORTH" || cameraMode === "FOLLOW_HEADING" || cameraMode === "RECENTERING") {
       const camera = applyAtlasCamera(map, gps, cameraMode, expanded, bearing);
@@ -418,6 +421,14 @@ export function AtlasMap({
       setPitch(camera.pitch);
     }
   }, [bearing, cameraMode, expanded, gps, loaded]);
+
+  // A vehicle marker style change from Settings is a rare, deliberate user action, not GPS noise --
+  // repaint immediately rather than waiting for the throttled GPS-update effect above to next fire.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || !gps) return;
+    updateAtlasVehicleLayer(map, gps, vehicleMarkerStyle);
+  }, [vehicleMarkerStyle, loaded]);
 
   useEffect(() => {
     const map = mapRef.current;
