@@ -1185,8 +1185,20 @@ path (needs a real or simulated network outage to trigger).
        to continue autonomously; found and fixed two real content-clipping bugs (Location card's
        duplicate Fix/Accuracy in Chase mode, Pi System/Diagnostics cards silently hiding their last
        rows) via a scrollHeight/clientHeight sweep, device-verified.
-    7. **Themes** — NOT STARTED. This is the next item.
-    8. **Custom vehicle dot (color/icon/image upload)** — NOT STARTED.
+    7. **Themes** — DEFERRED, owner's own call. Asked what "Themes" should mean; owner picked
+       "alternate accent colors, app-wide, via a Settings picker" over a light-mode variant. Before
+       writing code, investigated how that intersects with the existing red=severe/amber=watch alert
+       color-coding (`.threat-card--tornado/pds/severe`, `.alert-pill--*`, SourceBadge critical
+       state all key off the same `--cb-red`/`--red` variables also used for brand chrome like the
+       dock signature and page-dots — they were never cleanly separated in this codebase, so a
+       naive "recolor everything" pass risks making a live tornado warning and a routine watch look
+       the same color under an Amber theme). Raised this tradeoff directly rather than guess; owner
+       said to hold off on Themes for now. **No code was written for this — do not start it without
+       the owner raising it again.** If revisited, the open question is still on the table: chrome-
+       only recolor (safe, subtler), full recolor with Amber dropped, or a real `--cb-brand` vs
+       `--cb-severe` variable split (bigger refactor, cleanly separates the two forever).
+    8. **Custom vehicle dot (color/icon/image upload)** — NOT STARTED. This is the next item, unless
+       the owner says otherwise.
     Police-reports layer was investigated partway (owner referenced Google/Apple having something
     similar) then explicitly deprioritized by the owner's own later instruction and does not appear
     in this priority list — treat as dropped, not pending, unless the owner brings it back up.
