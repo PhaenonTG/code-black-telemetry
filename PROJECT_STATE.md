@@ -1,7 +1,7 @@
 # Code Black OPS — Project State
 
-Last updated: 2026-08-03 (Gas/Food POI map layer with favorite-brand highlighting, item #39).
-Written so a fresh AI assistant
+Last updated: 2026-08-03 (full-page Layer Configuration screen, replacing the dock corner, item
+#40). Written so a fresh AI assistant
 (or a human) can pick this project up cold, with no prior conversation history, and know exactly
 what exists, why, and what's next.
 
@@ -869,7 +869,49 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       the same pattern already proven for Team Roster, so this is a low-risk gap, not an open
       question about correctness.
 
-All of the above (items 1-39) were built, `npm run build` typechecked clean, and have now been
+40. **Full-page Layer Configuration screen, replacing the dock corner**. Fourth item in the owner's
+    priority order. The "CODE BLACK / WEATHER. DATA. DOMINANCE." bottom-dock corner was purely
+    decorative (a `<div>`, `aria-hidden`) — now a `<button>` opening `LayerConfigPage.tsx`, a
+    full-screen modal (same `.modal-backdrop`/`.product-modal` pattern as the Nearby/spotter detail
+    modals) listing every togglable map layer — Wide-Area Mosaic, Alerts (watches+warnings+MD),
+    Team, Chasers, Gas/Food POIs — each with a description and, where relevant, a one-line pointer
+    to the Settings subpage that manages its deeper config (radius, pin style, favorite brands).
+    - **Required a real architecture change, not just a new screen**: layer visibility
+      (`alertsVisible`/`teamVisible`/`chasersVisible`/`poiVisible`/`mosaicVisible`) had been 5
+      separate `useState` flags living inside `AtlasMap.tsx` itself since the map-overlays work
+      (Recent Work #26) — fine when the only control surface was the on-map Layers popover
+      rendered by that same component, but the Weather page's compact map and the Locate page's
+      full map are two independently-mounted `AtlasMap` instances, each with its own copy, and
+      neither was reachable from a screen outside the map. Moved to a new `services/settings.ts`
+      export, `mapLayerVisibility` (a single `MapLayerVisibility` object), same get/save/subscribe
+      triplet pattern already used for `teamPinStyle`/`chaserPinStyle`/`teamRoster` — now both map
+      instances AND the new config screen read/write the exact same state, and it persists across
+      app restarts like every other preference in this app (previously it reset to defaults on
+      every cold launch). The on-map Layers popover's checkboxes now call the shared
+      `saveMapLayerVisibility()` instead of local `setState` toggles — no visible change to that
+      popover, just a different state source underneath it.
+    - **Found and fixed two real CSS bugs** converting `.dock-signature` from a `<div>` to a
+      `<button>` (documented inline in `index.css` near the fix, ~line 5585): being a `<button>`
+      inside `.bottom-dock` newly matched every `.bottom-dock button` rule written for the icon+
+      label nav buttons, not just its own dedicated `.dock-signature` rules. Two collided badly:
+      (1) `.bottom-dock button`'s `grid-template-columns: 34px minmax(0, auto)` (the icon column)
+      split the signature's 2 text children into an unwanted 2-column grid — "CODE BLACK" wrapped
+      into the narrow 34px column and "WEATHER. DATA. DOMINANCE." spilled out past the panel's own
+      clip-path edge, confirmed via a zoomed before/after screenshot; (2) `.bottom-dock button
+      span`'s `!important` font-size rule has higher CSS specificity (`.bottom-dock button span` =
+      0,1,2) than the existing bare `.dock-signature span` (0,1,1), so it won regardless of source
+      order or its own `!important`, ballooning the tagline from the intended 8px to ~15px. Fixed
+      with an explicit `grid-template-columns: 1fr !important` override and a higher-specificity
+      compound selector (`.bottom-dock .dock-signature span`, 0,2,1) rather than fighting
+      specificity with more `!important` — confirmed pixel-for-pixel identical to the pre-change
+      design via zoomed before/after screenshots.
+    - Device-verified end to end: the full-page screen's toggles update both `AtlasMap` instances
+      (confirmed navigating Weather → toggle off in the config screen → Locate page's map no longer
+      shows the layer) and the on-map popover reflects the same state; toggling via the popover
+      updates the full-page screen's toggle the same way. This is a genuine two-way sync test, not
+      just each surface working in isolation.
+
+All of the above (items 1-40) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -1033,12 +1075,13 @@ path (needs a real or simulated network outage to trigger).
     3. **Gas/food/POI layer** — DONE (Recent Work #39). Map layer with favorite-brand highlighting
        (Love's/Buc-ee's/Taco Bell/Braum's-style), manageable from Settings' new "Favorite Brands"
        subpage.
-    4. **Full-page layer config screen** — NOT STARTED. Replaces the "CODE BLACK/DATA/DOMINANCE"
-       dock corner signature. This is the next item.
-    5. **Custom teams/groups with per-member contact info** — NOT STARTED. Note this is a step up
-       from the existing Team Roster (item #26/Recent Work), which is just a flat name/marker-ID
-       list with no contact fields — this item wants real per-member contact info, implying a
-       richer data model than what's there today.
+    4. **Full-page layer config screen** — DONE (Recent Work #40). Replaces the "CODE
+       BLACK/DATA/DOMINANCE" dock corner; layer visibility moved to a shared, persisted store so
+       it works correctly across both map instances.
+    5. **Custom teams/groups with per-member contact info** — NOT STARTED. This is the next item.
+       Note this is a step up from the existing Team Roster (item #26/Recent Work), which is just a
+       flat name/marker-ID list with no contact fields — this item wants real per-member contact
+       info, implying a richer data model than what's there today.
     6. **Dashboard polish pass** — NOT STARTED.
     7. **Themes** — NOT STARTED.
     8. **Custom vehicle dot (color/icon/image upload)** — NOT STARTED.
