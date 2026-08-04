@@ -965,7 +965,51 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       updates correctly (`layers_page2.png`).
     - Committed as `8edcde8` ("Correct Settings/Layer Config per owner: single page + real page").
 
-All of the above (items 1-42) were built, `npm run build` typechecked clean, and have now been
+43. **Dashboard polish pass**. Sixth item in the owner's priority order. Owner asked to continue
+    autonomously through the remaining priority items with changelog updates and no check-ins, so
+    this was a self-directed audit rather than a specific complaint list. Method: real-device
+    screenshots (`adb screencap`, since the Browser-pane's own screenshot tool was unavailable this
+    session — read_page/javascript_tool substituted for DOM-level checks) across all 7 pages, plus a
+    site-wide `scrollHeight` vs `clientHeight` sweep via `javascript_tool` to catch any element
+    silently clipping real content (as opposed to subjective spacing opinions, which were mostly left
+    alone — several apparent "dead space" spots turned out to be intentional idle-centering already
+    built and working correctly, e.g. the Alerts card/page empty states and the Weather page's
+    Active Alerts card, confirmed via computed-style checks rather than assumed).
+    - **Real bug found and fixed**: `LocationMotionPanel` (`components/situational/Panels.tsx`) was
+      showing the GPS fix state and accuracy twice in Chase mode — once in the hero `GPS` metric
+      tile (`3D` / `+/-23 m`) and again, spelled out, in the footer (`Fix: 3D FIX` / `Accuracy:
+      +/-23 M`). Chase mode's whole stated purpose is "reduced fields for driving," so a literal
+      duplicate directly worked against its own design intent. Removed the chase-mode footer
+      Fix/Accuracy pair; the footer is now normal-mode-only (Lat/Lon/Fix, unchanged) and simply
+      empty in Chase mode, which collapses cleanly to a small bottom padding strip rather than
+      leaving stray boxes.
+    - **Real bug found and fixed**: on the Operations page, `SystemCard` ("Pi System") renders 4
+      metric rows (CPU/RAM/Storage/Uptime) but shared the exact same fixed row-1 card height as its
+      siblings, which only have 3 (`PowerCard`/"Vehicle Power": Main Batt/Aux Batt/Charging) —
+      confirmed via `scrollHeight` (203px needed) vs `clientHeight` (157px available) that the
+      Uptime row was being silently hidden by `overflow:hidden`, not just visually tight. Similarly
+      the "Diagnostics" card (`App.tsx`'s inline `.diagnostic-grid`, 8 label/value rows) needed 270px
+      but only had 235px, clipping the last row or two. Rather than switch either to scrolling — the
+      project's established rule (see the `.nearby-list` comment in `index.css`) is that the main
+      dashboard should show everything at a glance, not require scrolling to discover hidden data —
+      both were fixed by tightening row density: `.metric-row` padding `10px 0` → `5px 0` and
+      `.dash-card-body` padding `14px` → `10px 14px` (shared by both System/Power cards, harmless for
+      Vehicle Power which already fit), `.diagnostic-grid` gap `9px 12px` → `5px 10px` and padding
+      `14px` → `10px`. Confirmed via the same scrollHeight/clientHeight check post-fix: Diagnostics
+      199px in 235px available (fits with room to spare), Pi System 159px in 157px (2px over,
+      imperceptible — matches Vehicle Power's own pre-existing snugness).
+    - **Investigated, not a bug**: the Radar Engine panel's tile grid appears to cut off mid-value
+      (e.g. cache size, decoder state) at whatever scroll position it happens to be at — confirmed
+      via computed style that this panel is deliberately `overflow-y:auto` (existing code comment:
+      "~30 diagnostic rows... too much content for any fixed card height... scroll it internally
+      instead of clipping the Apply/Clear Cache controls off the bottom"), so a value sitting at the
+      current scroll fold is expected, not a regression. Left alone.
+    - Device-verified both fixes after a full `npm run build` / `cap sync android` / `gradlew
+      assembleDebug` / reinstall cycle: Location & Motion's footer no longer shows the duplicate
+      Fix/Accuracy pair; Pi System's Uptime row and all 8 Diagnostics rows are now fully visible with
+      no clipping.
+
+All of the above (items 1-43) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -1137,8 +1181,11 @@ path (needs a real or simulated network outage to trigger).
        so it works correctly across both map instances.
     5. **Custom teams/groups with per-member contact info** — DONE (Recent Work #41). Team Roster
        became `TeamMember[]` (name/group/phone/email), map pin popups show the contact info.
-    6. **Dashboard polish pass** — NOT STARTED. This is the next item.
-    7. **Themes** — NOT STARTED.
+    6. **Dashboard polish pass** — DONE (Recent Work #43). Self-directed audit since the owner asked
+       to continue autonomously; found and fixed two real content-clipping bugs (Location card's
+       duplicate Fix/Accuracy in Chase mode, Pi System/Diagnostics cards silently hiding their last
+       rows) via a scrollHeight/clientHeight sweep, device-verified.
+    7. **Themes** — NOT STARTED. This is the next item.
     8. **Custom vehicle dot (color/icon/image upload)** — NOT STARTED.
     Police-reports layer was investigated partway (owner referenced Google/Apple having something
     similar) then explicitly deprioritized by the owner's own later instruction and does not appear

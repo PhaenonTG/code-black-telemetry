@@ -68,9 +68,7 @@ export function LocationMotionPanel({ tabletPermission, location, mode }: { tabl
         {mode === "chase" && <MetricTile label="GPS" value={fixHero} unit={location.accuracyM != null ? `+/-${Math.round(location.accuracyM)} m` : location.freshness} />}
       </div>
       <div className="loc-footer cockpit-footer">
-        {mode === "normal" && <><div><span>Lat</span><strong>{valid ? location.latitude!.toFixed(5) : "--"}</strong></div><div><span>Lon</span><strong>{valid ? location.longitude!.toFixed(5) : "--"}</strong></div></>}
-        <div><span>Fix</span><strong>{fixValue}</strong></div>
-        {mode === "chase" && <div><span>Accuracy</span><strong>{location.accuracyM != null ? `+/-${Math.round(location.accuracyM)} M` : location.freshness}</strong></div>}
+        {mode === "normal" && <><div><span>Lat</span><strong>{valid ? location.latitude!.toFixed(5) : "--"}</strong></div><div><span>Lon</span><strong>{valid ? location.longitude!.toFixed(5) : "--"}</strong></div><div><span>Fix</span><strong>{fixValue}</strong></div></>}
       </div>
       {tabletPermission === "denied" && <div className="cb-note cb-note--warn">Tablet GPS denied. Holding last valid source.</div>}
       {!valid && <div className="cb-note cb-note--warn">{location.fallbackReason}</div>}
