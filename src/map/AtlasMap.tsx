@@ -53,6 +53,10 @@ type AtlasMapProps = {
   alerts?: AlertProduct[];
   spotters?: Spotter[];
   poiPlaces?: NearbyPlace[];
+  // "compact" is the Weather-page card: owner asked for mosaic + layer visibility only, no zoom/
+  // north-up/rings/clear-trail/mosaic-toggle buttons and no single-site radar UI at all -- that
+  // full toolbar only exists on the "full" Locate page, which has the room for it.
+  controlsVariant?: "full" | "compact";
 };
 
 const EMPTY_MODIFIERS = { modifiedLayers: 0, firstSymbolLayerId: undefined as string | undefined, lastMapError: "" };
@@ -115,7 +119,9 @@ export function AtlasMap({
   alerts = EMPTY_ALERTS,
   spotters = EMPTY_SPOTTERS,
   poiPlaces = EMPTY_POI,
+  controlsVariant = "full",
 }: AtlasMapProps) {
+  const compact = controlsVariant === "compact";
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const styleInfoRef = useRef(EMPTY_MODIFIERS);
@@ -212,11 +218,11 @@ export function AtlasMap({
     }
     interactionResumeAtRef.current = 0;
     setCameraMode("RECENTERING");
-    const camera = applyAtlasCamera(map, gps, mode, expanded, bearing);
+    const camera = applyAtlasCamera(map, gps, mode, expanded, bearing, compact);
     setBearing(camera.bearing);
     setPitch(camera.pitch);
     window.setTimeout(() => setCameraMode(mode), 650);
-  }, [bearing, expanded, gps]);
+  }, [bearing, expanded, gps, compact]);
 
   // The interaction listeners below are attached once at map-construction time (mapbox instances
   // aren't re-created on every render), so they close over whatever `recenter`/`cameraMode` were at
@@ -348,7 +354,7 @@ export function AtlasMap({
         if (latest.gps) {
           updateAtlasVehicleLayer(map, latest.gps, vehicleMarkerStyleRef.current);
           recordBreadcrumbPoint(latest.gps.lat, latest.gps.lon);
-          const introZoom = zoomForSpeed(latest.gps.speedMph, latest.expanded);
+          const introZoom = zoomForSpeed(latest.gps.speedMph, latest.expanded, compact);
           map.flyTo({
             center: [latest.gps.lon, latest.gps.lat],
             zoom: introZoom,
@@ -416,11 +422,11 @@ export function AtlasMap({
     updateAtlasVehicleLayer(map, gps, vehicleMarkerStyleRef.current);
     recordBreadcrumbPoint(gps.lat, gps.lon, now);
     if (cameraMode === "FOLLOW_NORTH" || cameraMode === "FOLLOW_HEADING" || cameraMode === "RECENTERING") {
-      const camera = applyAtlasCamera(map, gps, cameraMode, expanded, bearing);
+      const camera = applyAtlasCamera(map, gps, cameraMode, expanded, bearing, compact);
       setBearing(camera.bearing);
       setPitch(camera.pitch);
     }
-  }, [bearing, cameraMode, expanded, gps, loaded]);
+  }, [bearing, cameraMode, expanded, gps, loaded, compact]);
 
   // A vehicle marker style change from Settings is a rare, deliberate user action, not GPS noise --
   // repaint immediately rather than waiting for the throttled GPS-update effect above to next fire.
@@ -599,9 +605,11 @@ export function AtlasMap({
       <div className="atlas-map-canvas-area">
         <div ref={containerRef} className="atlas-map" data-camera-mode={cameraMode} />
         {visibleError && <div className="atlas-map-error">{visibleError}</div>}
-        <div className="radar-strip atlas-radar-strip">
-          {statusLines.map((line, index) => <span key={index}>{line}</span>)}
-        </div>
+        {!compact && (
+          <div className="radar-strip atlas-radar-strip">
+            {statusLines.map((line, index) => <span key={index}>{line}</span>)}
+          </div>
+        )}
         {onOpenExpanded && (
           <button type="button" className="atlas-expand-button" aria-label="Expand radar" onClick={(event) => { event.stopPropagation(); onOpenExpanded(); }}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" /></svg>
@@ -626,6 +634,12 @@ export function AtlasMap({
               <input type="checkbox" checked={poiVisible} onChange={() => toggleLayer("poi")} />
               Gas / Food
             </label>
+            {compact && (
+              <label className="atlas-layers-popover__row">
+                <input type="checkbox" checked={mosaicVisible} onChange={() => toggleLayer("mosaic")} />
+                Wide-Area Mosaic
+              </label>
+            )}
           </div>
         )}
         {(visibleError || ATLAS_DIAGNOSTICS_ENABLED) && (
@@ -633,12 +647,16 @@ export function AtlasMap({
         )}
       </div>
       <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
-        <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) + 0.5, duration: 260 })}>ZOOM+</button>
-        <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>ZOOM−</button>
-        <button type="button" aria-label="Toggle follow mode" title="Cycles between North-up, Heading-up, and Recenter" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
-        <button type="button" aria-label="Toggle range rings" title="Distance rings around your position" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RINGS{rangeRings !== "off" ? ` ${rangeRings}NM` : ""}</button>
-        <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
-        <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, animated" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
+        {!compact && (
+          <>
+            <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) + 0.5, duration: 260 })}>ZOOM+</button>
+            <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>ZOOM−</button>
+            <button type="button" aria-label="Toggle follow mode" title="Cycles between North-up, Heading-up, and Recenter" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
+            <button type="button" aria-label="Toggle range rings" title="Distance rings around your position" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RINGS{rangeRings !== "off" ? ` ${rangeRings}NM` : ""}</button>
+            <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
+            <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, animated" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
+          </>
+        )}
         <button type="button" aria-label="Map layers" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
       </div>
     </div>

@@ -159,6 +159,7 @@
 .mode-toggle button {
   min-height: 42px;
   border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--cb-radius, 6px);
   background: rgba(255, 255, 255, 0.045);
   color: #d8dde7;
   text-transform: uppercase;
@@ -2232,11 +2233,11 @@ button {
   width: 36px;
   height: 36px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 5px;
+  border-radius: var(--cb-radius, 6px);
   background: rgba(3, 5, 7, 0.78);
   color: var(--text);
   font: 900 12px / 1 "JetBrains Mono", Consolas, monospace;
-  box-shadow: 0 0 16px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
 }
 
 .map-controls button:active {
@@ -2371,7 +2372,7 @@ button {
   min-height: 28px;
   min-width: 46px;
   border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 5px;
+  border-radius: var(--cb-radius, 6px);
   background: rgba(0, 0, 0, 0.54);
   color: var(--secondary);
   font: 900 10px / 1 "JetBrains Mono", Consolas, monospace;
@@ -2796,7 +2797,7 @@ button {
   height: clamp(36px, 4.5dvh, 48px);
   border: 1px solid rgba(255,45,53,0.34);
   border-radius: var(--cb-radius);
-  background: linear-gradient(180deg, rgba(255,45,53,0.12), rgba(0,0,0,0.18));
+  background: rgba(255,45,53,0.08);
   color: var(--cb-red);
   font: 900 clamp(10px, 0.84vw, 13px) / 1 "Consolas", monospace;
   letter-spacing: 0.08em;
@@ -3283,7 +3284,7 @@ button {
   --blue: #14a7ff;
   --spc: #14a7ff;
   --top-h: clamp(58px, 7dvh, 74px);
-  --dock-h: clamp(78px, 8.7dvh, 104px);
+  --dock-h: clamp(64px, 7dvh, 84px);
   --dots-h: 16px;
   --gap: clamp(8px, 0.95dvh, 13px);
   --radius: 8px;
@@ -3930,11 +3931,11 @@ body {
   width: 36px;
   height: 36px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 5px;
+  border-radius: var(--cb-radius, 6px);
   background: rgba(3, 5, 7, 0.78);
   color: var(--text);
   font: 900 12px / 1 "JetBrains Mono", Consolas, monospace;
-  box-shadow: 0 0 16px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
 }
 
 .map-controls button:active {
@@ -3972,43 +3973,47 @@ body {
   box-shadow: 0 0 12px rgba(255, 45, 53, 0.7);
 }
 
+/* Flat tab bar, not a beveled panel: one flat background + one hairline top border on the bar
+   itself, no clip-path/gradient/inset-shadow. Buttons are plain flat rectangles with a single
+   hairline border and a small consistent radius -- the same treatment every other button in the
+   app now uses (see the shared button rules below), so the dock reads as one uniform system
+   instead of its own bespoke "cut-corner tactical panel" look. */
 .bottom-dock {
   position: relative;
   width: min(1240px, calc(100vw - 22px));
   height: calc(var(--dock-h) - 12px);
   grid-template-columns: repeat(6, minmax(98px, 1fr)) minmax(130px, 0.9fr);
-  gap: 4px;
-  padding: 8px;
+  gap: 6px;
+  padding: 6px;
   margin-bottom: 6px;
-  border: 1px solid rgba(255, 45, 53, 0.24);
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 0;
-  clip-path: var(--cut);
-  background:
-    linear-gradient(180deg, rgba(24, 25, 28, 0.98), rgba(3, 3, 4, 0.98)),
-    linear-gradient(90deg, rgba(255, 45, 53, 0.08), transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 0 28px rgba(0, 0, 0, 0.58);
+  clip-path: none;
+  background: #0a0a0c;
+  box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.35);
 }
 
 .bottom-dock button {
   position: relative;
-  grid-template-columns: 34px minmax(0, auto);
+  grid-template-columns: 26px minmax(0, auto);
   grid-template-rows: 1fr 1fr;
   place-items: center start;
   align-items: center;
-  column-gap: 10px;
-  border-radius: 0;
-  clip-path: var(--cut);
-  border-color: rgba(255, 255, 255, 0.075);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(0, 0, 0, 0.32));
+  column-gap: 8px;
+  border-radius: var(--cb-radius, 6px);
+  clip-path: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
   color: var(--secondary);
-  padding: 8px 14px;
-  transition: transform 160ms ease, border-color 160ms ease, color 160ms ease, background 160ms ease;
+  padding: 6px 12px;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
 }
 
 .bottom-dock button svg {
   grid-row: 1 / 3;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.7;
@@ -4018,24 +4023,22 @@ body {
 
 .bottom-dock button span {
   align-self: end;
-  font: 900 clamp(14px, 1.05vw, 18px) / 1 "Rajdhani", "Inter", sans-serif;
+  font: 900 clamp(13px, 1vw, 16px) / 1 "Rajdhani", "Inter", sans-serif;
   letter-spacing: 0.08em;
 }
 
 .bottom-dock button em {
   align-self: start;
   color: var(--muted);
-  font: 900 clamp(9px, 0.72vw, 11px) / 1 "JetBrains Mono", Consolas, monospace;
+  font: 900 clamp(9px, 0.7vw, 10px) / 1 "JetBrains Mono", Consolas, monospace;
   letter-spacing: 0.08em;
 }
 
 .bottom-dock button.active {
   color: var(--text);
-  border-color: rgba(255, 45, 53, 0.76);
-  background:
-    radial-gradient(circle at 18% 50%, rgba(255, 45, 53, 0.26), transparent 36%),
-    linear-gradient(180deg, rgba(93, 18, 22, 0.62), rgba(9, 4, 5, 0.82));
-  box-shadow: inset 0 0 24px rgba(255, 45, 53, 0.18), 0 0 16px rgba(255, 45, 53, 0.18);
+  border-color: rgba(255, 45, 53, 0.7);
+  background: rgba(255, 45, 53, 0.14);
+  box-shadow: none;
 }
 
 .bottom-dock button:active {
@@ -4047,10 +4050,11 @@ body {
   align-content: center;
   justify-items: start;
   min-width: 0;
-  padding: 8px 14px;
-  border: 1px solid rgba(255, 45, 53, 0.16);
-  clip-path: var(--cut);
-  background: linear-gradient(135deg, rgba(255, 45, 53, 0.1), rgba(0, 0, 0, 0.36));
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 45, 53, 0.3);
+  border-radius: var(--cb-radius, 6px);
+  clip-path: none;
+  background: rgba(255, 45, 53, 0.06);
 }
 
 .dock-signature strong {
@@ -5288,6 +5292,16 @@ body {
   padding: 0 10px;
   font-size: 10px !important;
   letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* Compact map card (Weather page): only the Layers button remains, and it shouldn't stretch into
+   a full-width bar just because it's the only flex child -- every other single-action control in
+   this app (e.g. VIEW ALL ALERTS) is a compact right-aligned pill, not an edge-to-edge button. */
+.atlas-map-controls button:only-child {
+  flex: 0 0 auto;
+  min-width: 120px;
+  margin-left: auto;
   white-space: nowrap;
 }
 

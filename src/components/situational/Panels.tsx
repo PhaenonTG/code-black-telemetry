@@ -259,6 +259,10 @@ type MapRadarPanelProps = {
   alerts?: AlertProduct[];
   spotters?: Spotter[];
   poiPlaces?: NearbyPlace[];
+  // Weather-page card: owner asked to skip single-site radar entirely here (no product row, no
+  // fetch/decode work for it) and keep only the wide-area mosaic + a way to control layer
+  // visibility -- the full single-site toolbar only exists on the Locate page.
+  compact?: boolean;
 };
 
 export function MapRadarPanel(props: MapRadarPanelProps) {
@@ -276,6 +280,7 @@ function AtlasMapRadarPanel({
   alerts = [],
   spotters = [],
   poiPlaces = [],
+  compact = false,
 }: MapRadarPanelProps) {
   const [radarVisible, setRadarVisible] = useState(true);
   const [internalProduct, setInternalProduct] = useState<RadarProduct>("REF");
@@ -299,7 +304,7 @@ function AtlasMapRadarPanel({
   const gpsLon = gps?.lon;
 
   useEffect(() => {
-    if (gpsLat == null || gpsLon == null || !visible) return;
+    if (gpsLat == null || gpsLon == null || !visible || compact) return;
     let cancelled = false;
     getNearestRadarSites(gpsLat, gpsLon).then((sites) => {
       if (!cancelled) setNearestSites(sites);
@@ -309,10 +314,10 @@ function AtlasMapRadarPanel({
     return () => {
       cancelled = true;
     };
-  }, [gpsLat, gpsLon, visible]);
+  }, [gpsLat, gpsLon, visible, compact]);
 
   useEffect(() => {
-    if (!visible || !activeSite) return;
+    if (!visible || !activeSite || compact) return;
     let cancelled = false;
     const load = async () => {
       try {
@@ -435,15 +440,18 @@ function AtlasMapRadarPanel({
             alerts={alerts}
             spotters={spotters}
             poiPlaces={poiPlaces}
+            controlsVariant={compact ? "compact" : "full"}
           />
         </Suspense>
       </div>
-      <div className="atlas-product-mini" aria-label="Radar product selector">
-        {(["REF", "VEL", "SRV", "CC"] as RadarProduct[]).map((item) => (
-          <button key={item} className={item === product ? "active" : ""} onClick={() => applyProduct(item)}>{item}</button>
-        ))}
-        <button onClick={() => setRadarVisible((value) => !value)}>{radarVisible ? "RADAR ON" : "RADAR OFF"}</button>
-      </div>
+      {!compact && (
+        <div className="atlas-product-mini" aria-label="Radar product selector">
+          {(["REF", "VEL", "SRV", "CC"] as RadarProduct[]).map((item) => (
+            <button key={item} className={item === product ? "active" : ""} onClick={() => applyProduct(item)}>{item}</button>
+          ))}
+          <button onClick={() => setRadarVisible((value) => !value)}>{radarVisible ? "RADAR ON" : "RADAR OFF"}</button>
+        </div>
+      )}
       {allowExpand && expanded && typeof document !== "undefined" && createPortal(
         <RadarExpandedView
           active={expanded}

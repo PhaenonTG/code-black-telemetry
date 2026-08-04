@@ -3,6 +3,10 @@
    sits left, GPS/unit status sits right. See MEMORY.md project notes for why this file exists
    standalone instead of living in the shared index.css monolith. */
 
+/* One solid bar, not a row of floating chips: a single flat background + a single hairline bottom
+   border on .ops-header itself. Every child (brand lockup, clock, status cluster) is plain content
+   on that one surface -- no per-element borders/gradients/box-shadows, which is what made the
+   header read as several taped-together panels instead of one rock-solid top. */
 .ops-header {
   position: relative !important;
   display: grid !important;
@@ -10,12 +14,10 @@
   align-items: center !important;
   gap: 10px !important;
   min-width: 0 !important;
-  padding: 8px 18px 7px !important;
-  border-bottom: 1px solid rgba(255, 45, 53, 0.28) !important;
-  background:
-    linear-gradient(180deg, rgba(24, 26, 30, 0.96), rgba(5, 5, 6, 0.96)),
-    linear-gradient(90deg, rgba(255, 45, 53, 0.16), transparent 45%, rgba(255, 45, 53, 0.09)) !important;
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.04), 0 8px 22px rgba(0, 0, 0, 0.42) !important;
+  padding: 10px 20px !important;
+  border-bottom: 1px solid rgba(255, 45, 53, 0.3) !important;
+  background: #0a0a0c !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35) !important;
 }
 
 .brand-lockup {
@@ -25,9 +27,9 @@
   gap: 14px !important;
   height: 100% !important;
   min-width: 0 !important;
-  padding: 5px 12px !important;
-  border: 1px solid rgba(255, 45, 53, 0.22) !important;
-  background: linear-gradient(135deg, rgba(255, 45, 53, 0.12), rgba(255, 255, 255, 0.03) 33%, rgba(0, 0, 0, 0.18)) !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
 }
 
 .brand-lockup > div {
@@ -87,10 +89,10 @@
   display: grid !important;
   place-items: center !important;
   margin: 0 !important;
-  padding: 3px 14px 5px !important;
-  border: 1px solid rgba(255, 45, 53, 0.25) !important;
-  background: linear-gradient(180deg, rgba(18, 18, 20, 0.98), rgba(3, 3, 4, 0.98)) !important;
-  box-shadow: inset 0 0 28px rgba(255, 45, 53, 0.08) !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  box-shadow: none !important;
 }
 
 .time-module .font-mono {
@@ -110,8 +112,15 @@
   display: flex !important;
   align-items: center !important;
   justify-content: flex-end !important;
-  gap: 14px !important;
+  gap: 16px !important;
   min-width: 0 !important;
+}
+
+/* Thin hairline dividers instead of individual boxes -- keeps date/link/battery visually distinct
+   without giving each one its own chip. */
+.header-status > * + * {
+  padding-left: 16px !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .header-date {
@@ -127,10 +136,10 @@
   display: flex !important;
   align-items: center !important;
   flex-shrink: 0;
-  gap: 5px !important;
-  padding: 6px 10px !important;
-  border: 1px solid rgba(255, 255, 255, 0.09) !important;
-  background: linear-gradient(180deg, rgba(18, 19, 22, 0.94), rgba(7, 8, 10, 0.94)) !important;
+  gap: 6px !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
   color: var(--text);
   font: 800 clamp(10px, 0.85vw, 12px) / 1 "JetBrains Mono", Consolas, monospace !important;
   letter-spacing: 0.04em;
@@ -168,9 +177,9 @@
   align-items: center !important;
   flex-shrink: 0;
   gap: 7px !important;
-  padding: 6px 12px !important;
-  border: 1px solid rgba(255, 255, 255, 0.09) !important;
-  background: linear-gradient(180deg, rgba(18, 19, 22, 0.94), rgba(7, 8, 10, 0.94)) !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
   color: var(--text);
   font: 800 clamp(10px, 0.85vw, 12px) / 1 "JetBrains Mono", Consolas, monospace !important;
   letter-spacing: 0.08em;

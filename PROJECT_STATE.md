@@ -1058,7 +1058,76 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       owner's personal photo library); reverted the test styling back to the default red circle
       before finishing.
 
-All of the above (items 1-44) were built, `npm run build` typechecked clean, and have now been
+45. **Visual redesign: map card, header, dock, and button uniformity**. Owner's own words after
+    charging/evaluating the app fresh: "Map card is terrible and needs substantial work... looks
+    like dogshit... functionally it's not terrible but the design is dogshit." Confirmed via
+    screenshot review, not guessed — pulled a fresh device screenshot before touching anything.
+    - **Map controls relocated per owner's explicit direction** (asked via `AskUserQuestion`, owner
+      picked a custom answer over the three offered options): the Weather-page compact map card
+      keeps the wide-area mosaic (visible + animated by default, unchanged), keeps pan/zoom via
+      touch gestures, and keeps exactly one control — a "Layers" button — with everything else
+      (zoom +/-, north-up/heading-up/recenter cycle, range rings, clear trail, mosaic on/off toggle,
+      and the entire single-site REF/VEL/SRV/CC/RADAR-ON row) removed from that card entirely and
+      left intact-and-unchanged on the full Locate page. New `AtlasMap` prop `controlsVariant: "full"
+      | "compact"` gates the button row and the floating site/product status strip; new
+      `MapRadarPanel`/`AtlasMapRadarPanel` prop `compact` additionally skips the single-site radar
+      fetch effects entirely (not just the UI) so the compact card does zero NEXRAD site-list/frame
+      work. Since the dedicated MOSAIC toggle button no longer exists on the compact card, added a
+      "Wide-Area Mosaic" checkbox to that card's Layers popover (only there — the full page's
+      popover is untouched) so mosaic visibility is still reachable, per the owner's explicit "leave
+      me some way to control the layers... nothing else for now."
+    - **Compact map camera fixed to a wide regional zoom.** Owner caught a follow-up bug: the map
+      still *looked* like a local single-site chase view even with the radar layer gone, because
+      `applyAtlasCamera`'s continuous GPS-follow (`zoomForSpeed()`) was still easing the camera down
+      to the same local zoom (7.25-9.2) it always used, on every GPS update, regardless of variant —
+      the one-time cinematic wide-to-narrow intro animation (item #24, 4.5 → operating zoom) landed
+      wide for a moment and then got immediately overridden by the very next GPS tick. Added a
+      `compact` parameter to both `zoomForSpeed()` and `applyAtlasCamera()` (`AtlasCameraController.
+      ts`) that fixes the target zoom to a new `MOSAIC_CARD_ZOOM = 6.5` constant (matches the
+      mosaic tile source's own `maxzoom: 7` so the imagery reads crisp, not upscaled) instead of
+      tracking vehicle speed — reuses the exact same existing intro flyTo/easing/duration code path,
+      it now just eases down to 6.5 instead of a local zoom. Device-verified: the compact card now
+      settles on a multi-county regional view (visibly more chaser/team pins and towns in frame)
+      instead of a tight street-level view, while the Locate page's full map is completely
+      unaffected (still uses real `zoomForSpeed()`).
+    - **Header rebuilt as one solid bar instead of four floating chips** (`TopBar.css`). Previously
+      the brand lockup, the clock, the Pi-link status, and the battery indicator each had their own
+      `border` + their own background gradient + (for the clock) absolute positioning independent of
+      the bar — four separately-styled panels glued onto one bar, which is what read as "taped
+      together" rather than "rock solid." Stripped every child element's individual border/
+      background/box-shadow down to plain content sitting directly on `.ops-header`'s own single
+      flat background + single hairline bottom border; added a thin `border-left` divider between
+      the date/Pi-link/battery cluster items (`.header-status > * + *`) so they stay visually
+      distinct without each needing its own box.
+    - **Dock/footer flattened and shortened** (`index.css`). Every nav button was its own "chip"
+      (cut-corner `clip-path`, its own border, its own gradient, a box-shadow, a radial-glow active
+      state) nested inside a dock bar that *also* had its own clip-path/gradient/shadow — chip-
+      inside-a-chip is what made it read as heavy/"robust" rather than a clean tab bar. Removed all
+      clip-path/gradient/box-shadow from both `.bottom-dock` and `.bottom-dock button` (and
+      `.dock-signature`), replaced with one flat background + one hairline top border on the bar and
+      a small consistent `border-radius` + thin border on every button; active state is now a flat
+      red-tinted background + red border, no glow. Shrank `--dock-h` from `clamp(78px, 8.7dvh,
+      104px)` to `clamp(64px, 7dvh, 84px)` (confirmed via computed style: 92px → 72px actual
+      height at the tablet's resolution) and tightened button icon size (32px → 24px) and padding
+      to match.
+    - **Button styles converged on one shared flat language** across `.map-controls button`,
+      `.mode-toggle button`, `.view-all-button`, `.atlas-product-mini button`: same hairline border
+      color, same `var(--cb-radius, 6px)` corner radius, no gradients/clip-paths, consistent red
+      active-state treatment. Also fixed a self-inflicted regression from this same pass: the lone
+      Layers button on the compact map card was stretching into a full-width bar (it was the only
+      flex child of a row designed for 7 buttons) — added a `:only-child` rule so a single remaining
+      control renders as a normal right-aligned compact pill instead, matching every other single-
+      action control in the app (e.g. `VIEW ALL ALERTS`).
+    - Found and fixed a stray leftover mid-session: the Vehicle Pin color in Settings had been left
+      on yellow from earlier testing instead of reverted to the default red — not something this
+      pass touched functionally, just cleaned up before finishing since it wasn't intentional.
+    - Device-verified every piece on the physical tablet across multiple rebuild/install cycles:
+      compact card shows only Layers + wide mosaic in view; Locate page keeps every control
+      unchanged; header reads as one bar; dock is visibly shorter and flatter; Settings page (a
+      heavy consumer of `.mode-toggle`/`.settings-shape-row` buttons) still fits with no new
+      clipping; vehicle marker back to default red circle.
+
+All of the above (items 1-45) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
