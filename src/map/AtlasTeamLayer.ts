@@ -11,6 +11,6 @@ export function updateAtlasTeamLayer(map: MapboxMap, team: TeamPosition[], style
     markers = {};
     teamMarkers.set(map, markers);
   }
-  const points = team.map((member) => ({ id: member.id, lat: member.lat, lon: member.lon, name: member.name, updatedAtText: member.updatedAtText }));
+  const points = team.map((member) => ({ id: member.id, lat: member.lat, lon: member.lon, name: member.name, updatedAtText: member.updatedAtText, group: member.group, phone: member.phone, email: member.email }));
   syncAtlasPinMarkers(map, markers, points, style, visible);
 }

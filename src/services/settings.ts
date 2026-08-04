@@ -50,7 +50,7 @@ export interface PinStyle {
   shape: PinShape;
 }
 
-const TEAM_ROSTER_KEY = "codeblack.teamRoster";
+const TEAM_MEMBERS_KEY = "codeblack.teamMembers";
 const TEAM_PIN_STYLE_KEY = "codeblack.teamPinStyle";
 const CHASER_PIN_STYLE_KEY = "codeblack.chaserPinStyle";
 // Green is unclaimed anywhere else in this app's palette and conventionally reads as
@@ -60,40 +60,54 @@ const CHASER_PIN_STYLE_KEY = "codeblack.chaserPinStyle";
 const DEFAULT_TEAM_PIN_STYLE: PinStyle = { color: "#3ddc70", shape: "diamond" };
 const DEFAULT_CHASER_PIN_STYLE: PinStyle = { color: "#c7ccd6", shape: "circle" };
 
-let currentTeamRoster: string[] = [];
-const teamRosterListeners = new Set<(roster: string[]) => void>();
+export interface TeamMember {
+  id: string;
+  name: string;
+  group: string;
+  phone: string;
+  email: string;
+}
+
+// Was a flat string[] of names/marker IDs -- the owner asked for real teams/groups with per-member
+// contact info, a step up from "just a roster that filters the map." `group` is a free-text label
+// (e.g. "Alpha", "Chase Vehicle 2") rather than a separate managed entity -- multiple members can
+// share a group name, and there's no fixed group list to maintain elsewhere. `name` is still what
+// resolveTeamPositions() (teamPositions.ts) matches against the live Spotter Network feed to place
+// a pin; phone/email are purely for the contact-info popup, not used for matching.
+let currentTeamMembers: TeamMember[] = [];
+const teamMembersListeners = new Set<(members: TeamMember[]) => void>();
 let currentTeamPinStyle: PinStyle = DEFAULT_TEAM_PIN_STYLE;
 const teamPinStyleListeners = new Set<(style: PinStyle) => void>();
 let currentChaserPinStyle: PinStyle = DEFAULT_CHASER_PIN_STYLE;
 const chaserPinStyleListeners = new Set<(style: PinStyle) => void>();
 
-export async function loadTeamRoster() {
-  const saved = await Preferences.get({ key: TEAM_ROSTER_KEY });
+export async function loadTeamMembers() {
+  const saved = await Preferences.get({ key: TEAM_MEMBERS_KEY });
   try {
-    currentTeamRoster = saved.value ? (JSON.parse(saved.value) as string[]) : [];
+    currentTeamMembers = saved.value ? (JSON.parse(saved.value) as TeamMember[]) : [];
   } catch {
-    currentTeamRoster = [];
+    currentTeamMembers = [];
   }
-  teamRosterListeners.forEach((listener) => listener(currentTeamRoster));
-  return currentTeamRoster;
+  teamMembersListeners.forEach((listener) => listener(currentTeamMembers));
+  return currentTeamMembers;
 }
 
-export async function saveTeamRoster(roster: string[]) {
-  currentTeamRoster = roster.map((entry) => entry.trim()).filter(Boolean);
-  await Preferences.set({ key: TEAM_ROSTER_KEY, value: JSON.stringify(currentTeamRoster) });
-  teamRosterListeners.forEach((listener) => listener(currentTeamRoster));
-  return currentTeamRoster;
+export async function saveTeamMembers(members: TeamMember[]) {
+  currentTeamMembers = members;
+  await Preferences.set({ key: TEAM_MEMBERS_KEY, value: JSON.stringify(currentTeamMembers) });
+  teamMembersListeners.forEach((listener) => listener(currentTeamMembers));
+  return currentTeamMembers;
 }
 
-export function getTeamRoster() {
-  return currentTeamRoster;
+export function getTeamMembers() {
+  return currentTeamMembers;
 }
 
-export function subscribeTeamRoster(listener: (roster: string[]) => void) {
-  teamRosterListeners.add(listener);
-  listener(currentTeamRoster);
+export function subscribeTeamMembers(listener: (members: TeamMember[]) => void) {
+  teamMembersListeners.add(listener);
+  listener(currentTeamMembers);
   return () => {
-    teamRosterListeners.delete(listener);
+    teamMembersListeners.delete(listener);
   };
 }
 

@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { getTeamRoster, loadTeamRoster, subscribeTeamRoster } from "../services/settings";
+import { getTeamMembers, loadTeamMembers, subscribeTeamMembers, type TeamMember } from "../services/settings";
 
-export function useTeamRoster(): string[] {
-  const [roster, setRoster] = useState(() => getTeamRoster());
+export function useTeamRoster(): TeamMember[] {
+  const [members, setMembers] = useState(() => getTeamMembers());
   useEffect(() => {
-    const unsubscribe = subscribeTeamRoster(setRoster);
-    void loadTeamRoster();
+    const unsubscribe = subscribeTeamMembers(setMembers);
+    void loadTeamMembers();
     return unsubscribe;
   }, []);
-  return roster;
+  return members;
 }

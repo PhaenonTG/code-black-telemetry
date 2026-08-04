@@ -12,24 +12,25 @@ import {
   loadChaserRadiusMiles,
   loadFavoriteBrands,
   loadNightVisionEnabled,
+  loadTeamMembers,
   loadTeamPinStyle,
-  loadTeamRoster,
   saveBleCommandToken,
   saveChaserPinStyle,
   saveChaserRadiusMiles,
   saveFavoriteBrands,
   saveNightVisionEnabled,
+  saveTeamMembers,
   saveTeamPinStyle,
-  saveTeamRoster,
   subscribeChaserPinStyle,
   subscribeChaserRadiusMiles,
   subscribeFavoriteBrands,
   subscribeNightVisionEnabled,
   subscribePiEndpoint,
+  subscribeTeamMembers,
   subscribeTeamPinStyle,
-  subscribeTeamRoster,
   type PinShape,
   type PinStyle,
+  type TeamMember,
 } from "../../services/settings";
 import { emitCodeBlackSound, setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, subscribeCodeBlackSoundEnabled } from "../../services/sound";
 import { clearSpotterAccount, loadSpotterAccount, spotterNetworkLogin, subscribeSpotterAccount, type SpotterAccount } from "../../services/spotterAccount";
@@ -80,7 +81,7 @@ const SETTINGS_SECTIONS = [
   "Pi Connection",
   "Spotter Network",
   "Nearby Chasers",
-  "Team Roster",
+  "Teams",
   "Map Pins",
   "Favorite Brands",
   "Chase Session",
@@ -106,8 +107,11 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [chaserRadiusMiles, setChaserRadiusMiles] = useState(DEFAULT_CHASER_RADIUS_MILES);
   const [chaserRadiusInput, setChaserRadiusInput] = useState(String(DEFAULT_CHASER_RADIUS_MILES));
   const [chaserRadiusSaved, setChaserRadiusSaved] = useState(false);
-  const [teamRoster, setTeamRoster] = useState<string[]>([]);
-  const [teamRosterInput, setTeamRosterInput] = useState("");
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberGroup, setNewMemberGroup] = useState("");
+  const [newMemberPhone, setNewMemberPhone] = useState("");
+  const [newMemberEmail, setNewMemberEmail] = useState("");
   const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
   const [favoriteBrandsInput, setFavoriteBrandsInput] = useState("");
   const [teamPinStyle, setTeamPinStyle] = useState<PinStyle>({ color: "#3ddc70", shape: "diamond" });
@@ -192,8 +196,8 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   }, []);
 
   useEffect(() => {
-    const unsubscribe = subscribeTeamRoster(setTeamRoster);
-    void loadTeamRoster();
+    const unsubscribe = subscribeTeamMembers(setTeamMembers);
+    void loadTeamMembers();
     return unsubscribe;
   }, []);
 
@@ -264,14 +268,24 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   };
 
   const addTeamMember = () => {
-    const trimmed = teamRosterInput.trim();
-    if (!trimmed || teamRoster.includes(trimmed)) return;
-    void saveTeamRoster([...teamRoster, trimmed]);
-    setTeamRosterInput("");
+    const name = newMemberName.trim();
+    if (!name || teamMembers.some((member) => member.name === name)) return;
+    const member: TeamMember = {
+      id: `${name}-${Date.now()}`,
+      name,
+      group: newMemberGroup.trim(),
+      phone: newMemberPhone.trim(),
+      email: newMemberEmail.trim(),
+    };
+    void saveTeamMembers([...teamMembers, member]);
+    setNewMemberName("");
+    setNewMemberGroup("");
+    setNewMemberPhone("");
+    setNewMemberEmail("");
   };
 
-  const removeTeamMember = (name: string) => {
-    void saveTeamRoster(teamRoster.filter((entry) => entry !== name));
+  const removeTeamMember = (id: string) => {
+    void saveTeamMembers(teamMembers.filter((member) => member.id !== id));
   };
 
   const addFavoriteBrand = () => {
@@ -476,30 +490,53 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
       </Panel>
       </section>
 
-      <section className="settings-subpage" aria-label="Team Roster">
-      <Panel title="Team Roster" className="settings-team-panel">
+      <section className="settings-subpage" aria-label="Teams">
+      <Panel title="Teams" className="settings-team-panel">
         <div className="settings-row">
           <div>
             <strong>Team Members</strong>
-            <span>Spotter Network names/marker IDs to show as "Team" (a distinct pin) instead of generic Chasers on the map. Interim source until a direct vehicle-to-vehicle position feed exists.</span>
+            <span>Name must match a Spotter Network name/marker ID to show as "Team" (a distinct pin) instead of generic Chasers on the map. Group, phone, and email are optional -- shown when you tap that member's pin. Interim source until a direct vehicle-to-vehicle position feed exists.</span>
           </div>
         </div>
         <div className="settings-row settings-row--stack">
           <input
             className="settings-input"
-            placeholder="Name or marker ID"
-            value={teamRosterInput}
-            onChange={(event) => setTeamRosterInput(event.target.value)}
+            placeholder="Name or marker ID (required)"
+            value={newMemberName}
+            onChange={(event) => setNewMemberName(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Enter") addTeamMember(); }}
           />
-          <button className="settings-action" disabled={!teamRosterInput.trim()} onClick={addTeamMember}>Add</button>
+          <input
+            className="settings-input"
+            placeholder="Group (e.g. Alpha, Chase Vehicle 2)"
+            value={newMemberGroup}
+            onChange={(event) => setNewMemberGroup(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") addTeamMember(); }}
+          />
+          <input
+            className="settings-input"
+            placeholder="Phone"
+            type="tel"
+            value={newMemberPhone}
+            onChange={(event) => setNewMemberPhone(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") addTeamMember(); }}
+          />
+          <input
+            className="settings-input"
+            placeholder="Email"
+            type="email"
+            value={newMemberEmail}
+            onChange={(event) => setNewMemberEmail(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") addTeamMember(); }}
+          />
+          <button className="settings-action" disabled={!newMemberName.trim()} onClick={addTeamMember}>Add</button>
         </div>
-        {teamRoster.length > 0 && (
+        {teamMembers.length > 0 && (
           <div className="settings-roster-list">
-            {teamRoster.map((name) => (
-              <div key={name} className="settings-roster-chip">
-                <span>{name}</span>
-                <button type="button" aria-label={`Remove ${name}`} onClick={() => removeTeamMember(name)}>×</button>
+            {teamMembers.map((member) => (
+              <div key={member.id} className="settings-roster-chip" title={[member.phone, member.email].filter(Boolean).join(" · ") || undefined}>
+                <span>{member.name}{member.group ? ` (${member.group})` : ""}</span>
+                <button type="button" aria-label={`Remove ${member.name}`} onClick={() => removeTeamMember(member.id)}>×</button>
               </div>
             ))}
           </div>

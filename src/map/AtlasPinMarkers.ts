@@ -9,6 +9,9 @@ export interface PinPoint {
   lon: number;
   name?: string;
   updatedAtText?: string;
+  group?: string;
+  phone?: string;
+  email?: string;
 }
 
 // Personalizable color + shape rules out plain Mapbox GL circle layers (GL circles are,
@@ -70,7 +73,13 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
   // Computed fresh at click time (not whenever the marker last synced) so it's accurate to the
   // moment the popup is actually being read, not stale by however long since the last data poll.
   const age = point.updatedAtText ? spotterAgeText(point.updatedAtText) : "";
-  const html = `<strong>${escapeHtml(point.name)}</strong><span>${age ? `Last ping: ${escapeHtml(age)}` : "No recent ping data"}</span>`;
+  const pingLine = `<span>${age ? `Last ping: ${escapeHtml(age)}` : "No recent ping data"}</span>`;
+  // group/phone/email are only ever set for Team pins (see AtlasTeamLayer.ts) -- Chaser pins never
+  // carry contact info the owner didn't enter themselves, so these lines simply don't render there.
+  const groupLine = point.group ? `<em>${escapeHtml(point.group)}</em>` : "";
+  const phoneLine = point.phone ? `<span>${escapeHtml(point.phone)}</span>` : "";
+  const emailLine = point.email ? `<span>${escapeHtml(point.email)}</span>` : "";
+  const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${phoneLine}${emailLine}`;
   const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, offset: 16, className: "atlas-pin-popup" })
     .setLngLat([point.lon, point.lat])
     .setHTML(html)
