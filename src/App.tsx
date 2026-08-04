@@ -24,6 +24,7 @@ import { SevereFlashOverlay } from "./components/SevereFlashOverlay";
 import { WindCard } from "./components/situational/WindCard";
 import { useAlertProducts } from "./hooks/useAlertProducts";
 import { useNearbyPlaces } from "./hooks/useNearbyPlaces";
+import { useNearbyPoiList } from "./hooks/useNearbyPoiList";
 import { useSituationalData } from "./hooks/useSituationalData";
 import { useSpotters } from "./hooks/useSpotters";
 import { useStatus } from "./hooks/useTelemetry";
@@ -73,6 +74,7 @@ export default function App() {
     : null;
   const alertProducts = useAlertProducts(gpsPoint);
   const nearby = useNearbyPlaces(gpsPoint);
+  const poi = useNearbyPoiList(gpsPoint);
   const spotters = useSpotters(gpsPoint);
   const piState = status?.piOnline ? `ONLINE · ${status.apiLatencyMs} ms` : status?.updatedAt ? `OFFLINE · LAST CHECK ${new Date(status.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "OFFLINE";
   const serviceState = status?.piOnline ? "VIA PI · CHECK DASHBOARD" : "VIA PI · OFFLINE";
@@ -210,7 +212,7 @@ export default function App() {
             <WeatherObservationPanel external={external} mode={cockpitMode} />
             <WindCard external={external} mode={cockpitMode} />
             <AlertsPanel products={alertProducts.products} error={alertProducts.error} />
-            <MapRadarPanel gps={mapGps} visible={page === "weather"} alerts={alertProducts.products} spotters={spotters.spotters} />
+            <MapRadarPanel gps={mapGps} visible={page === "weather"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} />
             <NearbyPanel places={nearby.places} error={nearby.error} spotters={spotters.spotters} spottersError={spotters.error} />
           </div>
         </section>
@@ -248,7 +250,7 @@ export default function App() {
         </section>
         <section className="page page--locate" aria-label="Locate">
           <div className="page-grid page-grid--locate">
-            <MapRadarPanel gps={mapGps} visible={page === "locate"} alerts={alertProducts.products} spotters={spotters.spotters} />
+            <MapRadarPanel gps={mapGps} visible={page === "locate"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} />
           </div>
         </section>
         <section className="page page--alerts" aria-label="Alerts">

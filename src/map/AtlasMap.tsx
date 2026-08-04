@@ -5,9 +5,10 @@ import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagno
 import type { RadarFrame, RadarProduct } from "../services/radar";
 import { getRadarMosaicFrames, type AlertProduct } from "../services/situational";
 import type { Spotter } from "../services/spotters";
+import type { NearbyPlace } from "../services/nearby";
 import { resolveTeamPositions } from "../services/teamPositions";
 import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcrumbTrail";
-import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, subscribeChaserRadiusMiles } from "../services/settings";
+import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, loadFavoriteBrands, subscribeChaserRadiusMiles, subscribeFavoriteBrands } from "../services/settings";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
 import { useTeamRoster } from "../hooks/useTeamRoster";
 import { useChaserPinStyle, useTeamPinStyle } from "../hooks/usePinStyle";
@@ -16,6 +17,7 @@ import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstanc
 import { updateAtlasAlertsLayer } from "./AtlasAlertsLayer";
 import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
 import { startAtlasMosaicAnimation } from "./AtlasMosaicLayer";
+import { updateAtlasPoiLayer } from "./AtlasPoiLayer";
 import { updateAtlasRadarLayer, ATLAS_RADAR_LAYER, ATLAS_RADAR_SOURCE } from "./AtlasRadarLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
 import { updateAtlasSpotterLayer } from "./AtlasSpotterLayer";
@@ -50,6 +52,7 @@ type AtlasMapProps = {
   statusLines: string[];
   alerts?: AlertProduct[];
   spotters?: Spotter[];
+  poiPlaces?: NearbyPlace[];
 };
 
 const EMPTY_MODIFIERS = { modifiedLayers: 0, firstSymbolLayerId: undefined as string | undefined, lastMapError: "" };
@@ -58,6 +61,7 @@ const EMPTY_MODIFIERS = { modifiedLayers: 0, firstSymbolLayerId: undefined as st
 // off `alerts`/`spotters` even though nothing actually changed.
 const EMPTY_ALERTS: AlertProduct[] = [];
 const EMPTY_SPOTTERS: Spotter[] = [];
+const EMPTY_POI: NearbyPlace[] = [];
 const ATLAS_STYLE_TUNING_DISABLED = import.meta.env.VITE_ATLAS_DISABLE_STYLE_TUNE === "1";
 const ATLAS_DIAGNOSTICS_ENABLED = import.meta.env.VITE_ATLAS_DIAGNOSTICS === "1";
 const GPS_REFRESH_MAX_AGE_MS = 5_000;
@@ -110,6 +114,7 @@ export function AtlasMap({
   statusLines,
   alerts = EMPTY_ALERTS,
   spotters = EMPTY_SPOTTERS,
+  poiPlaces = EMPTY_POI,
 }: AtlasMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -149,6 +154,7 @@ export function AtlasMap({
   const [watches, setWatches] = useState<WatchPolygon[]>([]);
   const [teamVisible, setTeamVisible] = useState(true);
   const [chasersVisible, setChasersVisible] = useState(true);
+  const [poiVisible, setPoiVisible] = useState(true);
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
   const roster = useTeamRoster();
   const teamPinStyle = useTeamPinStyle();
@@ -157,6 +163,12 @@ export function AtlasMap({
   useEffect(() => {
     const unsubscribe = subscribeChaserRadiusMiles(setChaserRadiusMiles);
     void loadChaserRadiusMiles();
+    return () => { unsubscribe(); };
+  }, []);
+  const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
+  useEffect(() => {
+    const unsubscribe = subscribeFavoriteBrands(setFavoriteBrands);
+    void loadFavoriteBrands();
     return () => { unsubscribe(); };
   }, []);
   const teamPositions = useMemo(() => resolveTeamPositions(spotters, roster), [spotters, roster]);
@@ -443,6 +455,12 @@ export function AtlasMap({
   }, [chaserSpotters, chaserPinStyle, chasersVisible, loaded]);
 
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    updateAtlasPoiLayer(map, poiPlaces, favoriteBrands, poiVisible);
+  }, [poiPlaces, favoriteBrands, poiVisible, loaded]);
+
+  useEffect(() => {
     if (!mosaicVisible) return;
     let cancelled = false;
     const load = async () => {
@@ -583,6 +601,10 @@ export function AtlasMap({
               <input type="checkbox" checked={chasersVisible} onChange={() => setChasersVisible((value) => !value)} />
               Chasers
             </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={poiVisible} onChange={() => setPoiVisible((value) => !value)} />
+              Gas / Food
+            </label>
           </div>
         )}
         {(visibleError || ATLAS_DIAGNOSTICS_ENABLED) && (
@@ -596,7 +618,7 @@ export function AtlasMap({
         <button type="button" aria-label="Toggle range rings" title="Distance rings around your position" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RINGS{rangeRings !== "off" ? ` ${rangeRings}NM` : ""}</button>
         <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
         <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, animated" className={mosaicVisible ? "active" : ""} onClick={() => setMosaicVisible((value) => !value)}>MOSAIC</button>
-        <button type="button" aria-label="Map layers" title="Toggle alerts, team, and chaser pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
+        <button type="button" aria-label="Map layers" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
       </div>
     </div>
   );

@@ -10,17 +10,20 @@ import {
   loadBleCommandToken,
   loadChaserPinStyle,
   loadChaserRadiusMiles,
+  loadFavoriteBrands,
   loadNightVisionEnabled,
   loadTeamPinStyle,
   loadTeamRoster,
   saveBleCommandToken,
   saveChaserPinStyle,
   saveChaserRadiusMiles,
+  saveFavoriteBrands,
   saveNightVisionEnabled,
   saveTeamPinStyle,
   saveTeamRoster,
   subscribeChaserPinStyle,
   subscribeChaserRadiusMiles,
+  subscribeFavoriteBrands,
   subscribeNightVisionEnabled,
   subscribePiEndpoint,
   subscribeTeamPinStyle,
@@ -79,6 +82,7 @@ const SETTINGS_SECTIONS = [
   "Nearby Chasers",
   "Team Roster",
   "Map Pins",
+  "Favorite Brands",
   "Chase Session",
   "Interior Lighting",
   "About",
@@ -104,6 +108,8 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [chaserRadiusSaved, setChaserRadiusSaved] = useState(false);
   const [teamRoster, setTeamRoster] = useState<string[]>([]);
   const [teamRosterInput, setTeamRosterInput] = useState("");
+  const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
+  const [favoriteBrandsInput, setFavoriteBrandsInput] = useState("");
   const [teamPinStyle, setTeamPinStyle] = useState<PinStyle>({ color: "#3ddc70", shape: "diamond" });
   const [chaserPinStyle, setChaserPinStyle] = useState<PinStyle>({ color: "#c7ccd6", shape: "circle" });
   const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
@@ -192,6 +198,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   }, []);
 
   useEffect(() => {
+    const unsubscribe = subscribeFavoriteBrands(setFavoriteBrands);
+    void loadFavoriteBrands();
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = subscribeTeamPinStyle(setTeamPinStyle);
     void loadTeamPinStyle();
     return unsubscribe;
@@ -260,6 +272,17 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
 
   const removeTeamMember = (name: string) => {
     void saveTeamRoster(teamRoster.filter((entry) => entry !== name));
+  };
+
+  const addFavoriteBrand = () => {
+    const trimmed = favoriteBrandsInput.trim();
+    if (!trimmed || favoriteBrands.includes(trimmed)) return;
+    void saveFavoriteBrands([...favoriteBrands, trimmed]);
+    setFavoriteBrandsInput("");
+  };
+
+  const removeFavoriteBrand = (brand: string) => {
+    void saveFavoriteBrands(favoriteBrands.filter((entry) => entry !== brand));
   };
 
   const toggleNightVision = (enabled: boolean) => {
@@ -514,6 +537,37 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
             </div>
           </div>
         </div>
+      </Panel>
+      </section>
+
+      <section className="settings-subpage" aria-label="Favorite Brands">
+      <Panel title="Favorite Brands" className="settings-favorites-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Preferred Chains</strong>
+            <span>Gas/food POI pins on the map matching these names (e.g. Love's, Buc-ee's, Taco Bell, Braum's) render brighter and larger so your preferred stops stand out from the rest of the layer.</span>
+          </div>
+        </div>
+        <div className="settings-row settings-row--stack">
+          <input
+            className="settings-input"
+            placeholder="Brand name"
+            value={favoriteBrandsInput}
+            onChange={(event) => setFavoriteBrandsInput(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") addFavoriteBrand(); }}
+          />
+          <button className="settings-action" disabled={!favoriteBrandsInput.trim()} onClick={addFavoriteBrand}>Add</button>
+        </div>
+        {favoriteBrands.length > 0 && (
+          <div className="settings-roster-list">
+            {favoriteBrands.map((brand) => (
+              <div key={brand} className="settings-roster-chip">
+                <span>{brand}</span>
+                <button type="button" aria-label={`Remove ${brand}`} onClick={() => removeFavoriteBrand(brand)}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
       </Panel>
       </section>
 

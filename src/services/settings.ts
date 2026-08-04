@@ -216,6 +216,45 @@ export function subscribeNightVisionEnabled(listener: (enabled: boolean) => void
   };
 }
 
+const FAVORITE_BRANDS_KEY = "codeblack.favoriteBrands";
+// Case-insensitive substring match against a POI's OSM name (see AtlasPoiLayer.ts) -- lets the
+// owner call out specific preferred chains (Love's, Buc-ee's, Taco Bell, Braum's, etc.) so those
+// pins stand out from the rest of the Gas/Food POI layer on the map. Same shape as teamRoster
+// (plain string list, JSON in Preferences) since it's the same kind of "curated list filtering a
+// broader feed" pattern.
+let currentFavoriteBrands: string[] = [];
+const favoriteBrandsListeners = new Set<(brands: string[]) => void>();
+
+export async function loadFavoriteBrands() {
+  const saved = await Preferences.get({ key: FAVORITE_BRANDS_KEY });
+  try {
+    currentFavoriteBrands = saved.value ? (JSON.parse(saved.value) as string[]) : [];
+  } catch {
+    currentFavoriteBrands = [];
+  }
+  favoriteBrandsListeners.forEach((listener) => listener(currentFavoriteBrands));
+  return currentFavoriteBrands;
+}
+
+export async function saveFavoriteBrands(brands: string[]) {
+  currentFavoriteBrands = brands.map((entry) => entry.trim()).filter(Boolean);
+  await Preferences.set({ key: FAVORITE_BRANDS_KEY, value: JSON.stringify(currentFavoriteBrands) });
+  favoriteBrandsListeners.forEach((listener) => listener(currentFavoriteBrands));
+  return currentFavoriteBrands;
+}
+
+export function getFavoriteBrands() {
+  return currentFavoriteBrands;
+}
+
+export function subscribeFavoriteBrands(listener: (brands: string[]) => void) {
+  favoriteBrandsListeners.add(listener);
+  listener(currentFavoriteBrands);
+  return () => {
+    favoriteBrandsListeners.delete(listener);
+  };
+}
+
 function normalizeEndpoint(value: string) {
   const trimmed = value.trim().replace(/\/$/, "");
   if (!trimmed) return "";

@@ -241,7 +241,7 @@ async function fetchOverpassElements(url: string, query: string): Promise<Overpa
   }
 }
 
-function elementsToPlace(category: NearbyCategory, pos: Position, elements: OverpassNode[]): NearbyPlace | null {
+function elementsToCandidates(category: NearbyCategory, pos: Position, elements: OverpassNode[]): NearbyPlace[] {
   const now = new Date();
   const candidates: NearbyPlace[] = [];
   for (const node of elements) {
@@ -269,7 +269,7 @@ function elementsToPlace(category: NearbyCategory, pos: Position, elements: Over
       beds: Number.isFinite(beds) && beds > 0 ? beds : null,
     });
   }
-  return bestCandidate(category, candidates);
+  return candidates;
 }
 
 async function fetchCategoryPlace(category: NearbyCategory, pos: Position): Promise<NearbyPlace | null> {
@@ -278,12 +278,33 @@ async function fetchCategoryPlace(category: NearbyCategory, pos: Position): Prom
   for (const url of OVERPASS_URLS) {
     try {
       const elements = await fetchOverpassElements(url, query);
-      return elementsToPlace(category, pos, elements);
+      return bestCandidate(category, elementsToCandidates(category, pos, elements));
     } catch (error) {
       lastError = error;
     }
   }
   throw lastError instanceof Error ? lastError : new Error("Nearby lookup failed");
+}
+
+// Unlike fetchCategoryPlace (single best pick, for the Nearby card), the map's POI layer wants
+// every nearby candidate to render as its own pin -- sorted by distance and capped per category so
+// a dense urban area doesn't dump hundreds of pins on the map at once (mirrors the same reasoning
+// behind the chaser-pin radius fix elsewhere in this app: unbounded point layers on a map become
+// visual noise fast).
+async function fetchCategoryPlaceList(category: NearbyCategory, pos: Position, limit: number): Promise<NearbyPlace[]> {
+  const query = buildCategoryQuery(category, pos);
+  let lastError: unknown;
+  for (const url of OVERPASS_URLS) {
+    try {
+      const elements = await fetchOverpassElements(url, query);
+      return elementsToCandidates(category, pos, elements)
+        .sort((a, b) => a.distanceMiles - b.distanceMiles)
+        .slice(0, limit);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("POI lookup failed");
 }
 
 const REQUEST_STAGGER_MS = 350; // overpass-api.de's own usage policy caps concurrent requests per
@@ -318,5 +339,36 @@ export async function getNearbyPlaces(pos: Position): Promise<{ places: Partial<
   // Partial success is still useful (e.g. gas/food resolve fine, hospital times out) -- only
   // surface an error, and only then discard everything, if every category failed outright.
   if (successCount === 0) return { places: {}, error: lastError || "Nearby lookup failed" };
+  return { places, error: "" };
+}
+
+const POI_LIST_LIMIT_PER_CATEGORY = 20;
+
+// Feeds the map's Gas/Food POI layer (distinct from getNearbyPlaces above, which only returns the
+// single best pick per category for the Nearby card) -- every candidate within range, for the map
+// to render as its own pin.
+export async function getNearbyPoiList(pos: Position, categories: NearbyCategory[] = ["gas", "food"]): Promise<{ places: NearbyPlace[]; error: string }> {
+  const pending = categories.map((category, index) =>
+    new Promise<NearbyPlace[]>((resolve, reject) => {
+      window.setTimeout(() => {
+        fetchCategoryPlaceList(category, pos, POI_LIST_LIMIT_PER_CATEGORY).then(resolve, reject);
+      }, index * REQUEST_STAGGER_MS);
+    }),
+  );
+  const results = await Promise.allSettled(pending);
+
+  const places: NearbyPlace[] = [];
+  let lastError = "";
+  let successCount = 0;
+  results.forEach((result) => {
+    if (result.status === "fulfilled") {
+      successCount += 1;
+      places.push(...result.value);
+    } else {
+      lastError = result.reason instanceof Error ? result.reason.message : "POI lookup failed";
+    }
+  });
+
+  if (successCount === 0) return { places: [], error: lastError || "POI lookup failed" };
   return { places, error: "" };
 }

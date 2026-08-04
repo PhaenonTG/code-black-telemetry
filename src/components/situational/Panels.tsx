@@ -9,6 +9,7 @@ import { useWeather } from "../../hooks/useTelemetry";
 const AtlasMap = lazy(() => import("../../map/AtlasMap").then((mod) => ({ default: mod.AtlasMap })));
 import { type AlertProduct, type ExternalObservation } from "../../services/situational";
 import { type Spotter } from "../../services/spotters";
+import { type NearbyPlace } from "../../services/nearby";
 import { subscribeAlertFocus } from "../../services/mapFocusAlert";
 import { sourceLabel, type CanonicalLocation } from "../../services/location";
 import { cardinalFromDeg, compactAge, mbToInHg, valueText } from "../../services/telemetry/quality";
@@ -259,6 +260,7 @@ type MapRadarPanelProps = {
   playbackContext?: { playing: boolean; frameIndex: number; frameCount: number };
   alerts?: AlertProduct[];
   spotters?: Spotter[];
+  poiPlaces?: NearbyPlace[];
 };
 
 export function MapRadarPanel(props: MapRadarPanelProps) {
@@ -275,6 +277,7 @@ function AtlasMapRadarPanel({
   playbackContext,
   alerts = [],
   spotters = [],
+  poiPlaces = [],
 }: MapRadarPanelProps) {
   const [radarVisible, setRadarVisible] = useState(true);
   const [internalProduct, setInternalProduct] = useState<RadarProduct>("REF");
@@ -433,6 +436,7 @@ function AtlasMapRadarPanel({
             statusLines={mapStatusLines}
             alerts={alerts}
             spotters={spotters}
+            poiPlaces={poiPlaces}
           />
         </Suspense>
       </div>
