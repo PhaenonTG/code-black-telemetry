@@ -5582,8 +5582,21 @@ body {
   font-size: clamp(11px, 1.1vw, 15px) !important;
 }
 
+/* Was purely decorative (a <div>, aria-hidden); now opens the full-page Layer Config screen. The
+   red-gradient/border/clip-path panel look from the earlier .dock-signature rule (this file's
+   usual archaeology -- several blocks above this one) is untouched, but being a <button> now also
+   makes it match every ".bottom-dock button" rule meant for the icon+label nav buttons -- most
+   damagingly `grid-template-columns: 34px minmax(0, auto)` (the icon column), which split this
+   text-only element into an unwanted 2-column grid and sent "WEATHER. DATA. DOMINANCE." spilling
+   past the panel's own clip-path edge. Restored to a single stacked column explicitly. */
 .dock-signature {
   display: grid !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: auto auto !important;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  font: inherit;
 }
 
 .dock-signature strong {
@@ -5591,9 +5604,27 @@ body {
   font-size: clamp(13px, 1.2vw, 20px) !important;
 }
 
-.dock-signature span {
+/* `.bottom-dock button span` (0,1,2 specificity) beats a bare `.dock-signature span` (0,1,1)
+   regardless of source order, even with !important on both -- specificity is checked before
+   position. The compound selector below (0,2,1) reliably wins instead of relying on order. */
+.bottom-dock .dock-signature span {
   color: var(--muted, #8b949e) !important;
-  font-size: 8px !important;
+  font: 900 8px / 1.3 "JetBrains Mono", Consolas, monospace !important;
+  letter-spacing: 0.04em !important;
+}
+
+/* Layer Config modal -- reuses .product-modal/.modal-scroll/.settings-row (same visual language as
+   Settings), just a 2-row grid (head + scroll body) instead of the 3-row head/meta/scroll shape
+   other product-modal variants use, since this one has no .modal-meta strip. */
+.layer-config-modal {
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+.settings-row em {
+  margin-top: 2px;
+  color: var(--muted, #8b929e);
+  font: 600 10px / 1.3 Inter, sans-serif;
+  font-style: normal;
 }
 
 .map-controls button:disabled {

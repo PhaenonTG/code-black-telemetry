@@ -285,3 +285,57 @@ export function subscribePiEndpoint(listener: (endpoint: string) => void) {
   listener(currentPiEndpoint);
   return () => listeners.delete(listener);
 }
+
+export interface MapLayerVisibility {
+  alerts: boolean;
+  team: boolean;
+  chasers: boolean;
+  poi: boolean;
+  mosaic: boolean;
+}
+
+const MAP_LAYER_VISIBILITY_KEY = "codeblack.mapLayerVisibility";
+const DEFAULT_MAP_LAYER_VISIBILITY: MapLayerVisibility = { alerts: true, team: true, chasers: true, poi: true, mosaic: true };
+
+// Was local per-AtlasMap-instance state (the Weather page's compact map and the Locate page's full
+// map each kept their own independent copy) until the full-page Layer Config screen needed to
+// control it from outside either map instance -- moved to the same shared get/save/subscribe
+// pattern as pin styles/team roster so both maps AND the new config screen always agree, and the
+// owner's chosen layer set survives an app restart like every other preference in this app does.
+let currentMapLayerVisibility: MapLayerVisibility = DEFAULT_MAP_LAYER_VISIBILITY;
+const mapLayerVisibilityListeners = new Set<(visibility: MapLayerVisibility) => void>();
+
+export async function loadMapLayerVisibility() {
+  const saved = await Preferences.get({ key: MAP_LAYER_VISIBILITY_KEY });
+  if (saved.value) {
+    try {
+      const parsed = JSON.parse(saved.value) as Partial<MapLayerVisibility>;
+      currentMapLayerVisibility = { ...DEFAULT_MAP_LAYER_VISIBILITY, ...parsed };
+    } catch {
+      currentMapLayerVisibility = DEFAULT_MAP_LAYER_VISIBILITY;
+    }
+  } else {
+    currentMapLayerVisibility = DEFAULT_MAP_LAYER_VISIBILITY;
+  }
+  mapLayerVisibilityListeners.forEach((listener) => listener(currentMapLayerVisibility));
+  return currentMapLayerVisibility;
+}
+
+export async function saveMapLayerVisibility(visibility: MapLayerVisibility) {
+  currentMapLayerVisibility = visibility;
+  await Preferences.set({ key: MAP_LAYER_VISIBILITY_KEY, value: JSON.stringify(visibility) });
+  mapLayerVisibilityListeners.forEach((listener) => listener(currentMapLayerVisibility));
+  return currentMapLayerVisibility;
+}
+
+export function getMapLayerVisibility() {
+  return currentMapLayerVisibility;
+}
+
+export function subscribeMapLayerVisibility(listener: (visibility: MapLayerVisibility) => void) {
+  mapLayerVisibilityListeners.add(listener);
+  listener(currentMapLayerVisibility);
+  return () => {
+    mapLayerVisibilityListeners.delete(listener);
+  };
+}

@@ -20,6 +20,7 @@ import {
   WeatherObservationPanel,
 } from "./components/situational/Panels";
 import { ReportPage } from "./components/situational/ReportPage";
+import { LayerConfigPage } from "./components/situational/LayerConfigPage";
 import { SevereFlashOverlay } from "./components/SevereFlashOverlay";
 import { WindCard } from "./components/situational/WindCard";
 import { useAlertProducts } from "./hooks/useAlertProducts";
@@ -65,6 +66,7 @@ function pathToPage(): PageKey {
 export default function App() {
   const [page, setPage] = useState<PageKey>(() => pathToPage());
   const [cockpitMode, setCockpitMode] = useState<CockpitMode>("chase");
+  const [layerConfigOpen, setLayerConfigOpen] = useState(false);
   const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
   const pagerRef = useRef<HTMLDivElement | null>(null);
   const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
@@ -284,8 +286,9 @@ export default function App() {
         <button className={page === "alerts" ? "active" : ""} onClick={() => goToPage("alerts")}><DockIcon type="alerts" /><span>Alerts</span><em>Products</em></button>
         <button className={page === "report" ? "active" : ""} onClick={() => goToPage("report")}><DockIcon type="report" /><span>RPT</span><em>Report</em></button>
         <button className={page === "settings" ? "active" : ""} onClick={() => goToPage("settings")}><DockIcon type="settings" /><span>SET</span><em>Settings</em></button>
-        <div className="dock-signature" aria-hidden="true"><strong>CODE BLACK</strong><span>Weather. Data. Dominance.</span></div>
+        <button className="dock-signature" aria-label="Map layer configuration" onClick={() => setLayerConfigOpen(true)}><strong>CODE BLACK</strong><span>Weather. Data. Dominance.</span></button>
       </nav>
+      {layerConfigOpen && <LayerConfigPage onClose={() => setLayerConfigOpen(false)} />}
     </div>
   );
 }

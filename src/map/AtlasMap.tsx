@@ -8,7 +8,7 @@ import type { Spotter } from "../services/spotters";
 import type { NearbyPlace } from "../services/nearby";
 import { resolveTeamPositions } from "../services/teamPositions";
 import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcrumbTrail";
-import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, loadFavoriteBrands, subscribeChaserRadiusMiles, subscribeFavoriteBrands } from "../services/settings";
+import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, loadFavoriteBrands, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeFavoriteBrands, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
 import { useTeamRoster } from "../hooks/useTeamRoster";
 import { useChaserPinStyle, useTeamPinStyle } from "../hooks/usePinStyle";
@@ -146,15 +146,25 @@ export function AtlasMap({
   const [loaded, setLoaded] = useState(false);
   const styleUri = atlasStyleUri();
   const trail = useBreadcrumbTrail();
-  const [mosaicVisible, setMosaicVisible] = useState(true);
+  // Was 5 separate local useState flags (one per layer) until the full-page Layer Config screen
+  // needed to control the same toggles from outside either AtlasMap instance -- moved to the
+  // shared get/save/subscribe store in services/settings.ts so the Weather page's compact map, the
+  // Locate page's full map, and the new config screen all read/write the exact same state instead
+  // of each map instance keeping its own independent (and previously non-persisted) copy.
+  const [layerVisibility, setLayerVisibility] = useState({ alerts: true, team: true, chasers: true, poi: true, mosaic: true });
+  useEffect(() => {
+    const unsubscribe = subscribeMapLayerVisibility(setLayerVisibility);
+    void loadMapLayerVisibility();
+    return () => { unsubscribe(); };
+  }, []);
+  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible } = layerVisibility;
+  const toggleLayer = (key: keyof typeof layerVisibility) => {
+    void saveMapLayerVisibility({ ...layerVisibility, [key]: !layerVisibility[key] });
+  };
   const mosaicVisibleRef = useRef(mosaicVisible);
   const mosaicFramesRef = useRef<string[]>([]);
   mosaicVisibleRef.current = mosaicVisible;
-  const [alertsVisible, setAlertsVisible] = useState(true);
   const [watches, setWatches] = useState<WatchPolygon[]>([]);
-  const [teamVisible, setTeamVisible] = useState(true);
-  const [chasersVisible, setChasersVisible] = useState(true);
-  const [poiVisible, setPoiVisible] = useState(true);
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
   const roster = useTeamRoster();
   const teamPinStyle = useTeamPinStyle();
@@ -590,19 +600,19 @@ export function AtlasMap({
           <div className="atlas-layers-popover" role="dialog" aria-label="Map layers">
             <div className="atlas-layers-popover__title">Layers</div>
             <label className="atlas-layers-popover__row">
-              <input type="checkbox" checked={alertsVisible} onChange={() => setAlertsVisible((value) => !value)} />
+              <input type="checkbox" checked={alertsVisible} onChange={() => toggleLayer("alerts")} />
               Alerts (watches + warnings + MD)
             </label>
             <label className="atlas-layers-popover__row">
-              <input type="checkbox" checked={teamVisible} onChange={() => setTeamVisible((value) => !value)} />
+              <input type="checkbox" checked={teamVisible} onChange={() => toggleLayer("team")} />
               Team
             </label>
             <label className="atlas-layers-popover__row">
-              <input type="checkbox" checked={chasersVisible} onChange={() => setChasersVisible((value) => !value)} />
+              <input type="checkbox" checked={chasersVisible} onChange={() => toggleLayer("chasers")} />
               Chasers
             </label>
             <label className="atlas-layers-popover__row">
-              <input type="checkbox" checked={poiVisible} onChange={() => setPoiVisible((value) => !value)} />
+              <input type="checkbox" checked={poiVisible} onChange={() => toggleLayer("poi")} />
               Gas / Food
             </label>
           </div>
@@ -617,7 +627,7 @@ export function AtlasMap({
         <button type="button" aria-label="Toggle follow mode" title="Cycles between North-up, Heading-up, and Recenter" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
         <button type="button" aria-label="Toggle range rings" title="Distance rings around your position" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RINGS{rangeRings !== "off" ? ` ${rangeRings}NM` : ""}</button>
         <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
-        <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, animated" className={mosaicVisible ? "active" : ""} onClick={() => setMosaicVisible((value) => !value)}>MOSAIC</button>
+        <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, animated" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
         <button type="button" aria-label="Map layers" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
       </div>
     </div>
