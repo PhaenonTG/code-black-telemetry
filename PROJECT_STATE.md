@@ -1,7 +1,7 @@
 # Code Black OPS — Project State
 
-Last updated: 2026-08-03 (map card closeout: watches layer, click-to-detail, chaser pin radius +
-zoom-scaling fixes, item #37). Written so a fresh AI assistant
+Last updated: 2026-08-03 (Settings redesigned as a swipeable pager, zero scrolling, item #38).
+Written so a fresh AI assistant
 (or a human) can pick this project up cold, with no prior conversation history, and know exactly
 what exists, why, and what's next.
 
@@ -794,7 +794,42 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       bug), chaser pin count now respects the radius setting at every zoom level, pin size visibly
       shrinks between a local chase-range screenshot and a regional zoomed-out one.
 
-All of the above (items 1-37) were built, `npm run build` typechecked clean, and have now been
+38. **Settings redesigned as a swipeable pager — zero scrolling**. Second item in the owner's
+    priority order (see item #37/#22 in Pending). Explicit ask: "the setting page needs major
+    work... I don't want to scroll anything at all on this app. Swipe only." The 9-panel
+    `.page-grid--settings` CSS grid — already the exact fixed-row-count bug class documented in
+    "Established conventions" (it silently broke once already, see Recent Work #33) — is gone
+    entirely. Replaced with a nested horizontal pager one level inside `.page--settings`: 10
+    subpages (Display, Alerts, Pi Connection, Spotter Network, Nearby Chasers, Team Roster, Map
+    Pins, Chase Session, Interior Lighting, About), each getting the panel's full page area instead
+    of a shared grid cell, each with its own dot row + a "NAME n/N" label above it for orientation.
+    - Deliberately mirrors App.tsx's top-level page pager's exact mechanism (scroll-snap-x +
+      `scrollTo({left: index * clientWidth})` + a scroll-position listener syncing an index state +
+      a resize/orientationchange re-sync effect) rather than inventing a new gesture handler — that
+      top-level pager had a real swipe bug fixed earlier this project (Recent Work item referenced
+      as task #97 in the session's own tracking), so reusing its proven shape one level down avoids
+      reintroducing the same class of bug. New CSS is self-contained (`.settings-shell`/
+      `.settings-viewport`/`.settings-subpage`/`.settings-dots`) rather than reusing
+      `.page-viewport`/`.page`/`.page-dots` directly — those are positioned as direct grid children
+      of `.app-shell` for the top-level pager specifically, so borrowing the class names verbatim
+      would have dragged in grid-row placement that doesn't apply nested one level down.
+    - Also centers each panel's content vertically below its title (the classic flexbox auto-margin
+      trick — `.cb-panel__title + *` gets `margin-top: auto`, `.cb-panel__title ~ *:last-child` gets
+      `margin-bottom: auto`) instead of leaving it pinned to the top with a wall of dead space below
+      it, now that a 2-row panel like Display gets the full page height to itself instead of a
+      cramped grid cell. Purely structural selectors (not tied to `.settings-row` specifically) so
+      it works regardless of what a panel's last child actually is (`.cb-note`, `.settings-roster-
+      list`, `.settings-lighting-profiles`, etc.).
+    - Device-verified end to end: swipe-forward advances correctly through all 10 subpages with the
+      label/dot indicator staying in sync; tapping a dot directly jumps to that subpage (tested
+      jumping straight to About, 10/10); the densest panel (Interior Lighting — command token
+      input, power toggle, 3-button profile row, 6-swatch color row) fits cleanly with room to
+      spare at every subpage, confirming the "zero scrolling anywhere" constraint holds even for the
+      busiest category, not just the sparse ones. Confirmed the outer top-level 6-page dot row
+      (Weather/Operations/Locate/Alerts/Report/Settings) stays on Settings throughout all the inner
+      swiping — the nested horizontal scroll capture doesn't leak up to the parent pager.
+
+All of the above (items 1-38) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -943,23 +978,32 @@ path (needs a real or simulated network outage to trigger).
     #26 is now closed. Still open: the owner's own future plan to replace the Team roster's
     Spotter-Network-filter fallback with a real Pi/ESP32-based position feed once that
     infrastructure exists — not asked for yet, don't build until requested.
-22. **Map card, in full** — DONE (see Recent Work #24-28, #37). This was the first item in the
-    owner's explicit priority order given 2026-08-03: "Map card first, settings redesign second,
-    gas/food/poi layer third, full page layer config screen fourth, custom teams/groups with per
-    member contact info fifth, dashboard polish pass sixth, themes seventh, custom vehicle dot
-    eighth." Every complaint from the owner's original map-card list is now resolved: controls
-    relocated below the map with full-word labels, radar scan-age visibility, mosaic
-    animation/pause-resume fix, single-site radar clutter fix, spotter pin tap-for-name/last-ping,
-    a watches layer, and click-to-detail generalized across all alert layers. **Next per the
-    owner's own order: Settings redesign into swipeable sub-pages** (owner confirmed this approach
-    via `AskUserQuestion` on 2026-08-03) — not yet started. After that: gas/food/POI layer (owner
-    wants Love's/Buc-ee's/Taco Bell/Braum's-style categorization, manageable from Settings), a
-    full-page layer config screen (replacing the "CODE BLACK/DATA/DOMINANCE" dock corner), custom
-    teams/groups with per-member contact info, a dashboard polish pass, themes, and a custom vehicle
-    dot (color/icon/image upload) last. Police-reports layer was investigated partway (owner
-    referenced Google/Apple having something similar) then explicitly deprioritized by the owner's
-    own later instruction and does not appear in this priority list — treat as dropped, not pending,
-    unless the owner brings it back up.
+22. **Owner's priority order, tracked** — given 2026-08-03: "Map card first, settings redesign
+    second, gas/food/poi layer third, full page layer config screen fourth, custom teams/groups
+    with per member contact info fifth, dashboard polish pass sixth, themes seventh, custom vehicle
+    dot eighth." Status:
+    1. **Map card** — DONE (Recent Work #24-28, #37). Every complaint from the owner's original
+       map-card list resolved: controls relocated below the map with full-word labels, radar
+       scan-age visibility, mosaic animation/pause-resume fix, single-site radar clutter fix,
+       spotter pin tap-for-name/last-ping, a watches layer, click-to-detail generalized across all
+       alert layers, and a real chaser-pin-clutter bug fix + zoom-based pin sizing.
+    2. **Settings redesign into swipeable sub-pages** — DONE (Recent Work #38). Owner confirmed the
+       swipeable-sub-pages approach via `AskUserQuestion` on 2026-08-03; built, device-verified,
+       zero scrolling on any subpage including the densest one.
+    3. **Gas/food/POI layer** — NOT STARTED. Owner wants Love's/Buc-ee's/Taco Bell/Braum's-style
+       categorization, manageable from Settings. This is the next item.
+    4. **Full-page layer config screen** — NOT STARTED. Replaces the "CODE BLACK/DATA/DOMINANCE"
+       dock corner signature.
+    5. **Custom teams/groups with per-member contact info** — NOT STARTED. Note this is a step up
+       from the existing Team Roster (item #26/Recent Work), which is just a flat name/marker-ID
+       list with no contact fields — this item wants real per-member contact info, implying a
+       richer data model than what's there today.
+    6. **Dashboard polish pass** — NOT STARTED.
+    7. **Themes** — NOT STARTED.
+    8. **Custom vehicle dot (color/icon/image upload)** — NOT STARTED.
+    Police-reports layer was investigated partway (owner referenced Google/Apple having something
+    similar) then explicitly deprioritized by the owner's own later instruction and does not appear
+    in this priority list — treat as dropped, not pending, unless the owner brings it back up.
 17. **BLE bridge to the Pi** — DONE (see Recent Work #29-31, #36): telemetry, lighting control, a
     locked-down command channel, and now tablet-side UI for `start_chase_session`/
     `end_chase_session`/`set_storm_mode` all verified live against real hardware. Still open:
