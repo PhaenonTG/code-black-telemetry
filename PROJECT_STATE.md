@@ -1,6 +1,6 @@
 # Code Black OPS — Project State
 
-Last updated: 2026-08-03 (Settings redesigned as a swipeable pager, zero scrolling, item #38).
+Last updated: 2026-08-03 (Gas/Food POI map layer with favorite-brand highlighting, item #39).
 Written so a fresh AI assistant
 (or a human) can pick this project up cold, with no prior conversation history, and know exactly
 what exists, why, and what's next.
@@ -829,7 +829,47 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       (Weather/Operations/Locate/Alerts/Report/Settings) stays on Settings throughout all the inner
       swiping — the nested horizontal scroll capture doesn't leak up to the parent pager.
 
-All of the above (items 1-38) were built, `npm run build` typechecked clean, and have now been
+39. **Gas/Food POI map layer with favorite-brand highlighting**. Third item in the owner's priority
+    order. `services/nearby.ts`'s `getNearbyPlaces()` (used by the Nearby card) only ever returns
+    the single best-ranked pick per category — no good for a map layer, which needs every candidate
+    as its own pin. Refactored the shared Overpass element-parsing (`elementsToPlace` →
+    `elementsToCandidates`, now returns the full array) so both entry points reuse the same
+    query/parsing logic instead of duplicating it; new `fetchCategoryPlaceList()` +
+    `getNearbyPoiList()` return every gas/food candidate within the same existing per-category
+    radius (16km/~10mi), sorted by distance and capped at 20 per category — same "unbounded point
+    layers on a map become visual noise" reasoning as the recent chaser-pin radius fix, applied
+    proactively here instead of waiting to hit the same bug again.
+    - New `map/AtlasPoiLayer.ts` — deliberately separate from `AtlasPinMarkers.ts` (the
+      spotter/team helper) rather than extending it, since POIs need per-point styling (favorite
+      vs. not) and a different popup body (hours/distance, not a "last ping" age) that don't fit
+      that helper's one-style-per-call design. Same overall pattern reused though: `mapboxgl.Marker`
+      + DOM element, WeakMap-keyed-by-map marker registry (mirrors `AtlasSpotterLayer.ts`), fresh-
+      on-click popup data via a WeakMap keyed off that registry. Gas renders as a small rounded
+      square, food as a circle — shape-signals-category, same idea as the watch/warning fill-vs-
+      dashed-outline distinction elsewhere on this map.
+    - New `hooks/useNearbyPoiList.ts` — same polling/backoff shape as `useNearbyPlaces.ts` (10-min
+      cadence, 30s-doubling retry on failure, keeps last-known list rather than blanking on a
+      transient error).
+    - New `services/settings.ts` triplet: `favoriteBrands` (string list, same shape as
+      `teamRoster`). A case-insensitive substring match against a POI's OSM name — Love's, Buc-ee's,
+      Taco Bell, Braum's, whatever the owner adds — renders that pin larger/brighter (18px white
+      vs. 12px muted grey) so preferred stops stand out from the rest of the layer at a glance. New
+      Settings subpage "Favorite Brands" (SETTINGS_SECTIONS now has 11 entries), same add/remove
+      chip-list UI as Team Roster.
+    - Threaded `poiPlaces` the same way `alerts`/`spotters` already flow: `useNearbyPoiList(gpsPoint)`
+      called once in `App.tsx`, passed to both `<MapRadarPanel>` instances (Weather + Locate pages),
+      through `MapRadarPanelProps` → `AtlasMapRadarPanel` → `<AtlasMap>`. New "Gas / Food" checkbox
+      in the existing Layers popover, default on, matching the Alerts/Team/Chasers precedent.
+    - Device-verified end to end: POI markers render at real positions around Bentonville/Bella
+      Vista (square = gas), tapping one shows a real result — "Casey's General Store — 6.1 mi —
+      TYPICALLY OPEN" — confirming the popup correctly reuses the same hours-status labeling already
+      proven in the Nearby card. Favorite-brand styling wired and testable (added "Loves" via
+      Settings) but no nearby Love's happened to be in range on the day this was tested, so the
+      brighter/larger visual specifically wasn't seen live — the underlying substring-match logic is
+      the same pattern already proven for Team Roster, so this is a low-risk gap, not an open
+      question about correctness.
+
+All of the above (items 1-39) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -990,10 +1030,11 @@ path (needs a real or simulated network outage to trigger).
     2. **Settings redesign into swipeable sub-pages** — DONE (Recent Work #38). Owner confirmed the
        swipeable-sub-pages approach via `AskUserQuestion` on 2026-08-03; built, device-verified,
        zero scrolling on any subpage including the densest one.
-    3. **Gas/food/POI layer** — NOT STARTED. Owner wants Love's/Buc-ee's/Taco Bell/Braum's-style
-       categorization, manageable from Settings. This is the next item.
+    3. **Gas/food/POI layer** — DONE (Recent Work #39). Map layer with favorite-brand highlighting
+       (Love's/Buc-ee's/Taco Bell/Braum's-style), manageable from Settings' new "Favorite Brands"
+       subpage.
     4. **Full-page layer config screen** — NOT STARTED. Replaces the "CODE BLACK/DATA/DOMINANCE"
-       dock corner signature.
+       dock corner signature. This is the next item.
     5. **Custom teams/groups with per-member contact info** — NOT STARTED. Note this is a step up
        from the existing Team Roster (item #26/Recent Work), which is just a flat name/marker-ID
        list with no contact fields — this item wants real per-member contact info, implying a
