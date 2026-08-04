@@ -4791,13 +4791,6 @@ body {
    Connection/Spotter Network) were silently collapsing to 0px height and were completely
    inaccessible. Switching every row to auto-sized (matching how the implicit rows already work)
    plus a page-level scroll fixes it without needing to touch individual panels. */
-.page-grid--settings {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, auto);
-  overflow-y: auto;
-  align-content: start;
-}
-
 .settings-row {
   display: flex;
   align-items: center;
@@ -4842,6 +4835,114 @@ body {
 
 .settings-action:disabled {
   opacity: 0.4;
+}
+
+/* Settings sub-page pager -- swipeable categories, one panel per screen, no scrolling anywhere
+   (explicit owner request). Deliberately self-contained rather than reusing .page-viewport/.page/
+   .page-dots: those are positioned as direct grid children of .app-shell for the top-level pager,
+   and this pager lives nested one level down inside .page--settings, so reusing those classes
+   verbatim would drag in grid-row placement that doesn't apply here. Same scroll-snap + scrollTo
+   mechanism as the proven top-level pager (see App.tsx), just laid out with plain flexbox instead. */
+.settings-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.settings-subpage-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 4px 10px;
+  flex-shrink: 0;
+  color: var(--text);
+  font: 800 13px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.settings-subpage-label em {
+  color: var(--muted);
+  font: 700 11px / 1 "JetBrains Mono", Consolas, monospace;
+  font-style: normal;
+  letter-spacing: 0.04em;
+}
+
+.settings-viewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y pinch-zoom;
+  scrollbar-width: none;
+}
+
+.settings-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-subpage {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  min-height: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  overflow: hidden;
+}
+
+.settings-subpage > .cb-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Most categories are 1-2 rows -- given the whole page height now (no longer sharing a fixed grid
+   cell with 9 others), pinning content to the top left a wall of dead space below it. The classic
+   flexbox auto-margin trick centers everything below the title as a group while the title itself
+   stays pinned at the top like a normal header -- `justify-content: center` on the whole panel
+   would centered the title along with it, which reads wrong. Panels dense enough to fill the space
+   naturally (Interior Lighting, Chase Session) are unaffected either way -- there's no room left for
+   the auto margins to expand into. */
+.settings-subpage > .cb-panel > .cb-panel__title + * {
+  margin-top: auto;
+}
+
+.settings-subpage > .cb-panel > .cb-panel__title ~ *:last-child {
+  margin-bottom: auto;
+}
+
+.settings-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 2px;
+  flex-shrink: 0;
+}
+
+.settings-dots button {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.18);
+  transition: background 0.2s, transform 0.2s;
+}
+
+.settings-dots button.active {
+  background: var(--cb-red, #ff2d35);
+  transform: scale(1.35);
 }
 
 .ops-mode__hint {

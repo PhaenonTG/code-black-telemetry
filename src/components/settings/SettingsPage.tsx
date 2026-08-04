@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App as CapApp, type AppInfo } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
@@ -67,6 +67,23 @@ const STORM_MODE_PRESETS: Array<{ mode: string; label: string }> = [
   { mode: "pds_tornado_warning", label: "PDS Tornado" },
 ];
 
+// One subpage per category, swipeable -- the owner explicitly asked for zero scrolling anywhere on
+// this page ("I don't want to scroll anything at all... Swipe only"). Each entry gets the full page
+// area to itself instead of sharing a fixed-height grid cell with 9 others (the CSS Grid bug this
+// page grew into before -- see PROJECT_STATE.md's "Established conventions" for the full writeup).
+const SETTINGS_SECTIONS = [
+  "Display",
+  "Alerts",
+  "Pi Connection",
+  "Spotter Network",
+  "Nearby Chasers",
+  "Team Roster",
+  "Map Pins",
+  "Chase Session",
+  "Interior Lighting",
+  "About",
+] as const;
+
 interface SettingsPageProps {
   cockpitMode: CockpitMode;
   onChangeCockpitMode: (mode: CockpitMode) => void;
@@ -97,6 +114,37 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [lightingResult, setLightingResult] = useState("");
   const [chaseBusy, setChaseBusy] = useState(false);
   const [chaseResult, setChaseResult] = useState("");
+  const [subpageIndex, setSubpageIndex] = useState(0);
+  const settingsPagerRef = useRef<HTMLDivElement | null>(null);
+
+  // Mirrors App.tsx's top-level page pager exactly (same scroll-snap + scrollTo + scroll-listener
+  // shape) -- that mechanism had a real swipe bug fixed earlier this project, so reusing the proven
+  // pattern here instead of inventing a new one avoids reintroducing it one level down.
+  const goToSubpage = (index: number) => {
+    setSubpageIndex(index);
+    settingsPagerRef.current?.scrollTo({ left: index * settingsPagerRef.current.clientWidth, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    const pager = settingsPagerRef.current;
+    if (!pager) return;
+    const handleScroll = () => {
+      const nextIndex = Math.round(pager.scrollLeft / Math.max(1, pager.clientWidth));
+      setSubpageIndex((current) => (nextIndex !== current ? nextIndex : current));
+    };
+    pager.addEventListener("scroll", handleScroll, { passive: true });
+    return () => pager.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => goToSubpage(subpageIndex);
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, [subpageIndex]);
 
   useEffect(() => {
     const unsubscribe = subscribePiEndpoint(setPiEndpoint);
@@ -269,7 +317,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   };
 
   return (
-    <div className="page-grid page-grid--settings">
+    <div className="settings-shell">
+      <div className="settings-subpage-label">
+        {SETTINGS_SECTIONS[subpageIndex]} <em>{subpageIndex + 1} / {SETTINGS_SECTIONS.length}</em>
+      </div>
+      <div className="settings-viewport" ref={settingsPagerRef}>
+      <section className="settings-subpage" aria-label="Display">
       <Panel title="Display" className="settings-display-panel">
         <div className="settings-row">
           <div>
@@ -292,7 +345,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </div>
         </div>
       </Panel>
+      </section>
 
+      <section className="settings-subpage" aria-label="Alerts">
       <Panel title="Alerts" className="settings-alerts-panel">
         <div className="settings-row">
           <div>
@@ -312,7 +367,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           <button className="settings-action" disabled={!soundEnabled} onClick={() => emitCodeBlackSound("warning")}>Play Test</button>
         </div>
       </Panel>
+      </section>
 
+      <section className="settings-subpage" aria-label="Pi Connection">
       <Panel title="Pi Connection" className="settings-connection-panel">
         <div className="settings-row">
           <div>
@@ -322,7 +379,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           <button className="settings-action" onClick={onOpenPiConnection}>Open</button>
         </div>
       </Panel>
+      </section>
 
+      <section className="settings-subpage" aria-label="Spotter Network">
       <Panel title="Spotter Network" className="settings-spotter-panel">
         {spotterAccount ? (
           <div className="settings-row">
@@ -368,7 +427,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </>
         )}
       </Panel>
+      </section>
 
+      <section className="settings-subpage" aria-label="Nearby Chasers">
       <Panel title="Nearby Chasers" className="settings-radius-panel">
         <div className="settings-row">
           <div>
@@ -390,7 +451,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </div>
         </div>
       </Panel>
+      </section>
 
+      <section className="settings-subpage" aria-label="Team Roster">
       <Panel title="Team Roster" className="settings-team-panel">
         <div className="settings-row">
           <div>
@@ -419,7 +482,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </div>
         )}
       </Panel>
+      </section>
 
+      <section className="settings-subpage" aria-label="Map Pins">
       <Panel title="Map Pins" className="settings-pins-panel">
         <div className="settings-row">
           <div>
@@ -450,7 +515,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </div>
         </div>
       </Panel>
+      </section>
 
+      <section className="settings-subpage" aria-label="Chase Session">
       <Panel title="Chase Session" className="settings-chase-panel">
         <div className="settings-row">
           <div>
@@ -475,7 +542,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         </div>
         {chaseResult && <div className="cb-note">{chaseResult}</div>}
       </Panel>
+      </section>
 
+      <section className="settings-subpage" aria-label="Interior Lighting">
       <Panel title="Interior Lighting" className="settings-lighting-panel">
         <div className="settings-row">
           <div>
@@ -537,7 +606,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         </div>
         {lightingResult && <div className="cb-note">{lightingResult}</div>}
       </Panel>
+      </section>
 
+      <section className="settings-subpage" aria-label="About">
       <Panel title="About" className="settings-about-panel">
         <div className="settings-row">
           <div>
@@ -552,6 +623,20 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </div>
         </div>
       </Panel>
+      </section>
+      </div>
+      <div className="settings-dots" aria-label="Settings section indicator">
+        {SETTINGS_SECTIONS.map((label, index) => (
+          <button
+            key={label}
+            type="button"
+            aria-label={label}
+            title={label}
+            className={index === subpageIndex ? "active" : ""}
+            onClick={() => goToSubpage(index)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
