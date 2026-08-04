@@ -935,7 +935,37 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       chip rendered correctly as "DouglasKeck (Alpha)", and the panel still fit without scrolling
       despite the form growing from 1 input (the old flat roster) to 4 plus a submit button.
 
-All of the above (items 1-41) were built, `npm run build` typechecked clean, and have now been
+42. **Correction: Settings reverted to a single page, Layer Config became a real page.** Owner
+    course-corrected after items 38/40 shipped: "the settings page was supposed to stay as a single
+    page. Then you were going to add a new page and place the button where the code black icon is
+    bottom right corner. New page was going to be layer config remember?" **This entry supersedes
+    the designs described in items 38 and 40 — treat those two entries' "swipeable sub-pager" /
+    "modal" descriptions as historical, not current.**
+    - Confirmed via two targeted questions rather than re-guessing: Layer Config → a real top-level
+      page in the main pager, reached via the dock corner button (not a modal). Settings → stays a
+      single page (no sub-pager), refined to actually fit without scrolling.
+    - `SettingsPage.tsx` rewritten from the 11-subpage swipeable pager back to one page, using a new
+      two-tier CSS layout (`.settings-light-panels` / `.settings-heavy-panels` in `index.css`) after
+      three earlier attempts at a single fr-weighted CSS Grid each fixed one panel's clipping while
+      breaking another's (fr-weighting is zero-sum against a fixed row total). The two-tier split is
+      structurally self-balancing instead: a `display:grid; grid-auto-rows:auto; flex-shrink:0`
+      block holds the 8 uniformly-small panels (Display, Alerts, Pi Connection, Spotter Network,
+      Nearby Chasers, Map Pins, Favorite Brands, About) sized to their own content, and a
+      `flex:1; min-height:0` block holds the 3 disproportionately large panels (Teams, Interior
+      Lighting, Chase Session) getting 100% of whatever space remains — no manual proportion-tuning
+      needed. **Established as this project's go-to pattern for future dense single-page layouts.**
+    - `LayerConfigPage.tsx` rewritten to drop all modal/portal chrome (`createPortal`, backdrop, X
+      close button, `onClose` prop) and render as a plain `<Panel>`. `App.tsx` gained `"layers"` as
+      a 7th `PageKey`/pager entry; the old `layerConfigOpen` modal state was deleted; the dock corner
+      "CODE BLACK" button now calls `goToPage("layers")` and gets `.dock-signature.active` styling
+      when that page is current, same as the 6 icon+label dock buttons.
+    - Device-verified: all 11 Settings panels visible with zero clipping/overlap/scrolling
+      (`settings_single5.png`); Layers page reachable via the dock corner button, renders as a real
+      7th page with its own page-dot active (`layers_page1.png`); toggling a layer on the full page
+      updates correctly (`layers_page2.png`).
+    - Committed as `8edcde8` ("Correct Settings/Layer Config per owner: single page + real page").
+
+All of the above (items 1-42) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
@@ -1093,15 +1123,18 @@ path (needs a real or simulated network outage to trigger).
        scan-age visibility, mosaic animation/pause-resume fix, single-site radar clutter fix,
        spotter pin tap-for-name/last-ping, a watches layer, click-to-detail generalized across all
        alert layers, and a real chaser-pin-clutter bug fix + zoom-based pin sizing.
-    2. **Settings redesign into swipeable sub-pages** — DONE (Recent Work #38). Owner confirmed the
-       swipeable-sub-pages approach via `AskUserQuestion` on 2026-08-03; built, device-verified,
-       zero scrolling on any subpage including the densest one.
+    2. **Settings redesign** — DONE, corrected (Recent Work #38, superseded by #42). First built as
+       an 11-subpage swipeable pager; owner then clarified Settings was always meant to stay a
+       single page, so it was reverted to one page using a new two-tier `.settings-light-panels` /
+       `.settings-heavy-panels` CSS layout, zero scrolling, device-verified.
     3. **Gas/food/POI layer** — DONE (Recent Work #39). Map layer with favorite-brand highlighting
        (Love's/Buc-ee's/Taco Bell/Braum's-style), manageable from Settings' new "Favorite Brands"
        subpage.
-    4. **Full-page layer config screen** — DONE (Recent Work #40). Replaces the "CODE
-       BLACK/DATA/DOMINANCE" dock corner; layer visibility moved to a shared, persisted store so
-       it works correctly across both map instances.
+    4. **Full-page layer config screen** — DONE, corrected (Recent Work #40, superseded by #42).
+       First built as a modal opened from the dock corner; owner clarified it was meant to be a real
+       page, so it's now a genuine 7th top-level page in the main pager, still reached via the "CODE
+       BLACK/DATA/DOMINANCE" dock corner button. Layer visibility lives in a shared, persisted store
+       so it works correctly across both map instances.
     5. **Custom teams/groups with per-member contact info** — DONE (Recent Work #41). Team Roster
        became `TeamMember[]` (name/group/phone/email), map pin popups show the contact info.
     6. **Dashboard polish pass** — NOT STARTED. This is the next item.
