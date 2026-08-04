@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { Panel } from "./Panel";
 import {
   loadMapLayerVisibility,
   saveMapLayerVisibility,
@@ -24,7 +24,7 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description:
     key: "team",
     label: "Team",
     description: "Your curated team roster's positions, always shown regardless of distance.",
-    settingsHint: "Manage roster and pin style in Settings -> Team Roster / Map Pins.",
+    settingsHint: "Manage roster and pin style in Settings -> Teams / Map Pins.",
   },
   {
     key: "chasers",
@@ -40,13 +40,12 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description:
   },
 ];
 
-// A single full-screen config surface for every togglable map layer -- previously each layer's
-// on/off state only lived in a small on-map popover (still there, for quick access while looking
-// at the map) with no way to reach it except from inside the map card itself. This is reachable
-// from the dock corner on any page, which is why the underlying visibility state had to move to a
-// shared store (services/settings.ts) rather than staying local to whichever AtlasMap instance
-// happened to render the popover last.
-export function LayerConfigPage({ onClose }: { onClose: () => void }) {
+// A single page for every togglable map layer -- previously each layer's on/off state only lived
+// in a small on-map popover (still there, for quick access while looking at the map) with no way
+// to reach it except from inside the map card itself. Reachable from the dock corner on any page,
+// which is why the underlying visibility state lives in a shared store (services/settings.ts)
+// rather than staying local to whichever AtlasMap instance happened to render the popover last.
+export function LayerConfigPage() {
   const [visibility, setVisibility] = useState<MapLayerVisibility>(DEFAULT_VISIBILITY);
 
   useEffect(() => {
@@ -59,33 +58,21 @@ export function LayerConfigPage({ onClose }: { onClose: () => void }) {
     void saveMapLayerVisibility({ ...visibility, [key]: !visibility[key] });
   };
 
-  return createPortal(
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="layer-config-title">
-      <div className="product-modal layer-config-modal">
-        <div className="modal-head">
+  return (
+    <Panel title="Layer Configuration" className="layer-config-panel">
+      {LAYERS.map(({ key, label, description, settingsHint }) => (
+        <div key={key} className="settings-row">
           <div>
-            <div className="cb-panel__title">Situational Map</div>
-            <h2 id="layer-config-title">Layer Configuration</h2>
+            <strong>{label}</strong>
+            <span>{description}</span>
+            {settingsHint && <em>{settingsHint}</em>}
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">X</button>
+          <div className="mode-toggle" aria-label={`${label} visibility`}>
+            <button className={visibility[key] ? "" : "active"} onClick={() => toggle(key)}>Off</button>
+            <button className={visibility[key] ? "active" : ""} onClick={() => toggle(key)}>On</button>
+          </div>
         </div>
-        <div className="modal-scroll">
-          {LAYERS.map(({ key, label, description, settingsHint }) => (
-            <div key={key} className="settings-row">
-              <div>
-                <strong>{label}</strong>
-                <span>{description}</span>
-                {settingsHint && <em>{settingsHint}</em>}
-              </div>
-              <div className="mode-toggle" aria-label={`${label} visibility`}>
-                <button className={visibility[key] ? "" : "active"} onClick={() => toggle(key)}>Off</button>
-                <button className={visibility[key] ? "active" : ""} onClick={() => toggle(key)}>On</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>,
-    document.body,
+      ))}
+    </Panel>
   );
 }

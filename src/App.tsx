@@ -33,7 +33,7 @@ import { setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, startCodeBlackSoundPl
 import { loadNightVisionEnabled, subscribeNightVisionEnabled } from "./services/settings";
 import { setTelemetryPaused } from "./services/telemetry";
 
-type PageKey = "weather" | "operations" | "locate" | "alerts" | "report" | "settings";
+type PageKey = "weather" | "operations" | "locate" | "alerts" | "report" | "settings" | "layers";
 export type CockpitMode = "normal" | "chase";
 
 const pages: Array<{ key: PageKey; label: string; path: string }> = [
@@ -43,6 +43,9 @@ const pages: Array<{ key: PageKey; label: string; path: string }> = [
   { key: "alerts", label: "Alerts", path: "/alerts" },
   { key: "report", label: "Report", path: "/report" },
   { key: "settings", label: "Settings", path: "/settings" },
+  // Not one of the 6 bottom-dock buttons -- reached via the dock corner's "CODE BLACK" button
+  // (see the bottom-dock nav below) or by swiping past Settings, same as any other page.
+  { key: "layers", label: "Layers", path: "/layers" },
 ];
 const PAGE_PREF_KEY = "codeblack.activePage";
 const COCKPIT_MODE_KEY = "codeblack.cockpitMode";
@@ -66,7 +69,6 @@ function pathToPage(): PageKey {
 export default function App() {
   const [page, setPage] = useState<PageKey>(() => pathToPage());
   const [cockpitMode, setCockpitMode] = useState<CockpitMode>("chase");
-  const [layerConfigOpen, setLayerConfigOpen] = useState(false);
   const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
   const pagerRef = useRef<HTMLDivElement | null>(null);
   const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
@@ -275,6 +277,11 @@ export default function App() {
             }}
           />
         </section>
+        <section className="page page--layers" aria-label="Layer Configuration">
+          <div className="page-grid page-grid--layers">
+            <LayerConfigPage />
+          </div>
+        </section>
       </main>
       <div className="page-dots" aria-label="Page indicator">
         {pages.map((item) => <button key={item.key} aria-label={item.label} className={item.key === page ? "active" : ""} onClick={() => goToPage(item.key)} />)}
@@ -286,9 +293,8 @@ export default function App() {
         <button className={page === "alerts" ? "active" : ""} onClick={() => goToPage("alerts")}><DockIcon type="alerts" /><span>Alerts</span><em>Products</em></button>
         <button className={page === "report" ? "active" : ""} onClick={() => goToPage("report")}><DockIcon type="report" /><span>RPT</span><em>Report</em></button>
         <button className={page === "settings" ? "active" : ""} onClick={() => goToPage("settings")}><DockIcon type="settings" /><span>SET</span><em>Settings</em></button>
-        <button className="dock-signature" aria-label="Map layer configuration" onClick={() => setLayerConfigOpen(true)}><strong>CODE BLACK</strong><span>Weather. Data. Dominance.</span></button>
+        <button className={page === "layers" ? "dock-signature active" : "dock-signature"} aria-label="Map layer configuration" onClick={() => goToPage("layers")}><strong>CODE BLACK</strong><span>Weather. Data. Dominance.</span></button>
       </nav>
-      {layerConfigOpen && <LayerConfigPage onClose={() => setLayerConfigOpen(false)} />}
     </div>
   );
 }

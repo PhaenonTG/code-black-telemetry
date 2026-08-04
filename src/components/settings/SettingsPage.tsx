@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { App as CapApp, type AppInfo } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
@@ -71,24 +71,6 @@ const STORM_MODE_PRESETS: Array<{ mode: string; label: string }> = [
   { mode: "pds_tornado_warning", label: "PDS Tornado" },
 ];
 
-// One subpage per category, swipeable -- the owner explicitly asked for zero scrolling anywhere on
-// this page ("I don't want to scroll anything at all... Swipe only"). Each entry gets the full page
-// area to itself instead of sharing a fixed-height grid cell with 9 others (the CSS Grid bug this
-// page grew into before -- see PROJECT_STATE.md's "Established conventions" for the full writeup).
-const SETTINGS_SECTIONS = [
-  "Display",
-  "Alerts",
-  "Pi Connection",
-  "Spotter Network",
-  "Nearby Chasers",
-  "Teams",
-  "Map Pins",
-  "Favorite Brands",
-  "Chase Session",
-  "Interior Lighting",
-  "About",
-] as const;
-
 interface SettingsPageProps {
   cockpitMode: CockpitMode;
   onChangeCockpitMode: (mode: CockpitMode) => void;
@@ -124,37 +106,6 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [lightingResult, setLightingResult] = useState("");
   const [chaseBusy, setChaseBusy] = useState(false);
   const [chaseResult, setChaseResult] = useState("");
-  const [subpageIndex, setSubpageIndex] = useState(0);
-  const settingsPagerRef = useRef<HTMLDivElement | null>(null);
-
-  // Mirrors App.tsx's top-level page pager exactly (same scroll-snap + scrollTo + scroll-listener
-  // shape) -- that mechanism had a real swipe bug fixed earlier this project, so reusing the proven
-  // pattern here instead of inventing a new one avoids reintroducing it one level down.
-  const goToSubpage = (index: number) => {
-    setSubpageIndex(index);
-    settingsPagerRef.current?.scrollTo({ left: index * settingsPagerRef.current.clientWidth, behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    const pager = settingsPagerRef.current;
-    if (!pager) return;
-    const handleScroll = () => {
-      const nextIndex = Math.round(pager.scrollLeft / Math.max(1, pager.clientWidth));
-      setSubpageIndex((current) => (nextIndex !== current ? nextIndex : current));
-    };
-    pager.addEventListener("scroll", handleScroll, { passive: true });
-    return () => pager.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => {
-    const handleResize = () => goToSubpage(subpageIndex);
-    window.addEventListener("resize", handleResize);
-    window.addEventListener("orientationchange", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      window.removeEventListener("orientationchange", handleResize);
-    };
-  }, [subpageIndex]);
 
   useEffect(() => {
     const unsubscribe = subscribePiEndpoint(setPiEndpoint);
@@ -354,17 +305,13 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   };
 
   return (
-    <div className="settings-shell">
-      <div className="settings-subpage-label">
-        {SETTINGS_SECTIONS[subpageIndex]} <em>{subpageIndex + 1} / {SETTINGS_SECTIONS.length}</em>
-      </div>
-      <div className="settings-viewport" ref={settingsPagerRef}>
-      <section className="settings-subpage" aria-label="Display">
+    <div className="page-grid page-grid--settings">
+      <div className="settings-light-panels">
       <Panel title="Display" className="settings-display-panel">
         <div className="settings-row">
           <div>
             <strong>Cockpit Mode</strong>
-            <span>Chase shows a reduced field set for glancing while driving. Normal shows full detail.</span>
+            <span>Chase = reduced fields for driving. Normal = full detail.</span>
           </div>
           <div className="mode-toggle" aria-label="Cockpit information mode">
             <button className={cockpitMode === "normal" ? "active" : ""} onClick={() => onChangeCockpitMode("normal")}>Normal</button>
@@ -374,7 +321,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         <div className="settings-row">
           <div>
             <strong>Night Vision</strong>
-            <span>Dims the whole dashboard toward deep red/black to preserve night vision during night chases.</span>
+            <span>Dims display to deep red/black for night chases.</span>
           </div>
           <div className="mode-toggle" aria-label="Night vision mode">
             <button className={nightVisionEnabled ? "" : "active"} onClick={() => toggleNightVision(false)}>Off</button>
@@ -382,14 +329,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </div>
         </div>
       </Panel>
-      </section>
 
-      <section className="settings-subpage" aria-label="Alerts">
       <Panel title="Alerts" className="settings-alerts-panel">
         <div className="settings-row">
           <div>
             <strong>Audible Alerts</strong>
-            <span>Plays a caution tone when a new tornado warning or PDS-severity alert appears for your location.</span>
+            <span>Tone on new tornado/PDS alert for your location.</span>
           </div>
           <div className="mode-toggle" aria-label="Audible alerts">
             <button className={soundEnabled ? "" : "active"} onClick={() => toggleSound(false)}>Off</button>
@@ -399,14 +344,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         <div className="settings-row">
           <div>
             <strong>Test Alert Sound</strong>
-            <span>{soundEnabled ? "Plays the same tone a real tornado/PDS alert triggers." : "Enable audible alerts above to test."}</span>
+            <span>{soundEnabled ? "Same tone as a real alert." : "Enable audible alerts to test."}</span>
           </div>
           <button className="settings-action" disabled={!soundEnabled} onClick={() => emitCodeBlackSound("warning")}>Play Test</button>
         </div>
       </Panel>
-      </section>
 
-      <section className="settings-subpage" aria-label="Pi Connection">
       <Panel title="Pi Connection" className="settings-connection-panel">
         <div className="settings-row">
           <div>
@@ -416,9 +359,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           <button className="settings-action" onClick={onOpenPiConnection}>Open</button>
         </div>
       </Panel>
-      </section>
 
-      <section className="settings-subpage" aria-label="Spotter Network">
       <Panel title="Spotter Network" className="settings-spotter-panel">
         {spotterAccount ? (
           <div className="settings-row">
@@ -433,7 +374,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
             <div className="settings-row settings-row--stack">
               <div>
                 <strong>Sign In</strong>
-                <span>Powers nearby chasers and, soon, report submission. Stored on this device only.</span>
+                <span>Powers Chasers + report submission. Stored on-device only.</span>
               </div>
             </div>
             <div className="settings-row settings-row--stack">
@@ -464,14 +405,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </>
         )}
       </Panel>
-      </section>
 
-      <section className="settings-subpage" aria-label="Nearby Chasers">
       <Panel title="Nearby Chasers" className="settings-radius-panel">
         <div className="settings-row">
           <div>
             <strong>Search Radius</strong>
-            <span>How far out spotters count as "nearby" on the Weather page. 5-500 mi.</span>
+            <span>Chasers search radius, 5-500 mi.</span>
           </div>
           <div className="settings-radius-control">
             <input
@@ -488,14 +427,96 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </div>
         </div>
       </Panel>
-      </section>
 
-      <section className="settings-subpage" aria-label="Teams">
+      <Panel title="Map Pins" className="settings-pins-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Team Pin</strong>
+            <span>Color/shape for teammates.</span>
+          </div>
+          <div className="settings-pin-control">
+            <input type="color" value={teamPinStyle.color} onChange={(event) => void saveTeamPinStyle({ ...teamPinStyle, color: event.target.value })} />
+            <div className="settings-shape-row" aria-label="Team pin shape">
+              {PIN_SHAPES.map(({ shape, glyph }) => (
+                <button key={shape} type="button" className={teamPinStyle.shape === shape ? "active" : ""} onClick={() => void saveTeamPinStyle({ ...teamPinStyle, shape })}>{glyph}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Chaser Pin</strong>
+            <span>Color/shape for nearby chasers.</span>
+          </div>
+          <div className="settings-pin-control">
+            <input type="color" value={chaserPinStyle.color} onChange={(event) => void saveChaserPinStyle({ ...chaserPinStyle, color: event.target.value })} />
+            <div className="settings-shape-row" aria-label="Chaser pin shape">
+              {PIN_SHAPES.map(({ shape, glyph }) => (
+                <button key={shape} type="button" className={chaserPinStyle.shape === shape ? "active" : ""} onClick={() => void saveChaserPinStyle({ ...chaserPinStyle, shape })}>{glyph}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Panel>
+
+      <Panel title="Favorite Brands" className="settings-favorites-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Preferred Chains</strong>
+            <span>Matching gas/food pins render brighter and larger.</span>
+          </div>
+        </div>
+        <div className="settings-row settings-row--stack">
+          <input
+            className="settings-input"
+            placeholder="Brand name"
+            value={favoriteBrandsInput}
+            onChange={(event) => setFavoriteBrandsInput(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") addFavoriteBrand(); }}
+          />
+          <button className="settings-action" disabled={!favoriteBrandsInput.trim()} onClick={addFavoriteBrand}>Add</button>
+        </div>
+        {favoriteBrands.length > 0 && (
+          <div className="settings-roster-list">
+            {favoriteBrands.map((brand) => (
+              <div key={brand} className="settings-roster-chip">
+                <span>{brand}</span>
+                <button type="button" aria-label={`Remove ${brand}`} onClick={() => removeFavoriteBrand(brand)}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
+      <Panel title="About" className="settings-about-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Version</strong>
+            <span>{appInfo ? `${appInfo.version} (build ${appInfo.build})` : "Web preview build"}</span>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Radar Engine</strong>
+            <span>On-device NEXRAD Level II decode</span>
+          </div>
+        </div>
+      </Panel>
+      </div>
+
+      {/* Teams, Chase Session, and Interior Lighting are the heaviest panels on this page (a
+          4-field add form / a token input plus 3 separate button rows) -- sharing a fixed grid row
+          with the 8 lighter panels above was never going to fit both without either shrinking the
+          light panels below usability or clipping these. Giving this group the page's remaining
+          height (after the light panels claim only what their own auto-sized content needs)
+          instead of a hand-tuned fr-fraction is what actually made "no scrolling anywhere" hold for
+          every panel, not just most of them. */}
+      <div className="settings-heavy-panels">
       <Panel title="Teams" className="settings-team-panel">
         <div className="settings-row">
           <div>
             <strong>Team Members</strong>
-            <span>Name must match a Spotter Network name/marker ID to show as "Team" (a distinct pin) instead of generic Chasers on the map. Group, phone, and email are optional -- shown when you tap that member's pin. Interim source until a direct vehicle-to-vehicle position feed exists.</span>
+            <span>Name must match Spotter Network. Group/phone/email optional, shown on pin tap.</span>
           </div>
         </div>
         <div className="settings-row settings-row--stack">
@@ -542,105 +563,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </div>
         )}
       </Panel>
-      </section>
 
-      <section className="settings-subpage" aria-label="Map Pins">
-      <Panel title="Map Pins" className="settings-pins-panel">
-        <div className="settings-row">
-          <div>
-            <strong>Team Pin</strong>
-            <span>Color and shape for teammates on the Situational Map.</span>
-          </div>
-          <div className="settings-pin-control">
-            <input type="color" value={teamPinStyle.color} onChange={(event) => void saveTeamPinStyle({ ...teamPinStyle, color: event.target.value })} />
-            <div className="settings-shape-row" aria-label="Team pin shape">
-              {PIN_SHAPES.map(({ shape, glyph }) => (
-                <button key={shape} type="button" className={teamPinStyle.shape === shape ? "active" : ""} onClick={() => void saveTeamPinStyle({ ...teamPinStyle, shape })}>{glyph}</button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <strong>Chaser Pin</strong>
-            <span>Color and shape for nearby Spotter Network chasers on the map.</span>
-          </div>
-          <div className="settings-pin-control">
-            <input type="color" value={chaserPinStyle.color} onChange={(event) => void saveChaserPinStyle({ ...chaserPinStyle, color: event.target.value })} />
-            <div className="settings-shape-row" aria-label="Chaser pin shape">
-              {PIN_SHAPES.map(({ shape, glyph }) => (
-                <button key={shape} type="button" className={chaserPinStyle.shape === shape ? "active" : ""} onClick={() => void saveChaserPinStyle({ ...chaserPinStyle, shape })}>{glyph}</button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Panel>
-      </section>
-
-      <section className="settings-subpage" aria-label="Favorite Brands">
-      <Panel title="Favorite Brands" className="settings-favorites-panel">
-        <div className="settings-row">
-          <div>
-            <strong>Preferred Chains</strong>
-            <span>Gas/food POI pins on the map matching these names (e.g. Love's, Buc-ee's, Taco Bell, Braum's) render brighter and larger so your preferred stops stand out from the rest of the layer.</span>
-          </div>
-        </div>
-        <div className="settings-row settings-row--stack">
-          <input
-            className="settings-input"
-            placeholder="Brand name"
-            value={favoriteBrandsInput}
-            onChange={(event) => setFavoriteBrandsInput(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter") addFavoriteBrand(); }}
-          />
-          <button className="settings-action" disabled={!favoriteBrandsInput.trim()} onClick={addFavoriteBrand}>Add</button>
-        </div>
-        {favoriteBrands.length > 0 && (
-          <div className="settings-roster-list">
-            {favoriteBrands.map((brand) => (
-              <div key={brand} className="settings-roster-chip">
-                <span>{brand}</span>
-                <button type="button" aria-label={`Remove ${brand}`} onClick={() => removeFavoriteBrand(brand)}>×</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Panel>
-      </section>
-
-      <section className="settings-subpage" aria-label="Chase Session">
-      <Panel title="Chase Session" className="settings-chase-panel">
-        <div className="settings-row">
-          <div>
-            <strong>Session</strong>
-            <span>Tells the Pi you're actively chasing vs. standby, switching interior lighting to match.</span>
-          </div>
-          <div className="mode-toggle" aria-label="Chase session">
-            <button disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("end_chase_session")}>End</button>
-            <button disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("start_chase_session")}>Start</button>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <strong>Storm Mode</strong>
-            <span>Manually declares the current threat level — switches interior lighting the same way the Pi's own automatic alert-driven profile selection would.</span>
-          </div>
-        </div>
-        <div className="settings-lighting-profiles" aria-label="Storm mode">
-          {STORM_MODE_PRESETS.map(({ mode, label }) => (
-            <button key={mode} type="button" disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("set_storm_mode", { mode })}>{label}</button>
-          ))}
-        </div>
-        {chaseResult && <div className="cb-note">{chaseResult}</div>}
-      </Panel>
-      </section>
-
-      <section className="settings-subpage" aria-label="Interior Lighting">
       <Panel title="Interior Lighting" className="settings-lighting-panel">
         <div className="settings-row">
           <div>
             <strong>Command Token</strong>
-            <span>Shared secret configured on the Pi (CB_BLE_COMMAND_TOKEN). Required before any lighting command will be accepted.</span>
+            <span>Shared secret from the Pi. Required for lighting commands.</span>
           </div>
         </div>
         <div className="settings-row settings-row--stack">
@@ -657,8 +585,8 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         </div>
         <div className="settings-row">
           <div>
-            <strong>Govee H7090 (via Pi over BLE)</strong>
-            <span>{bleConnected ? "Pi link connected." : "Pi link not connected — commands will fail until the tablet reconnects."}</span>
+            <strong>Govee H7090</strong>
+            <span>{bleConnected ? "Pi link connected." : "Not connected -- commands will fail."}</span>
           </div>
           <div className="mode-toggle" aria-label="Lighting power">
             <button disabled={lightingBusy || !bleConnected} onClick={() => void sendLighting("power", { power: false })}>Off</button>
@@ -668,7 +596,6 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         <div className="settings-row">
           <div>
             <strong>Profile</strong>
-            <span>Chase brightens for driving; Standby is the default resting state.</span>
           </div>
           <div className="settings-lighting-profiles" aria-label="Lighting profile">
             {LIGHTING_PROFILE_PRESETS.map(({ profile, label }) => (
@@ -679,7 +606,6 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         <div className="settings-row">
           <div>
             <strong>Color</strong>
-            <span>Matches the presets already available on the Pi's own lighting API.</span>
           </div>
           <div className="settings-lighting-swatches" aria-label="Lighting color preset">
             {LIGHTING_COLOR_PRESETS.map(({ preset, label, swatch }) => (
@@ -697,36 +623,30 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         </div>
         {lightingResult && <div className="cb-note">{lightingResult}</div>}
       </Panel>
-      </section>
 
-      <section className="settings-subpage" aria-label="About">
-      <Panel title="About" className="settings-about-panel">
+      <Panel title="Chase Session" className="settings-chase-panel">
         <div className="settings-row">
           <div>
-            <strong>Version</strong>
-            <span>{appInfo ? `${appInfo.version} (build ${appInfo.build})` : "Web preview build"}</span>
+            <strong>Session</strong>
+            <span>Chasing vs. standby -- switches lighting.</span>
+          </div>
+          <div className="mode-toggle" aria-label="Chase session">
+            <button disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("end_chase_session")}>End</button>
+            <button disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("start_chase_session")}>Start</button>
           </div>
         </div>
         <div className="settings-row">
           <div>
-            <strong>Radar Engine</strong>
-            <span>On-device NEXRAD Level II decode</span>
+            <strong>Storm Mode</strong>
           </div>
         </div>
+        <div className="settings-lighting-profiles" aria-label="Storm mode">
+          {STORM_MODE_PRESETS.map(({ mode, label }) => (
+            <button key={mode} type="button" disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("set_storm_mode", { mode })}>{label}</button>
+          ))}
+        </div>
+        {chaseResult && <div className="cb-note">{chaseResult}</div>}
       </Panel>
-      </section>
-      </div>
-      <div className="settings-dots" aria-label="Settings section indicator">
-        {SETTINGS_SECTIONS.map((label, index) => (
-          <button
-            key={label}
-            type="button"
-            aria-label={label}
-            title={label}
-            className={index === subpageIndex ? "active" : ""}
-            onClick={() => goToSubpage(index)}
-          />
-        ))}
       </div>
     </div>
   );

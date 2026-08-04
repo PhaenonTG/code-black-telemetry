@@ -4837,112 +4837,115 @@ body {
   opacity: 0.4;
 }
 
-/* Settings sub-page pager -- swipeable categories, one panel per screen, no scrolling anywhere
-   (explicit owner request). Deliberately self-contained rather than reusing .page-viewport/.page/
-   .page-dots: those are positioned as direct grid children of .app-shell for the top-level pager,
-   and this pager lives nested one level down inside .page--settings, so reusing those classes
-   verbatim would drag in grid-row placement that doesn't apply here. Same scroll-snap + scrollTo
-   mechanism as the proven top-level pager (see App.tsx), just laid out with plain flexbox instead. */
-.settings-shell {
+/* Settings: one dense, non-scrolling page (owner's explicit call after trying the swipeable-
+   sub-page version: "the settings page was supposed to stay as a single page"). Two-tier layout,
+   not one uniform grid -- hand-tuned fr-fraction rows were tried first and needed three separate
+   on-device passes chasing whichever panel clipped worst, because every row's height had to be
+   guessed relative to every other row's. Splitting into an auto-sized block for the 8 "light"
+   panels (1-2 lines each) and a flex-fill block for the 3 "heavy" ones (Teams' 4-field add form;
+   Interior Lighting's token input + 3 separate button rows; Chase Session's own button rows) is
+   self-balancing instead: the light block only ever takes what its own content needs, and the
+   heavy block gets 100% of whatever's left, split three equal ways. */
+.page-grid--settings {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.settings-subpage-label {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 2px 4px 10px;
-  flex-shrink: 0;
-  color: var(--text);
-  font: 800 13px / 1 "JetBrains Mono", Consolas, monospace;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.settings-subpage-label em {
-  color: var(--muted);
-  font: 700 11px / 1 "JetBrains Mono", Consolas, monospace;
-  font-style: normal;
-  letter-spacing: 0.04em;
-}
-
-.settings-viewport {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  overscroll-behavior-x: contain;
-  touch-action: pan-x pan-y pinch-zoom;
-  scrollbar-width: none;
-}
-
-.settings-viewport::-webkit-scrollbar {
-  display: none;
-}
-
-.settings-subpage {
-  flex: 0 0 100%;
-  width: 100%;
-  min-width: 100%;
-  min-height: 0;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  display: flex;
+  gap: var(--gap);
   overflow: hidden;
 }
 
-.settings-subpage > .cb-panel {
+.settings-light-panels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  gap: var(--gap);
+  flex-shrink: 0;
+}
+
+.settings-heavy-panels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--gap);
   flex: 1;
+  min-height: 0;
+}
+
+.page-grid--settings .cb-panel {
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* Most categories are 1-2 rows -- given the whole page height now (no longer sharing a fixed grid
-   cell with 9 others), pinning content to the top left a wall of dead space below it. The classic
-   flexbox auto-margin trick centers everything below the title as a group while the title itself
-   stays pinned at the top like a normal header -- `justify-content: center` on the whole panel
-   would centered the title along with it, which reads wrong. Panels dense enough to fill the space
-   naturally (Interior Lighting, Chase Session) are unaffected either way -- there's no room left for
-   the auto margins to expand into. */
-.settings-subpage > .cb-panel > .cb-panel__title + * {
-  margin-top: auto;
-}
-
-.settings-subpage > .cb-panel > .cb-panel__title ~ *:last-child {
-  margin-bottom: auto;
-}
-
-.settings-dots {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
+/* Tightened from the base .settings-row rules for this density -- full padding/gaps were sized
+   for a page with 1-2 panels of breathing room, not 11 sharing one screen. */
+.page-grid--settings .settings-row {
+  padding: 4px 0;
   gap: 8px;
-  padding: 10px 0 2px;
-  flex-shrink: 0;
 }
 
-.settings-dots button {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: none;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.18);
-  transition: background 0.2s, transform 0.2s;
+.page-grid--settings .settings-row > div:first-child {
+  gap: 1px;
 }
 
-.settings-dots button.active {
-  background: var(--cb-red, #ff2d35);
-  transform: scale(1.35);
+.page-grid--settings .settings-row strong {
+  font-size: 11px;
+}
+
+.page-grid--settings .settings-row span,
+.page-grid--settings .settings-row em {
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.page-grid--settings .settings-row--stack {
+  gap: 4px;
+}
+
+.page-grid--settings .settings-input {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.page-grid--settings .settings-action {
+  padding: 4px 10px;
+  font-size: 9px;
+}
+
+.page-grid--settings .mode-toggle button {
+  padding: 4px 8px;
+  font-size: 9px;
+}
+
+.page-grid--settings .settings-roster-list {
+  padding: 1px 0 2px;
+  gap: 4px;
+}
+
+.page-grid--settings .settings-roster-chip {
+  padding: 3px 3px 3px 8px;
+  font-size: 9px;
+}
+
+.page-grid--settings .settings-lighting-profiles,
+.page-grid--settings .settings-lighting-swatches {
+  gap: 4px;
+}
+
+.page-grid--settings .settings-lighting-profiles button {
+  padding: 4px 8px;
+  font-size: 9px;
+}
+
+.page-grid--settings .settings-lighting-swatches button {
+  width: 22px;
+  height: 22px;
+}
+
+.page-grid--settings .cb-panel__title {
+  min-height: 24px;
+  padding: 5px 10px;
+  font-size: 11px;
 }
 
 .ops-mode__hint {
@@ -5544,6 +5547,15 @@ body {
   grid-template-rows: minmax(0, 1fr);
 }
 
+.page-grid--layers {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.layer-config-panel {
+  overflow-y: auto;
+}
+
 .report-page-panel {
   overflow: hidden;
 }
@@ -5611,13 +5623,6 @@ body {
   color: var(--muted, #8b949e) !important;
   font: 900 8px / 1.3 "JetBrains Mono", Consolas, monospace !important;
   letter-spacing: 0.04em !important;
-}
-
-/* Layer Config modal -- reuses .product-modal/.modal-scroll/.settings-row (same visual language as
-   Settings), just a 2-row grid (head + scroll body) instead of the 3-row head/meta/scroll shape
-   other product-modal variants use, since this one has no .modal-meta strip. */
-.layer-config-modal {
-  grid-template-rows: auto minmax(0, 1fr) !important;
 }
 
 .settings-row em {
