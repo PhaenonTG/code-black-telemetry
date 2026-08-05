@@ -1127,7 +1127,71 @@ back to "--" (this was a deliberate fix this session, see Recent Work).
       heavy consumer of `.mode-toggle`/`.settings-shape-row` buttons) still fits with no new
       clipping; vehicle marker back to default red circle.
 
-All of the above (items 1-45) were built, `npm run build` typechecked clean, and have now been
+46. **Fix map auto-center/zoom race, redesign dock, clean up Conditions card**. Owner evaluated
+    item 45's redesign fresh and found real regressions plus gave sharper direction, not just
+    aesthetic notes.
+    - **Real bug found and fixed**: the compact map card's "doesn't auto-center," "zoom changes
+      don't auto run," "mosaic doesn't auto run" reports all traced to one root cause. The
+      cinematic wide-to-operating-zoom intro (item #24) lived inside `initializeStyle()`, a
+      callback gated to run exactly once via `styleInitializedRef`, and only performed the
+      camera-centering/flyTo work `if (latest.gps)` was already truthy at that exact instant. Map
+      style becoming "ready" and the first real GPS fix arriving are two independent, differently-
+      timed events — style-ready usually won the race (more so after item #45 made the compact
+      card's map-init faster by skipping single-site radar fetch entirely), so the GPS block
+      silently never ran and the map sat forever at its construction-time fallback center
+      (`[-94.13, 36.45]`, zoom 4.5). Fixed by moving the intro to its own `useEffect` keyed on
+      `[loaded, gps]` with a new `introAppliedRef` one-shot guard, so it fires whenever GPS actually
+      becomes available regardless of which condition arrived first. Also seeds the ongoing
+      throttled-follow effect's `lastGpsAppliedRef` from inside the intro effect so the two don't
+      both animate the camera on the same first GPS value.
+    - **On-map Layers button removed entirely** from the compact card per explicit instruction —
+      "small and efficient or remove altogether and let me control layers in the layers page."
+      Went with full removal: `.atlas-map-controls` (the whole control row, LAYERS was its last
+      remaining button) no longer renders at all when `compact`. Layer visibility is now reachable
+      only from the Layer Configuration page.
+    - **Dock corner button retitled and de-specialized**. Was permanently branded "CODE BLACK /
+      Weather. Data. Dominance." regardless of function; owner: "it needs to reflect what it
+      actually is." Now reads "Layers" with a new stacked-layers `DockIcon` type, and dropped the
+      `.dock-signature` CSS class (permanent red-tinted background, italic branding font) entirely
+      in favor of the same button styling every other dock button uses — active only when the
+      Layers page is current, like its siblings.
+    - **Full dock redesign**: "too tall... feels too big... abbreviations are lame... buttons
+      [need to feel] more efficient/refined." Converted every button from icon-beside-two-line-text
+      (bold abbreviation + small subtitle, e.g. "WX" / "Weather") to icon-above-single-line-text
+      using the real word (just "Weather") — shorter by construction since there's one text line
+      instead of two, and the owner's specific complaint about abbreviations disappears since
+      nothing is abbreviated anymore. Grid went from 6 equal columns + 1 wide column (sized for the
+      old branded corner button) to 7 equal columns. `--dock-h` cut from `clamp(64px, 7dvh, 84px)`
+      to `clamp(52px, 5.6dvh, 66px)` (confirmed via computed style: 92px → 54px actual height at
+      the tablet's resolution, more than half the original ~110-120px this session started at).
+      Removed the now-fully-dead `.dock-signature` base CSS block (JSX no longer references the
+      class at all); left the scattered media-query-nested `.dock-signature` rules alone as inert
+      dead weight rather than risk touching intertwined blocks for zero functional gain.
+    - **Conditions card**: removed the `RH -- / RAIN --` line entirely — every device screenshot
+      all session showed these as permanent `--` placeholders (no humidity/rain sensor source
+      exists), so it was pure dead weight, not real data being hidden. `.conditions-strip` switched
+      from a fixed 2-or-3-column `grid-template-columns` (sized for the removed spans) to
+      `display:flex` + `margin-left:auto` on the source line, so it degrades correctly regardless
+      of how many spans remain (1 in chase mode, 2 in normal mode) instead of leaving empty
+      reserved grid tracks.
+    - **Real bug found and fixed**: pressure precision bumped from 1 to 2 decimals (`29.92`,
+      standard inHg convention — 1 decimal was non-standard imprecision, and per the owner "doesn't
+      have enough room to show the 4 digit reading properly") immediately exposed a real truncation
+      bug that hadn't been visible before: real pressure readings plus the trend arrow glyph got
+      clipped by an inherited `text-overflow:ellipsis` rule (`"29.9…"`) that every other tile's
+      shorter 2-3 character values never triggered. Fixed with a scoped, late-cascade
+      `.wx-panel .metric-tile--pressure strong` override (`overflow:visible`, `text-overflow:clip`,
+      a slightly smaller clamp to give the extra digit headroom) rather than touching the shared
+      rule every other tile still relies on.
+    - Device-verified end to end across a full build/sync/APK/reinstall cycle: map auto-centers on
+      Bentonville and eases to the wide regional zoom on cold launch (confirmed via a fresh-launch
+      screenshot after the 2.8s intro animation completes); dock reads as 7 clean, uniform, single-
+      word buttons at ~54px height; Layers page correctly titled and reachable, on-map button gone;
+      Settings page (heaviest consumer of dock height + button styling) still fits with zero
+      clipping despite the shorter dock; Conditions card shows no RH/RAIN line and a full
+      uninterrupted "29.99" pressure reading.
+
+All of the above (items 1-46) were built, `npm run build` typechecked clean, and have now been
 synced/compiled/installed to the physical tablet and screenshot-verified on-device, including:
 Wind card's 2-column grid with no text truncation at real (non-placeholder) values; Nearby loading
 a full ranked list; the map's CLR trail-clear control present and enabled; a real frame-to-frame
