@@ -5821,9 +5821,50 @@ body {
 
 .settings-pin-control {
   display: flex;
-  flex-shrink: 0;
+  width: 100%;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+  justify-content: flex-start;
+}
+
+.settings-color-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.settings-color-presets button {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0;
+}
+
+.settings-color-presets button.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.settings-size-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.settings-size-control input[type="range"] {
+  width: 120px;
+  accent-color: var(--red, #ff2d35);
+}
+
+.settings-size-control span {
+  min-width: 34px;
+  color: var(--muted);
+  font: 700 11px / 1 "JetBrains Mono", Consolas, monospace;
+  text-align: right;
 }
 
 .settings-pin-control input[type="color"] {
@@ -5837,6 +5878,7 @@ body {
 
 .settings-shape-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 

@@ -15,6 +15,8 @@ import {
   loadTeamMembers,
   loadTeamPinStyle,
   loadVehicleMarkerStyle,
+  MAX_PIN_SIZE_SCALE,
+  MIN_PIN_SIZE_SCALE,
   saveBleCommandToken,
   saveChaserPinStyle,
   saveChaserRadiusMiles,
@@ -47,6 +49,45 @@ const PIN_SHAPES: Array<{ shape: PinShape; glyph: string }> = [
   { shape: "star", glyph: "★" },
   { shape: "square", glyph: "■" },
 ];
+
+// Curated so the native color wheel isn't the only option -- picked for contrast against the map's
+// dark base style and against each other (a Team/Chaser pair should read as two different groups
+// at a glance, not just two shades of the same hue). No blue, matching this app's established
+// red/white/black + amber (+ these accent) palette rule.
+const PIN_COLOR_PRESETS = ["#3ddc70", "#ffbe3c", "#f2f2f2", "#b26bff", "#ff5fa8", "#ff8a3d", "#ff2d35", "#d4ff3d"];
+
+function PinColorPresets({ value, onSelect, label }: { value: string; onSelect: (hex: string) => void; label: string }) {
+  return (
+    <div className="settings-color-presets" aria-label={label}>
+      {PIN_COLOR_PRESETS.map((hex) => (
+        <button
+          key={hex}
+          type="button"
+          className={value.toLowerCase() === hex ? "active" : ""}
+          style={{ background: hex }}
+          aria-label={`Use ${hex}`}
+          onClick={() => onSelect(hex)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PinSizeSlider({ value, onChange, label }: { value: number; onChange: (scale: number) => void; label: string }) {
+  return (
+    <div className="settings-size-control" aria-label={label}>
+      <input
+        type="range"
+        min={MIN_PIN_SIZE_SCALE}
+        max={MAX_PIN_SIZE_SCALE}
+        step={0.1}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      <span>{Math.round(value * 100)}%</span>
+    </div>
+  );
+}
 
 // Mirrors lighting/api.py's PRESET_COLORS on the Pi -- same names, same swatches, so a preset here
 // maps to exactly one accepted preset string server-side rather than sending raw RGB that could
@@ -100,9 +141,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
   const [favoriteBrandsInput, setFavoriteBrandsInput] = useState("");
-  const [teamPinStyle, setTeamPinStyle] = useState<PinStyle>({ color: "#3ddc70", shape: "diamond" });
-  const [chaserPinStyle, setChaserPinStyle] = useState<PinStyle>({ color: "#c7ccd6", shape: "circle" });
-  const [vehicleMarkerStyle, setVehicleMarkerStyle] = useState<VehicleMarkerStyle>({ color: "#ff2d35", shape: "circle" });
+  const [teamPinStyle, setTeamPinStyle] = useState<PinStyle>({ color: "#3ddc70", shape: "diamond", sizeScale: 1 });
+  const [chaserPinStyle, setChaserPinStyle] = useState<PinStyle>({ color: "#c7ccd6", shape: "circle", sizeScale: 1 });
+  const [vehicleMarkerStyle, setVehicleMarkerStyle] = useState<VehicleMarkerStyle>({ color: "#ff2d35", shape: "circle", sizeScale: 1 });
   const vehicleImageInputRef = useRef<HTMLInputElement>(null);
   const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
   const [bleTokenInput, setBleTokenInput] = useState("");
@@ -483,41 +524,46 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
       </Panel>
 
       <Panel title="Map Pins" className="settings-pins-panel">
-        <div className="settings-row">
+        <div className="settings-row settings-row--stack">
           <div>
             <strong>Team Pin</strong>
             <span>Color/shape for teammates.</span>
           </div>
           <div className="settings-pin-control">
             <input type="color" value={teamPinStyle.color} onChange={(event) => void saveTeamPinStyle({ ...teamPinStyle, color: event.target.value })} />
+            <PinColorPresets label="Team pin color presets" value={teamPinStyle.color} onSelect={(color) => void saveTeamPinStyle({ ...teamPinStyle, color })} />
             <div className="settings-shape-row" aria-label="Team pin shape">
               {PIN_SHAPES.map(({ shape, glyph }) => (
                 <button key={shape} type="button" className={teamPinStyle.shape === shape ? "active" : ""} onClick={() => void saveTeamPinStyle({ ...teamPinStyle, shape })}>{glyph}</button>
               ))}
             </div>
+            <PinSizeSlider label="Team pin size" value={teamPinStyle.sizeScale} onChange={(sizeScale) => void saveTeamPinStyle({ ...teamPinStyle, sizeScale })} />
           </div>
         </div>
-        <div className="settings-row">
+        <div className="settings-row settings-row--stack">
           <div>
             <strong>Chaser Pin</strong>
             <span>Color/shape for nearby chasers.</span>
           </div>
           <div className="settings-pin-control">
             <input type="color" value={chaserPinStyle.color} onChange={(event) => void saveChaserPinStyle({ ...chaserPinStyle, color: event.target.value })} />
+            <PinColorPresets label="Chaser pin color presets" value={chaserPinStyle.color} onSelect={(color) => void saveChaserPinStyle({ ...chaserPinStyle, color })} />
             <div className="settings-shape-row" aria-label="Chaser pin shape">
               {PIN_SHAPES.map(({ shape, glyph }) => (
                 <button key={shape} type="button" className={chaserPinStyle.shape === shape ? "active" : ""} onClick={() => void saveChaserPinStyle({ ...chaserPinStyle, shape })}>{glyph}</button>
               ))}
             </div>
+            <PinSizeSlider label="Chaser pin size" value={chaserPinStyle.sizeScale} onChange={(sizeScale) => void saveChaserPinStyle({ ...chaserPinStyle, sizeScale })} />
           </div>
         </div>
-        <div className="settings-row">
+        <div className="settings-row settings-row--stack">
           <div>
             <strong>Vehicle</strong>
             <span>Color/shape/photo for your dot.</span>
           </div>
           <div className="settings-pin-control">
             <input type="color" value={vehicleMarkerStyle.color} onChange={(event) => void saveVehicleMarkerStyle({ ...vehicleMarkerStyle, color: event.target.value })} />
+            <PinColorPresets label="Vehicle color presets" value={vehicleMarkerStyle.color} onSelect={(color) => void saveVehicleMarkerStyle({ ...vehicleMarkerStyle, color })} />
             <div className="settings-shape-row" aria-label="Vehicle pin shape">
               {PIN_SHAPES.map(({ shape, glyph }) => (
                 <button key={shape} type="button" className={vehicleMarkerStyle.shape === shape ? "active" : ""} onClick={() => void saveVehicleMarkerStyle({ ...vehicleMarkerStyle, shape })}>{glyph}</button>
@@ -533,6 +579,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
               </button>
               <input ref={vehicleImageInputRef} type="file" accept="image/*" className="settings-file-input" onChange={(event) => void handleVehicleImageUpload(event)} />
             </div>
+            <PinSizeSlider label="Vehicle marker size" value={vehicleMarkerStyle.sizeScale} onChange={(sizeScale) => void saveVehicleMarkerStyle({ ...vehicleMarkerStyle, sizeScale })} />
           </div>
         </div>
       </Panel>

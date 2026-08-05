@@ -430,7 +430,8 @@ function AtlasMapRadarPanel({
             frame={radarLayerActive ? activeFrame : null}
             product={product}
             opacity={opacity}
-            expanded={!allowExpand}
+            expanded={!allowExpand && !compact}
+            active={visible}
             rangeRings={rangeRings}
             onRangeRingsChange={setRangeRings}
             onOpenExpanded={allowExpand ? () => setExpanded(true) : undefined}

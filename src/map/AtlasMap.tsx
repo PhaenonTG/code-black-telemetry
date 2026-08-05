@@ -46,6 +46,15 @@ type AtlasMapProps = {
   product: RadarProduct;
   opacity: number;
   expanded?: boolean;
+  // Weather-compact and Locate-full both stay mounted at once (swipeable pager keeps every page
+  // alive so switching is instant) -- without this, the page you're NOT looking at still runs a
+  // full pulse rAF loop, mosaic frame-swap ticks, and camera easeTo on every GPS update, fighting
+  // the visible instance for GPU/main-thread time. That contention is what read as "choppy pulse"
+  // and "zoom jumping between two values" -- not a single bad animation, but two live WebGL maps
+  // competing for frames. `active` pauses the continuous/expensive work on whichever instance isn't
+  // currently on screen; position data (vehicle marker, breadcrumb) still updates so there's no
+  // stale-catch-up animation when you swipe back.
+  active?: boolean;
   rangeRings: AtlasRangeRingMode;
   onRangeRingsChange: (mode: AtlasRangeRingMode) => void;
   onOpenExpanded?: () => void;
@@ -112,6 +121,7 @@ export function AtlasMap({
   product,
   opacity,
   expanded = false,
+  active = true,
   rangeRings,
   onRangeRingsChange,
   onOpenExpanded,
@@ -183,6 +193,8 @@ export function AtlasMap({
   const vehicleMarkerStyle = useVehicleMarkerStyle();
   const vehicleMarkerStyleRef = useRef(vehicleMarkerStyle);
   vehicleMarkerStyleRef.current = vehicleMarkerStyle;
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const [chaserRadiusMiles, setChaserRadiusMiles] = useState(DEFAULT_CHASER_RADIUS_MILES);
   useEffect(() => {
     const unsubscribe = subscribeChaserRadiusMiles(setChaserRadiusMiles);
@@ -364,11 +376,11 @@ export function AtlasMap({
         // zoom forever -- looked like "doesn't auto-center," "zoom doesn't run." Moved to its own
         // effect below keyed on [loaded, gps] so it fires whenever GPS actually becomes available,
         // regardless of which one was ready first.
-        stopPulseRef.current = startAtlasVehiclePulse(map);
+        stopPulseRef.current = startAtlasVehiclePulse(map, () => activeRef.current);
         stopMosaicRef.current = startAtlasMosaicAnimation(
           map,
           () => mosaicFramesRef.current,
-          () => mosaicVisibleRef.current,
+          () => mosaicVisibleRef.current && activeRef.current,
           styleInfoRef.current.firstSymbolLayerId,
           () => Date.now() < interactionResumeAtRef.current,
         );
@@ -445,12 +457,33 @@ export function AtlasMap({
     lastGpsAppliedRef.current = { gps, at: now };
     updateAtlasVehicleLayer(map, gps, vehicleMarkerStyleRef.current);
     recordBreadcrumbPoint(gps.lat, gps.lon, now);
+    // Skip the actual camera move when this instance isn't the one on screen -- the vehicle marker
+    // and breadcrumb above still stay current, so there's no stale-position catch-up animation when
+    // the user swipes back to this page, but the expensive easeTo (and the render/GPU work it
+    // drives) isn't spent on a canvas nobody's looking at right now.
+    if (!activeRef.current) return;
     if (cameraMode === "FOLLOW_NORTH" || cameraMode === "FOLLOW_HEADING" || cameraMode === "RECENTERING") {
       const camera = applyAtlasCamera(map, gps, cameraMode, expanded, bearing, compact);
       setBearing(camera.bearing);
       setPitch(camera.pitch);
     }
   }, [bearing, cameraMode, expanded, gps, loaded, compact]);
+
+  // Catch the camera up instantly (no easing) the moment this instance becomes the visible one
+  // again -- the effect above intentionally skipped every camera move while inactive, so without
+  // this the view would sit on wherever it was left until the next GPS tick happened to fire.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!active || !map || !loaded || !gps) return;
+    if (cameraMode !== "FOLLOW_NORTH" && cameraMode !== "FOLLOW_HEADING" && cameraMode !== "RECENTERING") return;
+    map.jumpTo({
+      center: [gps.lon, gps.lat],
+      zoom: zoomForSpeed(gps.speedMph, expanded, compact),
+      bearing,
+      pitch,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only meant to fire on the active edge
+  }, [active]);
 
   // A vehicle marker style change from Settings is a rare, deliberate user action, not GPS noise --
   // repaint immediately rather than waiting for the throttled GPS-update effect above to next fire.

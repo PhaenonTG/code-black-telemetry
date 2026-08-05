@@ -97,8 +97,12 @@
 
 .time-module .font-mono {
   color: var(--text);
-  font: 800 clamp(18px, 1.7vw, 27px) / 0.85 "JetBrains Mono", Consolas, monospace !important;
+  /* line-height must be >= 1: anything tighter shrinks the line box below the glyphs' actual
+     rendered height, clipping the tops of digits like "2" and "0" -- that's what read as the
+     clock's corners being cut off. */
+  font: 800 clamp(18px, 1.7vw, 27px) / 1.1 "JetBrains Mono", Consolas, monospace !important;
   letter-spacing: 0.08em;
+  padding-top: 0.05em;
 }
 
 .time-module span:last-child {

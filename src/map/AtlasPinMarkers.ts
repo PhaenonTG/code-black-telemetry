@@ -34,14 +34,14 @@ const MAX_PIN_SIZE_PX = 20;
 const ZOOM_AT_MIN_SIZE = 3; // world/nationwide overview
 const ZOOM_AT_MAX_SIZE = 9; // local chase-range view
 
-function pinSizeForZoom(zoom: number) {
+function pinSizeForZoom(zoom: number, sizeScale: number) {
   const t = (zoom - ZOOM_AT_MIN_SIZE) / (ZOOM_AT_MAX_SIZE - ZOOM_AT_MIN_SIZE);
   const clamped = Math.min(1, Math.max(0, t));
-  return MIN_PIN_SIZE_PX + clamped * (MAX_PIN_SIZE_PX - MIN_PIN_SIZE_PX);
+  return (MIN_PIN_SIZE_PX + clamped * (MAX_PIN_SIZE_PX - MIN_PIN_SIZE_PX)) * sizeScale;
 }
 
 function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number) {
-  const size = pinSizeForZoom(zoom);
+  const size = pinSizeForZoom(zoom, style.sizeScale ?? 1);
   const borderWidth = Math.max(1, size / 10);
   const glowBlur = Math.max(3, size / 2);
   el.style.width = `${size}px`;

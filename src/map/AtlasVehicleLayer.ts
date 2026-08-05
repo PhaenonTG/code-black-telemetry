@@ -29,8 +29,9 @@ const SHAPE_CLIP_PATH: Partial<Record<VehicleMarkerShape, string>> = {
 };
 
 function applyVehicleMarkerStyle(el: HTMLDivElement, style: VehicleMarkerStyle) {
-  el.style.width = `${VEHICLE_MARKER_SIZE_PX}px`;
-  el.style.height = `${VEHICLE_MARKER_SIZE_PX}px`;
+  const size = VEHICLE_MARKER_SIZE_PX * (style.sizeScale ?? 1);
+  el.style.width = `${size}px`;
+  el.style.height = `${size}px`;
   el.style.cursor = "default";
   if (style.shape === "custom" && style.imageDataUrl) {
     el.style.backgroundImage = `url(${style.imageDataUrl})`;
@@ -62,7 +63,7 @@ function destinationPoint(lat: number, lon: number, bearingDeg: number, miles: n
   return [((((lon2 * 180) / Math.PI) + 540) % 360) - 180, (lat2 * 180) / Math.PI] as [number, number];
 }
 
-export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null, style: VehicleMarkerStyle = { color: DEFAULT_VEHICLE_COLOR, shape: "circle" }) {
+export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null, style: VehicleMarkerStyle = { color: DEFAULT_VEHICLE_COLOR, shape: "circle", sizeScale: 1 }) {
   if (!gps) return;
   const point = {
     type: "FeatureCollection",
@@ -176,10 +177,14 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null, sty
 // Grows and fades on a loop so "my dot" reads at a glance without having to think about it, per
 // the original ask. Safe to start before the vehicle layer itself exists (e.g. before a first GPS
 // fix arrives) -- each tick just no-ops until updateAtlasVehicleLayer has created the pulse layer.
-export function startAtlasVehiclePulse(map: Map): () => void {
+// `isActive` lets the caller pause the actual paint writes when this map instance isn't the one on
+// screen (the Weather-compact and Locate-full cards both stay mounted at once) -- two concurrent
+// maps each repainting a pulse layer on every animation frame was real, measurable GPU/main-thread
+// contention that showed up as visible choppiness on both instances, not just the hidden one.
+export function startAtlasVehiclePulse(map: Map, isActive: () => boolean = () => true): () => void {
   const startedAt = performance.now();
   let frameId = requestAnimationFrame(function tick(now) {
-    if (map.getLayer(VEHICLE_PULSE_LAYER)) {
+    if (isActive() && map.getLayer(VEHICLE_PULSE_LAYER)) {
       const t = ((now - startedAt) % PULSE_CYCLE_MS) / PULSE_CYCLE_MS;
       try {
         map.setPaintProperty(VEHICLE_PULSE_LAYER, "circle-radius", PULSE_MIN_RADIUS + t * (PULSE_MAX_RADIUS - PULSE_MIN_RADIUS));

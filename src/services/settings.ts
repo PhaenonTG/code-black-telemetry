@@ -48,6 +48,17 @@ export type PinShape = "circle" | "diamond" | "triangle" | "star" | "square";
 export interface PinStyle {
   color: string;
   shape: PinShape;
+  // Multiplier on the normal zoom-based pin size (see pinSizeForZoom in AtlasPinMarkers.ts).
+  // Defaults to 1 -- missing on anything saved before this field existed.
+  sizeScale: number;
+}
+
+export const MIN_PIN_SIZE_SCALE = 0.5;
+export const MAX_PIN_SIZE_SCALE = 2.5;
+
+export function clampPinSizeScale(value: number) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(MAX_PIN_SIZE_SCALE, Math.max(MIN_PIN_SIZE_SCALE, value));
 }
 
 const TEAM_MEMBERS_KEY = "codeblack.teamMembers";
@@ -57,8 +68,8 @@ const CHASER_PIN_STYLE_KEY = "codeblack.chaserPinStyle";
 // "friendly/team" on a tactical map -- distinct from red (warnings + your own vehicle) and amber
 // (watches). Chasers default to a muted, informational white/grey. Both are just starting points;
 // full override lives in Settings.
-const DEFAULT_TEAM_PIN_STYLE: PinStyle = { color: "#3ddc70", shape: "diamond" };
-const DEFAULT_CHASER_PIN_STYLE: PinStyle = { color: "#c7ccd6", shape: "circle" };
+const DEFAULT_TEAM_PIN_STYLE: PinStyle = { color: "#3ddc70", shape: "diamond", sizeScale: 1 };
+const DEFAULT_CHASER_PIN_STYLE: PinStyle = { color: "#c7ccd6", shape: "circle", sizeScale: 1 };
 
 export interface TeamMember {
   id: string;
@@ -118,7 +129,7 @@ function loadPinStyleFactory(key: string, fallback: PinStyle, currentSetter: (st
     if (saved.value) {
       try {
         const parsed = JSON.parse(saved.value) as Partial<PinStyle>;
-        if (parsed.color && parsed.shape) next = { color: parsed.color, shape: parsed.shape };
+        if (parsed.color && parsed.shape) next = { color: parsed.color, shape: parsed.shape, sizeScale: clampPinSizeScale(parsed.sizeScale ?? 1) };
       } catch {
         next = fallback;
       }
@@ -180,10 +191,11 @@ export interface VehicleMarkerStyle {
   color: string;
   shape: VehicleMarkerShape;
   imageDataUrl?: string;
+  sizeScale: number;
 }
 
 const VEHICLE_MARKER_STYLE_KEY = "codeblack.vehicleMarkerStyle";
-const DEFAULT_VEHICLE_MARKER_STYLE: VehicleMarkerStyle = { color: "#ff2d35", shape: "circle" };
+const DEFAULT_VEHICLE_MARKER_STYLE: VehicleMarkerStyle = { color: "#ff2d35", shape: "circle", sizeScale: 1 };
 
 let currentVehicleMarkerStyle: VehicleMarkerStyle = DEFAULT_VEHICLE_MARKER_STYLE;
 const vehicleMarkerStyleListeners = new Set<(style: VehicleMarkerStyle) => void>();
@@ -194,7 +206,7 @@ export async function loadVehicleMarkerStyle() {
   if (saved.value) {
     try {
       const parsed = JSON.parse(saved.value) as Partial<VehicleMarkerStyle>;
-      if (parsed.color && parsed.shape) next = { color: parsed.color, shape: parsed.shape, imageDataUrl: parsed.imageDataUrl };
+      if (parsed.color && parsed.shape) next = { color: parsed.color, shape: parsed.shape, imageDataUrl: parsed.imageDataUrl, sizeScale: clampPinSizeScale(parsed.sizeScale ?? 1) };
     } catch {
       next = DEFAULT_VEHICLE_MARKER_STYLE;
     }
