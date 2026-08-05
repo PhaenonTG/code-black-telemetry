@@ -95,7 +95,7 @@ export function WeatherObservationPanel({ external, mode }: { external: External
               label="Pressure"
               value={
                 <>
-                  {valueText(pressureInHg, 1)}
+                  {valueText(pressureInHg, 2)}
                   {trendGlyph && <span className={`pressure-trend pressure-trend--${trend}`}>{trendGlyph}</span>}
                 </>
               }
@@ -113,8 +113,6 @@ export function WeatherObservationPanel({ external, mode }: { external: External
         )}
       </div>
       <div className="conditions-strip">
-        <span>RH <strong>{humidity == null ? "--" : `${Math.round(humidity)}%`}</strong></span>
-        <span>RAIN <strong>{wx?.rainRateInHr == null ? "--" : `${wx.rainRateInHr.toFixed(2)} IN/HR`}</strong></span>
         {mode === "normal" && <span>TOTAL <strong>{wx?.rainTotalIn == null ? "--" : `${wx.rainTotalIn.toFixed(2)} IN`}</strong></span>}
         <span className="conditions-strip__source">{footerParts.length > 0 ? footerParts.join(" • ") : "SOURCE UNAVAILABLE"}</span>
       </div>

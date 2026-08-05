@@ -126,6 +126,11 @@ export function AtlasMap({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const styleInfoRef = useRef(EMPTY_MODIFIERS);
   const styleInitializedRef = useRef(false);
+  // Whether the one-time cinematic wide-to-operating-zoom intro has fired for this map instance.
+  // Kept separate from styleInitializedRef because the two are gated on different, independently-
+  // arriving conditions (map style loaded vs. first real GPS fix) -- see the dedicated intro effect
+  // below for why they can't share one gate.
+  const introAppliedRef = useRef(false);
   const latestRef = useRef({ gps, frame, opacity, rangeRings, expanded });
   const [cameraMode, setCameraMode] = useState<AtlasCameraMode>("FOLLOW_NORTH");
   const [bearing, setBearing] = useState(gps?.headingDeg ?? 0);
@@ -351,21 +356,14 @@ export function AtlasMap({
         } : tuneAtlasStyle(map);
         setLoaded(true);
         setMapState("READY");
-        if (latest.gps) {
-          updateAtlasVehicleLayer(map, latest.gps, vehicleMarkerStyleRef.current);
-          recordBreadcrumbPoint(latest.gps.lat, latest.gps.lon);
-          const introZoom = zoomForSpeed(latest.gps.speedMph, latest.expanded, compact);
-          map.flyTo({
-            center: [latest.gps.lon, latest.gps.lat],
-            zoom: introZoom,
-            duration: INTRO_DURATION_MS,
-            easing: (t) => 1 - (1 - t) ** 3,
-            essential: true,
-          });
-          setBearing(0);
-          setPitch(0);
-          setCameraMode("FOLLOW_NORTH");
-        }
+        // The cinematic wide-to-operating-zoom intro used to run right here, gated on GPS being
+        // ready at this exact moment -- but map-style-ready and first-GPS-fix arrive independently,
+        // and style-ready usually wins the race (more so now that the compact card skips single-
+        // site radar fetch entirely, making it even faster). When GPS lost that race, this whole
+        // block silently never ran and the map was stuck at its construction-time fallback center/
+        // zoom forever -- looked like "doesn't auto-center," "zoom doesn't run." Moved to its own
+        // effect below keyed on [loaded, gps] so it fires whenever GPS actually becomes available,
+        // regardless of which one was ready first.
         stopPulseRef.current = startAtlasVehiclePulse(map);
         stopMosaicRef.current = startAtlasMosaicAnimation(
           map,
@@ -406,6 +404,32 @@ export function AtlasMap({
       mapRef.current = null;
     };
   }, [styleUri]);
+
+  // The one-time cinematic wide-to-operating-zoom intro, decoupled from the map-construction effect
+  // above so it fires whenever GPS actually becomes available -- not just if GPS happened to already
+  // be ready the instant the map style finished loading (see the comment left in its place above).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || !gps || introAppliedRef.current) return;
+    introAppliedRef.current = true;
+    // Also seeds the throttled ongoing-follow effect's own "last applied" marker so it doesn't
+    // immediately re-animate the camera again on this same GPS value right behind the cinematic
+    // flyTo -- two competing camera animations at once looks janky, not premium.
+    lastGpsAppliedRef.current = { gps, at: Date.now() };
+    updateAtlasVehicleLayer(map, gps, vehicleMarkerStyleRef.current);
+    recordBreadcrumbPoint(gps.lat, gps.lon);
+    const introZoom = zoomForSpeed(gps.speedMph, expanded, compact);
+    map.flyTo({
+      center: [gps.lon, gps.lat],
+      zoom: introZoom,
+      duration: INTRO_DURATION_MS,
+      easing: (t) => 1 - (1 - t) ** 3,
+      essential: true,
+    });
+    setBearing(0);
+    setPitch(0);
+    setCameraMode("FOLLOW_NORTH");
+  }, [loaded, gps, expanded, compact]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -634,31 +658,26 @@ export function AtlasMap({
               <input type="checkbox" checked={poiVisible} onChange={() => toggleLayer("poi")} />
               Gas / Food
             </label>
-            {compact && (
-              <label className="atlas-layers-popover__row">
-                <input type="checkbox" checked={mosaicVisible} onChange={() => toggleLayer("mosaic")} />
-                Wide-Area Mosaic
-              </label>
-            )}
           </div>
         )}
         {(visibleError || ATLAS_DIAGNOSTICS_ENABLED) && (
           <div className="map-status atlas-map-status">{visibleError || `${statusLines.join(" - ")} - ${atlasStateLabel}`}</div>
         )}
       </div>
-      <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
-        {!compact && (
-          <>
-            <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) + 0.5, duration: 260 })}>ZOOM+</button>
-            <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>ZOOM−</button>
-            <button type="button" aria-label="Toggle follow mode" title="Cycles between North-up, Heading-up, and Recenter" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
-            <button type="button" aria-label="Toggle range rings" title="Distance rings around your position" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RINGS{rangeRings !== "off" ? ` ${rangeRings}NM` : ""}</button>
-            <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
-            <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, animated" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
-          </>
-        )}
-        <button type="button" aria-label="Map layers" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
-      </div>
+      {/* Compact (Weather-page) card: no control row at all -- per the owner's explicit call,
+          layer visibility now lives entirely on the Layer Configuration page (reached via the dock
+          corner button), not duplicated here. Pan/zoom still work via touch gestures. */}
+      {!compact && (
+        <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
+          <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) + 0.5, duration: 260 })}>ZOOM+</button>
+          <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>ZOOM−</button>
+          <button type="button" aria-label="Toggle follow mode" title="Cycles between North-up, Heading-up, and Recenter" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
+          <button type="button" aria-label="Toggle range rings" title="Distance rings around your position" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RINGS{rangeRings !== "off" ? ` ${rangeRings}NM` : ""}</button>
+          <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
+          <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, animated" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
+          <button type="button" aria-label="Map layers" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
+        </div>
+      )}
     </div>
   );
 }
