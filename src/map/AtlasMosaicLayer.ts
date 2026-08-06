@@ -73,6 +73,35 @@ function sameUrls(a: string[], b: string[]) {
   return a.length === b.length && a.every((url, index) => url === b[index]);
 }
 
+// Mapbox only fetches tiles for a raster source once a layer using it is actually rendered at
+// least once -- a layer sitting at layout visibility "none" never triggers a request, no matter
+// how long it's been sitting there. Without this, the loop's normal tick was the FIRST time each
+// frame's layer ever went visible, so every frame flashed blank/transparent for however long its
+// tiles took to arrive over the network -- worst right after a rebuild (fresh app launch, or the
+// 10-minute frame refresh), when every single frame hits this cold. Sweeping every frame visible
+// for one real paint (then back to hidden) fires off all their tile requests together, up front,
+// so by the time the normal loop actually reaches frame N its tiles have had a real head start
+// instead of loading on demand mid-loop. The sweep runs well inside one FRAME_INTERVAL_MS tick
+// (two rAFs per frame, ~32ms, vs. the loop's own 500ms cadence), and setActiveFrame's unconditional
+// hide-all-but-current call is authoritative regardless of anything left mid-sweep, so there's no
+// coordination needed between the two.
+function prefetchAtlasMosaicFrameTiles(map: Map, count: number) {
+  let index = 0;
+  const step = () => {
+    if (index >= count) return;
+    const layerId = frameLayerId(index);
+    if (map.getLayer(layerId)) {
+      map.setLayoutProperty(layerId, "visibility", "visible");
+      requestAnimationFrame(() => {
+        if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", "none");
+      });
+    }
+    index += 1;
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 // Plays through the available frame history LOOP_COUNT times, then holds on the latest frame for
 // HOLD_MS before repeating. Reads getFrames()/isVisible()/isPaused() fresh on every tick (rather
 // than capturing them once) so the caller can refresh the frame list, toggle visibility, or pause
@@ -92,6 +121,7 @@ export function startAtlasMosaicAnimation(
     if (sameUrls(urls, builtUrls)) return;
     teardownAtlasMosaicFrameLayers(map, builtUrls.length);
     ensureAtlasMosaicFrameLayers(map, urls, firstSymbolLayerId);
+    prefetchAtlasMosaicFrameTiles(map, urls.length);
     builtUrls = urls;
     stepCount = 0;
   };

@@ -469,18 +469,23 @@ export function AtlasMap({
     }
   }, [bearing, cameraMode, expanded, gps, loaded, compact]);
 
-  // Catch the camera up instantly (no easing) the moment this instance becomes the visible one
-  // again -- the effect above intentionally skipped every camera move while inactive, so without
-  // this the view would sit on wherever it was left until the next GPS tick happened to fire.
+  // Catch the camera up the moment this instance becomes the visible one again -- the effect above
+  // intentionally skipped every camera move while inactive, so without this the view would sit on
+  // wherever it was left until the next GPS tick happened to fire. Eased rather than an instant
+  // jumpTo: a hard snap on every page switch read as "the map doesn't move" -- this is a single
+  // one-shot animation (not the continuous per-GPS-tick easing the skip above is actually saving
+  // the cost of), so animating it is effectively free.
   useEffect(() => {
     const map = mapRef.current;
     if (!active || !map || !loaded || !gps) return;
     if (cameraMode !== "FOLLOW_NORTH" && cameraMode !== "FOLLOW_HEADING" && cameraMode !== "RECENTERING") return;
-    map.jumpTo({
+    map.easeTo({
       center: [gps.lon, gps.lat],
       zoom: zoomForSpeed(gps.speedMph, expanded, compact),
       bearing,
       pitch,
+      duration: 600,
+      easing: (t) => 1 - (1 - t) ** 3,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only meant to fire on the active edge
   }, [active]);

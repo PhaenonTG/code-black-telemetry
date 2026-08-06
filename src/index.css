@@ -651,6 +651,12 @@ button {
   font: 800 clamp(13px, 1.05vw, 18px) / 1.05 "Inter", system-ui, sans-serif;
   text-wrap: balance;
   white-space: normal;
+  /* Native decoder states are compound words with no spaces (e.g. "REF_SELECTED") -- normal
+     white-space wraps at spaces only, so a value like that just overflowed past the tile's edge
+     and got clipped by overflow:hidden above (visible on-device as "REF_SELECTE", missing the D).
+     overflow-wrap lets it break mid-word onto a second line instead of silently losing a
+     character. */
+  overflow-wrap: anywhere;
 }
 
 .radar-engine-message {
@@ -5327,6 +5333,21 @@ body {
   overflow-y: auto;
 }
 
+/* .page-grid--operations splits its fixed page height into two `fr` rows (see that rule) --
+   row 1's height is whatever 42% of the page works out to, sized to fit its tallest sibling
+   (Operational Mode), not Pi System's own 4 metric rows. Same fixed-budget-doesn't-fit-content
+   issue as .radar-endpoint-panel above: Uptime was getting clipped off the bottom of Pi System,
+   same risk on Vehicle Power if a future row gets added. */
+.ops-system-panel,
+.ops-power-panel {
+  overflow-y: auto;
+}
+
+.ops-system-panel .metric-row,
+.ops-power-panel .metric-row {
+  flex-shrink: 0;
+}
+
 /* Interior Lighting panel has more rows (token, power, profile, color, result note) than the
    fixed-height Settings grid cell -- same overflow fix as .radar-endpoint-panel above. overflow-y
    alone isn't enough here though: .cb-panel is itself a flex column, and flex items default to
@@ -5334,8 +5355,16 @@ body {
    was squeezing each row down below its content's natural height to force-fit the fixed track,
    while the row's children (input/button/toggle) kept rendering at full size and visually spilled
    into neighboring rows. flex-shrink:0 keeps every row at its real height and lets the panel
-   actually scroll instead. */
-.settings-lighting-panel {
+   actually scroll instead.
+   Corrected: these five overflow-y:auto rules were all losing the cascade to
+   ".page-grid--settings .cb-panel { overflow: hidden }" above (0,2,0 beats a bare single-class
+   selector's 0,1,0, full stop, regardless of source order) -- on-device touch-scroll testing
+   confirmed none of these panels actually scrolled; they'd just been silently clipping the
+   content described in each comment below this whole time. Prefixing with .page-grid--settings
+   matches that selector's specificity so source order (these come later in the file) decides it,
+   the same way .radar-endpoint-panel's equivalent fix genuinely works -- that one's on the
+   Operations page, which has no competing .cb-panel overflow rule to lose to. */
+.page-grid--settings .settings-lighting-panel {
   overflow-y: auto;
 }
 
@@ -5343,7 +5372,19 @@ body {
   flex-shrink: 0;
 }
 
-.settings-chase-panel {
+/* Teams: name/group/phone/email/Add form plus the roster chip list is another "heavy" panel that
+   didn't get this fix along with Lighting/Chase originally -- phone, email, and the Add button (and
+   the roster itself once anyone's added) were unreachable below the fold. Same fix. */
+.page-grid--settings .settings-team-panel {
+  overflow-y: auto;
+}
+
+.settings-team-panel .settings-row,
+.settings-team-panel .settings-roster-list {
+  flex-shrink: 0;
+}
+
+.page-grid--settings .settings-chase-panel {
   overflow-y: auto;
 }
 
@@ -5356,7 +5397,7 @@ body {
    the-panel fix as .settings-lighting-panel above (see that comment for why overflow-y alone
    needs flex-shrink:0 on the rows too). Scroll to see Night Vision, same as Interior Lighting's
    Profile/Color rows. */
-.settings-display-panel {
+.page-grid--settings .settings-display-panel {
   overflow-y: auto;
 }
 
@@ -5565,6 +5606,15 @@ body {
 
 .report-page-actions {
   margin-top: 12px;
+}
+
+/* The real Submit Report action was rendering as a plain .settings-action (the same grey/neutral
+   style used for e.g. Settings' Save buttons) -- reads as secondary when it's actually the primary
+   action on this page, and inconsistent with the shortcut button that opens this same page from
+   Alerts (.alerts-full-panel__footer .settings-action below), which already gets this red accent. */
+.report-page-actions .settings-action {
+  border-color: rgba(255, 45, 53, 0.4);
+  color: var(--red, #ff2d35);
 }
 
 .alerts-full-panel__footer {
@@ -5817,6 +5867,24 @@ body {
   color: var(--red, #ff2d35);
   font-size: 13px;
   line-height: 1;
+}
+
+/* Map Pins started as a "light" 1-2-line-per-row panel (color + shape only) but grew a preset
+   swatch row and a size slider per group (Team/Chaser/Vehicle) -- three groups worth of that no
+   longer fits the light tier's assumption. Since .settings-light-panels sizes its grid row to the
+   tallest cell in it, letting Map Pins grow unbounded stretched that whole row tall enough to push
+   the Teams/Interior Lighting/Chase Session row (.settings-heavy-panels, flex:1 below it) off the
+   bottom of the page entirely -- not clipped, actually absent from the viewport. Same overflow-
+   inside-the-card fix as .settings-lighting-panel, but this one also needs an explicit max-height:
+   those panels are already height-bounded by their heavy-panels grid row; this one lives in the
+   auto-sized light tier, so without a cap there's nothing for overflow-y to ever trigger against. */
+.page-grid--settings .settings-pins-panel {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.settings-pins-panel .settings-row {
+  flex-shrink: 0;
 }
 
 .settings-pin-control {

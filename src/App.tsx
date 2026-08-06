@@ -232,8 +232,8 @@ export default function App() {
               </div>
             </section>
             <SensorHealthCard />
-            <SystemCard />
-            <PowerCard />
+            <SystemCard className="ops-system-panel" />
+            <PowerCard className="ops-power-panel" />
             <RadarEnginePanel />
             <PiEndpointPanel />
             <EventsCard className="events-ops" />

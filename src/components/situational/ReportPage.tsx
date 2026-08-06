@@ -214,7 +214,7 @@ export function ReportPage({ gps }: { gps: { lat: number; lon: number } | null }
 
         {error && <div className="cb-note cb-note--warn">{error}</div>}
 
-        <div className="nearby-actions">
+        <div className="nearby-actions report-page-actions">
           <button className="settings-action" disabled={busy} onClick={() => void submit()}>{busy ? "Submitting..." : "Submit Report"}</button>
         </div>
       </div>
