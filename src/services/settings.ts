@@ -7,7 +7,7 @@ let currentPiEndpoint = DEFAULT_PI_ENDPOINT;
 const listeners = new Set<(endpoint: string) => void>();
 
 const CHASER_RADIUS_KEY = "codeblack.chaserRadiusMiles";
-export const DEFAULT_CHASER_RADIUS_MILES = 100;
+export const DEFAULT_CHASER_RADIUS_MILES = 25;
 const MIN_CHASER_RADIUS_MILES = 5;
 const MAX_CHASER_RADIUS_MILES = 500;
 
@@ -181,16 +181,11 @@ export function subscribeChaserPinStyle(listener: (style: PinStyle) => void) {
   };
 }
 
-// Vehicle marker adds a sixth "custom" shape on top of the five PinShape options -- an uploaded,
-// downscaled-to-a-small-square photo/icon instead of a solid color shape. `imageDataUrl` only means
-// anything when shape is "custom"; `color` still applies to the accuracy ring/pulse/heading line
-// regardless of shape, so switching to a custom image doesn't lose the color identity.
-export type VehicleMarkerShape = PinShape | "custom";
+export type VehicleMarkerShape = PinShape;
 
 export interface VehicleMarkerStyle {
   color: string;
   shape: VehicleMarkerShape;
-  imageDataUrl?: string;
   sizeScale: number;
 }
 
@@ -205,8 +200,10 @@ export async function loadVehicleMarkerStyle() {
   let next = DEFAULT_VEHICLE_MARKER_STYLE;
   if (saved.value) {
     try {
-      const parsed = JSON.parse(saved.value) as Partial<VehicleMarkerStyle>;
-      if (parsed.color && parsed.shape) next = { color: parsed.color, shape: parsed.shape, imageDataUrl: parsed.imageDataUrl, sizeScale: clampPinSizeScale(parsed.sizeScale ?? 1) };
+      const parsed = JSON.parse(saved.value) as Omit<Partial<VehicleMarkerStyle>, "shape"> & { shape?: string };
+      // "custom" (uploaded-image marker) was removed -- fall back to circle for anyone who'd set it.
+      const shape = parsed.shape && parsed.shape !== "custom" ? (parsed.shape as PinShape) : "circle";
+      if (parsed.color) next = { color: parsed.color, shape, sizeScale: clampPinSizeScale(parsed.sizeScale ?? 1) };
     } catch {
       next = DEFAULT_VEHICLE_MARKER_STYLE;
     }
@@ -295,42 +292,50 @@ export function subscribeNightVisionEnabled(listener: (enabled: boolean) => void
   };
 }
 
-const FAVORITE_BRANDS_KEY = "codeblack.favoriteBrands";
-// Case-insensitive substring match against a POI's OSM name (see AtlasPoiLayer.ts) -- lets the
-// owner call out specific preferred chains (Love's, Buc-ee's, Taco Bell, Braum's, etc.) so those
-// pins stand out from the rest of the Gas/Food POI layer on the map. Same shape as teamRoster
-// (plain string list, JSON in Preferences) since it's the same kind of "curated list filtering a
-// broader feed" pattern.
-let currentFavoriteBrands: string[] = [];
-const favoriteBrandsListeners = new Set<(brands: string[]) => void>();
+// Replaced the old flat favoriteBrands string list -- "render matching pins bigger" inside the
+// full Gas/Food Overpass feed still showed every other station/restaurant too. This is a curated
+// allowlist instead: only a place whose OSM name matches one of these renders on the map at all,
+// each with its own color and (optionally) an uploaded logo image, so "that's a Love's" reads at a
+// glance instead of just "that's a slightly bigger gas dot."
+export interface CustomPoiPin {
+  id: string;
+  name: string;
+  matchText: string;
+  color: string;
+  imageDataUrl?: string;
+}
 
-export async function loadFavoriteBrands() {
-  const saved = await Preferences.get({ key: FAVORITE_BRANDS_KEY });
+const CUSTOM_POI_PINS_KEY = "codeblack.customPoiPins";
+let currentCustomPoiPins: CustomPoiPin[] = [];
+const customPoiPinsListeners = new Set<(pins: CustomPoiPin[]) => void>();
+
+export async function loadCustomPoiPins() {
+  const saved = await Preferences.get({ key: CUSTOM_POI_PINS_KEY });
   try {
-    currentFavoriteBrands = saved.value ? (JSON.parse(saved.value) as string[]) : [];
+    currentCustomPoiPins = saved.value ? (JSON.parse(saved.value) as CustomPoiPin[]) : [];
   } catch {
-    currentFavoriteBrands = [];
+    currentCustomPoiPins = [];
   }
-  favoriteBrandsListeners.forEach((listener) => listener(currentFavoriteBrands));
-  return currentFavoriteBrands;
+  customPoiPinsListeners.forEach((listener) => listener(currentCustomPoiPins));
+  return currentCustomPoiPins;
 }
 
-export async function saveFavoriteBrands(brands: string[]) {
-  currentFavoriteBrands = brands.map((entry) => entry.trim()).filter(Boolean);
-  await Preferences.set({ key: FAVORITE_BRANDS_KEY, value: JSON.stringify(currentFavoriteBrands) });
-  favoriteBrandsListeners.forEach((listener) => listener(currentFavoriteBrands));
-  return currentFavoriteBrands;
+export async function saveCustomPoiPins(pins: CustomPoiPin[]) {
+  currentCustomPoiPins = pins;
+  await Preferences.set({ key: CUSTOM_POI_PINS_KEY, value: JSON.stringify(currentCustomPoiPins) });
+  customPoiPinsListeners.forEach((listener) => listener(currentCustomPoiPins));
+  return currentCustomPoiPins;
 }
 
-export function getFavoriteBrands() {
-  return currentFavoriteBrands;
+export function getCustomPoiPins() {
+  return currentCustomPoiPins;
 }
 
-export function subscribeFavoriteBrands(listener: (brands: string[]) => void) {
-  favoriteBrandsListeners.add(listener);
-  listener(currentFavoriteBrands);
+export function subscribeCustomPoiPins(listener: (pins: CustomPoiPin[]) => void) {
+  customPoiPinsListeners.add(listener);
+  listener(currentCustomPoiPins);
   return () => {
-    favoriteBrandsListeners.delete(listener);
+    customPoiPinsListeners.delete(listener);
   };
 }
 

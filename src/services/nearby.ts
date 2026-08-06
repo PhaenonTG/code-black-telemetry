@@ -347,7 +347,7 @@ const POI_LIST_LIMIT_PER_CATEGORY = 20;
 // Feeds the map's Gas/Food POI layer (distinct from getNearbyPlaces above, which only returns the
 // single best pick per category for the Nearby card) -- every candidate within range, for the map
 // to render as its own pin.
-export async function getNearbyPoiList(pos: Position, categories: NearbyCategory[] = ["gas", "food"]): Promise<{ places: NearbyPlace[]; error: string }> {
+export async function getNearbyPoiList(pos: Position, categories: NearbyCategory[] = ["gas", "food", "hospital"]): Promise<{ places: NearbyPlace[]; error: string }> {
   const pending = categories.map((category, index) =>
     new Promise<NearbyPlace[]>((resolve, reject) => {
       window.setTimeout(() => {

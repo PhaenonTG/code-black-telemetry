@@ -77,7 +77,7 @@ export function NearbyPanel({ places, error, spotters, spottersError }: NearbyPa
       {selectedPlace && <NearbyDetailModal place={selectedPlace} onClose={() => setSelectedPlace(null)} />}
       {spotterListOpen && (
         <SpotterListModal
-          spotters={spotters}
+          spotters={spotters.filter((spotter) => spotter.distanceMiles <= chaserRadiusMiles)}
           error={spottersError}
           onClose={() => setSpotterListOpen(false)}
           onSelect={(spotter) => {

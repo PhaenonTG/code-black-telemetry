@@ -5887,6 +5887,48 @@ body {
   flex-shrink: 0;
 }
 
+.pin-style-preview {
+  display: inline-block;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.pin-style-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  background: #171717;
+  color: var(--text);
+  font: 800 11px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.pin-style-modal .modal-scroll {
+  padding: 16px;
+}
+
+.pin-style-modal__body .settings-pin-control {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.layer-row-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.layer-row-controls .mode-toggle {
+  margin-top: 0;
+}
+
 .settings-pin-control {
   display: flex;
   width: 100%;

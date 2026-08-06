@@ -8,9 +8,10 @@ import type { Spotter } from "../services/spotters";
 import type { NearbyPlace } from "../services/nearby";
 import { resolveTeamPositions } from "../services/teamPositions";
 import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcrumbTrail";
-import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, loadFavoriteBrands, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeFavoriteBrands, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
+import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
 import { useTeamRoster } from "../hooks/useTeamRoster";
+import { useCustomPoiPins } from "../hooks/useCustomPoiPins";
 import { useChaserPinStyle, useTeamPinStyle, useVehicleMarkerStyle } from "../hooks/usePinStyle";
 import { applyAtlasCamera, zoomForSpeed } from "./AtlasCameraController";
 import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstances, incrementAtlasCounter, incrementAtlasMapInstances, writeAtlasDiagnostics } from "./AtlasDiagnostics";
@@ -201,12 +202,7 @@ export function AtlasMap({
     void loadChaserRadiusMiles();
     return () => { unsubscribe(); };
   }, []);
-  const [favoriteBrands, setFavoriteBrands] = useState<string[]>([]);
-  useEffect(() => {
-    const unsubscribe = subscribeFavoriteBrands(setFavoriteBrands);
-    void loadFavoriteBrands();
-    return () => { unsubscribe(); };
-  }, []);
+  const customPoiPins = useCustomPoiPins();
   const teamPositions = useMemo(() => resolveTeamPositions(spotters, roster), [spotters, roster]);
   const chaserSpotters = useMemo(() => {
     const teamIds = new Set(teamPositions.map((member) => member.id));
@@ -498,11 +494,15 @@ export function AtlasMap({
     updateAtlasVehicleLayer(map, gps, vehicleMarkerStyle);
   }, [vehicleMarkerStyle, loaded]);
 
+  // Breadcrumb trail is a Locate-page driving aid (with its own Clear Trail button there) -- not a
+  // togglable Layers-page item, and not part of "the dashboard shows only what's configured." The
+  // compact Weather card never rendered a trail-clearing control, so a trail was quietly building up
+  // there with zero user control; simplest fix is to just not draw it on the compact instance at all.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    updateAtlasBreadcrumbLayer(map, trail);
-  }, [loaded, trail]);
+    updateAtlasBreadcrumbLayer(map, compact ? [] : trail);
+  }, [loaded, trail, compact]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -546,8 +546,8 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    updateAtlasPoiLayer(map, poiPlaces, favoriteBrands, poiVisible);
-  }, [poiPlaces, favoriteBrands, poiVisible, loaded]);
+    updateAtlasPoiLayer(map, poiPlaces, customPoiPins, poiVisible);
+  }, [poiPlaces, customPoiPins, poiVisible, loaded]);
 
   useEffect(() => {
     if (!mosaicVisible) return;

@@ -1,12 +1,14 @@
 import mapboxgl from "mapbox-gl";
 import type { Map as MapboxMap, Marker, Popup } from "mapbox-gl";
 import type { NearbyPlace } from "../services/nearby";
+import type { CustomPoiPin } from "../services/settings";
 
 // Separate from AtlasPinMarkers.ts (spotter/team position pins) rather than extended to share it --
 // that helper applies one PinStyle to every point in a call, but POIs need per-point styling
-// (favorite brand vs. not, gas vs. food) and a different popup body (hours/distance, not a "last
-// ping" age). Same overall shape (mapboxgl.Marker + DOM element, WeakMap-keyed latest-data cache for
-// fresh-on-click popups, create/update/remove-by-id sync) since that pattern is already proven here.
+// (which custom brand matched, or the fixed ER look) and a different popup body (hours/distance, not
+// a "last ping" age). Same overall shape (mapboxgl.Marker + DOM element, WeakMap-keyed latest-data
+// cache for fresh-on-click popups, create/update/remove-by-id sync) since that pattern is already
+// proven here.
 
 function escapeHtml(value: string) {
   return value
@@ -36,25 +38,62 @@ function showPoiPopup(map: MapboxMap, place: NearbyPlace) {
   activePopups.set(map, popup);
 }
 
-function isFavorite(place: NearbyPlace, favoriteBrands: string[]) {
-  if (favoriteBrands.length === 0) return false;
+// Owner: "I don't want that to list every available option, I want the ability to change that
+// myself" -- gas/food places only render at all when they match a curated custom pin (by name
+// substring, same matching approach teamRoster/favoriteBrands always used); everything else in the
+// raw Overpass feed for those two categories is simply not shown. Hospitals are the one category
+// exempted from that gate: every OSM-confirmed ER within range always renders with a fixed style,
+// no per-business configuration needed for "where's the nearest hospital."
+function matchCustomPin(place: NearbyPlace, customPins: CustomPoiPin[]): CustomPoiPin | null {
   const name = place.name.toLowerCase();
-  return favoriteBrands.some((brand) => brand.trim() && name.includes(brand.trim().toLowerCase()));
+  for (const pin of customPins) {
+    const match = pin.matchText.trim().toLowerCase();
+    if (match && name.includes(match)) return pin;
+  }
+  return null;
 }
 
-function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, favorite: boolean) {
-  const size = favorite ? 18 : 12;
+const ER_COLOR = "#ff2d35";
+
+function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: CustomPoiPin | null) {
+  if (place.category === "hospital") {
+    const size = 22;
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.backgroundImage = "";
+    el.style.backgroundColor = ER_COLOR;
+    el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
+    el.style.borderRadius = "4px";
+    el.style.boxShadow = `0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 8px 2px ${ER_COLOR}`;
+    el.style.display = "grid";
+    el.style.placeItems = "center";
+    el.style.color = "#fff";
+    el.style.font = "800 10px/1 'JetBrains Mono', monospace";
+    el.textContent = "ER";
+    el.style.cursor = "pointer";
+    return;
+  }
+
+  const size = 22;
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
-  el.style.backgroundColor = favorite ? "#ffffff" : "#8b929e";
+  el.style.display = "block";
+  el.textContent = "";
+  el.style.font = "";
+  el.style.color = "";
+  if (customPin?.imageDataUrl) {
+    el.style.backgroundImage = `url(${customPin.imageDataUrl})`;
+    el.style.backgroundSize = "cover";
+    el.style.backgroundPosition = "center";
+    el.style.backgroundColor = "";
+    el.style.borderRadius = "6px";
+  } else {
+    el.style.backgroundImage = "";
+    el.style.backgroundColor = customPin?.color ?? "#ffffff";
+    el.style.borderRadius = "50%";
+  }
   el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
-  el.style.boxShadow = favorite
-    ? "0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 10px 2px rgba(255, 255, 255, 0.85)"
-    : "0 0 0 1px rgba(0, 0, 0, 0.35)";
-  // Gas reads as a small square (fuel-pump silhouette, loosely), food as a circle -- same
-  // shape-as-category-signal idea as the existing watch/warning/MD layers using fill vs. dashed
-  // outline to distinguish product types at a glance.
-  el.style.borderRadius = place.category === "gas" ? "3px" : "50%";
+  el.style.boxShadow = "0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 8px 2px rgba(255, 255, 255, 0.5)";
   el.style.cursor = "pointer";
 }
 
@@ -64,7 +103,7 @@ function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, favorite: boolean
 const poiMarkers = new WeakMap<MapboxMap, Record<string, Marker>>();
 const latestPlacesByMarkers = new WeakMap<Record<string, Marker>, Record<string, NearbyPlace>>();
 
-export function updateAtlasPoiLayer(map: MapboxMap, places: NearbyPlace[], favoriteBrands: string[], visible: boolean) {
+export function updateAtlasPoiLayer(map: MapboxMap, places: NearbyPlace[], customPins: CustomPoiPin[], visible: boolean) {
   let markers = poiMarkers.get(map);
   if (!markers) {
     markers = {};
@@ -78,6 +117,9 @@ export function updateAtlasPoiLayer(map: MapboxMap, places: NearbyPlace[], favor
   const seen = new Set<string>();
   if (visible) {
     for (const place of places) {
+      const isHospital = place.category === "hospital";
+      const customPin = isHospital ? null : matchCustomPin(place, customPins);
+      if (!isHospital && !customPin) continue;
       seen.add(place.id);
       latest[place.id] = place;
       let marker = markers[place.id];
@@ -94,7 +136,7 @@ export function updateAtlasPoiLayer(map: MapboxMap, places: NearbyPlace[], favor
       } else {
         marker.setLngLat([place.lon, place.lat]);
       }
-      applyPoiStyle(marker.getElement() as HTMLDivElement, place, isFavorite(place, favoriteBrands));
+      applyPoiStyle(marker.getElement() as HTMLDivElement, place, customPin);
     }
   }
   for (const id of Object.keys(markers)) {

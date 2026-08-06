@@ -16,11 +16,11 @@ const PULSE_START_OPACITY = 0.5;
 const DEFAULT_VEHICLE_COLOR = "#ff2d35";
 
 // The main dot moved from a GL circle layer to a mapboxgl.Marker (DOM element) so it can take an
-// arbitrary color/shape/uploaded-image, the same reasoning AtlasPinMarkers.ts documents for Team/
-// Chaser pins: GL circles are definitionally circles, and generating per-color/per-shape/per-image
-// canvas icons is a lot more machinery than a styled div. The accuracy ring, pulse, and heading line
-// stay GL layers -- DOM markers render above the WebGL canvas by default, so the dot still reads as
-// "on top" without needing the old fixed GL paint-order trick.
+// arbitrary color/shape, the same reasoning AtlasPinMarkers.ts documents for Team/Chaser pins: GL
+// circles are definitionally circles, and generating per-color/per-shape canvas icons is a lot more
+// machinery than a styled div. The accuracy ring, pulse, and heading line stay GL layers -- DOM
+// markers render above the WebGL canvas by default, so the dot still reads as "on top" without
+// needing the old fixed GL paint-order trick.
 const VEHICLE_MARKER_SIZE_PX = 22;
 const SHAPE_CLIP_PATH: Partial<Record<VehicleMarkerShape, string>> = {
   diamond: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
@@ -33,19 +33,9 @@ function applyVehicleMarkerStyle(el: HTMLDivElement, style: VehicleMarkerStyle) 
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
   el.style.cursor = "default";
-  if (style.shape === "custom" && style.imageDataUrl) {
-    el.style.backgroundImage = `url(${style.imageDataUrl})`;
-    el.style.backgroundSize = "cover";
-    el.style.backgroundPosition = "center";
-    el.style.backgroundColor = "";
-    el.style.borderRadius = "6px";
-    el.style.clipPath = "";
-  } else {
-    el.style.backgroundImage = "";
-    el.style.backgroundColor = style.color;
-    el.style.borderRadius = style.shape === "circle" ? "50%" : style.shape === "square" ? "3px" : "0";
-    el.style.clipPath = SHAPE_CLIP_PATH[style.shape] ?? "";
-  }
+  el.style.backgroundColor = style.color;
+  el.style.borderRadius = style.shape === "circle" ? "50%" : style.shape === "square" ? "3px" : "0";
+  el.style.clipPath = SHAPE_CLIP_PATH[style.shape] ?? "";
   el.style.border = "2px solid #fff4f4";
   el.style.boxShadow = `0 0 10px 2px ${style.color}`;
 }
