@@ -1,178 +1,96 @@
-import type { Map } from "mapbox-gl";
+import type { Map, RasterSourceSpecification } from "mapbox-gl";
 import { ATLAS_RADAR_LAYER } from "./AtlasRadarLayer";
 import { incrementAtlasCounter } from "./AtlasDiagnostics";
 
-const MOSAIC_SOURCE_PREFIX = "atlas-mosaic-tiles-";
-const MOSAIC_LAYER_PREFIX = "atlas-mosaic-raster-";
+const MOSAIC_SOURCE_ID = "atlas-mosaic-nexrad";
+const MOSAIC_LAYER_ID = "atlas-mosaic-nexrad-raster";
 const MOSAIC_OPACITY = 0.6;
-// RainViewer's tile service only generates radar tiles up to z7 (documented max); this app's map
-// normally operates at z7.25-9.2. Without maxzoom, Mapbox requests tiles past what RainViewer has
-// and gets back a "Zoom level not supported" placeholder image instead of radar data.
-const MOSAIC_MAX_ZOOM = 7;
-const FRAME_INTERVAL_MS = 500; // Fast enough to read as motion, matching typical radar-loop apps.
-const LOOP_COUNT = 3; // Play through the available history this many times per cycle.
-const HOLD_MS = 20_000; // Then hold on the latest frame before the next cycle starts.
 
-function frameSourceId(index: number) {
-  return `${MOSAIC_SOURCE_PREFIX}${index}`;
+// Replaces the earlier RainViewer-backed animated frame loop (multi-layer frame cycling, prefetch
+// sweeps, pause-during-interaction bookkeeping) -- that machinery was the single most bug-prone
+// piece of this app across the whole project (choppy playback, sometimes not rendering at all,
+// fighting the compact card's zoom cycling for the main thread) despite repeated fixes. Owner opted
+// to trade the animated "storm crawling across the screen" loop for a single sharp auto-refreshing
+// frame from a better source instead -- see the URL comment below. A real animated loop on this
+// same NEXRAD source is a possible future addition (no documented public per-timestamp tile
+// endpoint was found for it in this pass), tracked separately rather than blocking this swap.
+//
+// Iowa Environmental Mesonet (mesonet.agron.iastate.edu) publishes a free, no-key, CORS-open
+// NEXRAD CONUS composite -- actual radar-derived mosaic at ~1km native resolution, regenerated
+// every 5 minutes since 2003 (see mesonet.agron.iastate.edu/docs/nexrad_mosaic/), a meaningfully
+// sharper and fresher source than RainViewer's globally-normalized product, which also hard-caps
+// its own tile service at zoom 7 -- this app operates at zoom ~7.25-9.2, past that cap. Confirmed
+// live via direct tile fetch that this endpoint serves clean tiles at zoom 10 with no error
+// placeholder, so no equivalent maxzoom restriction is needed here.
+//
+// The "900913" path segment is the (deprecated but still Google-Maps-era-standard) EPSG code for
+// Web Mercator that this tile service expects, not a frame selector -- this URL always serves
+// whichever composite is currently latest. Mapbox's tile cache has no way to know the underlying
+// image changed since the URL template itself never changes, so a coarse (REFRESH_MS-bucketed)
+// cache-busting query param is added on each scheduled refresh to force a refetch.
+const TILE_URL_BASE = "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png";
+const REFRESH_MS = 3 * 60_000; // Source data itself updates every 5 min; refresh a bit ahead of that.
+
+function tileUrlForBucket(bucket: number) {
+  return [`${TILE_URL_BASE}?v=${bucket}`];
 }
 
-function frameLayerId(index: number) {
-  return `${MOSAIC_LAYER_PREFIX}${index}`;
+function currentBucket() {
+  return Math.floor(Date.now() / REFRESH_MS);
 }
 
-// Each historical frame gets its own permanent source+layer instead of one shared source whose
-// tile URLs get mutated every animation tick. Confirmed live that repeatedly calling setTiles() on
-// a single raster source every ~400ms did not reliably force Mapbox to refetch/repaint -- its tile
-// cache is keyed by z/x/y coordinate, not by which "generation" of the source's URL template
-// produced the cached image, so the visible frame only actually changed when some OTHER map event
-// (a user pan/zoom) forced a full tile reload anyway. That's exactly what "animation only moves
-// when I move the map" was describing. Pre-creating one real layer per frame and toggling
-// visibility (the same mechanism every other layer in this app already uses for on/off state) is
-// instant and network-independent once each frame's tiles have loaded once.
-function ensureAtlasMosaicFrameLayers(map: Map, urls: string[], firstSymbolLayerId?: string) {
-  const beforeLayerId = map.getLayer(ATLAS_RADAR_LAYER) ? ATLAS_RADAR_LAYER : firstSymbolLayerId;
-  urls.forEach((url, index) => {
-    const sourceId = frameSourceId(index);
-    if (!map.getSource(sourceId)) {
-      map.addSource(sourceId, { type: "raster", tiles: [url], tileSize: 256, maxzoom: MOSAIC_MAX_ZOOM });
-      incrementAtlasCounter("sourceCreations");
-    }
-    const layerId = frameLayerId(index);
-    if (!map.getLayer(layerId)) {
-      map.addLayer(
-        {
-          id: layerId,
-          type: "raster",
-          source: sourceId,
-          layout: { visibility: "none" },
-          paint: { "raster-opacity": MOSAIC_OPACITY, "raster-fade-duration": 0 },
-        },
-        beforeLayerId,
-      );
-      incrementAtlasCounter("layerCreations");
-    }
-  });
-}
-
-function teardownAtlasMosaicFrameLayers(map: Map, count: number) {
-  for (let i = 0; i < count; i += 1) {
-    if (map.getLayer(frameLayerId(i))) map.removeLayer(frameLayerId(i));
-    if (map.getSource(frameSourceId(i))) map.removeSource(frameSourceId(i));
+function ensureAtlasMosaicLayer(map: Map, beforeLayerId?: string) {
+  if (!map.getSource(MOSAIC_SOURCE_ID)) {
+    map.addSource(MOSAIC_SOURCE_ID, {
+      type: "raster",
+      tiles: tileUrlForBucket(currentBucket()),
+      tileSize: 256,
+    } satisfies RasterSourceSpecification);
+    incrementAtlasCounter("sourceCreations");
+  }
+  if (!map.getLayer(MOSAIC_LAYER_ID)) {
+    const before = map.getLayer(ATLAS_RADAR_LAYER) ? ATLAS_RADAR_LAYER : beforeLayerId;
+    map.addLayer(
+      {
+        id: MOSAIC_LAYER_ID,
+        type: "raster",
+        source: MOSAIC_SOURCE_ID,
+        layout: { visibility: "none" },
+        paint: { "raster-opacity": MOSAIC_OPACITY, "raster-fade-duration": 300 },
+      },
+      before,
+    );
+    incrementAtlasCounter("layerCreations");
   }
 }
 
-function setActiveFrame(map: Map, count: number, activeIndex: number | null) {
-  for (let i = 0; i < count; i += 1) {
-    if (!map.getLayer(frameLayerId(i))) continue;
-    map.setLayoutProperty(frameLayerId(i), "visibility", i === activeIndex ? "visible" : "none");
-  }
+function teardownAtlasMosaicLayer(map: Map) {
+  if (map.getLayer(MOSAIC_LAYER_ID)) map.removeLayer(MOSAIC_LAYER_ID);
+  if (map.getSource(MOSAIC_SOURCE_ID)) map.removeSource(MOSAIC_SOURCE_ID);
 }
 
-function sameUrls(a: string[], b: string[]) {
-  return a.length === b.length && a.every((url, index) => url === b[index]);
-}
-
-// Mapbox only fetches tiles for a raster source once a layer using it is actually rendered at
-// least once -- a layer sitting at layout visibility "none" never triggers a request, no matter
-// how long it's been sitting there. Without this, the loop's normal tick was the FIRST time each
-// frame's layer ever went visible, so every frame flashed blank/transparent for however long its
-// tiles took to arrive over the network -- worst right after a rebuild (fresh app launch, or the
-// 10-minute frame refresh), when every single frame hits this cold. Sweeping every frame visible
-// for one real paint (then back to hidden) fires off all their tile requests together, up front,
-// so by the time the normal loop actually reaches frame N its tiles have had a real head start
-// instead of loading on demand mid-loop. The sweep runs well inside one FRAME_INTERVAL_MS tick
-// (two rAFs per frame, ~32ms, vs. the loop's own 500ms cadence), and setActiveFrame's unconditional
-// hide-all-but-current call is authoritative regardless of anything left mid-sweep, so there's no
-// coordination needed between the two.
-function prefetchAtlasMosaicFrameTiles(map: Map, count: number) {
-  let index = 0;
-  const step = () => {
-    if (index >= count) return;
-    const layerId = frameLayerId(index);
-    if (map.getLayer(layerId)) {
-      map.setLayoutProperty(layerId, "visibility", "visible");
-      requestAnimationFrame(() => {
-        if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", "none");
-      });
-    }
-    index += 1;
-    requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
-
-// Plays through the available frame history LOOP_COUNT times, then holds on the latest frame for
-// HOLD_MS before repeating. Reads getFrames()/isVisible()/isPaused() fresh on every tick (rather
-// than capturing them once) so the caller can refresh the frame list, toggle visibility, or pause
-// for manual map interaction at any time without having to restart this loop.
-export function startAtlasMosaicAnimation(
-  map: Map,
-  getFrames: () => string[],
-  isVisible: () => boolean,
-  firstSymbolLayerId?: string,
-  isPaused: () => boolean = () => false,
-): () => void {
-  let timeoutId = 0;
-  let stepCount = 0;
-  let builtUrls: string[] = [];
-  let hasBuiltBefore = false;
-
-  const rebuildIfNeeded = (urls: string[]) => {
-    if (sameUrls(urls, builtUrls)) return;
-    teardownAtlasMosaicFrameLayers(map, builtUrls.length);
-    ensureAtlasMosaicFrameLayers(map, urls, firstSymbolLayerId);
-    if (hasBuiltBefore) {
-      prefetchAtlasMosaicFrameTiles(map, urls.length);
-    } else {
-      // First-ever build for this map instance lands right as the cinematic wide-to-operating-zoom
-      // intro (AtlasMap.tsx, INTRO_DURATION_MS) is also animating -- sweeping every frame's tile
-      // fetch through rAF-paced style mutations at the exact same moment competed with that
-      // animation for the main thread and read as choppy right at cold-start, before the loop had
-      // even started stepping. Letting the intro finish first spreads the two out.
-      window.setTimeout(() => prefetchAtlasMosaicFrameTiles(map, urls.length), 3000);
-    }
-    hasBuiltBefore = true;
-    builtUrls = urls;
-    stepCount = 0;
-  };
+// Started once per map instance (mirrors startAtlasVehiclePulse's shape) rather than driven by a
+// React effect keyed on frequently-changing props -- the refresh cadence is time-based, not data-
+// or prop-driven, so it doesn't need to react to renders at all once running.
+export function startAtlasMosaicLayer(map: Map, isVisible: () => boolean, beforeLayerId?: string): () => void {
+  ensureAtlasMosaicLayer(map, beforeLayerId);
+  let lastBucket = currentBucket();
 
   const tick = () => {
-    const frames = getFrames();
-    const visible = isVisible() && frames.length > 0;
-    rebuildIfNeeded(frames);
-
-    if (!visible) {
-      setActiveFrame(map, builtUrls.length, null);
-      stepCount = 0;
-      timeoutId = window.setTimeout(tick, 1000);
-      return;
-    }
-
-    // Paused for manual map interaction: keep whatever frame is already showing (don't reset to
-    // frame 0) so a resumed loop continues from a sensible point, and check back soon rather than
-    // committing to a long HOLD_MS wait that would outlast the pause.
-    if (isPaused()) {
-      timeoutId = window.setTimeout(tick, 1000);
-      return;
-    }
-
-    const frameIndex = stepCount % frames.length;
-    setActiveFrame(map, builtUrls.length, frameIndex);
-    stepCount += 1;
-
-    const justFinishedLoops = stepCount >= frames.length * LOOP_COUNT;
-    if (justFinishedLoops) {
-      stepCount = 0;
-      timeoutId = window.setTimeout(tick, HOLD_MS);
-    } else {
-      timeoutId = window.setTimeout(tick, FRAME_INTERVAL_MS);
+    if (!map.getLayer(MOSAIC_LAYER_ID)) return;
+    map.setLayoutProperty(MOSAIC_LAYER_ID, "visibility", isVisible() ? "visible" : "none");
+    const bucket = currentBucket();
+    if (bucket !== lastBucket) {
+      lastBucket = bucket;
+      const source = map.getSource(MOSAIC_SOURCE_ID);
+      if (source && source.type === "raster") source.setTiles(tileUrlForBucket(bucket));
     }
   };
 
   tick();
+  const timer = window.setInterval(tick, 2000);
   return () => {
-    window.clearTimeout(timeoutId);
-    teardownAtlasMosaicFrameLayers(map, builtUrls.length);
+    window.clearInterval(timer);
+    teardownAtlasMosaicLayer(map);
   };
 }

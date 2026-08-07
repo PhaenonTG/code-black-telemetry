@@ -374,15 +374,3 @@ export async function getReverseLocality(pos: Position): Promise<LocalityResult>
   return coordinateLocality(pos);
 }
 
-// RainViewer's public radar mosaic. `radar.past` is chronological (oldest first, last entry is
-// the current/latest frame) and typically holds ~2 hours of history at 10-minute steps -- returned
-// in full so the map can loop through recent history rather than showing one static frame.
-export async function getRadarMosaicFrames(): Promise<string[]> {
-  try {
-    const data = await fetchJson<{ radar?: { past?: Array<{ path: string }> } }>("https://api.rainviewer.com/public/weather-maps.json", 5000);
-    const frames = data.radar?.past ?? [];
-    return frames.map((frame) => `https://tilecache.rainviewer.com${frame.path}/256/{z}/{x}/{y}/2/1_1.png`);
-  } catch {
-    return [];
-  }
-}

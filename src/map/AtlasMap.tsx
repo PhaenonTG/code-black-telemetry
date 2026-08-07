@@ -3,7 +3,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagnostics } from "../services/mapTiles";
 import type { RadarFrame, RadarProduct } from "../services/radar";
-import { getRadarMosaicFrames, type AlertProduct } from "../services/situational";
+import type { AlertProduct } from "../services/situational";
 import type { Spotter } from "../services/spotters";
 import type { NearbyCategory, NearbyPlace } from "../services/nearby";
 import { resolveTeamPositions } from "../services/teamPositions";
@@ -17,7 +17,7 @@ import { applyAtlasCamera, zoomForSpeed } from "./AtlasCameraController";
 import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstances, incrementAtlasCounter, incrementAtlasMapInstances, writeAtlasDiagnostics } from "./AtlasDiagnostics";
 import { updateAtlasAlertsLayer } from "./AtlasAlertsLayer";
 import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
-import { startAtlasMosaicAnimation } from "./AtlasMosaicLayer";
+import { startAtlasMosaicLayer } from "./AtlasMosaicLayer";
 import { updateAtlasPoiLayer } from "./AtlasPoiLayer";
 import { updateAtlasRadarLayer, ATLAS_RADAR_LAYER, ATLAS_RADAR_SOURCE } from "./AtlasRadarLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
@@ -32,13 +32,12 @@ import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
 // the real operating zoom for a "swoop to position" open on cold launch, rather than snapping.
 const INTRO_DURATION_MS = 2800;
-const MOSAIC_REFRESH_MS = 10 * 60_000; // RainViewer's public frames update roughly every 10 min.
 const WATCHES_REFRESH_MS = 5 * 60_000; // Watches are issued/canceled far less often than radar
 // updates, but a new one mid-chase matters -- 5 min keeps this current without hammering NWS's
 // service.
-// Owner-specified: manually moving the map pauses auto-follow and the mosaic loop for 2 minutes,
-// then both resume on their own -- long enough to actually look at something without fighting the
-// vehicle's own movement, short enough that walking away doesn't strand the map wherever it was left.
+// Owner-specified: manually moving the map pauses auto-follow for 2 minutes, then resumes on its
+// own -- long enough to actually look at something without fighting the vehicle's own movement,
+// short enough that walking away doesn't strand the map wherever it was left.
 const INTERACTION_PAUSE_MS = 2 * 60_000;
 
 type AtlasMapProps = {
@@ -187,7 +186,6 @@ export function AtlasMap({
     void saveMapLayerVisibility({ ...layerVisibility, [key]: !layerVisibility[key] });
   };
   const mosaicVisibleRef = useRef(mosaicVisible);
-  const mosaicFramesRef = useRef<string[]>([]);
   mosaicVisibleRef.current = mosaicVisible;
   const [watches, setWatches] = useState<WatchPolygon[]>([]);
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
@@ -389,12 +387,10 @@ export function AtlasMap({
         // effect below keyed on [loaded, gps] so it fires whenever GPS actually becomes available,
         // regardless of which one was ready first.
         stopPulseRef.current = startAtlasVehiclePulse(map, () => activeRef.current);
-        stopMosaicRef.current = startAtlasMosaicAnimation(
+        stopMosaicRef.current = startAtlasMosaicLayer(
           map,
-          () => mosaicFramesRef.current,
           () => mosaicVisibleRef.current && activeRef.current,
           styleInfoRef.current.firstSymbolLayerId,
-          () => Date.now() < interactionResumeAtRef.current,
         );
         const radar = updateAtlasRadarLayer(map, latest.frame, latest.opacity, styleInfoRef.current.firstSymbolLayerId);
         setRadarState(radar.state);
@@ -598,20 +594,6 @@ export function AtlasMap({
     updateAtlasPoiLayer(map, poiPlaces, nearbyBest, customPoiPins, poiVisible);
   }, [poiPlaces, nearbyBest, customPoiPins, poiVisible, loaded]);
 
-  useEffect(() => {
-    if (!mosaicVisible) return;
-    let cancelled = false;
-    const load = async () => {
-      const frames = await getRadarMosaicFrames();
-      if (!cancelled && frames.length > 0) mosaicFramesRef.current = frames;
-    };
-    void load();
-    const timer = window.setInterval(load, MOSAIC_REFRESH_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [mosaicVisible]);
 
   useEffect(() => {
     const map = mapRef.current;

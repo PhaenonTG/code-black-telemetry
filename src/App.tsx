@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
@@ -75,9 +75,18 @@ export default function App() {
   const pagerRef = useRef<HTMLDivElement | null>(null);
   const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
   const status = useStatus();
-  const gpsPoint = canonicalLocation.latitude != null && canonicalLocation.longitude != null
-    ? { lat: canonicalLocation.latitude, lon: canonicalLocation.longitude }
-    : null;
+  const lat = canonicalLocation.latitude;
+  const lon = canonicalLocation.longitude;
+  const headingDeg = canonicalLocation.headingDeg;
+  const speedMph = canonicalLocation.speedMph;
+  const accuracyM = canonicalLocation.accuracyM;
+  // Rebuilding these as fresh object literals every render (App re-renders on every telemetry tick)
+  // gave every consumer -- both live map instances, alert/outlook/nearby/spotter polling, all of
+  // which sit in effect dependency arrays -- a "changed" gps reference every 1-2s even when the
+  // vehicle hadn't actually moved, forcing camera/fetch effects to tear down and restart instead of
+  // running on their intended schedule. Memoizing on the underlying primitives keeps the object
+  // reference stable when the values themselves haven't.
+  const gpsPoint = useMemo(() => (lat != null && lon != null ? { lat, lon } : null), [lat, lon]);
   const alertProducts = useAlertProducts(gpsPoint);
   const spcOutlooks = useSpcOutlook(gpsPoint);
   const nearby = useNearbyPlaces(gpsPoint);
@@ -85,7 +94,10 @@ export default function App() {
   const spotters = useSpotters(gpsPoint);
   const piState = status?.piOnline ? `ONLINE · ${status.apiLatencyMs} ms` : status?.updatedAt ? `OFFLINE · LAST CHECK ${new Date(status.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "OFFLINE";
   const serviceState = status?.piOnline ? "VIA PI · CHECK DASHBOARD" : "VIA PI · OFFLINE";
-  const mapGps = gpsPoint ? { ...gpsPoint, headingDeg: canonicalLocation.headingDeg, speedMph: canonicalLocation.speedMph, accuracyM: canonicalLocation.accuracyM } : null;
+  const mapGps = useMemo(
+    () => (gpsPoint ? { ...gpsPoint, headingDeg, speedMph, accuracyM } : null),
+    [gpsPoint, headingDeg, speedMph, accuracyM],
+  );
 
   const goToPage = (next: PageKey) => {
     const index = pages.findIndex((item) => item.key === next);

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Panel, MetricTile } from "./Panel";
 import { SourceBadge } from "../ui/SourceBadge";
@@ -279,9 +279,14 @@ type MapRadarPanelProps = {
   compact?: boolean;
 };
 
-export function MapRadarPanel(props: MapRadarPanelProps) {
+// Both the Weather-page compact card and the Locate-page full map go through here -- App.tsx
+// re-renders on every telemetry tick, and without memo every one of those ticks would reconcile
+// this (and the mapbox-gl instance underneath it) even on ticks where none of its own props
+// actually changed. Default shallow prop comparison is correct here now that App.tsx memoizes
+// gps/mapGps on the underlying primitives instead of rebuilding a fresh object every render.
+export const MapRadarPanel = memo(function MapRadarPanel(props: MapRadarPanelProps) {
   return <AtlasMapRadarPanel {...props} />;
-}
+});
 
 function AtlasMapRadarPanel({
   gps,

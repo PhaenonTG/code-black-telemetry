@@ -1,17 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getNearestObservation, type ExternalObservation } from "../services/situational";
 import { getReverseLocality, type LocalityResult } from "../services/situational";
 import { buildCanonicalLocation, locationRequestKey } from "../services/location";
-import { useGps, useStatus, useTelemetry } from "./useTelemetry";
+import { useGps, useStatus } from "./useTelemetry";
 import { useTabletLocation } from "./useTabletLocation";
 import { distanceMiles } from "../services/telemetry/quality";
 
 export function useSituationalData() {
-  const snapshot = useTelemetry();
   const gps = useGps();
   const status = useStatus();
   const [locality, setLocality] = useState<LocalityResult | null>(null);
-  const canonicalLocation = buildCanonicalLocation(gps, locality);
+  // gps/locality are now stable references when their own values haven't changed (useGps is
+  // shallow-compared, setLocality only fires on a real resolved place) -- memoizing here means
+  // App.tsx's mapGps/canonicalLocation-derived values stay stable too instead of forcing every
+  // page in the swipeable pager to re-render on every telemetry tick even when nothing moved.
+  const canonicalLocation = useMemo(() => buildCanonicalLocation(gps, locality), [gps, locality]);
   const tabletPermission = useTabletLocation(Boolean(!gps?.hasFix || gps.source === "simulator" || gps.source === "unavailable" || !status?.piOnline));
   const [external, setExternal] = useState<ExternalObservation | null>(null);
   const lat = canonicalLocation.latitude;
@@ -53,5 +56,5 @@ export function useSituationalData() {
     };
   }, [lat, lon]);
 
-  return { snapshot, gps, canonicalLocation, external, tabletPermission };
+  return { gps, canonicalLocation, external, tabletPermission };
 }

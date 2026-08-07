@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { usePower, useStatus } from "../../hooks/useTelemetry";
 import { ageLabel } from "../../services/telemetry/quality";
 import { DashCard } from "../ui/DashCard";
@@ -10,7 +11,7 @@ function battStatus(v: number): "ok" | "warn" | "critical" {
   return "ok";
 }
 
-export function PowerCard({ className }: { className?: string }) {
+export const PowerCard = memo(function PowerCard({ className }: { className?: string }) {
   const power = usePower();
   const status = useStatus();
   if (!power) return null;
@@ -29,4 +30,4 @@ export function PowerCard({ className }: { className?: string }) {
       <MetricRow label="Charging" value={known ? (power.charging ? "YES" : "NO") : "--"} status={known && power.charging ? "ok" : "muted"} />
     </DashCard>
   );
-}
+});

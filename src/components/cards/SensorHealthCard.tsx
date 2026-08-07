@@ -1,8 +1,9 @@
+import { memo } from "react";
 import { useSensors, useStatus } from "../../hooks/useTelemetry";
 import { DashCard } from "../ui/DashCard";
 import { StatusBadge } from "../ui/StatusBadge";
 
-export function SensorHealthCard({ className }: { className?: string }) {
+export const SensorHealthCard = memo(function SensorHealthCard({ className }: { className?: string }) {
   const sensors = useSensors();
   const status = useStatus();
   if (!sensors) return null;
@@ -30,4 +31,4 @@ export function SensorHealthCard({ className }: { className?: string }) {
       </div>
     </DashCard>
   );
-}
+});

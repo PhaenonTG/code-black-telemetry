@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useStatus, useSystem } from "../../hooks/useTelemetry";
 import { ageLabel } from "../../services/telemetry/quality";
 import { DashCard } from "../ui/DashCard";
@@ -16,7 +17,7 @@ function uptime(s: number): string {
   return `${h}h ${m}m`;
 }
 
-export function SystemCard({ className }: { className?: string }) {
+export const SystemCard = memo(function SystemCard({ className }: { className?: string }) {
   const sys = useSystem();
   const status = useStatus();
   if (!sys) return null;
@@ -36,4 +37,4 @@ export function SystemCard({ className }: { className?: string }) {
       <MetricRow label="Uptime"  value={known ? uptime(sys.uptimeSeconds) : "--"} status="muted" />
     </DashCard>
   );
-}
+});

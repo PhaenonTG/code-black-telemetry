@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useEvents } from "../../hooks/useTelemetry";
 import { DashCard } from "../ui/DashCard";
 
@@ -13,7 +14,7 @@ const levelTag: Record<string, string> = {
   error: "ERR ",
 };
 
-export function EventsCard({ className }: { className?: string }) {
+export const EventsCard = memo(function EventsCard({ className }: { className?: string }) {
   const events = useEvents();
   if (!events) return null;
 
@@ -34,4 +35,4 @@ export function EventsCard({ className }: { className?: string }) {
       </div>
     </DashCard>
   );
-}
+});
