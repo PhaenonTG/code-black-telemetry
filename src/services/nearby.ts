@@ -14,6 +14,8 @@ export interface NearbyPlace {
   hoursStatus: "open" | "closed" | "unknown" | "typical-open";
   hoursText: string;
   beds: number | null;
+  // Lodging only -- see LODGING_PREFERRED_BRANDS below.
+  preferredBrand: boolean;
 }
 
 type Position = { lat: number; lon: number };
@@ -154,6 +156,26 @@ const TWENTY_FOUR_HOUR_BRANDS = [
   "speedway", "sheetz", "wawa", "buc-ee's", "buc-ees",
 ];
 
+// Owner: "rather see a Super 8 or Motel 6 than a bed and breakfast... nothing expected to be over
+// $250 a night but nothing sketchy either." OSM has no reliable price or quality-rating data to
+// filter on directly, so this is a proxy: known, predictable mid-tier chains are reliably in that
+// band (a real B&B, boutique inn, or unbranded/independent motel is exactly the kind of pick this
+// is trying to avoid -- could be a converted farmhouse or it could be genuinely rough, no way to
+// tell from OSM tags alone, whereas a Best Western is a known quantity). Matched against `brand` or
+// `name` the same case-insensitive-substring way TWENTY_FOUR_HOUR_BRANDS matches gas stations.
+const LODGING_PREFERRED_BRANDS = [
+  "super 8", "motel 6", "holiday inn express", "holiday inn", "best western", "days inn",
+  "quality inn", "comfort inn", "comfort suites", "hampton inn", "la quinta", "econo lodge",
+  "travelodge", "red roof inn", "rodeway inn", "baymont", "sleep inn", "fairfield inn", "ramada",
+  "microtel", "extended stay america", "candlewood suites", "americinn", "wingate", "wyndham",
+  "country inn", "drury inn", "hawthorn suites", "home2 suites", "tru by hilton",
+];
+
+function isPreferredLodgingBrand(tags: Record<string, string>): boolean {
+  const brand = (tags.brand || tags.name || "").toLowerCase();
+  return LODGING_PREFERRED_BRANDS.some((known) => brand.includes(known));
+}
+
 function inferTypicalHours(category: NearbyCategory, tags: Record<string, string>): { status: "typical-open"; text: string } | null {
   // Only OSM-confirmed emergency=yes facilities reach this point (see CATEGORY_QUERIES) -- EDs
   // are near-universally 24/7, but "typically" stays honest against rare diversion/closure.
@@ -208,10 +230,24 @@ const GAS_HOURS_RANK: Record<NearbyPlace["hoursStatus"], number> = {
 };
 const HOSPITAL_BEDS_TIEBREAK_MILES = 3;
 
+// Lodging weighs known-brand ahead of even distance -- a preferred-brand pick up to this much
+// farther away still wins over a closer unbranded/independent one. Not unconditional (a Best
+// Western 40 miles out shouldn't beat a Days Inn next door), just enough to not lose a known
+// mid-tier chain to a slightly-closer B&B or boutique inn, which is exactly the swap the owner
+// asked to avoid.
+const LODGING_BRAND_PREFERENCE_MILES = 15;
+
 function bestCandidate(category: NearbyCategory, candidates: NearbyPlace[]): NearbyPlace | null {
   if (candidates.length === 0) return null;
   const rank = category === "gas" ? GAS_HOURS_RANK : HOURS_RANK;
   const sorted = [...candidates].sort((a, b) => {
+    if (category === "lodging" && a.preferredBrand !== b.preferredBrand) {
+      const distanceDelta = a.distanceMiles - b.distanceMiles;
+      // Only let brand preference overrule distance when the two are within the same
+      // "reasonable drive" ballpark -- otherwise a known brand across the state would beat an
+      // unbranded motel down the street, which isn't what "prioritize" should mean here.
+      if (Math.abs(distanceDelta) <= LODGING_BRAND_PREFERENCE_MILES) return a.preferredBrand ? -1 : 1;
+    }
     const hoursDelta = rank[a.hoursStatus] - rank[b.hoursStatus];
     if (hoursDelta !== 0) return hoursDelta;
     if (category === "hospital" && Math.abs(a.distanceMiles - b.distanceMiles) <= HOSPITAL_BEDS_TIEBREAK_MILES) {
@@ -267,6 +303,7 @@ function elementsToCandidates(category: NearbyCategory, pos: Position, elements:
       hoursStatus: hours.status,
       hoursText: hours.text,
       beds: Number.isFinite(beds) && beds > 0 ? beds : null,
+      preferredBrand: category === "lodging" && isPreferredLodgingBrand(tags),
     });
   }
   return candidates;

@@ -116,12 +116,23 @@ export function startAtlasMosaicAnimation(
   let timeoutId = 0;
   let stepCount = 0;
   let builtUrls: string[] = [];
+  let hasBuiltBefore = false;
 
   const rebuildIfNeeded = (urls: string[]) => {
     if (sameUrls(urls, builtUrls)) return;
     teardownAtlasMosaicFrameLayers(map, builtUrls.length);
     ensureAtlasMosaicFrameLayers(map, urls, firstSymbolLayerId);
-    prefetchAtlasMosaicFrameTiles(map, urls.length);
+    if (hasBuiltBefore) {
+      prefetchAtlasMosaicFrameTiles(map, urls.length);
+    } else {
+      // First-ever build for this map instance lands right as the cinematic wide-to-operating-zoom
+      // intro (AtlasMap.tsx, INTRO_DURATION_MS) is also animating -- sweeping every frame's tile
+      // fetch through rAF-paced style mutations at the exact same moment competed with that
+      // animation for the main thread and read as choppy right at cold-start, before the loop had
+      // even started stepping. Letting the intro finish first spreads the two out.
+      window.setTimeout(() => prefetchAtlasMosaicFrameTiles(map, urls.length), 3000);
+    }
+    hasBuiltBefore = true;
     builtUrls = urls;
     stepCount = 0;
   };

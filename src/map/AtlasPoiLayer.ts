@@ -1,14 +1,14 @@
 import mapboxgl from "mapbox-gl";
 import type { Map as MapboxMap, Marker, Popup } from "mapbox-gl";
-import type { NearbyPlace } from "../services/nearby";
+import type { NearbyCategory, NearbyPlace } from "../services/nearby";
 import type { CustomPoiPin } from "../services/settings";
 
 // Separate from AtlasPinMarkers.ts (spotter/team position pins) rather than extended to share it --
 // that helper applies one PinStyle to every point in a call, but POIs need per-point styling
-// (which custom brand matched, or the fixed ER look) and a different popup body (hours/distance, not
-// a "last ping" age). Same overall shape (mapboxgl.Marker + DOM element, WeakMap-keyed latest-data
-// cache for fresh-on-click popups, create/update/remove-by-id sync) since that pattern is already
-// proven here.
+// (which custom brand matched, the fixed ER look, or a "closest of category" pick) and a different
+// popup body (hours/distance, not a "last ping" age). Same overall shape (mapboxgl.Marker + DOM
+// element, WeakMap-keyed latest-data cache for fresh-on-click popups, create/update/remove-by-id
+// sync) since that pattern is already proven here.
 
 function escapeHtml(value: string) {
   return value
@@ -39,11 +39,10 @@ function showPoiPopup(map: MapboxMap, place: NearbyPlace) {
 }
 
 // Owner: "I don't want that to list every available option, I want the ability to change that
-// myself" -- gas/food places only render at all when they match a curated custom pin (by name
-// substring, same matching approach teamRoster/favoriteBrands always used); everything else in the
-// raw Overpass feed for those two categories is simply not shown. Hospitals are the one category
-// exempted from that gate: every OSM-confirmed ER within range always renders with a fixed style,
-// no per-business configuration needed for "where's the nearest hospital."
+// myself" -- gas/food places from the broader list only render at all when they match a curated
+// custom pin (by name substring, same matching approach teamRoster always used); everything else in
+// the raw Overpass feed for those two categories is simply not shown there. Hospitals and the
+// closest-per-category picks below are the exceptions -- see their own comments.
 function matchCustomPin(place: NearbyPlace, customPins: CustomPoiPin[]): CustomPoiPin | null {
   const name = place.name.toLowerCase();
   for (const pin of customPins) {
@@ -54,24 +53,46 @@ function matchCustomPin(place: NearbyPlace, customPins: CustomPoiPin[]): CustomP
 }
 
 const ER_COLOR = "#ff2d35";
+// Closest-of-category picks (gas/lodging/food) get their own fixed, un-configurable style -- these
+// aren't curated by the owner the way custom pins are, they're just "whatever's actually nearest
+// right now" mirroring the Nearby card's own best-pick tiles, so a single letter + a color per
+// category is enough to tell them apart from custom brand pins at a glance. No blue (this app's
+// palette rule); red is reserved for ER/vehicle/warnings.
+const BEST_PICK_STYLE: Partial<Record<NearbyCategory, { color: string; label: string }>> = {
+  gas: { color: "#ffbe3c", label: "G" },
+  lodging: { color: "#b26bff", label: "H" },
+  food: { color: "#3ddc70", label: "F" },
+};
 
-function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: CustomPoiPin | null) {
+function applyLabeledPinStyle(el: HTMLDivElement, color: string, label: string) {
+  const size = 22;
+  el.style.width = `${size}px`;
+  el.style.height = `${size}px`;
+  el.style.backgroundImage = "";
+  el.style.backgroundColor = color;
+  el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
+  el.style.borderRadius = "4px";
+  el.style.boxShadow = `0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 8px 2px ${color}`;
+  el.style.display = "grid";
+  el.style.placeItems = "center";
+  el.style.color = "#000";
+  el.style.font = "800 10px/1 'JetBrains Mono', monospace";
+  el.textContent = label;
+  el.style.cursor = "pointer";
+}
+
+function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: CustomPoiPin | null, isBestPick: boolean) {
   if (place.category === "hospital") {
-    const size = 22;
-    el.style.width = `${size}px`;
-    el.style.height = `${size}px`;
-    el.style.backgroundImage = "";
-    el.style.backgroundColor = ER_COLOR;
-    el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
-    el.style.borderRadius = "4px";
-    el.style.boxShadow = `0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 8px 2px ${ER_COLOR}`;
-    el.style.display = "grid";
-    el.style.placeItems = "center";
-    el.style.color = "#fff";
-    el.style.font = "800 10px/1 'JetBrains Mono', monospace";
-    el.textContent = "ER";
-    el.style.cursor = "pointer";
+    applyLabeledPinStyle(el, ER_COLOR, "ER");
     return;
+  }
+
+  if (!customPin && isBestPick) {
+    const style = BEST_PICK_STYLE[place.category];
+    if (style) {
+      applyLabeledPinStyle(el, style.color, style.label);
+      return;
+    }
   }
 
   const size = 22;
@@ -103,7 +124,13 @@ function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: Custom
 const poiMarkers = new WeakMap<MapboxMap, Record<string, Marker>>();
 const latestPlacesByMarkers = new WeakMap<Record<string, Marker>, Record<string, NearbyPlace>>();
 
-export function updateAtlasPoiLayer(map: MapboxMap, places: NearbyPlace[], customPins: CustomPoiPin[], visible: boolean) {
+export function updateAtlasPoiLayer(
+  map: MapboxMap,
+  places: NearbyPlace[],
+  nearbyBest: Partial<Record<NearbyCategory, NearbyPlace>>,
+  customPins: CustomPoiPin[],
+  visible: boolean,
+) {
   let markers = poiMarkers.get(map);
   if (!markers) {
     markers = {};
@@ -116,10 +143,22 @@ export function updateAtlasPoiLayer(map: MapboxMap, places: NearbyPlace[], custo
   }
   const seen = new Set<string>();
   if (visible) {
-    for (const place of places) {
+    // Merge the general POI list with the Nearby card's own closest-per-category picks -- a best
+    // pick that also happens to be in the general list (common for gas/food, since both come from
+    // the same Overpass data) shouldn't render as two overlapping markers. Best-pick entries win
+    // the merge (they carry the "closest of category" styling) when the same id shows up in both.
+    const merged = new Map<string, NearbyPlace>();
+    for (const place of places) merged.set(place.id, place);
+    for (const place of Object.values(nearbyBest)) {
+      if (place) merged.set(place.id, place);
+    }
+    const bestPickIds = new Set(Object.values(nearbyBest).filter(Boolean).map((place) => place!.id));
+
+    for (const place of merged.values()) {
       const isHospital = place.category === "hospital";
-      const customPin = isHospital ? null : matchCustomPin(place, customPins);
-      if (!isHospital && !customPin) continue;
+      const isBestPick = bestPickIds.has(place.id);
+      const customPin = matchCustomPin(place, customPins);
+      if (!isHospital && !isBestPick && !customPin) continue;
       seen.add(place.id);
       latest[place.id] = place;
       let marker = markers[place.id];
@@ -136,7 +175,7 @@ export function updateAtlasPoiLayer(map: MapboxMap, places: NearbyPlace[], custo
       } else {
         marker.setLngLat([place.lon, place.lat]);
       }
-      applyPoiStyle(marker.getElement() as HTMLDivElement, place, customPin);
+      applyPoiStyle(marker.getElement() as HTMLDivElement, place, customPin, isBestPick);
     }
   }
   for (const id of Object.keys(markers)) {

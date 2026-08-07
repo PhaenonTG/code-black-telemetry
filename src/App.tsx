@@ -217,7 +217,7 @@ export default function App() {
             <WeatherObservationPanel external={external} mode={cockpitMode} />
             <WindCard external={external} mode={cockpitMode} />
             <AlertsPanel products={alertProducts.products} error={alertProducts.error} />
-            <MapRadarPanel gps={mapGps} visible={page === "weather"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} compact allowExpand={false} />
+            <MapRadarPanel gps={mapGps} visible={page === "weather"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} nearbyBest={nearby.places} compact allowExpand={false} />
             <NearbyPanel places={nearby.places} error={nearby.error} spotters={spotters.spotters} spottersError={spotters.error} />
           </div>
         </section>
@@ -255,7 +255,7 @@ export default function App() {
         </section>
         <section className="page page--locate" aria-label="Locate">
           <div className="page-grid page-grid--locate">
-            <MapRadarPanel gps={mapGps} visible={page === "locate"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} />
+            <MapRadarPanel gps={mapGps} visible={page === "locate"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} nearbyBest={nearby.places} />
           </div>
         </section>
         <section className="page page--alerts" aria-label="Alerts">

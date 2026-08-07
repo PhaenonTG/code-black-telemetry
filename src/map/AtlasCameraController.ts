@@ -9,13 +9,28 @@ export function smoothAngle(from: number, to: number, factor: number) {
   return (from + shortestAngleDelta(from, to) * factor + 360) % 360;
 }
 
-// The compact Weather-page card shows the wide-area mosaic, not single-site chase radar -- it
-// should sit at a fixed regional zoom that reads the mosaic tiles crisply (their maxzoom is 7, see
+// The compact Weather-page card shows the wide-area mosaic, not single-site chase radar -- it sits
+// at a fixed-ish regional zoom that reads the mosaic tiles crisply (their maxzoom is 7, see
 // AtlasMosaicLayer.ts) rather than tracking vehicle speed down to a local street-level chase zoom.
+// It's not perfectly static though -- owner asked for the zoom to visibly "cycle" rather than sit
+// dead still (a static camera on an otherwise-live card read as broken/frozen). MOSAIC_CARD_ZOOM is
+// still the default/most-common state (owner: "I like the way it looks now for default zoom"); it
+// eases out to MOSAIC_CARD_ZOOM_WIDE for a shorter stretch of every cycle for a wider look, then
+// back. Driven by wall-clock time (see mosaicCardZoomForTime) rather than any per-instance timer
+// state so every call site (GPS-follow, recenter, the "just became active" catch-up) agrees on
+// what zoom "now" means without needing to share a ticking clock between them.
 const MOSAIC_CARD_ZOOM = 6.5;
+const MOSAIC_CARD_ZOOM_WIDE = 5.6;
+const MOSAIC_CARD_ZOOM_CYCLE_MS = 45_000;
+const MOSAIC_CARD_ZOOM_WIDE_MS = 15_000;
+
+export function mosaicCardZoomForTime(now: number) {
+  const phase = now % MOSAIC_CARD_ZOOM_CYCLE_MS;
+  return phase < MOSAIC_CARD_ZOOM_CYCLE_MS - MOSAIC_CARD_ZOOM_WIDE_MS ? MOSAIC_CARD_ZOOM : MOSAIC_CARD_ZOOM_WIDE;
+}
 
 export function zoomForSpeed(speedMph: number | null | undefined, expanded: boolean, compact = false) {
-  if (compact) return MOSAIC_CARD_ZOOM;
+  if (compact) return mosaicCardZoomForTime(Date.now());
   const speed = speedMph ?? 0;
   if (speed < 5) return expanded ? 9.2 : 8.2;
   if (speed < 35) return expanded ? 8.8 : 7.95;

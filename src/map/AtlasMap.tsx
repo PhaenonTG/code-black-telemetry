@@ -5,7 +5,7 @@ import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagno
 import type { RadarFrame, RadarProduct } from "../services/radar";
 import { getRadarMosaicFrames, type AlertProduct } from "../services/situational";
 import type { Spotter } from "../services/spotters";
-import type { NearbyPlace } from "../services/nearby";
+import type { NearbyCategory, NearbyPlace } from "../services/nearby";
 import { resolveTeamPositions } from "../services/teamPositions";
 import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcrumbTrail";
 import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
@@ -63,6 +63,7 @@ type AtlasMapProps = {
   alerts?: AlertProduct[];
   spotters?: Spotter[];
   poiPlaces?: NearbyPlace[];
+  nearbyBest?: Partial<Record<NearbyCategory, NearbyPlace>>;
   // "compact" is the Weather-page card: owner asked for mosaic + layer visibility only, no zoom/
   // north-up/rings/clear-trail/mosaic-toggle buttons and no single-site radar UI at all -- that
   // full toolbar only exists on the "full" Locate page, which has the room for it.
@@ -76,6 +77,7 @@ const EMPTY_MODIFIERS = { modifiedLayers: 0, firstSymbolLayerId: undefined as st
 const EMPTY_ALERTS: AlertProduct[] = [];
 const EMPTY_SPOTTERS: Spotter[] = [];
 const EMPTY_POI: NearbyPlace[] = [];
+const EMPTY_NEARBY_BEST: Partial<Record<NearbyCategory, NearbyPlace>> = {};
 const ATLAS_STYLE_TUNING_DISABLED = import.meta.env.VITE_ATLAS_DISABLE_STYLE_TUNE === "1";
 const ATLAS_DIAGNOSTICS_ENABLED = import.meta.env.VITE_ATLAS_DIAGNOSTICS === "1";
 const GPS_REFRESH_MAX_AGE_MS = 5_000;
@@ -130,6 +132,7 @@ export function AtlasMap({
   alerts = EMPTY_ALERTS,
   spotters = EMPTY_SPOTTERS,
   poiPlaces = EMPTY_POI,
+  nearbyBest = EMPTY_NEARBY_BEST,
   controlsVariant = "full",
 }: AtlasMapProps) {
   const compact = controlsVariant === "compact";
@@ -486,6 +489,33 @@ export function AtlasMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only meant to fire on the active edge
   }, [active]);
 
+  // Compact card's zoom "cycles" (mosaicCardZoomForTime) on wall-clock time, but nothing else here
+  // re-renders the camera on a clock -- the GPS-follow effect above only fires on a real GPS update,
+  // which can be many seconds apart while parked, and would otherwise leave the cycle's wide phase
+  // invisible. Poll for the target changing (not a fixed-interval easeTo every tick, which would
+  // restart the same animation mid-flight and look stuttery) and only ease when it actually does.
+  const compactZoomRef = useRef(-1);
+  useEffect(() => {
+    if (!compact) return;
+    // Deliberately NOT depending on gps/expanded/active here (read via latestRef/activeRef
+    // instead) -- App.tsx builds a new gps object on every telemetry tick, and this effect
+    // re-running that often would clear+restart the interval before its 2s delay ever elapsed,
+    // starving the poll and leaving the camera stuck wherever it last eased to (this is why the
+    // wide-zoom phase of the cycle was never releasing back to default).
+    const timer = window.setInterval(() => {
+      const map = mapRef.current;
+      const currentGps = latestRef.current.gps;
+      if (!map || !activeRef.current || !loaded || !currentGps) return;
+      if (cameraMode !== "FOLLOW_NORTH" && cameraMode !== "FOLLOW_HEADING" && cameraMode !== "RECENTERING") return;
+      if (Date.now() < interactionResumeAtRef.current) return;
+      const target = zoomForSpeed(currentGps.speedMph, latestRef.current.expanded, compact);
+      if (Math.abs(target - compactZoomRef.current) < 0.05) return;
+      compactZoomRef.current = target;
+      map.easeTo({ zoom: target, duration: 4000, easing: (t) => 0.5 - Math.cos(t * Math.PI) / 2 });
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [compact, loaded, cameraMode]);
+
   // A vehicle marker style change from Settings is a rare, deliberate user action, not GPS noise --
   // repaint immediately rather than waiting for the throttled GPS-update effect above to next fire.
   useEffect(() => {
@@ -546,8 +576,8 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    updateAtlasPoiLayer(map, poiPlaces, customPoiPins, poiVisible);
-  }, [poiPlaces, customPoiPins, poiVisible, loaded]);
+    updateAtlasPoiLayer(map, poiPlaces, nearbyBest, customPoiPins, poiVisible);
+  }, [poiPlaces, nearbyBest, customPoiPins, poiVisible, loaded]);
 
   useEffect(() => {
     if (!mosaicVisible) return;
@@ -663,7 +693,7 @@ export function AtlasMap({
   const followLabel = cameraMode === "FOLLOW_HEADING" ? "HEADING UP" : cameraMode === "FREE" ? "RECENTER" : "NORTH UP";
 
   return (
-    <div className="atlas-map-shell">
+    <div className={compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"}>
       <div className="atlas-map-canvas-area">
         <div ref={containerRef} className="atlas-map" data-camera-mode={cameraMode} />
         {visibleError && <div className="atlas-map-error">{visibleError}</div>}
@@ -675,6 +705,20 @@ export function AtlasMap({
         {onOpenExpanded && (
           <button type="button" className="atlas-expand-button" aria-label="Expand radar" onClick={(event) => { event.stopPropagation(); onOpenExpanded(); }}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" /></svg>
+          </button>
+        )}
+        {/* Compact card dropped its whole control row (see below) for "ultra simple," but that also
+            took away the only way to reach layer toggles without leaving the page -- this one small
+            icon button is the deliberate exception: just enough to flip Alerts/Team/Chasers/POI on
+            or off while looking at the dashboard, same popover the full map's LAYERS button opens. */}
+        {compact && (
+          <button
+            type="button"
+            className={layersPopoverOpen ? "atlas-layers-button active" : "atlas-layers-button"}
+            aria-label="Map layers"
+            onClick={(event) => { event.stopPropagation(); setLayersPopoverOpen((value) => !value); }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5Z" /><path d="M2 12l10 5 10-5" /><path d="M2 17l10 5 10-5" /></svg>
           </button>
         )}
         {layersPopoverOpen && (
@@ -694,7 +738,7 @@ export function AtlasMap({
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={poiVisible} onChange={() => toggleLayer("poi")} />
-              Gas / Food
+              Nearby (gas / food / hotel / ER)
             </label>
           </div>
         )}

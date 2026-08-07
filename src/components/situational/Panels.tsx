@@ -9,7 +9,7 @@ import { useWeather } from "../../hooks/useTelemetry";
 const AtlasMap = lazy(() => import("../../map/AtlasMap").then((mod) => ({ default: mod.AtlasMap })));
 import { type AlertProduct, type ExternalObservation } from "../../services/situational";
 import { type Spotter } from "../../services/spotters";
-import { type NearbyPlace } from "../../services/nearby";
+import { type NearbyCategory, type NearbyPlace } from "../../services/nearby";
 import { subscribeAlertFocus } from "../../services/mapFocusAlert";
 import { sourceLabel, type CanonicalLocation } from "../../services/location";
 import { cardinalFromDeg, compactAge, mbToInHg, valueText } from "../../services/telemetry/quality";
@@ -257,6 +257,7 @@ type MapRadarPanelProps = {
   alerts?: AlertProduct[];
   spotters?: Spotter[];
   poiPlaces?: NearbyPlace[];
+  nearbyBest?: Partial<Record<NearbyCategory, NearbyPlace>>;
   // Weather-page card: owner asked to skip single-site radar entirely here (no product row, no
   // fetch/decode work for it) and keep only the wide-area mosaic + a way to control layer
   // visibility -- the full single-site toolbar only exists on the Locate page.
@@ -278,6 +279,7 @@ function AtlasMapRadarPanel({
   alerts = [],
   spotters = [],
   poiPlaces = [],
+  nearbyBest = {},
   compact = false,
 }: MapRadarPanelProps) {
   const [radarVisible, setRadarVisible] = useState(true);
@@ -439,6 +441,7 @@ function AtlasMapRadarPanel({
             alerts={alerts}
             spotters={spotters}
             poiPlaces={poiPlaces}
+            nearbyBest={nearbyBest}
             controlsVariant={compact ? "compact" : "full"}
           />
         </Suspense>

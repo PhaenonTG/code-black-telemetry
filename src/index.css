@@ -4546,6 +4546,40 @@ body {
   box-shadow: 0 0 16px rgba(0, 0, 0, 0.5);
 }
 
+/* Compact dashboard card's one deliberate exception to "no controls" -- small enough to not read
+   as a toolbar, positioned to match where its popover (.atlas-layers-popover, bottom-right) opens
+   from on the full map too. */
+.atlas-layers-button {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  background: rgba(3, 5, 7, 0.78);
+  color: #f8fafc;
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.5);
+}
+
+.atlas-layers-button svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.atlas-layers-button.active {
+  border-color: rgba(255, 45, 53, 0.7);
+  color: #ff2d35;
+}
+
 .atlas-expand-button svg {
   width: 16px;
   height: 16px;
@@ -5697,6 +5731,12 @@ body {
   border-color: rgba(255, 190, 60, 0.4) !important;
   color: var(--amber, #f59e0b) !important;
   font-size: 10px !important;
+}
+
+/* On the compact card the trigger itself lives at bottom-right inside the canvas (see
+   .atlas-layers-button) -- open the popover above it instead of on top of it. */
+.atlas-map-shell--compact .atlas-layers-popover {
+  bottom: 48px !important;
 }
 
 .atlas-layers-popover {
