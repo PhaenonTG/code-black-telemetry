@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import codeblackShield from "../../assets/codeblack-shield.png";
+import codeblackTornadoMark from "../../assets/codeblack-tornado-mark.png";
 import { useStatus } from "../../hooks/useTelemetry";
 import { useBattery } from "../../hooks/useBattery";
 import "./TopBar.css";
@@ -59,7 +59,13 @@ export function TopBar() {
   return (
     <header className="ops-header">
       <div className="brand-lockup" aria-label="Code Black OPS">
-        <img className="brand-mark brand-mark--codeblack" src={codeblackShield} alt="Code Black" />
+        {/* The full shield badge (still used at splash-screen size) has the "CODE BLACK" arc
+            lettering, two lightning bolts, and a two-line tagline baked into one 2048x2048 patch
+            design -- at this header's ~50px render size all of that fine detail and small text
+            just aliased into an illegible smudge. Cropped down to just the tornado glyph, which
+            reads cleanly at icon size and doesn't duplicate the "Code Black OPS" text already
+            sitting right next to it. */}
+        <img className="brand-mark brand-mark--codeblack" src={codeblackTornadoMark} alt="Code Black" />
         <div>
           <div className="brand-title"><span>Code Black</span> <strong>OPS</strong></div>
           <div className="brand-subtitle">Situational Awareness</div>
