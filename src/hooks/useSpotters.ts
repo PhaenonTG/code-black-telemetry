@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getAuthenticatedSpotterPositions, getNearbySpotters, type Spotter } from "../services/spotters";
-import { getSpotterAccount, subscribeSpotterAccount } from "../services/spotterAccount";
+import { getSpotterAccount, subscribeSpotterAccount, type SpotterAccount } from "../services/spotterAccount";
 import { useResumeTick } from "./useResumeTick";
 
 type GpsPoint = { lat: number; lon: number };
@@ -10,17 +10,30 @@ type GpsPoint = { lat: number; lon: number };
 // on top of that for a free, non-commercial public feed.
 const REFRESH_MS = 2 * 60_000;
 
+// Owner: signed into Spotter Network mid-chase and saw themselves listed as the "closest chaser"
+// -- the authenticated positions endpoint (spotters.ts: getAuthenticatedSpotterPositions) returns
+// the signed-in account's own broadcast position alongside everyone else's, and that position's
+// `id` is the account's own marker (spotters.ts maps `id: p.marker || ...`), matching the marker
+// this same account got back from login (spotterAccount.ts). Filtering on that id is precise --
+// distance-based "closest is probably me" heuristics would risk hiding a real chaser parked right
+// next to you.
+function excludeSelf(spotters: Spotter[], account: SpotterAccount | null): Spotter[] {
+  if (!account?.marker) return spotters;
+  return spotters.filter((spotter) => spotter.id !== account.marker);
+}
+
 export function useSpotters(gps: GpsPoint | null) {
   const [spotters, setSpotters] = useState<Spotter[]>([]);
   const [error, setError] = useState("");
-  const [accountId, setAccountId] = useState(() => getSpotterAccount()?.id ?? null);
+  const [account, setAccount] = useState(() => getSpotterAccount());
   const resumeTick = useResumeTick();
 
-  useEffect(() => subscribeSpotterAccount((account) => setAccountId(account?.id ?? null)), []);
+  useEffect(() => subscribeSpotterAccount(setAccount), []);
 
   useEffect(() => {
     if (!gps) return;
     let cancelled = false;
+    const accountId = account?.id ?? null;
     const load = async () => {
       // Prefer the official JSON positions endpoint when signed in — richer contact data than the
       // anonymous feed. If it fails for any reason (network blip, revoked id), fall back to the
@@ -28,7 +41,7 @@ export function useSpotters(gps: GpsPoint | null) {
       let result = accountId ? await getAuthenticatedSpotterPositions(accountId, gps) : await getNearbySpotters(gps);
       if (accountId && result.error) result = await getNearbySpotters(gps);
       if (!cancelled) {
-        setSpotters(result.spotters);
+        setSpotters(excludeSelf(result.spotters, account));
         setError(result.error);
       }
     };
@@ -38,7 +51,7 @@ export function useSpotters(gps: GpsPoint | null) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [accountId, gps == null, resumeTick]);
+  }, [account, gps == null, resumeTick]);
 
   return { spotters, error };
 }

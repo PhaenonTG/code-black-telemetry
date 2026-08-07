@@ -22,7 +22,10 @@ export function smoothAngle(from: number, to: number, factor: number) {
 const MOSAIC_CARD_ZOOM = 6.5;
 const MOSAIC_CARD_ZOOM_WIDE = 5.6;
 const MOSAIC_CARD_ZOOM_CYCLE_MS = 45_000;
-const MOSAIC_CARD_ZOOM_WIDE_MS = 15_000;
+// Grown alongside AtlasMap.tsx's compact zoom-cycle easeTo duration (10000ms) so the wide phase
+// still holds for a few seconds after the transition finishes, instead of the ease-out eating the
+// entire window and reversing immediately.
+const MOSAIC_CARD_ZOOM_WIDE_MS = 18_000;
 
 export function mosaicCardZoomForTime(now: number) {
   const phase = now % MOSAIC_CARD_ZOOM_CYCLE_MS;

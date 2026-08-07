@@ -39,10 +39,13 @@ function showPoiPopup(map: MapboxMap, place: NearbyPlace) {
 }
 
 // Owner: "I don't want that to list every available option, I want the ability to change that
-// myself" -- gas/food places from the broader list only render at all when they match a curated
-// custom pin (by name substring, same matching approach teamRoster always used); everything else in
-// the raw Overpass feed for those two categories is simply not shown there. Hospitals and the
-// closest-per-category picks below are the exceptions -- see their own comments.
+// myself" -- gas/food/hospital places from the broader list only render at all when they match a
+// curated custom pin (by name substring, same matching approach teamRoster always used) or are the
+// single closest-of-category pick already shown on the Nearby card; everything else in the raw
+// Overpass feed is simply not shown here. Hospitals used to bypass this entirely and render every
+// one in range -- owner: "Nearby layer on the dash map needs to only include what is listed on the
+// nearby tab" (which only ever shows the one closest ER) -- so hospitals now go through the same
+// best-pick gate as gas/lodging/food instead of a special always-on case.
 function matchCustomPin(place: NearbyPlace, customPins: CustomPoiPin[]): CustomPoiPin | null {
   const name = place.name.toLowerCase();
   for (const pin of customPins) {
@@ -155,10 +158,9 @@ export function updateAtlasPoiLayer(
     const bestPickIds = new Set(Object.values(nearbyBest).filter(Boolean).map((place) => place!.id));
 
     for (const place of merged.values()) {
-      const isHospital = place.category === "hospital";
       const isBestPick = bestPickIds.has(place.id);
       const customPin = matchCustomPin(place, customPins);
-      if (!isHospital && !isBestPick && !customPin) continue;
+      if (!isBestPick && !customPin) continue;
       seen.add(place.id);
       latest[place.id] = place;
       let marker = markers[place.id];

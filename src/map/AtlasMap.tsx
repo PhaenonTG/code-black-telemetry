@@ -283,9 +283,11 @@ export function AtlasMap({
       incrementAtlasMapInstances();
       map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
 
+      function realOriginalEvent(event: unknown): Event | undefined {
+        return typeof event === "object" && event !== null && "originalEvent" in event ? (event as { originalEvent?: Event }).originalEvent : undefined;
+      }
       const markUserInteraction = (event: unknown) => {
-        const originalEvent = typeof event === "object" && event !== null && "originalEvent" in event ? (event as { originalEvent?: Event }).originalEvent : undefined;
-        if (!originalEvent) return;
+        if (!realOriginalEvent(event)) return;
         setCameraMode("USER_INTERACTING");
         // Actively dragging counts as "paused" indefinitely -- the real 2-minute countdown starts
         // once they let go (markFree), not while their finger/mouse is still on the map.
@@ -295,7 +297,18 @@ export function AtlasMap({
         }
         interactionResumeAtRef.current = Infinity;
       };
-      const markFree = () => {
+      const markFree = (event: unknown) => {
+        // Mapbox fires dragend/zoomend/rotateend/pitchend for the CAMERA API's own programmatic
+        // moves too (flyTo/easeTo), not just real touch/mouse gestures -- confirmed live that the
+        // cinematic intro's flyTo, the recenter easeTo, and the compact zoom-cycle's periodic
+        // easeTo were all landing here every time they finished, each one unconditionally re-
+        // arming a fresh 2-minute "user is interacting" pause (interactionResumeAtRef) with no
+        // originalEvent guard -- unlike markUserInteraction right above, which already has one.
+        // That meant the mosaic loop and auto-follow's own periodic camera moves kept blocking
+        // themselves from ever running, near-permanently, which is what "mosaic isn't rendering"
+        // and inconsistent zoom cycling actually were. Only a real user gesture (which DOES carry
+        // an originalEvent) should start this countdown.
+        if (!realOriginalEvent(event)) return;
         setCameraMode((mode) => mode === "USER_INTERACTING" ? "FREE" : mode);
         interactionResumeAtRef.current = Date.now() + INTERACTION_PAUSE_MS;
         if (interactionResumeTimerRef.current != null) window.clearTimeout(interactionResumeTimerRef.current);
@@ -513,9 +526,11 @@ export function AtlasMap({
       compactZoomRef.current = target;
       // Ease-out cubic (matches the recenter/catch-up easing elsewhere in this file) rather than
       // ease-in-out -- owner wanted the transition to "zoom out fast and then slow down before it
-      // settles" instead of a slow start. Longer duration (was 4000ms) makes the whole thing read
-      // as a smoother drift instead of a snap, since the deceleration tail now has more room to play out.
-      map.easeTo({ zoom: target, duration: 6500, easing: (t) => 1 - (1 - t) ** 3 });
+      // settles" instead of a slow start. Duration went 4000ms -> 6500ms -> this (still felt too
+      // quick) -- bumped again, and MOSAIC_CARD_ZOOM_WIDE_MS in AtlasCameraController.ts grew to
+      // match so the wide phase still holds for a few seconds instead of the transition eating the
+      // whole window and immediately reversing.
+      map.easeTo({ zoom: target, duration: 10000, easing: (t) => 1 - (1 - t) ** 3 });
     }, 2000);
     return () => window.clearInterval(timer);
   }, [compact, loaded, cameraMode]);
