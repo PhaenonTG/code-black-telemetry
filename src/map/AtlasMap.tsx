@@ -511,7 +511,11 @@ export function AtlasMap({
       const target = zoomForSpeed(currentGps.speedMph, latestRef.current.expanded, compact);
       if (Math.abs(target - compactZoomRef.current) < 0.05) return;
       compactZoomRef.current = target;
-      map.easeTo({ zoom: target, duration: 4000, easing: (t) => 0.5 - Math.cos(t * Math.PI) / 2 });
+      // Ease-out cubic (matches the recenter/catch-up easing elsewhere in this file) rather than
+      // ease-in-out -- owner wanted the transition to "zoom out fast and then slow down before it
+      // settles" instead of a slow start. Longer duration (was 4000ms) makes the whole thing read
+      // as a smoother drift instead of a snap, since the deceleration tail now has more room to play out.
+      map.easeTo({ zoom: target, duration: 6500, easing: (t) => 1 - (1 - t) ** 3 });
     }, 2000);
     return () => window.clearInterval(timer);
   }, [compact, loaded, cameraMode]);
