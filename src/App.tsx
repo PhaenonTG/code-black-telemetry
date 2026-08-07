@@ -22,6 +22,7 @@ import {
 import { ReportPage } from "./components/situational/ReportPage";
 import { LayerConfigPage } from "./components/situational/LayerConfigPage";
 import { SevereFlashOverlay } from "./components/SevereFlashOverlay";
+import { SpotterOnboardingPrompt } from "./components/SpotterOnboardingPrompt";
 import { WindCard } from "./components/situational/WindCard";
 import { useAlertProducts } from "./hooks/useAlertProducts";
 import { useSpcOutlook } from "./hooks/useSpcOutlook";
@@ -32,6 +33,7 @@ import { useSpotters } from "./hooks/useSpotters";
 import { useStatus } from "./hooks/useTelemetry";
 import { setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, startCodeBlackSoundPlayer } from "./services/sound";
 import { loadNightVisionEnabled, subscribeNightVisionEnabled } from "./services/settings";
+import { getSpotterAccount, hasSeenSpotterOnboarding, subscribeSpotterAccount, type SpotterAccount } from "./services/spotterAccount";
 import { setTelemetryPaused } from "./services/telemetry";
 
 type PageKey = "weather" | "operations" | "locate" | "alerts" | "report" | "settings" | "layers";
@@ -72,6 +74,10 @@ export default function App() {
   const [page, setPage] = useState<PageKey>(() => pathToPage());
   const [cockpitMode, setCockpitMode] = useState<CockpitMode>("chase");
   const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
+  const [spotterAccount, setSpotterAccount] = useState<SpotterAccount | null>(() => getSpotterAccount());
+  // Defaults true (prompt hidden) so there's no flash of the onboarding prompt before the async
+  // Preferences read below resolves -- it only flips to false if the user genuinely hasn't seen it.
+  const [spotterOnboardingSeen, setSpotterOnboardingSeen] = useState(true);
   const pagerRef = useRef<HTMLDivElement | null>(null);
   const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
   const status = useStatus();
@@ -117,6 +123,12 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = subscribeNightVisionEnabled(setNightVisionEnabled);
     void loadNightVisionEnabled();
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeSpotterAccount(setSpotterAccount);
+    void hasSeenSpotterOnboarding().then(setSpotterOnboardingSeen);
     return unsubscribe;
   }, []);
 
@@ -223,6 +235,9 @@ export default function App() {
   return (
     <div className={nightVisionEnabled ? "app-shell app-shell--night-vision" : "app-shell"}>
       <SevereFlashOverlay />
+      {!spotterAccount && !spotterOnboardingSeen && (
+        <SpotterOnboardingPrompt onDismiss={() => setSpotterOnboardingSeen(true)} />
+      )}
       <TopBar />
       <main className="page-viewport" ref={pagerRef} aria-label="Code Black dashboard pages">
         <section className="page page--weather" aria-label="Situational Awareness">

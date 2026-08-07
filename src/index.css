@@ -1146,6 +1146,28 @@ button {
   font-size: clamp(15px, 1.3vw, 20px);
 }
 
+.spotter-onboarding-modal {
+  width: min(480px, 96vw);
+  max-height: min(560px, 88dvh);
+}
+
+.spotter-onboarding-body p {
+  margin: 0 0 14px;
+  color: var(--secondary);
+  font: 600 clamp(12px, 1vw, 14px) / 1.5 Inter, sans-serif;
+}
+
+.spotter-onboarding-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.spotter-onboarding-actions .settings-action {
+  flex: 1;
+  text-align: center;
+}
+
 .modal-scroll pre,
 .modal-scroll p {
   white-space: pre-wrap;

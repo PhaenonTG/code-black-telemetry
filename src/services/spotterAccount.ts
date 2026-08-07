@@ -1,6 +1,22 @@
 import { Preferences } from "@capacitor/preferences";
 
 const ACCOUNT_KEY = "codeblack.spotterAccount";
+const ONBOARDING_SEEN_KEY = "codeblack.spotterOnboardingSeen";
+
+// A one-time, skippable first-run prompt (see SpotterOnboardingPrompt.tsx) rather than gating the
+// app behind sign-in -- this dashboard's core purpose (GPS, weather, radar, alerts) has nothing to
+// do with Spotter Network, and a login screen blocking access to severe weather info during an
+// actual emergency (forgotten password, no signal to auth) would be actively unsafe. Checked once
+// at app mount; once dismissed (signed in OR skipped) it never shows again automatically -- signing
+// in later is always available from Settings.
+export async function hasSeenSpotterOnboarding(): Promise<boolean> {
+  const saved = await Preferences.get({ key: ONBOARDING_SEEN_KEY });
+  return saved.value === "true";
+}
+
+export async function markSpotterOnboardingSeen(): Promise<void> {
+  await Preferences.set({ key: ONBOARDING_SEEN_KEY, value: "true" });
+}
 
 export interface SpotterAccount {
   username: string;
