@@ -1,0 +1,357 @@
+# Code Black OPS Audit Handoff - 2026-08-06
+
+## Current State
+
+Code Black OPS is a working Android tablet app built with React 19, TypeScript, Vite, and Capacitor
+8. The app uses a seven-page landscape pager for Weather, Operations, Locate, Alerts, Report,
+Settings, and Layers. The tablet remains the primary chase operations interface.
+
+The real Raspberry Pi backend is not included in this checkout. Existing project notes identify it
+as a separate Pi-side codebase at `~/CodeBlack` with Flask dashboard/API, BLE bridge, ESP bridge,
+lighting control, and systemd services.
+
+## What Is Working
+
+- BLE-first tablet telemetry through `BleTelemetryClient`.
+- HTTP Pi endpoint fallback through Settings / Pi Endpoint.
+- Tablet GPS fallback when vehicle GPS is stale or invalid.
+- Last-known telemetry persistence and offline state display.
+- Native Android Level II radar products: REF, VEL, SRV, CC.
+- Mapbox Atlas map with radar, warnings, watches, team, chaser, POI, breadcrumb, and mosaic layers.
+- Spotter Network sign-in, nearby chaser view, report submission, and self-filtering.
+- Nearby gas, food, lodging, and hospital lookups through Overpass.
+- App crash boundary with guarded auto-reload.
+- Android immersive landscape shell and Android back handling.
+
+## What Was Inspected
+
+- Root project structure, package scripts, TypeScript config, Capacitor config.
+- `src/App.tsx`, navigation/pager behavior, app resume/pause handling.
+- Telemetry provider, BLE client, HTTP fallback, simulator fallback, quality mapping.
+- Settings persistence, BLE command token storage, team/pin/layer preferences.
+- Situational services: alerts, SPC outlooks, watches, nearby places, spotters, reports.
+- Map/radar components, Mapbox layer managers, radar loop diagnostics.
+- Native Android manifest, network security config, Java plugins, native radar bridge.
+- Rust radar decoder docs and native package boundary.
+- Prototype Node radar worker.
+- Scripts and install workflow.
+- Documentation and changelog.
+- Security-sensitive strings and committed environment files.
+
+## Safe Fixes Made
+
+- Replaced stale Vite-template `README.md` with a current project overview and guardrails.
+- Replaced stale Phase 1 `ARCHITECTURE.md` with the current pager, BLE, native-radar, and boundary model.
+- Added `.env.example` with sanitized configuration keys and no secrets.
+- Added this audit handoff/TODO document.
+- Updated `PROJECT_STATE.md` with a pointer to this audit.
+- Updated `CHANGELOG.md` with this audit pass.
+
+No runtime code, UI behavior, streaming implementation, networking topology, schema, or Pi service
+behavior was changed.
+
+## Audit Findings
+
+### CRITICAL
+
+No confirmed critical defects were fixed or newly introduced in this pass.
+
+### HIGH
+
+1. Plaintext credentials can be included in Android backups
+   - Affected files: `android/app/src/main/AndroidManifest.xml`, `src/services/spotterAccount.ts`, `src/services/settings.ts`
+   - Current behavior: `allowBackup="true"` while Spotter Network password and BLE command token are stored in Capacitor Preferences.
+   - Expected behavior: pre-release policy may allow local plaintext, but backup/export policy should be explicit before field/public use.
+   - Why it matters: backup extraction or device migration can expose a personal Spotter password and vehicle command token.
+   - Recommended fix: disable backup or add backup exclusion rules; consider Android encrypted storage or re-prompting for personal passwords.
+   - Safe to fix now: no, it changes device backup behavior.
+   - User approval required: yes.
+
+2. Prototype radar worker is CORS-open and listens on all interfaces
+   - Affected files: `radar-worker/worker.cjs`, `start-radar-worker.ps1`, `start-radar-worker.sh`
+   - Current behavior: worker listens on `0.0.0.0:${CODEBLACK_RADAR_PORT || 8787}` with unrestricted CORS and unauthenticated POST controls.
+   - Expected behavior: local-only dev service unless explicitly hardened.
+   - Why it matters: if run on LAN/Tailscale, other clients could drive radar selection/storm-motion endpoints.
+   - Recommended fix: bind to localhost by default, add optional auth token, or document as dev-only.
+   - Safe to fix now: not without confirming whether any device workflow depends on LAN access.
+   - User approval required: yes.
+
+3. Pi networking/recovery topology cannot be verified from this repo
+   - Affected files: repository-wide; Pi code is absent.
+   - Current behavior: only tablet client and notes exist here; NetworkManager, recovery AP, hotspot priorities, watchdogs, and systemd units are not included.
+   - Expected behavior: field readiness audit needs the real Pi service/profile definitions.
+   - Why it matters: Wi-Fi failover/recovery AP reliability is a chase-critical operational concern.
+   - Recommended fix: audit the Pi-side `~/CodeBlack` repo and live `/etc/NetworkManager/system-connections`, `systemctl`, and watchdog configuration.
+   - Safe to fix now: no.
+   - User approval required: yes, because it touches Pi networking.
+
+4. Nearby/POI/spotter hooks can use stale coordinates while driving
+   - Affected files: `src/hooks/useNearbyPlaces.ts`, `src/hooks/useNearbyPoiList.ts`, `src/hooks/useSpotters.ts`
+   - Current behavior: effects depend on `gps == null` to avoid polling on every telemetry tick; nearby hooks close over the GPS value from effect start, and spotter polling also uses that captured value.
+   - Expected behavior: avoid jitter-driven fetch storms while still refreshing after meaningful movement.
+   - Why it matters: nearby amenities, POI pins, and spotter distances can remain centered on an old location during a chase.
+   - Recommended fix: use a live `gpsRef` plus a movement threshold/geohash/grid trigger; alerts/SPC already use a ref pattern.
+   - Safe to fix now: likely small, but behavior-affecting and should be validated on device.
+   - User approval required: yes for this audit pass.
+
+### MEDIUM
+
+1. Native diagnostic recon activity is exported and hardcoded
+   - Affected files: `android/app/src/main/AndroidManifest.xml`, `NativeMapboxReconActivity.java`
+   - Current behavior: exported activity with static test point, hardcoded route/radar asset.
+   - Expected behavior: diagnostic surfaces should be non-exported or gated if not required externally.
+   - Why it matters: increases external launch surface and can confuse future maintainers.
+   - Recommended fix: confirm whether it is still used, then set `exported=false` or remove the intent filter.
+   - Safe to fix now: no, because external diagnostic launch may be intentional.
+   - User approval required: yes.
+
+2. Global Android cleartext traffic is enabled
+   - Affected files: `android/app/src/main/res/xml/network_security_config.xml`, `AndroidManifest.xml`
+   - Current behavior: cleartext HTTP is globally permitted for user-configured Pi LAN/Tailscale endpoints.
+   - Expected behavior: cleartext policy should be documented and bounded where practical.
+   - Why it matters: broad HTTP allowance increases risk if any non-local endpoint is configured.
+   - Recommended fix: keep only if local/Tailscale HTTP remains a requirement; otherwise move Pi APIs to HTTPS or narrow domains.
+   - Safe to fix now: no.
+   - User approval required: yes.
+
+3. No automated unit/integration test suite
+   - Affected files: `package.json`, repository-wide.
+   - Current behavior: validation is lint/build/Android build/device screenshots.
+   - Expected behavior: core service transforms and hooks should have targeted tests.
+   - Why it matters: telemetry/radar/nearby logic is safety-relevant and easy to regress.
+   - Recommended fix: add small tests for telemetry normalization, BLE fragment reassembly, nearby movement refresh, and radar loop series.
+   - Safe to fix now: no new test framework was authorized in this audit.
+   - User approval required: yes.
+
+4. Project state has stale fragments
+   - Affected files: `PROJECT_STATE.md`
+   - Current behavior: still says five-page pager and has some historical package notes.
+   - Expected behavior: handoff docs should separate current truth from history.
+   - Why it matters: future developers can make wrong assumptions.
+   - Recommended fix: continue consolidating project docs around this audit handoff and current architecture doc.
+   - Safe to fix now: partially done with pointer and root docs.
+   - User approval required: no for docs-only cleanup.
+
+5. Foreground radar service is declared but minimal
+   - Affected files: `RadarForegroundService.java`, `RadarNativePlugin.java`
+   - Current behavior: foreground service exists but has no meaningful lifecycle implementation.
+   - Expected behavior: either implement thermal/background policy or remove/defer declaration.
+   - Why it matters: it suggests background radar capability that is not actually present.
+   - Recommended fix: decide whether background radar is required before implementing.
+   - Safe to fix now: no.
+   - User approval required: yes.
+
+### LOW
+
+1. Root scripts are not grouped consistently
+   - Affected files: `install-codeblack-ops.ps1`, `start-radar-worker.ps1`, `start-radar-worker.sh`, `scripts/`
+   - Current behavior: most helper scripts are at root, while screenshot helper is under `scripts/`.
+   - Recommended fix: leave for now; moving scripts would require workflow updates.
+   - Safe to fix now: no need.
+   - User approval required: no if done later as docs/script cleanup.
+
+2. Some comments contain historical implementation archaeology
+   - Affected files: many `src/` files.
+   - Current behavior: comments preserve bug history and owner decisions.
+   - Recommended fix: keep field-relevant comments; trim only if they become misleading.
+   - Safe to fix now: no broad cleanup needed.
+   - User approval required: no.
+
+## Streaming Readiness Review
+
+Do not build the streaming stack until approved.
+
+Recommended tablet state model:
+
+- `OFF`
+- `STARTING`
+- `LIVE`
+- `DEGRADED`
+- `RECONNECTING`
+- `FAILED`
+
+Use two independent stream targets:
+
+- KNWA Stream
+- Code Black Stream
+
+Best integration points:
+
+- UI location: Operations page, near existing Pi/Radar diagnostics, as compact status/control panels.
+- Tablet service boundary: add a stream service/client module, not direct Pi fetches inside UI.
+- Pi boundary: Pi owns ingest, FFmpeg/MediaMTX/recording/reconnect/network failover.
+- Core boundary: Code Black Core owns overlays, OBS/producer workflows, archival, and distribution.
+
+Likely Pi endpoints:
+
+- `GET /api/streams/status`
+- `POST /api/streams/knwa/start`
+- `POST /api/streams/knwa/stop`
+- `POST /api/streams/codeblack/start`
+- `POST /api/streams/codeblack/stop`
+- `GET /api/streams/health`
+
+Status payload should include target state, last error, bitrate, fps, resolution, ingest source,
+recording state, active network, reconnect count, dropped frames, uptime, and updated timestamp.
+
+Prerequisites:
+
+- Real Pi streaming service design.
+- Credential/stream-key storage policy on Pi.
+- MediaMTX/FFmpeg or equivalent process supervision decision.
+- Network failover policy.
+- Tablet polling cadence/backoff.
+- Failure semantics for DEGRADED vs RECONNECTING vs FAILED.
+
+Risks:
+
+- Stream keys or RTMP/SRT URLs leaking into tablet/browser logs.
+- Pi CPU/thermal/network load impacting BLE/ESP telemetry.
+- UI claiming LIVE when only local ingest is alive.
+- Recording and streaming lifecycle split-brain if tablet disconnects.
+
+## Networking Review
+
+Actual implementation in this repo:
+
+- BLE is the primary tablet-to-Pi telemetry and command path.
+- HTTP Pi endpoint is optional fallback, user-configurable, and can be LAN, `.local`, or Tailscale.
+- No NetworkManager profiles, hotspot profiles, recovery AP files, PiWX-Recovery definitions, or Pi watchdog units are present.
+- No MediaMTX/FFmpeg/service definitions are present.
+
+Proposed future model comparison:
+
+- BLE for tablet telemetry: already aligned.
+- Pi onboard Wi-Fi available for infrastructure/WAN: cannot verify from this checkout.
+- USB Wi-Fi as second WAN: not present here.
+- Starlink, known infrastructure Wi-Fi, phone hotspot priority/failover: not present here.
+- Recovery AP/PiWX-Recovery: referenced by the user but not present in this checkout.
+
+Needed before changing networking:
+
+- Inspect live Pi NetworkManager profiles and active devices.
+- Confirm onboard vs USB Wi-Fi roles.
+- Confirm recovery AP trigger and whether it conflicts with infrastructure WAN use.
+- Define priority order and failure detection.
+- Add watchdog/readiness docs and tests on the Pi side.
+
+## Things Requiring User Approval
+
+- Any streaming implementation beyond docs/contracts.
+- Any Pi networking redesign or NetworkManager profile change.
+- Backup/credential storage policy changes.
+- Disabling/export changing native diagnostic activity.
+- Adding test framework or larger service tests.
+- Moving/deleting prototype radar worker.
+- Any UI repositioning, visual redesign, radar layout changes, or navigation changes.
+
+## Master TODO
+
+### P0 - Must Fix Before Field Use
+
+- Task: Verify Pi networking/recovery AP/watchdog configuration on the actual Pi.
+  Reason: this repo cannot prove recovery behavior.
+  Subsystem: Pi networking.
+  Complexity: medium.
+  Dependencies: Pi access.
+  Independent: yes.
+
+- Task: Decide backup/credential policy for Spotter password and BLE command token.
+  Reason: current Preferences storage can be included in Android backups.
+  Subsystem: Android/security.
+  Complexity: small.
+  Dependencies: owner policy decision.
+  Independent: yes.
+
+### P1 - High Priority
+
+- Task: Fix stale GPS handling in nearby/POI/spotter hooks with a movement threshold.
+  Reason: field data can stay centered on old coordinates.
+  Subsystem: nearby/spotters/maps.
+  Complexity: small.
+  Dependencies: device validation.
+  Independent: yes.
+
+- Task: Audit Pi BLE command auth/trusted-device policy.
+  Reason: shared token is current protection for vehicle hardware commands.
+  Subsystem: BLE/Pi/security.
+  Complexity: medium.
+  Dependencies: Pi BLE protocol docs.
+  Independent: yes.
+
+- Task: Define stream status API contract before UI implementation.
+  Reason: tablet should remain control/status only.
+  Subsystem: streaming/Pi/tablet.
+  Complexity: medium.
+  Dependencies: user approval.
+  Independent: no.
+
+### P2 - Useful Improvement
+
+- Task: Add targeted tests for telemetry normalization and radar loop frame ordering.
+  Reason: catches regressions in core data logic.
+  Subsystem: validation.
+  Complexity: medium.
+  Dependencies: test framework choice.
+  Independent: yes.
+
+- Task: Clarify or remove diagnostic NativeMapboxReconActivity after confirming usage.
+  Reason: hardcoded/exported prototype surface is confusing.
+  Subsystem: Android/native.
+  Complexity: small.
+  Dependencies: owner approval.
+  Independent: yes.
+
+- Task: Add Pi/Core streaming diagnostics panel once Pi APIs exist.
+  Reason: operator needs bitrate/fps/reconnect/recording truth.
+  Subsystem: streaming UI.
+  Complexity: medium.
+  Dependencies: stream API.
+  Independent: no.
+
+### P3 - Polish / Future
+
+- Task: Continue consolidating long historical comments into docs when they become stale.
+  Reason: reduces maintenance load without losing decisions.
+  Subsystem: docs/code comments.
+  Complexity: small.
+  Dependencies: none.
+  Independent: yes.
+
+- Task: Organize root helper scripts or document why they are root-level.
+  Reason: easier onboarding.
+  Subsystem: tooling.
+  Complexity: tiny.
+  Dependencies: none.
+  Independent: yes.
+
+### User Approval Required - Streaming Tasks
+
+- Task: Implement Pi stream supervisor.
+  Reason: Pi must own DJI ingest, FFmpeg/MediaMTX, reconnect, recording, and stream health.
+  Subsystem: Pi streaming.
+  Complexity: large.
+  Dependencies: hardware/source/credential decisions.
+  Independent: no.
+
+- Task: Add tablet stream controls.
+  Reason: operator needs KNWA and Code Black start/stop/status.
+  Subsystem: tablet UI/services.
+  Complexity: medium.
+  Dependencies: Pi stream API.
+  Independent: no.
+
+- Task: Add Code Black Core production/overlay integration.
+  Reason: overlays, OBS workflow, remote production, multistream, and archival belong on Core.
+  Subsystem: Core/streaming.
+  Complexity: large.
+  Dependencies: Core backend design.
+  Independent: no.
+
+## Next Recommended Development Pass
+
+1. Audit the real Raspberry Pi repo and live network/service configuration.
+2. Approve and fix stale GPS refresh behavior for nearby/POI/spotters.
+3. Decide credential/backup policy before wider field use.
+4. Define the Pi stream status/control API contract.
+5. Only then build the tablet streaming panels.

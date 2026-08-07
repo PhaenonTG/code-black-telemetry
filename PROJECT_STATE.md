@@ -1,9 +1,16 @@
 # Code Black OPS — Project State
 
-Last updated: 2026-08-03 (real teams/groups with per-member contact info, item #41). Written so a
+Last updated: 2026-08-06 (audit handoff added; see below). Written so a
 fresh AI assistant
 (or a human) can pick this project up cold, with no prior conversation history, and know exactly
 what exists, why, and what's next.
+
+## Latest audit handoff
+
+Read `docs/2026-08-06-audit-handoff.md` before starting a new development pass. It contains the
+current repository audit, safe documentation fixes, deferred findings, streaming readiness notes,
+networking review, approval-required items, and prioritized TODO list. No major UI, networking,
+streaming, architecture, or schema changes were authorized during that audit.
 
 ## What this is
 
@@ -35,7 +42,7 @@ directly. iOS support and that direct-ESP32 path are future work, not yet built 
 ## Directory map (src/)
 
 ```
-App.tsx                        — root: 5-page swipeable pager, dock nav, cockpit mode state
+App.tsx                        — root: 7-page swipeable pager, dock nav, cockpit mode state
 components/
   layout/TopBar.tsx (+.css)    — header: brand, clock, date, Pi Link chip, battery chip
   situational/
@@ -234,7 +241,7 @@ BLE is now the **primary** path and HTTP is a secondary/legacy fallback.
   triggering `start_chase_session`/`end_chase_session`/`set_storm_mode` (only `sendCommand()` the
   plumbing exists — no button calls them yet, only Interior Lighting's controls are wired to UI).
 
-## The 5 pages (App.tsx pager)
+## The 7 pages (App.tsx pager)
 
 1. **Weather** (`/`, default) — 2x3 grid: Location & Motion, Conditions (WeatherObservationPanel),
    Wind, Active Alerts (compact), Situational Map, Nearby (amenities + Chasers).
@@ -244,10 +251,14 @@ BLE is now the **primary** path and HTTP is a secondary/legacy fallback.
    instance).
 4. **Alerts** (`/alerts`) — `AlertsFullPanel`: uncapped product list + Storm Threat summary cards
    (watch/MD/warning) — these two were merged into one component this session.
-5. **Settings** (`/settings`) — 9 panels now: Display (cockpit mode + Night Vision toggle),
+5. **Report** (`/report`) — severe weather report workflow backed by the Spotter Network account
+   when signed in.
+6. **Settings** (`/settings`) — 9 panels now: Display (cockpit mode + Night Vision toggle),
    Alerts (sound on/off + test), Pi Connection, Spotter Network (sign in/out), Nearby Chasers
    (search radius), Team Roster, Map Pins (color/shape pickers), Interior Lighting (Govee control
    over BLE), About. See "Established conventions" below for a real bug this grew into.
+7. **Layers** (`/layers`) — full-page map layer configuration for alerts, team, chasers, POI, and
+   mosaic visibility shared by the Weather and Locate map instances.
 
 Cockpit mode is global (`normal` | `chase`), persisted via Capacitor Preferences, toggled from
 Settings. Chase mode shows a reduced field set for glancing while driving; Normal shows full

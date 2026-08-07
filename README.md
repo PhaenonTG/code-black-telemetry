@@ -1,32 +1,62 @@
-# React + TypeScript + Vite
+# Code Black OPS Tablet
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Code Black OPS is the in-vehicle storm chase operations tablet app. It is a React 19, TypeScript,
+Vite, and Capacitor 8 application packaged as an Android app under `com.codeblackwx.ops`.
 
-Currently, two official plugins are available:
+The tablet is the primary chase interface. The Raspberry Pi and ESP devices provide vehicle
+telemetry and control services, while future Code Black Core work should remain behind service/API
+boundaries instead of being wired directly into UI components.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Current Architecture
 
-## React Compiler
+- UI shell: seven-page landscape swipe pager in `src/App.tsx` with a bottom dock.
+- Telemetry: `src/services/telemetry/api-provider.ts` is the provider boundary used by the UI.
+- Primary vehicle link: BLE via `src/services/telemetry/ble-client.ts`.
+- Fallback vehicle link: configurable HTTP Pi endpoint through Settings / Pi Endpoint.
+- Radar: Android-native on-device Level II decoder through the `RadarNative` Capacitor plugin.
+- Map: Mapbox GL JS `AtlasMap` components with radar, alerts, watches, team, chaser, POI, and mosaic layers.
+- Native Android: Capacitor app plus Java plugins under `android/app/src/main/java/com/codeblackwx/ops`.
+- Prototype radar worker: `radar-worker/worker.cjs`, used for local development/reference, not the production tablet radar path.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The real Raspberry Pi backend is not included in this checkout. Project notes identify it as a
+separate Pi-side codebase at `~/CodeBlack` with Flask, BLE bridge, ESP bridge, lighting control,
+and systemd services.
 
-## Expanding the Oxlint configuration
+## Common Commands
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm run dev
+npm run lint
+npm run build
+npm run cap:sync
+npm run android:debug
+npm run radar:worker
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+`install-codeblack-ops.ps1` runs lint, build, Capacitor sync, Android debug build, and `adb install -r`.
+
+## Environment
+
+Copy `.env.example` values into a local `.env.local` and fill only the values needed for the current
+target. `.env.local` is intentionally ignored by git.
+
+Important variables:
+
+- `VITE_MAPBOX_ACCESS_TOKEN`: public Mapbox `pk.*` token for Atlas map rendering.
+- `VITE_ATLAS_MAPBOX_STYLE`: optional Mapbox style, defaults to `mapbox/navigation-night-v1`.
+- `VITE_PI_API_BASE`: optional HTTP fallback Pi API base.
+- `VITE_RADAR_API_BASE`: optional development radar worker base.
+- `VITE_ALLOW_SIMULATOR`: development-only simulator fallback flag.
+
+## Documentation
+
+- `PROJECT_STATE.md`: long-form project handoff and historical implementation notes.
+- `ARCHITECTURE.md`: current code structure and dependency boundaries.
+- `docs/on-device-radar-architecture.md`: native radar design and deferred radar roadmap.
+- `docs/2026-08-06-audit-handoff.md`: latest audit findings, TODOs, streaming readiness, and networking review.
+- `CHANGELOG.md`: newest-first change history.
+
+## Guardrails
+
+Do not make major UI, networking, streaming, schema, or architecture changes without owner approval.
+Use the existing service boundaries and document proposed changes before implementing them.

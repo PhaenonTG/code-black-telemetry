@@ -4,6 +4,46 @@ All changes logged newest-first.
 
 ---
 
+## Audit Pass - 2026-08-06 - Repository Review, Documentation, and Handoff
+
+### Scope
+- Performed a top-to-bottom audit of the current tablet repository before making changes.
+- Reviewed frontend shell, pager navigation, service boundaries, BLE telemetry, HTTP fallback, settings persistence, map/radar systems, Android native plugins, permissions, prototype radar worker, scripts, docs, and validation surface.
+- Confirmed that this pass did not authorize major UI, networking, streaming, schema, or architecture changes.
+
+### Safe Changes Made
+- Replaced stale Vite-template `README.md` with the current Code Black OPS tablet overview, command list, environment notes, and guardrails.
+- Replaced stale Phase 1 `ARCHITECTURE.md` with the current seven-page pager, BLE-first telemetry, native Android radar, networking boundary, and native Android surface.
+- Added sanitized `.env.example`.
+- Added `docs/2026-08-06-audit-handoff.md` with findings, TODOs, streaming readiness, networking review, and approval-required items.
+- Updated `PROJECT_STATE.md` to point future developers to the latest audit handoff.
+
+### Significant Findings
+- No confirmed critical runtime defect was changed during this pass.
+- Android backup remains enabled while Capacitor Preferences can contain Spotter Network password and BLE command token; policy decision required before field/public hardening.
+- Prototype Node radar worker is CORS-open, listens on all interfaces, and has unauthenticated POST controls; keep dev-only or harden with approval.
+- Real Raspberry Pi NetworkManager/recovery AP/hotspot/watchdog/systemd topology is not present in this checkout and must be audited on the Pi-side codebase/live Pi.
+- Nearby, POI, and spotter hooks avoid GPS jitter fetch storms but can keep using captured stale coordinates; recommended threshold/ref-based fix is deferred for approval.
+
+### Streaming Readiness
+- Documented future KNWA Stream and Code Black Stream state model: `OFF`, `STARTING`, `LIVE`, `DEGRADED`, `RECONNECTING`, `FAILED`.
+- Recommended tablet remains control/status only, with Raspberry Pi owning ingest, FFmpeg/MediaMTX or equivalent, recording, reconnect, and stream health.
+- Recommended Code Black Core owns overlays, producer/OBS workflow, remote production, distribution, and archival services.
+- No streaming stack was implemented during this audit.
+
+### Networking Findings
+- Current tablet repo implements BLE primary telemetry/commands and optional HTTP Pi endpoint fallback.
+- No NetworkManager, PiWX-Recovery, recovery AP, Starlink/phone hotspot priority, or systemd definitions are included here.
+- Future onboard Wi-Fi / USB Wi-Fi WAN failover model needs Pi-side inspection and user approval before changes.
+
+### Next Recommended Work
+- Audit the actual Raspberry Pi repo and live network/service configuration.
+- Approve and fix stale GPS refresh behavior for nearby/POI/spotters.
+- Decide Android backup/credential storage policy.
+- Define Pi stream status/control API contract before adding tablet controls.
+
+---
+
 ## Phase 1.0.0 — 2026-06-27 — Foundation & Dashboard Architecture
 
 **Initial build. Establishes the full Phase 1 foundation.**
