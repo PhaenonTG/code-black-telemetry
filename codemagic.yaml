@@ -1,0 +1,44 @@
+workflows:
+  ios-unsigned-altstore:
+    name: iOS unsigned build (AltStore sideload)
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+      node: latest
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Build web app
+        script: npm run build
+      - name: Sync Capacitor iOS platform
+        script: npx cap sync ios
+      # Signing is deliberately disabled here -- this produces an unsigned .app, which AltServer
+      # then re-signs locally with your own free Apple ID during sideload. There is no Apple
+      # Developer account, certificate, or provisioning profile involved anywhere in this build.
+      - name: Archive without code signing
+        script: |
+          cd ios/App
+          xcodebuild archive \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -archivePath "$CM_BUILD_DIR/App.xcarchive" \
+            -destination 'generic/platform=iOS' \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS=""
+      # xcodebuild -exportArchive always wants a real signing method, so there's no built-in way to
+      # export a genuinely unsigned .ipa -- this is the standard community workaround: an .ipa is
+      # just a zip of a Payload/ folder containing the .app, so build that structure by hand from
+      # the unsigned archive's .app bundle.
+      - name: Package unsigned .ipa
+        script: |
+          mkdir -p "$CM_BUILD_DIR/Payload"
+          cp -r "$CM_BUILD_DIR/App.xcarchive/Products/Applications/App.app" "$CM_BUILD_DIR/Payload/"
+          cd "$CM_BUILD_DIR"
+          zip -r CodeBlackOps-unsigned.ipa Payload
+    artifacts:
+      - $CM_BUILD_DIR/CodeBlackOps-unsigned.ipa
