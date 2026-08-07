@@ -2861,6 +2861,48 @@ button {
 .threat-card--severe { color: var(--cb-red); border-color: rgba(255,45,53,0.42); background-color: rgba(96,10,14,0.18); }
 .threat-card--empty strong { color: #cfd4dc; }
 
+/* SPC's own categorical colors are its published 6-tier scale (TSTM green through HIGH magenta),
+   not this app's red/amber warning language -- fill/border pull directly from the fetched feature
+   (spcOutlook.ts), this block only sets the layout + the no-data fallback look. */
+.spc-outlook-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.spc-outlook-card {
+  min-height: 64px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--cb-radius);
+  background: linear-gradient(135deg, rgba(255,255,255,0.052), rgba(0,0,0,0.24));
+}
+
+.spc-outlook-card span {
+  color: var(--cb-muted);
+  font: 900 10px / 1 "Consolas", monospace;
+  text-transform: uppercase;
+}
+
+.spc-outlook-card strong {
+  color: var(--cb-text);
+  font: 900 clamp(13px, 1vw, 17px) / 1.15 "Arial Narrow", "Segoe UI", sans-serif;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.spc-outlook-card em {
+  color: var(--cb-red);
+  font: 800 10px / 1 "Consolas", monospace;
+  font-style: normal;
+  text-transform: uppercase;
+}
+
 .map-canvas {
   margin: 8px;
   border-radius: 5px;

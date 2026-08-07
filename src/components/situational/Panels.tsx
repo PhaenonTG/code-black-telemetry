@@ -8,6 +8,7 @@ import { useWeather } from "../../hooks/useTelemetry";
 // deferring it to its own chunk keeps it out of the JS the app has to parse before first paint.
 const AtlasMap = lazy(() => import("../../map/AtlasMap").then((mod) => ({ default: mod.AtlasMap })));
 import { type AlertProduct, type ExternalObservation } from "../../services/situational";
+import { type SpcDayOutlook } from "../../services/spcOutlook";
 import { type Spotter } from "../../services/spotters";
 import { type NearbyCategory, type NearbyPlace } from "../../services/nearby";
 import { subscribeAlertFocus } from "../../services/mapFocusAlert";
@@ -144,7 +145,7 @@ export function AlertsPanel({ products, error }: { products: AlertProduct[]; err
 // Alerts is the one unified alerts destination now — this used to be split across two compact
 // Weather-page cards (Alerts + Storm Threats). The Watch/MD/SPC-outlook summary row below is what
 // Storm Threats used to show; the full pill list below that is what Alerts used to show, uncapped.
-export function AlertsFullPanel({ products, error, onOpenReport }: { products: AlertProduct[]; error: string; onOpenReport: () => void }) {
+export function AlertsFullPanel({ products, error, outlooks = [], onOpenReport }: { products: AlertProduct[]; error: string; outlooks?: SpcDayOutlook[]; onOpenReport: () => void }) {
   const [selected, setSelected] = useState<AlertProduct | null>(null);
   // Tapping a watch/warning/MD polygon on the map requests focus by id (mapFocusAlert.ts) and
   // separately fires the existing view-all-alerts navigation event -- this just needs to open the
@@ -188,8 +189,22 @@ export function AlertsFullPanel({ products, error, onOpenReport }: { products: A
             <em>Expires {warning.expires || "--"}</em>
           </button>
         ) : (
-          <div className="threat-card threat-card--risk threat-card--empty"><span>SPC Outlook</span><strong>No local SPC outlook</strong><em>Source: SPC</em></div>
+          <div className="threat-card threat-card--risk threat-card--empty"><span>Local Warning</span><strong>No active warning</strong><em>NWS source</em></div>
         )}
+      </div>
+      <div className="spc-outlook-row">
+        {[1, 2, 3].map((day) => {
+          const outlook = outlooks.find((o) => o.day === day);
+          const cat = outlook?.categorical ?? null;
+          const torn = outlook?.tornado ?? null;
+          return (
+            <div key={day} className="spc-outlook-card" style={cat?.color ? { borderColor: cat.color, backgroundColor: `${cat.color}22` } : undefined}>
+              <span>DAY {day}</span>
+              <strong style={cat?.color ? { color: cat.color } : undefined}>{cat ? cat.labelLong || cat.label : outlooks.length ? "No Risk" : "--"}</strong>
+              {torn && <em>{torn.labelLong || torn.label} Tornado</em>}
+            </div>
+          );
+        })}
       </div>
       <div className="alert-list alert-list--full">
         {products.length === 0 && <div className="calm-card">{error ? "ALERT DATA TEMPORARILY UNAVAILABLE" : "NO ACTIVE LOCATION-MATCHED PRODUCTS"}</div>}

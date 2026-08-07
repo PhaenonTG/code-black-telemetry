@@ -24,6 +24,7 @@ import { LayerConfigPage } from "./components/situational/LayerConfigPage";
 import { SevereFlashOverlay } from "./components/SevereFlashOverlay";
 import { WindCard } from "./components/situational/WindCard";
 import { useAlertProducts } from "./hooks/useAlertProducts";
+import { useSpcOutlook } from "./hooks/useSpcOutlook";
 import { useNearbyPlaces } from "./hooks/useNearbyPlaces";
 import { useNearbyPoiList } from "./hooks/useNearbyPoiList";
 import { useSituationalData } from "./hooks/useSituationalData";
@@ -78,6 +79,7 @@ export default function App() {
     ? { lat: canonicalLocation.latitude, lon: canonicalLocation.longitude }
     : null;
   const alertProducts = useAlertProducts(gpsPoint);
+  const spcOutlooks = useSpcOutlook(gpsPoint);
   const nearby = useNearbyPlaces(gpsPoint);
   const poi = useNearbyPoiList(gpsPoint);
   const spotters = useSpotters(gpsPoint);
@@ -260,7 +262,7 @@ export default function App() {
         </section>
         <section className="page page--alerts" aria-label="Alerts">
           <div className="page-grid page-grid--alerts">
-            <AlertsFullPanel products={alertProducts.products} error={alertProducts.error} onOpenReport={() => goToPage("report")} />
+            <AlertsFullPanel products={alertProducts.products} error={alertProducts.error} outlooks={spcOutlooks} onOpenReport={() => goToPage("report")} />
           </div>
         </section>
         <section className="page page--report" aria-label="Submit Report">
