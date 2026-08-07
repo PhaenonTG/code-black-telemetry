@@ -44,8 +44,14 @@
   clip-path: none !important;
   background: none !important;
   filter: drop-shadow(0 0 6px rgba(255, 45, 53, 0.32)) !important;
-  width: clamp(46px, 3.8vw, 64px) !important;
-  height: clamp(46px, 3.8vw, 64px) !important;
+  /* Full shield badge (shield outline, arc lettering, tornado mark, tagline) needs real size to
+     read as anything more than a smudge -- bumped up from the old 46-64px icon-sized range.
+     Capped at 78px, not higher: .ops-header's height is a fixed CSS custom property
+     (--cb-header-h, index.css) shared by the whole app's page grid, not sized to its content --
+     a max any taller than this overflows past the header's own bottom border instead of growing
+     the header to fit (confirmed on-device: 92px pushed the subtitle line down into the border). */
+  width: clamp(58px, 4.8vw, 78px) !important;
+  height: clamp(58px, 4.8vw, 78px) !important;
   object-fit: contain !important;
   display: block !important;
   flex-shrink: 0;
