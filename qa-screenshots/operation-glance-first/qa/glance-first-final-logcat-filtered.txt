@@ -1,1 +1,0 @@
-No fatal exception, ANR in, SIGSEGV, OutOfMemoryError, unrecovered WebGL context loss, EGL_BAD, or uncaught JS runtime error signatures found in final filtered logcat.

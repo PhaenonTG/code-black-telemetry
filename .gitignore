@@ -1,3 +1,9 @@
+# Ad-hoc on-device verification screenshots/logcat dumps from past sessions -- 617MB tracked
+# across 408 files as of this commit, none of it meant to be a permanent record. Slows every
+# clone (including Codemagic's CI checkout) for no benefit. Untracked below; not purged from
+# history here since that needs a force-push, which needs an explicit go-ahead first.
+qa-screenshots/
+
 # Logs
 logs
 *.log

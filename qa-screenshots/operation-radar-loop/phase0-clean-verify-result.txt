@@ -1,6 +1,0 @@
-Production baseline tag: atlas-production-v1-20260729-201239
-Production baseline commit: 7ca291882267b53dcec3cef6b05c46257f63170f
-Clean verification APK: C:\Users\glenn\Documents\Code Black Telemetry Backups\clean-verify-atlas-production-v1-20260729-201239\android\app\build\outputs\apk\debug\app-debug.apk
-Clean verification APK SHA256: 12A9CA649AF196F8DA18ED48BD93C752D1E59451C039730433DD784EA41A812A
-Prior approved APK SHA256: E7291DB05665C0A1966B6AF02C233A547863A9E511B3E0C1F495759682208448
-Hash difference reason: fresh Vite/Capacitor build emitted different hashed web assets while source build validation passed.
