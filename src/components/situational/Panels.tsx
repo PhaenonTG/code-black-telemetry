@@ -12,6 +12,7 @@ import { type SpcDayOutlook } from "../../services/spcOutlook";
 import { type Spotter } from "../../services/spotters";
 import { type NearbyCategory, type NearbyPlace } from "../../services/nearby";
 import { subscribeAlertFocus } from "../../services/mapFocusAlert";
+import type { AtlasRangeRingMode } from "../../map/types";
 import { sourceLabel, type CanonicalLocation } from "../../services/location";
 import { cardinalFromDeg, compactAge, mbToInHg, valueText } from "../../services/telemetry/quality";
 import { resolveWeatherWithFallback } from "../../services/telemetry/fallback";
@@ -496,7 +497,7 @@ function AtlasMapRadarPanel({
           setPlaybackSpeed={setPlaybackSpeed}
           opacity={opacity}
           setOpacity={setOpacity}
-          rangeRings={rangeRings === "10" || rangeRings === "100" ? "25" : rangeRings}
+          rangeRings={rangeRings}
           setRangeRings={(mode) => setRangeRings(mode)}
           radarError={radarError}
           status={status}
@@ -549,8 +550,8 @@ function RadarExpandedView({
   setPlaybackSpeed: (speed: RadarPlaybackSpeed) => void;
   opacity: number;
   setOpacity: (opacity: number) => void;
-  rangeRings: "off" | "25" | "50";
-  setRangeRings: (rings: "off" | "25" | "50") => void;
+  rangeRings: AtlasRangeRingMode;
+  setRangeRings: (rings: AtlasRangeRingMode) => void;
   radarError: string;
   status: RadarStatus | null;
   onClose: () => void;
@@ -661,7 +662,7 @@ function RadarExpandedView({
           </label>
           <div>
             <span>Range rings</span>
-            {(["off", "25", "50"] as const).map((value) => <button key={value} className={rangeRings === value ? "active" : ""} onClick={() => setRangeRings(value)}>{value === "off" ? "Off" : `${value} nm`}</button>)}
+            {(["off", "10", "25", "50", "100"] as const).map((value) => <button key={value} className={rangeRings === value ? "active" : ""} onClick={() => setRangeRings(value)}>{value === "off" ? "Off" : `${value} nm`}</button>)}
           </div>
           {product === "SRV" && (
             <div className="srv-motion-control">

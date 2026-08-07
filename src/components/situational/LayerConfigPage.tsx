@@ -69,8 +69,13 @@ export function LayerConfigPage() {
     return unsubscribe;
   }, []);
 
-  const toggle = (key: keyof MapLayerVisibility) => {
-    void saveMapLayerVisibility({ ...visibility, [key]: !visibility[key] });
+  // Explicit target value, not a blind flip -- these buttons are an On/Off pair (like Cockpit
+  // Mode/Night Vision in Settings), not a single toggle split across two elements. A blind flip
+  // meant clicking the already-active button (e.g. "On" while already On) turned the layer OFF
+  // instead of leaving it alone, since both buttons called the same flip regardless of which was
+  // clicked.
+  const setLayerVisible = (key: keyof MapLayerVisibility, value: boolean) => {
+    void saveMapLayerVisibility({ ...visibility, [key]: value });
   };
 
   const handleNewPinImage = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -115,8 +120,8 @@ export function LayerConfigPage() {
               <PinStyleField label="Chaser Pin" style={chaserPinStyle} onChange={(style) => void saveChaserPinStyle(style)} />
             )}
             <div className="mode-toggle" aria-label={`${label} visibility`}>
-              <button className={visibility[key] ? "" : "active"} onClick={() => toggle(key)}>Off</button>
-              <button className={visibility[key] ? "active" : ""} onClick={() => toggle(key)}>On</button>
+              <button className={visibility[key] ? "" : "active"} onClick={() => setLayerVisible(key, false)}>Off</button>
+              <button className={visibility[key] ? "active" : ""} onClick={() => setLayerVisible(key, true)}>On</button>
             </div>
           </div>
         </div>
