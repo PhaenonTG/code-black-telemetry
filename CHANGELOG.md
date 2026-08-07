@@ -4,6 +4,41 @@ All changes logged newest-first.
 
 ---
 
+## Streaming Controls - 2026-08-07 - Operations Mission Streaming Panel
+
+### Added
+- Added `MissionStreamingPanel` to the existing Operations page without changing navigation, map, radar, or global branding.
+- Added `src/services/streaming.ts` as the tablet-side stream model/client boundary for camera, KNWA, Code Black, and recording status.
+- Added compact KNWA, Code Black, and REC switches with visible state pills using the Pi state vocabulary: `OFF`, `STARTING`, `LIVE`, `DEGRADED`, `RECONNECTING`, `FAILED`.
+- Added camera ingest status as a compact read-only row.
+
+### Pi API / BLE Wiring
+- Status reads use the Pi local stream API:
+  - `GET /api/local/stream/status`
+  - fallback individual reads for `/camera`, `/knwa`, `/code-black`, `/recording`
+- Stream commands prefer BLE when connected:
+  - `stream.knwa.start` / `stream.knwa.stop`
+  - `stream.code_black.start` / `stream.code_black.stop`
+  - `recording.start` / `recording.stop`
+- If BLE is unavailable, commands fall back to the configured Pi HTTP endpoint:
+  - `POST /api/local/stream/knwa/start|stop`
+  - `POST /api/local/stream/code-black/start|stop`
+  - `POST /api/local/stream/recording/start|stop`
+- HTTP commands include the existing Code Black command token in `X-CodeBlack-Command-Token` and request body; no stream keys or destination credentials are stored or displayed on the tablet.
+
+### Behavior
+- Start taps show `STARTING` while the command is in flight, then reconcile from Pi status.
+- Stop taps do not claim `OFF` until the Pi reports `OFF`.
+- `DEGRADED` and `RECONNECTING` keep the switch logically on.
+- Stale/unreachable stream status displays `UNKNOWN` instead of leaving stale `LIVE` visible.
+- One command can be in flight at a time per panel interaction path; repeated taps are disabled while pending.
+
+### Deferred
+- No MediaMTX, FFmpeg, OBS, producer, Core ingest, stream-key, Pi networking, or mission PREP/LIVE implementation was added.
+- Follow-ups remain: real DJI ingest test, KNWA credential/config verification, Code Black Core video ingest, detailed metrics, storage remaining time, producer go-live signaling, prioritize-KNWA/panic action, and automatic preflight checklist.
+
+---
+
 ## Audit Pass - 2026-08-06 - Repository Review, Documentation, and Handoff
 
 ### Scope

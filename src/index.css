@@ -1366,6 +1366,7 @@ button {
   }
 
   .events-ops,
+  .ops-stream-panel,
   .diagnostics-panel,
   .endpoint-panel {
     grid-column: auto;
@@ -1534,6 +1535,7 @@ button {
   .page-grid--operations > .cb-panel,
   .ops-summary,
   .endpoint-panel,
+  .ops-stream-panel,
   .events-ops,
   .diagnostics-panel {
     grid-column: 1 !important;
@@ -3025,8 +3027,141 @@ button {
 .page-grid--operations > .cb-panel:nth-child(3) { grid-column: 7 / 10; grid-row: 1; }
 .page-grid--operations > .cb-panel:nth-child(4) { grid-column: 10 / 13; grid-row: 1; }
 .endpoint-panel { grid-column: 1 / 6; grid-row: 2; }
-.events-ops { grid-column: 6 / 10; grid-row: 2; }
+.ops-stream-panel { grid-column: 6 / 10; grid-row: 2; }
+.events-ops { grid-column: 8 / 13; grid-row: 3; }
 .diagnostics-panel { grid-column: 10 / 13; grid-row: 2; }
+
+.stream-panel-body {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(4, minmax(0, 1fr)) auto;
+  gap: 7px;
+  padding: clamp(10px, 1.2dvh, 14px);
+}
+
+.stream-row {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  padding: 7px 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.stream-row--camera {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.stream-row__label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stream-row__label strong {
+  color: var(--text);
+  font: 850 clamp(12px, 0.95vw, 16px) / 1.05 "Inter", system-ui, sans-serif;
+  text-transform: uppercase;
+}
+
+.stream-row__label span {
+  overflow: hidden;
+  color: var(--muted);
+  font: 700 9px / 1.15 Consolas, "JetBrains Mono", monospace;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stream-state {
+  min-width: 72px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.045);
+  font: 850 10px / 1 Consolas, "JetBrains Mono", monospace;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.stream-state--ok {
+  border-color: rgba(45, 212, 111, 0.34);
+  color: #7ef0a1;
+  background: rgba(45, 212, 111, 0.11);
+}
+
+.stream-state--warn {
+  border-color: rgba(245, 158, 11, 0.42);
+  color: #f8c96d;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.stream-state--bad {
+  border-color: rgba(255, 45, 53, 0.42);
+  color: #ff8b91;
+  background: rgba(255, 45, 53, 0.12);
+}
+
+.stream-switch {
+  width: 70px;
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 3px 8px 3px 4px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.055);
+  font: 850 10px / 1 Consolas, "JetBrains Mono", monospace;
+  letter-spacing: 0;
+}
+
+.stream-switch span {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.stream-switch--on {
+  border-color: rgba(255, 45, 53, 0.55);
+  color: var(--text);
+  background: rgba(255, 45, 53, 0.2);
+}
+
+.stream-switch--on span {
+  background: var(--red);
+  box-shadow: 0 0 12px rgba(255, 45, 53, 0.38);
+}
+
+.stream-switch:disabled {
+  opacity: 0.56;
+}
+
+.stream-message {
+  min-height: 22px;
+  overflow: hidden;
+  color: var(--muted);
+  font: 750 10px / 1.25 Consolas, "JetBrains Mono", monospace;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stream-message--warn {
+  color: var(--amber);
+}
 
 @media (orientation: landscape) and (max-height: 850px) {
   :root {
@@ -3242,6 +3377,7 @@ button {
   .page-grid--operations > .cb-panel,
   .ops-summary,
   .endpoint-panel,
+  .ops-stream-panel,
   .events-ops,
   .diagnostics-panel {
     grid-column: 1 !important;
@@ -4343,6 +4479,7 @@ body {
   }
 
   .events-ops,
+  .ops-stream-panel,
   .diagnostics-panel,
   .endpoint-panel {
     grid-column: auto;
@@ -4496,6 +4633,7 @@ body {
   .page-grid--operations > .cb-panel,
   .ops-summary,
   .endpoint-panel,
+  .ops-stream-panel,
   .events-ops,
   .diagnostics-panel {
     grid-column: 1 !important;
@@ -4758,7 +4896,7 @@ body {
 }
 
 .pi-endpoint-panel {
-  grid-column: 1 / 13 !important;
+  grid-column: 1 / 8 !important;
   grid-row: 3 !important;
   min-height: 0;
   overflow: hidden;
@@ -5522,6 +5660,7 @@ body {
    the shared <Panel> component — restore the same red diamond every other panel has. */
 .ops-summary .cb-panel__title::before,
 .radar-endpoint-panel .cb-panel__title::before,
+.ops-stream-panel .cb-panel__title::before,
 .diagnostics-panel .cb-panel__title::before,
 .pi-endpoint-panel .cb-panel__title::before {
   content: "";

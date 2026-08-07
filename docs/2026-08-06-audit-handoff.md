@@ -159,7 +159,9 @@ No confirmed critical defects were fixed or newly introduced in this pass.
 
 ## Streaming Readiness Review
 
-Do not build the streaming stack until approved.
+2026-08-07 update: the Pi streaming backend foundation is now implemented and validated, and the
+tablet Operations page is now authorized to control it. The tablet-side Mission Streaming card was
+added in `MissionStreamingPanel`. The larger streaming/producer/Core stack remains deferred.
 
 Recommended tablet state model:
 
@@ -175,39 +177,54 @@ Use two independent stream targets:
 - KNWA Stream
 - Code Black Stream
 
-Best integration points:
+Implemented tablet integration points:
 
-- UI location: Operations page, near existing Pi/Radar diagnostics, as compact status/control panels.
-- Tablet service boundary: add a stream service/client module, not direct Pi fetches inside UI.
+- UI location: Operations page, near existing Pi/Radar diagnostics, as a compact Mission Streaming card.
+- Tablet service boundary: `src/services/streaming.ts`, not direct Pi parsing in the UI.
 - Pi boundary: Pi owns ingest, FFmpeg/MediaMTX/recording/reconnect/network failover.
 - Core boundary: Code Black Core owns overlays, OBS/producer workflows, archival, and distribution.
 
-Likely Pi endpoints:
+Pi endpoints used by the tablet:
 
-- `GET /api/streams/status`
-- `POST /api/streams/knwa/start`
-- `POST /api/streams/knwa/stop`
-- `POST /api/streams/codeblack/start`
-- `POST /api/streams/codeblack/stop`
-- `GET /api/streams/health`
+- `GET /api/local/stream/status`
+- `GET /api/local/stream/camera`
+- `GET /api/local/stream/knwa`
+- `GET /api/local/stream/code-black`
+- `GET /api/local/stream/recording`
+- `POST /api/local/stream/knwa/start`
+- `POST /api/local/stream/knwa/stop`
+- `POST /api/local/stream/code-black/start`
+- `POST /api/local/stream/code-black/stop`
+- `POST /api/local/stream/recording/start`
+- `POST /api/local/stream/recording/stop`
 
-Status payload should include target state, last error, bitrate, fps, resolution, ingest source,
-recording state, active network, reconnect count, dropped frames, uptime, and updated timestamp.
+BLE commands used by the tablet:
+
+- `stream.knwa.start`
+- `stream.knwa.stop`
+- `stream.code_black.start`
+- `stream.code_black.stop`
+- `recording.start`
+- `recording.stop`
+
+Status payload normalization retains target state, desired-on state, last error, bitrate, fps,
+resolution, reconnect count, storage warning, and updated timestamp where present.
 
 Prerequisites:
 
-- Real Pi streaming service design.
-- Credential/stream-key storage policy on Pi.
-- MediaMTX/FFmpeg or equivalent process supervision decision.
-- Network failover policy.
-- Tablet polling cadence/backoff.
-- Failure semantics for DEGRADED vs RECONNECTING vs FAILED.
+- Real DJI ingest test.
+- KNWA credentials/config on the Pi.
+- Code Black Core video ingest availability.
+- Detailed producer/Core connectivity semantics.
+- PREP/LIVE mission mode and preflight checklist.
+- Prioritize-KNWA/panic action.
+- Storage remaining time and retention controls.
 
 Risks:
 
 - Stream keys or RTMP/SRT URLs leaking into tablet/browser logs.
 - Pi CPU/thermal/network load impacting BLE/ESP telemetry.
-- UI claiming LIVE when only local ingest is alive.
+- UI claiming LIVE when only local ingest is alive; tablet now waits for Pi status before showing LIVE.
 - Recording and streaming lifecycle split-brain if tablet disconnects.
 
 ## Networking Review
@@ -237,7 +254,7 @@ Needed before changing networking:
 
 ## Things Requiring User Approval
 
-- Any streaming implementation beyond docs/contracts.
+- Any streaming implementation beyond tablet control/status of the existing Pi API.
 - Any Pi networking redesign or NetworkManager profile change.
 - Backup/credential storage policy changes.
 - Disabling/export changing native diagnostic activity.
@@ -279,11 +296,11 @@ Needed before changing networking:
   Dependencies: Pi BLE protocol docs.
   Independent: yes.
 
-- Task: Define stream status API contract before UI implementation.
-  Reason: tablet should remain control/status only.
+- Task: Exercise stream status/control contract against the real Pi during a live ingest test.
+  Reason: tablet should remain control/status only and Pi must remain source of truth.
   Subsystem: streaming/Pi/tablet.
-  Complexity: medium.
-  Dependencies: user approval.
+  Complexity: small.
+  Dependencies: Pi streaming backend, camera source, destinations.
   Independent: no.
 
 ### P2 - Useful Improvement
@@ -302,11 +319,11 @@ Needed before changing networking:
   Dependencies: owner approval.
   Independent: yes.
 
-- Task: Add Pi/Core streaming diagnostics panel once Pi APIs exist.
-  Reason: operator needs bitrate/fps/reconnect/recording truth.
+- Task: Add detailed stream metrics only after the compact panel is field-proven.
+  Reason: operator may need bitrate/fps/reconnect/storage truth without cluttering the main card.
   Subsystem: streaming UI.
   Complexity: medium.
-  Dependencies: stream API.
+  Dependencies: real Pi payloads and user approval for expanded details.
   Independent: no.
 
 ### P3 - Polish / Future
@@ -332,13 +349,6 @@ Needed before changing networking:
   Subsystem: Pi streaming.
   Complexity: large.
   Dependencies: hardware/source/credential decisions.
-  Independent: no.
-
-- Task: Add tablet stream controls.
-  Reason: operator needs KNWA and Code Black start/stop/status.
-  Subsystem: tablet UI/services.
-  Complexity: medium.
-  Dependencies: Pi stream API.
   Independent: no.
 
 - Task: Add Code Black Core production/overlay integration.

@@ -1,6 +1,6 @@
 # Code Black OPS — Project State
 
-Last updated: 2026-08-06 (audit handoff added; see below). Written so a
+Last updated: 2026-08-07 (Mission Streaming tablet controls added). Written so a
 fresh AI assistant
 (or a human) can pick this project up cold, with no prior conversation history, and know exactly
 what exists, why, and what's next.
@@ -8,9 +8,11 @@ what exists, why, and what's next.
 ## Latest audit handoff
 
 Read `docs/2026-08-06-audit-handoff.md` before starting a new development pass. It contains the
-current repository audit, safe documentation fixes, deferred findings, streaming readiness notes,
-networking review, approval-required items, and prioritized TODO list. No major UI, networking,
-streaming, architecture, or schema changes were authorized during that audit.
+repository audit, safe documentation fixes, deferred findings, streaming readiness notes,
+networking review, approval-required items, and prioritized TODO list. The 2026-08-07 pass
+superseded the "streaming controls deferred" note for tablet controls only: the Pi backend already
+exists, and the Operations page now has a compact Mission Streaming control/status card. Major
+producer/Core/DJI/networking work remains deferred.
 
 ## What this is
 
@@ -25,6 +27,39 @@ The owner (Glenn) drives the primary vehicle, which has 3 ESP32s feeding a Raspb
 "vehicle" data source everywhere in this codebase). A chase partner, Nick, will run a second
 vehicle with **no Pi** — just a single ESP32 (GPS + temp/humidity + anemometer) feeding an iPad
 directly. iOS support and that direct-ESP32 path are future work, not yet built (see Pending).
+
+## Current Mission Streaming tablet controls
+
+Added 2026-08-07 after the Pi streaming backend foundation was implemented and validated. The
+tablet Operations page now includes `MissionStreamingPanel`, a compact control/status card for:
+
+- KNWA Stream
+- Code Black Stream
+- Recording
+- Camera ingest status
+
+The tablet reads stream truth from the Pi:
+
+- `GET /api/local/stream/status`
+- fallback individual reads for `/api/local/stream/camera`, `/knwa`, `/code-black`, and `/recording`
+
+Start/stop commands prefer the existing BLE command channel when connected and tokened:
+
+- `stream.knwa.start` / `stream.knwa.stop`
+- `stream.code_black.start` / `stream.code_black.stop`
+- `recording.start` / `recording.stop`
+
+If BLE is unavailable, the card falls back to the configured Pi HTTP endpoint:
+
+- `POST /api/local/stream/knwa/start|stop`
+- `POST /api/local/stream/code-black/start|stop`
+- `POST /api/local/stream/recording/start|stop`
+
+The Pi remains source of truth. The card shows `STARTING` while a start command is pending, does
+not claim `LIVE` or `OFF` until the Pi status confirms it, keeps switches logically on for
+`DEGRADED`/`RECONNECTING`, and shows `UNKNOWN` when stream status is stale/unreachable. No stream
+keys, RTMP/SRT URLs, KNWA credentials, or Code Black Core secrets are stored or displayed on the
+tablet.
 
 ## Tech stack
 
@@ -246,7 +281,7 @@ BLE is now the **primary** path and HTTP is a secondary/legacy fallback.
 1. **Weather** (`/`, default) — 2x3 grid: Location & Motion, Conditions (WeatherObservationPanel),
    Wind, Active Alerts (compact), Situational Map, Nearby (amenities + Chasers).
 2. **Operations** (`/operations`) — diagnostics-heavy: mode summary, Sensor Health, System, Power,
-   Radar Engine panel, Pi Endpoint config, Events log, raw diagnostics grid.
+   Radar Engine panel, Mission Streaming, Pi Endpoint config, Events log, raw diagnostics grid.
 3. **Locate** (`/locate`) — full-page map (same `MapRadarPanel`/`AtlasMap` as Weather page, second
    instance).
 4. **Alerts** (`/alerts`) — `AlertsFullPanel`: uncapped product list + Storm Threat summary cards

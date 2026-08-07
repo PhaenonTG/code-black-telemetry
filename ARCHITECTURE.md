@@ -28,6 +28,7 @@ Primary boundaries:
 
 - `src/services/telemetry/`: BLE-first telemetry provider, HTTP fallback, simulator fallback types
 - `src/services/radar.ts`: frontend contract for the native `RadarNative` plugin
+- `src/services/streaming.ts`: Mission Streaming status normalization and BLE/HTTP control client
 - `src/services/settings.ts`: Capacitor Preferences-backed app settings and subscriptions
 - `src/services/nearby.ts`, `situational.ts`, `spotters.ts`, `watches.ts`: external weather/places/spotter data
 - `src/map/`: Mapbox GL JS layer managers and diagnostics
@@ -70,6 +71,22 @@ systemd definitions. The tablet supports:
 
 Future Pi networking changes should be made in the Pi-side codebase after inspecting the real
 profiles and services on the Raspberry Pi.
+
+## Mission Streaming
+
+The Operations page includes a compact `MissionStreamingPanel` for KNWA, Code Black, recording,
+and camera ingest status. The tablet is only the switch/status surface:
+
+- status comes from `GET /api/local/stream/status` with individual `/camera`, `/knwa`,
+  `/code-black`, and `/recording` fallbacks
+- start/stop commands prefer BLE command transport when connected
+- HTTP command fallback uses the configured Pi endpoint and existing command token
+- stream states preserve the Pi vocabulary: `OFF`, `STARTING`, `LIVE`, `DEGRADED`,
+  `RECONNECTING`, `FAILED`
+
+The Pi owns actual camera ingest, FFmpeg/MediaMTX or equivalent process work, recording,
+reconnect, credentials, and network failover. Code Black Core/producer/OBS/overlay workflows are
+not implemented in the tablet.
 
 ## Native Android
 

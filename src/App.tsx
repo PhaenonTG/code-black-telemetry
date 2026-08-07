@@ -8,6 +8,7 @@ import { PowerCard } from "./components/cards/PowerCard";
 import { SensorHealthCard } from "./components/cards/SensorHealthCard";
 import { SystemCard } from "./components/cards/SystemCard";
 import { TopBar } from "./components/layout/TopBar";
+import { MissionStreamingPanel } from "./components/operations/MissionStreamingPanel";
 import { PiEndpointPanel } from "./components/operations/PiEndpointPanel";
 import { RadarEnginePanel } from "./components/operations/RadarEndpointPanel";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -264,6 +265,7 @@ export default function App() {
             <SystemCard className="ops-system-panel" />
             <PowerCard className="ops-power-panel" />
             <RadarEnginePanel />
+            <MissionStreamingPanel />
             <PiEndpointPanel />
             <EventsCard className="events-ops" />
             <section className="cb-panel diagnostics-panel">
