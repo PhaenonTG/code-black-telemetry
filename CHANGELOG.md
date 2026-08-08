@@ -4,6 +4,24 @@ All changes logged newest-first.
 
 ---
 
+## Weather Page Polish + Map Pin Customization - 2026-08-08 - Moveable Cards, Bottom Dock, POI Icons, Color Wheel
+
+### Added
+- Mounted `<WeatherGridSplitters />` in `App.tsx` -- the drag-to-resize feature for the Weather page's 6-card grid was fully implemented (drag hook, Capacitor Preferences persistence, clamping, matching CSS custom properties) but was never actually rendered anywhere, so it had no visible handles and nothing was draggable despite existing in the codebase.
+- Decoupled the Weather grid's two rows' column splits: `WeatherGridLayout` now has independent `row1ColSplitLeft/Right` (Location/Conditions/Wind) and `row2ColSplitLeft/Right` (Alerts/Map/Nearby) instead of one shared pair that moved both rows together. Stays percentage-based, so sizing still scales with viewport rather than fixed pixels.
+- Built `src/components/map/ColorWheel.tsx` -- a dependency-free HSV color wheel (hue ring + saturation/value square + hex field), replacing the native `<input type="color">` + fixed 8-swatch preset row in `PinStyleEditor.tsx` (Team/Chaser/Vehicle pin styling) and the plain color input in `LayerConfigPage.tsx`'s Custom Pins row. Full hue range, including blue, which the previous preset palette deliberately excluded.
+- Added 4 hand-authored POI category icons (`src/assets/poi-icons/`: fuel pump, bed, medical cross, fork+knife) replacing the single-letter (G/H/F/ER) map pin labels in `AtlasPoiLayer.ts` for gas/lodging/food/hospital nearby pins. Kept the existing colored-rounded-square treatment per category, just swapped the glyph.
+
+### Fixed
+- `src/index.css` bottom-dock nav: 3 separate `.bottom-dock { grid-template-columns }` rules (across different `@media (orientation: landscape)` blocks, one unconditional and last-in-file) were still hardcoded to `repeat(5, ...)` or `repeat(6, ...) + a signature slot`, left over from before the dock grew to its current 7 real buttons and `.dock-signature` stopped being a distinct corner element. Traced the actual cascade (not just source order) against the 1920x1200 landscape viewport to find which of ~15 overlapping `.bottom-dock` rule blocks genuinely wins, and fixed the ones that do.
+
+### Not Done / Needs Follow-up
+- No physical-device screenshot validation for any of the above -- this pass ran in a cloud session with no ADB/physical-tablet access. Per project QA practice, none of this should be considered accepted until built, installed, and visually confirmed on the real Samsung tablet.
+- POI icon SVGs are hand-drawn geometric silhouettes (no visual preview available while authoring) -- likely need an on-device look and possible refinement; they're plain static SVG files, easy to swap.
+- Alerts page detail/wording + live expiration countdown, and the broader card-by-card design-consistency pass (SourceBadge/MetricTile usage across Wind/Alerts/Map/Nearby), were scoped and handed off as a separate prompt but not yet implemented in this pass.
+
+---
+
 ## Streaming Controls - 2026-08-07 - Operations Mission Streaming Panel
 
 ### Added

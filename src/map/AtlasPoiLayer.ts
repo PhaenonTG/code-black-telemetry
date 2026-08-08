@@ -2,6 +2,10 @@ import mapboxgl from "mapbox-gl";
 import type { Map as MapboxMap, Marker, Popup } from "mapbox-gl";
 import type { NearbyCategory, NearbyPlace } from "../services/nearby";
 import type { CustomPoiPin } from "../services/settings";
+import iconFuel from "../assets/poi-icons/icon-fuel.svg";
+import iconLodging from "../assets/poi-icons/icon-lodging.svg";
+import iconHospital from "../assets/poi-icons/icon-hospital.svg";
+import iconFood from "../assets/poi-icons/icon-food.svg";
 
 // Separate from AtlasPinMarkers.ts (spotter/team position pins) rather than extended to share it --
 // that helper applies one PinStyle to every point in a call, but POIs need per-point styling
@@ -56,44 +60,59 @@ function matchCustomPin(place: NearbyPlace, customPins: CustomPoiPin[]): CustomP
 }
 
 const ER_COLOR = "#ff2d35";
-// Closest-of-category picks (gas/lodging/food) get their own fixed, un-configurable style -- these
+// Category glyph, always used regardless of color -- a fuel pump reads as "gas" no matter which
+// category's color scheme is behind it, so this is separate from BEST_PICK_COLOR below rather than
+// bundled into it (hospital doesn't go through the best-pick gate but still needs its icon).
+const CATEGORY_ICON: Record<NearbyCategory, string> = {
+  gas: iconFuel,
+  lodging: iconLodging,
+  hospital: iconHospital,
+  food: iconFood,
+};
+// Closest-of-category picks (gas/lodging/food) get their own fixed, un-configurable color -- these
 // aren't curated by the owner the way custom pins are, they're just "whatever's actually nearest
-// right now" mirroring the Nearby card's own best-pick tiles, so a single letter + a color per
-// category is enough to tell them apart from custom brand pins at a glance. No blue (this app's
+// right now" mirroring the Nearby card's own best-pick tiles, so a color per category plus its
+// fixed icon is enough to tell them apart from custom brand pins at a glance. No blue (this app's
 // palette rule); red is reserved for ER/vehicle/warnings.
-const BEST_PICK_STYLE: Partial<Record<NearbyCategory, { color: string; label: string }>> = {
-  gas: { color: "#ffbe3c", label: "G" },
-  lodging: { color: "#b26bff", label: "H" },
-  food: { color: "#3ddc70", label: "F" },
+const BEST_PICK_COLOR: Partial<Record<NearbyCategory, string>> = {
+  gas: "#ffbe3c",
+  lodging: "#b26bff",
+  food: "#3ddc70",
 };
 
-function applyLabeledPinStyle(el: HTMLDivElement, color: string, label: string) {
+// Icons render as background-image on the same colored rounded-square treatment the old letter
+// pins used, sized well below 100% so there's breathing room between the glyph and the pin's own
+// border/glow -- at this marker size (22px) any icon detail finer than a bold silhouette won't
+// survive anyway, so the source SVGs (src/assets/poi-icons/) are deliberately simple/blocky.
+function applyIconPinStyle(el: HTMLDivElement, color: string, iconUrl: string) {
   const size = 22;
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
-  el.style.backgroundImage = "";
   el.style.backgroundColor = color;
+  el.style.backgroundImage = `url(${iconUrl})`;
+  el.style.backgroundRepeat = "no-repeat";
+  el.style.backgroundPosition = "center";
+  el.style.backgroundSize = "60%";
   el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
   el.style.borderRadius = "4px";
   el.style.boxShadow = `0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 8px 2px ${color}`;
-  el.style.display = "grid";
-  el.style.placeItems = "center";
-  el.style.color = "#000";
-  el.style.font = "800 10px/1 'JetBrains Mono', monospace";
-  el.textContent = label;
+  el.style.display = "block";
+  el.style.color = "";
+  el.style.font = "";
+  el.textContent = "";
   el.style.cursor = "pointer";
 }
 
 function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: CustomPoiPin | null, isBestPick: boolean) {
   if (place.category === "hospital") {
-    applyLabeledPinStyle(el, ER_COLOR, "ER");
+    applyIconPinStyle(el, ER_COLOR, CATEGORY_ICON.hospital);
     return;
   }
 
   if (!customPin && isBestPick) {
-    const style = BEST_PICK_STYLE[place.category];
-    if (style) {
-      applyLabeledPinStyle(el, style.color, style.label);
+    const color = BEST_PICK_COLOR[place.category];
+    if (color) {
+      applyIconPinStyle(el, color, CATEGORY_ICON[place.category]);
       return;
     }
   }

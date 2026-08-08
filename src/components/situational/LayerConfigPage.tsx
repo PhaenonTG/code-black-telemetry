@@ -12,6 +12,7 @@ import {
 import { useChaserPinStyle, useTeamPinStyle } from "../../hooks/usePinStyle";
 import { useCustomPoiPins } from "../../hooks/useCustomPoiPins";
 import { PinStyleField, PinStylePreview } from "../map/PinStyleEditor";
+import { ColorField } from "../map/ColorWheel";
 import { downscaleImageToDataUrl } from "../../utils/image";
 
 const DEFAULT_VISIBILITY: MapLayerVisibility = { alerts: true, team: true, chasers: true, poi: true, mosaic: true };
@@ -140,7 +141,7 @@ export function LayerConfigPage() {
             onChange={(event) => setNewPinName(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Enter") addCustomPin(); }}
           />
-          <input type="color" value={newPinColor} onChange={(event) => setNewPinColor(event.target.value)} />
+          <ColorField label="Custom pin color" value={newPinColor} onChange={setNewPinColor} />
           <button
             type="button"
             className={newPinImage ? "settings-shape-custom active" : "settings-shape-custom"}

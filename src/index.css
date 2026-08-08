@@ -6101,23 +6101,85 @@ body {
   justify-content: flex-start;
 }
 
-.settings-color-presets {
+.color-wheel {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
-.settings-color-presets button {
-  width: 20px;
-  height: 20px;
+.color-wheel__ring {
+  position: relative;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 0;
+  cursor: pointer;
+  touch-action: none;
+  background: conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
-.settings-color-presets button.active {
-  border-color: #fff;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+.color-wheel__hole {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  /* Approximates .product-modal's own dark gradient background so this reads as a punched-out
+     hole in the ring rather than a mismatched flat circle sitting on top of it. */
+  background: #0c0d10;
+}
+
+.color-wheel__sv {
+  position: absolute;
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: none;
+  background-image: linear-gradient(to right, #fff, transparent), linear-gradient(to top, #000, transparent);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.color-wheel__handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.65), 0 0 4px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.color-wheel__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-wheel__swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  flex-shrink: 0;
+}
+
+.color-wheel__hex {
+  width: 100px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--cb-text, #f4f6fa);
+  font: 700 13px / 1 "JetBrains Mono", Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.color-field-trigger {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  cursor: pointer;
 }
 
 .settings-size-control {
@@ -6138,15 +6200,6 @@ body {
   color: var(--muted);
   font: 700 11px / 1 "JetBrains Mono", Consolas, monospace;
   text-align: right;
-}
-
-.settings-pin-control input[type="color"] {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 7px;
-  background: none;
 }
 
 .settings-shape-row {

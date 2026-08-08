@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { MAX_PIN_SIZE_SCALE, MIN_PIN_SIZE_SCALE, type PinShape } from "../../services/settings";
+import { ColorWheel } from "./ColorWheel";
 
 export const PIN_SHAPES: Array<{ shape: PinShape; glyph: string }> = [
   { shape: "circle", glyph: "●" },
@@ -9,12 +10,6 @@ export const PIN_SHAPES: Array<{ shape: PinShape; glyph: string }> = [
   { shape: "star", glyph: "★" },
   { shape: "square", glyph: "■" },
 ];
-
-// Curated so the native color wheel isn't the only option -- picked for contrast against the map's
-// dark base style and against each other (a Team/Chaser pair should read as two different groups
-// at a glance, not just two shades of the same hue). No blue, matching this app's established
-// red/white/black + amber (+ these accent) palette rule.
-export const PIN_COLOR_PRESETS = ["#3ddc70", "#ffbe3c", "#f2f2f2", "#b26bff", "#ff5fa8", "#ff8a3d", "#ff2d35", "#d4ff3d"];
 
 export interface SimplePinStyle {
   color: string;
@@ -84,19 +79,7 @@ export function PinStyleModal({
         </div>
         <div className="modal-scroll pin-style-modal__body">
           <div className="settings-pin-control">
-            <input type="color" value={style.color} onChange={(event) => onChange({ ...style, color: event.target.value })} />
-            <div className="settings-color-presets" aria-label={`${title} color presets`}>
-              {PIN_COLOR_PRESETS.map((hex) => (
-                <button
-                  key={hex}
-                  type="button"
-                  className={style.color.toLowerCase() === hex ? "active" : ""}
-                  style={{ background: hex }}
-                  aria-label={`Use ${hex}`}
-                  onClick={() => onChange({ ...style, color: hex })}
-                />
-              ))}
-            </div>
+            <ColorWheel value={style.color} onChange={(hex) => onChange({ ...style, color: hex })} />
             <div className="settings-shape-row" aria-label={`${title} shape`}>
               {PIN_SHAPES.map(({ shape, glyph }) => (
                 <button key={shape} type="button" className={style.shape === shape ? "active" : ""} onClick={() => onChange({ ...style, shape })}>{glyph}</button>
