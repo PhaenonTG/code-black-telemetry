@@ -1014,16 +1014,9 @@ button {
   background: var(--blue);
 }
 
-.map-status {
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.68);
-  color: var(--secondary);
-  font: 800 10px / 1 Consolas, monospace;
-}
+/* .map-status's real rule lives further down this file (search ".map-status {" again) --
+   consolidated from 3 separate base-rule blocks that partially overrode each other's
+   position/color/font on 2026-08-08 (this one was fully superseded either way and deleted). */
 
 .offline-map,
 .cb-empty {
@@ -2437,8 +2430,7 @@ button {
 
 .radar-strip,
 .map-controls,
-.radar-legend,
-.map-status {
+.radar-legend {
   z-index: 8;
 }
 

@@ -4,6 +4,77 @@ All changes logged newest-first.
 
 ---
 
+## Radar-on-iOS Investigation + CSS Cascade Cleanup - 2026-08-08
+
+### Investigated: Radar on iOS -- confirmed genuinely unimplemented, not fixed this pass
+
+- Verified the full current architecture: `src/services/radar.ts` talks to exactly one Capacitor
+  plugin, `RadarNative`. Android's implementation
+  (`android/app/src/main/java/.../radar/RadarNativePlugin.java`) loads a Rust `.so`
+  (`libcodeblack_radar.so`) via JNI. **iOS has zero implementation** -- no Swift plugin file, no
+  stub, no TODO, nothing in `ios/App/` mentions radar at all. The Rust core itself
+  (`native/radar-ref/`) is hard-coupled to Android: `crate-type = ["cdylib"]`, links the `jni`
+  crate directly, only targets `aarch64-linux-android` -- no iOS target exists anywhere in the repo
+  (`.cargo/config.toml`, `cargo lipo`, `aarch64-apple-ios`: zero matches).
+- **Not fixed, and not attempted as a blind implementation.** Real iOS radar support means
+  cross-compiling the Rust core for iOS (restructuring away from JNI-specific APIs to a C-ABI/
+  XCFramework target) plus writing a full Swift Capacitor plugin implementing all 14 methods the
+  Android plugin does -- work that can only be compiled and tested on an actual Mac with Xcode,
+  neither of which exist in this session. Writing that code without any way to compile or test it
+  would produce something that looks like a fix without being verifiably one.
+- **The one genuinely good finding**: iOS doesn't crash or fabricate data today. `radar.ts`'s
+  native calls are wrapped in try/catch (originally written for Android's own failure cases), so
+  the missing iOS plugin call gets caught and gracefully degrades to an honest "ON-DEVICE RADAR
+  DECODER NOT INSTALLED" status with no frames -- not a crash, not a hang, not fake data. Combined
+  with the RadarEndpointPanel fabrication fix above, this now displays honestly end-to-end on iOS.
+- This needs to be scoped and built as its own dedicated effort by whoever has Mac/Xcode access,
+  not attempted piecemeal.
+
+### Fixed -- confirmed CSS cascade bugs (not guesses)
+
+- `.map-status`'s styling was split across 5 separate unscoped base-rule blocks scattered through
+  `index.css` (not the 3 an earlier pass estimated -- a direct grep found 5), each partially
+  overriding the previous one's position/z-index/color/font. One of the 5 blocks was **fully dead**
+  (every property it set was unconditionally overridden by a later block) -- deleted it. A separate
+  single-property `z-index: 8` rule (shared with 3 other selectors) was also fully dead specifically
+  for `.map-status` (overridden twice more later to `4` then `2`) -- removed `.map-status` from
+  that selector list, left the rule intact for the other 3 selectors it still legitimately applies to.
+- Left the remaining `.map-status` font-size override (10px, overriding an earlier 14px `font`
+  shorthand) as-is after checking: the same 3 remaining blocks show a consistent pattern of
+  deliberately refining position/z-index/size together across multiple passes (10px→14px→12px for
+  left, 8→4→2 for z-index, etc.) -- this reads as intentional iteration, not an accidental clobber,
+  so I didn't guess at changing it without visual confirmation.
+
+### CSS responsive architecture -- audited, foundation is actually sound
+
+- Confirmed the landscape/portrait split is mathematically exhaustive: `(orientation: landscape)`
+  and `(max-aspect-ratio: 13/10)` together cover every possible device orientation by CSS spec
+  definition (any portrait device has aspect-ratio &lt; 1 &le; 1.3). Both "single source of truth"
+  grid blocks (100-column `fr`-based landscape grid, single-column portrait stack) use **no
+  hardcoded pixel minimums** -- they should scale cleanly from small tablets through ultrawide
+  monitors, and from phone-portrait through iPad-portrait, in principle.
+- Found the `(orientation: landscape)` condition alone is still duplicated across 9 separate
+  `@media` blocks (1,469 to 6,853 in the file), plus 3 separate unscoped base `.bottom-dock` rule
+  blocks, plus several other duplicate/conflicting declarations (`.alert-pill span`/`.metric-tile i`
+  font-size conflicts, `.metric-grid` gap/padding duplicates) not yet consolidated -- noted below,
+  not all fixed this pass given the size of the surface area.
+
+### Not Done / Needs Follow-up
+- **"Looks sharp on every device" cannot be fully guaranteed from this session.** The architectural
+  foundation is confirmed sound (exhaustive orientation coverage, no hardcoded overflow-causing
+  minimums in the live rules), and several concrete cascade bugs were fixed, but genuinely verifying
+  polish across real device sizes requires actually seeing it render on more than one physical
+  device/simulator -- something this cloud session cannot do. Treat this pass as "fixed what's
+  provably broken by code inspection," not "visually verified across screen sizes."
+- Remaining duplicate/conflicting declarations noted above (`.alert-pill`, `.metric-tile i`,
+  `.metric-grid`, the 9x-duplicated `(orientation: landscape)` condition, 3x duplicated
+  `.bottom-dock` base rules) -- not consolidated this pass, same effort-vs-blind-visual-risk
+  tradeoff as other deferred cleanup this session.
+- `.dock-signature` CSS (13 references across the file) confirmed 100% dead -- zero JSX references
+  anywhere -- but not removed this pass; it's inert either way so lower priority than the fixes above.
+
+---
+
 ## Operations Page Fixes - 2026-08-08 - Radar Status Fabrication, Grid Fragility, Empty States
 
 ### Fixed
