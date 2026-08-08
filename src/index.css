@@ -1511,8 +1511,7 @@ button {
     min-height: clamp(78px, 9dvh, 110px) !important;
   }
 
-  .alerts-panel .view-all-button,
-  .threats-panel .view-all-button {
+  .alerts-panel .view-all-button {
     align-self: end;
   }
 
@@ -1610,7 +1609,7 @@ button {
   .wind-panel { grid-area: 1 / 62 / 2 / 101 !important; }
   .alerts-panel { grid-area: 2 / 1 / 3 / 26 !important; }
   .map-panel { grid-area: 2 / 26 / 3 / 73 !important; }
-  .threats-panel { grid-area: 2 / 73 / 3 / 101 !important; }
+  .nearby-panel { grid-area: 2 / 73 / 3 / 101 !important; }
 
   .loc-panel.cockpit-card {
     grid-template-rows: auto minmax(0, 1fr) auto !important;
@@ -3270,7 +3269,7 @@ button {
   .wind-panel { grid-area: wind; }
   .alerts-panel { grid-area: alerts; }
   .map-panel { grid-area: map; min-height: 42dvh; }
-  .threats-panel { grid-area: threats; }
+  .nearby-panel { grid-area: threats; }
 
   .bottom-dock {
     grid-template-columns: repeat(5, 1fr);
@@ -4400,7 +4399,7 @@ body {
       "threats";
   }
 
-  .threats-panel {
+  .nearby-panel {
     grid-area: threats;
   }
 
@@ -4490,7 +4489,7 @@ body {
   .wind-panel    { grid-area: 1 / var(--wx-row1-col-right)/ 2 / 101                       !important; }
   .alerts-panel  { grid-area: 2 / 1                       / 3 / var(--wx-row2-col-left)  !important; }
   .map-panel     { grid-area: 2 / var(--wx-row2-col-left) / 3 / var(--wx-row2-col-right) !important; }
-  .threats-panel { grid-area: 2 / var(--wx-row2-col-right)/ 3 / 101                       !important; }
+  .nearby-panel { grid-area: 2 / var(--wx-row2-col-right)/ 3 / 101                       !important; }
 
   .bottom-dock {
     width: 100% !important;
@@ -4775,24 +4774,6 @@ body {
 
 .alert-list:has(.alert-pill):not(:has(.alert-pill ~ .alert-pill)) .view-all-button {
   margin-top: 4px;
-}
-
-/* Storm threats: typography-only tightening, no structural change. */
-.threats-panel .threat-card span {
-  letter-spacing: 0.08em;
-}
-
-.threats-panel .threat-card strong {
-  letter-spacing: 0;
-  line-height: 1.15;
-}
-
-.threats-panel .threat-list {
-  gap: 8px !important;
-}
-
-.threats-panel .threat-card {
-  padding-block: 9px !important;
 }
 
 /* Bottom nav: seven buttons as one mathematically centered group — no phantom signature column. */
@@ -5285,9 +5266,10 @@ body {
   border-left: 1px solid rgba(255, 255, 255, 0.09) !important;
 }
 
-/* Nearby panel — replaces the old compact Storm Threats card slot (reuses .threats-panel for
-   grid positioning, matching width/placement, but the content itself is informational rather
-   than a threat, so it gets its own calm blue accent instead of the amber/red threat palette. */
+/* Nearby panel — replaces the old compact Storm Threats card slot (grid positioning selectors were
+   renamed from .threats-panel to .nearby-panel 2026-08-08, matching the class the JSX actually
+   carries; grid positioning/width itself unchanged). The content is informational rather than a
+   threat, so it gets its own calm blue accent instead of the amber/red threat palette. */
 .nearby-list {
   position: relative;
   z-index: 1;

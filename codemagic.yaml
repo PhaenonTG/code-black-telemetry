@@ -12,9 +12,10 @@ workflows:
       # empty token and the map/radar layers silently fail on-device.
       #
       # Also requires group "github", containing GH_TOKEN (Secure) -- a GitHub PAT with "repo"
-      # scope (classic) or "Contents: Read and write" + "Releases" (fine-grained), used below to
-      # publish the .ipa as a GitHub Release and push the updated altstore-source.json so AltStore
-      # picks up new builds as in-app updates instead of requiring a manual re-sideload each time.
+      # scope (classic) or "Contents: Read and write" (fine-grained), used below to commit the
+      # built .ipa into the repo under altstore/ and push the updated altstore-source.json so
+      # AltStore picks up new builds as in-app updates instead of requiring a manual re-sideload
+      # each time.
       groups:
         - mapbox
         - github
@@ -31,8 +32,8 @@ workflows:
       - name: Archive without code signing
         script: |
           # Derived from HEAD's commit timestamp rather than $CM_ENV or the wall clock: it must come
-          # out byte-identical here and in the "Publish GitHub Release for AltStore" step below (two
-          # separate script processes, no shared state), and AltStore rejects an install if the
+          # out byte-identical here and in the "Publish AltStore source" step below (two separate
+          # script processes, no shared state), and AltStore rejects an install if the
           # .ipa's embedded CFBundleShortVersionString doesn't exactly match the "version" the source
           # manifest claims (VerificationError 4). The commit timestamp is fixed for the life of the
           # build, so recomputing it in each step always agrees.
@@ -65,39 +66,36 @@ workflows:
           # ("the data couldn't be read because it isn't in the correct format") trying to read
           # Info.plist back out of the archive, even though the .ipa is otherwise valid.
           COPYFILE_DISABLE=1 zip -rX CodeBlackOps-unsigned.ipa Payload -x '.*' -x '__MACOSX'
-      # Publishes the .ipa as a GitHub Release, then updates altstore-source.json (at the repo
-      # root) to point at it and pushes that change straight back to the branch being built. Add
+      # Commits the .ipa into the repo under altstore/ (served to AltStore via
+      # raw.githubusercontent.com, same as altstore-source.json itself), then updates
+      # altstore-source.json to point at it and pushes that change straight back to the branch
+      # being built. Add
       # https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore-source.json
       # as a Source in AltStore/SideStore once -- after that, every build here shows up as an
       # "Update" in-app instead of needing a manual reinstall via AltServer.
-      - name: Publish GitHub Release for AltStore
+      #
+      # Previously also created a GitHub Release and uploaded the .ipa there, back when
+      # downloadURL pointed at the release asset -- once downloadURL moved to the git-committed
+      # raw path instead, that release upload kept running on every build without anything ever
+      # linking to it. Removed as dead work rather than two needless GitHub API calls per build.
+      - name: Publish AltStore source
         script: |
           set -euo pipefail
-          REPO="PhaenonTG/code-black-telemetry"
           IPA_PATH="$CM_BUILD_DIR/CodeBlackOps-unsigned.ipa"
           # Same derivation as the "Archive without code signing" step above -- recomputed
           # independently here (not passed via $CM_ENV, which didn't reliably propagate between
           # these script steps) but always comes out identical since it's based on HEAD's fixed
           # commit timestamp rather than wall-clock time.
           VERSION="$(date -u -r "$(git log -1 --format=%ct)" +%Y.%m%d.%H%M)"
-          TAG="ios-$VERSION"
           VERSION_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           IPA_SIZE="$(stat -f%z "$IPA_PATH")"
           BRANCH="${CM_BRANCH:-master}"
 
-          RELEASE_JSON=$(curl -sS -f -X POST \
-            -H "Authorization: token $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/releases" \
-            -d "{\"tag_name\":\"$TAG\",\"name\":\"iOS $VERSION (AltStore, unsigned)\",\"body\":\"Automated unsigned build for AltStore/SideStore sideload.\",\"prerelease\":true}")
-          UPLOAD_URL="$(echo "$RELEASE_JSON" | jq -r '.upload_url' | sed 's/{?name,label}//')"
-
-          ASSET_JSON=$(curl -sS -f -X POST \
-            -H "Authorization: token $GH_TOKEN" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary @"$IPA_PATH" \
-            "$UPLOAD_URL?name=CodeBlackOps-unsigned.ipa")
           mkdir -p altstore
+          # Committing every build's .ipa here means altstore/ only ever grows unless something
+          # prunes it -- only the version altstore-source.json currently points at is ever actually
+          # served, so drop every other .ipa in this directory before adding the new one.
+          find altstore -maxdepth 1 -name '*.ipa' -delete
           cp "$IPA_PATH" "altstore/CodeBlackOps-$VERSION.ipa"
           DOWNLOAD_URL="https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/$BRANCH/altstore/CodeBlackOps-$VERSION.ipa"
 
@@ -106,19 +104,14 @@ workflows:
              | .apps[0].versionDate = $d
              | .apps[0].downloadURL = $u
              | .apps[0].size = $s
-             | del(.apps[0].sha256)
-             | del(.apps[0].appPermissions)
              | .apps[0].versionDescription = ("Automated Codemagic build " + $v)
              | .apps[0].versions = [{version: $v, date: $d, localizedDescription: ("Automated Codemagic build " + $v), downloadURL: $u, size: $s}]' \
             altstore-source.json > altstore-source.json.tmp
           mv altstore-source.json.tmp altstore-source.json
-          jq --arg u "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/$BRANCH/altstore-source-v2.json" \
-            '.sourceURL = $u' \
-            altstore-source.json > altstore-source-v2.json
 
           git config user.email "codemagic-ci@codeblackwx.local"
           git config user.name "Codemagic CI"
-          git add altstore-source.json altstore-source-v2.json "altstore/CodeBlackOps-$VERSION.ipa"
+          git add altstore-source.json altstore/
           git commit -m "Publish AltStore source for iOS $VERSION [skip ci]"
           # Auth via an extraHeader instead of embedding the token in the remote URL, so it can't
           # end up in a printed "origin" URL if any later command errors and echoes it.

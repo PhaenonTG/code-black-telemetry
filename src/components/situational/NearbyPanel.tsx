@@ -47,7 +47,7 @@ export function NearbyPanel({ places, error, spotters, spottersError }: NearbyPa
   }, []);
 
   return (
-    <Panel title="Nearby" className="threats-panel nearby-panel" tone="spc">
+    <Panel title="Nearby" className="nearby-panel" tone="spc">
       <div className="nearby-list">
         {!hasAny && <div className="calm-card">{error ? "NEARBY LOOKUP UNAVAILABLE" : "SEARCHING NEARBY..."}</div>}
         {CATEGORY_ORDER.map((category) => {
