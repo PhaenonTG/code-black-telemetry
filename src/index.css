@@ -6460,3 +6460,352 @@ body {
     animation: none !important;
   }
 }
+
+/* Mobile QA override 2026-08-08:
+   The drag-resizable Weather grid looked good as a concept but failed on real iPhone/iPad
+   viewports: persisted card proportions could make content unreadably short, and the landscape
+   two-row cockpit grid clipped large text. This final cascade layer intentionally wins over the
+   older duplicated grid rules above. The Weather page now uses stable breakpoint layouts and lets
+   the page/card internals scroll or clamp instead of allowing overlap. */
+.page-grid--weather {
+  --weather-card-min: 132px;
+}
+
+.page-grid--weather > .cb-panel {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.page-grid--weather .cb-panel__title {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-grid--weather .loc-city,
+.page-grid--weather .loc-county,
+.page-grid--weather .conditions-strip,
+.page-grid--weather .conditions-strip__source,
+.page-grid--weather .wind-toolbar,
+.page-grid--weather .wind-toolbar > span,
+.page-grid--weather .nearby-item strong,
+.page-grid--weather .nearby-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-grid--weather .loc-city,
+.page-grid--weather .loc-county,
+.page-grid--weather .conditions-strip__source,
+.page-grid--weather .wind-toolbar > span {
+  white-space: nowrap;
+}
+
+.page-grid--weather .metric-tile {
+  min-width: 0 !important;
+}
+
+.page-grid--weather .metric-tile strong {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-grid--weather .metric-tile span,
+.page-grid--weather .metric-tile em {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-aspect-ratio: 13 / 10) {
+  .page-viewport {
+    overflow-y: hidden !important;
+  }
+
+  .page.page--weather {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 18px max(14px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .page-grid--weather {
+    height: auto !important;
+    min-height: 0 !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: none !important;
+    grid-template-areas:
+      "wind"
+      "alerts"
+      "weather"
+      "loc"
+      "map"
+      "nearby" !important;
+    align-content: start !important;
+    gap: 14px !important;
+  }
+
+  .page-grid--weather .wind-panel { grid-area: wind !important; min-height: 172px !important; }
+  .page-grid--weather .alerts-panel { grid-area: alerts !important; min-height: 210px !important; }
+  .page-grid--weather .wx-panel { grid-area: weather !important; min-height: 245px !important; }
+  .page-grid--weather .loc-panel { grid-area: loc !important; min-height: 214px !important; }
+  .page-grid--weather .map-panel { grid-area: map !important; min-height: 300px !important; }
+  .page-grid--weather .nearby-panel { grid-area: nearby !important; min-height: 190px !important; }
+
+  .page-grid--weather .cockpit-primary--conditions,
+  .page-grid--weather .cockpit-primary--conditions-full {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+
+  .page-grid--weather .cockpit-primary--motion {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .page-grid--weather .metric-tile {
+    min-height: 82px !important;
+    padding: 10px !important;
+  }
+
+  .page-grid--weather .metric-tile strong {
+    font-size: clamp(24px, 8.6vw, 34px) !important;
+    line-height: 1 !important;
+  }
+
+  .page-grid--weather .metric-tile span,
+  .page-grid--weather .metric-tile em {
+    font-size: clamp(9px, 2.65vw, 11px) !important;
+    line-height: 1.15 !important;
+  }
+
+  .page-grid--weather .conditions-strip {
+    position: static !important;
+    padding: 0 14px 14px !important;
+    font-size: clamp(14px, 4vw, 18px) !important;
+    white-space: nowrap;
+  }
+
+  .page-grid--weather .loc-head {
+    padding: 12px 14px 0 !important;
+  }
+
+  .page-grid--weather .loc-city {
+    font-size: clamp(24px, 8vw, 36px) !important;
+    letter-spacing: 0.03em !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .page-grid--weather .alert-list {
+    max-height: none !important;
+    min-height: 0 !important;
+  }
+
+  .page-grid--weather .calm-card {
+    min-height: 92px !important;
+  }
+
+  .page-grid--weather .view-all-button {
+    min-height: 58px !important;
+  }
+
+  .page-grid--weather .nearby-panel {
+    display: none !important;
+  }
+
+  .bottom-dock {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    padding: 7px !important;
+  }
+
+  .bottom-dock button {
+    grid-template-columns: minmax(0, 1fr) !important;
+    justify-items: center !important;
+    gap: 4px !important;
+    padding: 7px 4px !important;
+  }
+
+  .bottom-dock button svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  .bottom-dock button span {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: clamp(10px, 2.8vw, 13px) !important;
+    line-height: 1.05 !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (orientation: landscape) {
+  .page.page--weather {
+    overflow: hidden !important;
+  }
+
+  .page-grid--weather {
+    height: 100% !important;
+    min-height: 0 !important;
+    grid-template-columns: minmax(190px, 0.88fr) minmax(300px, 1.65fr) minmax(220px, 1fr) !important;
+    grid-template-rows: minmax(154px, 0.92fr) minmax(168px, 1.08fr) !important;
+    grid-template-areas:
+      "loc weather wind"
+      "alerts map nearby" !important;
+    gap: var(--cb-gap) !important;
+  }
+
+  .page-grid--weather .loc-panel { grid-area: loc !important; }
+  .page-grid--weather .wx-panel { grid-area: weather !important; }
+  .page-grid--weather .wind-panel { grid-area: wind !important; }
+  .page-grid--weather .alerts-panel { grid-area: alerts !important; }
+  .page-grid--weather .map-panel { grid-area: map !important; }
+  .page-grid--weather .nearby-panel { grid-area: nearby !important; }
+
+  .page-grid--weather .cockpit-primary--conditions,
+  .page-grid--weather .cockpit-primary--conditions-full {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    padding: 10px 12px 4px !important;
+  }
+
+  .page-grid--weather .metric-tile {
+    min-height: 76px !important;
+    padding: 8px 9px !important;
+  }
+
+  .page-grid--weather .metric-tile strong {
+    font-size: clamp(20px, 2.8vw, 34px) !important;
+    line-height: 1 !important;
+  }
+
+  .page-grid--weather .metric-tile span,
+  .page-grid--weather .metric-tile em {
+    font-size: clamp(8px, 1vw, 10px) !important;
+    line-height: 1.12 !important;
+  }
+
+  .page-grid--weather .loc-city {
+    font-size: clamp(18px, 2.15vw, 26px) !important;
+    line-height: 1 !important;
+    letter-spacing: 0.02em !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .page-grid--weather .loc-kicker {
+    font-size: clamp(8px, 0.95vw, 10px) !important;
+    line-height: 1 !important;
+  }
+
+  .page-grid--weather .loc-panel .cockpit-primary--motion {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    padding: 6px 12px 0 !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile {
+    min-height: 54px !important;
+    padding: 6px 7px !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile strong {
+    font-size: clamp(18px, 2.45vw, 28px) !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile span,
+  .page-grid--weather .loc-panel .metric-tile em {
+    font-size: clamp(8px, 0.95vw, 10px) !important;
+  }
+
+  .page-grid--weather .loc-panel .cb-note {
+    padding-inline: 12px !important;
+    font-size: clamp(8px, 1vw, 10px) !important;
+    line-height: 1.15 !important;
+  }
+
+  .page-grid--weather .loc-county,
+  .page-grid--weather .loc-head > .cb-badge,
+  .page-grid--weather .loc-footer,
+  .page-grid--weather .conditions-strip,
+  .page-grid--weather .wind-hero__reset-hint {
+    display: none !important;
+  }
+
+  .page-grid--weather .wind-hero {
+    padding: 9px 12px 0 !important;
+  }
+
+  .page-grid--weather .wind-panel.cockpit-card--chase .wind-hero__item strong,
+  .page-grid--weather .wind-panel.cockpit-card--normal .wind-hero__item strong {
+    font-size: clamp(20px, 2.65vw, 32px) !important;
+  }
+
+  .page-grid--weather .wind-toolbar {
+    min-height: 34px !important;
+    padding-inline: 12px !important;
+  }
+
+  .page-grid--weather .calm-card {
+    min-height: 82px !important;
+    padding: 12px !important;
+  }
+
+  .page-grid--weather .view-all-button {
+    min-height: 42px !important;
+  }
+
+  .page-grid--weather .nearby-panel .nearby-list,
+  .page-grid--weather .alert-list {
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 620px) {
+  :root {
+    --cb-header-h: clamp(58px, 11dvh, 68px);
+    --cb-dock-h: clamp(66px, 12dvh, 78px);
+    --cb-dots-h: 18px;
+    --cb-gap: 7px;
+    --top-h: var(--cb-header-h);
+    --dock-h: var(--cb-dock-h);
+    --gap: var(--cb-gap);
+  }
+
+  .app-shell {
+    padding: 5px 8px 5px !important;
+  }
+
+  .page-grid--weather {
+    grid-template-rows: minmax(128px, 0.9fr) minmax(144px, 1.1fr) !important;
+  }
+
+  .page-grid--weather .cb-panel__title {
+    min-height: 30px !important;
+    padding: 8px 11px !important;
+    font-size: 10px !important;
+  }
+
+  .page-grid--weather .metric-tile {
+    min-height: 58px !important;
+    padding: 7px !important;
+  }
+
+  .page-grid--weather .metric-tile strong {
+    font-size: clamp(18px, 2.55vw, 28px) !important;
+  }
+
+  .page-grid--weather .map-canvas {
+    min-height: 0 !important;
+  }
+}

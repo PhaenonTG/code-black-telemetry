@@ -25,7 +25,6 @@ import { LayerConfigPage } from "./components/situational/LayerConfigPage";
 import { SevereFlashOverlay } from "./components/SevereFlashOverlay";
 import { SpotterOnboardingPrompt } from "./components/SpotterOnboardingPrompt";
 import { WindCard } from "./components/situational/WindCard";
-import { WeatherGridSplitters } from "./components/situational/WeatherGridSplitters";
 import { useAlertProducts } from "./hooks/useAlertProducts";
 import { useSpcOutlook } from "./hooks/useSpcOutlook";
 import { useNearbyPlaces } from "./hooks/useNearbyPlaces";
@@ -272,7 +271,6 @@ export default function App() {
             <AlertsPanel products={alertProducts.products} error={alertProducts.error} />
             <MapRadarPanel gps={mapGps} visible={page === "weather"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} nearbyBest={nearby.places} compact allowExpand={false} />
             <NearbyPanel places={nearby.places} error={nearby.error} spotters={spotters.spotters} spottersError={spotters.error} />
-            <WeatherGridSplitters />
           </div>
         </section>
         <section className="page page--operations" aria-label="Operations">
