@@ -114,7 +114,15 @@ workflows:
           git commit -m "Publish AltStore source for iOS $VERSION [skip ci]"
           # Auth via an extraHeader instead of embedding the token in the remote URL, so it can't
           # end up in a printed "origin" URL if any later command errors and echoes it.
-          git -c http.https://github.com/.extraHeader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64)" \
-            push origin "HEAD:${CM_BRANCH:-master}"
+          AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64)"
+          BRANCH="${CM_BRANCH:-master}"
+          # Retries once on a non-fast-forward rejection (e.g. a second build finishing this same
+          # step around the same time) by rebasing this single altstore-source.json commit onto
+          # whatever landed on the branch in the meantime, rather than failing outright.
+          if ! git -c "http.https://github.com/.extraHeader=$AUTH_HEADER" push origin "HEAD:$BRANCH"; then
+            git -c "http.https://github.com/.extraHeader=$AUTH_HEADER" fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            git -c "http.https://github.com/.extraHeader=$AUTH_HEADER" push origin "HEAD:$BRANCH"
+          fi
     artifacts:
       - $CM_BUILD_DIR/CodeBlackOps-unsigned.ipa
