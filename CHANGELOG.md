@@ -4,6 +4,22 @@ All changes logged newest-first.
 
 ---
 
+## Cleanup Pass - 2026-08-08 - Capacitor Version Fix, AltStore File Sprawl, Dead CSS Class
+
+### Fixed
+- `@capacitor/core`/`@capacitor/android` version mismatch (core was resolving to 8.5.0 via `@capacitor/ios`'s own `^8.5.0` requirement while android stayed pinned to 8.4.2) -- bumped android to `^8.5.0` to match, rather than pinning core down (which would have broken the iOS plugin's requirement -- not an option now that AltStore builds actually work).
+- Consolidated 3 AltStore manifests down to the 1 the Codemagic pipeline actually maintains (`altstore-source.json`). `altstore-source-v2.json` was a byte-identical duplicate under a different self-referencing URL; `altstore-source-min.json` was a one-off manual diagnostic file never wired into the automated pipeline. Also removed a genuinely wasteful step from `codemagic.yaml`: it was still creating a GitHub Release and uploading the `.ipa` there every build, left over from before `downloadURL` moved to the git-committed `altstore/` path -- the release was created but nothing ever referenced it. Removed 4 stale/unreferenced `.ipa` files from `altstore/`, and added a prune step so the directory stops accumulating one more `.ipa` per build forever.
+- Renamed the internal CSS class `.threats-panel` to `.nearby-panel` across 4 grid-placement rules in `index.css` (traced each one's actual `@media` applicability the same way the earlier bottom-dock/row-split cascade tracing did) -- `NearbyPanel.tsx`'s JSX already carried `.nearby-panel` alongside it, so `.threats-panel` was a pure leftover from this card's "Storm Threats" predecessor. Also deleted 5 genuinely dead CSS rules (`.threats-panel .threat-card`/`.threat-list`/`.view-all-button`) confirmed to match zero elements.
+
+### Investigated, Confirmed Intentional (Not Changed)
+- Map card in-chrome status line: `compact` mode (Page 1's map rendering) is an explicit owner decision to show "mosaic + layer visibility only... no single-site radar UI at all" (comment in `AtlasMap.tsx`), and the mosaic layer doesn't expose freshness data to hook into anyway. Not a gap -- implementing this would override a deliberate simplification.
+
+### Not Done / Needs Follow-up
+- Operations page (Page 2) design-consistency audit is in progress as of this entry -- see the next changelog entry once it lands.
+- No physical-device screenshot validation for any of the above -- this pass ran in a cloud session with no ADB/physical-tablet access.
+
+---
+
 ## Alerts Detail/Countdown + Card Consistency Pass - 2026-08-08 - Live Expiration Countdown, Alert Wording, SourceBadge/Precision Fixes
 
 ### Added
