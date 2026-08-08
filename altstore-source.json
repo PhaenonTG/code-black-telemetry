@@ -1,0 +1,33 @@
+{
+  "name": "Code Black OPS AltStore Source",
+  "identifier": "com.codeblackwx.altstore-source",
+  "sourceURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/main/altstore-source.json",
+  "apps": [
+    {
+      "name": "Code Black OPS",
+      "bundleIdentifier": "com.codeblackwx.ops",
+      "developerName": "PhaenonTG",
+      "subtitle": "Storm chasing telemetry & radar",
+      "localizedDescription": "Code Black OPS: live radar, vehicle sensor telemetry (wind, temperature, power), and severe weather alerts for storm chasing.",
+      "iconURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/main/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",
+      "version": "0.0.0",
+      "versionDate": "2026-08-08T00:00:00Z",
+      "versionDescription": "Placeholder entry -- overwritten automatically by the Codemagic \"Publish GitHub Release for AltStore\" step on the next build.",
+      "downloadURL": "",
+      "size": 0,
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      },
+      "versions": [
+        {
+          "version": "0.0.0",
+          "date": "2026-08-08T00:00:00Z",
+          "localizedDescription": "Placeholder entry -- overwritten automatically by the Codemagic \"Publish GitHub Release for AltStore\" step on the next build.",
+          "downloadURL": "",
+          "size": 0
+        }
+      ]
+    }
+  ]
+}
