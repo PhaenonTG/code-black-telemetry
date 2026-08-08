@@ -4,6 +4,65 @@ All changes logged newest-first.
 
 ---
 
+## Wide-Area Mosaic as Default Radar (iOS Parity) - 2026-08-08
+
+Direct follow-up to the "Radar-on-iOS Investigation" pass below, per explicit direction: rather
+than build native iOS single-site radar (blocked on Mac/Xcode access this session doesn't have),
+make the wide-area mosaic layer -- already implemented, already zero-native-dependency -- the
+default radar view everywhere. It renders identically on Android and iOS today since it's a plain
+Mapbox GL raster source hitting a public HTTP tile endpoint, no Capacitor plugin involved.
+
+### Changed
+- `src/components/situational/Panels.tsx` -- `AtlasMapRadarPanel` (Weather-page compact card and
+  Locate-page full map both route through this) no longer drives single-site product/site/frame/
+  playback state. It now passes `frame={null}` and an inert `product="REF"` to `AtlasMap`, with
+  static status lines (`MOSAIC / NEXRAD N0Q COMPOSITE / LIVE`) -- the mosaic layer
+  (`AtlasMosaicLayer.ts`) is independently always-on via `layerVisibility.mosaic` and is now the
+  only radar imagery this view renders.
+- `RadarExpandedView` (the full-screen map modal) simplified to match: header now reads "Wide-Area
+  Mosaic / NEXRAD N0Q Composite Reflectivity - CONUS / LIVE", with only range-ring controls and
+  updated help text remaining. Removed product tabs, loop/scrub controls, tilt display, site
+  selector, and the storm-motion form from this view -- they were all single-site-product controls
+  with nothing left to control here.
+- Removed now-dead code from the same file: `defaultRadarOpacity()`, the single-site frame/
+  playback/site-selection state machine, and unused imports (`useMemo`, `ageText`,
+  `getNearestRadarSites`, `getRadarFrames`, `getRadarStatus`, `setRadarStormMotion`, the
+  `RadarFrame`/`RadarProduct`/`RadarSite`/`RadarStatus`/`RadarPlaybackSpeed` types, the
+  `buildFrameSeries`/`nextHistoricalIndex`/`nextPlaybackIndex`/`playbackDelayMs`/
+  `previousHistoricalIndex`/`writeRadarLoopDiagnostics` helpers from `radarLoop`, and the local
+  `localTime()` helper).
+- Removed the CSS that only styled that now-deleted UI from `src/index.css`: `.atlas-product-mini`
+  (self-contained block), `.radar-loop-control`/`.radar-loop-speed` (self-contained block), and
+  `.radar-product-tabs`/`.srv-motion-control` (surgically removed from 3 shared selector lists,
+  leaving the still-used siblings -- `.radar-expanded__controls button`, `.storm-motion-form
+  input`, etc. -- untouched). Confirmed zero remaining references with a full-source grep before
+  and after. Production CSS bundle shrank ~1.2 kB as a result.
+- `src/components/situational/LayerConfigPage.tsx` -- fixed stale mosaic layer description that
+  called it "animated on a loop" (leftover copy from a removed RainViewer-based implementation).
+  Now correctly describes it as auto-refreshing composite reflectivity and the default live view.
+
+### Preserved (explicit user requirement: "keep the zoom and movement stuff in place")
+- Camera/zoom/pan/follow-mode logic in `AtlasCameraController.ts` is untouched -- it was already
+  confirmed independent of which radar layer is active, and nothing in this pass touched it.
+- Range-ring controls preserved in both the compact and expanded map views.
+- Android on-device single-site decoding (REF/VEL/SRV/CC via the Rust/JNI native plugin) is fully
+  intact and unaffected: `services/radar.ts`, the Android native plugin, and the Operations page's
+  Radar Engine diagnostics card (`RadarEndpointPanel.tsx`, including its storm-motion-override
+  form) still exist and still work where the native decoder is present. This pass only changes
+  what the map *shows by default* -- it does not remove or disable the underlying capability.
+
+### Not Done / Needs Follow-up
+- This is a UI-default change, not a permanent architectural decision -- if/when native iOS
+  single-site radar gets built (see the investigation entry below for what that requires), the
+  product tabs/loop UI that was removed here would need to be reintroduced or redesigned to cover
+  both platforms consistently.
+- Not visually verified on a physical device or simulator (no Mac/Xcode/physical device in this
+  session) -- verified via `npm run lint`, `npm run build` (`tsc -b` + `vite build`, catches unused
+  imports since `noUnusedLocals: true`), and `npx cap sync android` only. Needs a real look on both
+  platforms before calling it done-done.
+
+---
+
 ## Radar-on-iOS Investigation + CSS Cascade Cleanup - 2026-08-08
 
 ### Investigated: Radar on iOS -- confirmed genuinely unimplemented, not fixed this pass

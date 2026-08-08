@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Panel, MetricTile } from "./Panel";
 import { SourceBadge } from "../ui/SourceBadge";
@@ -17,34 +17,7 @@ import type { AtlasRangeRingMode } from "../../map/types";
 import { sourceLabel, type CanonicalLocation } from "../../services/location";
 import { cardinalFromDeg, compactAge, mbToInHg, valueText } from "../../services/telemetry/quality";
 import { resolveWeatherWithFallback } from "../../services/telemetry/fallback";
-import {
-  ageText,
-  getNearestRadarSites,
-  getRadarFrames,
-  getRadarStatus,
-  setRadarStormMotion,
-  type RadarFrame,
-  type RadarProduct,
-  type RadarSite,
-  type RadarStatus,
-} from "../../services/radar";
-import {
-  buildFrameSeries,
-  nextHistoricalIndex,
-  nextPlaybackIndex,
-  playbackDelayMs,
-  previousHistoricalIndex,
-  writeRadarLoopDiagnostics,
-  type RadarPlaybackSpeed,
-} from "../../services/radarLoop";
 import type { CockpitMode } from "../../App";
-
-function localTime(value: string | number | null | undefined) {
-  if (!value) return "--";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--";
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
 
 export function LocationMotionPanel({ tabletPermission, location, mode }: { tabletPermission: string; location: CanonicalLocation; mode: CockpitMode }) {
   const valid = location.validity === "VALID" && location.latitude != null && location.longitude != null;
@@ -283,28 +256,14 @@ function ProductModal({ product, onClose }: { product: AlertProduct; onClose: ()
   );
 }
 
-function defaultRadarOpacity(product: RadarProduct) {
-  if (product === "REF") return 0.74;
-  if (product === "VEL" || product === "SRV") return 0.78;
-  if (product === "CC") return 0.7;
-  return 0.7;
-}
-
 type MapRadarPanelProps = {
   gps: { lat: number; lon: number; headingDeg: number | null; speedMph?: number | null; accuracyM?: number | null } | null;
   visible?: boolean;
   allowExpand?: boolean;
-  productOverride?: RadarProduct;
-  onProductOverrideChange?: (product: RadarProduct) => void;
-  frameOverride?: RadarFrame | null;
-  playbackContext?: { playing: boolean; frameIndex: number; frameCount: number };
   alerts?: AlertProduct[];
   spotters?: Spotter[];
   poiPlaces?: NearbyPlace[];
   nearbyBest?: Partial<Record<NearbyCategory, NearbyPlace>>;
-  // Weather-page card: owner asked to skip single-site radar entirely here (no product row, no
-  // fetch/decode work for it) and keep only the wide-area mosaic + a way to control layer
-  // visibility -- the full single-site toolbar only exists on the Locate page.
   compact?: boolean;
 };
 
@@ -317,160 +276,30 @@ export const MapRadarPanel = memo(function MapRadarPanel(props: MapRadarPanelPro
   return <AtlasMapRadarPanel {...props} />;
 });
 
+// Wide-area mosaic (NEXRAD N0Q composite reflectivity via Iowa Environmental Mesonet,
+// AtlasMosaicLayer.ts) is the default radar view everywhere now, not an underneath overlay for a
+// single-site product row -- it's plain HTTP raster tiles with zero native-plugin dependency, so
+// unlike REF/VEL/SRV/CC (Android-only, requires the on-device Rust/JNI decoder that doesn't exist
+// on iOS at all) it renders identically on both platforms. On-device single-site decoding remains
+// fully intact in services/radar.ts, the Android native plugin, and the Operations page's Radar
+// Engine diagnostics card -- this only changes what the map itself shows by default, not whether
+// that capability still exists. Product tabs, frame history/loop/scrub, site selection, and
+// storm-motion controls were removed from this view since they all belonged to the single-site
+// product this view no longer surfaces; camera/zoom/pan/follow-mode and range rings are untouched,
+// since AtlasCameraController never read which radar layer was active.
 function AtlasMapRadarPanel({
   gps,
   visible = true,
   allowExpand = true,
-  productOverride,
-  onProductOverrideChange,
-  frameOverride,
-  playbackContext,
   alerts = [],
   spotters = [],
   poiPlaces = [],
   nearbyBest = {},
   compact = false,
 }: MapRadarPanelProps) {
-  const [radarVisible, setRadarVisible] = useState(true);
-  const [internalProduct, setInternalProduct] = useState<RadarProduct>("REF");
-  const product = productOverride ?? internalProduct;
-  const setProduct = onProductOverrideChange ?? setInternalProduct;
-  const [site, setSite] = useState("AUTO");
-  const [nearestSites, setNearestSites] = useState<RadarSite[]>([]);
-  const [frame, setFrame] = useState<RadarFrame | null>(null);
-  const [frames, setFrames] = useState<RadarFrame[]>([]);
-  const [status, setStatus] = useState<RadarStatus | null>(null);
-  const [frameIndex, setFrameIndex] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState<RadarPlaybackSpeed>(1);
-  const [opacity, setOpacity] = useState(() => defaultRadarOpacity(product));
   const [rangeRings, setRangeRings] = useState<"off" | "10" | "25" | "50" | "100">("off");
   const [expanded, setExpanded] = useState(false);
-  const [radarError, setRadarError] = useState("");
-  const activeSite = site === "AUTO" ? nearestSites[0]?.id ?? "KSRX" : site;
-  const selectedTilt = status?.selectedTilt ?? 1;
-  const gpsLat = gps?.lat;
-  const gpsLon = gps?.lon;
-
-  useEffect(() => {
-    if (gpsLat == null || gpsLon == null || !visible || compact) return;
-    let cancelled = false;
-    getNearestRadarSites(gpsLat, gpsLon).then((sites) => {
-      if (!cancelled) setNearestSites(sites);
-    }).catch(() => {
-      if (!cancelled) setRadarError("ON-DEVICE SITE LIST UNAVAILABLE");
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [gpsLat, gpsLon, visible, compact]);
-
-  useEffect(() => {
-    if (!visible || !activeSite || compact) return;
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const [nextStatus, nextFrames] = await Promise.all([
-          getRadarStatus(activeSite, product, selectedTilt),
-          getRadarFrames(activeSite, product, selectedTilt, 6),
-        ]);
-        if (!cancelled) {
-          setStatus(nextStatus);
-          const orderedFrames = buildFrameSeries(product, nextFrames, null, "LIVE_EDGE", 1).frames.map((item) => item.frame);
-          setFrames(orderedFrames);
-          setFrameIndex(0);
-          setFrame(orderedFrames[0] ?? null);
-          setRadarError(orderedFrames[0] ? "" : nextStatus.latestError || "");
-          // Splash screen listens for this to know real radar data has actually loaded, not just
-          // that the request resolved -- harmless no-op once the splash has unmounted its listener.
-          if (orderedFrames[0]) window.dispatchEvent(new Event("codeblack:radar-first-frame"));
-        }
-      } catch (error) {
-        if (!cancelled) setRadarError(error instanceof Error ? error.message : "ON-DEVICE RADAR UNAVAILABLE");
-      }
-    };
-    void load();
-    const timer = window.setInterval(load, 90_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [activeSite, product, selectedTilt, visible]);
-
-  useEffect(() => {
-    if (!playing || !frames.length || document.hidden) return;
-    const timer = window.setInterval(() => {
-      setFrameIndex((index) => {
-        const next = nextPlaybackIndex(index, frames.length);
-        setFrame(frames[next]);
-        return next;
-      });
-    }, playbackDelayMs(playbackSpeed));
-    return () => window.clearInterval(timer);
-  }, [playing, frames, playbackSpeed]);
-
-  const displayFrame = frameOverride === undefined ? frame : frameOverride;
-  const activeFrame = displayFrame ?? frame;
-  const loopSeries = useMemo(
-    () => buildFrameSeries(product, frames, activeFrame?.frameId ?? null, playing ? "PLAYING" : "PAUSED", playbackSpeed),
-    [activeFrame?.frameId, frames, playbackSpeed, playing, product],
-  );
-
-  useEffect(() => {
-    writeRadarLoopDiagnostics({
-      loopEnabled: playing,
-      playbackState: loopSeries.playbackState,
-      playbackSpeed,
-      selectedProduct: product,
-      frameCount: loopSeries.frames.length,
-      activeFrameIndex: loopSeries.activeFrameIndex,
-      newestScanTimestamp: loopSeries.frames[0]?.scanTimestamp ?? null,
-      oldestScanTimestamp: loopSeries.frames[loopSeries.frames.length - 1]?.scanTimestamp ?? null,
-      activeScanTimestamp: activeFrame?.time ?? null,
-      activeFrameAgeSeconds: activeFrame?.ageSeconds ?? null,
-      liveEdge: loopSeries.liveEdge,
-      cacheDirectory: "APP_PRIVATE_RADAR_CACHE",
-      cacheDiskUsageBytes: null,
-      objectUrlCount: 0,
-      imageLoadRequestId: 0,
-      sourceUpdateCount: 0,
-      staleUpdateRejectionCount: 0,
-      activeTextureEstimateBytes: activeFrame?.imageUrl ? null : 0,
-      lastPlaybackError: radarError,
-      lastCacheError: "",
-      skippedInvalidFrames: loopSeries.frames.filter((item) => item.validityState !== "VALID").length,
-      updatedAt: Date.now(),
-    });
-  }, [activeFrame, frames, loopSeries, playbackSpeed, playing, product, radarError]);
-
-  const applyProduct = (next: RadarProduct) => {
-    setProduct(next);
-    setOpacity(defaultRadarOpacity(next));
-    setPlaying(false);
-    setFrame(null);
-    setFrames([]);
-    setFrameIndex(0);
-    setRadarError("");
-    if (next === "SRV" && !status?.stormMotion) setRadarError("SRV UNAVAILABLE - SET STORM MOTION");
-  };
-
-  const radarLayerActive = radarVisible && activeFrame && !radarError.includes("UNAVAILABLE");
-  // Belt-and-suspenders: don't trust loopSeries.liveEdge alone (it only means "newest frame we
-  // have locally," which can still be hours old if the native cache never re-checked S3) — also
-  // verify the frame's own absolute scan time is actually recent before ever labeling it LIVE.
-  // 900s (15 min): NEXRAD volumes land roughly every 5-10 min, plus upload/download/decode
-  // latency — this gives a realistic margin without ever calling truly stale data "LIVE".
-  const frameAgeSeconds = activeFrame ? (Date.now() - new Date(activeFrame.time).getTime()) / 1000 : null;
-  const liveState = loopSeries.liveEdge && frameAgeSeconds != null && frameAgeSeconds < 900 ? "LIVE" : "CACHED";
-  // Owner: "no way of knowing if what I'm seeing is from 2 weeks ago or 2 mins ago" -- LIVE/CACHED
-  // alone doesn't say how old "cached" actually is, so the scan age is always shown alongside it,
-  // not just in the expanded radar view (which already had AGE via this same ageText helper).
-  const freshnessLine = frameAgeSeconds != null ? `${liveState} - SCAN ${ageText(Math.round(frameAgeSeconds))} AGO` : liveState;
-  const mapStatusLines = radarError
-    ? [activeSite, radarError]
-    : activeFrame
-      ? [activeFrame.site.id, product, playbackContext?.playing ? `LOOP ${playbackContext.frameIndex + 1}/${playbackContext.frameCount}` : freshnessLine]
-      : [activeSite, product, "LOADING"];
+  const mapStatusLines = ["MOSAIC", "NEXRAD N0Q COMPOSITE", "LIVE"];
 
   return (
     <Panel title="Situational Map" className="map-panel map-panel--atlas">
@@ -478,9 +307,9 @@ function AtlasMapRadarPanel({
         <Suspense fallback={<div className="atlas-map-loading">LOADING MAP ENGINE</div>}>
           <AtlasMap
             gps={gps}
-            frame={radarLayerActive ? activeFrame : null}
-            product={product}
-            opacity={opacity}
+            frame={null}
+            product="REF"
+            opacity={0.75}
             expanded={!allowExpand && !compact}
             active={visible}
             rangeRings={rangeRings}
@@ -495,40 +324,12 @@ function AtlasMapRadarPanel({
           />
         </Suspense>
       </div>
-      {!compact && (
-        <div className="atlas-product-mini" aria-label="Radar product selector">
-          {(["REF", "VEL", "SRV", "CC"] as RadarProduct[]).map((item) => (
-            <button key={item} className={item === product ? "active" : ""} onClick={() => applyProduct(item)}>{item}</button>
-          ))}
-          <button onClick={() => setRadarVisible((value) => !value)}>{radarVisible ? "RADAR ON" : "RADAR OFF"}</button>
-        </div>
-      )}
       {allowExpand && expanded && typeof document !== "undefined" && createPortal(
         <RadarExpandedView
           active={expanded}
           gps={gps}
-          product={product}
-          setProduct={applyProduct}
-          site={site}
-          setSite={setSite}
-          nearestSites={nearestSites}
-          frame={frame}
-          frames={frames}
-          frameIndex={frameIndex}
-          setFrameIndex={(index) => {
-            setFrameIndex(index);
-            setFrame(frames[index] ?? frame);
-          }}
-          playing={playing}
-          setPlaying={setPlaying}
-          playbackSpeed={playbackSpeed}
-          setPlaybackSpeed={setPlaybackSpeed}
-          opacity={opacity}
-          setOpacity={setOpacity}
           rangeRings={rangeRings}
-          setRangeRings={(mode) => setRangeRings(mode)}
-          radarError={radarError}
-          status={status}
+          setRangeRings={setRangeRings}
           onClose={() => setExpanded(false)}
         />,
         document.body,
@@ -540,65 +341,16 @@ function AtlasMapRadarPanel({
 function RadarExpandedView({
   active,
   gps,
-  product,
-  setProduct,
-  site,
-  setSite,
-  nearestSites,
-  frame,
-  frames,
-  frameIndex,
-  setFrameIndex,
-  playing,
-  setPlaying,
-  playbackSpeed,
-  setPlaybackSpeed,
-  opacity,
-  setOpacity,
   rangeRings,
   setRangeRings,
-  radarError,
-  status,
   onClose,
 }: {
   active: boolean;
   gps: { lat: number; lon: number; headingDeg: number | null } | null;
-  product: RadarProduct;
-  setProduct: (product: RadarProduct) => void;
-  site: string;
-  setSite: (site: string) => void;
-  nearestSites: RadarSite[];
-  frame: RadarFrame | null;
-  frames: RadarFrame[];
-  frameIndex: number;
-  setFrameIndex: (index: number) => void;
-  playing: boolean;
-  setPlaying: (playing: boolean) => void;
-  playbackSpeed: RadarPlaybackSpeed;
-  setPlaybackSpeed: (speed: RadarPlaybackSpeed) => void;
-  opacity: number;
-  setOpacity: (opacity: number) => void;
   rangeRings: AtlasRangeRingMode;
   setRangeRings: (rings: AtlasRangeRingMode) => void;
-  radarError: string;
-  status: RadarStatus | null;
   onClose: () => void;
 }) {
-  const [motionDir, setMotionDir] = useState("245");
-  const [motionSpeed, setMotionSpeed] = useState("32");
-  const [motionMessage, setMotionMessage] = useState("");
-  const selectedSite = site === "AUTO" ? nearestSites[0]?.id ?? "KSRX" : site;
-  const loopSeries = useMemo(
-    () => buildFrameSeries(product, frames, frame?.frameId ?? null, playing ? "PLAYING" : "PAUSED", playbackSpeed),
-    [frame?.frameId, frames, playbackSpeed, playing, product],
-  );
-
-  const selectFrame = (index: number, pause = true) => {
-    const bounded = Math.min(Math.max(index, 0), Math.max(0, frames.length - 1));
-    if (pause) setPlaying(false);
-    setFrameIndex(bounded);
-  };
-
   useEffect(() => {
     if (!active) return;
     const close = () => onClose();
@@ -615,94 +367,26 @@ function RadarExpandedView({
     };
   }, [active, onClose]);
 
-  const applyMotion = async () => {
-    const motion = await setRadarStormMotion({ directionDegrees: Number(motionDir), speedKnots: Number(motionSpeed), source: "MANUAL" });
-    setMotionMessage(`${Math.round(motion.directionDegrees)} deg at ${Math.round(motion.speedKnots)} kt  - ${motion.source}`);
-  };
-
   return (
     <div className={`modal-backdrop radar-expanded ${active ? "radar-expanded--active" : ""}`} role="dialog" aria-modal="true" aria-hidden={!active} aria-label="Expanded radar interrogation">
       <div className="radar-expanded__shell">
         <header className="radar-expanded__top">
           <button className="icon-button radar-expanded__close" onClick={onClose} aria-label="Close radar">X</button>
-          <strong>{frame ? `${frame.site.id}  - ${frame.site.name}` : selectedSite}</strong>
-          <span>{product}  - {frame?.sourceLevel ?? status?.sourceLevel ?? "RADAR"}  - {frame ? `SCAN ${localTime(frame.time)}  - AGE ${ageText(frame.ageSeconds)}` : "LOADING"}</span>
-          <em>{radarError || (loopSeries.liveEdge ? "LIVE EDGE" : frame ? "HISTORICAL" : "CONNECTED")}</em>
+          <strong>Wide-Area Mosaic</strong>
+          <span>NEXRAD N0Q Composite Reflectivity - CONUS</span>
+          <em>LIVE</em>
         </header>
-        <div className="radar-product-tabs">
-          {(["REF", "VEL", "SRV", "CC"] as RadarProduct[]).map((item) => (
-            <button key={item} className={item === product ? "active" : ""} onClick={() => setProduct(item)}>{item}</button>
-          ))}
-        </div>
         <div className="radar-expanded__map">
-          <MapRadarPanel
-            gps={gps}
-            visible
-            allowExpand={false}
-            productOverride={product}
-            onProductOverrideChange={setProduct}
-            frameOverride={frame}
-            playbackContext={{ playing, frameIndex, frameCount: frames.length }}
-          />
-          <div className="radar-expanded__overlay-note">{frame ? `${frame.product} ${frame.sourceLevel}  - ${loopSeries.liveEdge ? "LIVE EDGE" : "HISTORICAL"}  - ${localTime(frame.time)}  - ${frameIndex + 1}/${Math.max(frames.length, 1)}` : radarError || "Waiting for radar frame"}</div>
+          <MapRadarPanel gps={gps} visible allowExpand={false} />
+          <div className="radar-expanded__overlay-note">National composite reflectivity, auto-refreshing every few minutes.</div>
         </div>
         <aside className="radar-expanded__controls">
-          <div className="radar-loop-control">
-            <span>Loop</span>
-            <button onClick={() => setPlaying(!playing)}>{playing ? "Pause" : "Play"}</button>
-            <button onClick={() => selectFrame(previousHistoricalIndex(frameIndex, frames.length))}>Prev</button>
-            <button onClick={() => selectFrame(nextHistoricalIndex(frameIndex, frames.length))}>Next</button>
-            <button onClick={() => selectFrame(0)}>Latest</button>
-            <input
-              type="range"
-              min="0"
-              max={Math.max(0, frames.length - 1)}
-              value={Math.max(0, frameIndex)}
-              onChange={(event) => selectFrame(Number(event.target.value))}
-              aria-label="Radar frame timeline"
-            />
-            <strong>{frames.length ? `${frameIndex + 1} / ${frames.length}` : "0 / 0"}</strong>
-            <em>{loopSeries.playbackState.replace("_", " ")}</em>
-            <div className="radar-loop-speed">
-              {([0.5, 1, 2] as RadarPlaybackSpeed[]).map((speed) => (
-                <button key={speed} className={playbackSpeed === speed ? "active" : ""} onClick={() => setPlaybackSpeed(speed)}>{speed}x</button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <span>Tilt</span>
-            <strong>{`${frame?.elevationAngle?.toFixed(1) ?? "--"} deg`}</strong>
-            <em>{frame?.availableTilts?.length ? `${frame.availableTilts.length} cuts` : "No cuts"}</em>
-          </div>
-          <div>
-            <span>Site</span>
-            <button onClick={() => setSite("AUTO")}>AUTO</button>
-            <button onClick={() => setSite(nearestSites[Math.max(0, nearestSites.findIndex((item) => item.id === selectedSite) - 1)]?.id ?? selectedSite)}>Prev</button>
-            <button onClick={() => setSite(nearestSites[(nearestSites.findIndex((item) => item.id === selectedSite) + 1) % Math.max(1, nearestSites.length)]?.id ?? selectedSite)}>Next</button>
-            <select value={site} onChange={(event) => setSite(event.target.value)}>
-              <option value="AUTO">AUTO nearest</option>
-              {nearestSites.map((item) => <option key={item.id} value={item.id}>{item.id}  - {item.name}</option>)}
-            </select>
-          </div>
-          <label>
-            <span>Opacity</span>
-            <input type="range" min="0.25" max="0.9" step="0.05" value={opacity} onChange={(event) => setOpacity(Number(event.target.value))} />
-          </label>
           <div>
             <span>Range rings</span>
             {(["off", "10", "25", "50", "100"] as const).map((value) => <button key={value} className={rangeRings === value ? "active" : ""} onClick={() => setRangeRings(value)}>{value === "off" ? "Off" : `${value} nm`}</button>)}
           </div>
-          {product === "SRV" && (
-            <div className="srv-motion-control">
-              <span>Storm motion</span>
-              <input value={motionDir} onChange={(event) => setMotionDir(event.target.value)} inputMode="numeric" aria-label="Storm motion degrees" />
-              <input value={motionSpeed} onChange={(event) => setMotionSpeed(event.target.value)} inputMode="numeric" aria-label="Storm motion knots" />
-              <button onClick={applyMotion}>Apply</button>
-              <em>{motionMessage || status?.stormMotion ? `${status?.stormMotion?.directionDegrees ?? motionDir} deg at ${status?.stormMotion?.speedKnots ?? motionSpeed} kt` : "SRV unavailable until set"}</em>
-            </div>
-          )}
           <div className="radar-help">
-            Level II radial data is decoded on this tablet for REF, VEL, SRV, and CC. No laptop, Pi, or LAN radar worker is required. Level III products are deferred.
+            Situational awareness view: national composite reflectivity (NEXRAD N0Q via Iowa Environmental Mesonet), refreshed automatically -- no laptop, Pi, or LAN radar worker required. On-device single-site Level II decoding (REF/VEL/SRV/CC) remains available on Android but isn't the default view for now.
           </div>
         </aside>
       </div>

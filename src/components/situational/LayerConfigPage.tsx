@@ -21,7 +21,7 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description:
   {
     key: "mosaic",
     label: "Wide-Area Mosaic",
-    description: "National radar composite, animated on a loop -- broad situational context alongside the single-site radar.",
+    description: "National NEXRAD composite reflectivity, auto-refreshing every few minutes -- the default live radar view on the map.",
   },
   {
     key: "alerts",

@@ -285,18 +285,9 @@
   font-size: 11px;
 }
 
-.radar-product-tabs {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.radar-product-tabs button,
 .radar-expanded__controls button,
 .storm-motion-form button,
 .storm-motion-form input,
-.srv-motion-control input,
 .radar-expanded__controls select {
   border: 1px solid rgba(255, 255, 255, 0.1);
   clip-path: var(--cut);
@@ -308,7 +299,6 @@
   font: 900 11px / 1 "JetBrains Mono", Consolas, monospace;
 }
 
-.radar-product-tabs button.active,
 .radar-expanded__controls button.active {
   border-color: rgba(255, 45, 53, 0.7);
   color: var(--cb-red);
@@ -365,41 +355,6 @@
   text-transform: uppercase;
 }
 
-.radar-loop-control {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: center;
-}
-
-.radar-loop-control > span,
-.radar-loop-control > input,
-.radar-loop-control > strong,
-.radar-loop-control > em,
-.radar-loop-speed {
-  grid-column: 1 / -1;
-}
-
-.radar-loop-control input[type="range"] {
-  width: 100%;
-  accent-color: var(--cb-red);
-}
-
-.radar-loop-control strong,
-.radar-loop-control em {
-  color: var(--cb-text);
-  font: 900 10px / 1.2 "JetBrains Mono", Consolas, monospace;
-  text-transform: uppercase;
-}
-
-.radar-loop-control em {
-  color: var(--cb-amber);
-}
-
-.radar-loop-speed {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
-}
-
 .radar-help {
   color: var(--cb-muted);
   font: 700 11px / 1.35 "JetBrains Mono", Consolas, monospace;
@@ -439,7 +394,6 @@ body.radar-expanded-active {
 }
 
 .radar-expanded__top,
-.radar-product-tabs,
 .radar-expanded__controls,
 .radar-expanded__overlay-note {
   z-index: var(--z-expanded-radar-controls);
@@ -2354,29 +2308,6 @@ button {
 
 .atlas-map-status {
   z-index: 12 !important;
-}
-
-.atlas-product-mini {
-  display: flex;
-  gap: 6px;
-  padding: 0 10px 10px;
-  margin-top: -2px;
-}
-
-.atlas-product-mini button {
-  min-height: 28px;
-  min-width: 46px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: var(--cb-radius, 6px);
-  background: rgba(0, 0, 0, 0.54);
-  color: var(--secondary);
-  font: 900 10px / 1 "JetBrains Mono", Consolas, monospace;
-}
-
-.atlas-product-mini button.active {
-  color: var(--cb-red);
-  border-color: rgba(255, 45, 53, 0.56);
-  background: rgba(255, 45, 53, 0.15);
 }
 
 /* FINAL INTEGRATION QUALITY OVERRIDES */
