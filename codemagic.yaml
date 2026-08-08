@@ -112,10 +112,13 @@ workflows:
              | .apps[0].versions = [{version: $v, date: $d, localizedDescription: ("Automated Codemagic build " + $v), downloadURL: $u, size: $s}]' \
             altstore-source.json > altstore-source.json.tmp
           mv altstore-source.json.tmp altstore-source.json
+          jq --arg u "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/$BRANCH/altstore-source-v2.json" \
+            '.sourceURL = $u' \
+            altstore-source.json > altstore-source-v2.json
 
           git config user.email "codemagic-ci@codeblackwx.local"
           git config user.name "Codemagic CI"
-          git add altstore-source.json "altstore/CodeBlackOps-$VERSION.ipa"
+          git add altstore-source.json altstore-source-v2.json "altstore/CodeBlackOps-$VERSION.ipa"
           git commit -m "Publish AltStore source for iOS $VERSION [skip ci]"
           # Auth via an extraHeader instead of embedding the token in the remote URL, so it can't
           # end up in a printed "origin" URL if any later command errors and echoes it.
