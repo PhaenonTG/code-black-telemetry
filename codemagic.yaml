@@ -30,6 +30,13 @@ workflows:
       # Developer account, certificate, or provisioning profile involved anywhere in this build.
       - name: Archive without code signing
         script: |
+          # Derived from HEAD's commit timestamp rather than $CM_ENV or the wall clock: it must come
+          # out byte-identical here and in the "Publish GitHub Release for AltStore" step below (two
+          # separate script processes, no shared state), and AltStore rejects an install if the
+          # .ipa's embedded CFBundleShortVersionString doesn't exactly match the "version" the source
+          # manifest claims (VerificationError 4). The commit timestamp is fixed for the life of the
+          # build, so recomputing it in each step always agrees.
+          VERSION="$(date -u -r "$(git log -1 --format=%ct)" +%Y.%m%d.%H%M)"
           cd ios/App
           xcodebuild archive \
             -project App.xcodeproj \
@@ -38,6 +45,7 @@ workflows:
             -archivePath "$CM_BUILD_DIR/App.xcarchive" \
             -destination 'generic/platform=iOS' \
             -sdk iphoneos \
+            MARKETING_VERSION="$VERSION" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -67,12 +75,11 @@ workflows:
           set -euo pipefail
           REPO="PhaenonTG/code-black-telemetry"
           IPA_PATH="$CM_BUILD_DIR/CodeBlackOps-unsigned.ipa"
-          # Derived from a UTC timestamp rather than the Xcode project's MARKETING_VERSION so it
-          # always increases without anyone having to remember to bump the Xcode version per build
-          # -- AltStore only offers an "Update" when the source's version string is newer. (Not
-          # git rev-list --count: Codemagic's default clone is shallow, so that count would be
-          # stuck at 1 on every build.)
-          VERSION="1.0.$(date -u +%Y%m%d%H%M)"
+          # Same derivation as the "Archive without code signing" step above -- recomputed
+          # independently here (not passed via $CM_ENV, which didn't reliably propagate between
+          # these script steps) but always comes out identical since it's based on HEAD's fixed
+          # commit timestamp rather than wall-clock time.
+          VERSION="$(date -u -r "$(git log -1 --format=%ct)" +%Y.%m%d.%H%M)"
           TAG="ios-$VERSION"
           VERSION_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           IPA_SIZE="$(stat -f%z "$IPA_PATH")"
@@ -107,7 +114,15 @@ workflows:
           git commit -m "Publish AltStore source for iOS $VERSION [skip ci]"
           # Auth via an extraHeader instead of embedding the token in the remote URL, so it can't
           # end up in a printed "origin" URL if any later command errors and echoes it.
-          git -c http.https://github.com/.extraHeader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64)" \
-            push origin "HEAD:${CM_BRANCH:-master}"
+          AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64)"
+          BRANCH="${CM_BRANCH:-master}"
+          # Retries once on a non-fast-forward rejection (e.g. a second build finishing this same
+          # step around the same time) by rebasing this single altstore-source.json commit onto
+          # whatever landed on the branch in the meantime, rather than failing outright.
+          if ! git -c "http.https://github.com/.extraHeader=$AUTH_HEADER" push origin "HEAD:$BRANCH"; then
+            git -c "http.https://github.com/.extraHeader=$AUTH_HEADER" fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            git -c "http.https://github.com/.extraHeader=$AUTH_HEADER" push origin "HEAD:$BRANCH"
+          fi
     artifacts:
       - $CM_BUILD_DIR/CodeBlackOps-unsigned.ipa
