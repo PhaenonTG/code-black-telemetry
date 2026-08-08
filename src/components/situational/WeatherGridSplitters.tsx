@@ -17,8 +17,10 @@ function getGrid(): HTMLElement | null {
 // blocks there. Keeping this in one place means a drag can never leave the grid reading a
 // different value than what's actually driving layout.
 function applyLayoutToGrid(grid: HTMLElement, layout: WeatherGridLayout) {
-  grid.style.setProperty("--wx-col-left", String(layout.colSplitLeft));
-  grid.style.setProperty("--wx-col-right", String(layout.colSplitRight));
+  grid.style.setProperty("--wx-row1-col-left", String(layout.row1ColSplitLeft));
+  grid.style.setProperty("--wx-row1-col-right", String(layout.row1ColSplitRight));
+  grid.style.setProperty("--wx-row2-col-left", String(layout.row2ColSplitLeft));
+  grid.style.setProperty("--wx-row2-col-right", String(layout.row2ColSplitRight));
   grid.style.setProperty("--wx-row-split", `${layout.rowSplit}fr`);
   grid.style.setProperty("--wx-row-split-inv", `${100 - layout.rowSplit}fr`);
   layout.portraitHeights.forEach((h, i) => {
@@ -47,9 +49,15 @@ interface HandleProps {
   onMove: (fraction: number) => void;
   onEnd: () => void;
   ariaLabel: string;
+  // For "x" handles only: constrains the handle to one row's vertical extent instead of the full
+  // grid height, since row1 and row2 now have independent column splits -- without this, a single
+  // vertical line spanning both rows would visually suggest it moves both rows' cards together,
+  // which is no longer true.
+  rowTopPercent?: number;
+  rowHeightPercent?: number;
 }
 
-function SplitterHandle({ axis, positionPercent, onMove, onEnd, ariaLabel }: HandleProps) {
+function SplitterHandle({ axis, positionPercent, onMove, onEnd, ariaLabel, rowTopPercent, rowHeightPercent }: HandleProps) {
   const dragHandlers = useGridSplitter({ getContainer: getGrid, axis, onMove, onEnd });
   // Pure visual overlay, not real grid content -- position: absolute against the grid container
   // (made position: relative in index.css) rather than participating in grid placement, since
@@ -57,7 +65,15 @@ function SplitterHandle({ axis, positionPercent, onMove, onEnd, ariaLabel }: Han
   // want here.
   const style: React.CSSProperties =
     axis === "x"
-      ? { position: "absolute", left: `${positionPercent}%`, top: 0, bottom: 0, width: 44, marginLeft: -22 }
+      ? {
+          position: "absolute",
+          left: `${positionPercent}%`,
+          top: rowTopPercent != null ? `${rowTopPercent}%` : 0,
+          height: rowHeightPercent != null ? `${rowHeightPercent}%` : undefined,
+          bottom: rowHeightPercent != null ? undefined : 0,
+          width: 44,
+          marginLeft: -22,
+        }
       : { position: "absolute", top: `${positionPercent}%`, left: 0, right: 0, height: 44, marginTop: -22 };
   return (
     <div
@@ -112,17 +128,39 @@ export function WeatherGridSplitters() {
       <>
         <SplitterHandle
           axis="x"
-          positionPercent={layout.colSplitLeft}
-          onMove={(fraction) => applyLive({ colSplitLeft: fraction * 100 })}
+          positionPercent={layout.row1ColSplitLeft}
+          rowTopPercent={0}
+          rowHeightPercent={layout.rowSplit}
+          onMove={(fraction) => applyLive({ row1ColSplitLeft: fraction * 100 })}
           onEnd={commit}
-          ariaLabel="Resize Location/Alerts column"
+          ariaLabel="Resize Location/Conditions column"
         />
         <SplitterHandle
           axis="x"
-          positionPercent={layout.colSplitRight}
-          onMove={(fraction) => applyLive({ colSplitRight: fraction * 100 })}
+          positionPercent={layout.row1ColSplitRight}
+          rowTopPercent={0}
+          rowHeightPercent={layout.rowSplit}
+          onMove={(fraction) => applyLive({ row1ColSplitRight: fraction * 100 })}
           onEnd={commit}
-          ariaLabel="Resize Wind/Nearby column"
+          ariaLabel="Resize Conditions/Wind column"
+        />
+        <SplitterHandle
+          axis="x"
+          positionPercent={layout.row2ColSplitLeft}
+          rowTopPercent={layout.rowSplit}
+          rowHeightPercent={100 - layout.rowSplit}
+          onMove={(fraction) => applyLive({ row2ColSplitLeft: fraction * 100 })}
+          onEnd={commit}
+          ariaLabel="Resize Alerts/Map column"
+        />
+        <SplitterHandle
+          axis="x"
+          positionPercent={layout.row2ColSplitRight}
+          rowTopPercent={layout.rowSplit}
+          rowHeightPercent={100 - layout.rowSplit}
+          onMove={(fraction) => applyLive({ row2ColSplitRight: fraction * 100 })}
+          onEnd={commit}
+          ariaLabel="Resize Map/Nearby column"
         />
         <SplitterHandle
           axis="y"

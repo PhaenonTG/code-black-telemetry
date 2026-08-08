@@ -4429,15 +4429,19 @@ body {
 
   /* This is the single source of truth for the Weather page's landscape 6-card grid, following
      the 2026-08-07 dead-duplicate cleanup (see the note near "REFERENCE MATCH CASCADE LOCK"
-     earlier in this file). Column/row split points come from --wx-col-left/--wx-col-right/
-     --wx-row-split/--wx-row-split-inv custom properties (defaulted just below, overwritten live
-     by the draggable-splitter feature in WeatherGridSplitters.tsx) instead of hardcoded numbers,
-     so there is exactly one place that ever sets these 6 selectors' placement in landscape. Both
-     rows deliberately share the same column split (Location=Alerts, Conditions=Map, Wind=Threats)
-     so the page reads as one aligned grid, not two independently-proportioned rows. */
+     earlier in this file). Column/row split points come from --wx-row1-col-left/--wx-row1-col-right/
+     --wx-row2-col-left/--wx-row2-col-right/--wx-row-split/--wx-row-split-inv custom properties
+     (defaulted just below, overwritten live by the draggable-splitter feature in
+     WeatherGridSplitters.tsx) instead of hardcoded numbers, so there is exactly one place that ever
+     sets these 6 selectors' placement in landscape. The two rows each have their own independent
+     column split (row1: Location/Conditions/Wind, row2: Alerts/Map/Nearby) -- both rows share the
+     same 100-column track definition below, but each row's 3 cards are free to divide it
+     differently, since grid-area col-start/col-end is per-item, not shared across rows. */
   .page-grid--weather {
-    --wx-col-left: 26;
-    --wx-col-right: 73;
+    --wx-row1-col-left: 26;
+    --wx-row1-col-right: 73;
+    --wx-row2-col-left: 26;
+    --wx-row2-col-right: 73;
     --wx-row-split: 40fr;
     --wx-row-split-inv: 60fr;
     width: 100% !important;
@@ -4448,12 +4452,12 @@ body {
     gap: var(--cb-gap) !important;
   }
 
-  .loc-panel     { grid-area: 1 / 1                  / 2 / var(--wx-col-left)   !important; }
-  .wx-panel      { grid-area: 1 / var(--wx-col-left) / 2 / var(--wx-col-right)  !important; }
-  .wind-panel    { grid-area: 1 / var(--wx-col-right)/ 2 / 101                  !important; }
-  .alerts-panel  { grid-area: 2 / 1                  / 3 / var(--wx-col-left)   !important; }
-  .map-panel     { grid-area: 2 / var(--wx-col-left) / 3 / var(--wx-col-right)  !important; }
-  .threats-panel { grid-area: 2 / var(--wx-col-right)/ 3 / 101                  !important; }
+  .loc-panel     { grid-area: 1 / 1                       / 2 / var(--wx-row1-col-left)  !important; }
+  .wx-panel      { grid-area: 1 / var(--wx-row1-col-left) / 2 / var(--wx-row1-col-right) !important; }
+  .wind-panel    { grid-area: 1 / var(--wx-row1-col-right)/ 2 / 101                       !important; }
+  .alerts-panel  { grid-area: 2 / 1                       / 3 / var(--wx-row2-col-left)  !important; }
+  .map-panel     { grid-area: 2 / var(--wx-row2-col-left) / 3 / var(--wx-row2-col-right) !important; }
+  .threats-panel { grid-area: 2 / var(--wx-row2-col-right)/ 3 / 101                       !important; }
 
   .bottom-dock {
     width: 100% !important;

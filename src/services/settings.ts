@@ -458,27 +458,36 @@ export function subscribeMapLayerVisibility(listener: (visibility: MapLayerVisib
   };
 }
 
-// Lets the owner drag-resize the Weather page's card grid (landscape: 2 vertical + 1 horizontal
+// Lets the owner drag-resize the Weather page's card grid (landscape: 4 vertical + 1 horizontal
 // splitter; portrait: 5 row-height splitters between the single-column stack of 6 cards) instead
 // of the proportions being permanently hardcoded in index.css. Values are the same units already
-// used by the grid itself -- colSplitLeft/colSplitRight are column-index cut points on the
+// used by the grid itself -- the row*ColSplitLeft/Right fields are column-index cut points on the
 // existing 100-column landscape grid, rowSplit is the top row's height as a percent of the grid,
 // and portraitHeights are each of the 6 stacked cards' own height as a percent of the total stack
 // (6 heights, not 5 -- there are 5 *dividers* between 6 cards, but every card still needs its own
 // height value). Clamping every field on load/save/live-drag (not just on save) is the actual
 // "can't end up in a broken state" mechanism -- a card can never be dragged, or loaded from a
 // corrupt/stale preference, narrower or shorter than its readable floor.
+//
+// The two rows each get their own independent column split (row1: Location/Conditions/Wind, row2:
+// Alerts/Map/Nearby) rather than sharing one -- widening Location no longer forces Alerts to widen
+// underneath it. Each row's own 3 cards still sum to 100% of that row's width, so nothing overlaps
+// or leaves a gap within a row; only the two rows are decoupled from each other.
 export interface WeatherGridLayout {
-  colSplitLeft: number;
-  colSplitRight: number;
+  row1ColSplitLeft: number;
+  row1ColSplitRight: number;
+  row2ColSplitLeft: number;
+  row2ColSplitRight: number;
   rowSplit: number;
   portraitHeights: [number, number, number, number, number, number];
 }
 
 const WEATHER_GRID_LAYOUT_KEY = "codeblack.weatherGridLayout";
 export const DEFAULT_WEATHER_GRID_LAYOUT: WeatherGridLayout = {
-  colSplitLeft: 26,
-  colSplitRight: 73,
+  row1ColSplitLeft: 26,
+  row1ColSplitRight: 73,
+  row2ColSplitLeft: 26,
+  row2ColSplitRight: 73,
   rowSplit: 40,
   portraitHeights: [100 / 6, 100 / 6, 100 / 6, 100 / 6, 100 / 6, 100 / 6],
 };
@@ -510,29 +519,37 @@ function clampPortraitHeights(value: unknown): [number, number, number, number, 
   return normalized;
 }
 
+// left clamps first, against a fixed absolute range that's always safe regardless of right's
+// current value (100 - 2*MIN_GAP leaves room for right to still sit at least MIN_GAP further right
+// and at most 100-MIN_GAP). right then clamps against this already-resolved left. Clamping in the
+// other order (as an earlier version of this function did) used left's *raw, not-yet-clamped*
+// input as right's lower bound -- dragging left to an extreme value would then drag right along
+// with it even though right was never touched, confirmed as a real bug during implementation
+// testing.
+function clampColPair(left: unknown, right: unknown, defaultLeft: number, defaultRight: number): [number, number] {
+  const clampedLeft = clampNumber(left, COL_SPLIT_MIN_GAP, 100 - COL_SPLIT_MIN_GAP * 2, defaultLeft);
+  const clampedRight = clampNumber(right, clampedLeft + COL_SPLIT_MIN_GAP, 100 - COL_SPLIT_MIN_GAP, defaultRight);
+  return [clampedLeft, clampedRight];
+}
+
 export function clampWeatherGridLayout(value: Partial<WeatherGridLayout>): WeatherGridLayout {
-  // colSplitLeft clamps first, against a fixed absolute range that's always safe regardless of
-  // colSplitRight's current value (100 - 2*MIN_GAP leaves room for colSplitRight to still sit at
-  // least MIN_GAP further right and at most 100-MIN_GAP). colSplitRight then clamps against this
-  // already-resolved colSplitLeft. Clamping in the other order (as an earlier version of this
-  // function did) used colSplitLeft's *raw, not-yet-clamped* input as colSplitRight's lower bound
-  // -- dragging colSplitLeft to an extreme value would then drag colSplitRight along with it even
-  // though colSplitRight was never touched, confirmed as a real bug during implementation testing.
-  const colSplitLeft = clampNumber(
-    value.colSplitLeft,
-    COL_SPLIT_MIN_GAP,
-    100 - COL_SPLIT_MIN_GAP * 2,
-    DEFAULT_WEATHER_GRID_LAYOUT.colSplitLeft,
+  const [row1ColSplitLeft, row1ColSplitRight] = clampColPair(
+    value.row1ColSplitLeft,
+    value.row1ColSplitRight,
+    DEFAULT_WEATHER_GRID_LAYOUT.row1ColSplitLeft,
+    DEFAULT_WEATHER_GRID_LAYOUT.row1ColSplitRight,
   );
-  const colSplitRight = clampNumber(
-    value.colSplitRight,
-    colSplitLeft + COL_SPLIT_MIN_GAP,
-    100 - COL_SPLIT_MIN_GAP,
-    DEFAULT_WEATHER_GRID_LAYOUT.colSplitRight,
+  const [row2ColSplitLeft, row2ColSplitRight] = clampColPair(
+    value.row2ColSplitLeft,
+    value.row2ColSplitRight,
+    DEFAULT_WEATHER_GRID_LAYOUT.row2ColSplitLeft,
+    DEFAULT_WEATHER_GRID_LAYOUT.row2ColSplitRight,
   );
   return {
-    colSplitLeft,
-    colSplitRight,
+    row1ColSplitLeft,
+    row1ColSplitRight,
+    row2ColSplitLeft,
+    row2ColSplitRight,
     rowSplit: clampNumber(value.rowSplit, ROW_SPLIT_MIN, ROW_SPLIT_MAX, DEFAULT_WEATHER_GRID_LAYOUT.rowSplit),
     portraitHeights: clampPortraitHeights(value.portraitHeights),
   };
