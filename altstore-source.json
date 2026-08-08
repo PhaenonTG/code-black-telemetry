@@ -13,19 +13,17 @@
       "version": "2026.0808.0858",
       "versionDate": "2026-08-08T08:59:48Z",
       "versionDescription": "Automated Codemagic build 2026.0808.0858",
-      "downloadURL": "https://github.com/PhaenonTG/code-black-telemetry/releases/download/ios-2026.0808.0858/CodeBlackOps-unsigned.ipa",
+      "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-unsigned.ipa",
       "size": 1422720,
-      "appPermissions": {
-        "entitlements": [],
-        "privacy": {}
-      },
+      "sha256": "603283e52ff8ddc799c58ab9040fa502f06eda4060f4e77406e644d7f1cbf3fb",
       "versions": [
         {
           "version": "2026.0808.0858",
           "date": "2026-08-08T08:59:48Z",
           "localizedDescription": "Automated Codemagic build 2026.0808.0858",
-          "downloadURL": "https://github.com/PhaenonTG/code-black-telemetry/releases/download/ios-2026.0808.0858/CodeBlackOps-unsigned.ipa",
-          "size": 1422720
+          "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-unsigned.ipa",
+          "size": 1422720,
+          "sha256": "603283e52ff8ddc799c58ab9040fa502f06eda4060f4e77406e644d7f1cbf3fb"
         }
       ]
     }

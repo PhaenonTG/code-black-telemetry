@@ -83,6 +83,8 @@ workflows:
           TAG="ios-$VERSION"
           VERSION_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           IPA_SIZE="$(stat -f%z "$IPA_PATH")"
+          IPA_SHA256="$(shasum -a 256 "$IPA_PATH" | awk '{print $1}')"
+          BRANCH="${CM_BRANCH:-master}"
 
           RELEASE_JSON=$(curl -sS -f -X POST \
             -H "Authorization: token $GH_TOKEN" \
@@ -96,26 +98,29 @@ workflows:
             -H "Content-Type: application/octet-stream" \
             --data-binary @"$IPA_PATH" \
             "$UPLOAD_URL?name=CodeBlackOps-unsigned.ipa")
-          DOWNLOAD_URL="$(echo "$ASSET_JSON" | jq -r '.browser_download_url')"
+          mkdir -p altstore
+          cp "$IPA_PATH" altstore/CodeBlackOps-unsigned.ipa
+          DOWNLOAD_URL="https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/$BRANCH/altstore/CodeBlackOps-unsigned.ipa"
 
-          jq --arg v "$VERSION" --arg d "$VERSION_DATE" --arg u "$DOWNLOAD_URL" --argjson s "$IPA_SIZE" \
+          jq --arg v "$VERSION" --arg d "$VERSION_DATE" --arg u "$DOWNLOAD_URL" --arg h "$IPA_SHA256" --argjson s "$IPA_SIZE" \
             '.apps[0].version = $v
              | .apps[0].versionDate = $d
              | .apps[0].downloadURL = $u
              | .apps[0].size = $s
+             | .apps[0].sha256 = $h
+             | del(.apps[0].appPermissions)
              | .apps[0].versionDescription = ("Automated Codemagic build " + $v)
-             | .apps[0].versions = [{version: $v, date: $d, localizedDescription: ("Automated Codemagic build " + $v), downloadURL: $u, size: $s}]' \
+             | .apps[0].versions = [{version: $v, date: $d, localizedDescription: ("Automated Codemagic build " + $v), downloadURL: $u, size: $s, sha256: $h}]' \
             altstore-source.json > altstore-source.json.tmp
           mv altstore-source.json.tmp altstore-source.json
 
           git config user.email "codemagic-ci@codeblackwx.local"
           git config user.name "Codemagic CI"
-          git add altstore-source.json
+          git add altstore-source.json altstore/CodeBlackOps-unsigned.ipa
           git commit -m "Publish AltStore source for iOS $VERSION [skip ci]"
           # Auth via an extraHeader instead of embedding the token in the remote URL, so it can't
           # end up in a printed "origin" URL if any later command errors and echoes it.
           AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64)"
-          BRANCH="${CM_BRANCH:-master}"
           # Retries once on a non-fast-forward rejection (e.g. a second build finishing this same
           # step around the same time) by rebasing this single altstore-source.json commit onto
           # whatever landed on the branch in the meantime, rather than failing outright.
