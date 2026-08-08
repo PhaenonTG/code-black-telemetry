@@ -346,6 +346,40 @@ function normalizeEndpoint(value: string) {
   return `http://${trimmed}`;
 }
 
+const TELEMETRY_LINK_ENABLED_KEY = "codeblack.telemetryLinkEnabled";
+let currentTelemetryLinkEnabled = true;
+const telemetryLinkEnabledListeners = new Set<(enabled: boolean) => void>();
+
+// Lets the owner manually stop BLE scanning + HTTP polling entirely -- e.g. Nick's truck testing
+// without an ESP32 yet, or the tablet being used off-vehicle -- rather than the link retrying
+// forever in the background. Defaults to true (existing always-on behavior) so nobody who already
+// has real hardware sees a regression from this being added.
+export async function loadTelemetryLinkEnabled() {
+  const saved = await Preferences.get({ key: TELEMETRY_LINK_ENABLED_KEY });
+  currentTelemetryLinkEnabled = saved.value == null ? true : saved.value === "true";
+  telemetryLinkEnabledListeners.forEach((listener) => listener(currentTelemetryLinkEnabled));
+  return currentTelemetryLinkEnabled;
+}
+
+export async function saveTelemetryLinkEnabled(enabled: boolean) {
+  currentTelemetryLinkEnabled = enabled;
+  await Preferences.set({ key: TELEMETRY_LINK_ENABLED_KEY, value: String(enabled) });
+  telemetryLinkEnabledListeners.forEach((listener) => listener(currentTelemetryLinkEnabled));
+  return currentTelemetryLinkEnabled;
+}
+
+export function getTelemetryLinkEnabled() {
+  return currentTelemetryLinkEnabled;
+}
+
+export function subscribeTelemetryLinkEnabled(listener: (enabled: boolean) => void) {
+  telemetryLinkEnabledListeners.add(listener);
+  listener(currentTelemetryLinkEnabled);
+  return () => {
+    telemetryLinkEnabledListeners.delete(listener);
+  };
+}
+
 export async function loadPiEndpoint() {
   const saved = await Preferences.get({ key: PI_ENDPOINT_KEY });
   currentPiEndpoint = normalizeEndpoint(saved.value ?? DEFAULT_PI_ENDPOINT);
@@ -421,5 +455,123 @@ export function subscribeMapLayerVisibility(listener: (visibility: MapLayerVisib
   listener(currentMapLayerVisibility);
   return () => {
     mapLayerVisibilityListeners.delete(listener);
+  };
+}
+
+// Lets the owner drag-resize the Weather page's card grid (landscape: 2 vertical + 1 horizontal
+// splitter; portrait: 5 row-height splitters between the single-column stack of 6 cards) instead
+// of the proportions being permanently hardcoded in index.css. Values are the same units already
+// used by the grid itself -- colSplitLeft/colSplitRight are column-index cut points on the
+// existing 100-column landscape grid, rowSplit is the top row's height as a percent of the grid,
+// and portraitHeights are each of the 6 stacked cards' own height as a percent of the total stack
+// (6 heights, not 5 -- there are 5 *dividers* between 6 cards, but every card still needs its own
+// height value). Clamping every field on load/save/live-drag (not just on save) is the actual
+// "can't end up in a broken state" mechanism -- a card can never be dragged, or loaded from a
+// corrupt/stale preference, narrower or shorter than its readable floor.
+export interface WeatherGridLayout {
+  colSplitLeft: number;
+  colSplitRight: number;
+  rowSplit: number;
+  portraitHeights: [number, number, number, number, number, number];
+}
+
+const WEATHER_GRID_LAYOUT_KEY = "codeblack.weatherGridLayout";
+export const DEFAULT_WEATHER_GRID_LAYOUT: WeatherGridLayout = {
+  colSplitLeft: 26,
+  colSplitRight: 73,
+  rowSplit: 40,
+  portraitHeights: [100 / 6, 100 / 6, 100 / 6, 100 / 6, 100 / 6, 100 / 6],
+};
+
+const COL_SPLIT_MIN_GAP = 16;
+const ROW_SPLIT_MIN = 25;
+const ROW_SPLIT_MAX = 75;
+const PORTRAIT_HEIGHT_MIN = 10;
+const PORTRAIT_HEIGHT_MAX = 30;
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const num = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, num));
+}
+
+// Re-normalizes the 6 portrait card heights back to summing to 100 after any single one changes --
+// mirrors how dragging one shared edge between two stacked cards should redistribute across the
+// whole chain. Falls back to the even default split if the input is malformed rather than
+// producing NaN/negative heights.
+function clampPortraitHeights(value: unknown): [number, number, number, number, number, number] {
+  const arr = Array.isArray(value) ? value : [];
+  const clamped = Array.from({ length: 6 }, (_, i) =>
+    clampNumber(arr[i], PORTRAIT_HEIGHT_MIN, PORTRAIT_HEIGHT_MAX, DEFAULT_WEATHER_GRID_LAYOUT.portraitHeights[i]),
+  );
+  const sum = clamped.reduce((a, b) => a + b, 0);
+  if (sum <= 0) return [...DEFAULT_WEATHER_GRID_LAYOUT.portraitHeights];
+  const normalized = clamped.map((v) => (v / sum) * 100) as [number, number, number, number, number, number];
+  return normalized;
+}
+
+export function clampWeatherGridLayout(value: Partial<WeatherGridLayout>): WeatherGridLayout {
+  // colSplitLeft clamps first, against a fixed absolute range that's always safe regardless of
+  // colSplitRight's current value (100 - 2*MIN_GAP leaves room for colSplitRight to still sit at
+  // least MIN_GAP further right and at most 100-MIN_GAP). colSplitRight then clamps against this
+  // already-resolved colSplitLeft. Clamping in the other order (as an earlier version of this
+  // function did) used colSplitLeft's *raw, not-yet-clamped* input as colSplitRight's lower bound
+  // -- dragging colSplitLeft to an extreme value would then drag colSplitRight along with it even
+  // though colSplitRight was never touched, confirmed as a real bug during implementation testing.
+  const colSplitLeft = clampNumber(
+    value.colSplitLeft,
+    COL_SPLIT_MIN_GAP,
+    100 - COL_SPLIT_MIN_GAP * 2,
+    DEFAULT_WEATHER_GRID_LAYOUT.colSplitLeft,
+  );
+  const colSplitRight = clampNumber(
+    value.colSplitRight,
+    colSplitLeft + COL_SPLIT_MIN_GAP,
+    100 - COL_SPLIT_MIN_GAP,
+    DEFAULT_WEATHER_GRID_LAYOUT.colSplitRight,
+  );
+  return {
+    colSplitLeft,
+    colSplitRight,
+    rowSplit: clampNumber(value.rowSplit, ROW_SPLIT_MIN, ROW_SPLIT_MAX, DEFAULT_WEATHER_GRID_LAYOUT.rowSplit),
+    portraitHeights: clampPortraitHeights(value.portraitHeights),
+  };
+}
+
+let currentWeatherGridLayout: WeatherGridLayout = DEFAULT_WEATHER_GRID_LAYOUT;
+const weatherGridLayoutListeners = new Set<(layout: WeatherGridLayout) => void>();
+
+export async function loadWeatherGridLayout() {
+  const saved = await Preferences.get({ key: WEATHER_GRID_LAYOUT_KEY });
+  if (saved.value) {
+    try {
+      const parsed = JSON.parse(saved.value) as Partial<WeatherGridLayout>;
+      currentWeatherGridLayout = clampWeatherGridLayout({ ...DEFAULT_WEATHER_GRID_LAYOUT, ...parsed });
+    } catch {
+      currentWeatherGridLayout = DEFAULT_WEATHER_GRID_LAYOUT;
+    }
+  } else {
+    currentWeatherGridLayout = DEFAULT_WEATHER_GRID_LAYOUT;
+  }
+  weatherGridLayoutListeners.forEach((listener) => listener(currentWeatherGridLayout));
+  return currentWeatherGridLayout;
+}
+
+export async function saveWeatherGridLayout(layout: WeatherGridLayout) {
+  currentWeatherGridLayout = clampWeatherGridLayout(layout);
+  await Preferences.set({ key: WEATHER_GRID_LAYOUT_KEY, value: JSON.stringify(currentWeatherGridLayout) });
+  weatherGridLayoutListeners.forEach((listener) => listener(currentWeatherGridLayout));
+  return currentWeatherGridLayout;
+}
+
+export function getWeatherGridLayout() {
+  return currentWeatherGridLayout;
+}
+
+export function subscribeWeatherGridLayout(listener: (layout: WeatherGridLayout) => void) {
+  weatherGridLayoutListeners.add(listener);
+  listener(currentWeatherGridLayout);
+  return () => {
+    weatherGridLayoutListeners.delete(listener);
   };
 }

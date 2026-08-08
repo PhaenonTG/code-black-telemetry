@@ -6,6 +6,7 @@ import { Panel } from "../situational/Panel";
 import type { CockpitMode } from "../../App";
 import {
   DEFAULT_CHASER_RADIUS_MILES,
+  DEFAULT_WEATHER_GRID_LAYOUT,
   getBleCommandToken,
   loadBleCommandToken,
   loadChaserRadiusMiles,
@@ -16,11 +17,14 @@ import {
   saveChaserRadiusMiles,
   saveNightVisionEnabled,
   saveTeamMembers,
+  saveTelemetryLinkEnabled,
   saveVehicleMarkerStyle,
+  saveWeatherGridLayout,
   subscribeChaserRadiusMiles,
   subscribeNightVisionEnabled,
   subscribePiEndpoint,
   subscribeTeamMembers,
+  subscribeTelemetryLinkEnabled,
   subscribeVehicleMarkerStyle,
   type TeamMember,
   type VehicleMarkerStyle,
@@ -66,6 +70,7 @@ interface SettingsPageProps {
 export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnection }: SettingsPageProps) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [piEndpoint, setPiEndpoint] = useState("");
+  const [telemetryLinkEnabled, setTelemetryLinkEnabled] = useState(true);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [spotterAccount, setSpotterAccount] = useState<SpotterAccount | null>(null);
   const [spotterUsername, setSpotterUsername] = useState("");
@@ -82,6 +87,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [vehicleMarkerStyle, setVehicleMarkerStyle] = useState<VehicleMarkerStyle>({ color: "#ff2d35", shape: "circle", sizeScale: 1 });
   const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
+  const [weatherGridLayoutReset, setWeatherGridLayoutReset] = useState(false);
   const [bleTokenInput, setBleTokenInput] = useState("");
   const [bleTokenSaved, setBleTokenSaved] = useState(false);
   const [bleConnected, setBleConnected] = useState(false);
@@ -96,6 +102,17 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeTelemetryLinkEnabled(setTelemetryLinkEnabled);
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const toggleTelemetryLink = (enabled: boolean) => {
+    void saveTelemetryLinkEnabled(enabled);
+  };
 
   useEffect(() => {
     const unsubscribe = subscribeSpotterAccount(setSpotterAccount);
@@ -187,6 +204,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     setChaserRadiusInput(String(saved));
     setChaserRadiusSaved(true);
     window.setTimeout(() => setChaserRadiusSaved(false), 1600);
+  };
+
+  const resetWeatherGridLayout = async () => {
+    await saveWeatherGridLayout(DEFAULT_WEATHER_GRID_LAYOUT);
+    setWeatherGridLayoutReset(true);
+    window.setTimeout(() => setWeatherGridLayoutReset(false), 1600);
   };
 
   const addTeamMember = () => {
@@ -288,6 +311,13 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
             <button className={nightVisionEnabled ? "active" : ""} onClick={() => toggleNightVision(true)}>On</button>
           </div>
         </div>
+        <div className="settings-row">
+          <div>
+            <strong>Weather Layout</strong>
+            <span>Drag the dividers between Weather page cards to resize them. Resets to the default proportions.</span>
+          </div>
+          <button className="settings-action" onClick={() => void resetWeatherGridLayout()}>{weatherGridLayoutReset ? "Reset" : "Reset to Default"}</button>
+        </div>
       </Panel>
 
       <Panel title="Alerts" className="settings-alerts-panel">
@@ -311,6 +341,20 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
       </Panel>
 
       <Panel title="Pi Connection" className="settings-connection-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Pi / ESP Link</strong>
+            <span>
+              {telemetryLinkEnabled
+                ? "On -- scanning for BLE and polling HTTP."
+                : "Off -- not scanning or polling. Turn on once hardware is present."}
+            </span>
+          </div>
+          <div className="mode-toggle" aria-label="Pi/ESP link">
+            <button className={telemetryLinkEnabled ? "" : "active"} onClick={() => toggleTelemetryLink(false)}>Off</button>
+            <button className={telemetryLinkEnabled ? "active" : ""} onClick={() => toggleTelemetryLink(true)}>On</button>
+          </div>
+        </div>
         <div className="settings-row">
           <div>
             <strong>API Base</strong>

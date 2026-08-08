@@ -31,14 +31,16 @@
   text-rendering: geometricPrecision;
 }
 
-/* Operation Cockpit: mode-aware top-row information hierarchy. */
-.page-grid--weather {
-  grid-template-columns: repeat(100, minmax(0, 1fr));
-}
-
-.loc-panel { grid-column: 1 / 30 !important; grid-row: 1 !important; }
-.wx-panel { grid-column: 30 / 72 !important; grid-row: 1 !important; }
-.wind-panel { grid-column: 72 / 101 !important; grid-row: 1 !important; }
+/* Operation Cockpit: mode-aware top-row information hierarchy.
+   The unguarded .page-grid--weather / .loc-panel / .wx-panel / .wind-panel placement that used to
+   live here was removed 2026-08-07 -- being unguarded (no media query), it silently applied in
+   BOTH landscape and portrait, colliding with each orientation's own real rules. Confirmed via
+   live CSSOM query that it was the actual cause of the portrait "narrow sliver" bug: these numeric
+   grid-column values (up to column 72) forced implicit-column generation against portrait's
+   single-explicit-column grid, while the correct named-area placement from elsewhere fought for
+   the same elements. Landscape and portrait each now have one complete, self-sufficient rule set
+   (search "single source of truth" in this file) -- nothing unguarded should set these 6
+   selectors' placement again. */
 
 .cockpit-card,
 .cockpit-card > :not(.cb-panel__title) {
@@ -174,9 +176,12 @@
 }
 
 @media (max-width: 1450px) {
-  .loc-panel { grid-column: 1 / 31 !important; }
-  .wx-panel { grid-column: 31 / 71 !important; }
-  .wind-panel { grid-column: 71 / 101 !important; }
+  /* The grid-column overrides for .loc-panel/.wx-panel/.wind-panel that used to live here were
+     removed 2026-08-07 -- being width-only (no orientation qualifier), they fired in portrait
+     phone widths too, forcing a numeric column span onto elements that should have been using
+     their named grid-area placement instead. Confirmed via live CSSOM inspection as the actual
+     remaining cause of a portrait layout bug after the other duplicate blocks were already
+     cleaned up. Landscape narrow-width tuning now happens only inside orientation-scoped blocks. */
   .cockpit-primary .metric-tile strong { font-size: clamp(1.15rem, 1.4vw, 1.65rem); }
 }
 
@@ -577,25 +582,54 @@ button {
 }
 
 .page-grid {
+  position: relative;
   height: 100%;
   min-height: 0;
   display: grid;
   gap: var(--gap);
 }
 
-.page-grid--weather {
-  grid-template-columns: minmax(220px, 0.95fr) minmax(260px, 1.12fr) minmax(270px, 1.15fr) minmax(380px, 1.65fr);
-  grid-template-rows: minmax(160px, 0.94fr) minmax(190px, 1.08fr);
-  grid-template-areas:
-    "loc weather wind map"
-    "alerts alerts alerts map";
+/* Draggable splitter handles (WeatherGridSplitters.tsx) -- thin visible hairline inside a much
+   larger invisible touch target, matching the existing aviation aesthetic (no glow/gradient/
+   animation at rest, only a subtle brightness lift on active-drag). touch-action: none stops the
+   WebView's own scroll/pan from competing with the drag. */
+.wx-splitter {
+  z-index: 5;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.loc-panel { grid-area: loc; }
-.wx-panel { grid-area: weather; }
-.wind-panel { grid-area: wind; }
-.alerts-panel { grid-area: alerts; }
-.map-panel { grid-area: map; }
+.wx-splitter--x {
+  cursor: col-resize;
+}
+
+.wx-splitter--y {
+  cursor: row-resize;
+}
+
+.wx-splitter__line {
+  background: var(--border);
+  opacity: 0.7;
+  transition: opacity 0.15s, background-color 0.15s;
+}
+
+.wx-splitter--x .wx-splitter__line {
+  width: 2px;
+  height: 100%;
+}
+
+.wx-splitter--y .wx-splitter__line {
+  height: 2px;
+  width: 100%;
+}
+
+.wx-splitter:hover .wx-splitter__line,
+.wx-splitter:active .wx-splitter__line {
+  background: var(--cb-red, #ff2d35);
+  opacity: 1;
+}
 
 .page-grid--operations {
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1430,21 +1464,12 @@ button {
     overflow: hidden !important;
   }
 
-  .page-grid--weather {
-    width: 100% !important;
-    height: 100% !important;
-    grid-template-columns: repeat(100, minmax(0, 1fr)) !important;
-    grid-template-rows: minmax(0, 42fr) minmax(0, 58fr) !important;
-    grid-template-areas: none !important;
-    gap: var(--cb-gap) !important;
-  }
-
-  .loc-panel { grid-area: 1 / 1 / 2 / 25 !important; }
-  .wx-panel { grid-area: 1 / 25 / 2 / 59 !important; }
-  .wind-panel { grid-area: 1 / 59 / 2 / 101 !important; }
-  .alerts-panel { grid-area: 2 / 1 / 3 / 26 !important; }
-  .map-panel { grid-area: 2 / 26 / 3 / 71 !important; }
-  .threats-panel { grid-area: 2 / 71 / 3 / 101 !important; }
+  /* .page-grid--weather / .loc-panel / .wx-panel / .wind-panel / .alerts-panel / .map-panel /
+     .threats-panel grid placement removed from here 2026-08-07 -- this was one of ~7 byte-identical
+     or superseded copies of the same rules scattered across this file from repeated "final"
+     Samsung-tablet QA passes. Only the last one in source order ever actually applied (CSS cascade:
+     later !important wins), so the rest were dead weight. The single surviving source of truth is
+     near the end of the file, search "Top row columns are pinned to EXACTLY match". */
 
   .bottom-dock {
     width: 100% !important;
@@ -1657,58 +1682,6 @@ button {
   }
 }
 
-/* OPERATION GLANCE FIRST: terminal cascade overrides for Samsung landscape QA. */
-@media (orientation: landscape) {
-  .page-grid--weather {
-    grid-template-rows: minmax(0, 40fr) minmax(0, 60fr) !important;
-  }
-
-  .loc-panel { grid-area: 1 / 1 / 2 / 26 !important; }
-  .wx-panel { grid-area: 1 / 26 / 2 / 62 !important; }
-  .wind-panel { grid-area: 1 / 62 / 2 / 101 !important; }
-  .alerts-panel { grid-area: 2 / 1 / 3 / 26 !important; }
-  .map-panel { grid-area: 2 / 26 / 3 / 73 !important; }
-  .threats-panel { grid-area: 2 / 73 / 3 / 101 !important; }
-
-  .loc-panel.cockpit-card {
-    grid-template-rows: auto minmax(0, 1fr) auto !important;
-  }
-
-  .loc-panel.cockpit-card--chase .loc-head {
-    display: block !important;
-    min-width: 0 !important;
-    padding: 11px var(--glance-card-pad-x) 4px !important;
-  }
-
-  .loc-panel.cockpit-card--chase .loc-county,
-  .loc-panel.cockpit-card--chase .loc-head > .cb-badge {
-    display: none !important;
-  }
-
-  .loc-panel.cockpit-card--chase .loc-city {
-    max-width: 100% !important;
-    font-size: clamp(25px, 1.52vw, 31px) !important;
-    line-height: 1 !important;
-    letter-spacing: 0.01em !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: clip !important;
-  }
-
-  .loc-panel.cockpit-card--chase .cockpit-primary--motion {
-    padding-top: 5px !important;
-  }
-
-  .loc-panel.cockpit-card--chase .cockpit-primary--motion .metric-tile strong {
-    font-size: clamp(27px, 1.72vw, 36px) !important;
-  }
-
-  .loc-panel.cockpit-card--chase .cockpit-primary--motion .metric-tile em {
-    white-space: normal !important;
-    line-height: 1.05 !important;
-  }
-}
-
 /* OPERATION GLANCE FIRST: final physical-device collision fixes. */
 @media (orientation: landscape) {
   .loc-panel.cockpit-card .loc-head {
@@ -1821,17 +1794,6 @@ button {
 }
 
 @media (orientation: landscape) {
-  .page-grid--weather {
-    grid-template-rows: minmax(0, 40fr) minmax(0, 60fr) !important;
-  }
-
-  .loc-panel { grid-area: 1 / 1 / 2 / 26 !important; }
-  .wx-panel { grid-area: 1 / 26 / 2 / 62 !important; }
-  .wind-panel { grid-area: 1 / 62 / 2 / 101 !important; }
-  .alerts-panel { grid-area: 2 / 1 / 3 / 26 !important; }
-  .map-panel { grid-area: 2 / 26 / 3 / 73 !important; }
-  .threats-panel { grid-area: 2 / 73 / 3 / 101 !important; }
-
   .cockpit-card {
     padding-bottom: 0 !important;
   }
@@ -2124,16 +2086,6 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-@media (orientation: portrait) {
-  .loc-panel,
-  .wx-panel,
-  .wind-panel {
-    grid-column: 1 !important;
-    grid-row: auto !important;
-  }
-
 }
 
 .atlas-recon-page {
@@ -2640,21 +2592,6 @@ button {
 .page {
   padding: var(--cb-gap) 0 0;
 }
-
-.page-grid--weather {
-  height: 100%;
-  grid-template-columns: repeat(100, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 42fr) minmax(0, 58fr);
-  grid-template-areas: none;
-  gap: var(--cb-gap);
-}
-
-.loc-panel { grid-column: 1 / 25; grid-row: 1; }
-.wx-panel { grid-column: 25 / 59; grid-row: 1; }
-.wind-panel { grid-column: 59 / 101; grid-row: 1; }
-.alerts-panel { grid-column: 1 / 26; grid-row: 2; }
-.map-panel { grid-column: 26 / 71; grid-row: 2; }
-.threats-panel { grid-column: 71 / 101; grid-row: 2; }
 
 .cb-panel,
 .rounded-sm.bg-cb-panel {
@@ -3273,13 +3210,6 @@ button {
     font-size: 28px;
   }
 
-  .time-module {
-    top: 12px;
-    right: 18px;
-    width: 230px;
-    height: 52px;
-  }
-
   .header-status {
     grid-template-columns: 1fr 1fr;
     padding: 0;
@@ -3312,50 +3242,6 @@ button {
 
   .dock-signature {
     display: none;
-  }
-}
-
-/* REFERENCE MATCH FINAL OVERRIDE */
-@media (orientation: landscape) {
-  .app-shell {
-    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dots-h) var(--cb-dock-h) !important;
-    padding: 10px 12px 8px !important;
-  }
-
-  .page-viewport {
-    overflow-y: hidden !important;
-  }
-
-  .page {
-    width: 100% !important;
-    min-width: 100% !important;
-    padding: var(--cb-gap) 0 0 !important;
-    overflow: hidden !important;
-  }
-
-  .page-grid--weather {
-    width: 100% !important;
-    height: 100% !important;
-    grid-template-columns: repeat(100, minmax(0, 1fr)) !important;
-    grid-template-rows: minmax(0, 42fr) minmax(0, 58fr) !important;
-    grid-template-areas: none !important;
-    gap: var(--cb-gap) !important;
-  }
-
-  .loc-panel { grid-area: 1 / 1 / 2 / 25 !important; }
-  .wx-panel { grid-area: 1 / 25 / 2 / 59 !important; }
-  .wind-panel { grid-area: 1 / 59 / 2 / 101 !important; }
-  .alerts-panel { grid-area: 2 / 1 / 3 / 26 !important; }
-  .map-panel { grid-area: 2 / 26 / 3 / 71 !important; }
-  .threats-panel { grid-area: 2 / 71 / 3 / 101 !important; }
-
-  .bottom-dock {
-    width: 100% !important;
-    max-width: none !important;
-    justify-self: stretch !important;
-    align-self: stretch !important;
-    margin: 5px 0 0 !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(190px, 0.78fr) !important;
   }
 }
 
@@ -4427,10 +4313,13 @@ body {
     min-height: var(--top-h);
   }
 
+  /* Positioning removed from here 2026-08-07 -- TopBar.css is a component-scoped stylesheet that
+     loads AFTER index.css in the actual bundle (imported by TopBar.tsx, deeper in the component
+     tree, vs. index.css's top-level import in main.tsx), so any !important position/top/left
+     override placed here can never beat TopBar.css's own !important centering rule regardless of
+     which one appears "later" when just reading this file. The real fix lives in TopBar.css
+     itself now. This block still sizes the clock badge on narrow screens. */
   .time-module {
-    position: absolute;
-    top: 7px;
-    right: 12px;
     height: 44px;
     min-width: 170px;
   }
@@ -4443,18 +4332,40 @@ body {
     overflow-y: auto;
   }
 
+  /* Row heights come from --wx-p-h-1..6 (defaulted here, overwritten live by the draggable
+     row-splitter feature in WeatherGridSplitters.tsx). dvh rather than % -- this grid's own height
+     is content-driven (.page has overflow-y:auto in portrait, so the stack can exceed one screen
+     and scroll), so there's no definite container height for row-track percentages to resolve
+     against. The 6 stored values (settings.ts WeatherGridLayout.portraitHeights, 0-100 summing to
+     100) map 1:1 onto dvh units here. */
   .page-grid--weather {
+    --wx-p-h-1: 16.667dvh;
+    --wx-p-h-2: 16.667dvh;
+    --wx-p-h-3: 16.667dvh;
+    --wx-p-h-4: 16.667dvh;
+    --wx-p-h-5: 16.667dvh;
+    --wx-p-h-6: 16.667dvh;
     width: 100%;
     height: auto;
-    min-height: 100%;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
+    /* minmax(X, auto), not a bare length -- a fixed-length track does NOT grow for oversized
+       content in CSS Grid (e.g. .map-panel's own min-height:34dvh elsewhere), it just lets the
+       content overflow into the next row instead. minmax's auto ceiling lets a track grow when a
+       card genuinely needs more than its assigned share, and the rows after it correctly shift
+       down to match -- confirmed this was a real, visible bug during implementation (map-panel and
+       threats-panel overlapped without this). */
+    grid-template-rows: minmax(var(--wx-p-h-1), auto) minmax(var(--wx-p-h-2), auto) minmax(var(--wx-p-h-3), auto) minmax(var(--wx-p-h-4), auto) minmax(var(--wx-p-h-5), auto) minmax(var(--wx-p-h-6), auto);
     grid-template-areas:
       "wind"
       "alerts"
       "weather"
       "loc"
-      "map";
+      "map"
+      "threats";
+  }
+
+  .threats-panel {
+    grid-area: threats;
   }
 
   .metric-grid--wx,
@@ -4513,21 +4424,33 @@ body {
     overflow: hidden !important;
   }
 
+  /* This is the single source of truth for the Weather page's landscape 6-card grid, following
+     the 2026-08-07 dead-duplicate cleanup (see the note near "REFERENCE MATCH CASCADE LOCK"
+     earlier in this file). Column/row split points come from --wx-col-left/--wx-col-right/
+     --wx-row-split/--wx-row-split-inv custom properties (defaulted just below, overwritten live
+     by the draggable-splitter feature in WeatherGridSplitters.tsx) instead of hardcoded numbers,
+     so there is exactly one place that ever sets these 6 selectors' placement in landscape. Both
+     rows deliberately share the same column split (Location=Alerts, Conditions=Map, Wind=Threats)
+     so the page reads as one aligned grid, not two independently-proportioned rows. */
   .page-grid--weather {
+    --wx-col-left: 26;
+    --wx-col-right: 73;
+    --wx-row-split: 40fr;
+    --wx-row-split-inv: 60fr;
     width: 100% !important;
     height: 100% !important;
     grid-template-columns: repeat(100, minmax(0, 1fr)) !important;
-    grid-template-rows: minmax(0, 42fr) minmax(0, 58fr) !important;
+    grid-template-rows: minmax(0, var(--wx-row-split)) minmax(0, var(--wx-row-split-inv)) !important;
     grid-template-areas: none !important;
     gap: var(--cb-gap) !important;
   }
 
-  .loc-panel { grid-area: 1 / 1 / 2 / 25 !important; }
-  .wx-panel { grid-area: 1 / 25 / 2 / 59 !important; }
-  .wind-panel { grid-area: 1 / 59 / 2 / 101 !important; }
-  .alerts-panel { grid-area: 2 / 1 / 3 / 26 !important; }
-  .map-panel { grid-area: 2 / 26 / 3 / 71 !important; }
-  .threats-panel { grid-area: 2 / 71 / 3 / 101 !important; }
+  .loc-panel     { grid-area: 1 / 1                  / 2 / var(--wx-col-left)   !important; }
+  .wx-panel      { grid-area: 1 / var(--wx-col-left) / 2 / var(--wx-col-right)  !important; }
+  .wind-panel    { grid-area: 1 / var(--wx-col-right)/ 2 / 101                  !important; }
+  .alerts-panel  { grid-area: 2 / 1                  / 3 / var(--wx-col-left)   !important; }
+  .map-panel     { grid-area: 2 / var(--wx-col-left) / 3 / var(--wx-col-right)  !important; }
+  .threats-panel { grid-area: 2 / var(--wx-col-right)/ 3 / 101                  !important; }
 
   .bottom-dock {
     width: 100% !important;
@@ -4652,17 +4575,8 @@ body {
 
 /* OPERATION GLANCE FIRST: terminal Samsung landscape rules. */
 @media (orientation: landscape) {
-  .page-grid--weather {
-    grid-template-rows: minmax(0, 40fr) minmax(0, 60fr) !important;
-  }
-
-  .loc-panel { grid-area: 1 / 1 / 2 / 26 !important; }
-  .wx-panel { grid-area: 1 / 26 / 2 / 62 !important; }
-  .wind-panel { grid-area: 1 / 62 / 2 / 101 !important; }
-  .alerts-panel { grid-area: 2 / 1 / 3 / 26 !important; }
-  .map-panel { grid-area: 2 / 26 / 3 / 73 !important; }
-  .threats-panel { grid-area: 2 / 73 / 3 / 101 !important; }
-
+  /* .page-grid--weather grid-template-rows/columns + all 6 panels' grid placement now live in one
+     place (search "single source of truth" earlier in this file) -- removed from here 2026-08-07. */
   .loc-panel.cockpit-card {
     grid-template-rows: auto minmax(0, 1fr) auto !important;
   }
@@ -4704,15 +4618,8 @@ body {
 
 /* Header styling now lives in src/components/layout/TopBar.css (modularized). */
 
-/* Top row columns are pinned to EXACTLY match the bottom row's columns (Location=Alerts,
-   Conditions=Map, Wind=Threats) so the whole page reads as one aligned grid, not two
-   independently-proportioned rows. Conditions/Map stay the widest (visual anchor); Wind/Threats
-   stay the narrowest. */
-@media (orientation: landscape) {
-  .loc-panel { grid-area: 1 / 1 / 2 / 26 !important; }
-  .wx-panel { grid-area: 1 / 26 / 2 / 73 !important; }
-  .wind-panel { grid-area: 1 / 73 / 2 / 101 !important; }
-}
+/* Row-1 placement (Location/Conditions/Wind) now lives in the single consolidated block --
+   search "single source of truth" earlier in this file. Removed from here 2026-08-07. */
 
 /* Top-row cards: consistent footer band across Location / Conditions / Wind. */
 .loc-footer,

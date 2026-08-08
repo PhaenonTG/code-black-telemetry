@@ -10,7 +10,11 @@
 .ops-header {
   position: relative !important;
   display: grid !important;
-  grid-template-columns: minmax(300px, 1fr) minmax(60px, 0.3fr) minmax(300px, 1fr) !important;
+  /* 300px floors assumed a tablet-width header -- on a phone-width header (e.g. ~370px) that
+     alone requests 660px+ across the two outer columns, forcing massive overflow regardless of
+     what's inside them. min(300px, 40vw) lets the floor shrink on narrow screens instead of
+     staying fixed. */
+  grid-template-columns: minmax(min(300px, 40vw), 1fr) minmax(60px, 0.3fr) minmax(min(300px, 40vw), 1fr) !important;
   align-items: center !important;
   gap: 10px !important;
   min-width: 0 !important;
@@ -99,6 +103,38 @@
   border: none !important;
   background: none !important;
   box-shadow: none !important;
+}
+
+/* On a narrow (phone-width) header, .ops-header's minmax(300px, 1fr) brand/status columns don't
+   leave room for a horizontally-centered clock -- the brand title's white-space:nowrap content
+   overflows toward center and collides with it, since the centering above is deliberately
+   independent of sibling layout. Pin the clock to the top-right corner instead on narrow screens,
+   out of the brand title's path entirely, rather than trying to out-shrink the title. */
+@media (max-aspect-ratio: 13 / 10) {
+  .time-module {
+    left: auto !important;
+    top: 7px !important;
+    right: 12px !important;
+    transform: none !important;
+  }
+
+  /* The clock no longer occupies the middle grid track once it's absolutely positioned above --
+     reclaim that space for the brand/status columns, which are otherwise tight on a phone-width
+     header (status content alone -- date, Pi link, battery -- needs ~215px and had nowhere near
+     that in the 3-column layout). */
+  .ops-header {
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto) !important;
+  }
+
+  .header-status {
+    grid-column: 2 !important;
+    /* Anchor to the bottom of the header row -- the clock sits pinned to the top-right corner
+       (above) and .header-status is otherwise vertically centered across the whole header height,
+       which put the two in each other's way. Bottom-aligning clears the clock's ~44px-tall badge
+       without needing to touch the clock's own height or the header's total height. */
+    align-self: end !important;
+    padding-bottom: 8px;
+  }
 }
 
 .time-module .font-mono {

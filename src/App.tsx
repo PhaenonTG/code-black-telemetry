@@ -25,6 +25,7 @@ import { LayerConfigPage } from "./components/situational/LayerConfigPage";
 import { SevereFlashOverlay } from "./components/SevereFlashOverlay";
 import { SpotterOnboardingPrompt } from "./components/SpotterOnboardingPrompt";
 import { WindCard } from "./components/situational/WindCard";
+import { WeatherGridSplitters } from "./components/situational/WeatherGridSplitters";
 import { useAlertProducts } from "./hooks/useAlertProducts";
 import { useSpcOutlook } from "./hooks/useSpcOutlook";
 import { useNearbyPlaces } from "./hooks/useNearbyPlaces";
@@ -187,9 +188,30 @@ export default function App() {
     if (!Capacitor.isNativePlatform()) return;
     void StatusBar.hide();
     const listeners: Array<{ remove: () => Promise<void> }> = [];
+    let pauseTimer: number | null = null;
+    const clearPauseTimer = () => {
+      if (pauseTimer != null) {
+        window.clearTimeout(pauseTimer);
+        pauseTimer = null;
+      }
+    };
     void CapApp.addListener("appStateChange", ({ isActive }) => {
-      setTelemetryPaused(!isActive);
-      if (isActive) window.dispatchEvent(new Event("codeblack:resume"));
+      clearPauseTimer();
+      if (isActive) {
+        setTelemetryPaused(false);
+        window.dispatchEvent(new Event("codeblack:resume"));
+        return;
+      }
+      // iOS reports isActive:false for any system alert taking focus, not just real
+      // backgrounding -- including the Bluetooth pairing prompt itself. Pausing (which
+      // disconnects BLE) immediately on that blip cancels the in-progress pairing handshake,
+      // which iOS then re-prompts for, creating a continuous pairing-request loop. A brief
+      // debounce lets transient dialogs resolve without tearing down the connection, while real
+      // backgrounding (which stays inactive) still pauses shortly after.
+      pauseTimer = window.setTimeout(() => {
+        pauseTimer = null;
+        setTelemetryPaused(true);
+      }, 1500);
     }).then((listener) => listeners.push(listener));
     void CapApp.addListener("backButton", ({ canGoBack }) => {
       const expandedRadar = document.querySelector(".radar-expanded--active");
@@ -209,6 +231,7 @@ export default function App() {
       if (canGoBack) window.history.back();
     }).then((listener) => listeners.push(listener));
     return () => {
+      clearPauseTimer();
       listeners.forEach((listener) => void listener.remove());
     };
   }, [page]);
@@ -249,6 +272,7 @@ export default function App() {
             <AlertsPanel products={alertProducts.products} error={alertProducts.error} />
             <MapRadarPanel gps={mapGps} visible={page === "weather"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} nearbyBest={nearby.places} compact allowExpand={false} />
             <NearbyPanel places={nearby.places} error={nearby.error} spotters={spotters.spotters} spottersError={spotters.error} />
+            <WeatherGridSplitters />
           </div>
         </section>
         <section className="page page--operations" aria-label="Operations">

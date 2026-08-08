@@ -1,7 +1,7 @@
 import { SimulatorProvider } from "./simulator";
 import type { GpsData, PowerData, SystemData, TabletLocationInput, TelemetryProvider, TelemetrySnapshot, WeatherData, WindData } from "./types";
 import { cardinalFromDeg, isFiniteNumber, readEvents, readNumber, readSensors, readString, readTimestamp } from "./quality";
-import { getPiEndpoint, loadPiEndpoint, subscribePiEndpoint } from "../settings";
+import { getPiEndpoint, getTelemetryLinkEnabled, loadPiEndpoint, loadTelemetryLinkEnabled, subscribePiEndpoint, subscribeTelemetryLinkEnabled } from "../settings";
 import { Preferences } from "@capacitor/preferences";
 import { bleTelemetryClient, type BleTelemetryPayload } from "./ble-client";
 
@@ -298,16 +298,31 @@ export class HybridTelemetryProvider implements TelemetryProvider {
       this.nextPollAt = 0;
       void this.poll();
     });
+    // Manual owner switch (Settings -> Pi Connection) -- lets BLE scanning + HTTP polling be turned
+    // off entirely rather than retrying forever when there's genuinely no Pi/ESP on this vehicle
+    // yet. Fires immediately with the current in-memory value on subscribe, so this also replaces
+    // the old unconditional bleTelemetryClient.start() call below.
+    void loadTelemetryLinkEnabled();
+    subscribeTelemetryLinkEnabled((enabled) => {
+      if (enabled) {
+        this.failureCount = 0;
+        this.nextPollAt = 0;
+        bleTelemetryClient.start();
+        void this.poll();
+      } else {
+        bleTelemetryClient.stop();
+        this.publish(this.applyTabletGps(this.offlineSnapshot(this.snapshot, "Pi/ESP link turned off in Settings")));
+      }
+    });
     // BLE is the primary link to the Pi (no WiFi/Starlink dependency); HTTP polling below stays as
     // a fallback for whenever BLE isn't connected. Whichever is currently fresh wins -- see the
     // guard at the top of poll().
     bleTelemetryClient.subscribe((payload) => {
-      if (!payload) return;
+      if (!payload || !getTelemetryLinkEnabled()) return;
       const now = Date.now();
       this.lastBleAt = now;
       this.publish(this.applyTabletGps(normalizeBleSnapshot(payload, this.snapshot, now)));
     });
-    bleTelemetryClient.start();
     if (SIMULATOR_ALLOWED) {
       this.fallback.subscribe((snapshot) => {
         if (!this.snapshot.status.piOnline) {
@@ -424,6 +439,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
 
   private async poll() {
     if (this.paused) return;
+    if (!getTelemetryLinkEnabled()) return;
     const now = Date.now();
     if (now - this.lastBleAt < BLE_FRESH_WINDOW_MS) return;
     if (now < this.nextPollAt) return;

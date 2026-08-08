@@ -6,6 +6,12 @@ workflows:
     environment:
       xcode: latest
       node: latest
+      # Created in Codemagic dashboard: App settings -> Environment variables -> group "mapbox",
+      # containing VITE_MAPBOX_ACCESS_TOKEN (Secure). .env.local (which holds the real token) is
+      # gitignored and never reaches this cloud Mac, so without this the built app ships with an
+      # empty token and the map/radar layers silently fail on-device.
+      groups:
+        - mapbox
     scripts:
       - name: Install npm dependencies
         script: npm ci
@@ -39,6 +45,11 @@ workflows:
           mkdir -p "$CM_BUILD_DIR/Payload"
           cp -r "$CM_BUILD_DIR/App.xcarchive/Products/Applications/App.app" "$CM_BUILD_DIR/Payload/"
           cd "$CM_BUILD_DIR"
-          zip -r CodeBlackOps-unsigned.ipa Payload
+          # COPYFILE_DISABLE stops macOS from writing AppleDouble (._*) resource-fork files into the
+          # zip, and -X drops the extra Apple file attributes zip would otherwise embed per entry --
+          # without both, AltStore's on-device installer can fail with a plist-parsing error
+          # ("the data couldn't be read because it isn't in the correct format") trying to read
+          # Info.plist back out of the archive, even though the .ipa is otherwise valid.
+          COPYFILE_DISABLE=1 zip -rX CodeBlackOps-unsigned.ipa Payload -x '.*' -x '__MACOSX'
     artifacts:
       - $CM_BUILD_DIR/CodeBlackOps-unsigned.ipa
