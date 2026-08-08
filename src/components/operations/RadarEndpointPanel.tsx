@@ -62,7 +62,7 @@ export function RadarEnginePanel() {
 
   return (
     <section className="cb-panel endpoint-panel radar-endpoint-panel">
-      <div className="cb-panel__title">Radar Engine</div>
+      <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Radar Engine</div>
       <div className="endpoint-form radar-engine-form">
         <div className="radar-engine-grid">
           <div className="radar-engine-metric"><span>Engine</span><strong>{status?.backendState === "ON_DEVICE" ? "ON DEVICE" : "STARTING"}</strong></div>
@@ -70,10 +70,10 @@ export function RadarEnginePanel() {
           <div className="radar-engine-metric"><span>Selected Site</span><strong>{status?.selectedSite ?? "AUTO"}</strong></div>
           <div className="radar-engine-metric"><span>Download</span><strong>{status?.currentFrameId ? "CURRENT" : "WAITING"}</strong></div>
           <div className="radar-engine-metric"><span>Decoder</span><strong>{status?.processingState ?? "READY"}</strong></div>
-          <div className="radar-engine-metric"><span>REF</span><strong>AVAILABLE</strong></div>
-          <div className="radar-engine-metric"><span>VEL</span><strong>AVAILABLE</strong></div>
-          <div className="radar-engine-metric"><span>SRV</span><strong>AVAILABLE</strong></div>
-          <div className="radar-engine-metric"><span>CC</span><strong>AVAILABLE</strong></div>
+          <div className="radar-engine-metric"><span>REF</span><strong>{!status ? "--" : status.availableProducts.includes("REF") ? "AVAILABLE" : "UNAVAILABLE"}</strong></div>
+          <div className="radar-engine-metric"><span>VEL</span><strong>{!status ? "--" : status.availableProducts.includes("VEL") ? "AVAILABLE" : "UNAVAILABLE"}</strong></div>
+          <div className="radar-engine-metric"><span>SRV</span><strong>{!status ? "--" : status.availableProducts.includes("SRV") ? "AVAILABLE" : "UNAVAILABLE"}</strong></div>
+          <div className="radar-engine-metric"><span>CC</span><strong>{!status ? "--" : status.availableProducts.includes("CC") ? "AVAILABLE" : "UNAVAILABLE"}</strong></div>
           <div className="radar-engine-metric"><span>Level III</span><strong>DEFERRED</strong></div>
           <div className="radar-engine-metric"><span>Cache</span><strong>{cache ? `${sizeLabel(cache.usedBytes)} / ${sizeLabel(cache.limitBytes)}` : "LOADING"}</strong></div>
           <div className="radar-engine-metric"><span>Frames</span><strong>{cache ? `${cache.frames}` : "--"}</strong></div>

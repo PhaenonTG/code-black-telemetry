@@ -52,7 +52,7 @@ export function PiEndpointPanel() {
 
   return (
     <section className="cb-panel pi-endpoint-panel">
-      <div className="cb-panel__title">Pi Endpoint</div>
+      <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Pi Endpoint</div>
       <div className="endpoint-form">
         <label>
           <span>API base</span>

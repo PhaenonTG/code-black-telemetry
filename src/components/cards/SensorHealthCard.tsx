@@ -11,6 +11,7 @@ export const SensorHealthCard = memo(function SensorHealthCard({ className }: { 
   return (
     <DashCard title="Sensor Health" className={className}>
       <div className="flex flex-col gap-3">
+        {sensors.length === 0 && <div className="calm-card">NO SENSORS REPORTED</div>}
         {sensors.map(sensor => {
           const online = status?.piOnline && sensor.online;
           const age = sensor.lastPacketAt ? Math.round((Date.now() - sensor.lastPacketAt) / 1000) : null;

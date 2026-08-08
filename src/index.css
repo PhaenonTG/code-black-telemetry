@@ -2994,10 +2994,15 @@ button {
   gap: var(--cb-gap);
 }
 
+/* Named classes rather than :nth-child(2)/(3)/(4) -- those matched "whichever cb-panel happens to
+   be the Nth DOM child," so reordering App.tsx's Operations section (or inserting any new cb-panel
+   before these three) would silently move cards into the wrong grid cell. SensorHealthCard didn't
+   previously have its own class at all; ops-system-panel/ops-power-panel already existed on
+   SystemCard/PowerCard for unrelated overflow styling and are reused here for placement too. */
 .ops-summary { grid-column: 1 / 4; grid-row: 1; }
-.page-grid--operations > .cb-panel:nth-child(2) { grid-column: 4 / 7; grid-row: 1; }
-.page-grid--operations > .cb-panel:nth-child(3) { grid-column: 7 / 10; grid-row: 1; }
-.page-grid--operations > .cb-panel:nth-child(4) { grid-column: 10 / 13; grid-row: 1; }
+.ops-sensor-panel { grid-column: 4 / 7; grid-row: 1; }
+.ops-system-panel { grid-column: 7 / 10; grid-row: 1; }
+.ops-power-panel { grid-column: 10 / 13; grid-row: 1; }
 .endpoint-panel { grid-column: 1 / 6; grid-row: 2; }
 .ops-stream-panel { grid-column: 6 / 10; grid-row: 2; }
 .events-ops { grid-column: 8 / 13; grid-row: 3; }

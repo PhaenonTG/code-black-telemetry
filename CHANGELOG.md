@@ -4,6 +4,23 @@ All changes logged newest-first.
 
 ---
 
+## Operations Page Fixes - 2026-08-08 - Radar Status Fabrication, Grid Fragility, Empty States
+
+### Fixed
+- **Data fabrication (direct rule violation, highest priority)**: `RadarEndpointPanel.tsx`'s "Radar Engine" card hardcoded REF/VEL/SRV/CC to the literal string `"AVAILABLE"` unconditionally, regardless of the actual decoder state -- even while the on-device radar engine had never initialized or was in a `DECODER_NOT_INSTALLED` state. The real data (`RadarStatus.availableProducts`) already existed and was simply never read. Now shows `"--"` (unknown, before first status fetch), `"AVAILABLE"`, or `"UNAVAILABLE"` based on the real value. Same bug in `App.tsx`'s Diagnostics panel, which separately hardcoded "Radar Engine: ON DEVICE" -- removed that line entirely rather than plumbing a second live data path, since `RadarEndpointPanel` already shows this correctly and the two were at risk of visibly contradicting each other (one hardcoded-always-on-device, one correctly conditional) two panels apart on the same page.
+- 4 Operations-page panel titles (`RadarEndpointPanel`, `PiEndpointPanel`, and the two hand-rolled sections in `App.tsx` -- "Operational Mode" and "Diagnostics") were missing the `panel-glyph` span every `DashCard`/`Panel`-based title renders -- a visible inconsistency (no glyph before those 4 titles specifically). Added.
+- `SensorHealthCard`/`SystemCard`/`PowerCard` were positioned in the Operations grid via `:nth-child(2)`/`:nth-child(3)`/`:nth-child(4)` -- "whichever `.cb-panel` happens to be the Nth DOM child" -- so reordering `App.tsx`'s Operations section, or inserting any new panel before these three, would silently move cards into the wrong grid cell with no compile-time or visual warning until it happened. Replaced with named classes (`SensorHealthCard` didn't have one at all; `ops-system-panel`/`ops-power-panel` already existed on `SystemCard`/`PowerCard` for unrelated overflow styling and are now reused for placement too).
+- `SensorHealthCard` (zero sensors) and `EventsCard` (zero events) rendered a blank interior with no explanation when their data arrays were empty -- added `"NO SENSORS REPORTED"`/`"NO RECENT EVENTS"` empty states, matching the `.calm-card` pattern already used for this on Page 1.
+- `EventsCard`'s `[ERR ]` log-level tag used a hardcoded trailing space baked into the string literal to visually pad it to the same width as `[INFO]`/`[WARN]` -- replaced with `.padEnd(4)` applied consistently to all three tags.
+
+### Not Done / Needs Follow-up (noted, not attempted this pass)
+- Operations page has 4 different, incompatible "shared primitive" patterns in play (`DashCard`/`MetricRow`, `Panel` alone, hand-rolled `cb-panel` sections, and inline JSX in `App.tsx`) -- worse fragmentation than Page 1's `Panel`/`MetricTile` split found earlier. Not unified this pass; a real architectural decision (which pattern becomes canonical, applied app-wide) rather than a quick fix.
+- `.cb-panel`/`.cb-panel::before`/`.cb-panel--red`/`.cb-panel--spc` are each defined 2-3 times across scattered `index.css` blocks (same duplication pattern found and partially cleaned up elsewhere this session); `.diagnostic-grid` has 7+ separate rule sites; the Operations grid's mobile-collapse block is byte-for-byte duplicated across 3 separate `@media` blocks. Not consolidated this pass.
+- Blank-hole loading state (`if (!x) return null`) on all 4 `src/components/cards/` components while telemetry is still cold-starting -- no skeleton/placeholder shown, just an empty grid cell until the first snapshot arrives.
+- No physical-device screenshot validation for any of the above.
+
+---
+
 ## Cleanup Pass - 2026-08-08 - Capacitor Version Fix, AltStore File Sprawl, Dead CSS Class
 
 ### Fixed

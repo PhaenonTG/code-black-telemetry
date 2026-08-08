@@ -278,14 +278,14 @@ export default function App() {
         <section className="page page--operations" aria-label="Operations">
           <div className="page-grid page-grid--operations">
             <section className="ops-summary cb-panel">
-              <div className="cb-panel__title">Operational Mode</div>
+              <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Operational Mode</div>
               <div className="ops-mode">
                 <strong>{status?.mode === "pi" ? "PI CONNECTED" : status?.mode === "tablet" ? "STANDALONE TABLET" : "DEVELOPMENT SIMULATOR"}</strong>
                 <span>PI {status?.piOnline ? "ONLINE" : "OFFLINE"} | INTERNET {status?.internetOnline ? "AVAILABLE" : "UNKNOWN"}</span>
                 <span className="ops-mode__hint">Cockpit display mode moved to Settings.</span>
               </div>
             </section>
-            <SensorHealthCard />
+            <SensorHealthCard className="ops-sensor-panel" />
             <SystemCard className="ops-system-panel" />
             <PowerCard className="ops-power-panel" />
             <RadarEnginePanel />
@@ -293,10 +293,9 @@ export default function App() {
             <PiEndpointPanel />
             <EventsCard className="events-ops" />
             <section className="cb-panel diagnostics-panel">
-              <div className="cb-panel__title">Diagnostics</div>
+              <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Diagnostics</div>
               <div className="diagnostic-grid">
                 <span>PI API</span><strong>{piState}</strong>
-                <span>Radar Engine</span><strong>ON DEVICE</strong>
                 <span>Internet</span><strong>{status?.internetOnline ? "AVAILABLE" : "UNAVAILABLE"}</strong>
                 <span>Native GPS</span><strong>{gps ? `${gps.source.toUpperCase()} · ${gps.accuracyM ? `${Math.round(gps.accuracyM)} m` : "ACTIVE"}` : "WAITING"}</strong>
                 <span>UI Mode</span><strong>{cockpitMode.toUpperCase()}</strong>
