@@ -10,20 +10,18 @@
       "subtitle": "Storm chasing telemetry & radar",
       "localizedDescription": "Code Black OPS: live radar, vehicle sensor telemetry (wind, temperature, power), and severe weather alerts for storm chasing.",
       "iconURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",
-      "version": "2026.0808.0858",
-      "versionDate": "2026-08-08T08:59:48Z",
-      "versionDescription": "Automated Codemagic build 2026.0808.0858",
-      "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-unsigned.ipa",
+      "version": "2026.0808.0952",
+      "versionDate": "2026-08-08T14:51:46Z",
+      "versionDescription": "AltStore parser compatibility republish 2026.0808.0952",
+      "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-2026.0808.0952.ipa",
       "size": 1422720,
-      "sha256": "603283e52ff8ddc799c58ab9040fa502f06eda4060f4e77406e644d7f1cbf3fb",
       "versions": [
         {
-          "version": "2026.0808.0858",
-          "date": "2026-08-08T08:59:48Z",
-          "localizedDescription": "Automated Codemagic build 2026.0808.0858",
-          "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-unsigned.ipa",
-          "size": 1422720,
-          "sha256": "603283e52ff8ddc799c58ab9040fa502f06eda4060f4e77406e644d7f1cbf3fb"
+          "version": "2026.0808.0952",
+          "date": "2026-08-08T14:51:46Z",
+          "localizedDescription": "AltStore parser compatibility republish 2026.0808.0952",
+          "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-2026.0808.0952.ipa",
+          "size": 1422720
         }
       ]
     }
