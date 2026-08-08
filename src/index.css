@@ -1477,7 +1477,10 @@ button {
     justify-self: stretch !important;
     align-self: stretch !important;
     margin: 5px 0 0 !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(190px, 0.78fr) !important;
+    /* 7 even columns, matching the real 7-button dock (Weather/Operations/Locate/Alerts/Report/
+       Settings/Layers) -- this used to be repeat(5, ...) + a 190px slot for the now-removed
+       .dock-signature corner button, left stale after Report and Layers were added. */
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
   }
 
   .alert-list,
@@ -4458,7 +4461,10 @@ body {
     justify-self: stretch !important;
     align-self: stretch !important;
     margin: 5px 0 0 !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(190px, 0.78fr) !important;
+    /* 7 even columns, matching the real 7-button dock (Weather/Operations/Locate/Alerts/Report/
+       Settings/Layers) -- this used to be repeat(5, ...) + a 190px slot for the now-removed
+       .dock-signature corner button, left stale after Report and Layers were added. */
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
   }
 
   .wx-panel {
@@ -4752,10 +4758,10 @@ body {
   padding-block: 9px !important;
 }
 
-/* Bottom nav: five buttons as one mathematically centered group — no phantom signature column. */
+/* Bottom nav: seven buttons as one mathematically centered group — no phantom signature column. */
 @media (orientation: landscape) {
   .bottom-dock {
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
   }
 
   .dock-signature {
@@ -5773,13 +5779,16 @@ body {
   color: var(--red, #ff2d35);
 }
 
-/* Dock: added a 6th page (Report) this session. There are many older .bottom-dock
-   grid-template-columns rules scattered across media-query breakpoints throughout this file
-   (established archaeology in this project — see PROJECT_STATE.md), several still hardcoded to
-   5 nav buttons + signature and some with !important, so a single earlier edit isn't guaranteed
-   to win at every viewport. Force 6 nav buttons + signature here, unconditionally, last in file. */
+/* Dock: 7 nav buttons (Weather/Operations/Locate/Alerts/Report/Settings/Layers), all real
+   <button> elements in a single even grid -- .dock-signature is no longer a distinct corner
+   element (Layers replaced it as a normal 7th button), so there's no extra wide slot to reserve.
+   There are many older .bottom-dock grid-template-columns rules scattered across media-query
+   breakpoints throughout this file (established archaeology in this project — see
+   PROJECT_STATE.md), several still hardcoded to 5 or 6 buttons + a signature slot and some with
+   !important, so a single earlier edit isn't guaranteed to win at every viewport. Force 7 even
+   nav buttons here, unconditionally, last in file. */
 .bottom-dock {
-  grid-template-columns: repeat(6, minmax(0, 1fr)) minmax(130px, 0.85fr) !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
 }
 
 .bottom-dock button span {
