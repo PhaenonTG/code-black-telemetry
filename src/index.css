@@ -889,6 +889,25 @@ button {
   font: 800 clamp(10px, 0.82vw, 13px) / 1.15 Inter, sans-serif;
 }
 
+/* Wraps the pill button (untouched, same grid/sizing as before) plus an optional description
+   caption below it -- kept as a sibling rather than a child of .alert-pill itself so the pill's
+   own heavily-overridden grid layout (many breakpoint-specific rules elsewhere in this file) isn't
+   at risk from a 5th child changing its auto-placement. Only rendered on the full Alerts page, not
+   Page 1's compact card. */
+.alert-pill-group {
+  min-width: 0;
+}
+
+.alert-pill__description {
+  margin: 6px 2px 0;
+  color: var(--muted);
+  font: 500 11px / 1.35 Inter, sans-serif;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
 .alert-pill--tornado,
 .alert-pill--pds {
   border-color: rgba(239, 68, 68, 0.65);
@@ -2661,6 +2680,20 @@ button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   padding: 0 12px 12px;
+}
+
+/* Chase mode's own footer row: previously empty (mode === "normal" was the only branch that ever
+   rendered anything into .loc-footer), even though .cockpit-card--chase .loc-footer already had
+   flex styling waiting for content. A single compact coordinate line instead of the normal mode's
+   3-tile Lat/Lon/Fix breakdown, so chase mode isn't missing position data entirely. */
+.loc-footer--chase {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  color: var(--cb-muted, #8b929f);
+  font: 700 11px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.02em;
 }
 
 .loc-footer div {

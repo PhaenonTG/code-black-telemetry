@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Panel, MetricTile } from "./Panel";
 import { SourceBadge } from "../ui/SourceBadge";
 import { useWeather } from "../../hooks/useTelemetry";
+import { useCountdown } from "../../hooks/useCountdown";
 
 // mapbox-gl (and everything under src/map/) is the single largest dependency in the bundle —
 // deferring it to its own chunk keeps it out of the JS the app has to parse before first paint.
@@ -71,6 +72,11 @@ export function LocationMotionPanel({ tabletPermission, location, mode }: { tabl
       </div>
       <div className="loc-footer cockpit-footer">
         {mode === "normal" && <><div><span>Lat</span><strong>{valid ? location.latitude!.toFixed(5) : "--"}</strong></div><div><span>Lon</span><strong>{valid ? location.longitude!.toFixed(5) : "--"}</strong></div><div><span>Fix</span><strong>{fixValue}</strong></div></>}
+        {mode === "chase" && (
+          <div className="loc-footer--chase">
+            <span>{valid ? `${location.latitude!.toFixed(4)}, ${location.longitude!.toFixed(4)}` : "-- , --"}</span>
+          </div>
+        )}
       </div>
       {tabletPermission === "denied" && <div className="cb-note cb-note--warn">Tablet GPS denied. Holding last valid source.</div>}
       {!valid && <div className="cb-note cb-note--warn">{location.fallbackReason}</div>}
@@ -80,7 +86,7 @@ export function LocationMotionPanel({ tabletPermission, location, mode }: { tabl
 
 export function WeatherObservationPanel({ external, mode }: { external: ExternalObservation | null; mode: CockpitMode }) {
   const wx = useWeather();
-  const { temp, dew, humidity, pressure, spread, footerParts } = resolveWeatherWithFallback(wx, external);
+  const { temp, dew, humidity, pressure, spread, footerParts, badgeState } = resolveWeatherWithFallback(wx, external);
   const pressureInHg = mbToInHg(pressure);
   const trend = wx?.pressureTrend ?? null;
   const trendGlyph = trend === "rising" ? "▲" : trend === "falling" ? "▼" : trend === "steady" ? "▬" : "";
@@ -107,7 +113,7 @@ export function WeatherObservationPanel({ external, mode }: { external: External
           </>
         ) : (
           <>
-            <MetricTile icon="T" label="Temp" value={valueText(temp, 1)} unit="deg F" accent="red" />
+            <MetricTile icon="T" label="Temp" value={valueText(temp, 0)} unit="deg F" accent="red" />
             <MetricTile icon="D" label="Dew" value={valueText(dew, 0)} unit="deg F" accent="blue" />
             <MetricTile icon="%" label="RH" value={valueText(humidity, 0)} unit="%" accent="blue" />
             <MetricTile icon="P" label="Pressure" value={valueText(pressure, 0)} unit="mb" accent={wx?.pressureTrend === "rising" ? "green" : "blue"} />
@@ -116,9 +122,33 @@ export function WeatherObservationPanel({ external, mode }: { external: External
       </div>
       <div className="conditions-strip">
         {mode === "normal" && <span>TOTAL <strong>{wx?.rainTotalIn == null ? "--" : `${wx.rainTotalIn.toFixed(2)} IN`}</strong></span>}
-        <span className="conditions-strip__source">{footerParts.length > 0 ? footerParts.join(" • ") : "SOURCE UNAVAILABLE"}</span>
+        <SourceBadge state={badgeState} className="conditions-strip__source">
+          {footerParts.length > 0 ? footerParts.join(" • ") : "SOURCE UNAVAILABLE"}
+        </SourceBadge>
       </div>
     </Panel>
+  );
+}
+
+// Extracted so useCountdown (a hook) can be called once per pill rather than a variable number of
+// times inside a .map() in the parent -- calling a hook inside a loop whose length can change
+// between renders (products.length) would violate rules-of-hooks; giving each pill its own
+// component makes the hook call count fixed (exactly one) per component instance instead.
+// showDescription is only ever true from AlertsFullPanel's list -- Page 1's compact AlertsPanel
+// stays headline-only to preserve the "glance in 1-2 seconds" requirement stated elsewhere in this
+// project's design docs, rather than showing full alert wording on an already-dense card.
+function AlertPill({ product, onClick, showDescription = false }: { product: AlertProduct; onClick: () => void; showDescription?: boolean }) {
+  const countdown = useCountdown(product.expires);
+  return (
+    <div className="alert-pill-group">
+      <button className={`alert-pill alert-pill--${product.severity}`} onClick={onClick}>
+        <i aria-hidden="true">{product.severity === "md" ? "MD" : product.severity === "watch" ? "W" : "!"}</i>
+        <span>{product.title}</span>
+        <strong>{product.headline}</strong>
+        <em>{countdown || (product.expires ? `Expires ${product.expires}` : product.source)}</em>
+      </button>
+      {showDescription && product.description && <p className="alert-pill__description">{product.description}</p>}
+    </div>
   );
 }
 
@@ -129,12 +159,7 @@ export function AlertsPanel({ products, error }: { products: AlertProduct[]; err
       <div className="alert-list">
         {products.length === 0 && <div className="calm-card">{error ? "ALERT DATA TEMPORARILY UNAVAILABLE" : "NO ACTIVE LOCATION-MATCHED PRODUCTS"}</div>}
         {products.slice(0, 3).map((product) => (
-          <button key={product.id} className={`alert-pill alert-pill--${product.severity}`} onClick={() => setSelected(product)}>
-            <i aria-hidden="true">{product.severity === "md" ? "MD" : product.severity === "watch" ? "W" : "!"}</i>
-            <span>{product.title}</span>
-            <strong>{product.headline}</strong>
-            <em>{product.expires ? `Expires ${product.expires}` : product.source}</em>
-          </button>
+          <AlertPill key={product.id} product={product} onClick={() => setSelected(product)} />
         ))}
         <button className="view-all-button" onClick={() => window.dispatchEvent(new Event("codeblack:view-all-alerts"))}>View All Alerts</button>
       </div>
@@ -162,6 +187,13 @@ export function AlertsFullPanel({ products, error, outlooks = [], onOpenReport }
   const watch = products.find((product) => product.type === "watch");
   const md = products.find((product) => product.type === "md");
   const warning = products.find((product) => product.type === "warning");
+  // Fixed 3 calls regardless of whether watch/md/warning are actually present this render -- safe
+  // under rules-of-hooks (a constant count, unlike a hook called inside a variable-length .map()).
+  // Falls back to an empty string (useCountdown itself returns "" for an empty expires) when a
+  // slot is unfilled.
+  const watchCountdown = useCountdown(watch?.expires ?? "");
+  const mdCountdown = useCountdown(md?.expires ?? "");
+  const warningCountdown = useCountdown(warning?.expires ?? "");
   return (
     <Panel title={`All Active Products ${products.length ? products.length : ""}`} className="alerts-full-panel" tone={products.some((p) => p.severity === "tornado" || p.severity === "pds") ? "red" : "spc"}>
       <div className="threat-list threat-list--summary">
@@ -169,7 +201,7 @@ export function AlertsFullPanel({ products, error, outlooks = [], onOpenReport }
           <button className="threat-card threat-card--watch" onClick={() => setSelected(watch)}>
             <span>{watch.title}</span>
             <strong>{watch.headline}</strong>
-            <em>Expires {watch.expires || "--"}</em>
+            <em>{watchCountdown || `Expires ${watch.expires || "--"}`}</em>
           </button>
         ) : (
           <div className="threat-card threat-card--watch threat-card--empty"><span>Watch Status</span><strong>No local watch</strong><em>NWS/SPC source</em></div>
@@ -178,7 +210,7 @@ export function AlertsFullPanel({ products, error, outlooks = [], onOpenReport }
           <button className="threat-card threat-card--md" onClick={() => setSelected(md)}>
             <span>{md.title}</span>
             <strong>{md.insideText ?? md.headline}</strong>
-            <em>Expires {md.expires || "--"}</em>
+            <em>{mdCountdown || `Expires ${md.expires || "--"}`}</em>
           </button>
         ) : (
           <div className="threat-card threat-card--md threat-card--empty"><span>Mesoscale Discussion</span><strong>No local MD</strong><em>Current location clear</em></div>
@@ -187,7 +219,7 @@ export function AlertsFullPanel({ products, error, outlooks = [], onOpenReport }
           <button className={`threat-card threat-card--${warning.severity}`} onClick={() => setSelected(warning)}>
             <span>{warning.title}</span>
             <strong>{warning.headline}</strong>
-            <em>Expires {warning.expires || "--"}</em>
+            <em>{warningCountdown || `Expires ${warning.expires || "--"}`}</em>
           </button>
         ) : (
           <div className="threat-card threat-card--risk threat-card--empty"><span>Local Warning</span><strong>No active warning</strong><em>NWS source</em></div>
@@ -210,12 +242,7 @@ export function AlertsFullPanel({ products, error, outlooks = [], onOpenReport }
       <div className="alert-list alert-list--full">
         {products.length === 0 && <div className="calm-card">{error ? "ALERT DATA TEMPORARILY UNAVAILABLE" : "NO ACTIVE LOCATION-MATCHED PRODUCTS"}</div>}
         {products.map((product) => (
-          <button key={product.id} className={`alert-pill alert-pill--${product.severity}`} onClick={() => setSelected(product)}>
-            <i aria-hidden="true">{product.severity === "md" ? "MD" : product.severity === "watch" ? "W" : "!"}</i>
-            <span>{product.title}</span>
-            <strong>{product.headline}</strong>
-            <em>{product.expires ? `Expires ${product.expires}` : product.source}</em>
-          </button>
+          <AlertPill key={product.id} product={product} onClick={() => setSelected(product)} showDescription />
         ))}
       </div>
       <div className="alerts-full-panel__footer">
@@ -227,6 +254,7 @@ export function AlertsFullPanel({ products, error, outlooks = [], onOpenReport }
 }
 
 function ProductModal({ product, onClose }: { product: AlertProduct; onClose: () => void }) {
+  const countdown = useCountdown(product.expires);
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="product-title">
       <div className="product-modal">
@@ -239,7 +267,7 @@ function ProductModal({ product, onClose }: { product: AlertProduct; onClose: ()
         </div>
         <div className="modal-meta">
           <span>ISSUED {product.sent || "--"}</span>
-          <span>EXPIRES {product.expires || "--"}</span>
+          <span>EXPIRES {product.expires || "--"}{countdown ? ` (${countdown})` : ""}</span>
           {product.watchProbability && <span>WATCH PROB {product.watchProbability}</span>}
         </div>
         <div className="modal-scroll">

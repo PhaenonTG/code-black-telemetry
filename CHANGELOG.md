@@ -4,6 +4,28 @@ All changes logged newest-first.
 
 ---
 
+## Alerts Detail/Countdown + Card Consistency Pass - 2026-08-08 - Live Expiration Countdown, Alert Wording, SourceBadge/Precision Fixes
+
+### Added
+- Alerts now show a live, ticking expiration countdown ("Expires in 23 min") instead of a static raw timestamp string. Extracted the countdown logic (previously private to the map's alert popup) into `timeRemainingText()` in `src/services/situational.ts` so the map popup, Alerts panels, and product detail modal all share one implementation. Built `src/hooks/useCountdown.ts` to make it tick live (30s interval) in React components.
+- The full Alerts page now shows a truncated (3-line) preview of each product's real `description` text directly on its pill, not just the headline -- full untruncated text was already available via the detail modal, this surfaces it one tap earlier. Page 1's compact Alerts card intentionally stays headline-only to preserve glanceability.
+- Extracted `AlertPill` as its own component (used by both the compact Page-1 card and the full Alerts page) so the countdown hook has a fixed call count per pill, not a variable one inside a `.map()` -- a real rules-of-hooks constraint, not just a style preference.
+- Conditions card ("Weather Observations"/"Conditions") now has a `SourceBadge`, matching Location and Wind -- previously the only Page-1 telemetry card without one; source attribution was buried in a small footer string. The freshness state (`badgeState`) was already computed by `resolveWeatherWithFallback`, just never rendered as a badge.
+- Location & Motion's chase-mode footer now shows a compact single-line coordinate readout -- previously chase mode dropped Lat/Lon/Fix entirely rather than showing a trimmed version (normal mode kept the full 3-tile breakdown). The CSS scaffolding for a flex chase-mode footer already existed and was unused.
+
+### Fixed
+- Conditions card showed temperature at 1-decimal precision in normal mode but 0-decimal in chase mode, for no functional reason -- standardized to 0 decimals in both.
+
+### Not Done / Needs Follow-up
+- Map card in-chrome status line (LIVE/CACHED + age): investigated, did not implement. `compact` mode (how the map renders on Page 1) deliberately skips all single-site radar status/frame fetching for performance -- there's no site freshness data available to show without either reintroducing that fetching or piping through wide-area-mosaic freshness data that isn't currently exposed anywhere accessible. Needs an actual design decision, not a styling change.
+- Wind card's separate CSS file (`WindCard.css` vs. the monolithic `index.css` every other card uses) and its unique tap-to-reset interaction pattern: left as-is. Both are real, documented, intentional-for-now choices (the separate file works around specificity conflicts with stale `index.css` rules; the interaction pattern is unique to Wind and extending it elsewhere is a design decision, not a bug fix).
+- `NearbyPanel` still carries the internal CSS class `.threats-panel` (grid-placement leftover from its "Storm Threats" predecessor). Confirmed purely cosmetic (zero visual/functional effect) and touches ~8-10 scattered grid-placement rules across breakpoints to rename -- skipped given the effort-to-benefit ratio, noted for a future cleanup pass.
+- Full `MetricTile` migration for Wind/Alerts/Map/Nearby (currently hand-rolled markup each): not attempted this pass -- a bigger visual restructuring of each card's internals than the more surgical fixes above, and not verifiable without physical-device screenshots.
+- `AlertsPanel`'s "View All Alerts" `window.dispatchEvent` navigation: re-investigated and confirmed this is the *correct*, deliberate pattern (not a bug) -- the map's non-React alert popup needs the same global event bus since it has no React tree access, and `App.tsx` already listens for it consistently. Not changed.
+- No physical-device screenshot validation for any of the above -- this pass ran in a cloud session with no ADB/physical-tablet access.
+
+---
+
 ## Weather Page Polish + Map Pin Customization - 2026-08-08 - Moveable Cards, Bottom Dock, POI Icons, Color Wheel
 
 ### Added

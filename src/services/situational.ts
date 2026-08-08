@@ -31,6 +31,20 @@ export interface AlertProduct {
   geometry?: AlertGeometry | null;
 }
 
+// Shared with AtlasAlertPopup.ts (the map's tap-a-polygon popup) so both the Alerts panels and the
+// map use the exact same countdown text/format -- was previously duplicated there as a private
+// copy. Co-located with AlertProduct itself since it operates directly on its `expires` field.
+export function timeRemainingText(expiresIso: string): string {
+  if (!expiresIso) return "";
+  const expiresAt = new Date(expiresIso).getTime();
+  if (!Number.isFinite(expiresAt)) return "";
+  const ms = expiresAt - Date.now();
+  if (ms <= 0) return "Expired";
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `Expires in ${minutes} min`;
+  return `Expires in ${(minutes / 60).toFixed(1)} hrs`;
+}
+
 export interface ExternalObservation {
   station: string;
   name: string;

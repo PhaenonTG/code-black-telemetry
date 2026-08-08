@@ -1,23 +1,13 @@
 import mapboxgl from "mapbox-gl";
 import type { Map as MapboxMap, Popup } from "mapbox-gl";
 import { requestAlertFocus } from "../services/mapFocusAlert";
+import { timeRemainingText } from "../services/situational";
 
 export interface AlertPopupInfo {
   id: string;
   title: string;
   headline: string;
   expires: string;
-}
-
-function timeRemainingText(expiresIso: string): string {
-  if (!expiresIso) return "";
-  const expiresAt = new Date(expiresIso).getTime();
-  if (!Number.isFinite(expiresAt)) return "";
-  const ms = expiresAt - Date.now();
-  if (ms <= 0) return "Expired";
-  const minutes = Math.round(ms / 60_000);
-  if (minutes < 60) return `Expires in ${minutes} min`;
-  return `Expires in ${(minutes / 60).toFixed(1)} hrs`;
 }
 
 function escapeHtml(value: string) {
