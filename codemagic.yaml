@@ -19,17 +19,6 @@ workflows:
         - mapbox
         - github
     scripts:
-      # Computed once, up front, and exported via $CM_ENV so every later step (the Xcode archive
-      # and the AltStore publish step) agrees on the exact same version string. AltStore refuses to
-      # install an update if the .ipa's own embedded CFBundleShortVersionString doesn't exactly
-      # match the "version" the source manifest claims for it (VerificationError 4: "the downloaded
-      # version does not match the version specified by the source") -- so this can't be computed
-      # independently in the publish step the way it used to be.
-      - name: Compute build version
-        script: |
-          VERSION="$(date -u +%Y.%m%d.%H%M)"
-          echo "Building version $VERSION"
-          echo "VERSION=$VERSION" >> "$CM_ENV"
       - name: Install npm dependencies
         script: npm ci
       - name: Build web app
@@ -41,6 +30,13 @@ workflows:
       # Developer account, certificate, or provisioning profile involved anywhere in this build.
       - name: Archive without code signing
         script: |
+          # Derived from HEAD's commit timestamp rather than $CM_ENV or the wall clock: it must come
+          # out byte-identical here and in the "Publish GitHub Release for AltStore" step below (two
+          # separate script processes, no shared state), and AltStore rejects an install if the
+          # .ipa's embedded CFBundleShortVersionString doesn't exactly match the "version" the source
+          # manifest claims (VerificationError 4). The commit timestamp is fixed for the life of the
+          # build, so recomputing it in each step always agrees.
+          VERSION="$(date -u -r "$(git log -1 --format=%ct)" +%Y.%m%d.%H%M)"
           cd ios/App
           xcodebuild archive \
             -project App.xcodeproj \
@@ -79,9 +75,11 @@ workflows:
           set -euo pipefail
           REPO="PhaenonTG/code-black-telemetry"
           IPA_PATH="$CM_BUILD_DIR/CodeBlackOps-unsigned.ipa"
-          # $VERSION comes from the "Compute build version" step via $CM_ENV -- it's also what got
-          # passed as MARKETING_VERSION into the Xcode archive, so it matches what's embedded in the
-          # .ipa itself.
+          # Same derivation as the "Archive without code signing" step above -- recomputed
+          # independently here (not passed via $CM_ENV, which didn't reliably propagate between
+          # these script steps) but always comes out identical since it's based on HEAD's fixed
+          # commit timestamp rather than wall-clock time.
+          VERSION="$(date -u -r "$(git log -1 --format=%ct)" +%Y.%m%d.%H%M)"
           TAG="ios-$VERSION"
           VERSION_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           IPA_SIZE="$(stat -f%z "$IPA_PATH")"
