@@ -1,0 +1,17 @@
+{
+  "name": "Code Black OPS",
+  "identifier": "com.codeblackwx.source.min",
+  "apps": [
+    {
+      "name": "Code Black OPS",
+      "bundleIdentifier": "com.codeblackwx.ops",
+      "developerName": "PhaenonTG",
+      "localizedDescription": "Code Black OPS: live radar, vehicle telemetry, and severe weather alerts for storm chasing.",
+      "iconURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",
+      "version": "2026.808.1119",
+      "versionDate": "2026-08-08T16:56:00Z",
+      "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-2026.808.1119.ipa",
+      "size": 1423497
+    }
+  ]
+}
