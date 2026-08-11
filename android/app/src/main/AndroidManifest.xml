@@ -52,6 +52,22 @@
         <service
             android:name=".radar.RadarForegroundService"
             android:exported="false" />
+
+        <service
+            android:name=".car.CodeBlackCarAppService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <category android:name="androidx.car.app.category.WEATHER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.car.app.minCarApiLevel"
+                android:value="1" />
+        </service>
+
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
     </application>
 
     <!-- Permissions -->

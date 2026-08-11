@@ -31,11 +31,12 @@ import { useNearbyPlaces } from "./hooks/useNearbyPlaces";
 import { useNearbyPoiList } from "./hooks/useNearbyPoiList";
 import { useSituationalData } from "./hooks/useSituationalData";
 import { useSpotters } from "./hooks/useSpotters";
-import { useStatus } from "./hooks/useTelemetry";
+import { useStatus, useWeather, useWind } from "./hooks/useTelemetry";
 import { setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, startCodeBlackSoundPlayer } from "./services/sound";
 import { loadNightVisionEnabled, subscribeNightVisionEnabled } from "./services/settings";
 import { getSpotterAccount, hasSeenSpotterOnboarding, subscribeSpotterAccount, type SpotterAccount } from "./services/spotterAccount";
 import { setTelemetryPaused } from "./services/telemetry";
+import { publishVehicleDisplaySnapshot } from "./services/vehicleDisplay";
 
 type PageKey = "weather" | "operations" | "locate" | "alerts" | "report" | "settings" | "layers";
 export type CockpitMode = "normal" | "chase";
@@ -82,6 +83,8 @@ export default function App() {
   const pagerRef = useRef<HTMLDivElement | null>(null);
   const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
   const status = useStatus();
+  const weather = useWeather();
+  const wind = useWind();
   const lat = canonicalLocation.latitude;
   const lon = canonicalLocation.longitude;
   const headingDeg = canonicalLocation.headingDeg;
@@ -182,6 +185,10 @@ export default function App() {
     window.addEventListener("codeblack:view-all-alerts", handleViewAllAlerts);
     return () => window.removeEventListener("codeblack:view-all-alerts", handleViewAllAlerts);
   }, []);
+
+  useEffect(() => {
+    void publishVehicleDisplaySnapshot({ location: canonicalLocation, weather, wind, external });
+  }, [canonicalLocation, weather, wind, external]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;

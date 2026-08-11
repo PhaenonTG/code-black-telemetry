@@ -4,6 +4,55 @@ All changes logged newest-first.
 
 ---
 
+## Full App UI Polish Pass - 2026-08-11
+
+Refined page spacing, dock sizing, and tablet/phone layout behavior after a full rendered review.
+
+### Changed
+- Tightened the bottom dock so it stays anchored to the real bottom edge with less wasted height.
+- Removed dashboard page-dot controls from the fixed dashboard layout after reverting the movable
+  card experiment.
+- Improved Alerts page readability with stronger summary cards, clearer full alert text, and better
+  portrait/landscape scrolling behavior.
+- Refined Report page density so the submission panel and nearby report feed share space more cleanly.
+- Improved Layers page rows so labels, toggles, and pin controls do not collide on phone layouts.
+- Reduced Settings page crowding on tablet landscape and made Settings scroll cleanly when content
+  exceeds the viewport.
+- Added short-landscape dock behavior so phone landscape labels no longer clip at the bottom edge.
+
+### Preserved
+- Weather telemetry, BLE/Pi status, radar/maps, alerts data, report feed behavior, stream controls,
+  and Android Auto vehicle-display plumbing were not changed.
+
+### Validation
+- `npm run lint` passes with existing warnings.
+- `npm run build` passes with the existing Mapbox chunk-size warning.
+- Render checks were captured across tablet landscape, phone portrait, and short landscape viewports.
+
+---
+
+## Vehicle Display Snapshot and Android Auto Weather Surface - 2026-08-11
+
+Added a read-only vehicle display data path for Android Auto and the future CarPlay Live Activity/widget surface.
+
+### Changed
+- Added a shared vehicle-display snapshot published by the main app with nearest city/state,
+  conditions, wind, and update age.
+- Added an Android Auto Weather app service that reads that snapshot and presents current
+  location, conditions, wind, and snapshot age in a car-safe template.
+- Added Android Auto `weather` category metadata and the AndroidX Car App dependency.
+- Documented the intended CarPlay implementation as a WidgetKit/ActivityKit Live Activity surface,
+  not a full custom CarPlay dashboard.
+
+### Preserved
+- Main tablet dashboard behavior, radar, alerts, reports, BLE/Pi telemetry, and stream controls
+  were not changed.
+
+### Validation
+- `npm run lint`, `npm run build`, `npx cap sync android`, and Android `assembleDebug` pass.
+
+---
+
 ## Spotter Network Reports and Feed Settings - 2026-08-11
 
 Added Spotter Network reports to the nearby report feed and made feed range configurable.
