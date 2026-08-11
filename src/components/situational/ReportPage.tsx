@@ -29,6 +29,7 @@ const HAZARD_FIELDS: Array<{ key: keyof Pick<SevereReportInput, "tornado" | "fun
 
 const REPORT_RADIUS_OPTIONS = [10, 25, 50, 100];
 const REPORT_RETENTION_OPTIONS = [1, 3, 6, 12, 24];
+type ReportFeedFilter = "all" | "spotter" | "nws";
 
 function emptyReport(gps: { lat: number; lon: number } | null): SevereReportInput {
   return {
@@ -282,6 +283,23 @@ function StormReportFeedPanel({
   onChangeRetention: (hours: number) => void;
 }) {
   const updatedLabel = updatedAt ? new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "WAITING";
+  const [sourceFilter, setSourceFilter] = useState<ReportFeedFilter>("all");
+  const spotterCount = reports.filter((report) => report.source === "Spotter Network").length;
+  const nwsCount = reports.length - spotterCount;
+  const latestReport = reports[0] ?? null;
+  const nearestReport = reports.reduce<StormReport | null>((nearest, report) => (
+    nearest == null || report.distanceMiles < nearest.distanceMiles ? report : nearest
+  ), null);
+  const visibleReports = reports.filter((report) => {
+    if (sourceFilter === "spotter") return report.source === "Spotter Network";
+    if (sourceFilter === "nws") return report.source === "NWS";
+    return true;
+  });
+  const emptyMessage = sourceFilter === "spotter"
+    ? "NO SPOTTER NETWORK REPORTS IN RANGE"
+    : sourceFilter === "nws"
+      ? "NO NWS LOCAL STORM REPORTS IN RANGE"
+      : "NO NWS OR SPOTTER NETWORK REPORTS IN RANGE";
   return (
     <Panel title={`Nearby Reports ${reports.length ? reports.length : ""}`} className="report-page-panel report-feed-panel" tone={reports.length ? "red" : "default"}>
       <div className="report-feed-controls">
@@ -296,16 +314,31 @@ function StormReportFeedPanel({
           ))}
         </div>
       </div>
+      <div className="report-feed-source-controls" aria-label="Report source filter">
+        <button className={sourceFilter === "all" ? "active" : ""} onClick={() => setSourceFilter("all")}>All {reports.length}</button>
+        <button className={sourceFilter === "spotter" ? "active" : ""} onClick={() => setSourceFilter("spotter")}>Spotter {spotterCount}</button>
+        <button className={sourceFilter === "nws" ? "active" : ""} onClick={() => setSourceFilter("nws")}>NWS {nwsCount}</button>
+      </div>
       <div className="report-feed-meta">
         <span>{gps ? `WITHIN ${radiusMiles} MI` : "NO GPS FIX"}</span>
         <span>KEEP {retentionHours}H</span>
         <span>UPDATED {updatedLabel}</span>
       </div>
+      <div className="report-feed-summary">
+        <div>
+          <span>Latest</span>
+          <strong>{latestReport ? `${latestReport.type} - ${reportAgeText(latestReport.validTime)}` : "No reports"}</strong>
+        </div>
+        <div>
+          <span>Nearest</span>
+          <strong>{nearestReport ? `${nearestReport.type} - ${nearestReport.distanceMiles.toFixed(1)} MI` : "No reports"}</strong>
+        </div>
+      </div>
       <div className="report-feed-list">
         {!gps && <div className="calm-card">Waiting for GPS before loading nearby Local Storm Reports.</div>}
         {gps && error && <div className="cb-note cb-note--warn">{error}</div>}
-        {gps && !error && reports.length === 0 && <div className="calm-card">NO NWS OR SPOTTER NETWORK REPORTS IN RANGE</div>}
-        {reports.map((item) => <StormReportRow key={item.id} report={item} />)}
+        {gps && !error && visibleReports.length === 0 && <div className="calm-card">{emptyMessage}</div>}
+        {visibleReports.map((item) => <StormReportRow key={item.id} report={item} />)}
       </div>
     </Panel>
   );
@@ -317,7 +350,10 @@ function StormReportRow({ report }: { report: StormReport }) {
   return (
     <article className={`storm-report-row storm-report-row--${report.source === "Spotter Network" ? "spotter-network" : "nws"} storm-report-row--${report.type.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
       <div className="storm-report-row__head">
-        <strong>{report.type}</strong>
+        <div className="storm-report-row__title">
+          <strong>{report.type}</strong>
+          <span className="storm-report-source">{report.source === "Spotter Network" ? "Spotter" : "NWS"}</span>
+        </div>
         <span>{reportAgeText(report.validTime)} - {report.distanceMiles.toFixed(1)} MI</span>
       </div>
       <div className="storm-report-row__place">

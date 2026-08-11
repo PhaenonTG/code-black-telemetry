@@ -9,6 +9,8 @@ All changes logged newest-first.
 Added Spotter Network reports to the nearby report feed and made feed range configurable.
 
 ### Changed
+- Refined the Report page feed with source filters, source counts, latest/nearest report summary
+  cards, and visible source badges on each report row.
 - Added the public Spotter Network reports-only feed alongside NWS Local Storm Reports on the
   Report page.
 - Added Settings controls for report-feed radius and retention so nearby reports can be tuned
