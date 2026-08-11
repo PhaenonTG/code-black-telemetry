@@ -4,6 +4,24 @@ All changes logged newest-first.
 
 ---
 
+## Nearby Report Feed - 2026-08-11
+
+Added a live nearby Local Storm Reports feed to the Report page.
+
+### Changed
+- Split the Report page into a report submission panel and a nearby report feed panel.
+- Added NOAA/NWS Local Storm Reports polling from the official 24-hour MapServer layer.
+- Filtered reports by exact distance from current GPS and by a selectable retention window.
+- Added quick controls for 10/25/50/100 mile radius and 1/3/6/12 hour feed retention.
+- Kept the feed available even when Spotter Network sign-in is missing; submission still requires
+  Spotter Network as before.
+
+### Preserved
+- Existing Spotter Network report submission fields and validation remain intact.
+- Weather, radar, alerts, maps, Operations, BLE/Pi telemetry, and stream controls were not changed.
+
+---
+
 ## UI Polish and Alert Tone Pass - 2026-08-11
 
 Tightened the fixed dashboard layout and alert feedback after phone/tablet review.

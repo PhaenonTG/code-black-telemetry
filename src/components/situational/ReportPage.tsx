@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Panel } from "./Panel";
 import { usePeakGust } from "../../hooks/usePeakGust";
+import { useStormReports } from "../../hooks/useStormReports";
 import { loadSpotterAccount, subscribeSpotterAccount, submitSevereReport, type SevereReportInput, type SpotterAccount } from "../../services/spotterAccount";
+import { reportAgeText, type StormReport } from "../../services/stormReports";
 
 const HAZARD_FIELDS: Array<{ key: keyof Pick<SevereReportInput, "tornado" | "funnelCloud" | "wallCloud" | "rotation" | "hail" | "wind" | "flood" | "flashFlood" | "other">; label: string }> = [
   { key: "tornado", label: "Tornado" },
@@ -14,6 +16,9 @@ const HAZARD_FIELDS: Array<{ key: keyof Pick<SevereReportInput, "tornado" | "fun
   { key: "flashFlood", label: "Flash Flood" },
   { key: "other", label: "Other" },
 ];
+
+const REPORT_RADIUS_OPTIONS = [10, 25, 50, 100];
+const REPORT_RETENTION_OPTIONS = [1, 3, 6, 12];
 
 function emptyReport(gps: { lat: number; lon: number } | null): SevereReportInput {
   return {
@@ -44,10 +49,13 @@ function emptyReport(gps: { lat: number; lon: number } | null): SevereReportInpu
 export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: number } | null; onOpenSettings: () => void }) {
   const [account, setAccount] = useState<SpotterAccount | null>(null);
   const [report, setReport] = useState<SevereReportInput>(() => emptyReport(gps));
+  const [radiusMiles, setRadiusMiles] = useState(50);
+  const [retentionHours, setRetentionHours] = useState(3);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
   const peakGust = usePeakGust();
+  const feed = useStormReports(gps, radiusMiles, retentionHours);
 
   useEffect(() => {
     const unsubscribe = subscribeSpotterAccount(setAccount);
@@ -63,7 +71,7 @@ export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: n
 
   const submit = async () => {
     if (!gps) {
-      setError("No GPS fix yet — can't submit a report without a location.");
+      setError("No GPS fix yet - can't submit a report without a location.");
       return;
     }
     const anyHazard = HAZARD_FIELDS.some((field) => report[field.key]);
@@ -82,30 +90,22 @@ export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: n
     }
   };
 
-  if (!account) {
-    return (
-      <Panel title="Submit Report" className="report-page-panel">
-        <div className="calm-card">Sign in to Spotter Network in Settings before submitting a report.</div>
-        <div className="nearby-actions report-page-actions">
-          <button className="settings-action" onClick={onOpenSettings}>Open Spotter Settings</button>
-        </div>
-      </Panel>
-    );
-  }
-
-  if (sent) {
-    return (
-      <Panel title="Submit Report" className="report-page-panel">
-        <div className="calm-card">Your report was submitted to Spotter Network.</div>
-        <div className="nearby-actions report-page-actions">
-          <button className="settings-action" onClick={() => { setSent(false); setReport(emptyReport(gps)); }}>Submit Another</button>
-        </div>
-      </Panel>
-    );
-  }
-
-  return (
-    <Panel title="Spotter Network — Submit Report" className="report-page-panel">
+  const formPanel = !account ? (
+    <Panel title="Submit Report" className="report-page-panel report-compose-panel report-compose-panel--locked">
+      <div className="calm-card">Sign in to Spotter Network in Settings before submitting a report.</div>
+      <div className="nearby-actions report-page-actions">
+        <button className="settings-action" onClick={onOpenSettings}>Open Spotter Settings</button>
+      </div>
+    </Panel>
+  ) : sent ? (
+    <Panel title="Submit Report" className="report-page-panel report-compose-panel">
+      <div className="calm-card">Your report was submitted to Spotter Network.</div>
+      <div className="nearby-actions report-page-actions">
+        <button className="settings-action" onClick={() => { setSent(false); setReport(emptyReport(gps)); }}>Submit Another</button>
+      </div>
+    </Panel>
+  ) : (
+    <Panel title="Spotter Network - Submit Report" className="report-page-panel report-compose-panel">
       <div className="report-page-scroll report-form">
         <div className="report-section">
           <div className="mode-toggle" aria-label="Report type">
@@ -222,5 +222,89 @@ export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: n
         </div>
       </div>
     </Panel>
+  );
+
+  return (
+    <>
+      {formPanel}
+      <StormReportFeedPanel
+        gps={gps}
+        reports={feed.reports}
+        error={feed.error}
+        updatedAt={feed.updatedAt}
+        radiusMiles={radiusMiles}
+        retentionHours={retentionHours}
+        onChangeRadius={setRadiusMiles}
+        onChangeRetention={setRetentionHours}
+      />
+    </>
+  );
+}
+
+function StormReportFeedPanel({
+  gps,
+  reports,
+  error,
+  updatedAt,
+  radiusMiles,
+  retentionHours,
+  onChangeRadius,
+  onChangeRetention,
+}: {
+  gps: { lat: number; lon: number } | null;
+  reports: StormReport[];
+  error: string;
+  updatedAt: number | null;
+  radiusMiles: number;
+  retentionHours: number;
+  onChangeRadius: (miles: number) => void;
+  onChangeRetention: (hours: number) => void;
+}) {
+  const updatedLabel = updatedAt ? new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "WAITING";
+  return (
+    <Panel title={`Nearby Reports ${reports.length ? reports.length : ""}`} className="report-page-panel report-feed-panel" tone={reports.length ? "red" : "default"}>
+      <div className="report-feed-controls">
+        <div className="mode-toggle report-feed-toggle" aria-label="Report feed radius">
+          {REPORT_RADIUS_OPTIONS.map((miles) => (
+            <button key={miles} className={radiusMiles === miles ? "active" : ""} onClick={() => onChangeRadius(miles)}>{miles} mi</button>
+          ))}
+        </div>
+        <div className="mode-toggle report-feed-toggle" aria-label="Report feed retention">
+          {REPORT_RETENTION_OPTIONS.map((hours) => (
+            <button key={hours} className={retentionHours === hours ? "active" : ""} onClick={() => onChangeRetention(hours)}>{hours}h</button>
+          ))}
+        </div>
+      </div>
+      <div className="report-feed-meta">
+        <span>{gps ? `WITHIN ${radiusMiles} MI` : "NO GPS FIX"}</span>
+        <span>KEEP {retentionHours}H</span>
+        <span>UPDATED {updatedLabel}</span>
+      </div>
+      <div className="report-feed-list">
+        {!gps && <div className="calm-card">Waiting for GPS before loading nearby Local Storm Reports.</div>}
+        {gps && error && <div className="cb-note cb-note--warn">{error}</div>}
+        {gps && !error && reports.length === 0 && <div className="calm-card">NO LOCAL STORM REPORTS IN RANGE</div>}
+        {reports.map((item) => <StormReportRow key={item.id} report={item} />)}
+      </div>
+    </Panel>
+  );
+}
+
+function StormReportRow({ report }: { report: StormReport }) {
+  const magnitude = [report.magnitude, report.units].filter(Boolean).join(" ");
+  const office = report.officeId || report.office;
+  return (
+    <article className={`storm-report-row storm-report-row--${report.type.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+      <div className="storm-report-row__head">
+        <strong>{report.type}</strong>
+        <span>{reportAgeText(report.validTime)} - {report.distanceMiles.toFixed(1)} MI</span>
+      </div>
+      <div className="storm-report-row__place">
+        <span>{report.location}{report.state ? `, ${report.state}` : ""}</span>
+        {magnitude && <em>{magnitude}</em>}
+      </div>
+      {report.remarks && <p>{report.remarks}</p>}
+      <footer>{office ? `NWS ${office}` : "NWS LSR"} - {report.validTimeText || new Date(report.validTime).toLocaleString()}</footer>
+    </article>
   );
 }
