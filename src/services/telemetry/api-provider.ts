@@ -302,8 +302,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
     // off entirely rather than retrying forever when there's genuinely no Pi/ESP on this vehicle
     // yet. Fires immediately with the current in-memory value on subscribe, so this also replaces
     // the old unconditional bleTelemetryClient.start() call below.
-    void loadTelemetryLinkEnabled();
-    subscribeTelemetryLinkEnabled((enabled) => {
+    const applyTelemetryLinkSetting = (enabled: boolean) => {
       if (enabled) {
         this.failureCount = 0;
         this.nextPollAt = 0;
@@ -313,6 +312,10 @@ export class HybridTelemetryProvider implements TelemetryProvider {
         bleTelemetryClient.stop();
         this.publish(this.applyTabletGps(this.offlineSnapshot(this.snapshot, "Pi/ESP link turned off in Settings")));
       }
+    };
+    void loadTelemetryLinkEnabled().then((enabled) => {
+      applyTelemetryLinkSetting(enabled);
+      subscribeTelemetryLinkEnabled(applyTelemetryLinkSetting);
     });
     // BLE is the primary link to the Pi (no WiFi/Starlink dependency); HTTP polling below stays as
     // a fallback for whenever BLE isn't connected. Whichever is currently fresh wins -- see the

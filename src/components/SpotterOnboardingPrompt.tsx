@@ -13,8 +13,8 @@ export function SpotterOnboardingPrompt({ onDismiss }: { onDismiss: () => void }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const dismiss = () => {
-    void markSpotterOnboardingSeen();
+  const dismiss = async () => {
+    await markSpotterOnboardingSeen();
     onDismiss();
   };
 
@@ -24,7 +24,7 @@ export function SpotterOnboardingPrompt({ onDismiss }: { onDismiss: () => void }
     const result = await spotterNetworkLogin(username.trim(), password);
     setBusy(false);
     if (result.success) {
-      dismiss();
+      await dismiss();
     } else {
       setError(result.error);
     }
@@ -38,7 +38,7 @@ export function SpotterOnboardingPrompt({ onDismiss }: { onDismiss: () => void }
             <div className="cb-panel__title">Spotter Network</div>
             <h2 id="spotter-onboarding-title">Sign In?</h2>
           </div>
-          <button className="icon-button" onClick={dismiss} aria-label="Skip for now">X</button>
+          <button className="icon-button" onClick={() => void dismiss()} aria-label="Skip for now">X</button>
         </div>
         <div className="modal-scroll spotter-onboarding-body">
           <p>Signing in upgrades Chasers to real-time positions and contact info instead of the anonymous public feed, and lets you submit severe reports from this app. Optional -- everything else works fine without it.</p>
@@ -69,7 +69,7 @@ export function SpotterOnboardingPrompt({ onDismiss }: { onDismiss: () => void }
           </div>
           <div className="spotter-onboarding-actions">
             <a className="settings-action" href="https://www.spotternetwork.org/account/register" target="_blank" rel="noreferrer">Create Account</a>
-            <button className="settings-action" onClick={dismiss}>Skip For Now</button>
+            <button className="settings-action" onClick={() => void dismiss()}>Skip For Now</button>
           </div>
         </div>
       </div>

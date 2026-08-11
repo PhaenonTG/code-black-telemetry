@@ -4,6 +4,25 @@ All changes logged newest-first.
 
 ---
 
+## First-Run Prompt and BLE Pairing Hardening - 2026-08-11
+
+Hardened two first-run/device-test annoyances before pushing the mobile layout fixes.
+
+### Changed
+- Made the Spotter Network first-run prompt persist its dismissed state before closing, with a
+  local fallback so a failed native Preferences write cannot trap the user behind the modal.
+- Fixed a telemetry-link startup race where BLE could briefly start before the saved On/Off setting
+  finished loading.
+- Added BLE pairing/auth/cancel failure cooldown so the app does not immediately keep re-triggering
+  OS pairing prompts after a rejected or canceled pairing flow.
+
+### Preserved
+- Spotter sign-in remains optional and still available from Settings.
+- BLE telemetry remains enabled when the Pi/ESP link setting is On; this only reduces unwanted
+  repeated prompts and startup races.
+
+---
+
 ## Tablet Bottom Dock Refinement - 2026-08-11
 
 Refined the iPad/tablet bottom navigation after the phone dock pass so the tab bar sits flush to

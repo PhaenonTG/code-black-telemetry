@@ -3,6 +3,22 @@ import { Preferences } from "@capacitor/preferences";
 const ACCOUNT_KEY = "codeblack.spotterAccount";
 const ONBOARDING_SEEN_KEY = "codeblack.spotterOnboardingSeen";
 
+function readLocalSeenFallback() {
+  try {
+    return window.localStorage.getItem(ONBOARDING_SEEN_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeLocalSeenFallback() {
+  try {
+    window.localStorage.setItem(ONBOARDING_SEEN_KEY, "true");
+  } catch {
+    // Preferences is the primary store; localStorage is only a web/dev fallback.
+  }
+}
+
 // A one-time, skippable first-run prompt (see SpotterOnboardingPrompt.tsx) rather than gating the
 // app behind sign-in -- this dashboard's core purpose (GPS, weather, radar, alerts) has nothing to
 // do with Spotter Network, and a login screen blocking access to severe weather info during an
@@ -10,12 +26,22 @@ const ONBOARDING_SEEN_KEY = "codeblack.spotterOnboardingSeen";
 // at app mount; once dismissed (signed in OR skipped) it never shows again automatically -- signing
 // in later is always available from Settings.
 export async function hasSeenSpotterOnboarding(): Promise<boolean> {
-  const saved = await Preferences.get({ key: ONBOARDING_SEEN_KEY });
-  return saved.value === "true";
+  try {
+    const saved = await Preferences.get({ key: ONBOARDING_SEEN_KEY });
+    return saved.value === "true" || readLocalSeenFallback();
+  } catch {
+    return readLocalSeenFallback();
+  }
 }
 
 export async function markSpotterOnboardingSeen(): Promise<void> {
-  await Preferences.set({ key: ONBOARDING_SEEN_KEY, value: "true" });
+  writeLocalSeenFallback();
+  try {
+    await Preferences.set({ key: ONBOARDING_SEEN_KEY, value: "true" });
+  } catch {
+    // The prompt is intentionally non-critical. Never trap the driver behind Spotter sign-in
+    // because native preferences are temporarily unavailable.
+  }
 }
 
 export interface SpotterAccount {

@@ -16,6 +16,7 @@ const SCAN_TIMEOUT_MS = 10_000;
 // down) settles into brief, infrequent scans rather than nonstop scanning that outpaces charging.
 const RECONNECT_DELAY_MIN_MS = 5_000;
 const RECONNECT_DELAY_MAX_MS = 90_000;
+const PAIRING_RETRY_DELAY_MS = 10 * 60_000;
 
 export type BleHealth = "READY" | "DEGRADED" | "BACKEND_OFFLINE" | "DATA_STALE" | "NO_SENSORS";
 
@@ -46,6 +47,11 @@ export interface BleCommandResponse {
 
 type Listener = (payload: BleTelemetryPayload | null, connected: boolean) => void;
 
+function isPairingPromptFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /auth|bond|pair|pin|passkey|cancel|user|denied|rejected/i.test(message);
+}
+
 // A single long-lived scan/connect/subscribe state machine, not a per-component hook -- there's
 // exactly one physical BLE radio link to the Pi, and every consumer (telemetry provider today,
 // an Operations-page diagnostics panel later) should share it rather than each opening their own
@@ -61,6 +67,7 @@ class BleTelemetryClient {
   private fragmentBuffers = new Map<number, Map<number, string>>();
   private retryDelayMs = RECONNECT_DELAY_MIN_MS;
   private retryTimer: number | null = null;
+  private connecting = false;
 
   start() {
     if (this.started) return;
@@ -76,6 +83,8 @@ class BleTelemetryClient {
     if (this.deviceId) void BleClient.disconnect(this.deviceId).catch(() => {});
     this.deviceId = null;
     this.connected = false;
+    this.connecting = false;
+    this.notify(null);
   }
 
   // Mirrors HybridTelemetryProvider.setPaused() for the HTTP path -- called from the same
@@ -91,6 +100,8 @@ class BleTelemetryClient {
     if (this.deviceId) void BleClient.disconnect(this.deviceId).catch(() => {});
     this.deviceId = null;
     this.connected = false;
+    this.connecting = false;
+    this.notify(null);
   }
 
   resume() {
@@ -169,6 +180,15 @@ class BleTelemetryClient {
     this.retryDelayMs = Math.min(this.retryDelayMs * 2, RECONNECT_DELAY_MAX_MS);
   }
 
+  private schedulePairingRetry(fn: () => void) {
+    this.clearRetryTimer();
+    this.retryTimer = window.setTimeout(() => {
+      this.retryTimer = null;
+      fn();
+    }, PAIRING_RETRY_DELAY_MS);
+    this.retryDelayMs = RECONNECT_DELAY_MAX_MS;
+  }
+
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => {
@@ -212,21 +232,34 @@ class BleTelemetryClient {
   }
 
   private async scanAndConnect() {
-    if (this.stopped || this.paused) return;
+    if (this.stopped || this.paused || this.connecting) return;
+    this.connecting = true;
     try {
       const device = await this.scanForDevice();
+      this.connecting = false;
       if (!device) {
         if (!this.stopped && !this.paused) this.scheduleRetry(() => void this.scanAndConnect());
         return;
       }
+      this.connecting = true;
       await BleClient.connect(device.deviceId, () => this.handleDisconnect());
       this.deviceId = device.deviceId;
       this.connected = true;
+      this.connecting = false;
       this.retryDelayMs = RECONNECT_DELAY_MIN_MS;
       this.notify(null);
       await BleClient.startNotifications(device.deviceId, SERVICE_UUID, TELEMETRY_CHARACTERISTIC_UUID, (value) => this.handleFrame(value));
-    } catch {
-      if (!this.stopped && !this.paused) this.scheduleRetry(() => void this.scanAndConnect());
+    } catch (error) {
+      this.connecting = false;
+      this.connected = false;
+      this.deviceId = null;
+      this.notify(null);
+      if (this.stopped || this.paused) return;
+      if (isPairingPromptFailure(error)) {
+        this.schedulePairingRetry(() => void this.scanAndConnect());
+        return;
+      }
+      this.scheduleRetry(() => void this.scanAndConnect());
     }
   }
 
