@@ -6964,3 +6964,56 @@ body {
     content: "Setup";
   }
 }
+
+/* Tablet dock refinement 2026-08-11:
+   iPad/tablet layouts need the same bottom-anchored tab bar as phones, but with slightly larger
+   controls and labels. Keep the bar flush to the viewport bottom and let the dock row carry any
+   safe-area inset instead of leaving shell padding below it. */
+@media (min-width: 768px) {
+  :root {
+    --cb-dock-bar-h: clamp(54px, 6.4dvh, 64px);
+    --cb-dock-h: calc(var(--cb-dock-bar-h) + env(safe-area-inset-bottom));
+    --dock-h: var(--cb-dock-h);
+  }
+
+  .app-shell {
+    padding-bottom: 0 !important;
+    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dots-h) var(--cb-dock-h) !important;
+  }
+
+  .bottom-dock {
+    align-self: stretch !important;
+    justify-self: stretch !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 5px 12px max(5px, env(safe-area-inset-bottom)) !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    gap: clamp(6px, 0.9vw, 10px) !important;
+    border-radius: 0 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.11) !important;
+  }
+
+  .bottom-dock button {
+    min-height: 0 !important;
+    height: calc(var(--cb-dock-bar-h) - 10px) !important;
+    gap: 3px !important;
+    padding: 4px 6px !important;
+    border-radius: 6px !important;
+  }
+
+  .bottom-dock button svg {
+    width: clamp(18px, 2.2vw, 22px) !important;
+    height: clamp(18px, 2.2vw, 22px) !important;
+  }
+
+  .bottom-dock button span {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    font-size: clamp(10px, 1.3vw, 12px) !important;
+    line-height: 1 !important;
+    letter-spacing: 0.02em !important;
+  }
+}

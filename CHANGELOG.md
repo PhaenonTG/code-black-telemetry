@@ -4,6 +4,22 @@ All changes logged newest-first.
 
 ---
 
+## Tablet Bottom Dock Refinement - 2026-08-11
+
+Refined the iPad/tablet bottom navigation after the phone dock pass so the tab bar sits flush to
+the physical bottom of the screen and uses shorter, denser controls.
+
+### Changed
+- Added tablet-specific dock sizing and safe-area handling for portrait and landscape viewports.
+- Removed the tablet shell's visual bottom gap by letting the dock row own the bottom inset.
+- Kept all seven navigation buttons evenly distributed with single-line labels.
+
+### Preserved
+- Weather dashboard card layout, radar/maps, Operations, telemetry, alerts, reporting, and stream
+  controls were not changed.
+
+---
+
 ## Mobile Dashboard Density Pass - 2026-08-11
 
 Tightened the restored fixed Weather dashboard for phone layouts after device screenshots showed the
