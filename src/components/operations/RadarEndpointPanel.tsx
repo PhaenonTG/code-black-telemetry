@@ -25,6 +25,7 @@ export function RadarEnginePanel() {
   const [mapDiagnostics, setMapDiagnostics] = useState<MapRuntimeDiagnostics | null>(null);
   const [atlasDiagnostics, setAtlasDiagnostics] = useState<AtlasDiagnosticsSnapshot | null>(null);
   const [loopDiagnostics, setLoopDiagnostics] = useState<RadarLoopDiagnostics | null>(null);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [message, setMessage] = useState("On-device radar engine starting.");
   const [motionDir, setMotionDir] = useState("245");
   const [motionSpeed, setMotionSpeed] = useState("32");
@@ -64,7 +65,7 @@ export function RadarEnginePanel() {
     <section className="cb-panel endpoint-panel radar-endpoint-panel">
       <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Radar Engine</div>
       <div className="endpoint-form radar-engine-form">
-        <div className="radar-engine-grid">
+        <div className="radar-engine-grid radar-engine-grid--summary">
           <div className="radar-engine-metric"><span>Engine</span><strong>{status?.backendState === "ON_DEVICE" ? "ON DEVICE" : "STARTING"}</strong></div>
           <div className="radar-engine-metric"><span>Source</span><strong>NOAA LEVEL II</strong></div>
           <div className="radar-engine-metric"><span>Selected Site</span><strong>{status?.selectedSite ?? "AUTO"}</strong></div>
@@ -77,6 +78,12 @@ export function RadarEnginePanel() {
           <div className="radar-engine-metric"><span>Level III</span><strong>DEFERRED</strong></div>
           <div className="radar-engine-metric"><span>Cache</span><strong>{cache ? `${sizeLabel(cache.usedBytes)} / ${sizeLabel(cache.limitBytes)}` : "LOADING"}</strong></div>
           <div className="radar-engine-metric"><span>Frames</span><strong>{cache ? `${cache.frames}` : "--"}</strong></div>
+        </div>
+        <button className="settings-action radar-engine-diagnostics-toggle" onClick={() => setDiagnosticsOpen((open) => !open)}>
+          {diagnosticsOpen ? "Hide Diagnostics" : "Show Diagnostics"}
+        </button>
+        {diagnosticsOpen && (
+        <div className="radar-engine-grid radar-engine-grid--diagnostics">
           <div className="radar-engine-metric"><span>Background</span><strong>OFF</strong></div>
           <div className="radar-engine-metric"><span>Map Renderer</span><strong>{mapDiagnostics?.renderer ?? "WAITING"}</strong></div>
           <div className="radar-engine-metric"><span>Map Style</span><strong>{mapDiagnostics?.styleUri.replace("mapbox://styles/", "") ?? "UNKNOWN"}</strong></div>
@@ -101,6 +108,7 @@ export function RadarEnginePanel() {
           <div className="radar-engine-metric"><span>Loop Errors</span><strong>{loopDiagnostics?.lastPlaybackError || "NONE"}</strong></div>
           <div className="radar-engine-metric"><span>Invalid Frames</span><strong>{loopDiagnostics?.skippedInvalidFrames ?? 0}</strong></div>
         </div>
+        )}
         <div className="radar-engine-message">{message}</div>
         <div className="storm-motion-form">
           <span>SRV manual storm motion</span>

@@ -4,6 +4,28 @@ All changes logged newest-first.
 
 ---
 
+## UI Polish and Alert Tone Pass - 2026-08-11
+
+Tightened the fixed dashboard layout and alert feedback after phone/tablet review.
+
+### Changed
+- Refined phone Weather scaling, header density, bottom dock height, and card ordering so location,
+  wind, alerts, conditions, and map content fit more naturally on small screens.
+- Tightened tablet/landscape Weather cards so Location & Motion text no longer collides and
+  Conditions/Alerts use their card space more evenly.
+- Collapsed the long Operations radar diagnostic wall behind a Show/Hide Diagnostics control while
+  preserving the native radar engine details.
+- Added a direct Spotter Settings action from the signed-out report page.
+- Split alert audio into distinct Severe, Tornado, and PDS warning tones, with Settings test buttons
+  for each.
+
+### Preserved
+- Fixed dashboard cards remain fixed; no movable/sliding/card-ordering behavior was reintroduced.
+- Radar/maps, BLE telemetry, Pi HTTP fallback, alerts, reporting, streaming controls, and KNWA/Code
+  Black stream controls remain in place.
+
+---
+
 ## First-Run Prompt and BLE Pairing Hardening - 2026-08-11
 
 Hardened two first-run/device-test annoyances before pushing the mobile layout fixes.

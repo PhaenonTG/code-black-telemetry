@@ -22,10 +22,10 @@ import type { CockpitMode } from "../../App";
 export function LocationMotionPanel({ tabletPermission, location, mode }: { tabletPermission: string; location: CanonicalLocation; mode: CockpitMode }) {
   const valid = location.validity === "VALID" && location.latitude != null && location.longitude != null;
   const source = sourceLabel(location.source);
-  const place = location.resolvedCity && location.resolvedState ? `${location.resolvedCity}, ${location.resolvedState}` : valid ? "CURRENT POSITION" : "GPS ACQUIRING";
+  const place = location.resolvedCity && location.resolvedState ? `${location.resolvedCity}, ${location.resolvedState}` : valid ? "CURRENT POSITION" : "NO GPS FIX";
   const county = location.resolvedCounty ?? (valid ? "LOCALITY RESOLVING" : "NO CURRENT GPS FIX");
   const fixValue = location.fixState === "FIX_3D" ? "3D FIX" : location.fixState === "FIX_2D" ? "2D FIX" : location.fixState.replace("_", " ");
-  const fixHero = location.fixState === "FIX_3D" ? "3D" : location.fixState === "FIX_2D" ? "2D" : location.fixState.replace("_", " ");
+  const fixHero = !valid ? "NO FIX" : location.fixState === "FIX_3D" ? "3D" : location.fixState === "FIX_2D" ? "2D" : location.fixState.replace("_", " ");
   const altitudeValue = location.altitudeFt == null ? "--" : location.altitudeFt >= 1000 ? `${Math.round(location.altitudeFt / 1000)}K` : location.altitudeFt.toFixed(0);
   return (
     <Panel title="Location & Motion" className={`loc-panel cockpit-card cockpit-card--${mode}`}>

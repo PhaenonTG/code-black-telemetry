@@ -27,7 +27,7 @@ import {
   type TeamMember,
   type VehicleMarkerStyle,
 } from "../../services/settings";
-import { emitCodeBlackSound, setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, subscribeCodeBlackSoundEnabled } from "../../services/sound";
+import { emitCodeBlackSound, setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, subscribeCodeBlackSoundEnabled, type CodeBlackSoundEvent } from "../../services/sound";
 import { clearSpotterAccount, loadSpotterAccount, spotterNetworkLogin, subscribeSpotterAccount, type SpotterAccount } from "../../services/spotterAccount";
 import { bleTelemetryClient } from "../../services/telemetry/ble-client";
 import { PinStyleField } from "../map/PinStyleEditor";
@@ -57,6 +57,12 @@ const STORM_MODE_PRESETS: Array<{ mode: string; label: string }> = [
   { mode: "flash_flood_warning", label: "Flash Flood" },
   { mode: "tornado_warning", label: "Tornado Warning" },
   { mode: "pds_tornado_warning", label: "PDS Tornado" },
+];
+
+const ALERT_SOUND_TESTS: Array<{ event: CodeBlackSoundEvent; label: string }> = [
+  { event: "severe-warning", label: "Severe" },
+  { event: "tornado-warning", label: "Tornado" },
+  { event: "pds-warning", label: "PDS" },
 ];
 
 interface SettingsPageProps {
@@ -317,10 +323,14 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         </div>
         <div className="settings-row">
           <div>
-            <strong>Test Alert Sound</strong>
-            <span>{soundEnabled ? "Same tone as a real alert." : "Enable audible alerts to test."}</span>
+            <strong>Test Alert Tones</strong>
+            <span>{soundEnabled ? "Severe, tornado, and PDS each use a distinct tone." : "Enable audible alerts to test."}</span>
           </div>
-          <button className="settings-action" disabled={!soundEnabled} onClick={() => emitCodeBlackSound("warning")}>Play Test</button>
+          <div className="settings-alert-tone-tests">
+            {ALERT_SOUND_TESTS.map(({ event, label }) => (
+              <button key={event} className="settings-action" disabled={!soundEnabled} onClick={() => emitCodeBlackSound(event)}>{label}</button>
+            ))}
+          </div>
         </div>
       </Panel>
 

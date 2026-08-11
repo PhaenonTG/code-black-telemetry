@@ -317,7 +317,13 @@ export default function App() {
         </section>
         <section className="page page--report" aria-label="Submit Report">
           <div className="page-grid page-grid--report">
-            <ReportPage gps={gpsPoint} />
+            <ReportPage
+              gps={gpsPoint}
+              onOpenSettings={() => {
+                goToPage("settings");
+                focusPanel(".settings-spotter-panel");
+              }}
+            />
           </div>
         </section>
         <section className="page page--settings" aria-label="Settings">

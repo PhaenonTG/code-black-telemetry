@@ -6,7 +6,13 @@ import { useResumeTick } from "./useResumeTick";
 
 type GpsPoint = { lat: number; lon: number };
 
-const SEVERE_SEVERITIES: AlertProduct["severity"][] = ["tornado", "pds"];
+const SEVERE_SEVERITIES: AlertProduct["severity"][] = ["severe", "tornado", "pds"];
+
+function soundEventFor(product: AlertProduct) {
+  if (product.severity === "pds") return "pds-warning";
+  if (product.severity === "tornado") return "tornado-warning";
+  return "severe-warning";
+}
 
 export function useAlertProducts(gps: GpsPoint | null) {
   const [products, setProducts] = useState<AlertProduct[]>([]);
@@ -36,10 +42,11 @@ export function useAlertProducts(gps: GpsPoint | null) {
           const currentSevere = next.filter((product) => SEVERE_SEVERITIES.includes(product.severity));
           const newSevere = currentSevere.filter((product) => !seenSevereIds.current.has(product.id));
           if (newSevere.length > 0) {
-            emitCodeBlackSound("warning");
-            // PDS outranks a plain tornado warning when both are new in the same poll -- flash the
-            // more urgent one.
-            const toFlash = newSevere.find((product) => product.severity === "pds") ?? newSevere[0];
+            const toFlash =
+              newSevere.find((product) => product.severity === "pds") ??
+              newSevere.find((product) => product.severity === "tornado") ??
+              newSevere[0];
+            emitCodeBlackSound(soundEventFor(toFlash));
             triggerSevereFlash(toFlash);
           }
           seenSevereIds.current = new Set(currentSevere.map((product) => product.id));

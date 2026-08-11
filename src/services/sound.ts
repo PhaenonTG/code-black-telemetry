@@ -1,4 +1,11 @@
-export type CodeBlackSoundEvent = "warning" | "gps-acquired" | "pi-connected" | "sensor-offline";
+export type CodeBlackSoundEvent =
+  | "warning"
+  | "severe-warning"
+  | "tornado-warning"
+  | "pds-warning"
+  | "gps-acquired"
+  | "pi-connected"
+  | "sensor-offline";
 
 export const SOUND_ENABLED_PREF_KEY = "codeblack.soundEnabled";
 
@@ -18,9 +25,8 @@ export function isCodeBlackSoundEnabled() {
   return enabled;
 }
 
-// Preferred over reading isCodeBlackSoundEnabled() once at mount — this fires immediately with
-// the current value AND on every later change, so a component never shows a stale snapshot taken
-// before App's async preference load resolves.
+// Preferred over reading isCodeBlackSoundEnabled() once at mount: this fires immediately with
+// the current value and on every later change, so components do not show a stale preference value.
 export function subscribeCodeBlackSoundEnabled(listener: EnabledListener) {
   enabledListeners.add(listener);
   listener(enabled);
@@ -37,8 +43,6 @@ export function subscribeCodeBlackSound(listener: SoundListener) {
   return () => listeners.delete(listener);
 }
 
-// Synthesized via WebAudio rather than shipping an audio asset — works fully offline (no network
-// asset to fetch in a dead zone) and needs no licensed sound file.
 let audioContext: AudioContext | null = null;
 
 function getAudioContext(): AudioContext | null {
@@ -50,29 +54,56 @@ function getAudioContext(): AudioContext | null {
   return audioContext;
 }
 
-function playTone(ctx: AudioContext, freq: number, startAt: number, durationSec: number, gainPeak = 0.22) {
+type ToneStep = {
+  freq: number;
+  duration: number;
+  gap: number;
+  endFreq?: number;
+  gain?: number;
+  type?: OscillatorType;
+};
+
+function playTone(ctx: AudioContext, step: ToneStep, startAt: number) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = "square";
-  osc.frequency.setValueAtTime(freq, startAt);
+  osc.type = step.type ?? "square";
+  osc.frequency.setValueAtTime(step.freq, startAt);
+  if (step.endFreq != null) {
+    osc.frequency.exponentialRampToValueAtTime(step.endFreq, startAt + Math.max(step.duration - 0.02, 0.02));
+  }
   gain.gain.setValueAtTime(0, startAt);
-  gain.gain.linearRampToValueAtTime(gainPeak, startAt + 0.02);
-  gain.gain.linearRampToValueAtTime(0, startAt + durationSec);
+  gain.gain.linearRampToValueAtTime(step.gain ?? 0.22, startAt + 0.015);
+  gain.gain.linearRampToValueAtTime(0, startAt + step.duration);
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start(startAt);
-  osc.stop(startAt + durationSec + 0.02);
+  osc.stop(startAt + step.duration + 0.02);
 }
 
-// warning: 4-tone alternating caution tone (aviation master-caution style) — the only pattern
-// currently wired to a real trigger (new tornado/PDS-severity alert). The others are ready for
-// future use but nothing calls emitCodeBlackSound() with them yet.
-const TONE_PATTERNS: Record<CodeBlackSoundEvent, Array<{ freq: number; duration: number; gap: number }>> = {
+const TONE_PATTERNS: Record<CodeBlackSoundEvent, ToneStep[]> = {
   warning: [
-    { freq: 880, duration: 0.16, gap: 0.06 },
-    { freq: 660, duration: 0.16, gap: 0.06 },
-    { freq: 880, duration: 0.16, gap: 0.06 },
-    { freq: 660, duration: 0.16, gap: 0.12 },
+    { freq: 680, duration: 0.14, gap: 0.05 },
+    { freq: 860, duration: 0.14, gap: 0.05 },
+    { freq: 680, duration: 0.14, gap: 0.1 },
+  ],
+  "severe-warning": [
+    { freq: 560, duration: 0.16, gap: 0.05 },
+    { freq: 760, duration: 0.16, gap: 0.05 },
+    { freq: 560, duration: 0.2, gap: 0.1 },
+  ],
+  "tornado-warning": [
+    { freq: 740, endFreq: 1180, duration: 0.22, gap: 0.04, gain: 0.26 },
+    { freq: 1180, endFreq: 740, duration: 0.22, gap: 0.04, gain: 0.26 },
+    { freq: 740, endFreq: 1180, duration: 0.22, gap: 0.08, gain: 0.26 },
+    { freq: 1180, duration: 0.18, gap: 0.02, gain: 0.24 },
+  ],
+  "pds-warning": [
+    { freq: 380, duration: 0.18, gap: 0.03, gain: 0.28, type: "sawtooth" },
+    { freq: 960, endFreq: 1320, duration: 0.2, gap: 0.03, gain: 0.3 },
+    { freq: 380, duration: 0.18, gap: 0.03, gain: 0.28, type: "sawtooth" },
+    { freq: 1320, endFreq: 820, duration: 0.24, gap: 0.05, gain: 0.3 },
+    { freq: 520, duration: 0.18, gap: 0.03, gain: 0.28 },
+    { freq: 1180, duration: 0.28, gap: 0.08, gain: 0.3 },
   ],
   "sensor-offline": [{ freq: 340, duration: 0.28, gap: 0 }],
   "pi-connected": [
@@ -87,14 +118,13 @@ function playPattern(event: CodeBlackSoundEvent) {
   if (!ctx) return;
   let t = ctx.currentTime;
   for (const step of TONE_PATTERNS[event]) {
-    playTone(ctx, step.freq, t, step.duration);
+    playTone(ctx, step, t);
     t += step.duration + step.gap;
   }
 }
 
 let playerStarted = false;
 
-// Call once at app startup. Idempotent so it's safe to call from multiple mount points.
 export function startCodeBlackSoundPlayer() {
   if (playerStarted) return;
   playerStarted = true;

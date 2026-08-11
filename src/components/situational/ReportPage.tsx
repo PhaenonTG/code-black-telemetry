@@ -41,7 +41,7 @@ function emptyReport(gps: { lat: number; lon: number } | null): SevereReportInpu
   };
 }
 
-export function ReportPage({ gps }: { gps: { lat: number; lon: number } | null }) {
+export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: number } | null; onOpenSettings: () => void }) {
   const [account, setAccount] = useState<SpotterAccount | null>(null);
   const [report, setReport] = useState<SevereReportInput>(() => emptyReport(gps));
   const [busy, setBusy] = useState(false);
@@ -86,6 +86,9 @@ export function ReportPage({ gps }: { gps: { lat: number; lon: number } | null }
     return (
       <Panel title="Submit Report" className="report-page-panel">
         <div className="calm-card">Sign in to Spotter Network in Settings before submitting a report.</div>
+        <div className="nearby-actions report-page-actions">
+          <button className="settings-action" onClick={onOpenSettings}>Open Spotter Settings</button>
+        </div>
       </Panel>
     );
   }

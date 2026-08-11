@@ -7017,3 +7017,251 @@ body {
     letter-spacing: 0.02em !important;
   }
 }
+
+/* UI polish pass 2026-08-11:
+   Scoped final overrides for the approved pass: cleaner phone header/dock, fixed Weather density,
+   more usable tablet Weather cards, collapsed Operations diagnostics, and clearer Settings groups. */
+.radar-engine-form {
+  gap: 8px;
+}
+
+.radar-engine-grid--summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.radar-engine-grid--diagnostics {
+  max-height: min(34dvh, 320px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.radar-engine-diagnostics-toggle {
+  justify-self: start;
+  min-height: 32px;
+  padding-inline: 14px;
+}
+
+.settings-section-label {
+  align-self: end;
+  padding: 2px 4px 0;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: clamp(9px, 0.95vw, 11px);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.settings-alert-tone-tests {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.settings-alert-tone-tests .settings-action {
+  min-width: 72px;
+}
+
+.report-page-panel > .report-page-actions {
+  padding: 0 16px 16px;
+}
+
+@media (orientation: landscape) and (min-aspect-ratio: 13 / 10) {
+  .page-grid--weather {
+    grid-template-columns: minmax(260px, 1.08fr) minmax(360px, 1.52fr) minmax(260px, 1.08fr) !important;
+    grid-template-rows: minmax(146px, 0.9fr) minmax(158px, 1.1fr) !important;
+    gap: 10px !important;
+  }
+
+  .page-grid--weather .loc-head {
+    min-height: 0 !important;
+    padding: 10px 12px 2px !important;
+  }
+
+  .page-grid--weather .loc-city {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: clamp(18px, 2.25vw, 28px) !important;
+    line-height: 0.96 !important;
+  }
+
+  .page-grid--weather .loc-panel .cockpit-primary--motion {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+    padding: 6px 12px 8px !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile--gps {
+    grid-column: 1 / -1;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile {
+    min-height: 56px !important;
+  }
+
+  .page-grid--weather .wx-panel {
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) auto !important;
+  }
+
+  .page-grid--weather .wx-panel .cockpit-primary--conditions-full {
+    align-content: stretch !important;
+    height: 100% !important;
+    padding: 12px !important;
+  }
+
+  .page-grid--weather .wx-panel .metric-tile {
+    min-height: 74px !important;
+  }
+
+  .page-grid--weather .wx-panel .conditions-strip {
+    display: flex !important;
+    min-height: 28px !important;
+    padding: 0 12px 10px !important;
+  }
+
+  .page-grid--weather .alerts-panel .alert-list {
+    display: grid !important;
+    grid-template-rows: minmax(0, 1fr) auto !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+
+  .page-grid--weather .alerts-panel .calm-card {
+    min-height: 0 !important;
+    height: 100% !important;
+  }
+}
+
+@media (max-aspect-ratio: 13 / 10) {
+  :root {
+    --cb-header-h: calc(clamp(64px, 8.8dvh, 78px) + env(safe-area-inset-top));
+    --cb-dock-bar-h: clamp(44px, 6dvh, 50px);
+    --cb-dock-h: calc(var(--cb-dock-bar-h) + env(safe-area-inset-bottom));
+    --cb-dots-h: 10px;
+    --top-h: var(--cb-header-h);
+    --dock-h: var(--cb-dock-h);
+    --dots-h: var(--cb-dots-h);
+  }
+
+  .top-bar {
+    padding: env(safe-area-inset-top) 14px 6px !important;
+  }
+
+  .brand-mark {
+    width: clamp(34px, 9vw, 42px) !important;
+    height: clamp(34px, 9vw, 42px) !important;
+  }
+
+  .brand-word {
+    font-size: clamp(15px, 4.6vw, 20px) !important;
+    line-height: 0.95 !important;
+  }
+
+  .brand-subtitle {
+    font-size: clamp(8px, 2.2vw, 10px) !important;
+  }
+
+  .status-cluster {
+    gap: 7px !important;
+    font-size: clamp(8px, 2.15vw, 10px) !important;
+  }
+
+  .bottom-dock {
+    padding: 3px 8px max(3px, env(safe-area-inset-bottom)) !important;
+    gap: 4px !important;
+  }
+
+  .bottom-dock button {
+    height: calc(var(--cb-dock-bar-h) - 6px) !important;
+    padding: 3px 1px !important;
+  }
+
+  .bottom-dock button svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  .bottom-dock button span {
+    font-size: clamp(8px, 2.25vw, 10px) !important;
+  }
+
+  .page.page--weather {
+    padding: 7px 12px 4px !important;
+  }
+
+  .page-grid--weather {
+    grid-template-areas:
+      "loc"
+      "wind"
+      "alerts"
+      "weather"
+      "map"
+      "nearby" !important;
+    gap: 8px !important;
+  }
+
+  .page-grid--weather .loc-panel { min-height: 158px !important; }
+  .page-grid--weather .wind-panel { min-height: 118px !important; }
+  .page-grid--weather .alerts-panel { min-height: 138px !important; }
+  .page-grid--weather .wx-panel { min-height: 184px !important; }
+  .page-grid--weather .map-panel { min-height: 228px !important; }
+
+  .page-grid--weather .loc-city {
+    font-size: clamp(18px, 5.8vw, 26px) !important;
+    line-height: 1 !important;
+  }
+
+  .page-grid--weather .loc-panel .cockpit-primary--motion {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile--gps {
+    grid-column: 1 / -1;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile,
+  .page-grid--weather .metric-tile {
+    min-height: 52px !important;
+  }
+
+  .page-grid--weather .wx-panel .cockpit-primary--conditions-full {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .page-grid--weather .conditions-strip {
+    padding-bottom: 8px !important;
+  }
+
+  .page-grid--weather .alerts-panel .alert-list {
+    display: grid !important;
+    grid-template-rows: minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+  }
+
+  .page-grid--weather .view-all-button {
+    min-height: 36px !important;
+  }
+}
+
+@media (max-width: 760px), (max-height: 620px) {
+  .radar-engine-grid--summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .radar-engine-grid--diagnostics {
+    max-height: 220px;
+  }
+
+  .settings-alert-tone-tests {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .settings-alert-tone-tests .settings-action {
+    flex: 1 1 72px;
+  }
+}
