@@ -4,6 +4,27 @@ All changes logged newest-first.
 
 ---
 
+## Revert Movable Dashboard Cards - 2026-08-10
+
+Restored the Weather dashboard to the fixed card layout at user request, removing the experimental
+movable/resizable dashboard-card UI without rolling back later radar, maps, alerts, BLE, Pi, report,
+streaming, or networking work.
+
+### Changed
+- Removed the mounted Weather-grid splitter controls from `src/App.tsx`.
+- Deleted the unused splitter component/hook pair (`WeatherGridSplitters.tsx`, `useGridSplitter.ts`).
+- Removed the Weather layout reset control from Settings and the persisted Weather-grid layout
+  preference API from `src/services/settings.ts`.
+- Converted the remaining Weather dashboard CSS back to fixed hardcoded grid tracks/areas and
+  removed the splitter handle styles/comments.
+
+### Preserved
+- Wide-area mosaic radar default, Locate map behavior, range rings, camera/zoom/pan/follow mode,
+  Operations radar diagnostics, Pi/BLE telemetry controls, alerts, reporting, streaming controls,
+  and the current AltStore/Codemagic publish flow were left intact.
+
+---
+
 ## Wide-Area Mosaic as Default Radar (iOS Parity) - 2026-08-08
 
 Direct follow-up to the "Radar-on-iOS Investigation" pass below, per explicit direction: rather

@@ -6,7 +6,6 @@ import { Panel } from "../situational/Panel";
 import type { CockpitMode } from "../../App";
 import {
   DEFAULT_CHASER_RADIUS_MILES,
-  DEFAULT_WEATHER_GRID_LAYOUT,
   getBleCommandToken,
   loadBleCommandToken,
   loadChaserRadiusMiles,
@@ -19,7 +18,6 @@ import {
   saveTeamMembers,
   saveTelemetryLinkEnabled,
   saveVehicleMarkerStyle,
-  saveWeatherGridLayout,
   subscribeChaserRadiusMiles,
   subscribeNightVisionEnabled,
   subscribePiEndpoint,
@@ -87,7 +85,6 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [vehicleMarkerStyle, setVehicleMarkerStyle] = useState<VehicleMarkerStyle>({ color: "#ff2d35", shape: "circle", sizeScale: 1 });
   const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
-  const [weatherGridLayoutReset, setWeatherGridLayoutReset] = useState(false);
   const [bleTokenInput, setBleTokenInput] = useState("");
   const [bleTokenSaved, setBleTokenSaved] = useState(false);
   const [bleConnected, setBleConnected] = useState(false);
@@ -206,12 +203,6 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     window.setTimeout(() => setChaserRadiusSaved(false), 1600);
   };
 
-  const resetWeatherGridLayout = async () => {
-    await saveWeatherGridLayout(DEFAULT_WEATHER_GRID_LAYOUT);
-    setWeatherGridLayoutReset(true);
-    window.setTimeout(() => setWeatherGridLayoutReset(false), 1600);
-  };
-
   const addTeamMember = () => {
     const name = newMemberName.trim();
     if (!name || teamMembers.some((member) => member.name === name)) return;
@@ -310,13 +301,6 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
             <button className={nightVisionEnabled ? "" : "active"} onClick={() => toggleNightVision(false)}>Off</button>
             <button className={nightVisionEnabled ? "active" : ""} onClick={() => toggleNightVision(true)}>On</button>
           </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <strong>Weather Layout</strong>
-            <span>Drag the dividers between Weather page cards to resize them. Resets to the default proportions.</span>
-          </div>
-          <button className="settings-action" onClick={() => void resetWeatherGridLayout()}>{weatherGridLayoutReset ? "Reset" : "Reset to Default"}</button>
         </div>
       </Panel>
 

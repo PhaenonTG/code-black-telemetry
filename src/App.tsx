@@ -13,7 +13,6 @@ import { PiEndpointPanel } from "./components/operations/PiEndpointPanel";
 import { RadarEnginePanel } from "./components/operations/RadarEndpointPanel";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { NearbyPanel } from "./components/situational/NearbyPanel";
-import { WeatherGridSplitters } from "./components/situational/WeatherGridSplitters";
 import {
   AlertsFullPanel,
   AlertsPanel,
@@ -272,7 +271,6 @@ export default function App() {
             <AlertsPanel products={alertProducts.products} error={alertProducts.error} />
             <MapRadarPanel gps={mapGps} visible={page === "weather"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} nearbyBest={nearby.places} compact allowExpand={false} />
             <NearbyPanel places={nearby.places} error={nearby.error} spotters={spotters.spotters} spottersError={spotters.error} />
-            <WeatherGridSplitters />
           </div>
         </section>
         <section className="page page--operations" aria-label="Operations">
