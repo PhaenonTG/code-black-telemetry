@@ -364,3 +364,54 @@
     width: 7px !important;
   }
 }
+
+@media (max-aspect-ratio: 13 / 10) and (max-width: 430px) {
+  .ops-header {
+    grid-template-columns: minmax(0, 1fr) max-content !important;
+    gap: 2px 6px !important;
+    padding-inline: 10px !important;
+  }
+
+  .brand-lockup {
+    gap: 6px !important;
+  }
+
+  .brand-mark,
+  .brand-mark--codeblack {
+    width: clamp(34px, 10vw, 42px) !important;
+    height: clamp(34px, 10vw, 42px) !important;
+  }
+
+  .brand-title {
+    font-size: clamp(16px, 4.65vw, 19px) !important;
+    letter-spacing: 0.02em !important;
+  }
+
+  .brand-subtitle {
+    max-width: 165px !important;
+    font-size: 7px !important;
+    letter-spacing: 0.1em !important;
+  }
+
+  .time-module .font-mono {
+    font-size: clamp(15px, 4.7vw, 18px) !important;
+  }
+
+  .header-status {
+    max-width: 128px !important;
+    gap: 5px !important;
+  }
+
+  .header-date {
+    display: none !important;
+  }
+
+  .header-status > * + * {
+    padding-left: 5px !important;
+  }
+
+  .pi-link,
+  .battery-chip {
+    font-size: 8px !important;
+  }
+}

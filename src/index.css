@@ -6829,4 +6829,138 @@ body {
   .page-grid--weather {
     gap: 10px !important;
   }
+
+  .page-grid--weather .cb-panel__title {
+    min-height: 32px !important;
+    padding: 8px 11px !important;
+    font-size: 10px !important;
+  }
+
+  .page-grid--weather .wind-panel { min-height: 138px !important; }
+  .page-grid--weather .alerts-panel { min-height: 164px !important; }
+  .page-grid--weather .wx-panel { min-height: 218px !important; }
+  .page-grid--weather .loc-panel { min-height: 198px !important; }
+  .page-grid--weather .map-panel { min-height: 250px !important; }
+
+  .page-grid--weather .wind-hero {
+    gap: 4px !important;
+    padding: 8px 12px 0 !important;
+  }
+
+  .page-grid--weather .wind-hero__item--peak {
+    padding-left: 12px !important;
+  }
+
+  .page-grid--weather .wind-panel.cockpit-card--chase .wind-hero__item strong,
+  .page-grid--weather .wind-panel.cockpit-card--normal .wind-hero__item strong {
+    font-size: clamp(20px, 6vw, 28px) !important;
+  }
+
+  .page-grid--weather .wind-hero__item span {
+    margin-top: 3px !important;
+    font-size: clamp(8px, 2.15vw, 10px) !important;
+  }
+
+  .page-grid--weather .wind-toolbar {
+    min-height: 28px !important;
+    padding-inline: 12px !important;
+  }
+
+  .page-grid--weather .calm-card {
+    min-height: 62px !important;
+    padding: 10px !important;
+    font-size: clamp(10px, 2.55vw, 12px) !important;
+    line-height: 1.2 !important;
+  }
+
+  .page-grid--weather .view-all-button {
+    min-height: 44px !important;
+    font-size: clamp(10px, 2.55vw, 12px) !important;
+  }
+
+  .page-grid--weather .cockpit-primary--conditions,
+  .page-grid--weather .cockpit-primary--conditions-full {
+    gap: 8px !important;
+    padding: 10px 12px 8px !important;
+  }
+
+  .page-grid--weather .wx-panel .cockpit-primary--conditions-full .metric-tile,
+  .page-grid--weather .metric-tile {
+    min-height: 62px !important;
+    padding: 8px 8px 8px 28px !important;
+  }
+
+  .page-grid--weather .metric-tile strong {
+    font-size: clamp(20px, 6.6vw, 28px) !important;
+  }
+
+  .page-grid--weather .metric-tile span,
+  .page-grid--weather .metric-tile em {
+    font-size: clamp(8px, 2.25vw, 10px) !important;
+  }
+
+  .page-grid--weather .conditions-strip {
+    padding: 0 12px 10px !important;
+    font-size: clamp(10px, 2.55vw, 12px) !important;
+  }
+
+  .page-grid--weather .loc-head {
+    padding: 9px 12px 0 !important;
+  }
+
+  .page-grid--weather .loc-city {
+    font-size: clamp(22px, 6.9vw, 30px) !important;
+    line-height: 0.95 !important;
+  }
+
+  .page-grid--weather .loc-county,
+  .page-grid--weather .loc-kicker {
+    font-size: clamp(8px, 2.2vw, 10px) !important;
+  }
+
+  .page-grid--weather .loc-panel .cockpit-primary--motion {
+    gap: 7px !important;
+    padding: 6px 12px 0 !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile {
+    min-height: 56px !important;
+    padding: 7px !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile strong {
+    font-size: clamp(18px, 6.2vw, 26px) !important;
+  }
+
+  .page-grid--weather .loc-footer {
+    display: none !important;
+  }
+
+  .page-grid--weather .loc-panel .cb-note {
+    padding-inline: 12px !important;
+    font-size: clamp(8px, 2.1vw, 10px) !important;
+    line-height: 1.15 !important;
+  }
+}
+
+@media (max-aspect-ratio: 13 / 10) and (max-width: 430px) {
+  .bottom-dock button:nth-child(2) span,
+  .bottom-dock button:nth-child(6) span {
+    font-size: 0 !important;
+  }
+
+  .bottom-dock button:nth-child(2) span::after,
+  .bottom-dock button:nth-child(6) span::after {
+    display: inline;
+    font-size: clamp(9px, 2.45vw, 11px) !important;
+    line-height: 1 !important;
+  }
+
+  .bottom-dock button:nth-child(2) span::after {
+    content: "Ops";
+  }
+
+  .bottom-dock button:nth-child(6) span::after {
+    content: "Setup";
+  }
 }

@@ -4,6 +4,26 @@ All changes logged newest-first.
 
 ---
 
+## Mobile Dashboard Density Pass - 2026-08-11
+
+Tightened the restored fixed Weather dashboard for phone layouts after device screenshots showed the
+header and bottom dock consuming too much space on narrow screens.
+
+### Changed
+- Reduced the mobile bottom dock height, pinned it to the safe-area bottom, and shortened narrow
+  phone labels where needed.
+- Added narrow-phone header overrides so the Code Black OPS brand, time, Pi link, and battery fit
+  around camera cutouts/notches.
+- Compressed Weather dashboard card spacing, title bars, metric tiles, wind/alert/location panels,
+  and conditions content on portrait phones while keeping the fixed dashboard layout.
+
+### Preserved
+- No movable, draggable, swipeable, or carousel-style dashboard cards were reintroduced.
+- Radar, navigation, Operations, BLE/Pi telemetry, alerts, reporting, and stream controls were left
+  untouched.
+
+---
+
 ## Revert Movable Dashboard Cards - 2026-08-10
 
 Restored the Weather dashboard to the fixed card layout at user request, removing the experimental
