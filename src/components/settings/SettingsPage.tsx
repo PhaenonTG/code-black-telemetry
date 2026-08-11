@@ -6,21 +6,29 @@ import { Panel } from "../situational/Panel";
 import type { CockpitMode } from "../../App";
 import {
   DEFAULT_CHASER_RADIUS_MILES,
+  DEFAULT_REPORT_FEED_RADIUS_MILES,
+  DEFAULT_REPORT_FEED_RETENTION_HOURS,
   getBleCommandToken,
   loadBleCommandToken,
   loadChaserRadiusMiles,
   loadNightVisionEnabled,
+  loadReportFeedRadiusMiles,
+  loadReportFeedRetentionHours,
   loadTeamMembers,
   loadVehicleMarkerStyle,
   saveBleCommandToken,
   saveChaserRadiusMiles,
   saveNightVisionEnabled,
+  saveReportFeedRadiusMiles,
+  saveReportFeedRetentionHours,
   saveTeamMembers,
   saveTelemetryLinkEnabled,
   saveVehicleMarkerStyle,
   subscribeChaserRadiusMiles,
   subscribeNightVisionEnabled,
   subscribePiEndpoint,
+  subscribeReportFeedRadiusMiles,
+  subscribeReportFeedRetentionHours,
   subscribeTeamMembers,
   subscribeTelemetryLinkEnabled,
   subscribeVehicleMarkerStyle,
@@ -84,6 +92,11 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [chaserRadiusMiles, setChaserRadiusMiles] = useState(DEFAULT_CHASER_RADIUS_MILES);
   const [chaserRadiusInput, setChaserRadiusInput] = useState(String(DEFAULT_CHASER_RADIUS_MILES));
   const [chaserRadiusSaved, setChaserRadiusSaved] = useState(false);
+  const [reportFeedRadiusMiles, setReportFeedRadiusMiles] = useState(DEFAULT_REPORT_FEED_RADIUS_MILES);
+  const [reportFeedRadiusInput, setReportFeedRadiusInput] = useState(String(DEFAULT_REPORT_FEED_RADIUS_MILES));
+  const [reportFeedRetentionHours, setReportFeedRetentionHours] = useState(DEFAULT_REPORT_FEED_RETENTION_HOURS);
+  const [reportFeedRetentionInput, setReportFeedRetentionInput] = useState(String(DEFAULT_REPORT_FEED_RETENTION_HOURS));
+  const [reportFeedSaved, setReportFeedSaved] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberGroup, setNewMemberGroup] = useState("");
@@ -140,6 +153,23 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     void loadChaserRadiusMiles();
     return () => {
       unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribeRadius = subscribeReportFeedRadiusMiles((miles) => {
+      setReportFeedRadiusMiles(miles);
+      setReportFeedRadiusInput(String(miles));
+    });
+    const unsubscribeRetention = subscribeReportFeedRetentionHours((hours) => {
+      setReportFeedRetentionHours(hours);
+      setReportFeedRetentionInput(String(hours));
+    });
+    void loadReportFeedRadiusMiles();
+    void loadReportFeedRetentionHours();
+    return () => {
+      unsubscribeRadius();
+      unsubscribeRetention();
     };
   }, []);
 
@@ -207,6 +237,19 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     setChaserRadiusInput(String(saved));
     setChaserRadiusSaved(true);
     window.setTimeout(() => setChaserRadiusSaved(false), 1600);
+  };
+
+  const saveReportFeed = async () => {
+    const parsedRadius = Number(reportFeedRadiusInput);
+    const parsedRetention = Number(reportFeedRetentionInput);
+    const [savedRadius, savedRetention] = await Promise.all([
+      saveReportFeedRadiusMiles(Number.isFinite(parsedRadius) ? parsedRadius : reportFeedRadiusMiles),
+      saveReportFeedRetentionHours(Number.isFinite(parsedRetention) ? parsedRetention : reportFeedRetentionHours),
+    ]);
+    setReportFeedRadiusInput(String(savedRadius));
+    setReportFeedRetentionInput(String(savedRetention));
+    setReportFeedSaved(true);
+    window.setTimeout(() => setReportFeedSaved(false), 1600);
   };
 
   const addTeamMember = () => {
@@ -422,6 +465,46 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
             />
             <span>mi</span>
             <button className="settings-action" onClick={() => void saveRadius()}>{chaserRadiusSaved ? "Saved" : "Save"}</button>
+          </div>
+        </div>
+      </Panel>
+
+      <Panel title="Report Feed" className="settings-report-feed-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Report Radius</strong>
+            <span>NWS + Spotter Network reports, 5-500 mi.</span>
+          </div>
+          <div className="settings-radius-control">
+            <input
+              className="settings-input settings-input--radius"
+              type="number"
+              inputMode="numeric"
+              min={5}
+              max={500}
+              value={reportFeedRadiusInput}
+              onChange={(event) => setReportFeedRadiusInput(event.target.value)}
+            />
+            <span>mi</span>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Keep Reports</strong>
+            <span>Clears feed entries older than 1-24 hr.</span>
+          </div>
+          <div className="settings-radius-control">
+            <input
+              className="settings-input settings-input--radius"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={24}
+              value={reportFeedRetentionInput}
+              onChange={(event) => setReportFeedRetentionInput(event.target.value)}
+            />
+            <span>hr</span>
+            <button className="settings-action" onClick={() => void saveReportFeed()}>{reportFeedSaved ? "Saved" : "Save"}</button>
           </div>
         </div>
       </Panel>

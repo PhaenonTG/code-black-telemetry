@@ -5689,7 +5689,7 @@ body {
 
 .report-feed-toggle {
   width: 100%;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
 }
 
 .report-feed-toggle button {
@@ -5736,6 +5736,13 @@ body {
 
 .storm-report-row--hail {
   border-left-color: rgba(255, 204, 51, 0.72);
+}
+
+.storm-report-row--spotter-network {
+  border-left-color: rgba(61, 220, 112, 0.78);
+  background:
+    linear-gradient(90deg, rgba(61, 220, 112, 0.1), transparent 45%),
+    rgba(255, 255, 255, 0.035);
 }
 
 .storm-report-row--tornado,
@@ -7415,6 +7422,22 @@ body {
 }
 
 @media (max-aspect-ratio: 13 / 10) {
+  .page-grid--settings {
+    overflow-y: auto !important;
+    padding-bottom: 10px;
+  }
+
+  .settings-light-panels,
+  .settings-heavy-panels {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: none !important;
+    flex: 0 0 auto !important;
+  }
+
+  .page-grid--settings .cb-panel {
+    min-height: auto !important;
+  }
+
   .page-grid--report {
     grid-template-columns: minmax(0, 1fr) !important;
     grid-template-rows: minmax(220px, 0.58fr) minmax(420px, 1.42fr) !important;
@@ -7434,7 +7457,7 @@ body {
   }
 
   .report-feed-toggle {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(54px, 1fr)) !important;
   }
 
   .report-feed-toggle button {

@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import { Panel } from "./Panel";
 import { usePeakGust } from "../../hooks/usePeakGust";
 import { useStormReports } from "../../hooks/useStormReports";
+import {
+  DEFAULT_REPORT_FEED_RADIUS_MILES,
+  DEFAULT_REPORT_FEED_RETENTION_HOURS,
+  loadReportFeedRadiusMiles,
+  loadReportFeedRetentionHours,
+  saveReportFeedRadiusMiles,
+  saveReportFeedRetentionHours,
+  subscribeReportFeedRadiusMiles,
+  subscribeReportFeedRetentionHours,
+} from "../../services/settings";
 import { loadSpotterAccount, subscribeSpotterAccount, submitSevereReport, type SevereReportInput, type SpotterAccount } from "../../services/spotterAccount";
 import { reportAgeText, type StormReport } from "../../services/stormReports";
 
@@ -18,7 +28,7 @@ const HAZARD_FIELDS: Array<{ key: keyof Pick<SevereReportInput, "tornado" | "fun
 ];
 
 const REPORT_RADIUS_OPTIONS = [10, 25, 50, 100];
-const REPORT_RETENTION_OPTIONS = [1, 3, 6, 12];
+const REPORT_RETENTION_OPTIONS = [1, 3, 6, 12, 24];
 
 function emptyReport(gps: { lat: number; lon: number } | null): SevereReportInput {
   return {
@@ -49,8 +59,8 @@ function emptyReport(gps: { lat: number; lon: number } | null): SevereReportInpu
 export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: number } | null; onOpenSettings: () => void }) {
   const [account, setAccount] = useState<SpotterAccount | null>(null);
   const [report, setReport] = useState<SevereReportInput>(() => emptyReport(gps));
-  const [radiusMiles, setRadiusMiles] = useState(50);
-  const [retentionHours, setRetentionHours] = useState(3);
+  const [radiusMiles, setRadiusMiles] = useState(DEFAULT_REPORT_FEED_RADIUS_MILES);
+  const [retentionHours, setRetentionHours] = useState(DEFAULT_REPORT_FEED_RETENTION_HOURS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
@@ -62,6 +72,17 @@ export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: n
     void loadSpotterAccount();
     return () => {
       unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribeRadius = subscribeReportFeedRadiusMiles(setRadiusMiles);
+    const unsubscribeRetention = subscribeReportFeedRetentionHours(setRetentionHours);
+    void loadReportFeedRadiusMiles();
+    void loadReportFeedRetentionHours();
+    return () => {
+      unsubscribeRadius();
+      unsubscribeRetention();
     };
   }, []);
 
@@ -234,8 +255,8 @@ export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: n
         updatedAt={feed.updatedAt}
         radiusMiles={radiusMiles}
         retentionHours={retentionHours}
-        onChangeRadius={setRadiusMiles}
-        onChangeRetention={setRetentionHours}
+        onChangeRadius={(miles) => void saveReportFeedRadiusMiles(miles)}
+        onChangeRetention={(hours) => void saveReportFeedRetentionHours(hours)}
       />
     </>
   );
@@ -283,7 +304,7 @@ function StormReportFeedPanel({
       <div className="report-feed-list">
         {!gps && <div className="calm-card">Waiting for GPS before loading nearby Local Storm Reports.</div>}
         {gps && error && <div className="cb-note cb-note--warn">{error}</div>}
-        {gps && !error && reports.length === 0 && <div className="calm-card">NO LOCAL STORM REPORTS IN RANGE</div>}
+        {gps && !error && reports.length === 0 && <div className="calm-card">NO NWS OR SPOTTER NETWORK REPORTS IN RANGE</div>}
         {reports.map((item) => <StormReportRow key={item.id} report={item} />)}
       </div>
     </Panel>
@@ -294,7 +315,7 @@ function StormReportRow({ report }: { report: StormReport }) {
   const magnitude = [report.magnitude, report.units].filter(Boolean).join(" ");
   const office = report.officeId || report.office;
   return (
-    <article className={`storm-report-row storm-report-row--${report.type.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+    <article className={`storm-report-row storm-report-row--${report.source === "Spotter Network" ? "spotter-network" : "nws"} storm-report-row--${report.type.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
       <div className="storm-report-row__head">
         <strong>{report.type}</strong>
         <span>{reportAgeText(report.validTime)} - {report.distanceMiles.toFixed(1)} MI</span>
@@ -304,7 +325,7 @@ function StormReportRow({ report }: { report: StormReport }) {
         {magnitude && <em>{magnitude}</em>}
       </div>
       {report.remarks && <p>{report.remarks}</p>}
-      <footer>{office ? `NWS ${office}` : "NWS LSR"} - {report.validTimeText || new Date(report.validTime).toLocaleString()}</footer>
+      <footer>{report.source === "Spotter Network" ? "Spotter Network" : office ? `NWS ${office}` : "NWS LSR"} - {report.validTimeText || new Date(report.validTime).toLocaleString()}</footer>
     </article>
   );
 }

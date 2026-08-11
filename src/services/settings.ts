@@ -14,6 +14,20 @@ const MAX_CHASER_RADIUS_MILES = 500;
 let currentChaserRadiusMiles = DEFAULT_CHASER_RADIUS_MILES;
 const chaserRadiusListeners = new Set<(radiusMiles: number) => void>();
 
+const REPORT_FEED_RADIUS_KEY = "codeblack.reportFeedRadiusMiles";
+const REPORT_FEED_RETENTION_KEY = "codeblack.reportFeedRetentionHours";
+export const DEFAULT_REPORT_FEED_RADIUS_MILES = 50;
+export const DEFAULT_REPORT_FEED_RETENTION_HOURS = 3;
+const MIN_REPORT_FEED_RADIUS_MILES = 5;
+const MAX_REPORT_FEED_RADIUS_MILES = 500;
+const MIN_REPORT_FEED_RETENTION_HOURS = 1;
+const MAX_REPORT_FEED_RETENTION_HOURS = 24;
+
+let currentReportFeedRadiusMiles = DEFAULT_REPORT_FEED_RADIUS_MILES;
+let currentReportFeedRetentionHours = DEFAULT_REPORT_FEED_RETENTION_HOURS;
+const reportFeedRadiusListeners = new Set<(radiusMiles: number) => void>();
+const reportFeedRetentionListeners = new Set<(hours: number) => void>();
+
 function clampChaserRadius(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_CHASER_RADIUS_MILES;
   return Math.min(MAX_CHASER_RADIUS_MILES, Math.max(MIN_CHASER_RADIUS_MILES, Math.round(value)));
@@ -41,6 +55,56 @@ export function subscribeChaserRadiusMiles(listener: (radiusMiles: number) => vo
   chaserRadiusListeners.add(listener);
   listener(currentChaserRadiusMiles);
   return () => chaserRadiusListeners.delete(listener);
+}
+
+function clampReportFeedRadius(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_REPORT_FEED_RADIUS_MILES;
+  return Math.min(MAX_REPORT_FEED_RADIUS_MILES, Math.max(MIN_REPORT_FEED_RADIUS_MILES, Math.round(value)));
+}
+
+function clampReportFeedRetention(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_REPORT_FEED_RETENTION_HOURS;
+  return Math.min(MAX_REPORT_FEED_RETENTION_HOURS, Math.max(MIN_REPORT_FEED_RETENTION_HOURS, Math.round(value)));
+}
+
+export async function loadReportFeedRadiusMiles() {
+  const saved = await Preferences.get({ key: REPORT_FEED_RADIUS_KEY });
+  currentReportFeedRadiusMiles = saved.value ? clampReportFeedRadius(Number(saved.value)) : DEFAULT_REPORT_FEED_RADIUS_MILES;
+  reportFeedRadiusListeners.forEach((listener) => listener(currentReportFeedRadiusMiles));
+  return currentReportFeedRadiusMiles;
+}
+
+export async function saveReportFeedRadiusMiles(value: number) {
+  currentReportFeedRadiusMiles = clampReportFeedRadius(value);
+  await Preferences.set({ key: REPORT_FEED_RADIUS_KEY, value: String(currentReportFeedRadiusMiles) });
+  reportFeedRadiusListeners.forEach((listener) => listener(currentReportFeedRadiusMiles));
+  return currentReportFeedRadiusMiles;
+}
+
+export function subscribeReportFeedRadiusMiles(listener: (radiusMiles: number) => void) {
+  reportFeedRadiusListeners.add(listener);
+  listener(currentReportFeedRadiusMiles);
+  return () => reportFeedRadiusListeners.delete(listener);
+}
+
+export async function loadReportFeedRetentionHours() {
+  const saved = await Preferences.get({ key: REPORT_FEED_RETENTION_KEY });
+  currentReportFeedRetentionHours = saved.value ? clampReportFeedRetention(Number(saved.value)) : DEFAULT_REPORT_FEED_RETENTION_HOURS;
+  reportFeedRetentionListeners.forEach((listener) => listener(currentReportFeedRetentionHours));
+  return currentReportFeedRetentionHours;
+}
+
+export async function saveReportFeedRetentionHours(value: number) {
+  currentReportFeedRetentionHours = clampReportFeedRetention(value);
+  await Preferences.set({ key: REPORT_FEED_RETENTION_KEY, value: String(currentReportFeedRetentionHours) });
+  reportFeedRetentionListeners.forEach((listener) => listener(currentReportFeedRetentionHours));
+  return currentReportFeedRetentionHours;
+}
+
+export function subscribeReportFeedRetentionHours(listener: (hours: number) => void) {
+  reportFeedRetentionListeners.add(listener);
+  listener(currentReportFeedRetentionHours);
+  return () => reportFeedRetentionListeners.delete(listener);
 }
 
 export type PinShape = "circle" | "diamond" | "triangle" | "star" | "square";

@@ -4,6 +4,27 @@ All changes logged newest-first.
 
 ---
 
+## Spotter Network Reports and Feed Settings - 2026-08-11
+
+Added Spotter Network reports to the nearby report feed and made feed range configurable.
+
+### Changed
+- Added the public Spotter Network reports-only feed alongside NWS Local Storm Reports on the
+  Report page.
+- Added Settings controls for report-feed radius and retention so nearby reports can be tuned
+  separately from nearby chaser pins.
+- Added a 24-hour retention quick option on the Report page and distinct Spotter Network row
+  styling in the feed.
+- Fixed phone portrait Settings layout so the added Report Feed controls render as readable
+  full-width panels instead of squeezed desktop columns.
+
+### Preserved
+- Existing Spotter Network report submission/sign-in behavior remains unchanged.
+- NWS Local Storm Reports remain in the same feed.
+- Weather, radar, alerts, maps, Operations, BLE/Pi telemetry, and stream controls were not changed.
+
+---
+
 ## Nearby Report Feed - 2026-08-11
 
 Added a live nearby Local Storm Reports feed to the Report page.
