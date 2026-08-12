@@ -4,36 +4,37 @@ All changes logged newest-first.
 
 ---
 
-## AltStore Source "Not Valid JSON" Fix, Attempt 2 - 2026-08-12
+## AltStore Source "Not Valid JSON" Fix, Attempt 3 - 2026-08-12
 
-### Investigated
-- Confirmed via a live on-device Safari load (user-provided screenshot) that the raw file reaching
-  the phone is byte-for-byte the fixed content from attempt 1 below -- ruling out network
-  interference, a stale CDN cache, or a wrong/mistyped source URL. The failure is genuinely inside
-  AltStore's own parsing of an otherwise syntactically valid file.
-- Checked this repo's git history: `appPermissions` has been present in `altstore-source.json`
-  since the very first commit that created it, and nothing in this repo's history shows anyone ever
-  successfully completing "Add Source" in AltStore with this file -- the earlier "debugged through
-  many rounds" work was entirely about the Codemagic build pipeline (VerificationError 4, GitHub
-  auth, etc.), not this in-app step. Unlike every other field in the file (`name`,
-  `bundleIdentifier`, `iconURL`, `versions`, etc., all well-established AltStore source fields),
-  `appPermissions` is the one part of this schema that was never independently confirmed against a
-  real AltStore install.
+`altstore-source.json` never successfully loaded in AltStore's "Add Source" flow -- confirmed by
+checking this repo's history (the field causing trouble has been present since the file's very
+first commit) and by the fact this session's earlier "debugged through many rounds" work was all
+about the Codemagic build pipeline, never this in-app step. Took three passes to actually fix,
+each one narrowing the cause with real evidence instead of guessing blind:
 
-### Fixed
-- Removed `apps[0].appPermissions` entirely from `altstore-source.json` (attempt 1 changed its
-  `privacy` value from `{}` to `[]`, which did not fix the error -- ruling out that specific type
-  mismatch as the cause, though the array shape is still probably correct in principle). Also
-  removed the corresponding `jq` clause in `codemagic.yaml`'s publish step so future auto-published
-  builds don't reintroduce the field.
+1. **Attempt 1** (previous entry, since folded into this one): changed `appPermissions.privacy`
+   from `{}` to `[]`, suspecting a type mismatch. Did not fix it.
+2. **Attempt 2**: removed `appPermissions` entirely, since it was the one field never confirmed
+   against a real install. Still did not fix it. Along the way, confirmed via a user-provided
+   on-device Safari screenshot that the phone really was receiving the exact fixed file byte for
+   byte -- ruling out network interference, CDN staleness, or a wrong URL -- and confirmed via the
+   user successfully adding one of AltStore's own "Recommended Sources" that AltStore's JSON
+   parsing works fine in general, isolating the bug to our file's schema specifically.
+3. **Attempt 3 (this one)**: pulled a real, currently-working AltStore source
+   (`flyinghead/flycast-builds` on GitHub, referenced from AltStore's own recommended-sources list)
+   and diffed it against ours. The two structural differences: our file had a top-level `sourceURL`
+   field and a per-app `versions` array (a duplicate historical-version list) that their
+   known-good file doesn't have at all. Removed both, leaving only the flat fields their file uses
+   (`name`, `bundleIdentifier`, `developerName`, `subtitle`, `localizedDescription`, `iconURL`,
+   `version`, `versionDate`, `versionDescription`, `downloadURL`, `size`). Updated
+   `codemagic.yaml`'s publish step to match (no longer writes `versions[]`).
 
 ### Not Done / Needs Follow-up
-- Still not confirmed against AltStore's actual Swift source model (no network access to AltStore's
-  docs or source repo from this session, and this repo has no self-hosted copy of the real schema)
-  -- this is a diagnostic-by-elimination fix (drop the one unverified field), not a confirmed root
-  cause. If "Add Source" still fails after this, the next step is trimming the file down to the
-  handful of fields every real-world AltStore source is confirmed to use and rebuilding up from
-  there field-by-field with on-device verification each time.
+- Still pending on-device confirmation that this specific fix resolves it -- everything here is
+  evidence-based elimination against a real reference file, not a decode error message actually
+  seen from AltStore's source code (still no network access to that from this session). If this
+  also fails, the next step is copying the known-good file's exact keys and values in and swapping
+  them back to ours one at a time.
 
 ---
 

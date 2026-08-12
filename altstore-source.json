@@ -1,7 +1,6 @@
 {
   "name": "Code Black OPS AltStore Source",
   "identifier": "com.codeblackwx.altstore-source",
-  "sourceURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore-source.json",
   "apps": [
     {
       "name": "Code Black OPS",
@@ -14,16 +13,7 @@
       "versionDate": "2026-08-12T04:26:52Z",
       "versionDescription": "Automated Codemagic build 2026.0811.2126",
       "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-2026.0811.2126.ipa",
-      "size": 1428946,
-      "versions": [
-        {
-          "version": "2026.0811.2126",
-          "date": "2026-08-12T04:26:52Z",
-          "localizedDescription": "Automated Codemagic build 2026.0811.2126",
-          "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-2026.0811.2126.ipa",
-          "size": 1428946
-        }
-      ]
+      "size": 1428946
     }
   ]
 }
