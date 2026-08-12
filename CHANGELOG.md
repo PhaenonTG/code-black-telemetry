@@ -4,6 +4,29 @@ All changes logged newest-first.
 
 ---
 
+## AltStore Source "Not Valid JSON" Fix - 2026-08-12
+
+### Fixed
+- `altstore-source.json`'s `apps[0].appPermissions.privacy` was an empty object (`{}`). AltStore's
+  source schema expects `privacy` to decode as an array; a type mismatch there throws a Swift
+  `DecodingError` that AltStore surfaces to the user as a generic "source is not valid JSON" error,
+  even though the file is syntactically valid JSON (confirmed by fetching and parsing the live raw
+  file directly). Changed to `"privacy": []`. This field has needed manual correction before (see
+  the "Restore AltStore source permissions metadata" commit) -- it's the one fragile spot in an
+  otherwise-working manifest.
+- Fixed the same default in `codemagic.yaml`'s publish step (the `jq` fallback that only fires if
+  `appPermissions` is ever missing entirely) so a future auto-publish can't reintroduce the wrong
+  type.
+
+### Not Done / Needs Follow-up
+- Not confirmed against AltStore's actual Swift source model (no network access to AltStore's docs
+  or source repo from this session) -- this is the most likely root cause based on the schema
+  pattern (every other permissions-adjacent field is an array) and the file's own history of this
+  exact field needing correction, but should be confirmed by actually re-adding the source in
+  AltStore after this fix ships.
+
+---
+
 ## Full App UI Polish Pass - 2026-08-11
 
 Refined page spacing, dock sizing, and tablet/phone layout behavior after a full rendered review.
