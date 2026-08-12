@@ -4,26 +4,36 @@ All changes logged newest-first.
 
 ---
 
-## AltStore Source "Not Valid JSON" Fix - 2026-08-12
+## AltStore Source "Not Valid JSON" Fix, Attempt 2 - 2026-08-12
+
+### Investigated
+- Confirmed via a live on-device Safari load (user-provided screenshot) that the raw file reaching
+  the phone is byte-for-byte the fixed content from attempt 1 below -- ruling out network
+  interference, a stale CDN cache, or a wrong/mistyped source URL. The failure is genuinely inside
+  AltStore's own parsing of an otherwise syntactically valid file.
+- Checked this repo's git history: `appPermissions` has been present in `altstore-source.json`
+  since the very first commit that created it, and nothing in this repo's history shows anyone ever
+  successfully completing "Add Source" in AltStore with this file -- the earlier "debugged through
+  many rounds" work was entirely about the Codemagic build pipeline (VerificationError 4, GitHub
+  auth, etc.), not this in-app step. Unlike every other field in the file (`name`,
+  `bundleIdentifier`, `iconURL`, `versions`, etc., all well-established AltStore source fields),
+  `appPermissions` is the one part of this schema that was never independently confirmed against a
+  real AltStore install.
 
 ### Fixed
-- `altstore-source.json`'s `apps[0].appPermissions.privacy` was an empty object (`{}`). AltStore's
-  source schema expects `privacy` to decode as an array; a type mismatch there throws a Swift
-  `DecodingError` that AltStore surfaces to the user as a generic "source is not valid JSON" error,
-  even though the file is syntactically valid JSON (confirmed by fetching and parsing the live raw
-  file directly). Changed to `"privacy": []`. This field has needed manual correction before (see
-  the "Restore AltStore source permissions metadata" commit) -- it's the one fragile spot in an
-  otherwise-working manifest.
-- Fixed the same default in `codemagic.yaml`'s publish step (the `jq` fallback that only fires if
-  `appPermissions` is ever missing entirely) so a future auto-publish can't reintroduce the wrong
-  type.
+- Removed `apps[0].appPermissions` entirely from `altstore-source.json` (attempt 1 changed its
+  `privacy` value from `{}` to `[]`, which did not fix the error -- ruling out that specific type
+  mismatch as the cause, though the array shape is still probably correct in principle). Also
+  removed the corresponding `jq` clause in `codemagic.yaml`'s publish step so future auto-published
+  builds don't reintroduce the field.
 
 ### Not Done / Needs Follow-up
-- Not confirmed against AltStore's actual Swift source model (no network access to AltStore's docs
-  or source repo from this session) -- this is the most likely root cause based on the schema
-  pattern (every other permissions-adjacent field is an array) and the file's own history of this
-  exact field needing correction, but should be confirmed by actually re-adding the source in
-  AltStore after this fix ships.
+- Still not confirmed against AltStore's actual Swift source model (no network access to AltStore's
+  docs or source repo from this session, and this repo has no self-hosted copy of the real schema)
+  -- this is a diagnostic-by-elimination fix (drop the one unverified field), not a confirmed root
+  cause. If "Add Source" still fails after this, the next step is trimming the file down to the
+  handful of fields every real-world AltStore source is confirmed to use and rebuilding up from
+  there field-by-field with on-device verification each time.
 
 ---
 

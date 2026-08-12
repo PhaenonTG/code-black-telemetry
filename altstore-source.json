@@ -15,10 +15,6 @@
       "versionDescription": "Automated Codemagic build 2026.0811.2126",
       "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-2026.0811.2126.ipa",
       "size": 1428946,
-      "appPermissions": {
-        "entitlements": [],
-        "privacy": []
-      },
       "versions": [
         {
           "version": "2026.0811.2126",

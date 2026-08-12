@@ -104,7 +104,6 @@ workflows:
              | .apps[0].versionDate = $d
              | .apps[0].downloadURL = $u
              | .apps[0].size = $s
-             | .apps[0].appPermissions = (.apps[0].appPermissions // {entitlements: [], privacy: []})
              | .apps[0].versionDescription = ("Automated Codemagic build " + $v)
              | .apps[0].versions = [{version: $v, date: $d, localizedDescription: ("Automated Codemagic build " + $v), downloadURL: $u, size: $s}]' \
             altstore-source.json > altstore-source.json.tmp
