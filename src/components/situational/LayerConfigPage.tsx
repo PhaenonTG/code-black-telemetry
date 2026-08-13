@@ -62,7 +62,10 @@ export function LayerConfigPage() {
   const [newPinName, setNewPinName] = useState("");
   const [newPinColor, setNewPinColor] = useState("#ffbe3c");
   const [newPinImage, setNewPinImage] = useState<string | undefined>(undefined);
+  const [customPinError, setCustomPinError] = useState("");
   const newPinImageInputRef = useRef<HTMLInputElement>(null);
+  const normalizedNewPinName = newPinName.trim().toLowerCase();
+  const duplicateCustomPin = Boolean(normalizedNewPinName && customPins.some((pin) => pin.name.trim().toLowerCase() === normalizedNewPinName));
 
   useEffect(() => {
     const unsubscribe = subscribeMapLayerVisibility(setVisibility);
@@ -85,20 +88,26 @@ export function LayerConfigPage() {
     if (!file) return;
     try {
       setNewPinImage(await downscaleImageToDataUrl(file, CUSTOM_PIN_IMAGE_SIZE_PX));
+      setCustomPinError("");
     } catch {
-      // Unreadable/corrupt file -- leave whatever image (if any) was already staged.
+      setCustomPinError("Logo image could not be read. Pick another image or add the pin without a logo.");
     }
   };
 
   const addCustomPin = () => {
     const name = newPinName.trim();
     if (!name) return;
+    if (customPins.some((pin) => pin.name.trim().toLowerCase() === name.toLowerCase())) {
+      setCustomPinError("That custom pin already exists.");
+      return;
+    }
     void saveCustomPoiPins([
       ...customPins,
       { id: `${name}-${Date.now()}`, name, matchText: name, color: newPinColor, imageDataUrl: newPinImage },
     ]);
     setNewPinName("");
     setNewPinImage(undefined);
+    setCustomPinError("");
   };
 
   const removeCustomPin = (id: string) => {
@@ -138,7 +147,10 @@ export function LayerConfigPage() {
             className="settings-input"
             placeholder="Business name (e.g. Love's)"
             value={newPinName}
-            onChange={(event) => setNewPinName(event.target.value)}
+            onChange={(event) => {
+              setNewPinName(event.target.value);
+              setCustomPinError("");
+            }}
             onKeyDown={(event) => { if (event.key === "Enter") addCustomPin(); }}
           />
           <ColorField label="Custom pin color" value={newPinColor} onChange={setNewPinColor} />
@@ -152,15 +164,16 @@ export function LayerConfigPage() {
             {!newPinImage && "LOGO"}
           </button>
           <input ref={newPinImageInputRef} type="file" accept="image/*" className="settings-file-input" onChange={(event) => void handleNewPinImage(event)} />
-          <button className="settings-action" disabled={!newPinName.trim()} onClick={addCustomPin}>Add</button>
+          <button className="settings-action" disabled={!newPinName.trim() || duplicateCustomPin} onClick={addCustomPin}>Add</button>
         </div>
+        {customPinError && <div className="cb-note cb-note--warn">{customPinError}</div>}
         {customPins.length > 0 && (
           <div className="settings-roster-list">
             {customPins.map((pin) => (
               <div key={pin.id} className="settings-roster-chip">
                 <PinStylePreview style={{ color: pin.color, shape: "circle", sizeScale: 1 }} size={14} />
                 <span>{pin.name}</span>
-                <button type="button" aria-label={`Remove ${pin.name}`} onClick={() => removeCustomPin(pin.id)}>×</button>
+                <button type="button" aria-label={`Remove ${pin.name}`} onClick={() => removeCustomPin(pin.id)}>X</button>
               </div>
             ))}
           </div>

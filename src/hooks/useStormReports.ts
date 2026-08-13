@@ -11,9 +11,10 @@ export function useStormReports(gps: GpsPoint | null, radiusMiles: number, reten
   const gpsRef = useRef(gps);
   const resumeTick = useResumeTick();
   gpsRef.current = gps;
+  const hasGps = gps != null;
 
   useEffect(() => {
-    if (!gps) {
+    if (!hasGps) {
       setReports([]);
       setError("");
       setUpdatedAt(null);
@@ -40,7 +41,7 @@ export function useStormReports(gps: GpsPoint | null, radiusMiles: number, reten
       window.clearInterval(refreshTimer);
       window.clearInterval(pruneTimer);
     };
-  }, [gps == null, radiusMiles, retentionHours, resumeTick]);
+  }, [hasGps, radiusMiles, retentionHours, resumeTick]);
 
   return { reports, error, updatedAt };
 }

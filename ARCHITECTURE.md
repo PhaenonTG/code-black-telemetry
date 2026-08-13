@@ -2,7 +2,8 @@
 
 ## Product Role
 
-Code Black OPS is the chase vehicle tablet interface. It should stay focused on control, status,
+Code Black OPS is the chase vehicle operations interface. Tablets are the primary target, with
+phone support for field use. It should stay focused on control, status,
 map/radar awareness, reporting, and field diagnostics. Vehicle service work belongs on the
 Raspberry Pi. Remote aggregation, overlays, production, archival, and multi-user services belong
 behind Code Black Core APIs when those systems are available.
@@ -27,7 +28,6 @@ UI components should continue to read through service hooks and provider APIs.
 Primary boundaries:
 
 - `src/services/telemetry/`: BLE-first telemetry provider, HTTP fallback, simulator fallback types
-- `src/services/radar.ts`: frontend contract for the native `RadarNative` plugin
 - `src/services/streaming.ts`: Mission Streaming status normalization and BLE/HTTP control client
 - `src/services/settings.ts`: Capacitor Preferences-backed app settings and subscriptions
 - `src/services/nearby.ts`, `situational.ts`, `spotters.ts`, `watches.ts`: external weather/places/spotter data
@@ -43,7 +43,7 @@ The active provider is `HybridTelemetryProvider` in `src/services/telemetry/api-
 
 - BLE is primary through `BleTelemetryClient`.
 - HTTP polling of `/api/latest` is a fallback and is skipped while BLE telemetry is fresh.
-- Tablet GPS is used as a fallback when vehicle GPS is invalid or stale.
+- Internal device GPS is used as a fallback when vehicle GPS is invalid or stale.
 - Last successful telemetry is persisted and shown as last-known/offline state.
 - App backgrounding pauses BLE and HTTP work; resume triggers an immediate poll/reconnect attempt.
 
@@ -52,13 +52,12 @@ in Capacitor Preferences by current design; revisit before wider distribution.
 
 ## Radar
 
-Production tablet radar is Android-native and on-device:
+Production radar is mosaic-first:
 
-NOAA/Unidata Level II source -> native Android download -> Rust/JNI decoder -> app-private processed cache -> Mapbox layer.
+Iowa Environmental Mesonet NEXRAD N0Q composite -> Mapbox raster source -> Weather and Locate maps.
 
-The Node worker under `radar-worker/` is a local development/reference server. It is not the
-production tablet radar path and should not be exposed on a trusted network without an explicit
-auth/bind-address review.
+The previous Android-native single-site Level II decoder path was removed from the active app. Any
+future single-site radar work should be treated as a fresh feature with explicit product approval.
 
 ## Networking
 
@@ -94,10 +93,8 @@ Capacitor app id: `com.codeblackwx.ops`.
 
 Native components:
 
-- `RadarNativePlugin`: Level II radar download/cache/decode bridge
 - `TabletLocationNativePlugin`: last-known Android location bridge
 - `NativeMapboxReconActivity`: hardcoded diagnostic/prototype Mapbox activity
-- `RadarForegroundService`: declared but currently minimal
 
 Security-sensitive manifest settings currently include app backup enabled, global cleartext HTTP
 allowed, and an exported diagnostic recon activity. Treat changes to these as policy decisions.

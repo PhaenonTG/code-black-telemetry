@@ -19,9 +19,10 @@ export function useSpcOutlook(gps: GpsPoint | null) {
   // relocation is reflected on the next scheduled poll instead of freezing at launch position.
   const gpsRef = useRef(gps);
   gpsRef.current = gps;
+  const hasGps = gps != null;
 
   useEffect(() => {
-    if (!gps) return;
+    if (!hasGps) return;
     let cancelled = false;
     const load = async () => {
       const currentGps = gpsRef.current;
@@ -35,7 +36,7 @@ export function useSpcOutlook(gps: GpsPoint | null) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [gps == null, resumeTick]);
+  }, [hasGps, resumeTick]);
 
   return outlooks;
 }

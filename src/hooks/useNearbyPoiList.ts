@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getNearbyPoiList, type NearbyPlace } from "../services/nearby";
 import { useResumeTick } from "./useResumeTick";
 
@@ -13,15 +13,20 @@ export function useNearbyPoiList(gps: GpsPoint | null) {
   const [places, setPlaces] = useState<NearbyPlace[]>([]);
   const [error, setError] = useState("");
   const resumeTick = useResumeTick();
+  const gpsRef = useRef(gps);
+  gpsRef.current = gps;
+  const hasGps = gps != null;
 
   useEffect(() => {
-    if (!gps) return;
+    if (!hasGps) return;
     let cancelled = false;
     let timer: number | undefined;
     let retryDelay = RETRY_BASE_MS;
 
     const load = async () => {
-      const result = await getNearbyPoiList(gps);
+      const currentGps = gpsRef.current;
+      if (!currentGps) return;
+      const result = await getNearbyPoiList(currentGps);
       if (cancelled) return;
       setError(result.error);
       if (result.error) {
@@ -41,7 +46,7 @@ export function useNearbyPoiList(gps: GpsPoint | null) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [gps == null, resumeTick]);
+  }, [hasGps, resumeTick]);
 
   return { places, error };
 }

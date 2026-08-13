@@ -34,8 +34,7 @@ export type MapRuntimeDiagnostics = {
   cameraMode: string;
   gpsAccuracyM: number | null;
   speedMph: number | null;
-  radarOpacity: number;
-  product: string;
+  mosaicVisible: boolean;
   provider: BasemapProvider;
   updatedAt: number;
 };

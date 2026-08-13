@@ -7,12 +7,7 @@ import { incrementAtlasCounter } from "./AtlasDiagnostics";
 const VEHICLE_SOURCE = "atlas-vehicle";
 const VEHICLE_HEADING_SOURCE = "atlas-vehicle-heading";
 const VEHICLE_ACCURACY_LAYER = "atlas-vehicle-accuracy";
-const VEHICLE_PULSE_LAYER = "atlas-vehicle-pulse";
 const VEHICLE_HEADING_LAYER = "atlas-vehicle-heading";
-const PULSE_CYCLE_MS = 1800;
-const PULSE_MIN_RADIUS = 9;
-const PULSE_MAX_RADIUS = 26;
-const PULSE_START_OPACITY = 0.5;
 const DEFAULT_VEHICLE_COLOR = "#ff2d35";
 
 // The main dot moved from a GL circle layer to a mapboxgl.Marker (DOM element) so it can take an
@@ -28,16 +23,28 @@ const SHAPE_CLIP_PATH: Partial<Record<VehicleMarkerShape, string>> = {
   star: "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)",
 };
 
+function alphaColor(color: string, alpha: number) {
+  const match = color.trim().match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!match) return `rgba(255, 45, 53, ${alpha})`;
+  const [, r, g, b] = match;
+  return `rgba(${Number.parseInt(r, 16)}, ${Number.parseInt(g, 16)}, ${Number.parseInt(b, 16)}, ${alpha})`;
+}
+
 function applyVehicleMarkerStyle(el: HTMLDivElement, style: VehicleMarkerStyle) {
   const size = VEHICLE_MARKER_SIZE_PX * (style.sizeScale ?? 1);
+  const core = el.querySelector<HTMLDivElement>(".atlas-vehicle-marker__core") ?? el;
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
+  el.style.setProperty("--atlas-vehicle-color", style.color);
+  el.style.setProperty("--atlas-vehicle-pulse-fill", alphaColor(style.color, 0.42));
+  el.style.setProperty("--atlas-vehicle-pulse-glow", alphaColor(style.color, 0.68));
+  el.style.setProperty("--atlas-vehicle-size", `${size}px`);
   el.style.cursor = "default";
-  el.style.backgroundColor = style.color;
-  el.style.borderRadius = style.shape === "circle" ? "50%" : style.shape === "square" ? "3px" : "0";
-  el.style.clipPath = SHAPE_CLIP_PATH[style.shape] ?? "";
-  el.style.border = "2px solid #fff4f4";
-  el.style.boxShadow = `0 0 10px 2px ${style.color}`;
+  core.style.backgroundColor = style.color;
+  core.style.borderRadius = style.shape === "circle" ? "50%" : style.shape === "square" ? "3px" : "0";
+  core.style.clipPath = SHAPE_CLIP_PATH[style.shape] ?? "";
+  core.style.border = "2px solid #fff4f4";
+  core.style.boxShadow = `0 0 10px 2px ${style.color}`;
 }
 
 const vehicleMarkers = new WeakMap<Map, Marker>();
@@ -110,25 +117,6 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null, sty
     incrementAtlasCounter("layerCreations");
   }
 
-  // A rider on the accuracy circle: this is what actually pulses (see startAtlasVehiclePulse
-  // below). Added here, before the heading layer, so paint order stays fixed: accuracy (bottom) ->
-  // pulse (animated) -> heading. The main dot itself is a DOM marker (see applyVehicleMarkerStyle
-  // above) and always renders above all of this since DOM markers sit above the WebGL canvas.
-  if (!map.getLayer(VEHICLE_PULSE_LAYER)) {
-    map.addLayer({
-      id: VEHICLE_PULSE_LAYER,
-      type: "circle",
-      source: VEHICLE_SOURCE,
-      paint: {
-        "circle-radius": PULSE_MIN_RADIUS,
-        "circle-color": DEFAULT_VEHICLE_COLOR,
-        "circle-opacity": PULSE_START_OPACITY,
-        "circle-stroke-width": 0,
-      },
-    });
-    incrementAtlasCounter("layerCreations");
-  }
-
   if (!map.getLayer(VEHICLE_HEADING_LAYER)) {
     map.addLayer({
       id: VEHICLE_HEADING_LAYER,
@@ -145,45 +133,23 @@ export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null, sty
   }
 
   // Re-applied every call (cheap -- one vehicle) so a live color change from Settings repaints the
-  // accuracy ring/pulse/heading immediately, the same "just re-apply, it's cheap" approach
+  // accuracy ring/heading immediately, the same "just re-apply, it's cheap" approach
   // AtlasPinMarkers.ts uses for Team/Chaser pins.
   map.setPaintProperty(VEHICLE_ACCURACY_LAYER, "circle-color", style.color);
   map.setPaintProperty(VEHICLE_ACCURACY_LAYER, "circle-stroke-color", style.color);
-  map.setPaintProperty(VEHICLE_PULSE_LAYER, "circle-color", style.color);
   map.setPaintProperty(VEHICLE_HEADING_LAYER, "line-color", style.color);
 
   let marker = vehicleMarkers.get(map);
   if (!marker) {
     const el = document.createElement("div");
     el.className = "atlas-vehicle-marker";
+    const core = document.createElement("div");
+    core.className = "atlas-vehicle-marker__core";
+    el.appendChild(core);
     marker = new mapboxgl.Marker({ element: el }).setLngLat([gps.lon, gps.lat]).addTo(map);
     vehicleMarkers.set(map, marker);
   } else {
     marker.setLngLat([gps.lon, gps.lat]);
   }
   applyVehicleMarkerStyle(marker.getElement() as HTMLDivElement, style);
-}
-
-// Grows and fades on a loop so "my dot" reads at a glance without having to think about it, per
-// the original ask. Safe to start before the vehicle layer itself exists (e.g. before a first GPS
-// fix arrives) -- each tick just no-ops until updateAtlasVehicleLayer has created the pulse layer.
-// `isActive` lets the caller pause the actual paint writes when this map instance isn't the one on
-// screen (the Weather-compact and Locate-full cards both stay mounted at once) -- two concurrent
-// maps each repainting a pulse layer on every animation frame was real, measurable GPU/main-thread
-// contention that showed up as visible choppiness on both instances, not just the hidden one.
-export function startAtlasVehiclePulse(map: Map, isActive: () => boolean = () => true): () => void {
-  const startedAt = performance.now();
-  let frameId = requestAnimationFrame(function tick(now) {
-    if (isActive() && map.getLayer(VEHICLE_PULSE_LAYER)) {
-      const t = ((now - startedAt) % PULSE_CYCLE_MS) / PULSE_CYCLE_MS;
-      try {
-        map.setPaintProperty(VEHICLE_PULSE_LAYER, "circle-radius", PULSE_MIN_RADIUS + t * (PULSE_MAX_RADIUS - PULSE_MIN_RADIUS));
-        map.setPaintProperty(VEHICLE_PULSE_LAYER, "circle-opacity", PULSE_START_OPACITY * (1 - t));
-      } catch {
-        // Style can be mid-reload for a frame or two; skip and try again next tick.
-      }
-    }
-    frameId = requestAnimationFrame(tick);
-  });
-  return () => cancelAnimationFrame(frameId);
 }

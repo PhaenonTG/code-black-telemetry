@@ -1,5 +1,5 @@
 import type { GeoJSONSource, Map } from "mapbox-gl";
-import type { RadarSite } from "../services/radar";
+import type { AtlasGpsPoint } from "./types";
 import type { AtlasRangeRingMode } from "./types";
 import { incrementAtlasCounter } from "./AtlasDiagnostics";
 
@@ -17,9 +17,9 @@ function destination(lat: number, lon: number, bearingDeg: number, miles: number
   return [((((lon2 * 180) / Math.PI) + 540) % 360) - 180, (lat2 * 180) / Math.PI];
 }
 
-function ringFeature(site: RadarSite, miles: number) {
+function ringFeature(center: Pick<AtlasGpsPoint, "lat" | "lon">, miles: number) {
   const coordinates = [];
-  for (let bearing = 0; bearing <= 360; bearing += 4) coordinates.push(destination(site.lat, site.lon, bearing, miles));
+  for (let bearing = 0; bearing <= 360; bearing += 4) coordinates.push(destination(center.lat, center.lon, bearing, miles));
   return {
     type: "Feature",
     properties: { miles },
@@ -27,11 +27,11 @@ function ringFeature(site: RadarSite, miles: number) {
   };
 }
 
-export function updateAtlasRangeRings(map: Map, site: RadarSite | null, mode: AtlasRangeRingMode) {
+export function updateAtlasRangeRings(map: Map, center: Pick<AtlasGpsPoint, "lat" | "lon"> | null, mode: AtlasRangeRingMode) {
   const distances = mode === "off" ? [] : mode === "10" ? [10] : mode === "25" ? [25, 50, 75, 100] : mode === "50" ? [50, 100, 150] : [100, 200];
   const data = {
     type: "FeatureCollection",
-    features: site ? distances.map((distanceMiles) => ringFeature(site, distanceMiles)) : [],
+    features: center ? distances.map((distanceMiles) => ringFeature(center, distanceMiles)) : [],
   };
 
   const source = map.getSource(SOURCE) as GeoJSONSource | undefined;

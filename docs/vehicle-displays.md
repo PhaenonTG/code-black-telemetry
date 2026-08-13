@@ -4,7 +4,7 @@ Code Black OPS stays tablet-first. Vehicle display support is intentionally glan
 
 ## Android Auto
 
-The Android project includes a read-only Android Auto Weather app service:
+The Android project includes a read-only Android Auto Weather app service for local testing:
 
 - Service: `com.codeblackwx.ops.car.CodeBlackCarAppService`
 - Category metadata: `weather`
@@ -19,6 +19,20 @@ The car surface shows:
 - Snapshot age
 
 The main app publishes the snapshot while it is running. If Android Auto opens before the tablet app has published data, it shows a waiting state.
+
+### Current Status
+
+This surface is experimental until tested on a real Android Auto host or head unit. The service
+currently uses AndroidX Car App's permissive local-testing host validator so the app can be opened
+outside Play review. Do not treat that as release-ready Android Auto hardening.
+
+Before wider Android Auto distribution:
+
+- Replace the local-testing host validator with a production host validation path supported by the
+  target AndroidX Car App release.
+- Confirm the app category and template behavior on the Android Auto Desktop Head Unit or a real
+  vehicle head unit.
+- Keep the surface glance-only: current location, conditions, wind, and update age.
 
 ## CarPlay
 

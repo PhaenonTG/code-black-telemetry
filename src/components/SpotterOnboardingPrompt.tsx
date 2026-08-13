@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { markSpotterOnboardingSeen, spotterNetworkLogin } from "../services/spotterAccount";
+import { openExternalUrl } from "../utils/externalLinks";
 
 // One-time, skippable first-run prompt -- NOT a login gate. See markSpotterOnboardingSeen's
 // comment in spotterAccount.ts for why: this dashboard's core purpose (GPS, weather, radar,
@@ -68,7 +69,7 @@ export function SpotterOnboardingPrompt({ onDismiss }: { onDismiss: () => void }
             {error && <span className="cb-note cb-note--warn">{error}</span>}
           </div>
           <div className="spotter-onboarding-actions">
-            <a className="settings-action" href="https://www.spotternetwork.org/account/register" target="_blank" rel="noreferrer">Create Account</a>
+            <button className="settings-action" onClick={() => void openExternalUrl("https://www.spotternetwork.org/account/register")}>Create Account</button>
             <button className="settings-action" onClick={() => void dismiss()}>Skip For Now</button>
           </div>
         </div>

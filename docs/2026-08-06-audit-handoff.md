@@ -16,8 +16,8 @@ lighting control, and systemd services.
 - HTTP Pi endpoint fallback through Settings / Pi Endpoint.
 - Tablet GPS fallback when vehicle GPS is stale or invalid.
 - Last-known telemetry persistence and offline state display.
-- Native Android Level II radar products: REF, VEL, SRV, CC.
-- Mapbox Atlas map with radar, warnings, watches, team, chaser, POI, breadcrumb, and mosaic layers.
+- Wide-area NEXRAD mosaic radar through Mapbox raster tiles.
+- Mapbox Atlas map with mosaic radar, warnings, watches, team, chaser, POI, and breadcrumb layers.
 - Spotter Network sign-in, nearby chaser view, report submission, and self-filtering.
 - Nearby gas, food, lodging, and hospital lookups through Overpass.
 - App crash boundary with guarded auto-reload.
@@ -30,10 +30,8 @@ lighting control, and systemd services.
 - Telemetry provider, BLE client, HTTP fallback, simulator fallback, quality mapping.
 - Settings persistence, BLE command token storage, team/pin/layer preferences.
 - Situational services: alerts, SPC outlooks, watches, nearby places, spotters, reports.
-- Map/radar components, Mapbox layer managers, radar loop diagnostics.
-- Native Android manifest, network security config, Java plugins, native radar bridge.
-- Rust radar decoder docs and native package boundary.
-- Prototype Node radar worker.
+- Map components and Mapbox layer managers.
+- Native Android manifest, network security config, and Java plugins.
 - Scripts and install workflow.
 - Documentation and changelog.
 - Security-sensitive strings and committed environment files.
@@ -67,16 +65,7 @@ No confirmed critical defects were fixed or newly introduced in this pass.
    - Safe to fix now: no, it changes device backup behavior.
    - User approval required: yes.
 
-2. Prototype radar worker is CORS-open and listens on all interfaces
-   - Affected files: `radar-worker/worker.cjs`, `start-radar-worker.ps1`, `start-radar-worker.sh`
-   - Current behavior: worker listens on `0.0.0.0:${CODEBLACK_RADAR_PORT || 8787}` with unrestricted CORS and unauthenticated POST controls.
-   - Expected behavior: local-only dev service unless explicitly hardened.
-   - Why it matters: if run on LAN/Tailscale, other clients could drive radar selection/storm-motion endpoints.
-   - Recommended fix: bind to localhost by default, add optional auth token, or document as dev-only.
-   - Safe to fix now: not without confirming whether any device workflow depends on LAN access.
-   - User approval required: yes.
-
-3. Pi networking/recovery topology cannot be verified from this repo
+2. Pi networking/recovery topology cannot be verified from this repo
    - Affected files: repository-wide; Pi code is absent.
    - Current behavior: only tablet client and notes exist here; NetworkManager, recovery AP, hotspot priorities, watchdogs, and systemd units are not included.
    - Expected behavior: field readiness audit needs the real Pi service/profile definitions.
@@ -85,7 +74,7 @@ No confirmed critical defects were fixed or newly introduced in this pass.
    - Safe to fix now: no.
    - User approval required: yes, because it touches Pi networking.
 
-4. Nearby/POI/spotter hooks can use stale coordinates while driving
+3. Nearby/POI/spotter hooks can use stale coordinates while driving
    - Affected files: `src/hooks/useNearbyPlaces.ts`, `src/hooks/useNearbyPoiList.ts`, `src/hooks/useSpotters.ts`
    - Current behavior: effects depend on `gps == null` to avoid polling on every telemetry tick; nearby hooks close over the GPS value from effect start, and spotter polling also uses that captured value.
    - Expected behavior: avoid jitter-driven fetch storms while still refreshing after meaningful movement.
@@ -118,8 +107,8 @@ No confirmed critical defects were fixed or newly introduced in this pass.
    - Affected files: `package.json`, repository-wide.
    - Current behavior: validation is lint/build/Android build/device screenshots.
    - Expected behavior: core service transforms and hooks should have targeted tests.
-   - Why it matters: telemetry/radar/nearby logic is safety-relevant and easy to regress.
-   - Recommended fix: add small tests for telemetry normalization, BLE fragment reassembly, nearby movement refresh, and radar loop series.
+   - Why it matters: telemetry/nearby logic is safety-relevant and easy to regress.
+   - Recommended fix: add small tests for telemetry normalization, BLE fragment reassembly, and nearby movement refresh.
    - Safe to fix now: no new test framework was authorized in this audit.
    - User approval required: yes.
 
@@ -131,15 +120,6 @@ No confirmed critical defects were fixed or newly introduced in this pass.
    - Recommended fix: continue consolidating project docs around this audit handoff and current architecture doc.
    - Safe to fix now: partially done with pointer and root docs.
    - User approval required: no for docs-only cleanup.
-
-5. Foreground radar service is declared but minimal
-   - Affected files: `RadarForegroundService.java`, `RadarNativePlugin.java`
-   - Current behavior: foreground service exists but has no meaningful lifecycle implementation.
-   - Expected behavior: either implement thermal/background policy or remove/defer declaration.
-   - Why it matters: it suggests background radar capability that is not actually present.
-   - Recommended fix: decide whether background radar is required before implementing.
-   - Safe to fix now: no.
-   - User approval required: yes.
 
 ### LOW
 

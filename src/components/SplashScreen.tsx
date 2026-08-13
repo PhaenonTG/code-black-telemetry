@@ -2,23 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import codeblackShield from "../assets/codeblack-shield.png";
 import { bleTelemetryClient } from "../services/telemetry/ble-client";
 
-// Real progress, not a fixed timer -- holds on each stage until its actual signal fires (BLE/Pi
-// link connects, first radar frame decodes), so a fast launch feels fast and a slow one still
+// Real progress, not a fixed timer -- holds on telemetry until its actual signal fires (BLE/Pi
+// link connects), so a fast launch feels fast and a slow one still
 // shows something true rather than a lie ("SITUATIONAL AWARENESS ONLINE" before it actually is).
 // Every stage still has its own timeout so a tablet with no Pi in range (standalone mode, the
 // common case away from the vehicle) never hangs waiting for a signal that will never come.
 const MIN_DISPLAY_MS = 1800;
 const MAX_DISPLAY_MS = 11000;
 const BLE_TIMEOUT_MS = 4000;
-const RADAR_TIMEOUT_MS = 9000;
 const EXIT_DURATION_MS = 380;
 const REDUCED_MOTION_MS = 500;
 
-type Stage = "telemetry" | "radar" | "ready";
+type Stage = "telemetry" | "ready";
 
 const STAGE_MESSAGE: Record<Stage, string> = {
   telemetry: "LINKING TELEMETRY",
-  radar: "CALIBRATING RADAR",
   ready: "SITUATIONAL AWARENESS ONLINE",
 };
 
@@ -30,7 +28,6 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
   );
   const startRef = useRef(Date.now());
   const bleReadyRef = useRef(false);
-  const radarReadyRef = useRef(false);
   const finishedRef = useRef(false);
 
   const finish = () => {
@@ -42,8 +39,6 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
 
   const tryAdvance = () => {
     if (!bleReadyRef.current) return;
-    setStage((current) => (current === "telemetry" ? "radar" : current));
-    if (!radarReadyRef.current) return;
     setStage("ready");
     const elapsed = Date.now() - startRef.current;
     window.setTimeout(finish, Math.max(0, MIN_DISPLAY_MS - elapsed));
@@ -61,31 +56,16 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
         tryAdvance();
       }
     });
-    const handleRadar = () => {
-      if (!radarReadyRef.current) {
-        radarReadyRef.current = true;
-        tryAdvance();
-      }
-    };
-    window.addEventListener("codeblack:radar-first-frame", handleRadar);
     const bleTimeout = window.setTimeout(() => {
       if (!bleReadyRef.current) {
         bleReadyRef.current = true;
         tryAdvance();
       }
     }, BLE_TIMEOUT_MS);
-    const radarTimeout = window.setTimeout(() => {
-      if (!radarReadyRef.current) {
-        radarReadyRef.current = true;
-        tryAdvance();
-      }
-    }, RADAR_TIMEOUT_MS);
     return () => {
       window.clearTimeout(maxTimer);
       window.clearTimeout(bleTimeout);
-      window.clearTimeout(radarTimeout);
       unsubscribeBle();
-      window.removeEventListener("codeblack:radar-first-frame", handleRadar);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

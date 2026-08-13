@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getAuthenticatedSpotterPositions, getNearbySpotters, type Spotter } from "../services/spotters";
 import { getSpotterAccount, subscribeSpotterAccount, type SpotterAccount } from "../services/spotterAccount";
 import { useResumeTick } from "./useResumeTick";
@@ -27,19 +27,24 @@ export function useSpotters(gps: GpsPoint | null) {
   const [error, setError] = useState("");
   const [account, setAccount] = useState(() => getSpotterAccount());
   const resumeTick = useResumeTick();
+  const gpsRef = useRef(gps);
+  gpsRef.current = gps;
+  const hasGps = gps != null;
 
   useEffect(() => subscribeSpotterAccount(setAccount), []);
 
   useEffect(() => {
-    if (!gps) return;
+    if (!hasGps) return;
     let cancelled = false;
     const accountId = account?.id ?? null;
     const load = async () => {
+      const currentGps = gpsRef.current;
+      if (!currentGps) return;
       // Prefer the official JSON positions endpoint when signed in — richer contact data than the
       // anonymous feed. If it fails for any reason (network blip, revoked id), fall back to the
       // anonymous feed rather than showing nothing; a signed-out user always uses the fallback.
-      let result = accountId ? await getAuthenticatedSpotterPositions(accountId, gps) : await getNearbySpotters(gps);
-      if (accountId && result.error) result = await getNearbySpotters(gps);
+      let result = accountId ? await getAuthenticatedSpotterPositions(accountId, currentGps) : await getNearbySpotters(currentGps);
+      if (accountId && result.error) result = await getNearbySpotters(currentGps);
       if (!cancelled) {
         setSpotters(excludeSelf(result.spotters, account));
         setError(result.error);
@@ -51,7 +56,7 @@ export function useSpotters(gps: GpsPoint | null) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [account, gps == null, resumeTick]);
+  }, [account, hasGps, resumeTick]);
 
   return { spotters, error };
 }

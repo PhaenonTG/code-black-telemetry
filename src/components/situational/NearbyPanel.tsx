@@ -5,6 +5,7 @@ import { Panel } from "./Panel";
 import type { NearbyCategory, NearbyPlace } from "../../services/nearby";
 import type { Spotter } from "../../services/spotters";
 import { loadChaserRadiusMiles, subscribeChaserRadiusMiles } from "../../services/settings";
+import { openExternalUrl } from "../../utils/externalLinks";
 
 const CATEGORY_LABEL: Record<NearbyCategory, string> = {
   gas: "Gas",
@@ -149,7 +150,7 @@ function NearbyDetailModal({ place, onClose }: { place: NearbyPlace; onClose: ()
           {place.beds != null && <p>{place.beds} beds</p>}
           <div className="nearby-actions">
             {mapProviderLinks(place).map((link) => (
-              <a key={link.label} className="settings-action" href={link.href}>{link.label}</a>
+              <button key={link.label} type="button" className="settings-action" onClick={() => void openExternalUrl(link.href)}>{link.label}</button>
             ))}
             <button className="settings-action" onClick={copyAddress}>{copied ? "Copied" : "Copy Address"}</button>
           </div>
@@ -224,7 +225,7 @@ function SpotterDetailModal({ spotter, onClose, onBack }: { spotter: Spotter; on
           ))}
           <div className="nearby-actions">
             {mapProviderLinks(spotter).map((link) => (
-              <a key={link.label} className="settings-action" href={link.href}>{link.label}</a>
+              <button key={link.label} type="button" className="settings-action" onClick={() => void openExternalUrl(link.href)}>{link.label}</button>
             ))}
             <button className="settings-action" onClick={copyCoordinates}>{copied ? "Copied" : "Copy Coordinates"}</button>
           </div>

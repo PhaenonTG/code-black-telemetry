@@ -11,24 +11,22 @@
     "cap:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "android:debug": "npm run cap:sync && cd android && gradlew.bat assembleDebug",
-    "radar:worker": "node radar-worker/worker.cjs"
+    "release:sanity": "node scripts/release-sanity.mjs"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^8.2.0",
-    "@capacitor/android": "^8.5.0",
+    "@capacitor/android": "8.5.0",
     "@capacitor/app": "^8.1.1",
-    "@capacitor/cli": "^8.4.2",
-    "@capacitor/core": "^8.4.2",
+    "@capacitor/browser": "^8.0.4",
+    "@capacitor/cli": "8.5.0",
+    "@capacitor/core": "8.5.0",
     "@capacitor/device": "^8.0.3",
     "@capacitor/geolocation": "^8.2.0",
-    "@capacitor/ios": "^8.5.0",
+    "@capacitor/ios": "8.5.0",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "mapbox-gl": "^3.27.0",
-    "nexrad-level-2-data": "^2.4.3",
-    "nexrad-level-3-data": "^0.6.1",
-    "pngjs": "^7.0.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "zustand": "^5.0.14"
@@ -44,5 +42,8 @@
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.2",
     "vite": "^8.1.0"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
   }
 }

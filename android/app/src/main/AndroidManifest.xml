@@ -50,10 +50,6 @@
         </provider>
 
         <service
-            android:name=".radar.RadarForegroundService"
-            android:exported="false" />
-
-        <service
             android:name=".car.CodeBlackCarAppService"
             android:exported="true">
             <intent-filter>

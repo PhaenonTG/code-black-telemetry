@@ -97,7 +97,7 @@ export function MissionStreamingPanel() {
   const resumeTick = useResumeTick();
 
   const stale = status.stale || !status.fetchedAt || Date.now() - status.fetchedAt > STALE_MS;
-  const controlsDisabled = Boolean(pending) || !hasToken || (!bleConnected && stale);
+  const controlsDisabled = Boolean(pending) || !hasToken;
 
   const cameraLine = useMemo(() => {
     const details = [status.camera.resolution, status.camera.fps ? `${Math.round(status.camera.fps)} fps` : ""].filter(Boolean).join(" - ");

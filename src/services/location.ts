@@ -121,8 +121,8 @@ export function buildCanonicalLocation(gps: GpsData | null | undefined, locality
   };
 }
 
-export function sourceLabel(source: CanonicalLocationSource) {
-  if (source === "tablet-gps") return "TABLET GPS";
+export function sourceLabel(source: CanonicalLocationSource, internalGpsLabel = "INTERNAL GPS") {
+  if (source === "tablet-gps") return internalGpsLabel.toUpperCase();
   if (source === "vehicle-gps") return "VEHICLE GPS";
   if (source === "esp-gps") return "ESP GPS";
   if (source === "cached-gps") return "LAST KNOWN";

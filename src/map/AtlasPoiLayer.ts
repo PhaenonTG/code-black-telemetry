@@ -76,6 +76,7 @@ const CATEGORY_ICON: Record<NearbyCategory, string> = {
 // palette rule); red is reserved for ER/vehicle/warnings.
 const BEST_PICK_COLOR: Partial<Record<NearbyCategory, string>> = {
   gas: "#ffbe3c",
+  hospital: "#ff2d35",
   lodging: "#b26bff",
   food: "#3ddc70",
 };
@@ -85,17 +86,17 @@ const BEST_PICK_COLOR: Partial<Record<NearbyCategory, string>> = {
 // border/glow -- at this marker size (22px) any icon detail finer than a bold silhouette won't
 // survive anyway, so the source SVGs (src/assets/poi-icons/) are deliberately simple/blocky.
 function applyIconPinStyle(el: HTMLDivElement, color: string, iconUrl: string) {
-  const size = 22;
+  const size = 28;
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
   el.style.backgroundColor = color;
   el.style.backgroundImage = `url(${iconUrl})`;
   el.style.backgroundRepeat = "no-repeat";
   el.style.backgroundPosition = "center";
-  el.style.backgroundSize = "60%";
+  el.style.backgroundSize = "62%";
   el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
-  el.style.borderRadius = "4px";
-  el.style.boxShadow = `0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 8px 2px ${color}`;
+  el.style.borderRadius = "6px";
+  el.style.boxShadow = `0 0 0 2px rgba(0, 0, 0, 0.4), 0 0 10px 2px ${color}`;
   el.style.display = "block";
   el.style.color = "";
   el.style.font = "";
@@ -103,41 +104,28 @@ function applyIconPinStyle(el: HTMLDivElement, color: string, iconUrl: string) {
   el.style.cursor = "pointer";
 }
 
-function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: CustomPoiPin | null, isBestPick: boolean) {
-  if (place.category === "hospital") {
-    applyIconPinStyle(el, ER_COLOR, CATEGORY_ICON.hospital);
-    return;
-  }
-
-  if (!customPin && isBestPick) {
-    const color = BEST_PICK_COLOR[place.category];
-    if (color) {
-      applyIconPinStyle(el, color, CATEGORY_ICON[place.category]);
-      return;
-    }
-  }
-
-  const size = 22;
-  el.style.width = `${size}px`;
-  el.style.height = `${size}px`;
-  el.style.display = "block";
-  el.textContent = "";
-  el.style.font = "";
-  el.style.color = "";
+function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: CustomPoiPin | null) {
   if (customPin?.imageDataUrl) {
+    const size = 28;
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.display = "block";
+    el.textContent = "";
+    el.style.font = "";
+    el.style.color = "";
     el.style.backgroundImage = `url(${customPin.imageDataUrl})`;
     el.style.backgroundSize = "cover";
     el.style.backgroundPosition = "center";
     el.style.backgroundColor = "";
     el.style.borderRadius = "6px";
-  } else {
-    el.style.backgroundImage = "";
-    el.style.backgroundColor = customPin?.color ?? "#ffffff";
-    el.style.borderRadius = "50%";
+    el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
+    el.style.boxShadow = "0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 8px 2px rgba(255, 255, 255, 0.5)";
+    el.style.cursor = "pointer";
+    return;
   }
-  el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
-  el.style.boxShadow = "0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 8px 2px rgba(255, 255, 255, 0.5)";
-  el.style.cursor = "pointer";
+
+  const color = customPin?.color ?? BEST_PICK_COLOR[place.category] ?? ER_COLOR;
+  applyIconPinStyle(el, color, CATEGORY_ICON[place.category]);
 }
 
 // Per-map marker registry, same WeakMap-keyed-by-instance pattern AtlasSpotterLayer.ts/
@@ -196,7 +184,7 @@ export function updateAtlasPoiLayer(
       } else {
         marker.setLngLat([place.lon, place.lat]);
       }
-      applyPoiStyle(marker.getElement() as HTMLDivElement, place, customPin, isBestPick);
+      applyPoiStyle(marker.getElement() as HTMLDivElement, place, customPin);
     }
   }
   for (const id of Object.keys(markers)) {

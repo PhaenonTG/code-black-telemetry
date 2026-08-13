@@ -17,6 +17,7 @@ const SCAN_TIMEOUT_MS = 10_000;
 const RECONNECT_DELAY_MIN_MS = 5_000;
 const RECONNECT_DELAY_MAX_MS = 90_000;
 const PAIRING_RETRY_DELAY_MS = 10 * 60_000;
+const PERMISSION_RETRY_DELAY_MS = 15 * 60_000;
 
 export type BleHealth = "READY" | "DEGRADED" | "BACKEND_OFFLINE" | "DATA_STALE" | "NO_SENSORS";
 
@@ -52,6 +53,11 @@ function isPairingPromptFailure(error: unknown) {
   return /auth|bond|pair|pin|passkey|cancel|user|denied|rejected/i.test(message);
 }
 
+function isPermissionDenied(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /permission|denied|not granted/i.test(message);
+}
+
 // A single long-lived scan/connect/subscribe state machine, not a per-component hook -- there's
 // exactly one physical BLE radio link to the Pi, and every consumer (telemetry provider today,
 // an Operations-page diagnostics panel later) should share it rather than each opening their own
@@ -68,11 +74,13 @@ class BleTelemetryClient {
   private retryDelayMs = RECONNECT_DELAY_MIN_MS;
   private retryTimer: number | null = null;
   private connecting = false;
+  private permissionBlocked = false;
 
   start() {
     if (this.started) return;
     this.started = true;
     this.stopped = false;
+    this.permissionBlocked = false;
     void this.run();
   }
 
@@ -84,6 +92,7 @@ class BleTelemetryClient {
     this.deviceId = null;
     this.connected = false;
     this.connecting = false;
+    this.permissionBlocked = false;
     this.notify(null);
   }
 
@@ -189,6 +198,16 @@ class BleTelemetryClient {
     this.retryDelayMs = RECONNECT_DELAY_MAX_MS;
   }
 
+  private schedulePermissionRetry(fn: () => void) {
+    this.clearRetryTimer();
+    this.retryTimer = window.setTimeout(() => {
+      this.retryTimer = null;
+      this.permissionBlocked = false;
+      fn();
+    }, PERMISSION_RETRY_DELAY_MS);
+    this.retryDelayMs = RECONNECT_DELAY_MAX_MS;
+  }
+
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => {
@@ -201,14 +220,20 @@ class BleTelemetryClient {
   }
 
   private async run() {
-    if (this.stopped || this.paused) return;
+    if (this.stopped || this.paused || this.permissionBlocked) return;
     if (!this.initialized) {
       try {
         await BleClient.initialize({ androidNeverForLocation: true });
         this.initialized = true;
-      } catch {
-        // No BLE radio, permission denied, or unsupported platform -- retry with the same backoff
-        // as a failed scan rather than giving up permanently (permission can be granted later).
+      } catch (error) {
+        // Permission denial should not keep throwing Android system dialogs every few seconds.
+        // Pause BLE retries for a long interval; toggling Pi/ESP Link off/on also restarts cleanly.
+        if (isPermissionDenied(error)) {
+          this.permissionBlocked = true;
+          this.notify(null);
+          if (!this.stopped && !this.paused) this.schedulePermissionRetry(() => void this.run());
+          return;
+        }
         if (!this.stopped && !this.paused) this.scheduleRetry(() => void this.run());
         return;
       }
@@ -217,7 +242,7 @@ class BleTelemetryClient {
   }
 
   private scanForDevice(): Promise<BleDevice | null> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let settled = false;
       const finish = (device: BleDevice | null) => {
         if (settled) return;
@@ -227,7 +252,14 @@ class BleTelemetryClient {
         resolve(device);
       };
       const timer = window.setTimeout(() => finish(null), SCAN_TIMEOUT_MS);
-      BleClient.requestLEScan({ services: [SERVICE_UUID] }, (result) => finish(result.device)).catch(() => finish(null));
+      BleClient.requestLEScan({ services: [SERVICE_UUID] }, (result) => finish(result.device)).catch((error: unknown) => {
+        if (isPermissionDenied(error)) {
+          window.clearTimeout(timer);
+          reject(error instanceof Error ? error : new Error(String(error)));
+          return;
+        }
+        finish(null);
+      });
     });
   }
 
@@ -255,6 +287,11 @@ class BleTelemetryClient {
       this.deviceId = null;
       this.notify(null);
       if (this.stopped || this.paused) return;
+      if (isPermissionDenied(error)) {
+        this.permissionBlocked = true;
+        this.schedulePermissionRetry(() => void this.run());
+        return;
+      }
       if (isPairingPromptFailure(error)) {
         this.schedulePairingRetry(() => void this.scanAndConnect());
         return;

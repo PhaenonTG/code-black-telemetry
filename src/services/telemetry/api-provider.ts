@@ -281,7 +281,7 @@ function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: n
 
 export class HybridTelemetryProvider implements TelemetryProvider {
   private fallback = new SimulatorProvider();
-  private snapshot = this.offlineSnapshot(this.fallback.getLatest(), "App started in standalone tablet mode");
+  private snapshot = this.offlineSnapshot(this.fallback.getLatest(), "App started in standalone device mode");
   private subscribers: Set<(s: TelemetrySnapshot) => void> = new Set();
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private tabletLocation: TabletLocationInput | null = null;

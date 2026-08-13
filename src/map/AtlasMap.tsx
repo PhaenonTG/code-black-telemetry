@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagnostics } from "../services/mapTiles";
-import type { RadarFrame, RadarProduct } from "../services/radar";
 import type { AlertProduct } from "../services/situational";
 import type { Spotter } from "../services/spotters";
 import type { NearbyCategory, NearbyPlace } from "../services/nearby";
@@ -19,14 +18,13 @@ import { updateAtlasAlertsLayer } from "./AtlasAlertsLayer";
 import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
 import { startAtlasMosaicLayer } from "./AtlasMosaicLayer";
 import { updateAtlasPoiLayer } from "./AtlasPoiLayer";
-import { updateAtlasRadarLayer, ATLAS_RADAR_LAYER, ATLAS_RADAR_SOURCE } from "./AtlasRadarLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
 import { updateAtlasSpotterLayer } from "./AtlasSpotterLayer";
 import { tuneAtlasStyle } from "./AtlasStyleManager";
 import { updateAtlasTeamLayer } from "./AtlasTeamLayer";
-import { startAtlasVehiclePulse, updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
+import { updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import { updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
-import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRadarState, AtlasRangeRingMode } from "./types";
+import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRangeRingMode } from "./types";
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
@@ -42,9 +40,6 @@ const INTERACTION_PAUSE_MS = 2 * 60_000;
 
 type AtlasMapProps = {
   gps: AtlasGpsPoint | null;
-  frame: RadarFrame | null;
-  product: RadarProduct;
-  opacity: number;
   expanded?: boolean;
   // Weather-compact and Locate-full both stay mounted at once (swipeable pager keeps every page
   // alive so switching is instant) -- without this, the page you're NOT looking at still runs a
@@ -119,9 +114,6 @@ function shouldApplyGpsUpdate(previous: { gps: AtlasGpsPoint; at: number } | nul
 
 export function AtlasMap({
   gps,
-  frame,
-  product,
-  opacity,
   expanded = false,
   active = true,
   rangeRings,
@@ -144,21 +136,18 @@ export function AtlasMap({
   // arriving conditions (map style loaded vs. first real GPS fix) -- see the dedicated intro effect
   // below for why they can't share one gate.
   const introAppliedRef = useRef(false);
-  const latestRef = useRef({ gps, frame, opacity, rangeRings, expanded });
+  const latestRef = useRef({ gps, rangeRings, expanded });
   const [cameraMode, setCameraMode] = useState<AtlasCameraMode>("FOLLOW_NORTH");
   const [bearing, setBearing] = useState(gps?.headingDeg ?? 0);
   const [pitch, setPitch] = useState(0);
   const [mapError, setMapError] = useState("");
-  const [radarError, setRadarError] = useState("");
   const [mapState, setMapState] = useState<AtlasMapState>("INITIALIZING");
-  const [radarState, setRadarState] = useState<AtlasRadarState>("LOADING");
   const [renderCount, setRenderCount] = useState(0);
   const [idleCount, setIdleCount] = useState(0);
   const [pixelSample, setPixelSample] = useState("pending");
   const renderCountRef = useRef(0);
   const idleCountRef = useRef(0);
   const lastGpsAppliedRef = useRef<{ gps: AtlasGpsPoint; at: number } | null>(null);
-  const stopPulseRef = useRef<(() => void) | null>(null);
   const stopMosaicRef = useRef<(() => void) | null>(null);
   // Manual pan/zoom/rotate pauses auto-follow and the mosaic loop rather than fighting the user's
   // own drag -- Infinity while actively interacting (never "expires" mid-gesture), a real
@@ -214,7 +203,7 @@ export function AtlasMap({
     return spotters.filter((spotter) => !teamIds.has(spotter.id) && spotter.distanceMiles <= chaserRadiusMiles);
   }, [spotters, teamPositions, chaserRadiusMiles]);
 
-  latestRef.current = { gps, frame, opacity, rangeRings, expanded };
+  latestRef.current = { gps, rangeRings, expanded };
 
   useEffect(() => {
     incrementAtlasCounter("reactMounts");
@@ -370,7 +359,6 @@ export function AtlasMap({
         if (styleInitializedRef.current || !map.isStyleLoaded()) return;
         styleInitializedRef.current = true;
         incrementAtlasCounter("styleLoads");
-        const latest = latestRef.current;
         styleInfoRef.current = ATLAS_STYLE_TUNING_DISABLED ? {
           modifiedLayers: 0,
           firstSymbolLayerId: map.getStyle().layers?.find((layer) => layer.type === "symbol")?.id,
@@ -386,17 +374,12 @@ export function AtlasMap({
         // zoom forever -- looked like "doesn't auto-center," "zoom doesn't run." Moved to its own
         // effect below keyed on [loaded, gps] so it fires whenever GPS actually becomes available,
         // regardless of which one was ready first.
-        stopPulseRef.current = startAtlasVehiclePulse(map, () => activeRef.current);
         stopMosaicRef.current = startAtlasMosaicLayer(
           map,
           () => mosaicVisibleRef.current && activeRef.current,
           styleInfoRef.current.firstSymbolLayerId,
         );
-        const radar = updateAtlasRadarLayer(map, latest.frame, latest.opacity, styleInfoRef.current.firstSymbolLayerId);
-        setRadarState(radar.state);
-        if (!radar.loaded && radar.error) setRadarError(radar.error);
-        else setRadarError("");
-        updateAtlasRangeRings(map, latest.frame?.site ?? null, latest.rangeRings);
+        updateAtlasRangeRings(map, latestRef.current.gps, latestRef.current.rangeRings);
       };
       map.on("load", initializeStyle);
       map.on("style.load", initializeStyle);
@@ -407,8 +390,6 @@ export function AtlasMap({
     }
 
     return () => {
-      stopPulseRef.current?.();
-      stopPulseRef.current = null;
       stopMosaicRef.current?.();
       stopMosaicRef.current = null;
       if (interactionResumeTimerRef.current != null) {
@@ -535,8 +516,9 @@ export function AtlasMap({
   // repaint immediately rather than waiting for the throttled GPS-update effect above to next fire.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !loaded || !gps) return;
-    updateAtlasVehicleLayer(map, gps, vehicleMarkerStyle);
+    const currentGps = latestRef.current.gps;
+    if (!map || !loaded || !currentGps) return;
+    updateAtlasVehicleLayer(map, currentGps, vehicleMarkerStyle);
   }, [vehicleMarkerStyle, loaded]);
 
   // Breadcrumb trail is a Locate-page driving aid (with its own Clear Trail button there) -- not a
@@ -598,17 +580,8 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    const radar = updateAtlasRadarLayer(map, frame, opacity, styleInfoRef.current.firstSymbolLayerId);
-    setRadarState(radar.state);
-    if (!radar.loaded && radar.error) setRadarError(radar.error);
-    else setRadarError("");
-  }, [frame, loaded, opacity]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !loaded) return;
-    updateAtlasRangeRings(map, frame?.site ?? null, rangeRings);
-  }, [frame?.site, loaded, rangeRings]);
+    updateAtlasRangeRings(map, gps, rangeRings);
+  }, [gps, loaded, rangeRings]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -633,7 +606,6 @@ export function AtlasMap({
       styleUri,
       styleLoaded: loaded,
       mapState,
-      radarState,
       mapInitialized: Boolean(map),
       mapInstanceCount: atlasMapInstanceCount(),
       canvasCount,
@@ -645,13 +617,7 @@ export function AtlasMap({
       pitch: Number((map?.getPitch() ?? pitch).toFixed(1)),
       center: center ? { lat: Number(center.lat.toFixed(5)), lon: Number(center.lng.toFixed(5)) } : null,
       gps,
-      selectedProduct: product,
-      radarSourceLoaded: Boolean(map?.getSource(ATLAS_RADAR_SOURCE)),
-      radarLayerLoaded: Boolean(map?.getLayer(ATLAS_RADAR_LAYER)),
-      radarOpacity: opacity,
-      radarBounds: frame?.bounds ?? null,
-      radarFrameId: frame?.frameId ?? null,
-      radarImageUrlType: frame?.imageUrl?.startsWith("blob:") ? "blob" : frame?.imageUrl?.startsWith("http") ? "http" : frame?.imageUrl?.startsWith("capacitor:") ? "capacitor" : frame?.imageUrl?.startsWith("/") ? "asset" : frame?.imageUrl ? "other" : "none",
+      mosaicVisible,
       canvas: canvas && rect ? {
         cssWidth: Math.round(rect.width),
         cssHeight: Math.round(rect.height),
@@ -662,7 +628,7 @@ export function AtlasMap({
       canvasPixelSample: pixelSample,
       sourceCount,
       layerCount,
-      lastMapError: mapError || radarError || styleInfoRef.current.lastMapError,
+      lastMapError: mapError || styleInfoRef.current.lastMapError,
       fallbackState: mapError ? "ATLAS_ERROR_LEGACY_AVAILABLE" : "ATLAS_ACTIVE",
       updatedAt: Date.now(),
     });
@@ -678,12 +644,11 @@ export function AtlasMap({
       cameraMode,
       gpsAccuracyM: gps?.accuracyM ?? null,
       speedMph: gps?.speedMph ?? null,
-      radarOpacity: opacity,
-      product,
+      mosaicVisible,
       provider: "mapbox",
       updatedAt: Date.now(),
     });
-  }, [bearing, cameraMode, frame?.bounds, frame?.frameId, frame?.imageUrl, gps, idleCount, loaded, mapError, mapState, opacity, pitch, pixelSample, product, radarError, radarState, renderCount, styleUri]);
+  }, [bearing, cameraMode, gps, idleCount, loaded, mapError, mapState, mosaicVisible, pitch, pixelSample, renderCount, styleUri]);
 
   const visibleError = mapError && mapState !== "READY" ? mapError : "";
   const canvasCount = containerRef.current?.querySelectorAll("canvas").length ?? 0;
@@ -694,7 +659,7 @@ export function AtlasMap({
   const followLabel = cameraMode === "FOLLOW_HEADING" ? "HEADING UP" : cameraMode === "FREE" ? "RECENTER" : "NORTH UP";
 
   return (
-    <div className={compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"}>
+    <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"}`}>
       <div className="atlas-map-canvas-area">
         <div ref={containerRef} className="atlas-map" data-camera-mode={cameraMode} />
         {visibleError && <div className="atlas-map-error">{visibleError}</div>}
@@ -753,11 +718,11 @@ export function AtlasMap({
       {!compact && (
         <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
           <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) + 0.5, duration: 260 })}>ZOOM+</button>
-          <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>ZOOM−</button>
+          <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>ZOOM-</button>
           <button type="button" aria-label="Toggle follow mode" title="Cycles between North-up, Heading-up, and Recenter" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
           <button type="button" aria-label="Toggle range rings" title="Distance rings around your position" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RINGS{rangeRings !== "off" ? ` ${rangeRings}NM` : ""}</button>
           <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
-          <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, animated" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
+          <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
           <button type="button" aria-label="Map layers" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
         </div>
       )}

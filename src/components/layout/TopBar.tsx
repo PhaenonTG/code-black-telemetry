@@ -10,12 +10,12 @@ function batteryState(level: number): "good" | "warn" | "bad" {
   return "bad";
 }
 
-function BatteryChip({ level, isCharging }: { level: number | null; isCharging: boolean }) {
+function BatteryChip({ level, isCharging, label }: { level: number | null; isCharging: boolean; label: string }) {
   if (level == null) return null;
   const state = batteryState(level);
   const fillWidth = Math.max(1, Math.round((level / 100) * 12));
   return (
-    <div className={`battery-chip battery-chip--${state}`} aria-label={`Tablet battery ${level} percent${isCharging ? ", charging" : ""}`}>
+    <div className={`battery-chip battery-chip--${state}`} aria-label={`${label} ${level} percent${isCharging ? ", charging" : ""}`}>
       {isCharging && (
         <svg className="battery-chip__bolt" viewBox="0 0 10 14" aria-hidden="true">
           <path d="M5.6 0 0 8h3.4L2.6 14 9 5H5.4Z" fill="currentColor" />
@@ -49,7 +49,7 @@ function piLinkState(piOnline: boolean | undefined, apiLatencyMs: number | undef
   return "good";
 }
 
-export function TopBar() {
+export function TopBar({ batteryLabel = "Device battery" }: { batteryLabel?: string }) {
   const status = useStatus();
   const battery = useBattery();
   const now = useNow();
@@ -82,7 +82,7 @@ export function TopBar() {
           <span className={`pi-link__dot pi-link__dot--${linkState}`} aria-hidden="true" />
           <span>Pi Link</span>
         </div>
-        <BatteryChip level={battery.level} isCharging={battery.isCharging} />
+        <BatteryChip level={battery.level} isCharging={battery.isCharging} label={batteryLabel} />
       </div>
     </header>
   );

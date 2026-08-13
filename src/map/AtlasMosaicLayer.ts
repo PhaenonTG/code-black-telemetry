@@ -1,5 +1,4 @@
 import type { Map, RasterSourceSpecification } from "mapbox-gl";
-import { ATLAS_RADAR_LAYER } from "./AtlasRadarLayer";
 import { incrementAtlasCounter } from "./AtlasDiagnostics";
 
 const MOSAIC_SOURCE_ID = "atlas-mosaic-nexrad";
@@ -49,7 +48,6 @@ function ensureAtlasMosaicLayer(map: Map, beforeLayerId?: string) {
     incrementAtlasCounter("sourceCreations");
   }
   if (!map.getLayer(MOSAIC_LAYER_ID)) {
-    const before = map.getLayer(ATLAS_RADAR_LAYER) ? ATLAS_RADAR_LAYER : beforeLayerId;
     map.addLayer(
       {
         id: MOSAIC_LAYER_ID,
@@ -58,7 +56,7 @@ function ensureAtlasMosaicLayer(map: Map, beforeLayerId?: string) {
         layout: { visibility: "none" },
         paint: { "raster-opacity": MOSAIC_OPACITY, "raster-fade-duration": 300 },
       },
-      before,
+      beforeLayerId,
     );
     incrementAtlasCounter("layerCreations");
   }
@@ -69,9 +67,9 @@ function teardownAtlasMosaicLayer(map: Map) {
   if (map.getSource(MOSAIC_SOURCE_ID)) map.removeSource(MOSAIC_SOURCE_ID);
 }
 
-// Started once per map instance (mirrors startAtlasVehiclePulse's shape) rather than driven by a
-// React effect keyed on frequently-changing props -- the refresh cadence is time-based, not data-
-// or prop-driven, so it doesn't need to react to renders at all once running.
+// Started once per map instance rather than driven by a React effect keyed on frequently-changing
+// props -- the refresh cadence is time-based, not data- or prop-driven, so it doesn't need to react
+// to renders at all once running.
 export function startAtlasMosaicLayer(map: Map, isVisible: () => boolean, beforeLayerId?: string): () => void {
   ensureAtlasMosaicLayer(map, beforeLayerId);
   let lastBucket = currentBucket();

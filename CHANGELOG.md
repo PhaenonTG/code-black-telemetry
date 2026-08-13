@@ -35,6 +35,135 @@ each one narrowing the cause with real evidence instead of guessing blind:
   seen from AltStore's source code (still no network access to that from this session). If this
   also fails, the next step is copying the known-good file's exact keys and values in and swapping
   them back to ours one at a time.
+## Samsung Short-Landscape Polish - 2026-08-12
+
+Fixed layout issues found while testing the Android debug APK directly on a connected Samsung
+SM-S921U in landscape.
+
+### Changed
+- Added a dedicated short-landscape header layout so the Code Black subtitle no longer clips and
+  the clock/status cluster stays readable.
+- Restored bottom-dock labels in phone landscape while keeping the dock compact and flush to the
+  bottom of the screen.
+- Reworked Weather dashboard short-landscape sizing so Location & Motion no longer clips the GPS
+  tile.
+- Reworked Operations short-landscape behavior into a scrollable vertical stack instead of
+  compressing the tablet grid into overlapping cards.
+
+### Validation
+- Built and installed the debug APK on Samsung SM-S921U via ADB.
+- Captured physical-device screenshots for Weather, Operations, Locate, Report, Settings, and
+  Layers under `artifacts/android-qa/`.
+
+---
+
+## Field QA Fix Pass - 2026-08-12
+
+Fixed issues found during the full-app control/function inspection on the Samsung test device.
+
+### Changed
+- Backed off BLE retries after Android Nearby Devices permission denial so the system prompt does
+  not keep reappearing every few seconds.
+- Updated nearby places, POI pins, and Spotter Network position refreshes to read the latest GPS
+  coordinates on scheduled polls instead of holding the coordinates from app/page launch.
+- Routed nearby map buttons and Spotter registration through Capacitor Browser with a web fallback.
+- Removed the unfinished Winter report toggle and disabled report submission until GPS and at
+  least one hazard are present.
+- Allowed streaming controls to use the existing Pi HTTP fallback path when BLE status is stale.
+- Added duplicate-name and image-read guardrails for custom POI pins.
+- Cleaned stale radar wording, CSS, and tooltips after the mosaic-only radar cleanup.
+
+### Validation
+- `npm run lint` passes with only existing Fast Refresh warnings.
+- `npm run build` passes with the existing Mapbox chunk-size warning.
+- `npm run android:debug` passes and syncs the Capacitor Browser plugin.
+- Samsung install/log smoke was not rerun because no ADB device was connected after the build.
+
+---
+
+## Live Vehicle Dot Pulse Smoothing - 2026-08-12
+
+Fixed the live-location dot pulse path after device testing showed the pulse still looked buggy.
+
+### Changed
+- Moved the animated vehicle pulse from per-frame Mapbox paint-property updates to a CSS-composited
+  DOM pulse around the vehicle marker.
+- Paused the pulse animation on inactive/offscreen map instances so the Weather and Locate maps do
+  not both animate the live dot at the same time.
+- Kept the accuracy ring, heading line, custom marker color, marker shape, and marker size settings
+  intact.
+
+### Validation
+- `npm run lint` passes with existing warnings.
+- `npm run build` passes with the existing Mapbox chunk-size warning.
+
+---
+
+## Mosaic-Only Radar Cleanup - 2026-08-12
+
+Removed the retired single-site radar implementation so the app stays mosaic-only for now.
+
+### Changed
+- Removed the Operations Radar Engine panel and stale Settings copy for on-device Level II decode.
+- Removed the web radar service wrappers, radar loop helper, Mapbox decoded-image radar layer, and
+  desktop radar worker files.
+- Removed Android native radar plugin registration, Java radar plugin/service/site classes, and the
+  packaged `libcodeblack_radar.so` native library.
+- Removed the NEXRAD decoder npm packages and the `radar:worker` script.
+- Kept range rings working by centering them on current GPS instead of the removed radar-site frame.
+- Updated radar architecture docs to mark the single-site decoder path retired.
+
+### Preserved
+- Weather and Locate maps continue to use the Iowa Environmental Mesonet NEXRAD N0Q mosaic.
+- Map camera/follow behavior, pan/zoom, range rings, alerts/watches, Spotter Network chasers, POI
+  pins, breadcrumbs, report feed, BLE/Pi telemetry, streaming controls, and vehicle-display work
+  were preserved.
+
+---
+
+## iPhone Device-Language and Map POI Pin Polish - 2026-08-12
+
+Cleaned up issues found in the installed iPhone build screenshots.
+
+### Changed
+- Replaced visible "tablet" GPS/mode copy with dynamic device labels such as iPhone GPS, iPad GPS,
+  Galaxy GPS, or Internal GPS based on Capacitor device info.
+- Updated Operations and Settings diagnostics so standalone mode and GPS source labels reflect the
+  current device instead of assuming a tablet.
+- Made nearby map pins use clear category icons by default for gas, food, lodging, and ER/hospital
+  instead of falling back to plain dots.
+- Increased POI marker size and switched POI glyphs to white silhouettes for better readability on
+  dark Mapbox maps.
+- Added a phone-landscape Weather layout guard so the dashboard stacks vertically instead of
+  crushing tablet-style columns into a short iPhone viewport.
+
+### Preserved
+- Internal telemetry source names, Pi/BLE fallback behavior, map camera/follow behavior, Spotter
+  Network layers, reports, alerts, and radar functionality were not changed.
+
+---
+
+## Release Hygiene and Device Diagnostics - 2026-08-12
+
+Added release checks and in-app diagnostics before the next physical-device test pass.
+
+### Changed
+- Pinned Capacitor core, Android, iOS, and CLI packages to the same exact version to prevent
+  wrapper drift across installs.
+- Added `npm run release:sanity` to validate the AltStore source, Capacitor package alignment,
+  release warnings, lint, web build, Capacitor sync, and Android debug build in one command.
+- Added Settings diagnostics with platform, app/native version, branch/commit, build time, GPS
+  state, service state, Pi endpoint, BLE state, and Spotter Network sign-in state.
+- Refined tablet Settings layout after rendered QA so diagnostics and controls use wider columns
+  instead of cramped three-column cards.
+- Added a device test checklist for Android tablet, Android phone, iPad, iPhone, and tester
+  screenshot handoff.
+- Clarified Android Auto as an experimental local-testing surface until host validation and real
+  head-unit testing are completed.
+
+### Preserved
+- Dashboard behavior, radar/maps, report feed behavior, alert logic, BLE/Pi telemetry, and Spotter
+  Network report submission were not changed.
 
 ---
 

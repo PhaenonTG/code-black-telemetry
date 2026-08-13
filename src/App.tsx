@@ -10,7 +10,6 @@ import { SystemCard } from "./components/cards/SystemCard";
 import { TopBar } from "./components/layout/TopBar";
 import { MissionStreamingPanel } from "./components/operations/MissionStreamingPanel";
 import { PiEndpointPanel } from "./components/operations/PiEndpointPanel";
-import { RadarEnginePanel } from "./components/operations/RadarEndpointPanel";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { NearbyPanel } from "./components/situational/NearbyPanel";
 import {
@@ -32,6 +31,8 @@ import { useNearbyPoiList } from "./hooks/useNearbyPoiList";
 import { useSituationalData } from "./hooks/useSituationalData";
 import { useSpotters } from "./hooks/useSpotters";
 import { useStatus, useWeather, useWind } from "./hooks/useTelemetry";
+import { useDeviceLabels } from "./hooks/useDeviceLabels";
+import { sourceLabel } from "./services/location";
 import { setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, startCodeBlackSoundPlayer } from "./services/sound";
 import { loadNightVisionEnabled, subscribeNightVisionEnabled } from "./services/settings";
 import { getSpotterAccount, hasSeenSpotterOnboarding, subscribeSpotterAccount, type SpotterAccount } from "./services/spotterAccount";
@@ -82,6 +83,7 @@ export default function App() {
   const [spotterOnboardingSeen, setSpotterOnboardingSeen] = useState(true);
   const pagerRef = useRef<HTMLDivElement | null>(null);
   const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
+  const deviceLabels = useDeviceLabels();
   const status = useStatus();
   const weather = useWeather();
   const wind = useWind();
@@ -268,11 +270,17 @@ export default function App() {
       {!spotterAccount && !spotterOnboardingSeen && (
         <SpotterOnboardingPrompt onDismiss={() => setSpotterOnboardingSeen(true)} />
       )}
-      <TopBar />
+      <TopBar batteryLabel={deviceLabels.battery} />
       <main className="page-viewport" ref={pagerRef} aria-label="Code Black dashboard pages">
         <section className="page page--weather" aria-label="Situational Awareness">
           <div className="page-grid page-grid--weather">
-            <LocationMotionPanel tabletPermission={tabletPermission} location={canonicalLocation} mode={cockpitMode} />
+            <LocationMotionPanel
+              tabletPermission={tabletPermission}
+              location={canonicalLocation}
+              mode={cockpitMode}
+              internalGpsLabel={deviceLabels.gps}
+              gpsDeniedMessage={deviceLabels.deniedGps}
+            />
             <WeatherObservationPanel external={external} mode={cockpitMode} />
             <WindCard external={external} mode={cockpitMode} />
             <AlertsPanel products={alertProducts.products} error={alertProducts.error} />
@@ -285,7 +293,7 @@ export default function App() {
             <section className="ops-summary cb-panel">
               <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Operational Mode</div>
               <div className="ops-mode">
-                <strong>{status?.mode === "pi" ? "PI CONNECTED" : status?.mode === "tablet" ? "STANDALONE TABLET" : "DEVELOPMENT SIMULATOR"}</strong>
+                <strong>{status?.mode === "pi" ? "PI CONNECTED" : status?.mode === "tablet" ? deviceLabels.standaloneMode : "DEVELOPMENT SIMULATOR"}</strong>
                 <span>PI {status?.piOnline ? "ONLINE" : "OFFLINE"} | INTERNET {status?.internetOnline ? "AVAILABLE" : "UNKNOWN"}</span>
                 <span className="ops-mode__hint">Cockpit display mode moved to Settings.</span>
               </div>
@@ -293,7 +301,6 @@ export default function App() {
             <SensorHealthCard className="ops-sensor-panel" />
             <SystemCard className="ops-system-panel" />
             <PowerCard className="ops-power-panel" />
-            <RadarEnginePanel />
             <MissionStreamingPanel />
             <PiEndpointPanel />
             <EventsCard className="events-ops" />
@@ -302,9 +309,9 @@ export default function App() {
               <div className="diagnostic-grid">
                 <span>PI API</span><strong>{piState}</strong>
                 <span>Internet</span><strong>{status?.internetOnline ? "AVAILABLE" : "UNAVAILABLE"}</strong>
-                <span>Native GPS</span><strong>{gps ? `${gps.source.toUpperCase()} · ${gps.accuracyM ? `${Math.round(gps.accuracyM)} m` : "ACTIVE"}` : "WAITING"}</strong>
+                <span>Internal GPS</span><strong>{gps ? `${gps.source === "tablet" ? deviceLabels.gps.toUpperCase() : gps.source.toUpperCase()} · ${gps.accuracyM ? `${Math.round(gps.accuracyM)} m` : "ACTIVE"}` : "WAITING"}</strong>
                 <span>UI Mode</span><strong>{cockpitMode.toUpperCase()}</strong>
-                <span>Canonical GPS</span><strong>{canonicalLocation.validity} · {canonicalLocation.source.toUpperCase()}</strong>
+                <span>Canonical GPS</span><strong>{canonicalLocation.validity} · {sourceLabel(canonicalLocation.source, deviceLabels.gps)}</strong>
                 <span>Resolved Place</span><strong>{canonicalLocation.resolvedCity ? `${canonicalLocation.resolvedCity}, ${canonicalLocation.resolvedState ?? ""}` : canonicalLocation.fallbackReason}</strong>
                 <span>Services</span><strong>{serviceState}</strong>
                 <span>Logs</span><strong>RECENT EVENTS</strong>
@@ -341,6 +348,14 @@ export default function App() {
               goToPage("operations");
               focusPanel(".pi-endpoint-panel");
             }}
+            diagnostics={{
+              gpsSource: canonicalLocation.source,
+              gpsSourceLabel: sourceLabel(canonicalLocation.source, deviceLabels.gps),
+              gpsValidity: canonicalLocation.validity,
+              gpsPermission: tabletPermission,
+              serviceState,
+            }}
+            deviceLabels={deviceLabels}
           />
         </section>
         <section className="page page--layers" aria-label="Layer Configuration">

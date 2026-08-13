@@ -19,9 +19,21 @@ import { cardinalFromDeg, compactAge, mbToInHg, valueText } from "../../services
 import { resolveWeatherWithFallback } from "../../services/telemetry/fallback";
 import type { CockpitMode } from "../../App";
 
-export function LocationMotionPanel({ tabletPermission, location, mode }: { tabletPermission: string; location: CanonicalLocation; mode: CockpitMode }) {
+export function LocationMotionPanel({
+  tabletPermission,
+  location,
+  mode,
+  internalGpsLabel = "Internal GPS",
+  gpsDeniedMessage = "Internal GPS denied. Holding last valid source.",
+}: {
+  tabletPermission: string;
+  location: CanonicalLocation;
+  mode: CockpitMode;
+  internalGpsLabel?: string;
+  gpsDeniedMessage?: string;
+}) {
   const valid = location.validity === "VALID" && location.latitude != null && location.longitude != null;
-  const source = sourceLabel(location.source);
+  const source = sourceLabel(location.source, internalGpsLabel);
   const place = location.resolvedCity && location.resolvedState ? `${location.resolvedCity}, ${location.resolvedState}` : valid ? "CURRENT POSITION" : "NO GPS FIX";
   const county = location.resolvedCounty ?? (valid ? "LOCALITY RESOLVING" : "NO CURRENT GPS FIX");
   const fixValue = location.fixState === "FIX_3D" ? "3D FIX" : location.fixState === "FIX_2D" ? "2D FIX" : location.fixState.replace("_", " ");
@@ -51,7 +63,7 @@ export function LocationMotionPanel({ tabletPermission, location, mode }: { tabl
           </div>
         )}
       </div>
-      {tabletPermission === "denied" && <div className="cb-note cb-note--warn">Tablet GPS denied. Holding last valid source.</div>}
+      {tabletPermission === "denied" && <div className="cb-note cb-note--warn">{gpsDeniedMessage}</div>}
       {!valid && <div className="cb-note cb-note--warn">{location.fallbackReason}</div>}
     </Panel>
   );
@@ -277,16 +289,8 @@ export const MapRadarPanel = memo(function MapRadarPanel(props: MapRadarPanelPro
 });
 
 // Wide-area mosaic (NEXRAD N0Q composite reflectivity via Iowa Environmental Mesonet,
-// AtlasMosaicLayer.ts) is the default radar view everywhere now, not an underneath overlay for a
-// single-site product row -- it's plain HTTP raster tiles with zero native-plugin dependency, so
-// unlike REF/VEL/SRV/CC (Android-only, requires the on-device Rust/JNI decoder that doesn't exist
-// on iOS at all) it renders identically on both platforms. On-device single-site decoding remains
-// fully intact in services/radar.ts, the Android native plugin, and the Operations page's Radar
-// Engine diagnostics card -- this only changes what the map itself shows by default, not whether
-// that capability still exists. Product tabs, frame history/loop/scrub, site selection, and
-// storm-motion controls were removed from this view since they all belonged to the single-site
-// product this view no longer surfaces; camera/zoom/pan/follow-mode and range rings are untouched,
-// since AtlasCameraController never read which radar layer was active.
+// AtlasMosaicLayer.ts) is the radar view everywhere now. It is plain HTTP raster tiles with zero
+// native-plugin dependency, so it renders the same way on iOS, Android, and the web preview.
 function AtlasMapRadarPanel({
   gps,
   visible = true,
@@ -307,9 +311,6 @@ function AtlasMapRadarPanel({
         <Suspense fallback={<div className="atlas-map-loading">LOADING MAP ENGINE</div>}>
           <AtlasMap
             gps={gps}
-            frame={null}
-            product="REF"
-            opacity={0.75}
             expanded={!allowExpand && !compact}
             active={visible}
             rangeRings={rangeRings}
@@ -386,7 +387,7 @@ function RadarExpandedView({
             {(["off", "10", "25", "50", "100"] as const).map((value) => <button key={value} className={rangeRings === value ? "active" : ""} onClick={() => setRangeRings(value)}>{value === "off" ? "Off" : `${value} nm`}</button>)}
           </div>
           <div className="radar-help">
-            Situational awareness view: national composite reflectivity (NEXRAD N0Q via Iowa Environmental Mesonet), refreshed automatically -- no laptop, Pi, or LAN radar worker required. On-device single-site Level II decoding (REF/VEL/SRV/CC) remains available on Android but isn't the default view for now.
+            Situational awareness view: national composite reflectivity (NEXRAD N0Q via Iowa Environmental Mesonet), refreshed automatically -- no laptop, Pi, LAN radar worker, or native decoder required.
           </div>
         </aside>
       </div>

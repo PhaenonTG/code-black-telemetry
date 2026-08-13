@@ -1,5 +1,3 @@
-import type { RadarFrame, RadarProduct } from "../services/radar";
-
 export type AtlasCameraMode = "FREE" | "FOLLOW_NORTH" | "FOLLOW_HEADING" | "RECENTERING" | "USER_INTERACTING";
 
 export type AtlasGpsPoint = {
@@ -13,7 +11,6 @@ export type AtlasGpsPoint = {
 export type AtlasRangeRingMode = "off" | "10" | "25" | "50" | "100";
 
 export type AtlasMapState = "INITIALIZING" | "READY" | "STYLE_ERROR" | "WEBGL_ERROR" | "TOKEN_MISSING" | "CONTAINER_INVALID";
-export type AtlasRadarState = "LOADING" | "LIVE" | "CACHED" | "STALE" | "FRAME_MISSING" | "IMAGE_MISSING" | "BOUNDS_INVALID" | "SOURCE_ERROR";
 
 export type AtlasLifecycleCounters = {
   reactMounts: number;
@@ -24,9 +21,6 @@ export type AtlasLifecycleCounters = {
   sourceCreations: number;
   layerCreations: number;
   sourceUpdates: number;
-  radarImageUpdates: number;
-  radarObjectUrlsCreated: number;
-  radarObjectUrlsRevoked: number;
 };
 
 export type AtlasDiagnosticsSnapshot = {
@@ -36,7 +30,6 @@ export type AtlasDiagnosticsSnapshot = {
   styleUri: string;
   styleLoaded: boolean;
   mapState: AtlasMapState;
-  radarState: AtlasRadarState;
   mapInitialized: boolean;
   mapInstanceCount: number;
   canvasCount: number;
@@ -48,13 +41,7 @@ export type AtlasDiagnosticsSnapshot = {
   pitch: number;
   center: { lat: number; lon: number } | null;
   gps: AtlasGpsPoint | null;
-  selectedProduct: RadarProduct;
-  radarSourceLoaded: boolean;
-  radarLayerLoaded: boolean;
-  radarOpacity: number;
-  radarBounds: RadarFrame["bounds"] | null;
-  radarFrameId: string | null;
-  radarImageUrlType: string;
+  mosaicVisible: boolean;
   canvas: { cssWidth: number; cssHeight: number; backingWidth: number; backingHeight: number; devicePixelRatio: number } | null;
   canvasPixelSample: string;
   sourceCount: number;

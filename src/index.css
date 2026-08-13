@@ -286,8 +286,6 @@
 }
 
 .radar-expanded__controls button,
-.storm-motion-form button,
-.storm-motion-form input,
 .radar-expanded__controls select {
   border: 1px solid rgba(255, 255, 255, 0.1);
   clip-path: var(--cut);
@@ -348,8 +346,7 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
-.radar-expanded__controls span,
-.storm-motion-form span {
+.radar-expanded__controls span {
   color: var(--cb-muted);
   font: 900 10px / 1 "JetBrains Mono", Consolas, monospace;
   text-transform: uppercase;
@@ -462,17 +459,6 @@ body.radar-expanded-active {
   backdrop-filter: blur(8px);
 }
 
-.storm-motion-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 70px 70px auto;
-  gap: 7px;
-  align-items: end;
-}
-
-.storm-motion-form span {
-  grid-column: 1 / -1;
-}
-
 * {
   box-sizing: border-box;
 }
@@ -558,98 +544,6 @@ button {
 
 .endpoint-panel {
   grid-column: span 2;
-}
-
-.radar-engine-form {
-  display: grid;
-  grid-template-rows: auto auto auto;
-  gap: clamp(10px, 1.1dvh, 14px);
-  padding: clamp(12px, 1.35dvh, 16px);
-}
-
-.radar-engine-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.radar-engine-metric {
-  min-width: 0;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 7px;
-  padding: 9px 10px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
-}
-
-.radar-engine-metric span {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--muted);
-  font: 700 10px / 1.1 Consolas, "JetBrains Mono", monospace;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.radar-engine-metric strong {
-  display: block;
-  overflow: hidden;
-  color: var(--text);
-  font: 800 clamp(13px, 1.05vw, 18px) / 1.05 "Inter", system-ui, sans-serif;
-  text-wrap: balance;
-  white-space: normal;
-  /* Native decoder states are compound words with no spaces (e.g. "REF_SELECTED") -- normal
-     white-space wraps at spaces only, so a value like that just overflowed past the tile's edge
-     and got clipped by overflow:hidden above (visible on-device as "REF_SELECTE", missing the D).
-     overflow-wrap lets it break mid-word onto a second line instead of silently losing a
-     character. */
-  overflow-wrap: anywhere;
-}
-
-.radar-engine-message {
-  min-height: 38px;
-  border: 1px solid rgba(239, 68, 68, 0.18);
-  border-radius: 7px;
-  padding: 9px 10px;
-  color: var(--muted);
-  font: 700 11px / 1.3 Consolas, "JetBrains Mono", monospace;
-  letter-spacing: 0;
-  text-transform: uppercase;
-  background: rgba(239, 68, 68, 0.045);
-}
-
-.storm-motion-form {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(72px, 0.45fr) minmax(72px, 0.45fr) auto auto;
-  align-items: center;
-  gap: 8px;
-}
-
-.storm-motion-form span {
-  color: var(--muted);
-  font: 700 10px / 1.1 Consolas, "JetBrains Mono", monospace;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.storm-motion-form input,
-.storm-motion-form button {
-  min-height: 42px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 7px;
-  background: rgba(0, 0, 0, 0.42);
-  color: var(--text);
-  font: 800 14px / 1 "Inter", system-ui, sans-serif;
-}
-
-.storm-motion-form input {
-  width: 100%;
-  padding: 0 12px;
-}
-
-.storm-motion-form button {
-  padding: 0 14px;
-  color: var(--cb-red);
-  text-transform: uppercase;
 }
 
 .cb-panel,
@@ -2237,6 +2131,60 @@ button {
   opacity: 0.58;
   transform: scale(0.82);
   transform-origin: bottom right;
+}
+
+.atlas-vehicle-marker {
+  --atlas-vehicle-color: #ff2d35;
+  --atlas-vehicle-pulse-fill: rgba(255, 45, 53, 0.42);
+  --atlas-vehicle-pulse-glow: rgba(255, 45, 53, 0.68);
+  --atlas-vehicle-size: 22px;
+  position: relative;
+  width: var(--atlas-vehicle-size);
+  height: var(--atlas-vehicle-size);
+  pointer-events: none;
+  contain: layout paint;
+}
+
+.atlas-vehicle-marker::before {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: 999px;
+  background: var(--atlas-vehicle-pulse-fill);
+  box-shadow: 0 0 18px var(--atlas-vehicle-pulse-glow);
+  opacity: 0;
+  transform: scale(0.5);
+  animation: atlas-vehicle-pulse 1.9s cubic-bezier(0.16, 0.84, 0.28, 1) infinite;
+  will-change: transform, opacity;
+}
+
+.atlas-vehicle-marker__core {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  will-change: transform;
+}
+
+.atlas-map-shell--inactive .atlas-vehicle-marker::before {
+  animation-play-state: paused;
+}
+
+@keyframes atlas-vehicle-pulse {
+  0% {
+    opacity: 0.56;
+    transform: scale(0.55);
+  }
+
+  68% {
+    opacity: 0;
+    transform: scale(2.25);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(2.25);
+  }
 }
 
 .atlas-map-error {
@@ -4681,8 +4629,8 @@ body {
   justify-content: center;
 }
 
-/* Operations page: Pi Endpoint panel gets its own row — it previously shared .endpoint-panel
-   with the Radar Engine panel, which put both in the same grid cell and overlapped them. */
+/* Operations page: Pi Endpoint panel gets its own row so connection setup remains reachable
+   without competing with the telemetry/status panels. */
 @media (orientation: landscape) {
   .page-grid--operations {
     grid-template-rows: minmax(0, 0.33fr) minmax(0, 0.4fr) minmax(0, 0.27fr) !important;
@@ -5357,18 +5305,10 @@ body {
   padding-top: 6px;
 }
 
-/* Radar Engine panel has ~30 diagnostic rows plus a storm-motion form — genuinely too much
-   content for any fixed card height, unlike the other Operations cards. Scroll it internally
-   instead of clipping the Apply/Clear Cache controls off the bottom. */
-.radar-endpoint-panel {
-  overflow-y: auto;
-}
-
 /* .page-grid--operations splits its fixed page height into two `fr` rows (see that rule) --
    row 1's height is whatever 42% of the page works out to, sized to fit its tallest sibling
-   (Operational Mode), not Pi System's own 4 metric rows. Same fixed-budget-doesn't-fit-content
-   issue as .radar-endpoint-panel above: Uptime was getting clipped off the bottom of Pi System,
-   same risk on Vehicle Power if a future row gets added. */
+   (Operational Mode), not Pi System's own 4 metric rows. Uptime was getting clipped off the bottom
+   of Pi System, with the same risk on Vehicle Power if a future row gets added. */
 .ops-system-panel,
 .ops-power-panel {
   overflow-y: auto;
@@ -5380,7 +5320,7 @@ body {
 }
 
 /* Interior Lighting panel has more rows (token, power, profile, color, result note) than the
-   fixed-height Settings grid cell -- same overflow fix as .radar-endpoint-panel above. overflow-y
+   fixed-height Settings grid cell. overflow-y
    alone isn't enough here though: .cb-panel is itself a flex column, and flex items default to
    min-height:auto which computes to 0 in a scroll container -- without flex-shrink:0, the browser
    was squeezing each row down below its content's natural height to force-fit the fixed track,
@@ -5393,8 +5333,7 @@ body {
    confirmed none of these panels actually scrolled; they'd just been silently clipping the
    content described in each comment below this whole time. Prefixing with .page-grid--settings
    matches that selector's specificity so source order (these come later in the file) decides it,
-   the same way .radar-endpoint-panel's equivalent fix genuinely works -- that one's on the
-   Operations page, which has no competing .cb-panel overflow rule to lose to. */
+   matching specificity lets source order decide instead. */
 .page-grid--settings .settings-lighting-panel {
   overflow-y: auto;
 }
@@ -5454,7 +5393,6 @@ body {
 /* Missing panel-title glyph on Operations cards that hand-roll their title div instead of using
    the shared <Panel> component — restore the same red diamond every other panel has. */
 .ops-summary .cb-panel__title::before,
-.radar-endpoint-panel .cb-panel__title::before,
 .ops-stream-panel .cb-panel__title::before,
 .diagnostics-panel .cb-panel__title::before,
 .pi-endpoint-panel .cb-panel__title::before {
@@ -7263,26 +7201,6 @@ body {
 /* UI polish pass 2026-08-11:
    Scoped final overrides for the approved pass: cleaner phone header/dock, fixed Weather density,
    more usable tablet Weather cards, collapsed Operations diagnostics, and clearer Settings groups. */
-.radar-engine-form {
-  gap: 8px;
-}
-
-.radar-engine-grid--summary {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.radar-engine-grid--diagnostics {
-  max-height: min(34dvh, 320px);
-  overflow: auto;
-  padding-right: 2px;
-}
-
-.radar-engine-diagnostics-toggle {
-  justify-self: start;
-  min-height: 32px;
-  padding-inline: 14px;
-}
-
 .settings-section-label {
   align-self: end;
   padding: 2px 4px 0;
@@ -7490,14 +7408,6 @@ body {
 }
 
 @media (max-width: 760px), (max-height: 620px) {
-  .radar-engine-grid--summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .radar-engine-grid--diagnostics {
-    max-height: 220px;
-  }
-
   .settings-alert-tone-tests {
     justify-content: flex-start;
     width: 100%;
@@ -8194,5 +8104,335 @@ body {
       "loc weather"
       "wind alerts"
       "map nearby" !important;
+  }
+}
+
+/* Settings readability follow-up: configuration pages can scroll; cramped controls are worse than
+   another short swipe when using this in a vehicle. */
+@media (orientation: landscape) and (min-width: 900px) and (min-height: 700px) {
+  .settings-light-panels,
+  .settings-heavy-panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .settings-diagnostics-panel,
+  .settings-chase-panel {
+    grid-column: span 2;
+  }
+
+  .page-grid--settings .settings-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(170px, auto) !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+
+  .page-grid--settings .settings-row--stack {
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    width: 100% !important;
+  }
+
+  .page-grid--settings .settings-row--stack > * {
+    box-sizing: border-box !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  .page-grid--settings .settings-row--stack .settings-action {
+    align-self: flex-end !important;
+    min-width: 96px !important;
+    width: auto !important;
+  }
+
+  .settings-team-panel .settings-row--stack,
+  .settings-lighting-panel .settings-row--stack {
+    padding-inline: 12px !important;
+  }
+
+  .settings-team-panel .settings-input,
+  .settings-lighting-panel .settings-input {
+    width: 100% !important;
+  }
+
+  .page-grid--settings .settings-row strong {
+    font-size: 12px !important;
+    line-height: 1.18 !important;
+  }
+
+  .page-grid--settings .settings-row span,
+  .page-grid--settings .settings-row em {
+    font-size: 10.5px !important;
+    line-height: 1.28 !important;
+    overflow-wrap: normal !important;
+  }
+
+  .page-grid--settings .settings-radius-control {
+    justify-self: end !important;
+    margin-right: 8px !important;
+    min-width: 0 !important;
+  }
+
+  .page-grid--settings .settings-input--radius {
+    width: 64px !important;
+  }
+
+  .settings-diagnostic-grid {
+    grid-template-columns: minmax(120px, auto) minmax(0, 1fr) !important;
+    padding: 14px 16px !important;
+  }
+
+  .settings-diagnostic-grid strong {
+    white-space: normal !important;
+  }
+}
+
+/* iPhone/phone landscape: do not force the tablet dashboard grid into a 390px-tall viewport.
+   A scrollable single column is more useful than six crushed cards with overlapping text. */
+@media (orientation: landscape) and (max-width: 900px) and (max-height: 500px) {
+  .page.page--weather {
+    overflow-y: auto !important;
+  }
+
+  .page-grid--weather {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    grid-template-areas: none !important;
+    grid-template-columns: none !important;
+    grid-template-rows: none !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  .page-grid--weather > .cb-panel {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    width: 100% !important;
+  }
+
+  .page-grid--weather .loc-panel {
+    min-height: 210px !important;
+  }
+
+  .page-grid--weather .wind-panel,
+  .page-grid--weather .alerts-panel,
+  .page-grid--weather .wx-panel,
+  .page-grid--weather .nearby-panel {
+    min-height: 160px !important;
+  }
+
+  .page-grid--weather .map-panel {
+    min-height: 240px !important;
+  }
+}
+
+/* Real phone landscape pass from Samsung SM-S921U physical QA. This condition catches devices that
+   are too wide for the portrait-phone media queries but too short for tablet dashboard proportions. */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --cb-header-h: calc(66px + env(safe-area-inset-top));
+    --cb-dock-bar-h: 44px;
+    --cb-dock-h: calc(var(--cb-dock-bar-h) + env(safe-area-inset-bottom));
+    --top-h: var(--cb-header-h);
+    --dock-h: var(--cb-dock-h);
+  }
+
+  .app-shell {
+    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dock-h) !important;
+    padding: 0 !important;
+  }
+
+  .page {
+    padding: 6px 12px 8px !important;
+  }
+
+  .page.page--weather {
+    padding: 6px 12px 8px !important;
+    overflow-y: auto !important;
+  }
+
+  .page-grid--weather {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  .page-grid--weather > .cb-panel {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    width: 100% !important;
+  }
+
+  .bottom-dock {
+    padding: 3px 10px max(3px, env(safe-area-inset-bottom)) !important;
+    gap: 6px !important;
+  }
+
+  .bottom-dock button {
+    height: calc(var(--cb-dock-bar-h) - 6px) !important;
+    grid-template-columns: 22px minmax(0, auto) !important;
+    gap: 5px !important;
+    padding: 3px 8px !important;
+  }
+
+  .bottom-dock button svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .bottom-dock button span {
+    display: block !important;
+    font-size: clamp(10px, 2.55dvh, 12px) !important;
+    line-height: 1 !important;
+  }
+
+  .page-grid--weather .cb-panel__title {
+    min-height: 30px !important;
+    padding: 7px 10px !important;
+    font-size: 10px !important;
+  }
+
+  .page-grid--weather .loc-panel {
+    min-height: 170px !important;
+  }
+
+  .page-grid--weather .loc-head {
+    padding: 8px 12px 0 !important;
+  }
+
+  .page-grid--weather .loc-city {
+    max-width: min(62vw, 560px) !important;
+    font-size: clamp(25px, 7.4dvh, 36px) !important;
+    line-height: 0.98 !important;
+  }
+
+  .page-grid--weather .loc-county,
+  .page-grid--weather .loc-kicker {
+    font-size: 9px !important;
+  }
+
+  .page-grid--weather .loc-head > .cb-badge {
+    align-self: start !important;
+    margin-top: 2px !important;
+    font-size: 9px !important;
+  }
+
+  .page-grid--weather .loc-panel .cockpit-primary--motion {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    padding: 8px 12px 10px !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile,
+  .page-grid--weather .metric-tile {
+    min-height: 68px !important;
+    padding: 8px 10px !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile--gps {
+    grid-column: auto !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile strong {
+    font-size: clamp(24px, 7dvh, 34px) !important;
+    line-height: 1 !important;
+  }
+
+  .page-grid--weather .loc-panel .metric-tile span,
+  .page-grid--weather .loc-panel .metric-tile em {
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+  }
+
+  .page-grid--weather .loc-footer {
+    display: none !important;
+  }
+
+  .page-grid--weather .wind-panel,
+  .page-grid--weather .alerts-panel,
+  .page-grid--weather .wx-panel,
+  .page-grid--weather .nearby-panel {
+    min-height: 148px !important;
+  }
+
+  .page-grid--weather .map-panel {
+    min-height: 230px !important;
+  }
+
+  .page--operations {
+    overflow-y: auto !important;
+  }
+
+  .page-grid--operations {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  .page-grid--operations > .cb-panel {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-height: 0 !important;
+    grid-column: auto !important;
+    grid-row: auto !important;
+  }
+
+  .page-grid--operations .ops-summary,
+  .page-grid--operations .ops-sensor-panel,
+  .page-grid--operations .ops-system-panel,
+  .page-grid--operations .ops-power-panel {
+    min-height: 112px !important;
+  }
+
+  .page-grid--operations .ops-stream-panel {
+    min-height: 210px !important;
+  }
+
+  .page-grid--operations .pi-endpoint-panel {
+    min-height: 156px !important;
+    overflow: visible !important;
+  }
+
+  .page-grid--operations .events-ops,
+  .page-grid--operations .diagnostics-panel {
+    min-height: 180px !important;
+  }
+
+  .page-grid--operations .endpoint-form {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 7px 10px !important;
+    padding: 9px 12px !important;
+  }
+
+  .page-grid--operations .endpoint-presets {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .page-grid--operations .endpoint-presets button {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  .page-grid--operations .mission-stream-list {
+    padding: 10px 12px !important;
+  }
+
+  .page-grid--operations .stream-row,
+  .page-grid--operations .metric-row,
+  .page-grid--operations .diagnostic-grid {
+    min-height: 0 !important;
   }
 }

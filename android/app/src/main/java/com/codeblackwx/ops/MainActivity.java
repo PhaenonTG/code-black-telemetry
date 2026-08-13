@@ -6,13 +6,11 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import com.codeblackwx.ops.location.TabletLocationNativePlugin;
-import com.codeblackwx.ops.radar.RadarNativePlugin;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        registerPlugin(RadarNativePlugin.class);
         registerPlugin(TabletLocationNativePlugin.class);
         super.onCreate(savedInstanceState);
         enableImmersiveMode();

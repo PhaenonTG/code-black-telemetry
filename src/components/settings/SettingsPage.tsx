@@ -39,6 +39,7 @@ import { emitCodeBlackSound, setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, s
 import { clearSpotterAccount, loadSpotterAccount, spotterNetworkLogin, subscribeSpotterAccount, type SpotterAccount } from "../../services/spotterAccount";
 import { bleTelemetryClient } from "../../services/telemetry/ble-client";
 import { PinStyleField } from "../map/PinStyleEditor";
+import type { DeviceLabels } from "../../hooks/useDeviceLabels";
 
 // Mirrors lighting/api.py's PRESET_COLORS on the Pi -- same names, same swatches, so a preset here
 // maps to exactly one accepted preset string server-side rather than sending raw RGB that could
@@ -77,9 +78,17 @@ interface SettingsPageProps {
   cockpitMode: CockpitMode;
   onChangeCockpitMode: (mode: CockpitMode) => void;
   onOpenPiConnection: () => void;
+  diagnostics: {
+    gpsSource: string;
+    gpsSourceLabel: string;
+    gpsValidity: string;
+    gpsPermission: string;
+    serviceState: string;
+  };
+  deviceLabels: DeviceLabels;
 }
 
-export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnection }: SettingsPageProps) {
+export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnection, diagnostics, deviceLabels }: SettingsPageProps) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [piEndpoint, setPiEndpoint] = useState("");
   const [telemetryLinkEnabled, setTelemetryLinkEnabled] = useState(true);
@@ -111,6 +120,8 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [lightingResult, setLightingResult] = useState("");
   const [chaseBusy, setChaseBusy] = useState(false);
   const [chaseResult, setChaseResult] = useState("");
+  const platform = Capacitor.getPlatform();
+  const buildTime = Number.isNaN(Date.parse(__BUILD_TIME__)) ? __BUILD_TIME__ : new Date(__BUILD_TIME__).toLocaleString();
 
   useEffect(() => {
     const unsubscribe = subscribePiEndpoint(setPiEndpoint);
@@ -395,7 +406,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         <div className="settings-row">
           <div>
             <strong>API Base</strong>
-            <span>{piEndpoint || "Not configured — running in standalone tablet mode."}</span>
+            <span>{piEndpoint || deviceLabels.standaloneNote}</span>
           </div>
           <button className="settings-action" onClick={onOpenPiConnection}>Open</button>
         </div>
@@ -523,14 +534,31 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         <div className="settings-row">
           <div>
             <strong>Version</strong>
-            <span>{appInfo ? `${appInfo.version} (build ${appInfo.build})` : "Web preview build"}</span>
+            <span>{appInfo ? `${appInfo.version} (build ${appInfo.build})` : `${__APP_VERSION__} web preview`}</span>
           </div>
         </div>
         <div className="settings-row">
           <div>
-            <strong>Radar Engine</strong>
-            <span>On-device NEXRAD Level II decode</span>
+            <strong>Radar View</strong>
+            <span>Wide-area NEXRAD mosaic</span>
           </div>
+        </div>
+      </Panel>
+
+      <Panel title="Diagnostics" className="settings-diagnostics-panel">
+        <div className="diagnostic-grid settings-diagnostic-grid">
+          <span>Platform</span><strong>{platform.toUpperCase()}</strong>
+          <span>Build</span><strong>{__APP_VERSION__}</strong>
+          <span>Commit</span><strong>{__BUILD_BRANCH__} / {__BUILD_COMMIT__}</strong>
+          <span>Built</span><strong>{buildTime}</strong>
+          <span>Native App</span><strong>{appInfo ? `${appInfo.version} (${appInfo.build})` : "WEB PREVIEW"}</strong>
+          <span>GPS</span><strong>{diagnostics.gpsValidity.toUpperCase()} / {diagnostics.gpsSourceLabel}</strong>
+          <span>GPS Permission</span><strong>{diagnostics.gpsPermission.toUpperCase()}</strong>
+          <span>Services</span><strong>{diagnostics.serviceState}</strong>
+          <span>Pi Endpoint</span><strong>{piEndpoint || "NOT SET"}</strong>
+          <span>Pi Link</span><strong>{telemetryLinkEnabled ? "ON" : "OFF"}</strong>
+          <span>BLE</span><strong>{bleConnected ? "CONNECTED" : "DISCONNECTED"}</strong>
+          <span>Spotter</span><strong>{spotterAccount ? spotterAccount.username : "SIGNED OUT"}</strong>
         </div>
       </Panel>
       </div>
@@ -547,7 +575,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         <div className="settings-row">
           <div>
             <strong>Team Members</strong>
-            <span>Name must match Spotter Network. Group/phone/email optional, shown on pin tap.</span>
+            <span>Name must match Spotter Network. Group, phone, and email are optional and shown on pin tap.</span>
           </div>
         </div>
         <div className="settings-row settings-row--stack">

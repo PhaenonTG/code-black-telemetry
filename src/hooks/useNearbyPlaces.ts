@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getNearbyPlaces, type NearbyCategory, type NearbyPlace } from "../services/nearby";
 import { useResumeTick } from "./useResumeTick";
 
@@ -14,15 +14,20 @@ export function useNearbyPlaces(gps: GpsPoint | null) {
   const [places, setPlaces] = useState<Partial<Record<NearbyCategory, NearbyPlace>>>({});
   const [error, setError] = useState("");
   const resumeTick = useResumeTick();
+  const gpsRef = useRef(gps);
+  gpsRef.current = gps;
+  const hasGps = gps != null;
 
   useEffect(() => {
-    if (!gps) return;
+    if (!hasGps) return;
     let cancelled = false;
     let timer: number | undefined;
     let retryDelay = RETRY_BASE_MS;
 
     const load = async () => {
-      const result = await getNearbyPlaces(gps);
+      const currentGps = gpsRef.current;
+      if (!currentGps) return;
+      const result = await getNearbyPlaces(currentGps);
       if (cancelled) return;
       setError(result.error);
       // Each category is fetched independently now (see nearby.ts) -- a category missing from a
@@ -51,7 +56,7 @@ export function useNearbyPlaces(gps: GpsPoint | null) {
     // Re-fetching on every minor GPS jitter would hammer Overpass; only whether a fix exists at
     // all (not its exact value) is in the dependency array, so refreshes come from the schedule
     // above, not from every GPS coordinate update.
-  }, [gps == null, resumeTick]);
+  }, [hasGps, resumeTick]);
 
   return { places, error };
 }

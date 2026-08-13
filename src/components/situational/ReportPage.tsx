@@ -67,6 +67,8 @@ export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: n
   const [sent, setSent] = useState(false);
   const peakGust = usePeakGust();
   const feed = useStormReports(gps, radiusMiles, retentionHours);
+  const anyHazard = HAZARD_FIELDS.some((field) => report[field.key]);
+  const canSubmit = Boolean(gps && anyHazard && !busy);
 
   useEffect(() => {
     const unsubscribe = subscribeSpotterAccount(setAccount);
@@ -96,7 +98,6 @@ export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: n
       setError("No GPS fix yet - can't submit a report without a location.");
       return;
     }
-    const anyHazard = HAZARD_FIELDS.some((field) => report[field.key]);
     if (!anyHazard) {
       setError("Select at least one hazard type.");
       return;
@@ -130,10 +131,7 @@ export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: n
     <Panel title="Spotter Network - Submit Report" className="report-page-panel report-compose-panel">
       <div className="report-page-scroll report-form">
         <div className="report-section">
-          <div className="mode-toggle" aria-label="Report type">
-            <button className={report.reportType === "S" ? "active" : ""} onClick={() => setReport((prev) => ({ ...prev, reportType: "S" }))}>Severe</button>
-            <button className={report.reportType === "W" ? "active" : ""} onClick={() => setReport((prev) => ({ ...prev, reportType: "W" }))}>Winter</button>
-          </div>
+          <div className="cb-note">Severe weather reports submit to Spotter Network with your current GPS position.</div>
         </div>
 
         <div className="report-section">
@@ -240,7 +238,7 @@ export function ReportPage({ gps, onOpenSettings }: { gps: { lat: number; lon: n
         {error && <div className="cb-note cb-note--warn">{error}</div>}
 
         <div className="nearby-actions report-page-actions">
-          <button className="settings-action" disabled={busy} onClick={() => void submit()}>{busy ? "Submitting..." : "Submit Report"}</button>
+          <button className="settings-action" disabled={!canSubmit} onClick={() => void submit()}>{busy ? "Submitting..." : "Submit Report"}</button>
         </div>
       </div>
     </Panel>
