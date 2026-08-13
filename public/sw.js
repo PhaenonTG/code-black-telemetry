@@ -1,5 +1,5 @@
-const CACHE = "code-black-runtime-v1";
-const TILE_HOSTS = ["api.mapbox.com", "tile.openstreetmap.org", "tilecache.rainviewer.com"];
+const CACHE = "code-black-runtime-v2";
+const TILE_HOSTS = ["api.mapbox.com", "tile.openstreetmap.org", "mesonet.agron.iastate.edu"];
 const APP_ASSETS = ["/", "/manifest.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -23,6 +23,16 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.open(CACHE).then(async (cache) => {
+      if (event.request.mode === "navigate") {
+        try {
+          const response = await fetch(event.request);
+          if (response.ok) cache.put("/", response.clone());
+          return response;
+        } catch {
+          return (await cache.match("/")) || Response.error();
+        }
+      }
+
       const cached = await cache.match(event.request);
       try {
         const response = await fetch(event.request);

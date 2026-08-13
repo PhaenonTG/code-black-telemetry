@@ -4,6 +4,24 @@ All changes logged newest-first.
 
 ---
 
+## Laptop PWA Launcher - 2026-08-13
+
+Added a Windows laptop path for running Code Black OPS as a local PWA-style app window.
+
+### Changed
+- Added `npm run desktop`, which starts the production Vite preview server on localhost and opens
+  the app in Edge/Chrome app-window mode.
+- Added `scripts/launch-webapp.ps1` for the desktop shortcut target.
+- Updated the service worker tile cache host list from the retired RainViewer host to the current
+  Iowa Environmental Mesonet mosaic host.
+
+### Notes
+- This is a laptop web/PWA path, not a native Windows BLE implementation.
+- Pi HTTP/Tailscale, Mapbox maps, mosaic radar, alerts, reports, settings, and browser GPS remain
+  the expected laptop capabilities.
+
+---
+
 ## AltStore Source "Not Valid JSON" Fix, Attempt 3 - 2026-08-12
 
 `altstore-source.json` never successfully loaded in AltStore's "Add Source" flow -- confirmed by
