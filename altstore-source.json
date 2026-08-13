@@ -9,11 +9,11 @@
       "subtitle": "Storm chasing telemetry & radar",
       "localizedDescription": "Code Black OPS: live radar, vehicle sensor telemetry (wind, temperature, power), and severe weather alerts for storm chasing.",
       "iconURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",
-      "version": "2026.0813.0851",
-      "versionDate": "2026-08-13T12:41:09Z",
-      "versionDescription": "Automated Codemagic build 2026.0813.0851",
-      "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-2026.0813.0851.ipa",
-      "size": 1436081
+      "version": "2026.0813.1245",
+      "versionDate": "2026-08-13T20:25:08Z",
+      "versionDescription": "Automated Codemagic build 2026.0813.1245",
+      "downloadURL": "https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore/CodeBlackOps-2026.0813.1245.ipa",
+      "size": 1436121
     }
   ]
 }
