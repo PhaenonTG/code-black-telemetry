@@ -1,4 +1,4 @@
-const CACHE = "code-black-runtime-v2";
+const CACHE = "code-black-runtime-v3";
 const TILE_HOSTS = ["api.mapbox.com", "tile.openstreetmap.org", "mesonet.agron.iastate.edu"];
 const APP_ASSETS = ["/", "/manifest.webmanifest", "/favicon.svg"];
 
@@ -16,6 +16,7 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   const isTile = TILE_HOSTS.includes(url.hostname);
   const isSameOriginAsset = url.origin === self.location.origin && event.request.method === "GET";

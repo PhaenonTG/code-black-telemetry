@@ -6,7 +6,7 @@ import type { AlertProduct } from "../services/situational";
 import type { Spotter } from "../services/spotters";
 import type { NearbyCategory, NearbyPlace } from "../services/nearby";
 import { resolveTeamPositions } from "../services/teamPositions";
-import { clearBreadcrumbTrail, recordBreadcrumbPoint } from "../services/breadcrumbTrail";
+import { clearBreadcrumbTrail } from "../services/breadcrumbTrail";
 import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
 import { useTeamRoster } from "../hooks/useTeamRoster";
@@ -25,6 +25,7 @@ import { updateAtlasTeamLayer } from "./AtlasTeamLayer";
 import { updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import { updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRangeRingMode } from "./types";
+import { clusterViewportPoints, filterViewportPoints, viewportFromMap, type MapViewport } from "./viewport";
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
@@ -164,13 +165,13 @@ export function AtlasMap({
   // shared get/save/subscribe store in services/settings.ts so the Weather page's compact map, the
   // Locate page's full map, and the new config screen all read/write the exact same state instead
   // of each map instance keeping its own independent (and previously non-persisted) copy.
-  const [layerVisibility, setLayerVisibility] = useState({ alerts: true, team: true, chasers: true, poi: true, mosaic: true });
+  const [layerVisibility, setLayerVisibility] = useState({ alerts: true, team: true, chasers: true, poi: true, mosaic: true, roadConditions: false, trafficCameras: false, probes: false, chaserNet: false, breadcrumbs: true });
   useEffect(() => {
     const unsubscribe = subscribeMapLayerVisibility(setLayerVisibility);
     void loadMapLayerVisibility();
     return () => { unsubscribe(); };
   }, []);
-  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible } = layerVisibility;
+  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, breadcrumbs: breadcrumbsVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, probes: probesVisible, chaserNet: chaserNetVisible } = layerVisibility;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
     void saveMapLayerVisibility({ ...layerVisibility, [key]: !layerVisibility[key] });
   };
@@ -178,6 +179,7 @@ export function AtlasMap({
   mosaicVisibleRef.current = mosaicVisible;
   const [watches, setWatches] = useState<WatchPolygon[]>([]);
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
+  const [viewport, setViewport] = useState<MapViewport | null>(null);
   const roster = useTeamRoster();
   const teamPinStyle = useTeamPinStyle();
   const chaserPinStyle = useChaserPinStyle();
@@ -202,6 +204,11 @@ export function AtlasMap({
     // (including the watch/warning polygons underneath) once you zoom out even slightly.
     return spotters.filter((spotter) => !teamIds.has(spotter.id) && spotter.distanceMiles <= chaserRadiusMiles);
   }, [spotters, teamPositions, chaserRadiusMiles]);
+  const visibleTeamPositions = useMemo(() => (viewport ? filterViewportPoints(teamPositions, viewport) : teamPositions), [teamPositions, viewport]);
+  const visibleChaserSpotters = useMemo(() => (viewport ? filterViewportPoints(chaserSpotters, viewport) : chaserSpotters), [chaserSpotters, viewport]);
+  const visiblePoiPlaces = useMemo(() => (viewport ? filterViewportPoints(poiPlaces, viewport) : poiPlaces), [poiPlaces, viewport]);
+  const clusteredTeamPositions = useMemo(() => (viewport ? clusterViewportPoints(visibleTeamPositions, viewport) : visibleTeamPositions), [visibleTeamPositions, viewport]);
+  const clusteredChaserSpotters = useMemo(() => (viewport ? clusterViewportPoints(visibleChaserSpotters, viewport) : visibleChaserSpotters), [visibleChaserSpotters, viewport]);
 
   latestRef.current = { gps, rangeRings, expanded };
 
@@ -345,8 +352,11 @@ export function AtlasMap({
       map.on("idle", () => {
         idleCountRef.current += 1;
         setIdleCount(idleCountRef.current);
+        setViewport(viewportFromMap(map));
         samplePixels();
       });
+      map.on("moveend", () => setViewport(viewportFromMap(map)));
+      map.on("zoomend", () => setViewport(viewportFromMap(map)));
       map.getCanvas().addEventListener("webglcontextlost", () => {
         setMapState("WEBGL_ERROR");
         setMapError("WEBGL_CONTEXT_LOST");
@@ -418,7 +428,6 @@ export function AtlasMap({
     // flyTo -- two competing camera animations at once looks janky, not premium.
     lastGpsAppliedRef.current = { gps, at: Date.now() };
     updateAtlasVehicleLayer(map, gps, vehicleMarkerStyleRef.current);
-    recordBreadcrumbPoint(gps.lat, gps.lon);
     const introZoom = zoomForSpeed(gps.speedMph, expanded, compact);
     map.flyTo({
       center: [gps.lon, gps.lat],
@@ -440,12 +449,29 @@ export function AtlasMap({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !loaded || !active) return;
+    const timers = [0, 120, 420].map((delay) => window.setTimeout(() => {
+      map.resize();
+      const currentGps = latestRef.current.gps;
+      if (currentGps) {
+        map.jumpTo({
+          center: [currentGps.lon, currentGps.lat],
+          zoom: zoomForSpeed(currentGps.speedMph, latestRef.current.expanded, compact),
+          bearing,
+          pitch,
+        });
+      }
+    }, delay));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [active, bearing, compact, loaded, pitch]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map || !loaded || !gps) return;
     const now = Date.now();
     if (!shouldApplyGpsUpdate(lastGpsAppliedRef.current, gps, now)) return;
     lastGpsAppliedRef.current = { gps, at: now };
     updateAtlasVehicleLayer(map, gps, vehicleMarkerStyleRef.current);
-    recordBreadcrumbPoint(gps.lat, gps.lon, now);
     // Skip the actual camera move when this instance isn't the one on screen -- the vehicle marker
     // and breadcrumb above still stay current, so there's no stale-position catch-up animation when
     // the user swipes back to this page, but the expensive easeTo (and the render/GPU work it
@@ -528,8 +554,8 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    updateAtlasBreadcrumbLayer(map, compact ? [] : trail);
-  }, [loaded, trail, compact]);
+    updateAtlasBreadcrumbLayer(map, compact || !breadcrumbsVisible ? [] : trail);
+  }, [loaded, trail, compact, breadcrumbsVisible]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -561,20 +587,20 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    updateAtlasTeamLayer(map, teamPositions, teamPinStyle, teamVisible);
-  }, [teamPositions, teamPinStyle, teamVisible, loaded]);
+    updateAtlasTeamLayer(map, clusteredTeamPositions, teamPinStyle, teamVisible);
+  }, [clusteredTeamPositions, teamPinStyle, teamVisible, loaded]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    updateAtlasSpotterLayer(map, chaserSpotters, chaserPinStyle, chasersVisible);
-  }, [chaserSpotters, chaserPinStyle, chasersVisible, loaded]);
+    updateAtlasSpotterLayer(map, clusteredChaserSpotters, chaserPinStyle, chasersVisible);
+  }, [clusteredChaserSpotters, chaserPinStyle, chasersVisible, loaded]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    updateAtlasPoiLayer(map, poiPlaces, nearbyBest, customPoiPins, poiVisible);
-  }, [poiPlaces, nearbyBest, customPoiPins, poiVisible, loaded]);
+    updateAtlasPoiLayer(map, visiblePoiPlaces, nearbyBest, customPoiPins, poiVisible);
+  }, [visiblePoiPlaces, nearbyBest, customPoiPins, poiVisible, loaded]);
 
 
   useEffect(() => {
@@ -705,6 +731,26 @@ export function AtlasMap({
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={poiVisible} onChange={() => toggleLayer("poi")} />
               Nearby (gas / food / hotel / ER)
+            </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={breadcrumbsVisible} onChange={() => toggleLayer("breadcrumbs")} />
+              Breadcrumbs
+            </label>
+            <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
+              <input type="checkbox" checked={roadConditionsVisible} onChange={() => toggleLayer("roadConditions")} />
+              Road conditions - not configured
+            </label>
+            <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
+              <input type="checkbox" checked={trafficCamerasVisible} onChange={() => toggleLayer("trafficCameras")} />
+              Traffic cameras - not configured
+            </label>
+            <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
+              <input type="checkbox" checked={probesVisible} onChange={() => toggleLayer("probes")} />
+              Probes - not configured
+            </label>
+            <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
+              <input type="checkbox" checked={chaserNetVisible} onChange={() => toggleLayer("chaserNet")} />
+              Chaser Net - not configured
             </label>
           </div>
         )}

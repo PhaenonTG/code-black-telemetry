@@ -15,7 +15,18 @@ import { PinStyleField, PinStylePreview } from "../map/PinStyleEditor";
 import { ColorField } from "../map/ColorWheel";
 import { downscaleImageToDataUrl } from "../../utils/image";
 
-const DEFAULT_VISIBILITY: MapLayerVisibility = { alerts: true, team: true, chasers: true, poi: true, mosaic: true };
+const DEFAULT_VISIBILITY: MapLayerVisibility = {
+  alerts: true,
+  team: true,
+  chasers: true,
+  poi: true,
+  mosaic: true,
+  roadConditions: false,
+  trafficCameras: false,
+  probes: false,
+  chaserNet: false,
+  breadcrumbs: true,
+};
 
 const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description: string }> = [
   {
@@ -42,6 +53,31 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description:
     key: "poi",
     label: "Gas / Food / ER",
     description: "ER pins always show when nearby. Gas and food only show for the specific businesses below -- add one to put it on the map.",
+  },
+  {
+    key: "breadcrumbs",
+    label: "Breadcrumbs",
+    description: "Your local rolling chase trail. Captured independently of whether the map page is visible.",
+  },
+  {
+    key: "roadConditions",
+    label: "Road Conditions",
+    description: "Prepared for closures, crashes, flooding, construction, winter, and route-impacting hazards. Provider not configured yet.",
+  },
+  {
+    key: "trafficCameras",
+    label: "Traffic / Public Cameras",
+    description: "Prepared for lawful public cameras and user-authorized feeds. Provider not configured yet.",
+  },
+  {
+    key: "probes",
+    label: "Code Black Probes",
+    description: "Prepared for future deployable probe observations. Live probe provider not configured yet.",
+  },
+  {
+    key: "chaserNet",
+    label: "Code Black Chaser Net",
+    description: "Prepared for verified members, privacy-aware presence, and zoom clustering. Backend not configured yet.",
   },
 ];
 

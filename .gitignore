@@ -3,6 +3,8 @@
 # clone (including Codemagic's CI checkout) for no benefit. Untracked below; not purged from
 # history here since that needs a force-push, which needs an explicit go-ahead first.
 qa-screenshots/
+artifacts/
+.claude/
 
 # Logs
 logs

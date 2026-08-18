@@ -4,6 +4,187 @@ All changes logged newest-first.
 
 ---
 
+## S24 UI Polish and Checkpoint Hygiene - 2026-08-18
+
+Targeted cleanup pass after the accepted native Chase Tracking build.
+
+### Changed
+- Added narrow ignore rules for local QA artifacts and local Codex/Claude launch config so device
+  screenshots/logs are not accidentally committed.
+- Tightened Chase Session settings spacing and status badge behavior for phone portrait without
+  changing the tablet/landscape Settings architecture.
+- Reworded persistent tracking status copy to use platform-neutral operational language instead of
+  exposing Android implementation details in normal UI.
+- Corrected shared tracking status normalization so a running native platform tracker is not
+  mislabeled as unsupported, and hardened Chase start/end feedback against failed platform calls.
+- Added shared map marker family classes for team/chaser/report/probe/road/camera/MARK objects and
+  a consistent stale-marker treatment for future live layers.
+
+### Validation Notes
+- Android native Chase Tracking service code was not changed in this pass; the previous accepted
+  foreground, background, locked-screen, MARK, END CHASE, and notification cleanup behavior is
+  preserved.
+- Mosaic remains the active radar experience. Native Level II REF/VEL/SRV/CC remains deferred.
+
+---
+
+## S24 Hands-Free Chase Acceptance Stabilization - 2026-08-18
+
+Finalized the latest Samsung S24 acceptance pass around Chase Mode cleanup, native tracking state,
+and mosaic-only radar validation.
+
+### Changed
+- Fixed the active mission status strip so it no longer steals scroll height from phone portrait
+  Settings and other non-weather pages while a chase is active.
+- Tightened Android native Chase Tracking stop behavior so `END CHASE` marks native tracking
+  inactive immediately, reports stop-pending correctly during Android service teardown, and cancels
+  the chase notification through both supported notification-ID forms.
+- Reset the native pending breadcrumb buffer when a new native chase session starts, preventing
+  old session points from mixing into a fresh session's pending native queue.
+
+### Validation Notes
+- Rebuilt and installed the exact debug APK on the connected Samsung S24 (`SM-S921U`).
+- Physical S24 evidence confirms native foreground/background/locked tracking worked during the
+  pass, `MARK` persisted with the active session, `END CHASE` stopped point growth, and a second
+  session used a distinct session ID.
+- Final launch state after the cleanup fix is inactive, with no active `ChaseTrackingService` and
+  no active Code Black chase-tracking notification.
+- Mosaic radar remains the active radar experience; native Level II REF/VEL/SRV/CC stays deferred.
+
+---
+
+## Cross-Platform Chase Tracking Abstraction - 2026-08-18
+
+Kept Code Black OPS pointed at one shared product core while refining the Android native tracking
+work as a platform adapter.
+
+### Changed
+- Added platform-neutral service contracts and models for location tracking, normalized location
+  observations, platform capabilities, operational notifications, and display control.
+- Routed Chase Mode start/stop/status, pending breadcrumb sync, and UI status through the shared
+  `LocationTrackingService` instead of calling Android-native tracking directly from App/Settings.
+- Added normalized breadcrumb quality handling for good/degraded/stale/invalid observations while
+  preserving raw accuracy, speed, heading, altitude, provider, and source values when available.
+- Added balanced, high-detail, and battery-saver tracking presets as shared intent, with Android
+  translating those presets into native sampling intervals and distance thresholds.
+- Added mission-session recovery from an existing active native tracking session so reopening OPS
+  can reconcile with the same session ID instead of creating a duplicate chase.
+- Moved keep-awake and brightness behavior behind a `DisplayControlService` abstraction to reduce
+  UI coupling to browser or platform-specific display APIs.
+- Added domain tests for location quality classification, stale/invalid handling, duplicate
+  breadcrumb filtering, improved-accuracy retention, and tracking preset policy values.
+
+### Validation Notes
+- `npm test`, `npm run lint`, `npm run build`, and `npm run android:debug` pass after the
+  abstraction update.
+- The exact debug APK was installed on the connected Samsung S24, but final interactive physical QA
+  for MARK/END/radar still requires the phone to be unlocked.
+
+---
+
+## Native Chase Tracking Foreground Service - 2026-08-18
+
+Implemented the first Android-native Chase Mode tracking pass for physical S24 validation.
+
+### Changed
+- Added a Capacitor-backed Android foreground location service that starts only with an explicit
+  Chase Mode session and posts a persistent "Code Black OPS - Chase Tracking Active" notification.
+- Added Android foreground-service location and notification permission wiring without requesting
+  background location for this pass.
+- Added bounded native breadcrumb persistence tied to the active chase session, including timestamp,
+  coordinates, accuracy, altitude, speed, heading, provider/source, and quality flags.
+- Synced native service breadcrumbs back into the existing app breadcrumb store on resume/poll so
+  valid points are not lost while the WebView is suspended.
+- Updated MARK to prefer the freshest native chase location when foreground tracking is active.
+- Added native tracking status visibility in the Chase Session settings panel and a compact active
+  chase status strip outside Settings.
+- Tightened resume recovery so an explicitly stopped native tracking service is not restarted as if
+  it had crashed.
+- Hardened native status reporting so stale stored tracking state is reported as degraded if the
+  foreground service is not actually running after an update or force-stop.
+- Fixed the S24 portrait Settings layout so Chase Session controls remain visible and touchable.
+
+### Validation Notes
+- Physical S24 QA confirmed the native foreground service and notification are active and native
+  breadcrumbs continue while OPS is backgrounded and while the screen is locked.
+- The current app radar UI exposes wide-area mosaic radar; legacy REF/VEL/SRV/CC product switching
+  is not currently exposed in the source tree and was not claimed as physically passed.
+
+---
+
+## Roadmap Pass 1 Foundations - 2026-08-18
+
+Implemented the first production-quality integration pass for the Code Black OPS roadmap while
+preserving the existing tablet cockpit, radar, telemetry, Pi/BLE, streaming, navigation, and map
+camera foundations.
+
+### Changed
+- S24 physical QA found the Android activity was still locked to landscape. Removed the main
+  activity orientation lock so phone portrait can use the new scroll dashboard while landscape and
+  tablet cockpit layouts remain available.
+- Fixed the phone portrait Weather-page compact radar card on the S24 by forcing Mapbox resize
+  when the active map/card changes and by giving the compact map a stable portrait height.
+- Moved the MARK control higher on the Locate page in phone portrait so it does not cover the map's
+  bottom Layers control.
+- Fixed S24 portrait Settings rows so labels, segmented controls, sliders, and action buttons wrap
+  cleanly instead of compressing vertically; hidden floating operational buttons on Settings where
+  they were covering controls.
+- Fixed Light theme contrast on the S24 by overriding the hard-coded tactical header, panel, dock,
+  and segmented-control surfaces after the phone responsive rules.
+- Added a phone-portrait dashboard path that uses fixed vertical cards instead of shrinking the
+  tablet layout, keeping warning status, radar, location, weather, wind, telemetry, streaming, and
+  system health reachable in a scroll flow.
+- Added Display settings for theme, clock mode, keep-awake behavior, OPS brightness, and optional
+  Chase Mode auto-awake behavior. Brightness control is in-app scoped and releases on lifecycle
+  changes instead of permanently overwriting system brightness.
+- Replaced the old full-red Night Vision behavior with a restrained Night theme using dark
+  surfaces and red accents. Dark, Light, Night, and System theme modes are now supported.
+- Reworked the header clock around live `Intl.DateTimeFormat` formatting for Local, Central, and
+  Zulu modes so timezone and DST changes are not cached at startup.
+- Added a lightweight Mission Session lifecycle, persistent bounded breadcrumb capture tied to the
+  active session, and a fast MARK action for recording the current GPS position.
+- Added reusable viewport, detail-level, and clustering helpers for map layers without changing
+  radar rendering.
+- Added disabled/not-configured foundations for Road Conditions, Traffic/Public Cameras, Code
+  Black Probes, and Code Black Chaser Net map layers.
+- Added a reusable operational map-layer manager model for visibility, opacity, order, viewport
+  context, loading/stale/unavailable/error state, and provenance.
+- Expanded Road Conditions and Traffic/Public Camera layer contracts with geometry, closure state,
+  event timing, direction, stale state, public preview/stream URL slots, and source metadata while
+  keeping providers honestly not-configured.
+- Added a press-and-hold ESCAPE foundation that builds an egress context from current GPS/session
+  state and reports degraded/unavailable input states without claiming to calculate a safe route.
+- Added Chaser Net, mobile mesonet, station metadata, and observation provenance domain models so
+  future official, human, experimental, and Code Black sensor data can remain distinct.
+- Added focused non-UI tests for clock formatting, viewport filtering, clustering, and Chaser Net
+  privacy behavior, map-layer state, and egress degraded-data handling.
+
+### Deferred
+- No production Chaser Net backend, public signup, moderation, Spotter Network submission, GOES/GLM,
+  HRRR/RAP ingestion, turn-by-turn navigation, Android Auto, CarPlay, or emergency escape routing
+  was implemented in this pass.
+- Road, camera, probe, and Chaser Net layers intentionally show provider-not-configured states
+  unless a real provider is wired later.
+
+---
+
+## Laptop PWA GPS Hardening - 2026-08-18
+
+Tightened the Windows laptop/PWA path after the initial launcher pass.
+
+### Changed
+- Hardened browser GPS handling so transient laptop geolocation timeouts remain in a searching
+  state instead of becoming a hard dashboard error.
+- Added browser permission preflight, secure-localhost checks, and a fresh GPS request when the
+  app window returns to focus.
+- Replaced generic browser copy with laptop-aware labels such as Laptop GPS and Standalone Laptop.
+- Added visible unsupported/error messaging for laptop GPS permission or system-location failures.
+- Hardened the Windows launcher to reuse an existing Code Black preview server only when verified,
+  otherwise choose the next free localhost port and log preview startup to the temp directory.
+- Bumped the PWA runtime cache and added manifest metadata for the laptop install path.
+
+---
+
 ## Laptop PWA Launcher - 2026-08-13
 
 Added a Windows laptop path for running Code Black OPS as a local PWA-style app window.

@@ -17,7 +17,6 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:screenOrientation="landscape"
             android:exported="true">
 
             <intent-filter>
@@ -61,6 +60,11 @@
                 android:value="1" />
         </service>
 
+        <service
+            android:name=".chase.ChaseTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
@@ -72,6 +76,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- BLE link to the Pi (CodeBlack-OPS telemetry bridge) -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />

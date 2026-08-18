@@ -1,6 +1,8 @@
 {
   "name": "Code Black OPS",
   "short_name": "Code Black",
+  "id": "/",
+  "description": "Code Black OPS situational awareness dashboard for vehicle, tablet, phone, and laptop field use.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

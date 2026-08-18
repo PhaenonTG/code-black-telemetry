@@ -12,6 +12,9 @@ export interface PinPoint {
   group?: string;
   phone?: string;
   email?: string;
+  clusterCount?: number;
+  family?: "team" | "chaser" | "report" | "probe" | "road" | "camera" | "mark";
+  stale?: boolean;
 }
 
 // Personalizable color + shape rules out plain Mapbox GL circle layers (GL circles are,
@@ -52,6 +55,21 @@ function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number) {
   el.style.borderRadius = style.shape === "circle" ? "50%" : style.shape === "square" ? "2px" : "0";
   el.style.clipPath = SHAPE_CLIP_PATH[style.shape] ?? "";
   el.style.cursor = "pointer";
+}
+
+function applyMarkerClasses(el: HTMLDivElement, point: PinPoint) {
+  const family = point.family ?? "chaser";
+  el.className = [
+    "atlas-pin-marker",
+    `atlas-pin-marker--${family}`,
+    point.clusterCount && point.clusterCount > 1 ? "atlas-pin-marker--cluster" : "",
+    point.stale ? "atlas-pin-marker--stale" : "",
+  ].filter(Boolean).join(" ");
+}
+
+function applyClusterLabel(el: HTMLDivElement, count: number | undefined, family: string) {
+  el.textContent = count && count > 1 ? String(count) : "";
+  el.setAttribute("aria-label", count && count > 1 ? `${count} ${family} map objects` : `${family} map object`);
 }
 
 function escapeHtml(value: string) {
@@ -129,7 +147,10 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
       } else {
         marker.setLngLat([point.lon, point.lat]);
       }
-      applyPinStyle(marker.getElement() as HTMLDivElement, style, zoom);
+      const element = marker.getElement() as HTMLDivElement;
+      applyMarkerClasses(element, point);
+      applyPinStyle(element, style, zoom);
+      applyClusterLabel(element, point.clusterCount, point.family ?? "chaser");
     }
   }
   for (const id of Object.keys(markers)) {
@@ -147,7 +168,11 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
       if (!currentStyle) return;
       const currentZoom = map.getZoom();
       for (const id of Object.keys(markers)) {
-        applyPinStyle(markers[id].getElement() as HTMLDivElement, currentStyle, currentZoom);
+        const element = markers[id].getElement() as HTMLDivElement;
+        const point = latestPointsByMarkers.get(markers)?.[id];
+        if (point) applyMarkerClasses(element, point);
+        applyPinStyle(element, currentStyle, currentZoom);
+        applyClusterLabel(element, point?.clusterCount, point?.family ?? "chaser");
       }
     });
   }

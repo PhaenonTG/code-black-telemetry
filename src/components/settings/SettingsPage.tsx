@@ -6,26 +6,37 @@ import { Panel } from "../situational/Panel";
 import type { CockpitMode } from "../../App";
 import {
   DEFAULT_CHASER_RADIUS_MILES,
+  DEFAULT_CHASE_TRACKING_SETTINGS,
+  DEFAULT_DISPLAY_SETTINGS,
   DEFAULT_REPORT_FEED_RADIUS_MILES,
   DEFAULT_REPORT_FEED_RETENTION_HOURS,
   getBleCommandToken,
+  loadAppTheme,
   loadBleCommandToken,
   loadChaserRadiusMiles,
-  loadNightVisionEnabled,
+  loadClockMode,
+  loadChaseTrackingSettings,
+  loadDisplaySettings,
   loadReportFeedRadiusMiles,
   loadReportFeedRetentionHours,
   loadTeamMembers,
   loadVehicleMarkerStyle,
+  saveAppTheme,
   saveBleCommandToken,
   saveChaserRadiusMiles,
-  saveNightVisionEnabled,
+  saveClockMode,
+  saveChaseTrackingSettings,
+  saveDisplaySettings,
   saveReportFeedRadiusMiles,
   saveReportFeedRetentionHours,
   saveTeamMembers,
   saveTelemetryLinkEnabled,
   saveVehicleMarkerStyle,
+  subscribeAppTheme,
   subscribeChaserRadiusMiles,
-  subscribeNightVisionEnabled,
+  subscribeClockMode,
+  subscribeChaseTrackingSettings,
+  subscribeDisplaySettings,
   subscribePiEndpoint,
   subscribeReportFeedRadiusMiles,
   subscribeReportFeedRetentionHours,
@@ -34,12 +45,22 @@ import {
   subscribeVehicleMarkerStyle,
   type TeamMember,
   type VehicleMarkerStyle,
+  type AppThemeMode,
+  type ClockMode,
+  type ChaseTrackingSettings,
+  type DisplaySettings,
+  type DisplayWakeMode,
 } from "../../services/settings";
 import { emitCodeBlackSound, setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, subscribeCodeBlackSoundEnabled, type CodeBlackSoundEvent } from "../../services/sound";
 import { clearSpotterAccount, loadSpotterAccount, spotterNetworkLogin, subscribeSpotterAccount, type SpotterAccount } from "../../services/spotterAccount";
 import { bleTelemetryClient } from "../../services/telemetry/ble-client";
 import { PinStyleField } from "../map/PinStyleEditor";
 import type { DeviceLabels } from "../../hooks/useDeviceLabels";
+import { endMissionSession, startMissionSession } from "../../services/missionSession";
+import { useMissionSession } from "../../hooks/useMissionSession";
+import { useLocationTracking } from "../../hooks/useLocationTracking";
+import { locationTrackingService } from "../../services/locationTracking";
+import { getPlatformCapabilities } from "../../services/platformCapabilities";
 
 // Mirrors lighting/api.py's PRESET_COLORS on the Pi -- same names, same swatches, so a preset here
 // maps to exactly one accepted preset string server-side rather than sending raw RGB that could
@@ -74,6 +95,72 @@ const ALERT_SOUND_TESTS: Array<{ event: CodeBlackSoundEvent; label: string }> = 
   { event: "pds-warning", label: "PDS" },
 ];
 
+const THEME_OPTIONS: Array<{ mode: AppThemeMode; label: string }> = [
+  { mode: "dark", label: "Dark" },
+  { mode: "light", label: "Light" },
+  { mode: "night", label: "Night" },
+  { mode: "system", label: "System" },
+];
+
+const CLOCK_OPTIONS: Array<{ mode: ClockMode; label: string }> = [
+  { mode: "local", label: "Local" },
+  { mode: "central", label: "Central" },
+  { mode: "zulu", label: "Zulu" },
+];
+
+const WAKE_OPTIONS: Array<{ mode: DisplayWakeMode; label: string }> = [
+  { mode: "normal", label: "Normal" },
+  { mode: "keep-awake-dim", label: "Awake + Dim" },
+  { mode: "keep-awake-bright", label: "Awake + Bright" },
+];
+
+const TRACKING_DETAIL_OPTIONS: Array<{ preset: ChaseTrackingSettings["detailPreset"]; label: string }> = [
+  { preset: "battery-saver", label: "Saver" },
+  { preset: "balanced", label: "Balanced" },
+  { preset: "high-detail", label: "Detail" },
+];
+
+function trackingIssueLabel(error: string) {
+  const lower = error.toLowerCase();
+  if (lower.includes("permission")) return "location permission limited";
+  if (lower.includes("gps") || lower.includes("location")) return "GPS unavailable";
+  if (lower.includes("notification")) return "notification permission unavailable";
+  if (lower.includes("platform") || lower.includes("native")) return "persistent tracking unavailable";
+  return error;
+}
+
+function trackingStatusCopy(locationTracking: ReturnType<typeof useLocationTracking>) {
+  if (!locationTracking.backgroundCapable) {
+    return {
+      detail: "Persistent background tracking is not available on this platform.",
+      label: "UNAVAILABLE",
+    };
+  }
+  if (locationTracking.locationPermission === "denied") {
+    return {
+      detail: "Persistent tracking degraded: location permission limited.",
+      label: "NO LOCATION",
+    };
+  }
+  if (locationTracking.active) {
+    const permissionNote = locationTracking.notificationPermission === "denied" ? "notification permission unavailable" : "foreground/background ready";
+    return {
+      detail: `Persistent chase tracking active · ${locationTracking.pointCount} breadcrumbs · ${permissionNote}.`,
+      label: "TRACKING ACTIVE",
+    };
+  }
+  if (locationTracking.lastError) {
+    return {
+      detail: `Persistent tracking degraded: ${trackingIssueLabel(locationTracking.lastError)}.`,
+      label: "DEGRADED",
+    };
+  }
+  return {
+    detail: "Starts with Chase Mode and stops when the chase ends.",
+    label: locationTracking.state === "unavailable" ? "UNAVAILABLE" : "READY",
+  };
+}
+
 interface SettingsPageProps {
   cockpitMode: CockpitMode;
   onChangeCockpitMode: (mode: CockpitMode) => void;
@@ -89,6 +176,8 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnection, diagnostics, deviceLabels }: SettingsPageProps) {
+  const missionSession = useMissionSession();
+  const locationTracking = useLocationTracking();
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [piEndpoint, setPiEndpoint] = useState("");
   const [telemetryLinkEnabled, setTelemetryLinkEnabled] = useState(true);
@@ -112,7 +201,11 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [newMemberPhone, setNewMemberPhone] = useState("");
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [vehicleMarkerStyle, setVehicleMarkerStyle] = useState<VehicleMarkerStyle>({ color: "#ff2d35", shape: "circle", sizeScale: 1 });
-  const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
+  const [appTheme, setAppTheme] = useState<AppThemeMode>("dark");
+  const [clockMode, setClockMode] = useState<ClockMode>("local");
+  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
+  const [chaseTrackingSettings, setChaseTrackingSettings] = useState<ChaseTrackingSettings>(DEFAULT_CHASE_TRACKING_SETTINGS);
+  const [localChaseBusy, setLocalChaseBusy] = useState(false);
   const [bleTokenInput, setBleTokenInput] = useState("");
   const [bleTokenSaved, setBleTokenSaved] = useState(false);
   const [bleConnected, setBleConnected] = useState(false);
@@ -121,7 +214,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [chaseBusy, setChaseBusy] = useState(false);
   const [chaseResult, setChaseResult] = useState("");
   const platform = Capacitor.getPlatform();
+  const platformCapabilities = getPlatformCapabilities();
   const buildTime = Number.isNaN(Date.parse(__BUILD_TIME__)) ? __BUILD_TIME__ : new Date(__BUILD_TIME__).toLocaleString();
+  const trackingCopy = trackingStatusCopy(locationTracking);
 
   useEffect(() => {
     const unsubscribe = subscribePiEndpoint(setPiEndpoint);
@@ -203,9 +298,20 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   }, []);
 
   useEffect(() => {
-    const unsubscribe = subscribeNightVisionEnabled(setNightVisionEnabled);
-    void loadNightVisionEnabled();
-    return unsubscribe;
+    const unsubscribeTheme = subscribeAppTheme(setAppTheme);
+    const unsubscribeClock = subscribeClockMode(setClockMode);
+    const unsubscribeDisplay = subscribeDisplaySettings(setDisplaySettings);
+    const unsubscribeChaseTracking = subscribeChaseTrackingSettings(setChaseTrackingSettings);
+    void loadAppTheme();
+    void loadClockMode();
+    void loadDisplaySettings();
+    void loadChaseTrackingSettings();
+    return () => {
+      unsubscribeTheme();
+      unsubscribeClock();
+      unsubscribeDisplay();
+      unsubscribeChaseTracking();
+    };
   }, []);
 
   useEffect(() => {
@@ -284,8 +390,45 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     void saveTeamMembers(teamMembers.filter((member) => member.id !== id));
   };
 
-  const toggleNightVision = (enabled: boolean) => {
-    void saveNightVisionEnabled(enabled);
+  const updateDisplaySettings = (patch: Partial<DisplaySettings>) => {
+    void saveDisplaySettings({ ...displaySettings, ...patch });
+  };
+
+  const updateChaseTrackingSettings = (patch: Partial<ChaseTrackingSettings>) => {
+    void saveChaseTrackingSettings({ ...chaseTrackingSettings, ...patch });
+  };
+
+  const startLocalChase = async () => {
+    setLocalChaseBusy(true);
+    setChaseResult("");
+    try {
+      const session = await startMissionSession();
+      const trackingStatus = await locationTrackingService.start({
+        session,
+        detailPreset: chaseTrackingSettings.detailPreset,
+        persistent: chaseTrackingSettings.persistentTrackingEnabled,
+      });
+      setChaseResult(trackingStatus.active ? "Local chase started. Persistent chase tracking active." : `Local chase started. Persistent tracking degraded: ${trackingIssueLabel(trackingStatus.lastError || "persistent tracking unavailable")}.`);
+    } catch (error) {
+      setChaseResult(`Chase start failed: ${trackingIssueLabel(error instanceof Error ? error.message : "persistent tracking unavailable")}.`);
+    } finally {
+      setLocalChaseBusy(false);
+    }
+  };
+
+  const endLocalChase = async () => {
+    setLocalChaseBusy(true);
+    setChaseResult("");
+    try {
+      await locationTrackingService.syncPendingObservations();
+      const trackingStatus = await locationTrackingService.stop();
+      await endMissionSession();
+      setChaseResult(trackingStatus.active ? "Chase ended, but persistent tracking still reports active." : "Local chase ended. Persistent chase tracking stopped.");
+    } catch (error) {
+      setChaseResult(`Chase end failed: ${trackingIssueLabel(error instanceof Error ? error.message : "persistent tracking cleanup unavailable")}.`);
+    } finally {
+      setLocalChaseBusy(false);
+    }
   };
 
   const saveBleToken = async () => {
@@ -354,12 +497,59 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         </div>
         <div className="settings-row">
           <div>
-            <strong>Night Vision</strong>
-            <span>Dims display to deep red/black for night chases.</span>
+            <strong>Theme</strong>
+            <span>Dark is default. Night keeps black surfaces with restrained red accents.</span>
           </div>
-          <div className="mode-toggle" aria-label="Night vision mode">
-            <button className={nightVisionEnabled ? "" : "active"} onClick={() => toggleNightVision(false)}>Off</button>
-            <button className={nightVisionEnabled ? "active" : ""} onClick={() => toggleNightVision(true)}>On</button>
+          <div className="settings-segmented settings-segmented--four" aria-label="Theme">
+            {THEME_OPTIONS.map(({ mode, label }) => (
+              <button key={mode} className={appTheme === mode ? "active" : ""} onClick={() => void saveAppTheme(mode)}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Clock</strong>
+            <span>Local follows device timezone. Central and Zulu stay fixed.</span>
+          </div>
+          <div className="settings-segmented settings-segmented--three" aria-label="Clock mode">
+            {CLOCK_OPTIONS.map(({ mode, label }) => (
+              <button key={mode} className={clockMode === mode ? "active" : ""} onClick={() => void saveClockMode(mode)}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Screen</strong>
+            <span>Wake Lock is used when the platform supports it; device brightness is never overwritten permanently.</span>
+          </div>
+          <div className="settings-segmented settings-segmented--three" aria-label="Display wake behavior">
+            {WAKE_OPTIONS.map(({ mode, label }) => (
+              <button key={mode} className={displaySettings.wakeMode === mode ? "active" : ""} onClick={() => updateDisplaySettings({ wakeMode: mode })}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>OPS Brightness</strong>
+            <span>{Math.round(displaySettings.opsBrightness * 100)}% in-app brightness when Awake + Bright is active.</span>
+          </div>
+          <input
+            className="settings-slider"
+            type="range"
+            min={15}
+            max={100}
+            value={Math.round(displaySettings.opsBrightness * 100)}
+            onChange={(event) => updateDisplaySettings({ opsBrightness: Number(event.target.value) / 100 })}
+          />
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Chase Auto Awake</strong>
+            <span>Automatically keep the screen awake during Chase Mode.</span>
+          </div>
+          <div className="mode-toggle" aria-label="Auto keep-awake during Chase Mode">
+            <button className={displaySettings.autoEnableDuringChase ? "" : "active"} onClick={() => updateDisplaySettings({ autoEnableDuringChase: false })}>Off</button>
+            <button className={displaySettings.autoEnableDuringChase ? "active" : ""} onClick={() => updateDisplaySettings({ autoEnableDuringChase: true })}>On</button>
           </div>
         </div>
       </Panel>
@@ -686,12 +876,50 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
       <Panel title="Chase Session" className="settings-chase-panel">
         <div className="settings-row">
           <div>
+            <strong>Persistent Tracking</strong>
+            <span>{platformCapabilities.backgroundLocation ? "Records chase breadcrumbs while OPS is backgrounded or locked." : "Background tracking is not available on this platform."}</span>
+          </div>
+          <div className="mode-toggle" aria-label="Persistent chase tracking">
+            <button className={chaseTrackingSettings.persistentTrackingEnabled ? "" : "active"} disabled={!platformCapabilities.backgroundLocation} onClick={() => updateChaseTrackingSettings({ persistentTrackingEnabled: false })}>Off</button>
+            <button className={chaseTrackingSettings.persistentTrackingEnabled ? "active" : ""} disabled={!platformCapabilities.backgroundLocation} onClick={() => updateChaseTrackingSettings({ persistentTrackingEnabled: true })}>On</button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Tracking Detail</strong>
+            <span>Stores cross-platform intent; each platform translates it to native sampling.</span>
+          </div>
+          <div className="settings-segmented settings-segmented--three" aria-label="Tracking detail">
+            {TRACKING_DETAIL_OPTIONS.map(({ preset, label }) => (
+              <button key={preset} className={chaseTrackingSettings.detailPreset === preset ? "active" : ""} disabled={!platformCapabilities.backgroundLocation} onClick={() => updateChaseTrackingSettings({ detailPreset: preset })}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
             <strong>Session</strong>
-            <span>Chasing vs. standby -- switches lighting.</span>
+            <span>{missionSession ? `Active since ${new Date(missionSession.startedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Creates a local operational boundary for breadcrumbs, marks, reports, and future sync."}</span>
           </div>
           <div className="mode-toggle" aria-label="Chase session">
-            <button disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("end_chase_session")}>End</button>
-            <button disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("start_chase_session")}>Start</button>
+            <button className={!missionSession ? "" : "active"} disabled={localChaseBusy || !missionSession} onClick={() => void endLocalChase()}>End</button>
+            <button className={missionSession ? "active" : ""} disabled={localChaseBusy || Boolean(missionSession)} onClick={() => void startLocalChase()}>Start</button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Tracking Status</strong>
+            <span>{trackingCopy.detail}</span>
+          </div>
+          <strong>{trackingCopy.label}</strong>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Pi Session Command</strong>
+            <span>{bleConnected ? "Optional hardware command path for vehicle lighting/backend state." : "BLE not connected; local session still works."}</span>
+          </div>
+          <div className="mode-toggle" aria-label="Pi chase session command">
+            <button disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("end_chase_session")}>Pi End</button>
+            <button disabled={chaseBusy || !bleConnected} onClick={() => void sendChaseCommand("start_chase_session")}>Pi Start</button>
           </div>
         </div>
         <div className="settings-row">

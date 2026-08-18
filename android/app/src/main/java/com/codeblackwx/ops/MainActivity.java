@@ -5,6 +5,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import com.codeblackwx.ops.chase.ChaseTrackingNativePlugin;
 import com.codeblackwx.ops.location.TabletLocationNativePlugin;
 import com.getcapacitor.BridgeActivity;
 
@@ -12,6 +13,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(TabletLocationNativePlugin.class);
+        registerPlugin(ChaseTrackingNativePlugin.class);
         super.onCreate(savedInstanceState);
         enableImmersiveMode();
     }

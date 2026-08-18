@@ -87,7 +87,7 @@ function StreamRow({
   );
 }
 
-export function MissionStreamingPanel() {
+export function MissionStreamingPanel({ className = "" }: { className?: string }) {
   const [status, setStatus] = useState<MissionStreamStatus>(() => emptyMissionStreamStatus("Waiting for Pi stream status."));
   const [pending, setPending] = useState<PendingCommand>(null);
   const [message, setMessage] = useState("");
@@ -165,7 +165,7 @@ export function MissionStreamingPanel() {
   const cameraTone = stale ? "neutral" : status.camera.available ? "ok" : status.camera.available === false ? "bad" : "neutral";
 
   return (
-    <Panel title="Mission Streaming" className="ops-stream-panel">
+    <Panel title="Mission Streaming" className={`ops-stream-panel ${className}`.trim()}>
       <div className="stream-panel-body">
         <div className="stream-row stream-row--camera">
           <div className="stream-row__label">

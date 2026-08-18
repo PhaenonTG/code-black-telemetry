@@ -25,12 +25,14 @@ export function LocationMotionPanel({
   mode,
   internalGpsLabel = "Internal GPS",
   gpsDeniedMessage = "Internal GPS denied. Holding last valid source.",
+  gpsUnavailableMessage = "Internal GPS unavailable. Check location permission.",
 }: {
   tabletPermission: string;
   location: CanonicalLocation;
   mode: CockpitMode;
   internalGpsLabel?: string;
   gpsDeniedMessage?: string;
+  gpsUnavailableMessage?: string;
 }) {
   const valid = location.validity === "VALID" && location.latitude != null && location.longitude != null;
   const source = sourceLabel(location.source, internalGpsLabel);
@@ -64,6 +66,8 @@ export function LocationMotionPanel({
         )}
       </div>
       {tabletPermission === "denied" && <div className="cb-note cb-note--warn">{gpsDeniedMessage}</div>}
+      {(tabletPermission === "unsupported" || tabletPermission === "error") && <div className="cb-note cb-note--warn">{gpsUnavailableMessage}</div>}
+      {tabletPermission === "searching" && !valid && <div className="cb-note">Waiting for {internalGpsLabel.toLowerCase()} fix.</div>}
       {!valid && <div className="cb-note cb-note--warn">{location.fallbackReason}</div>}
     </Panel>
   );

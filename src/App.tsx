@@ -32,12 +32,20 @@ import { useSituationalData } from "./hooks/useSituationalData";
 import { useSpotters } from "./hooks/useSpotters";
 import { useStatus, useWeather, useWind } from "./hooks/useTelemetry";
 import { useDeviceLabels } from "./hooks/useDeviceLabels";
+import { useMissionSession } from "./hooks/useMissionSession";
+import { useLocationTracking } from "./hooks/useLocationTracking";
 import { sourceLabel } from "./services/location";
 import { setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, startCodeBlackSoundPlayer } from "./services/sound";
-import { loadNightVisionEnabled, subscribeNightVisionEnabled } from "./services/settings";
+import { loadAppTheme, subscribeAppTheme, type AppThemeMode } from "./services/settings";
 import { getSpotterAccount, hasSeenSpotterOnboarding, subscribeSpotterAccount, type SpotterAccount } from "./services/spotterAccount";
 import { setTelemetryPaused } from "./services/telemetry";
 import { publishVehicleDisplaySnapshot } from "./services/vehicleDisplay";
+import { getLatestBreadcrumbPoint, recordBreadcrumbFromGps } from "./services/breadcrumbTrail";
+import { recordMarkEvent, recordMarkEventFromBreadcrumb } from "./services/markEvents";
+import { recoverMissionSession } from "./services/missionSession";
+import { setDisplayCockpitMode, startDisplayController } from "./services/displayController";
+import { createEgressContext, summarizeEgressReadiness } from "./services/egress";
+import { locationTrackingService } from "./services/locationTracking";
 
 type PageKey = "weather" | "operations" | "locate" | "alerts" | "report" | "settings" | "layers";
 export type CockpitMode = "normal" | "chase";
@@ -73,16 +81,39 @@ function pathToPage(): PageKey {
   return window.location.pathname === "/system" ? "operations" : "weather";
 }
 
+function chaseStatusParts(locationTracking: ReturnType<typeof useLocationTracking>) {
+  if (locationTracking.active) {
+    const accuracy = locationTracking.latestObservation?.horizontalAccuracyM;
+    return {
+      tone: "active",
+      tracking: "TRACKING ACTIVE",
+      gps: Number.isFinite(accuracy) ? `GPS ${Math.round(accuracy!)} M` : "GPS GOOD",
+    };
+  }
+  if (locationTracking.locationPermission === "denied") {
+    return { tone: "degraded", tracking: "TRACKING DEGRADED", gps: "LOCATION LIMITED" };
+  }
+  if (locationTracking.state === "unavailable" || !locationTracking.backgroundCapable) {
+    return { tone: "degraded", tracking: "BACKGROUND TRACKING OFF", gps: "GPS UNAVAILABLE" };
+  }
+  return { tone: "degraded", tracking: "TRACKING DEGRADED", gps: locationTracking.lastError ? "CHECK SETTINGS" : "GPS WAITING" };
+}
+
 export default function App() {
   const [page, setPage] = useState<PageKey>(() => pathToPage());
   const [cockpitMode, setCockpitMode] = useState<CockpitMode>("chase");
-  const [nightVisionEnabled, setNightVisionEnabled] = useState(false);
+  const [appTheme, setAppTheme] = useState<AppThemeMode>("dark");
+  const [markStatus, setMarkStatus] = useState("");
+  const [escapeStatus, setEscapeStatus] = useState("");
   const [spotterAccount, setSpotterAccount] = useState<SpotterAccount | null>(() => getSpotterAccount());
   // Defaults true (prompt hidden) so there's no flash of the onboarding prompt before the async
   // Preferences read below resolves -- it only flips to false if the user genuinely hasn't seen it.
   const [spotterOnboardingSeen, setSpotterOnboardingSeen] = useState(true);
   const pagerRef = useRef<HTMLDivElement | null>(null);
+  const escapeTimerRef = useRef<number | null>(null);
+  const nativeRecoveryAttemptRef = useRef<string | null>(null);
   const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
+  const missionSession = useMissionSession();
   const deviceLabels = useDeviceLabels();
   const status = useStatus();
   const weather = useWeather();
@@ -104,6 +135,9 @@ export default function App() {
   const nearby = useNearbyPlaces(gpsPoint);
   const poi = useNearbyPoiList(gpsPoint);
   const spotters = useSpotters(gpsPoint);
+  const locationTracking = useLocationTracking();
+  const chaseStatus = chaseStatusParts(locationTracking);
+  const missionSessionId = missionSession?.id ?? null;
   const piState = status?.piOnline ? `ONLINE · ${status.apiLatencyMs} ms` : status?.updatedAt ? `OFFLINE · LAST CHECK ${new Date(status.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "OFFLINE";
   const serviceState = status?.piOnline ? "VIA PI · CHECK DASHBOARD" : "VIA PI · OFFLINE";
   const mapGps = useMemo(
@@ -127,8 +161,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    const unsubscribe = subscribeNightVisionEnabled(setNightVisionEnabled);
-    void loadNightVisionEnabled();
+    const unsubscribe = subscribeAppTheme(setAppTheme);
+    void loadAppTheme();
     return unsubscribe;
   }, []);
 
@@ -154,6 +188,7 @@ export default function App() {
 
   const changeCockpitMode = (mode: CockpitMode) => {
     setCockpitMode(mode);
+    setDisplayCockpitMode(mode);
     void Preferences.set({ key: COCKPIT_MODE_KEY, value: mode });
   };
 
@@ -191,6 +226,97 @@ export default function App() {
   useEffect(() => {
     void publishVehicleDisplaySnapshot({ location: canonicalLocation, weather, wind, external });
   }, [canonicalLocation, weather, wind, external]);
+
+  useEffect(() => {
+    recordBreadcrumbFromGps(mapGps);
+  }, [mapGps]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    void locationTrackingService.syncPendingObservations();
+    const interval = window.setInterval(() => {
+      void locationTrackingService.syncPendingObservations();
+    }, missionSessionId ? 15_000 : 45_000);
+    const handleResume = () => {
+      void locationTrackingService.syncPendingObservations();
+    };
+    window.addEventListener("codeblack:resume", handleResume);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("codeblack:resume", handleResume);
+    };
+  }, [missionSessionId]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || missionSession || !locationTracking.active || !locationTracking.sessionId) return;
+    void recoverMissionSession(locationTracking.sessionId, locationTracking.startedAt || Date.now());
+  }, [missionSession, locationTracking.active, locationTracking.sessionId, locationTracking.startedAt]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !missionSession || locationTracking.active || locationTracking.lastError) return;
+    if (locationTracking.lastServiceEvent === "tracking_stopped") return;
+    if (nativeRecoveryAttemptRef.current === missionSession.id) return;
+    nativeRecoveryAttemptRef.current = missionSession.id;
+    void locationTrackingService.start({ session: missionSession, detailPreset: "balanced", persistent: true });
+  }, [missionSession, locationTracking.active, locationTracking.lastError, locationTracking.lastServiceEvent]);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    void startDisplayController("chase").then((dispose) => {
+      cleanup = dispose;
+    });
+    return () => {
+      cleanup?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    setDisplayCockpitMode(cockpitMode);
+  }, [cockpitMode]);
+
+  useEffect(() => () => cancelEscapeHold(), []);
+
+  const markCurrentPosition = async () => {
+    await locationTrackingService.syncPendingObservations();
+    const latestNativePoint = getLatestBreadcrumbPoint(missionSessionId);
+    const nativeIsFresh = latestNativePoint && Date.now() - latestNativePoint.timestamp < 120_000;
+    const result = locationTracking.active && nativeIsFresh
+      ? await recordMarkEventFromBreadcrumb(latestNativePoint)
+      : await recordMarkEvent(mapGps);
+    if (!result.event) {
+      setMarkStatus("MARK FAILED - NO GPS");
+      window.setTimeout(() => setMarkStatus(""), 1800);
+      return;
+    }
+    setMarkStatus("MARK SAVED");
+    window.setTimeout(() => setMarkStatus(""), 1800);
+  };
+
+  const cancelEscapeHold = () => {
+    if (escapeTimerRef.current == null) return;
+    window.clearTimeout(escapeTimerRef.current);
+    escapeTimerRef.current = null;
+  };
+
+  const armEscapeHold = () => {
+    cancelEscapeHold();
+    setEscapeStatus("HOLD TO ARM ESCAPE");
+    escapeTimerRef.current = window.setTimeout(() => {
+      escapeTimerRef.current = null;
+      const context = createEgressContext({
+        chaseSessionId: missionSessionId,
+        currentPosition: mapGps ? {
+          lat: mapGps.lat,
+          lon: mapGps.lon,
+          headingDeg: mapGps.headingDeg,
+          speedMph: mapGps.speedMph ?? null,
+        } : null,
+      });
+      const readiness = summarizeEgressReadiness(context);
+      setEscapeStatus(readiness.state === "GOOD" ? "ESCAPE CONTEXT READY - ROUTING NOT ACTIVE" : readiness.message.toUpperCase());
+      window.setTimeout(() => setEscapeStatus(""), 2600);
+    }, 850);
+  };
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -265,12 +391,33 @@ export default function App() {
   }, [page]);
 
   return (
-    <div className={nightVisionEnabled ? "app-shell app-shell--night-vision" : "app-shell"}>
+    <div className={`app-shell app-shell--theme-${appTheme} app-shell--page-${page}${missionSession ? " app-shell--mission-active" : ""}`}>
       <SevereFlashOverlay />
+      <button
+        className="escape-button"
+        type="button"
+        onPointerDown={armEscapeHold}
+        onPointerUp={cancelEscapeHold}
+        onPointerLeave={cancelEscapeHold}
+        onPointerCancel={cancelEscapeHold}
+        aria-label="Hold to prepare escape context"
+      >
+        ESCAPE
+      </button>
+      <button className="mark-button" type="button" onClick={() => void markCurrentPosition()} aria-label="Mark current position">MARK</button>
+      {markStatus && <div className="mark-toast" role="status">{markStatus}</div>}
+      {escapeStatus && <div className="escape-toast" role="status">{escapeStatus}</div>}
       {!spotterAccount && !spotterOnboardingSeen && (
         <SpotterOnboardingPrompt onDismiss={() => setSpotterOnboardingSeen(true)} />
       )}
       <TopBar batteryLabel={deviceLabels.battery} />
+      {missionSession && (
+        <div className={`chase-status-strip chase-status-strip--${chaseStatus.tone}`} role="status">
+          <span>CHASE ACTIVE</span>
+          <span>{chaseStatus.tracking}</span>
+          <span>{chaseStatus.gps}</span>
+        </div>
+      )}
       <main className="page-viewport" ref={pagerRef} aria-label="Code Black dashboard pages">
         <section className="page page--weather" aria-label="Situational Awareness">
           <div className="page-grid page-grid--weather">
@@ -280,12 +427,16 @@ export default function App() {
               mode={cockpitMode}
               internalGpsLabel={deviceLabels.gps}
               gpsDeniedMessage={deviceLabels.deniedGps}
+              gpsUnavailableMessage={deviceLabels.unavailableGps}
             />
             <WeatherObservationPanel external={external} mode={cockpitMode} />
             <WindCard external={external} mode={cockpitMode} />
             <AlertsPanel products={alertProducts.products} error={alertProducts.error} />
             <MapRadarPanel gps={mapGps} visible={page === "weather"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} nearbyBest={nearby.places} compact allowExpand={false} />
             <NearbyPanel places={nearby.places} error={nearby.error} spotters={spotters.spotters} spottersError={spotters.error} />
+            <SensorHealthCard className="phone-dashboard-only phone-dashboard-health" />
+            <SystemCard className="phone-dashboard-only phone-dashboard-system" />
+            <MissionStreamingPanel className="phone-dashboard-only phone-dashboard-streaming" />
           </div>
         </section>
         <section className="page page--operations" aria-label="Operations">
@@ -309,7 +460,7 @@ export default function App() {
               <div className="diagnostic-grid">
                 <span>PI API</span><strong>{piState}</strong>
                 <span>Internet</span><strong>{status?.internetOnline ? "AVAILABLE" : "UNAVAILABLE"}</strong>
-                <span>Internal GPS</span><strong>{gps ? `${gps.source === "tablet" ? deviceLabels.gps.toUpperCase() : gps.source.toUpperCase()} · ${gps.accuracyM ? `${Math.round(gps.accuracyM)} m` : "ACTIVE"}` : "WAITING"}</strong>
+                <span>{deviceLabels.gps}</span><strong>{gps ? `${gps.source === "tablet" ? deviceLabels.gps.toUpperCase() : gps.source.toUpperCase()} · ${gps.accuracyM ? `${Math.round(gps.accuracyM)} m` : "ACTIVE"}` : "WAITING"}</strong>
                 <span>UI Mode</span><strong>{cockpitMode.toUpperCase()}</strong>
                 <span>Canonical GPS</span><strong>{canonicalLocation.validity} · {sourceLabel(canonicalLocation.source, deviceLabels.gps)}</strong>
                 <span>Resolved Place</span><strong>{canonicalLocation.resolvedCity ? `${canonicalLocation.resolvedCity}, ${canonicalLocation.resolvedState ?? ""}` : canonicalLocation.fallbackReason}</strong>

@@ -845,6 +845,40 @@ button {
   color: var(--amber);
 }
 
+.chase-status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.45rem, 1.2vw, 0.9rem);
+  min-height: 1.65rem;
+  width: min(92vw, 48rem);
+  margin: -0.2rem auto 0.45rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid rgba(255, 45, 53, 0.42);
+  border-radius: 0.28rem;
+  background: rgba(10, 10, 12, 0.84);
+  color: var(--primary);
+  font: 800 clamp(0.62rem, 1.4vw, 0.78rem) / 1.1 Consolas, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 0 18px rgba(255, 45, 53, 0.14);
+  z-index: 4;
+}
+
+.chase-status-strip span + span {
+  padding-left: clamp(0.45rem, 1.2vw, 0.9rem);
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.chase-status-strip--active span:nth-child(2) {
+  color: #20f07a;
+}
+
+.chase-status-strip--degraded span:nth-child(2),
+.chase-status-strip--degraded span:nth-child(3) {
+  color: var(--amber);
+}
+
 .cb-badge {
   display: inline-flex;
   align-items: center;
@@ -4904,6 +4938,29 @@ body {
   gap: 4px;
 }
 
+.settings-chase-panel .settings-row {
+  align-items: center;
+}
+
+.settings-chase-panel .settings-row > strong {
+  justify-self: end;
+  white-space: nowrap;
+  color: var(--secondary);
+  font: 900 10px / 1.1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.settings-chase-panel .settings-row:has(.settings-segmented),
+.settings-chase-panel .settings-row:has(.mode-toggle) {
+  gap: 10px;
+}
+
+.settings-chase-panel .settings-segmented,
+.settings-chase-panel .mode-toggle {
+  min-width: min(100%, 220px);
+}
+
 .page-grid--settings .settings-lighting-profiles button {
   padding: 4px 8px;
   font-size: 9px;
@@ -8435,4 +8492,549 @@ body {
   .page-grid--operations .diagnostic-grid {
     min-height: 0 !important;
   }
+}
+/* Pass 1 foundations: phone portrait gets a real scroll dashboard instead of a crushed tablet grid.
+   Tablet/landscape rules elsewhere remain the cockpit source of truth. */
+.phone-dashboard-only {
+  display: none !important;
+}
+
+.mark-button {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(var(--dock-h) + max(14px, env(safe-area-inset-bottom)));
+  z-index: calc(var(--z-dock) + 2);
+  min-width: 74px;
+  height: 48px;
+  border: 1px solid rgba(255, 45, 53, 0.82);
+  border-radius: 999px;
+  background: rgba(70, 0, 8, 0.94);
+  color: #fff;
+  box-shadow: 0 0 18px rgba(255, 45, 53, 0.35);
+  font: 900 13px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.12em;
+}
+
+.escape-button {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(var(--dock-h) + max(14px, env(safe-area-inset-bottom)));
+  z-index: calc(var(--z-dock) + 2);
+  min-width: 86px;
+  height: 48px;
+  border: 1px solid rgba(255, 196, 40, 0.86);
+  border-radius: 999px;
+  background: rgba(60, 32, 0, 0.94);
+  color: #ffe08a;
+  box-shadow: 0 0 18px rgba(255, 196, 40, 0.22);
+  font: 900 13px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.1em;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.escape-button:active {
+  background: rgba(92, 47, 0, 0.98);
+  transform: translateY(1px);
+}
+
+.mark-toast {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(var(--dock-h) + 70px + env(safe-area-inset-bottom));
+  z-index: var(--z-toast);
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 45, 53, 0.55);
+  border-radius: 6px;
+  background: rgba(10, 10, 10, 0.94);
+  color: #fff;
+  font: 900 11px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.08em;
+}
+
+.escape-toast {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(var(--dock-h) + 70px + env(safe-area-inset-bottom));
+  z-index: var(--z-toast);
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 196, 40, 0.6);
+  border-radius: 6px;
+  background: rgba(10, 10, 10, 0.94);
+  color: #ffe08a;
+  font: 900 11px / 1.25 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.07em;
+}
+
+.settings-segmented {
+  display: grid;
+  gap: 0.45rem;
+  min-width: min(100%, 320px);
+}
+
+.settings-segmented--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.settings-segmented--four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.settings-segmented button {
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--cb-radius, 6px);
+  background: rgba(255, 255, 255, 0.045);
+  color: #d8dde7;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font: inherit;
+}
+
+.settings-segmented button.active {
+  border-color: rgba(255, 47, 64, 0.75);
+  background: rgba(255, 47, 64, 0.18);
+  color: #ff3044;
+}
+
+.settings-slider {
+  width: min(260px, 100%);
+  accent-color: #ff3044;
+}
+
+.atlas-pin-marker {
+  display: grid;
+  place-items: center;
+  color: #050505;
+  font: 900 10px / 1 "JetBrains Mono", Consolas, monospace;
+  isolation: isolate;
+  outline: 1px solid rgba(255, 255, 255, 0.34);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.35);
+  transform: translateZ(0);
+}
+
+.atlas-pin-marker--team {
+  outline-color: rgba(61, 220, 112, 0.48);
+}
+
+.atlas-pin-marker--chaser {
+  outline-color: rgba(216, 221, 231, 0.42);
+}
+
+.atlas-pin-marker--report,
+.atlas-pin-marker--mark {
+  outline-color: rgba(255, 190, 60, 0.58);
+}
+
+.atlas-pin-marker--probe {
+  outline-color: rgba(66, 209, 255, 0.54);
+}
+
+.atlas-pin-marker--road {
+  outline-color: rgba(255, 126, 48, 0.58);
+}
+
+.atlas-pin-marker--camera {
+  outline-color: rgba(178, 107, 255, 0.52);
+}
+
+.atlas-pin-marker--cluster {
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 999px !important;
+  clip-path: none !important;
+  background-image: none !important;
+}
+
+.atlas-pin-marker--stale {
+  opacity: 0.52;
+  filter: saturate(0.55);
+}
+
+.atlas-pin-marker--stale::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 5px;
+  height: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.75);
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.atlas-layers-popover__row--stub {
+  color: rgba(216, 221, 231, 0.62);
+}
+
+.app-shell {
+  filter: brightness(var(--ops-brightness, 1));
+}
+
+.app-shell--theme-light {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --panel-2: #edf1f5;
+  --border: #c6ccd5;
+  --text: #101317;
+  --muted: #5d6570;
+  --secondary: #303742;
+  background: #f4f6f8;
+  color: var(--text);
+}
+
+.app-shell--theme-light::before {
+  opacity: 0.08;
+  background:
+    linear-gradient(rgba(17, 24, 39, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 24, 39, 0.16) 1px, transparent 1px);
+  background-size: 70px 70px;
+}
+
+.app-shell--theme-light .ops-header {
+  color: #101317;
+  border-color: rgba(209, 47, 58, 0.34);
+  border-bottom-color: rgba(209, 47, 58, 0.58);
+  background:
+    linear-gradient(135deg, rgba(255, 45, 53, 0.12), transparent 18% 82%, rgba(255, 45, 53, 0.07)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(230, 235, 242, 0.98));
+}
+
+.app-shell--theme-light .brand-lockup,
+.app-shell--theme-light .time-module,
+.app-shell--theme-light .gps-strip,
+.app-shell--theme-light .unit-strip {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(230, 235, 242, 0.9));
+  border-color: rgba(16, 19, 23, 0.12);
+}
+
+.app-shell--theme-light .brand-title span,
+.app-shell--theme-light .time-module .font-mono,
+.app-shell--theme-light .header-date,
+.app-shell--theme-light .pi-link,
+.app-shell--theme-light .unit-strip {
+  color: #101317 !important;
+}
+
+.app-shell--theme-light .brand-subtitle,
+.app-shell--theme-light .time-module span:last-child,
+.app-shell--theme-light .unit-strip em {
+  color: #4a5360;
+}
+
+.app-shell--theme-light .cb-panel,
+.app-shell--theme-light .rounded-sm.bg-cb-panel {
+  border-color: rgba(16, 19, 23, 0.15);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(235, 239, 245, 0.98)),
+    var(--panel);
+  box-shadow: 0 14px 34px rgba(16, 24, 40, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.84);
+}
+
+.app-shell--theme-light .cb-panel::before {
+  background:
+    linear-gradient(90deg, rgba(255, 45, 53, 0.16), transparent 18%, transparent 84%, rgba(255, 45, 53, 0.08)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), transparent 28%);
+  opacity: 0.72;
+}
+
+.app-shell--theme-light .cb-panel__title,
+.app-shell--theme-light .rounded-sm.bg-cb-panel > div:first-child {
+  color: #303742;
+  border-bottom-color: rgba(16, 19, 23, 0.12);
+  background: linear-gradient(90deg, rgba(255, 45, 53, 0.13), rgba(16, 24, 40, 0.04) 45%, transparent);
+}
+
+.app-shell--theme-light .bottom-dock {
+  background: rgba(246, 248, 251, 0.96);
+  border-color: rgba(16, 19, 23, 0.16);
+}
+
+.app-shell--theme-light .bottom-dock button {
+  color: #303742;
+  border-color: rgba(16, 19, 23, 0.16);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.app-shell--theme-light .bottom-dock button.active {
+  color: #d11f2e;
+  border-color: rgba(209, 31, 46, 0.75);
+  background: rgba(255, 45, 53, 0.1);
+}
+
+.app-shell--theme-night {
+  --bg: #020202;
+  --panel: #080808;
+  --panel-2: #111;
+  --border: rgba(255, 45, 53, 0.28);
+  --text: #f2f2f2;
+  --muted: #8f8488;
+  --secondary: #c7b8bd;
+  --red: #ff3044;
+  background: #020202;
+}
+
+.app-shell--theme-night .cb-panel,
+.app-shell--theme-night .bottom-dock,
+.app-shell--theme-night .ops-header {
+  background-color: rgba(5, 5, 5, 0.96) !important;
+  border-color: rgba(255, 45, 53, 0.22) !important;
+}
+
+.app-shell--theme-night .cb-panel__title {
+  background: linear-gradient(90deg, rgba(255, 45, 53, 0.18), rgba(255, 255, 255, 0.035)) !important;
+}
+
+@media (prefers-color-scheme: light) {
+  .app-shell--theme-system {
+    --bg: #f4f6f8;
+    --panel: #ffffff;
+    --panel-2: #edf1f5;
+    --border: #c6ccd5;
+    --text: #101317;
+    --muted: #5d6570;
+    --secondary: #303742;
+    background: #f4f6f8;
+    color: var(--text);
+  }
+}
+
+.app-shell--theme-light .ops-header {
+  color: #101317 !important;
+  border-color: rgba(209, 47, 58, 0.34) !important;
+  border-bottom-color: rgba(209, 47, 58, 0.58) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 45, 53, 0.12), transparent 18% 82%, rgba(255, 45, 53, 0.07)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(230, 235, 242, 0.98)) !important;
+}
+
+.app-shell--theme-light .brand-lockup,
+.app-shell--theme-light .time-module,
+.app-shell--theme-light .gps-strip,
+.app-shell--theme-light .unit-strip {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(230, 235, 242, 0.9)) !important;
+  border-color: rgba(16, 19, 23, 0.12) !important;
+}
+
+.app-shell--theme-light .brand-title span,
+.app-shell--theme-light .time-module .font-mono,
+.app-shell--theme-light .header-date,
+.app-shell--theme-light .pi-link,
+.app-shell--theme-light .unit-strip {
+  color: #101317 !important;
+}
+
+.app-shell--theme-light .brand-subtitle,
+.app-shell--theme-light .time-module span:last-child,
+.app-shell--theme-light .unit-strip em {
+  color: #4a5360 !important;
+}
+
+.app-shell--theme-light .settings-segmented button,
+.app-shell--theme-light .settings-action,
+.app-shell--theme-light .bottom-dock button {
+  color: #303742 !important;
+  border-color: rgba(16, 19, 23, 0.22) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+}
+
+.app-shell--theme-light .settings-segmented button.active,
+.app-shell--theme-light .bottom-dock button.active {
+  color: #d11f2e !important;
+  border-color: rgba(209, 31, 46, 0.75) !important;
+  background: rgba(255, 45, 53, 0.12) !important;
+}
+
+@media (orientation: portrait) and (max-width: 700px) {
+  :root {
+    --dock-h: calc(56px + env(safe-area-inset-bottom));
+  }
+
+  .page.page--weather {
+    overflow-y: auto !important;
+    padding: 8px 10px calc(var(--dock-h) + 18px) !important;
+  }
+
+  .page-grid--weather {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    grid-template: none !important;
+  }
+
+  .page-grid--weather > .cb-panel {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    width: 100% !important;
+  }
+
+  .page-grid--weather .alerts-panel { order: 1; min-height: 176px !important; }
+  .page-grid--weather .map-panel {
+    order: 2;
+    height: min(72dvh, 420px) !important;
+    min-height: min(72dvh, 420px) !important;
+  }
+  .page-grid--weather .loc-panel { order: 3; min-height: 210px !important; }
+  .page-grid--weather .wx-panel { order: 4; min-height: 205px !important; }
+  .page-grid--weather .wind-panel { order: 5; min-height: 165px !important; }
+  .page-grid--weather .nearby-panel { order: 6; min-height: 160px !important; }
+  .page-grid--weather .phone-dashboard-health { order: 7; }
+  .page-grid--weather .phone-dashboard-streaming { order: 8; }
+  .page-grid--weather .phone-dashboard-system { order: 9; }
+
+  .phone-dashboard-only {
+    display: flex !important;
+  }
+
+  .mark-button {
+    right: 10px;
+    bottom: calc(var(--dock-h) + 10px);
+    min-width: 66px;
+    height: 42px;
+    font-size: 12px;
+  }
+
+  .app-shell--page-locate .mark-button {
+    bottom: calc(var(--dock-h) + 132px);
+  }
+
+  .escape-button {
+    left: 10px;
+    bottom: calc(var(--dock-h) + 10px);
+    min-width: 76px;
+    height: 42px;
+    font-size: 11px;
+  }
+
+  .app-shell--page-locate .escape-button {
+    bottom: calc(var(--dock-h) + 132px);
+  }
+
+  .mark-toast {
+    right: 10px;
+    bottom: calc(var(--dock-h) + 58px);
+  }
+
+  .escape-toast {
+    left: 10px;
+    bottom: calc(var(--dock-h) + 58px);
+    max-width: calc(100vw - 20px);
+  }
+
+  .app-shell--page-settings .mark-button,
+  .app-shell--page-settings .escape-button {
+    display: none;
+  }
+
+  .settings-segmented--four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-grid--settings {
+    display: flex !important;
+    flex-direction: column !important;
+    align-content: stretch !important;
+    overflow-y: auto !important;
+    padding-bottom: calc(var(--dock-h) + 18px) !important;
+  }
+
+  .page-grid--settings .settings-light-panels,
+  .page-grid--settings .settings-heavy-panels {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+  }
+
+  .page-grid--settings .settings-heavy-panels {
+    padding-bottom: calc(var(--dock-h) + 20px) !important;
+  }
+
+  .page-grid--settings .settings-team-panel,
+  .page-grid--settings .settings-lighting-panel,
+  .page-grid--settings .settings-chase-panel {
+    overflow: visible !important;
+  }
+
+  .page-grid--settings .settings-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 12px 0 !important;
+  }
+
+  .page-grid--settings .settings-row > div:first-child {
+    width: 100% !important;
+  }
+
+  .page-grid--settings .settings-row strong,
+  .page-grid--settings .settings-row span,
+  .page-grid--settings .settings-row em {
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    white-space: normal !important;
+  }
+
+  .page-grid--settings .settings-segmented,
+  .page-grid--settings .mode-toggle,
+  .page-grid--settings .settings-slider,
+  .page-grid--settings .settings-action {
+    justify-self: stretch !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .settings-chase-panel .settings-row {
+    gap: 9px !important;
+    padding: 10px 0 !important;
+  }
+
+  .settings-chase-panel .settings-row > strong {
+    justify-self: start !important;
+    width: auto !important;
+    padding: 5px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .settings-chase-panel .settings-row span {
+    max-width: 52ch;
+  }
+
+  .settings-chase-panel .settings-segmented,
+  .settings-chase-panel .mode-toggle {
+    display: grid !important;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    min-width: 0 !important;
+  }
+
+  .settings-chase-panel .settings-segmented button,
+  .settings-chase-panel .mode-toggle button {
+    min-height: 36px;
+    white-space: normal;
+  }
+}
+
+/* Chase status strip participates in the shell layout. Without an explicit row, the strip can
+   consume the main content row and push Settings/Radar content below the viewport after resume. */
+.app-shell {
+  grid-template-rows: var(--top-h) minmax(0, 1fr) var(--dots-h) var(--dock-h) !important;
+}
+
+.app-shell--mission-active {
+  grid-template-rows: var(--top-h) auto minmax(0, 1fr) var(--dots-h) var(--dock-h) !important;
+}
+
+.app-shell--mission-active .page-viewport {
+  min-height: 0 !important;
+}
+
+.app-shell--mission-active .page:not(.page--weather),
+.app-shell--mission-active .page-grid--settings {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
 }

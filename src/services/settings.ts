@@ -327,18 +327,85 @@ export function subscribeBleCommandToken(listener: (token: string) => void) {
 }
 
 const NIGHT_VISION_KEY = "codeblack.nightVisionEnabled";
+const APP_THEME_KEY = "codeblack.appTheme";
+const CLOCK_MODE_KEY = "codeblack.clockMode";
+const DISPLAY_SETTINGS_KEY = "codeblack.displaySettings";
+const CHASE_TRACKING_SETTINGS_KEY = "codeblack.chaseTrackingSettings";
 let currentNightVisionEnabled = false;
 const nightVisionListeners = new Set<(enabled: boolean) => void>();
+export type AppThemeMode = "dark" | "light" | "night" | "system";
+export type ClockMode = "local" | "central" | "zulu";
+export type DisplayWakeMode = "normal" | "keep-awake-dim" | "keep-awake-bright";
+export type TrackingDetailPreset = "battery-saver" | "balanced" | "high-detail";
+
+export interface DisplaySettings {
+  wakeMode: DisplayWakeMode;
+  opsBrightness: number;
+  autoEnableDuringChase: boolean;
+}
+
+export interface ChaseTrackingSettings {
+  persistentTrackingEnabled: boolean;
+  detailPreset: TrackingDetailPreset;
+}
+
+export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
+  wakeMode: "normal",
+  opsBrightness: 0.85,
+  autoEnableDuringChase: false,
+};
+
+export const DEFAULT_CHASE_TRACKING_SETTINGS: ChaseTrackingSettings = {
+  persistentTrackingEnabled: true,
+  detailPreset: "balanced",
+};
+
+let currentAppTheme: AppThemeMode = "dark";
+let currentClockMode: ClockMode = "local";
+let currentDisplaySettings: DisplaySettings = DEFAULT_DISPLAY_SETTINGS;
+let currentChaseTrackingSettings: ChaseTrackingSettings = DEFAULT_CHASE_TRACKING_SETTINGS;
+const appThemeListeners = new Set<(mode: AppThemeMode) => void>();
+const clockModeListeners = new Set<(mode: ClockMode) => void>();
+const displaySettingsListeners = new Set<(settings: DisplaySettings) => void>();
+const chaseTrackingSettingsListeners = new Set<(settings: ChaseTrackingSettings) => void>();
+
+function normalizeTheme(value: string | null | undefined): AppThemeMode {
+  return value === "light" || value === "night" || value === "system" || value === "dark" ? value : "dark";
+}
+
+function normalizeClockMode(value: string | null | undefined): ClockMode {
+  return value === "central" || value === "zulu" || value === "local" ? value : "local";
+}
+
+function normalizeDisplaySettings(value: unknown): DisplaySettings {
+  const source = value && typeof value === "object" ? value as Partial<DisplaySettings> : {};
+  const wakeMode = source.wakeMode === "keep-awake-dim" || source.wakeMode === "keep-awake-bright" || source.wakeMode === "normal" ? source.wakeMode : DEFAULT_DISPLAY_SETTINGS.wakeMode;
+  const brightness = typeof source.opsBrightness === "number" && Number.isFinite(source.opsBrightness) ? source.opsBrightness : DEFAULT_DISPLAY_SETTINGS.opsBrightness;
+  return {
+    wakeMode,
+    opsBrightness: Math.min(1, Math.max(0.15, brightness)),
+    autoEnableDuringChase: typeof source.autoEnableDuringChase === "boolean" ? source.autoEnableDuringChase : DEFAULT_DISPLAY_SETTINGS.autoEnableDuringChase,
+  };
+}
+
+function normalizeChaseTrackingSettings(value: unknown): ChaseTrackingSettings {
+  const source = value && typeof value === "object" ? value as Partial<ChaseTrackingSettings> : {};
+  const detailPreset = source.detailPreset === "battery-saver" || source.detailPreset === "high-detail" ? source.detailPreset : DEFAULT_CHASE_TRACKING_SETTINGS.detailPreset;
+  return {
+    persistentTrackingEnabled: source.persistentTrackingEnabled !== false,
+    detailPreset,
+  };
+}
 
 export async function loadNightVisionEnabled() {
-  const saved = await Preferences.get({ key: NIGHT_VISION_KEY });
-  currentNightVisionEnabled = saved.value === "true";
+  await loadAppTheme();
+  currentNightVisionEnabled = currentAppTheme === "night";
   nightVisionListeners.forEach((listener) => listener(currentNightVisionEnabled));
   return currentNightVisionEnabled;
 }
 
 export async function saveNightVisionEnabled(enabled: boolean) {
-  currentNightVisionEnabled = enabled;
+  await saveAppTheme(enabled ? "night" : "dark");
   await Preferences.set({ key: NIGHT_VISION_KEY, value: String(enabled) });
   nightVisionListeners.forEach((listener) => listener(currentNightVisionEnabled));
   return currentNightVisionEnabled;
@@ -474,10 +541,26 @@ export interface MapLayerVisibility {
   chasers: boolean;
   poi: boolean;
   mosaic: boolean;
+  roadConditions: boolean;
+  trafficCameras: boolean;
+  probes: boolean;
+  chaserNet: boolean;
+  breadcrumbs: boolean;
 }
 
 const MAP_LAYER_VISIBILITY_KEY = "codeblack.mapLayerVisibility";
-const DEFAULT_MAP_LAYER_VISIBILITY: MapLayerVisibility = { alerts: true, team: true, chasers: true, poi: true, mosaic: true };
+const DEFAULT_MAP_LAYER_VISIBILITY: MapLayerVisibility = {
+  alerts: true,
+  team: true,
+  chasers: true,
+  poi: true,
+  mosaic: true,
+  roadConditions: false,
+  trafficCameras: false,
+  probes: false,
+  chaserNet: false,
+  breadcrumbs: true,
+};
 
 // Was local per-AtlasMap-instance state (the Weather page's compact map and the Locate page's full
 // map each kept their own independent copy) until the full-page Layer Config screen needed to
@@ -519,5 +602,113 @@ export function subscribeMapLayerVisibility(listener: (visibility: MapLayerVisib
   listener(currentMapLayerVisibility);
   return () => {
     mapLayerVisibilityListeners.delete(listener);
+  };
+}
+
+export async function loadAppTheme() {
+  const [themeSaved, legacyNight] = await Promise.all([
+    Preferences.get({ key: APP_THEME_KEY }),
+    Preferences.get({ key: NIGHT_VISION_KEY }),
+  ]);
+  currentAppTheme = themeSaved.value ? normalizeTheme(themeSaved.value) : legacyNight.value === "true" ? "night" : "dark";
+  currentNightVisionEnabled = currentAppTheme === "night";
+  appThemeListeners.forEach((listener) => listener(currentAppTheme));
+  nightVisionListeners.forEach((listener) => listener(currentNightVisionEnabled));
+  return currentAppTheme;
+}
+
+export async function saveAppTheme(mode: AppThemeMode) {
+  currentAppTheme = normalizeTheme(mode);
+  currentNightVisionEnabled = currentAppTheme === "night";
+  await Preferences.set({ key: APP_THEME_KEY, value: currentAppTheme });
+  await Preferences.set({ key: NIGHT_VISION_KEY, value: String(currentNightVisionEnabled) });
+  appThemeListeners.forEach((listener) => listener(currentAppTheme));
+  nightVisionListeners.forEach((listener) => listener(currentNightVisionEnabled));
+  return currentAppTheme;
+}
+
+export function getAppTheme() {
+  return currentAppTheme;
+}
+
+export function subscribeAppTheme(listener: (mode: AppThemeMode) => void) {
+  appThemeListeners.add(listener);
+  listener(currentAppTheme);
+  return () => {
+    appThemeListeners.delete(listener);
+  };
+}
+
+export async function loadClockMode() {
+  const saved = await Preferences.get({ key: CLOCK_MODE_KEY });
+  currentClockMode = normalizeClockMode(saved.value);
+  clockModeListeners.forEach((listener) => listener(currentClockMode));
+  return currentClockMode;
+}
+
+export async function saveClockMode(mode: ClockMode) {
+  currentClockMode = normalizeClockMode(mode);
+  await Preferences.set({ key: CLOCK_MODE_KEY, value: currentClockMode });
+  clockModeListeners.forEach((listener) => listener(currentClockMode));
+  return currentClockMode;
+}
+
+export function subscribeClockMode(listener: (mode: ClockMode) => void) {
+  clockModeListeners.add(listener);
+  listener(currentClockMode);
+  return () => {
+    clockModeListeners.delete(listener);
+  };
+}
+
+export async function loadDisplaySettings() {
+  const saved = await Preferences.get({ key: DISPLAY_SETTINGS_KEY });
+  try {
+    currentDisplaySettings = normalizeDisplaySettings(saved.value ? JSON.parse(saved.value) : DEFAULT_DISPLAY_SETTINGS);
+  } catch {
+    currentDisplaySettings = DEFAULT_DISPLAY_SETTINGS;
+  }
+  displaySettingsListeners.forEach((listener) => listener(currentDisplaySettings));
+  return currentDisplaySettings;
+}
+
+export async function saveDisplaySettings(settings: DisplaySettings) {
+  currentDisplaySettings = normalizeDisplaySettings(settings);
+  await Preferences.set({ key: DISPLAY_SETTINGS_KEY, value: JSON.stringify(currentDisplaySettings) });
+  displaySettingsListeners.forEach((listener) => listener(currentDisplaySettings));
+  return currentDisplaySettings;
+}
+
+export function subscribeDisplaySettings(listener: (settings: DisplaySettings) => void) {
+  displaySettingsListeners.add(listener);
+  listener(currentDisplaySettings);
+  return () => {
+    displaySettingsListeners.delete(listener);
+  };
+}
+
+export async function loadChaseTrackingSettings() {
+  const saved = await Preferences.get({ key: CHASE_TRACKING_SETTINGS_KEY });
+  try {
+    currentChaseTrackingSettings = normalizeChaseTrackingSettings(saved.value ? JSON.parse(saved.value) : DEFAULT_CHASE_TRACKING_SETTINGS);
+  } catch {
+    currentChaseTrackingSettings = DEFAULT_CHASE_TRACKING_SETTINGS;
+  }
+  chaseTrackingSettingsListeners.forEach((listener) => listener(currentChaseTrackingSettings));
+  return currentChaseTrackingSettings;
+}
+
+export async function saveChaseTrackingSettings(settings: ChaseTrackingSettings) {
+  currentChaseTrackingSettings = normalizeChaseTrackingSettings(settings);
+  await Preferences.set({ key: CHASE_TRACKING_SETTINGS_KEY, value: JSON.stringify(currentChaseTrackingSettings) });
+  chaseTrackingSettingsListeners.forEach((listener) => listener(currentChaseTrackingSettings));
+  return currentChaseTrackingSettings;
+}
+
+export function subscribeChaseTrackingSettings(listener: (settings: ChaseTrackingSettings) => void) {
+  chaseTrackingSettingsListeners.add(listener);
+  listener(currentChaseTrackingSettings);
+  return () => {
+    chaseTrackingSettingsListeners.delete(listener);
   };
 }

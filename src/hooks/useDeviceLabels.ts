@@ -8,6 +8,7 @@ export interface DeviceLabels {
   standaloneNote: string;
   battery: string;
   deniedGps: string;
+  unavailableGps: string;
 }
 
 const DEFAULT_DEVICE_LABELS: DeviceLabels = {
@@ -17,10 +18,20 @@ const DEFAULT_DEVICE_LABELS: DeviceLabels = {
   standaloneNote: "Not configured - running from this device.",
   battery: "Device battery",
   deniedGps: "Internal GPS denied. Holding last valid source.",
+  unavailableGps: "Internal GPS unavailable. Check location permission.",
 };
 
 function titleCase(value: string) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : "";
+}
+
+function webDeviceLabel(userAgent: string) {
+  const ua = userAgent.toLowerCase();
+  if (/iphone|ipod/.test(ua)) return "iPhone";
+  if (/ipad/.test(ua)) return "iPad";
+  if (/android/.test(ua)) return /sm-|samsung|galaxy/.test(ua) ? "Galaxy" : "Android Device";
+  if (/windows|macintosh|linux|cros/.test(ua)) return "Laptop";
+  return "Browser";
 }
 
 export function labelsFromDeviceInfo(info: Partial<DeviceInfo> | null | undefined): DeviceLabels {
@@ -42,7 +53,7 @@ export function labelsFromDeviceInfo(info: Partial<DeviceInfo> | null | undefine
       device = titleCase(manufacturer) || "Android Device";
     }
   } else if (platform === "web") {
-    device = "Browser";
+    device = webDeviceLabel(model || (typeof navigator !== "undefined" ? navigator.userAgent : ""));
   }
 
   const gps = device === "Browser" || device === "Device" ? "Internal GPS" : `${device} GPS`;
@@ -53,6 +64,7 @@ export function labelsFromDeviceInfo(info: Partial<DeviceInfo> | null | undefine
     standaloneNote: `Not configured - running from this ${device.toLowerCase()}.`,
     battery: `${device} battery`,
     deniedGps: `${gps} denied. Holding last valid source.`,
+    unavailableGps: `${gps} unavailable. Check browser/system location permission.`,
   };
 }
 

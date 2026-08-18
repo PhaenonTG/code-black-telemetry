@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import codeblackShield from "../../assets/codeblack-shield.png";
 import { useStatus } from "../../hooks/useTelemetry";
 import { useBattery } from "../../hooks/useBattery";
+import { formatOpsClock } from "../../services/clock";
+import { loadClockMode, subscribeClockMode, type ClockMode } from "../../services/settings";
 import "./TopBar.css";
 
 function batteryState(level: number): "good" | "warn" | "bad" {
@@ -53,8 +55,25 @@ export function TopBar({ batteryLabel = "Device battery" }: { batteryLabel?: str
   const status = useStatus();
   const battery = useBattery();
   const now = useNow();
+  const [clockMode, setClockMode] = useState<ClockMode>("local");
   const linkState = piLinkState(status?.piOnline, status?.apiLatencyMs);
   const dateLabel = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
+  const clock = formatOpsClock(now, clockMode);
+
+  useEffect(() => {
+    const unsubscribe = subscribeClockMode(setClockMode);
+    void loadClockMode();
+    const refresh = () => void loadClockMode();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    window.addEventListener("codeblack:resume", refresh);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      window.removeEventListener("codeblack:resume", refresh);
+    };
+  }, []);
 
   return (
     <header className="ops-header">
@@ -71,9 +90,9 @@ export function TopBar({ batteryLabel = "Device battery" }: { batteryLabel?: str
 
       <div className="time-module">
         <span className="font-mono text-sm tabular-nums text-white">
-          {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+          {clock.time}
         </span>
-        <span>Local Time</span>
+        <span>{clock.label} Time · {clock.zone}</span>
       </div>
 
       <div className="header-status">
