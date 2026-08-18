@@ -28,6 +28,30 @@ let currentReportFeedRetentionHours = DEFAULT_REPORT_FEED_RETENTION_HOURS;
 const reportFeedRadiusListeners = new Set<(radiusMiles: number) => void>();
 const reportFeedRetentionListeners = new Set<(hours: number) => void>();
 
+export type ChaserNetPresenceVisibility = "hidden" | "team-only" | "trusted-network" | "delayed";
+
+export interface ChaserNetPresenceSettings {
+  sharePresence: boolean;
+  locationVisibility: ChaserNetPresenceVisibility;
+  preciseLocationAllowed: boolean;
+  shareSpeed: boolean;
+  shareHeading: boolean;
+  delayMinutes: number;
+}
+
+const CHASER_NET_PRESENCE_SETTINGS_KEY = "codeblack.chaserNetPresenceSettings";
+export const DEFAULT_CHASER_NET_PRESENCE_SETTINGS: ChaserNetPresenceSettings = {
+  sharePresence: false,
+  locationVisibility: "hidden",
+  preciseLocationAllowed: false,
+  shareSpeed: false,
+  shareHeading: false,
+  delayMinutes: 15,
+};
+
+let currentChaserNetPresenceSettings = DEFAULT_CHASER_NET_PRESENCE_SETTINGS;
+const chaserNetPresenceSettingsListeners = new Set<(settings: ChaserNetPresenceSettings) => void>();
+
 function clampChaserRadius(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_CHASER_RADIUS_MILES;
   return Math.min(MAX_CHASER_RADIUS_MILES, Math.max(MIN_CHASER_RADIUS_MILES, Math.round(value)));
@@ -65,6 +89,58 @@ function clampReportFeedRadius(value: number) {
 function clampReportFeedRetention(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_REPORT_FEED_RETENTION_HOURS;
   return Math.min(MAX_REPORT_FEED_RETENTION_HOURS, Math.max(MIN_REPORT_FEED_RETENTION_HOURS, Math.round(value)));
+}
+
+function normalizeChaserNetPresenceSettings(input: Partial<ChaserNetPresenceSettings>): ChaserNetPresenceSettings {
+  const locationVisibility = ["hidden", "team-only", "trusted-network", "delayed"].includes(String(input.locationVisibility))
+    ? input.locationVisibility as ChaserNetPresenceVisibility
+    : DEFAULT_CHASER_NET_PRESENCE_SETTINGS.locationVisibility;
+  const preciseLocationAllowed = Boolean(input.preciseLocationAllowed) && locationVisibility !== "hidden";
+  const delayMinutes = Number.isFinite(input.delayMinutes)
+    ? Math.max(1, Math.min(120, Math.round(Number(input.delayMinutes))))
+    : DEFAULT_CHASER_NET_PRESENCE_SETTINGS.delayMinutes;
+  return {
+    sharePresence: Boolean(input.sharePresence),
+    locationVisibility,
+    preciseLocationAllowed,
+    shareSpeed: Boolean(input.shareSpeed) && preciseLocationAllowed,
+    shareHeading: Boolean(input.shareHeading) && preciseLocationAllowed,
+    delayMinutes,
+  };
+}
+
+export async function loadChaserNetPresenceSettings() {
+  const saved = await Preferences.get({ key: CHASER_NET_PRESENCE_SETTINGS_KEY });
+  if (saved.value) {
+    try {
+      currentChaserNetPresenceSettings = normalizeChaserNetPresenceSettings(JSON.parse(saved.value) as Partial<ChaserNetPresenceSettings>);
+    } catch {
+      currentChaserNetPresenceSettings = DEFAULT_CHASER_NET_PRESENCE_SETTINGS;
+    }
+  } else {
+    currentChaserNetPresenceSettings = DEFAULT_CHASER_NET_PRESENCE_SETTINGS;
+  }
+  chaserNetPresenceSettingsListeners.forEach((listener) => listener(currentChaserNetPresenceSettings));
+  return currentChaserNetPresenceSettings;
+}
+
+export async function saveChaserNetPresenceSettings(settings: Partial<ChaserNetPresenceSettings>) {
+  currentChaserNetPresenceSettings = normalizeChaserNetPresenceSettings({ ...currentChaserNetPresenceSettings, ...settings });
+  await Preferences.set({ key: CHASER_NET_PRESENCE_SETTINGS_KEY, value: JSON.stringify(currentChaserNetPresenceSettings) });
+  chaserNetPresenceSettingsListeners.forEach((listener) => listener(currentChaserNetPresenceSettings));
+  return currentChaserNetPresenceSettings;
+}
+
+export function getChaserNetPresenceSettings() {
+  return currentChaserNetPresenceSettings;
+}
+
+export function subscribeChaserNetPresenceSettings(listener: (settings: ChaserNetPresenceSettings) => void) {
+  chaserNetPresenceSettingsListeners.add(listener);
+  listener(currentChaserNetPresenceSettings);
+  return () => {
+    chaserNetPresenceSettingsListeners.delete(listener);
+  };
 }
 
 export async function loadReportFeedRadiusMiles() {

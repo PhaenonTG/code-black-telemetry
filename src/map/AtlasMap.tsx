@@ -8,6 +8,7 @@ import type { NearbyCategory, NearbyPlace } from "../services/nearby";
 import { resolveTeamPositions } from "../services/teamPositions";
 import { clearBreadcrumbTrail } from "../services/breadcrumbTrail";
 import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
+import { getChaserNetMembersForViewport, getChaserNetReportsForViewport, type ChaserNetMapMember, type ChaserNetReport } from "../services/chaserNet";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
 import { useTeamRoster } from "../hooks/useTeamRoster";
 import { useCustomPoiPins } from "../hooks/useCustomPoiPins";
@@ -16,6 +17,7 @@ import { applyAtlasCamera, zoomForSpeed } from "./AtlasCameraController";
 import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstances, incrementAtlasCounter, incrementAtlasMapInstances, writeAtlasDiagnostics } from "./AtlasDiagnostics";
 import { updateAtlasAlertsLayer } from "./AtlasAlertsLayer";
 import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
+import { chaserNetReportToMapPoint, updateAtlasChaserNetLayer, updateAtlasChaserNetReportLayer } from "./AtlasChaserNetLayer";
 import { startAtlasMosaicLayer } from "./AtlasMosaicLayer";
 import { updateAtlasPoiLayer } from "./AtlasPoiLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
@@ -25,7 +27,7 @@ import { updateAtlasTeamLayer } from "./AtlasTeamLayer";
 import { updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import { updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRangeRingMode } from "./types";
-import { clusterViewportPoints, filterViewportPoints, viewportFromMap, type MapViewport } from "./viewport";
+import { clusterViewportPoints, filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewport } from "./viewport";
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
@@ -178,6 +180,8 @@ export function AtlasMap({
   const mosaicVisibleRef = useRef(mosaicVisible);
   mosaicVisibleRef.current = mosaicVisible;
   const [watches, setWatches] = useState<WatchPolygon[]>([]);
+  const [chaserNetMembers, setChaserNetMembers] = useState<ChaserNetMapMember[]>([]);
+  const [chaserNetReports, setChaserNetReports] = useState<ChaserNetReport[]>([]);
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
   const [viewport, setViewport] = useState<MapViewport | null>(null);
   const roster = useTeamRoster();
@@ -207,8 +211,11 @@ export function AtlasMap({
   const visibleTeamPositions = useMemo(() => (viewport ? filterViewportPoints(teamPositions, viewport) : teamPositions), [teamPositions, viewport]);
   const visibleChaserSpotters = useMemo(() => (viewport ? filterViewportPoints(chaserSpotters, viewport) : chaserSpotters), [chaserSpotters, viewport]);
   const visiblePoiPlaces = useMemo(() => (viewport ? filterViewportPoints(poiPlaces, viewport) : poiPlaces), [poiPlaces, viewport]);
+  const chaserNetReportPoints = useMemo(() => chaserNetReports.map(chaserNetReportToMapPoint), [chaserNetReports]);
   const clusteredTeamPositions = useMemo(() => (viewport ? clusterViewportPoints(visibleTeamPositions, viewport) : visibleTeamPositions), [visibleTeamPositions, viewport]);
   const clusteredChaserSpotters = useMemo(() => (viewport ? clusterViewportPoints(visibleChaserSpotters, viewport) : visibleChaserSpotters), [visibleChaserSpotters, viewport]);
+  const clusteredChaserNetMembers = useMemo(() => (viewport ? clusterViewportPoints(chaserNetMembers, viewport) : chaserNetMembers), [chaserNetMembers, viewport]);
+  const clusteredChaserNetReports = useMemo(() => (viewport ? clusterViewportPoints(chaserNetReportPoints, viewport) : chaserNetReportPoints), [chaserNetReportPoints, viewport]);
 
   latestRef.current = { gps, rangeRings, expanded };
 
@@ -601,6 +608,34 @@ export function AtlasMap({
     if (!map || !loaded) return;
     updateAtlasPoiLayer(map, visiblePoiPlaces, nearbyBest, customPoiPins, poiVisible);
   }, [visiblePoiPlaces, nearbyBest, customPoiPins, poiVisible, loaded]);
+
+  useEffect(() => {
+    if (!viewport || !chaserNetVisible) {
+      setChaserNetMembers([]);
+      setChaserNetReports([]);
+      return;
+    }
+    let cancelled = false;
+    const context = { viewport, detail: zoomDetailLevel(viewport.zoom), sessionId: null };
+    void Promise.all([
+      getChaserNetMembersForViewport(context),
+      getChaserNetReportsForViewport(context),
+    ]).then(([members, reports]) => {
+      if (cancelled) return;
+      setChaserNetMembers(members.data);
+      setChaserNetReports(reports.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewport, chaserNetVisible]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    updateAtlasChaserNetLayer(map, clusteredChaserNetMembers, chaserPinStyle, chaserNetVisible);
+    updateAtlasChaserNetReportLayer(map, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible);
+  }, [clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
 
 
   useEffect(() => {

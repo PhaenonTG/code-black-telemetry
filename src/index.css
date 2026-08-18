@@ -5615,11 +5615,126 @@ body {
 
 .page-grid--layers {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, auto) minmax(0, auto);
+  align-content: start;
+  overflow-y: auto;
 }
 
 .layer-config-panel {
-  overflow-y: auto;
+  overflow: visible;
+}
+
+.chaser-net-panel {
+  overflow: visible;
+}
+
+.chaser-net-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.chaser-net-card {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.chaser-net-card span,
+.chaser-net-contract span {
+  display: block;
+  color: var(--muted);
+  font: 800 10px / 1.25 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chaser-net-card strong {
+  display: block;
+  margin: 6px 0 4px;
+  color: var(--text);
+  font: 900 15px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.chaser-net-card em {
+  display: block;
+  color: var(--secondary);
+  font: 700 11px / 1.25 Inter, sans-serif;
+  font-style: normal;
+}
+
+.chaser-net-card--status strong {
+  color: var(--amber);
+}
+
+.chaser-net-privacy-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.chaser-net-privacy-options button {
+  min-height: 64px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--secondary);
+  text-align: left;
+}
+
+.chaser-net-privacy-options button.active {
+  border-color: rgba(255, 45, 53, 0.7);
+  background: rgba(255, 45, 53, 0.14);
+}
+
+.chaser-net-privacy-options strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text);
+  font: 900 11px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chaser-net-privacy-options span {
+  display: block;
+  color: var(--muted);
+  font: 700 10px / 1.2 Inter, sans-serif;
+}
+
+.chaser-net-contract {
+  display: grid;
+  gap: 6px;
+  margin: 0 14px 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 190, 60, 0.18);
+  border-radius: 7px;
+  background: rgba(255, 190, 60, 0.055);
+}
+
+.chaser-net-contract strong {
+  color: var(--amber);
+  font: 900 11px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+  .chaser-net-grid,
+  .chaser-net-privacy-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chaser-net-card strong {
+    font-size: 13px;
+  }
 }
 
 .report-page-panel {

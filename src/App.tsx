@@ -21,6 +21,7 @@ import {
 } from "./components/situational/Panels";
 import { ReportPage } from "./components/situational/ReportPage";
 import { LayerConfigPage } from "./components/situational/LayerConfigPage";
+import { ChaserNetPanel } from "./components/situational/ChaserNetPanel";
 import { SevereFlashOverlay } from "./components/SevereFlashOverlay";
 import { SpotterOnboardingPrompt } from "./components/SpotterOnboardingPrompt";
 import { WindCard } from "./components/situational/WindCard";
@@ -254,7 +255,7 @@ export default function App() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !missionSession || locationTracking.active || locationTracking.lastError) return;
-    if (locationTracking.lastServiceEvent === "tracking_stopped") return;
+    if (locationTracking.lastServiceEvent === "tracking_stopped" || locationTracking.lastServiceEvent === "tracking_stop_pending") return;
     if (nativeRecoveryAttemptRef.current === missionSession.id) return;
     nativeRecoveryAttemptRef.current = missionSession.id;
     void locationTrackingService.start({ session: missionSession, detailPreset: "balanced", persistent: true });
@@ -512,6 +513,7 @@ export default function App() {
         <section className="page page--layers" aria-label="Layer Configuration">
           <div className="page-grid page-grid--layers">
             <LayerConfigPage />
+            <ChaserNetPanel />
           </div>
         </section>
       </main>

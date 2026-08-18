@@ -4,6 +4,31 @@ All changes logged newest-first.
 
 ---
 
+## Code Black Chaser Net v0.1 Foundation - 2026-08-18
+
+Created the first production-minded Chaser Net backend/domain/network foundation without enabling a
+fake production network.
+
+### Changed
+- Expanded the shared Chaser Net service boundary with authenticated identity, member profiles,
+  screened membership states, network roles, teams, privacy, presence, reports, moderation, audit,
+  realtime event, and API contract models.
+- Added server-side-style access-control helpers and an in-memory backend test harness covering
+  authenticated writes, team-only location privacy, report visibility, report retraction, moderation
+  permission boundaries, coordinate validation, heartbeat freshness, and rate limiting.
+- Added local Chaser Net privacy controls under the Layers page. Presence sharing remains OFF by
+  default and is explicitly separate from local Chase Tracking/breadcrumb collection.
+- Wired disabled-by-default Chaser Net member and Chaser Net report map layers through the existing
+  viewport-aware and zoom-clustering map path. No fake members or reports render in production.
+- Documented Chaser Net trust/privacy semantics, non-official human-report provenance, retention
+  assumptions, realtime/read/write contracts, and deferred features in `docs/chaser-net-v0.1.md`.
+
+### Validation Notes
+- Chaser Net remains backend-not-configured at runtime until a real auth/backend provider is wired.
+- Mosaic remains the active radar experience. Native Level II REF/VEL/SRV/CC remains deferred.
+
+---
+
 ## S24 UI Polish and Checkpoint Hygiene - 2026-08-18
 
 Targeted cleanup pass after the accepted native Chase Tracking build.

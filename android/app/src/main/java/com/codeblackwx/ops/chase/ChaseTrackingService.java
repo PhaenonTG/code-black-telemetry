@@ -85,6 +85,9 @@ public class ChaseTrackingService extends Service implements LocationListener {
     @Override
     public void onDestroy() {
         removeLocationUpdates();
+        if (!ChaseTrackingStore.status(this).optBoolean("active", false)) {
+            cancelForegroundNotification();
+        }
         super.onDestroy();
     }
 

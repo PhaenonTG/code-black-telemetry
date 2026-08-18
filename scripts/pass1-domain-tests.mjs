@@ -41,12 +41,96 @@ assert.equal(viewport.zoomDetailLevel(7), "medium");
 assert.equal(viewport.zoomDetailLevel(3), "far");
 assert.ok(viewport.clusterViewportPoints(points.slice(0, 2), testViewport).some((item) => "count" in item && item.count === 2));
 
+const now = Date.parse("2026-08-18T12:00:00Z");
 const member = {
   privacy: { preciseLocationAllowed: true, locationVisibility: "team-only" },
 };
 assert.equal(chaserNet.canExposePreciseChaserLocation(member, "team"), true);
 assert.equal(chaserNet.canExposePreciseChaserLocation(member, "trusted"), false);
 assert.equal(chaserNet.canExposePreciseChaserLocation({ privacy: { preciseLocationAllowed: false, locationVisibility: "trusted-network" } }, "trusted"), false);
+assert.equal(chaserNet.normalizeChaserNetPrivacy({ locationVisibility: "hidden", preciseLocationAllowed: true }).preciseLocationAllowed, false);
+assert.equal(chaserNet.presenceFreshness({ timestampUtc: now - 20_000 }, chaserNet.DEFAULT_CHASER_NET_HEARTBEAT_POLICY, now), "current");
+assert.equal(chaserNet.presenceFreshness({ timestampUtc: now - 10 * 60_000 }, chaserNet.DEFAULT_CHASER_NET_HEARTBEAT_POLICY, now), "stale");
+assert.equal(chaserNet.validateChaserNetCoordinate(36, -94), true);
+assert.equal(chaserNet.validateChaserNetCoordinate(136, -94), false);
+
+const identityA = { userId: "user-a", provider: "test", subject: "a", authenticatedAt: now };
+const identityB = { userId: "user-b", provider: "test", subject: "b", authenticatedAt: now };
+const identityC = { userId: "user-c", provider: "test", subject: "c", authenticatedAt: now };
+const basePrivacy = { presenceSharingEnabled: true, locationVisibility: "team-only", preciseLocationAllowed: true, shareSpeed: true, shareHeading: true, delaySeconds: 900 };
+const makeMember = (memberId, authenticatedUserId, teamId, roles = ["verified-chaser"], privacy = basePrivacy) => ({
+  memberId,
+  authenticatedUserId,
+  displayName: memberId,
+  callsign: memberId.toUpperCase(),
+  teamId,
+  team: teamId,
+  membershipState: "active",
+  roles,
+  role: roles[0],
+  verificationLevel: roles.includes("admin") ? "admin" : "chaser",
+  verificationBadges: [],
+  avatarRef: null,
+  vehicleUnitName: null,
+  homeRegion: null,
+  createdAt: now,
+  lastActiveAt: null,
+  status: "off-duty",
+  moderationState: "clear",
+  privacy,
+  publicProfileVisible: false,
+  trustedProfileVisible: true,
+});
+const backend = new chaserNet.InMemoryChaserNetBackend({
+  members: [
+    makeMember("member-a", "user-a", "team-1"),
+    makeMember("member-b", "user-b", "team-1"),
+    makeMember("member-c", "user-c", "team-2"),
+  ],
+}, { currentMs: 24 * 60 * 60_000, agingMs: 48 * 60 * 60_000, staleMs: 72 * 60 * 60_000 });
+const presenceLocation = {
+  lat: 36.42,
+  lon: -94.2,
+  horizontalAccuracyM: 12,
+  altitudeM: null,
+  altitudeAccuracyM: null,
+  speedMps: 8,
+  speedAccuracyMps: null,
+  headingDeg: 220,
+  headingAccuracyDeg: null,
+  provider: "gps",
+  quality: "good",
+};
+backend.submitPresence(identityB, { memberId: "member-b", state: "active-chase", currentSessionId: "chase-1", timestampUtc: now, location: presenceLocation });
+const permittedPresence = backend.getPresenceForViewport({ identity: identityA, viewport: testViewport, detail: "close", sessionId: null });
+assert.equal(permittedPresence.data.length, 1);
+const deniedPresence = backend.getPresenceForViewport({ identity: identityC, viewport: testViewport, detail: "close", sessionId: null });
+assert.equal(deniedPresence.data.length, 0);
+assert.throws(() => backend.submitPresence(null, { memberId: "member-a", state: "active-chase", currentSessionId: null, timestampUtc: now, location: presenceLocation }), /CHASER_NET_AUTH_REQUIRED/);
+assert.throws(() => backend.submitPresence(identityB, { memberId: "member-b", state: "active-chase", currentSessionId: "chase-1", timestampUtc: now + 1_000, location: presenceLocation }), /CHASER_NET_PRESENCE_RATE_LIMITED/);
+
+const report = backend.createReport(identityB, {
+  reporterMemberId: "member-b",
+  chaseSessionId: "chase-1",
+  timestampUtc: now,
+  lat: 36.43,
+  lon: -94.21,
+  horizontalAccuracyM: 15,
+  category: "wall-cloud",
+  text: "Persistent lowering west of town",
+  confidence: "medium",
+  visibility: "team-only",
+});
+assert.equal(report.provenance.provider, "CHASERNET/HUMAN");
+assert.equal(report.verificationState, "unverified");
+assert.equal(backend.getReportsForViewport({ identity: identityA, viewport: testViewport, detail: "close", sessionId: null }).data.length, 1);
+assert.equal(backend.getReportsForViewport({ identity: identityC, viewport: testViewport, detail: "close", sessionId: null }).data.length, 0);
+assert.throws(() => backend.createReport(identityB, { reporterMemberId: "member-b", chaseSessionId: null, timestampUtc: now, lat: 136, lon: -94, horizontalAccuracyM: null, category: "hail", text: "bad coord", confidence: "low", visibility: "trusted-network" }), /CHASER_NET_INVALID_COORDINATE/);
+assert.throws(() => backend.updateReport(identityB, report.reportId, { verificationState: "moderator-reviewed" }), /CHASER_NET_PERMISSION_DENIED/);
+const retracted = backend.retractReport(identityB, report.reportId);
+assert.equal(retracted.updateState, "retracted");
+assert.equal(backend.getReportsForViewport({ identity: identityA, viewport: testViewport, detail: "close", sessionId: null }).data.length, 0);
+assert.ok(backend.getAuditEvents().some((event) => event.action === "report.retracted"));
 
 const unavailableRoads = layerManager.notConfiguredLayer("road-conditions", "Road Conditions");
 assert.equal(unavailableRoads.availability, "unavailable");
@@ -68,7 +152,6 @@ const routeScore = egress.scoreCandidateRoute({
 assert.equal(routeScore.usable, false);
 assert.equal(routeScore.confidence, "DEGRADED");
 
-const now = Date.parse("2026-08-18T12:00:00Z");
 assert.equal(locationObservation.classifyLocationQuality({ latitude: 36, longitude: -94, horizontalAccuracyM: 12, timestampUtc: now, now }), "good");
 assert.equal(locationObservation.classifyLocationQuality({ latitude: 36, longitude: -94, horizontalAccuracyM: 250, timestampUtc: now, now }), "degraded");
 assert.equal(locationObservation.classifyLocationQuality({ latitude: 36, longitude: -94, horizontalAccuracyM: 12, timestampUtc: now - 10 * 60_000, now }), "stale");
