@@ -32,6 +32,7 @@ import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRangeRingMode 
 import { clusterViewportPoints, filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewport } from "./viewport";
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, type RoadConditionEvent, type TrafficCamera, type ViewportLayerResult } from "../services/mapLayerModels";
+import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
 
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
 // the real operating zoom for a "swoop to position" open on cold launch, rather than snapping.
@@ -773,12 +774,14 @@ export function AtlasMap({
       : cameraMode === "USER_INTERACTING"
         ? "PANNING"
         : "FREE";
-  const providerStatusLabel = (status: ViewportLayerResult<unknown>["status"], count: number) => {
+  const roadProviderCount = viewport ? roadProvidersForViewport(viewport).length : 0;
+  const trafficCameraProviderCount = viewport ? trafficCameraProvidersForViewport(viewport).length : 0;
+  const providerStatusLabel = (status: ViewportLayerResult<unknown>["status"], count: number, providerCount: number) => {
     if (status === "ready") return count > 0 ? `${count}` : "available";
     if (status === "stale") return `${count} stale`;
     if (status === "empty") return "none in view";
     if (status === "unavailable" || status === "error") return "provider unavailable";
-    return "outside coverage";
+    return providerCount > 0 ? "available" : "outside coverage";
   };
 
   return (
@@ -836,11 +839,11 @@ export function AtlasMap({
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={roadConditionsVisible} onChange={() => toggleLayer("roadConditions")} />
-              Road Conditions - {providerStatusLabel(roadLayerStatus, roadConditions.length)}
+              Road Conditions - {providerStatusLabel(roadLayerStatus, roadConditions.length, roadProviderCount)}
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={trafficCamerasVisible} onChange={() => toggleLayer("trafficCameras")} />
-              Public Cameras - {providerStatusLabel(cameraLayerStatus, trafficCameras.length)}
+              Public Cameras - {providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount)}
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
               <input type="checkbox" checked={false} disabled onChange={() => undefined} />
