@@ -30,6 +30,8 @@ public class ChaseTrackingNativePlugin extends Plugin {
     public void start(PluginCall call) {
         String sessionId = call.getString("sessionId");
         Long startedAtValue = call.getLong("startedAt");
+        long startedAt = startedAtValue != null ? startedAtValue : System.currentTimeMillis();
+        String trackingPreset = call.getString("trackingPreset", "balanced");
         if (sessionId == null || sessionId.trim().isEmpty()) {
             call.reject("SESSION_ID_REQUIRED");
             return;
@@ -39,17 +41,38 @@ public class ChaseTrackingNativePlugin extends Plugin {
             return;
         }
 
+        ChaseTrackingStore.start(getContext(), sessionId, startedAt, trackingPreset);
         Intent intent = new Intent(getContext(), ChaseTrackingService.class);
         intent.setAction(ChaseTrackingService.ACTION_START);
         intent.putExtra(ChaseTrackingService.EXTRA_SESSION_ID, sessionId);
-        intent.putExtra(ChaseTrackingService.EXTRA_STARTED_AT, startedAtValue != null ? startedAtValue : System.currentTimeMillis());
-        intent.putExtra(ChaseTrackingService.EXTRA_TRACKING_PRESET, call.getString("trackingPreset", "balanced"));
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            ContextCompat.startForegroundService(getContext(), intent);
-        } else {
-            getContext().startService(intent);
+        intent.putExtra(ChaseTrackingService.EXTRA_STARTED_AT, startedAt);
+        intent.putExtra(ChaseTrackingService.EXTRA_TRACKING_PRESET, trackingPreset);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ContextCompat.startForegroundService(getContext(), intent);
+            } else {
+                getContext().startService(intent);
+            }
+        } catch (RuntimeException error) {
+            ChaseTrackingStore.setLastError(getContext(), error.getClass().getSimpleName() + ": " + error.getMessage());
+            ChaseTrackingStore.stop(getContext());
+            call.reject("NATIVE_START_FAILED", error.getMessage());
+            return;
         }
-        call.resolve(statusObject());
+        JSObject result = new JSObject();
+        result.put("active", true);
+        result.put("sessionId", sessionId);
+        result.put("startedAt", startedAt);
+        result.put("stoppedAt", 0);
+        result.put("pointCount", 0);
+        result.put("lastPoint", JSONObject.NULL);
+        result.put("lastError", JSONObject.NULL);
+        result.put("trackingPreset", trackingPreset);
+        result.put("lastServiceEvent", "tracking_start_requested");
+        result.put("platform", "android");
+        result.put("locationPermission", hasLocationPermission() ? "granted" : "denied");
+        result.put("notificationPermission", hasNotificationPermission() ? "granted" : "denied");
+        call.resolve(result);
     }
 
     @PluginMethod
