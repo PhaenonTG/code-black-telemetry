@@ -178,7 +178,7 @@ export function AtlasMap({
     window.addEventListener("codeblack:close-map-popovers", close);
     return () => window.removeEventListener("codeblack:close-map-popovers", close);
   }, []);
-  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, breadcrumbs: breadcrumbsVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, probes: probesVisible, chaserNet: chaserNetVisible } = layerVisibility;
+  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
     void saveMapLayerVisibility({ ...layerVisibility, [key]: !layerVisibility[key] });
   };
@@ -785,20 +785,20 @@ export function AtlasMap({
               Breadcrumbs
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
-              <input type="checkbox" checked={roadConditionsVisible} onChange={() => toggleLayer("roadConditions")} />
-              Road conditions - not configured
+              <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+              Road conditions - unavailable
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
-              <input type="checkbox" checked={trafficCamerasVisible} onChange={() => toggleLayer("trafficCameras")} />
-              Traffic cameras - not configured
+              <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+              Traffic cameras - unavailable
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
-              <input type="checkbox" checked={probesVisible} onChange={() => toggleLayer("probes")} />
-              Probes - not configured
+              <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+              Probes - unavailable
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
-              <input type="checkbox" checked={chaserNetVisible} onChange={() => toggleLayer("chaserNet")} />
-              Chaser Net - not configured
+              <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+              Chaser Net - unavailable
             </label>
           </div>
         )}

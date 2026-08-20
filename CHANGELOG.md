@@ -16,6 +16,8 @@ Started the recovery-safe field-app stabilization branch.
 - Made expanded map camera state clearer with explicit follow/free/panning status wording.
 - Locked Chaser Net presence sharing OFF while the production backend/auth provider is not
   configured, while preserving visible privacy/readiness controls.
+- Made future/provider-backed map layers display as unavailable instead of toggleable live layers
+  until Road Conditions, Traffic Cameras, Probes, and Chaser Net providers are actually configured.
 - Normalized Pi endpoint save/test behavior and cleared stale endpoint test state after edits.
 - Clarified Core/Pi diagnostic state on the Operations page.
 
