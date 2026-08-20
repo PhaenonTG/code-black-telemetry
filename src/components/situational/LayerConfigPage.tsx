@@ -46,7 +46,7 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description:
   },
   {
     key: "chasers",
-    label: "Chasers",
+    label: "Spotter Network",
     description: "Nearby Spotter Network positions, bounded by your search radius (Settings -> Nearby Chasers).",
   },
   {
@@ -56,7 +56,7 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description:
   },
   {
     key: "breadcrumbs",
-    label: "Breadcrumbs",
+    label: "Trail",
     description: "Your local rolling chase trail. Captured independently of whether the map page is visible.",
   },
   {
