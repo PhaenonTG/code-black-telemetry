@@ -108,7 +108,7 @@ function pointToBreadcrumb(point: NativeChasePoint): BreadcrumbPoint {
     accuracyM: point.accuracyM ?? null,
     altitudeM: point.altitudeM ?? null,
     provider: point.provider ?? null,
-    source: point.source ?? "android-foreground-service",
+    source: point.source ?? "native-persistent-location",
     valid: point.valid ?? true,
     stale: point.stale ?? false,
     headingAvailable: point.headingAvailable ?? point.headingDeg != null,

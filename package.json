@@ -9,8 +9,11 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "cap:sync": "npm run build && cap sync android",
+    "cap:sync:android": "npm run build && cap sync android",
+    "cap:sync:ios": "npm run build && cap sync ios",
     "android:open": "cap open android",
-    "android:debug": "npm run cap:sync && cd android && gradlew.bat assembleDebug",
+    "android:debug": "npm run cap:sync:android && cd android && gradlew.bat assembleDebug",
+    "ios:sync": "npm run cap:sync:ios",
     "desktop": "powershell -ExecutionPolicy Bypass -File scripts/launch-webapp.ps1",
     "test": "node scripts/pass1-domain-tests.mjs",
     "release:sanity": "node scripts/release-sanity.mjs"

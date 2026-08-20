@@ -21,6 +21,7 @@ const chaserNet = await importTs("src/services/chaserNet.ts");
 const layerManager = await importTs("src/services/mapLayerManager.ts");
 const egress = await importTs("src/services/egress.ts");
 const locationObservation = await importTs("src/services/locationObservation.ts");
+const platformCapabilityModel = await importTs("src/services/platformCapabilityModel.ts");
 
 const januaryCentral = clock.formatOpsClock(new Date("2026-01-15T18:15:00Z"), "central");
 const julyCentral = clock.formatOpsClock(new Date("2026-07-15T18:15:00Z"), "central");
@@ -247,5 +248,17 @@ assert.equal(locationObservation.shouldKeepLocationObservation(baseObs, nearDupl
 assert.equal(locationObservation.shouldKeepLocationObservation(baseObs, improvedAccuracy, balancedPolicy), true);
 assert.equal(locationObservation.shouldKeepLocationObservation(baseObs, movedObs, balancedPolicy), true);
 assert.deepEqual(locationObservation.trackingPresetPolicy("battery-saver"), { minDistanceM: 40, minElapsedMs: 120_000 });
+
+const androidCapabilities = platformCapabilityModel.capabilitiesForRuntime({ platform: "android", nativeRuntime: true, wakeLockSupported: false });
+assert.equal(platformCapabilityModel.platformSupportsPersistentChaseTracking(androidCapabilities), true);
+assert.equal(androidCapabilities.nativePersistentLocation, true);
+const iosCapabilities = platformCapabilityModel.capabilitiesForRuntime({ platform: "ios", nativeRuntime: true, wakeLockSupported: false });
+assert.equal(platformCapabilityModel.platformSupportsPersistentChaseTracking(iosCapabilities), false);
+assert.equal(iosCapabilities.nativePersistentLocation, false);
+assert.equal(iosCapabilities.ble, true);
+const webCapabilities = platformCapabilityModel.capabilitiesForRuntime({ platform: "web", nativeRuntime: false, wakeLockSupported: true });
+assert.equal(platformCapabilityModel.platformSupportsPersistentChaseTracking(webCapabilities), false);
+assert.equal(webCapabilities.wakeLock, true);
+assert.equal(webCapabilities.desktopNotifications, true);
 
 console.log("pass1-domain-tests: ok");

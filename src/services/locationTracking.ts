@@ -27,7 +27,7 @@ export interface LocationTrackingStatus {
   lastError: string | null;
   lastServiceEvent: string | null;
   platform: string;
-  implementation: "android-foreground-service" | "web-geolocation" | "unavailable";
+  implementation: "native-persistent-location" | "web-geolocation" | "unavailable";
   locationPermission: TrackingPermissionState;
   notificationPermission: TrackingPermissionState;
   backgroundCapable: boolean;
@@ -70,7 +70,7 @@ function pointToObservation(point: NativeChasePoint | null): LocationObservation
     headingDeg: point.headingDeg ?? null,
     headingAccuracyDeg: null,
     provider: point.provider ?? null,
-    source: point.source ?? "android-foreground-service",
+    source: point.source ?? "native-persistent-location",
     stale: point.stale ?? false,
   });
 }
@@ -101,7 +101,7 @@ function normalizeNativeStatus(status: NativeChaseStatus): LocationTrackingStatu
     lastError: unavailable ? "PERSISTENT_TRACKING_UNSUPPORTED" : status.lastError,
     lastServiceEvent: status.lastServiceEvent,
     platform: status.platform,
-    implementation: nativeAndroidStatus ? "android-foreground-service" : unavailable ? "unavailable" : "web-geolocation",
+    implementation: nativeAndroidStatus ? "native-persistent-location" : unavailable ? "unavailable" : "web-geolocation",
     locationPermission: status.locationPermission,
     notificationPermission: status.notificationPermission,
     backgroundCapable,
