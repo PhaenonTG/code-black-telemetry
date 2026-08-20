@@ -125,6 +125,8 @@ Write contracts:
 
 Realtime event contract:
 
+- `application.submitted`
+- `application.reviewed`
 - `presence.updated`
 - `presence.offline`
 - `report.created`
@@ -161,3 +163,33 @@ Not implemented in v0.1:
 
 Recommended next pass: Chaser Net v0.2, covering screened application/admin workflow, operational
 team features, and production presence deployment.
+
+## v0.2 Application Review Foundation
+
+The shared service layer now includes the first screened-membership workflow contracts:
+
+- authenticated application draft save
+- authenticated application submission
+- code-of-conduct and experience gates before submission
+- moderator-only application review queue
+- moderator-only approval/rejection decisions
+- probationary member creation on approval
+- application-specific audit events
+- backend snapshot import/export for future durable storage
+
+Sensitive application review fields stay in `internalReview` and are not used by the map, presence,
+member marker, or public/trusted profile flows. Public application UI, production auth, durable
+database persistence, and admin dashboards remain deferred.
+
+Additional read contract:
+
+- `GET /chaser-net/applications`
+
+Additional write contracts:
+
+- `PATCH /chaser-net/applications/me`
+- `POST /chaser-net/applications/me/submit`
+- `PATCH /chaser-net/applications/:id/review`
+
+The in-app Chaser Net panel shows these contracts as foundation-ready but continues to report the
+runtime backend as not configured until a real provider is connected.

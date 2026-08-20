@@ -13,11 +13,15 @@ export type ChaserNetReportVisibility = "team-only" | "trusted-network";
 export type ChaserNetReportVerificationState = "unverified" | "corroborated" | "moderator-reviewed" | "retracted" | "disputed";
 export type ChaserNetReportConfidence = "low" | "medium" | "high";
 export type ChaserNetModerationState = "clear" | "flagged" | "hidden" | "suspended" | "removed";
+export type ChaserNetApplicationDecisionStatus = "draft" | "submitted" | "approved" | "rejected" | "withdrawn";
 export type ChaserNetAuditAction =
   | "member.approved"
   | "member.role_changed"
   | "member.suspended"
   | "member.reinstated"
+  | "application.draft_saved"
+  | "application.submitted"
+  | "application.reviewed"
   | "team.created"
   | "team.role_changed"
   | "report.created"
@@ -27,6 +31,8 @@ export type ChaserNetAuditAction =
   | "privacy.changed"
   | "presence.updated";
 export type ChaserNetRealtimeEventType =
+  | "application.submitted"
+  | "application.reviewed"
   | "presence.updated"
   | "presence.offline"
   | "report.created"
@@ -111,10 +117,12 @@ export interface ChaserNetApplication {
     codeOfConductAcceptedAt: number | null;
     reviewerNotes: string[];
   };
-  decisionStatus: "draft" | "submitted" | "approved" | "rejected" | "withdrawn";
+  decisionStatus: ChaserNetApplicationDecisionStatus;
   createdAt: number;
+  updatedAt: number;
   submittedAt: number | null;
   decidedAt: number | null;
+  reviewerMemberId: string | null;
 }
 
 export interface ChaserNetTeam {
@@ -192,7 +200,7 @@ export interface ChaserNetAuditEvent {
   action: ChaserNetAuditAction;
   actorUserId: string;
   actorMemberId: string | null;
-  targetType: "member" | "team" | "report" | "presence" | "privacy";
+  targetType: "application" | "member" | "team" | "report" | "presence" | "privacy";
   targetId: string;
   reason: string;
   timestampUtc: number;
@@ -259,6 +267,19 @@ export interface ChaserNetReportInput {
   visibility: ChaserNetReportVisibility;
 }
 
+export interface ChaserNetApplicationInput {
+  publicProfile: ChaserNetApplication["publicProfile"];
+  internalReview: Omit<ChaserNetApplication["internalReview"], "reviewerNotes">;
+}
+
+export interface ChaserNetApplicationReviewInput {
+  decisionStatus: Extract<ChaserNetApplicationDecisionStatus, "approved" | "rejected">;
+  reviewerNote: string;
+  approvedRole?: ChaserNetRole;
+  approvedMembershipState?: ChaserNetMembershipState;
+  verificationLevel?: ChaserNetVerificationLevel;
+}
+
 export interface ChaserNetReadQuery extends LayerQueryContext {
   identity: ChaserNetAuthenticatedIdentity | null;
   since?: number;
@@ -268,6 +289,22 @@ export interface ChaserNetApiContract {
   realtimeEvents: ChaserNetRealtimeEventType[];
   read: Record<string, { method: "GET"; path: string; viewportAware?: boolean }>;
   write: Record<string, { method: "POST" | "PATCH"; path: string; authenticated: boolean }>;
+}
+
+export interface ChaserNetBackendSnapshot {
+  schemaVersion: 1;
+  members: ChaserNetMember[];
+  teams: ChaserNetTeam[];
+  applications: ChaserNetApplication[];
+  presence: ChaserNetPresence[];
+  reports: ChaserNetReport[];
+  auditEvents: ChaserNetAuditEvent[];
+  capturedAt: number;
+}
+
+export interface ChaserNetPersistenceAdapter {
+  load(): Promise<ChaserNetBackendSnapshot | null>;
+  save(snapshot: ChaserNetBackendSnapshot): Promise<void>;
 }
 
 export const CHASER_NET_REPORT_CATEGORIES: ChaserNetReportCategory[] = [
@@ -319,16 +356,20 @@ export const CHASER_NET_PROVENANCE: ObservationProvenance = {
 };
 
 export const CHASER_NET_API_CONTRACT: ChaserNetApiContract = {
-  realtimeEvents: ["presence.updated", "presence.offline", "report.created", "report.updated", "report.retracted", "member.updated", "team.updated"],
+  realtimeEvents: ["application.submitted", "application.reviewed", "presence.updated", "presence.offline", "report.created", "report.updated", "report.retracted", "member.updated", "team.updated"],
   read: {
     me: { method: "GET", path: "/chaser-net/me" },
     members: { method: "GET", path: "/chaser-net/members", viewportAware: true },
+    applications: { method: "GET", path: "/chaser-net/applications" },
     presence: { method: "GET", path: "/chaser-net/presence", viewportAware: true },
     reports: { method: "GET", path: "/chaser-net/reports", viewportAware: true },
     teams: { method: "GET", path: "/chaser-net/teams" },
   },
   write: {
     presence: { method: "POST", path: "/chaser-net/presence", authenticated: true },
+    applicationDraft: { method: "PATCH", path: "/chaser-net/applications/me", authenticated: true },
+    applicationSubmit: { method: "POST", path: "/chaser-net/applications/me/submit", authenticated: true },
+    applicationReview: { method: "PATCH", path: "/chaser-net/applications/:id/review", authenticated: true },
     reports: { method: "POST", path: "/chaser-net/reports", authenticated: true },
     updateReport: { method: "PATCH", path: "/chaser-net/reports/:id", authenticated: true },
     retractReport: { method: "POST", path: "/chaser-net/reports/:id/retract", authenticated: true },
@@ -452,6 +493,31 @@ function sanitizeReportText(value: string) {
   return value.trim().replace(/\s+/g, " ").slice(0, 800);
 }
 
+function sanitizeApplicationNote(value: string) {
+  return value.trim().replace(/\s+/g, " ").slice(0, 600);
+}
+
+function normalizeApplicationInput(input: ChaserNetApplicationInput): ChaserNetApplicationInput {
+  return {
+    publicProfile: {
+      displayName: input.publicProfile.displayName.trim().slice(0, 80),
+      callsign: input.publicProfile.callsign.trim().slice(0, 40),
+      teamAffiliation: input.publicProfile.teamAffiliation?.trim().slice(0, 80) || null,
+      chaseWeatherProfileLinks: input.publicProfile.chaseWeatherProfileLinks.map((link) => link.trim()).filter(Boolean).slice(0, 8),
+    },
+    internalReview: {
+      legalName: input.internalReview.legalName?.trim().slice(0, 120) || null,
+      chaseSpotterExperience: input.internalReview.chaseSpotterExperience.trim().slice(0, 1200),
+      skywarnTraining: input.internalReview.skywarnTraining?.trim().slice(0, 400) || null,
+      spotterNetworkId: input.internalReview.spotterNetworkId?.trim().slice(0, 80) || null,
+      references: input.internalReview.references.map((reference) => reference.trim()).filter(Boolean).slice(0, 8),
+      codeOfConductAcceptedAt: Number.isFinite(input.internalReview.codeOfConductAcceptedAt)
+        ? input.internalReview.codeOfConductAcceptedAt
+        : null,
+    },
+  };
+}
+
 function createAudit(action: ChaserNetAuditAction, identity: ChaserNetAuthenticatedIdentity, targetType: ChaserNetAuditEvent["targetType"], targetId: string, reason: string, actorMemberId: string | null): ChaserNetAuditEvent {
   return { auditId: makeId("audit"), action, actorUserId: identity.userId, actorMemberId, targetType, targetId, reason, timestampUtc: nowMs() };
 }
@@ -459,6 +525,7 @@ function createAudit(action: ChaserNetAuditAction, identity: ChaserNetAuthentica
 export class InMemoryChaserNetBackend {
   private members = new Map<string, ChaserNetMember>();
   private teams = new Map<string, ChaserNetTeam>();
+  private applications = new Map<string, ChaserNetApplication>();
   private presence = new Map<string, ChaserNetPresence>();
   private reports = new Map<string, ChaserNetReport>();
   private auditEvents: ChaserNetAuditEvent[] = [];
@@ -468,7 +535,7 @@ export class InMemoryChaserNetBackend {
   private readonly rateLimitPolicy: ChaserNetRateLimitPolicy;
 
   constructor(
-    seed?: { members?: ChaserNetMember[]; teams?: ChaserNetTeam[]; presence?: ChaserNetPresence[]; reports?: ChaserNetReport[] },
+    seed?: { members?: ChaserNetMember[]; teams?: ChaserNetTeam[]; applications?: ChaserNetApplication[]; presence?: ChaserNetPresence[]; reports?: ChaserNetReport[]; auditEvents?: ChaserNetAuditEvent[] },
     heartbeatPolicy = DEFAULT_CHASER_NET_HEARTBEAT_POLICY,
     rateLimitPolicy = DEFAULT_CHASER_NET_RATE_LIMIT_POLICY,
   ) {
@@ -476,8 +543,10 @@ export class InMemoryChaserNetBackend {
     this.rateLimitPolicy = rateLimitPolicy;
     seed?.members?.forEach((member) => this.members.set(member.memberId, member));
     seed?.teams?.forEach((team) => this.teams.set(team.teamId, team));
+    seed?.applications?.forEach((application) => this.applications.set(application.authenticatedUserId, application));
     seed?.presence?.forEach((presence) => this.presence.set(presence.memberId, presence));
     seed?.reports?.forEach((report) => this.reports.set(report.reportId, report));
+    this.auditEvents = seed?.auditEvents ? [...seed.auditEvents] : [];
   }
 
   getStatus(identity: ChaserNetAuthenticatedIdentity | null): ChaserNetServiceStatus {
@@ -514,6 +583,114 @@ export class InMemoryChaserNetBackend {
     this.members.set(updated.memberId, updated);
     this.auditEvents.push(createAudit("privacy.changed", identity, "privacy", updated.memberId, "privacy settings changed", updated.memberId));
     return updated.privacy;
+  }
+
+  getApplicationForIdentity(identity: ChaserNetAuthenticatedIdentity | null) {
+    assertAuthenticated(identity);
+    return this.applications.get(identity.userId) ?? null;
+  }
+
+  saveApplicationDraft(identity: ChaserNetAuthenticatedIdentity | null, input: ChaserNetApplicationInput) {
+    assertAuthenticated(identity);
+    const normalized = normalizeApplicationInput(input);
+    if (!normalized.publicProfile.displayName || !normalized.publicProfile.callsign) throw new Error("CHASER_NET_APPLICATION_PROFILE_REQUIRED");
+    const existing = this.applications.get(identity.userId);
+    if (existing && existing.decisionStatus !== "draft") throw new Error("CHASER_NET_APPLICATION_LOCKED");
+    const timestamp = nowMs();
+    const application: ChaserNetApplication = {
+      applicationId: existing?.applicationId ?? makeId("application"),
+      authenticatedUserId: identity.userId,
+      publicProfile: normalized.publicProfile,
+      internalReview: {
+        ...normalized.internalReview,
+        reviewerNotes: existing?.internalReview.reviewerNotes ?? [],
+      },
+      decisionStatus: "draft",
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+      submittedAt: null,
+      decidedAt: null,
+      reviewerMemberId: null,
+    };
+    this.applications.set(identity.userId, application);
+    this.auditEvents.push(createAudit("application.draft_saved", identity, "application", application.applicationId, "application draft saved", null));
+    return application;
+  }
+
+  submitApplication(identity: ChaserNetAuthenticatedIdentity | null) {
+    assertAuthenticated(identity);
+    const application = this.applications.get(identity.userId);
+    if (!application) throw new Error("CHASER_NET_APPLICATION_REQUIRED");
+    if (application.decisionStatus !== "draft") throw new Error("CHASER_NET_APPLICATION_LOCKED");
+    if (!application.internalReview.codeOfConductAcceptedAt) throw new Error("CHASER_NET_CODE_OF_CONDUCT_REQUIRED");
+    if (application.internalReview.chaseSpotterExperience.length < 10) throw new Error("CHASER_NET_EXPERIENCE_REQUIRED");
+    const updated: ChaserNetApplication = { ...application, decisionStatus: "submitted", updatedAt: nowMs(), submittedAt: nowMs() };
+    this.applications.set(identity.userId, updated);
+    this.auditEvents.push(createAudit("application.submitted", identity, "application", updated.applicationId, "application submitted", null));
+    return updated;
+  }
+
+  listApplicationsForReview(identity: ChaserNetAuthenticatedIdentity | null) {
+    assertAuthenticated(identity);
+    const member = this.memberForIdentity(identity);
+    if (!member || !memberCanModerate(member)) throw new Error("CHASER_NET_PERMISSION_DENIED");
+    return [...this.applications.values()].filter((application) => application.decisionStatus === "submitted");
+  }
+
+  reviewApplication(identity: ChaserNetAuthenticatedIdentity | null, applicationId: string, review: ChaserNetApplicationReviewInput) {
+    assertAuthenticated(identity);
+    const reviewer = this.memberForIdentity(identity);
+    if (!reviewer || !memberCanModerate(reviewer)) throw new Error("CHASER_NET_PERMISSION_DENIED");
+    const application = [...this.applications.values()].find((item) => item.applicationId === applicationId);
+    if (!application) throw new Error("CHASER_NET_APPLICATION_NOT_FOUND");
+    if (application.decisionStatus !== "submitted") throw new Error("CHASER_NET_APPLICATION_LOCKED");
+    const note = sanitizeApplicationNote(review.reviewerNote);
+    if (!note) throw new Error("CHASER_NET_REVIEW_REASON_REQUIRED");
+    const decidedAt = nowMs();
+    const updated: ChaserNetApplication = {
+      ...application,
+      decisionStatus: review.decisionStatus,
+      updatedAt: decidedAt,
+      decidedAt,
+      reviewerMemberId: reviewer.memberId,
+      internalReview: {
+        ...application.internalReview,
+        reviewerNotes: [...application.internalReview.reviewerNotes, note].slice(-20),
+      },
+    };
+    this.applications.set(application.authenticatedUserId, updated);
+    if (review.decisionStatus === "approved") {
+      const role = review.approvedRole ?? "probationary";
+      const membershipState = review.approvedMembershipState ?? "probationary";
+      const now = nowMs();
+      const member: ChaserNetMember = {
+        memberId: makeId("member"),
+        authenticatedUserId: application.authenticatedUserId,
+        displayName: application.publicProfile.displayName,
+        callsign: application.publicProfile.callsign,
+        teamId: null,
+        team: application.publicProfile.teamAffiliation,
+        membershipState,
+        roles: [role],
+        role,
+        verificationLevel: review.verificationLevel ?? "identity",
+        verificationBadges: [],
+        avatarRef: null,
+        vehicleUnitName: null,
+        homeRegion: null,
+        createdAt: now,
+        lastActiveAt: null,
+        status: "off-duty",
+        moderationState: "clear",
+        privacy: DEFAULT_CHASER_NET_PRIVACY,
+        publicProfileVisible: false,
+        trustedProfileVisible: true,
+      };
+      this.members.set(member.memberId, member);
+      this.auditEvents.push(createAudit("member.approved", identity, "member", member.memberId, "application approved", reviewer.memberId));
+    }
+    this.auditEvents.push(createAudit("application.reviewed", identity, "application", application.applicationId, `application ${review.decisionStatus}`, reviewer.memberId));
+    return updated;
   }
 
   createTeam(identity: ChaserNetAuthenticatedIdentity | null, team: ChaserNetTeam) {
@@ -674,6 +851,40 @@ export class InMemoryChaserNetBackend {
     if (!member) return [];
     return [...this.teams.values()].filter((team) => team.members.some((entry) => entry.memberId === member.memberId) || memberCanModerate(member));
   }
+
+  toSnapshot(): ChaserNetBackendSnapshot {
+    return {
+      schemaVersion: 1,
+      members: [...this.members.values()],
+      teams: [...this.teams.values()],
+      applications: [...this.applications.values()],
+      presence: [...this.presence.values()],
+      reports: [...this.reports.values()],
+      auditEvents: [...this.auditEvents],
+      capturedAt: nowMs(),
+    };
+  }
+}
+
+export function createChaserNetBackendFromSnapshot(snapshot: ChaserNetBackendSnapshot | null) {
+  if (!snapshot) return new InMemoryChaserNetBackend();
+  if (snapshot.schemaVersion !== 1) throw new Error("CHASER_NET_SNAPSHOT_VERSION_UNSUPPORTED");
+  return new InMemoryChaserNetBackend({
+    members: snapshot.members,
+    teams: snapshot.teams,
+    applications: snapshot.applications,
+    presence: snapshot.presence,
+    reports: snapshot.reports,
+    auditEvents: snapshot.auditEvents,
+  });
+}
+
+export async function persistChaserNetBackend(backend: InMemoryChaserNetBackend, adapter: ChaserNetPersistenceAdapter) {
+  await adapter.save(backend.toSnapshot());
+}
+
+export async function loadChaserNetBackend(adapter: ChaserNetPersistenceAdapter) {
+  return createChaserNetBackendFromSnapshot(await adapter.load());
 }
 
 const unconfiguredStatus: ChaserNetServiceStatus = {

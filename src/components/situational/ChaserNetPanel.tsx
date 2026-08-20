@@ -57,6 +57,11 @@ export function ChaserNetPanel() {
           <strong>{settings.sharePresence ? "Enabled locally" : "Off"}</strong>
           <em>{settings.sharePresence ? "No backend publish occurs until Chaser Net is configured." : "Local Chase Tracking remains separate."}</em>
         </div>
+        <div className="chaser-net-card">
+          <span>Application Workflow</span>
+          <strong>Foundation Ready</strong>
+          <em>Screened application and moderator review contracts exist; public submission UI is deferred.</em>
+        </div>
       </div>
 
       <div className="settings-row">
@@ -122,7 +127,11 @@ export function ChaserNetPanel() {
       </div>
 
       <div className="chaser-net-contract">
-        <strong>v0.1 Contracts</strong>
+        <strong>v0.2 Contracts</strong>
+        <span>{CHASER_NET_API_CONTRACT.read.applications.method} {CHASER_NET_API_CONTRACT.read.applications.path} - moderator review queue</span>
+        <span>{CHASER_NET_API_CONTRACT.write.applicationDraft.method} {CHASER_NET_API_CONTRACT.write.applicationDraft.path} - authenticated draft</span>
+        <span>{CHASER_NET_API_CONTRACT.write.applicationSubmit.method} {CHASER_NET_API_CONTRACT.write.applicationSubmit.path} - screened submission</span>
+        <span>{CHASER_NET_API_CONTRACT.write.applicationReview.method} {CHASER_NET_API_CONTRACT.write.applicationReview.path} - moderator decision</span>
         <span>{CHASER_NET_API_CONTRACT.read.presence.method} {CHASER_NET_API_CONTRACT.read.presence.path} - viewport aware</span>
         <span>{CHASER_NET_API_CONTRACT.write.presence.method} {CHASER_NET_API_CONTRACT.write.presence.path} - authenticated</span>
         <span>{CHASER_NET_API_CONTRACT.write.reports.method} {CHASER_NET_API_CONTRACT.write.reports.path} - authenticated Chaser Net human reports</span>

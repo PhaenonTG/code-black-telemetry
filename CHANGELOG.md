@@ -4,6 +4,30 @@ All changes logged newest-first.
 
 ---
 
+## Code Black Chaser Net v0.2 Application Review Foundation - 2026-08-19
+
+Extended the Chaser Net foundation toward screened membership without enabling a public production
+network.
+
+### Changed
+- Added application draft, submission, moderator review, approval, and rejection contracts to the
+  shared Chaser Net backend harness.
+- Added moderator-only application review queue access, code-of-conduct and experience gates, and
+  application-specific audit events.
+- Added snapshot import/export and persistence-adapter contracts so Chaser Net backend state can
+  move to a durable API/database layer without changing shared domain semantics.
+- Updated the Chaser Net Layers panel to show v0.2 application/review contracts while keeping
+  runtime production state honest as backend-not-configured.
+- Expanded domain tests for application submission, moderator-only review, approved probationary
+  member creation, audit logging, and snapshot reload.
+
+### Validation Notes
+- Public application UI, production auth, production storage, deployment, and admin dashboards remain
+  deferred.
+- Presence sharing remains OFF by default and remains separate from local Chase Tracking.
+
+---
+
 ## Code Black Chaser Net v0.1 Foundation - 2026-08-18
 
 Created the first production-minded Chaser Net backend/domain/network foundation without enabling a

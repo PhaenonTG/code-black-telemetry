@@ -57,6 +57,8 @@ assert.equal(chaserNet.validateChaserNetCoordinate(136, -94), false);
 const identityA = { userId: "user-a", provider: "test", subject: "a", authenticatedAt: now };
 const identityB = { userId: "user-b", provider: "test", subject: "b", authenticatedAt: now };
 const identityC = { userId: "user-c", provider: "test", subject: "c", authenticatedAt: now };
+const identityAdmin = { userId: "user-admin", provider: "test", subject: "admin", authenticatedAt: now };
+const identityApplicant = { userId: "user-applicant", provider: "test", subject: "applicant", authenticatedAt: now };
 const basePrivacy = { presenceSharingEnabled: true, locationVisibility: "team-only", preciseLocationAllowed: true, shareSpeed: true, shareHeading: true, delaySeconds: 900 };
 const makeMember = (memberId, authenticatedUserId, teamId, roles = ["verified-chaser"], privacy = basePrivacy) => ({
   memberId,
@@ -86,8 +88,51 @@ const backend = new chaserNet.InMemoryChaserNetBackend({
     makeMember("member-a", "user-a", "team-1"),
     makeMember("member-b", "user-b", "team-1"),
     makeMember("member-c", "user-c", "team-2"),
+    makeMember("member-admin", "user-admin", "team-admin", ["admin"]),
   ],
 }, { currentMs: 24 * 60 * 60_000, agingMs: 48 * 60 * 60_000, staleMs: 72 * 60 * 60_000 });
+const applicationDraft = backend.saveApplicationDraft(identityApplicant, {
+  publicProfile: {
+    displayName: "Test Applicant",
+    callsign: "TEST-1",
+    teamAffiliation: null,
+    chaseWeatherProfileLinks: ["https://example.test/chase"],
+  },
+  internalReview: {
+    legalName: "Internal Only",
+    chaseSpotterExperience: "Several seasons of storm spotting and basic radar awareness.",
+    skywarnTraining: "SKYWARN basic",
+    spotterNetworkId: "SN123",
+    references: ["Known team reference"],
+    codeOfConductAcceptedAt: null,
+  },
+});
+assert.equal(applicationDraft.decisionStatus, "draft");
+assert.throws(() => backend.submitApplication(identityApplicant), /CHASER_NET_CODE_OF_CONDUCT_REQUIRED/);
+backend.saveApplicationDraft(identityApplicant, {
+  ...applicationDraft,
+  internalReview: {
+    ...applicationDraft.internalReview,
+    codeOfConductAcceptedAt: now,
+  },
+});
+const submittedApplication = backend.submitApplication(identityApplicant);
+assert.equal(submittedApplication.decisionStatus, "submitted");
+assert.throws(() => backend.listApplicationsForReview(identityA), /CHASER_NET_PERMISSION_DENIED/);
+assert.equal(backend.listApplicationsForReview(identityAdmin).length, 1);
+assert.throws(() => backend.reviewApplication(identityA, submittedApplication.applicationId, { decisionStatus: "approved", reviewerNote: "not allowed" }), /CHASER_NET_PERMISSION_DENIED/);
+const reviewedApplication = backend.reviewApplication(identityAdmin, submittedApplication.applicationId, {
+  decisionStatus: "approved",
+  reviewerNote: "Approved for probationary access after review.",
+  approvedRole: "probationary",
+  approvedMembershipState: "probationary",
+});
+assert.equal(reviewedApplication.decisionStatus, "approved");
+assert.equal(backend.getStatus(identityApplicant).member?.membershipState, "probationary");
+const snapshotBackend = chaserNet.createChaserNetBackendFromSnapshot(backend.toSnapshot());
+assert.equal(snapshotBackend.getStatus(identityApplicant).member?.callsign, "TEST-1");
+assert.ok(snapshotBackend.getAuditEvents().some((event) => event.action === "application.reviewed"));
+
 const presenceLocation = {
   lat: 36.42,
   lon: -94.2,
