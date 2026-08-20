@@ -749,7 +749,7 @@ export function AtlasMap({
         )}
         {/* Compact card dropped its whole control row (see below) for "ultra simple," but that also
             took away the only way to reach layer toggles without leaving the page -- this one small
-            icon button is the deliberate exception: just enough to flip Alerts/Team/Chasers/POI on
+            icon button is the deliberate exception: just enough to flip Alerts/Team/Spotter Network/POI on
             or off while looking at the dashboard, same popover the full map's LAYERS button opens. */}
         {compact && (
           <button
@@ -774,7 +774,7 @@ export function AtlasMap({
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={chasersVisible} onChange={() => toggleLayer("chasers")} />
-              Chasers
+              Spotter Network
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={poiVisible} onChange={() => toggleLayer("poi")} />
@@ -782,7 +782,7 @@ export function AtlasMap({
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={breadcrumbsVisible} onChange={() => toggleLayer("breadcrumbs")} />
-              Breadcrumbs
+              Trail
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
               <input type="checkbox" checked={false} disabled onChange={() => undefined} />

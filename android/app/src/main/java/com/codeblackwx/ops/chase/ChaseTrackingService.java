@@ -49,7 +49,7 @@ public class ChaseTrackingService extends Service implements LocationListener {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : null;
         if (ACTION_STOP.equals(action)) {
-            stopTracking();
+            stopTracking(startId);
             return START_NOT_STICKY;
         }
 
@@ -149,10 +149,17 @@ public class ChaseTrackingService extends Service implements LocationListener {
     }
 
     private void stopTracking() {
+        stopTracking(-1);
+    }
+
+    private void stopTracking(int startId) {
         removeLocationUpdates();
         ChaseTrackingStore.stop(this);
         removeForegroundState();
         cancelForegroundNotification();
+        if (startId > 0) {
+            stopSelfResult(startId);
+        }
         stopSelf();
     }
 

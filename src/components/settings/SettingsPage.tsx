@@ -878,11 +878,11 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         <div className="settings-row">
           <div>
             <strong>Persistent Tracking</strong>
-            <span>{platformCapabilities.backgroundLocation ? "Records chase breadcrumbs while OPS is backgrounded or locked." : "Background tracking is not available on this platform."}</span>
+            <span>{platformCapabilities.nativePersistentLocation ? "Records chase breadcrumbs while OPS is backgrounded or locked." : "Persistent background tracking is not configured on this platform."}</span>
           </div>
           <div className="mode-toggle" aria-label="Persistent chase tracking">
-            <button className={chaseTrackingSettings.persistentTrackingEnabled ? "" : "active"} disabled={!platformCapabilities.backgroundLocation} onClick={() => updateChaseTrackingSettings({ persistentTrackingEnabled: false })}>Off</button>
-            <button className={chaseTrackingSettings.persistentTrackingEnabled ? "active" : ""} disabled={!platformCapabilities.backgroundLocation} onClick={() => updateChaseTrackingSettings({ persistentTrackingEnabled: true })}>On</button>
+            <button className={chaseTrackingSettings.persistentTrackingEnabled ? "" : "active"} disabled={!platformCapabilities.nativePersistentLocation} onClick={() => updateChaseTrackingSettings({ persistentTrackingEnabled: false })}>Off</button>
+            <button className={chaseTrackingSettings.persistentTrackingEnabled ? "active" : ""} disabled={!platformCapabilities.nativePersistentLocation} onClick={() => updateChaseTrackingSettings({ persistentTrackingEnabled: true })}>On</button>
           </div>
         </div>
         <div className="settings-row">
@@ -892,7 +892,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </div>
           <div className="settings-segmented settings-segmented--three" aria-label="Tracking detail">
             {TRACKING_DETAIL_OPTIONS.map(({ preset, label }) => (
-              <button key={preset} className={chaseTrackingSettings.detailPreset === preset ? "active" : ""} disabled={!platformCapabilities.backgroundLocation} onClick={() => updateChaseTrackingSettings({ detailPreset: preset })}>{label}</button>
+              <button key={preset} className={chaseTrackingSettings.detailPreset === preset ? "active" : ""} disabled={!platformCapabilities.nativePersistentLocation} onClick={() => updateChaseTrackingSettings({ detailPreset: preset })}>{label}</button>
             ))}
           </div>
         </div>

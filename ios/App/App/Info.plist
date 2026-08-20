@@ -28,6 +28,8 @@
 	<string>Code Black OPS uses your location to show your position on the map, resolve local weather/radar data, and match severe weather alerts to where you are.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Code Black OPS uses Bluetooth to connect to your vehicle's onboard sensor hardware for live wind, temperature, and power readings.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Code Black OPS connects to your local Code Black Core or Pi endpoint for vehicle telemetry, stream controls, and field-network status when you configure one.</string>
 	<!-- Mirrors android/app/src/main/res/xml/network_security_config.xml's own reasoning: the Pi
 	     endpoint is user-configurable and may be a DHCP LAN IP, .local hostname, or Tailscale
 	     100.x address -- none of which iOS's App Transport Security allows over plain HTTP by

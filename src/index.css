@@ -403,7 +403,10 @@ body.radar-expanded-active {
 }
 
 .radar-expanded__map .map-panel {
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  min-height: 0;
   margin: 0;
   border: 0;
   background: transparent;
@@ -414,7 +417,9 @@ body.radar-expanded-active {
 }
 
 .radar-expanded__map .map-canvas {
+  flex: 1 1 auto;
   height: 100%;
+  min-height: 0;
   margin: 0;
   border: 0;
   border-radius: 0;
@@ -457,6 +462,32 @@ body.radar-expanded-active {
 .radar-expanded__map .radar-legend {
   background: rgba(0, 0, 0, 0.74);
   backdrop-filter: blur(8px);
+}
+
+@media (max-width: 760px), (orientation: portrait) {
+  .radar-expanded__shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .radar-expanded__top {
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 10px;
+    min-height: 62px;
+  }
+
+  .radar-expanded__top span,
+  .radar-expanded__top em {
+    grid-column: 2;
+  }
+
+  .radar-expanded__controls {
+    max-height: 28dvh;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-y: auto;
+  }
 }
 
 * {
@@ -1275,7 +1306,9 @@ button {
 }
 
 .radar-expanded__map .map-canvas {
+  flex: 1 1 auto;
   height: 100% !important;
+  min-height: 0 !important;
   margin: 0 !important;
   border: 0 !important;
 }
@@ -4528,18 +4561,20 @@ body {
 
 .atlas-expand-button {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 12;
+  top: 10px;
+  right: 10px;
+  z-index: 60;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 5px;
   background: rgba(3, 5, 7, 0.78);
   color: #f8fafc;
   box-shadow: 0 0 16px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 /* Compact dashboard card's one deliberate exception to "no controls" -- small enough to not read

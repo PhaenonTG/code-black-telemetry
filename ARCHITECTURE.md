@@ -2,8 +2,9 @@
 
 ## Product Role
 
-Code Black OPS is the chase vehicle operations interface. Tablets are the primary target, with
-phone support for field use. It should stay focused on control, status,
+Code Black OPS is the chase vehicle operations interface. The shared product targets iPhone,
+iPad, Android phone/tablet, and Windows/PWA surfaces through common domain/UI code plus thin
+platform adapters. It should stay focused on control, status,
 map/radar awareness, reporting, and field diagnostics. Vehicle service work belongs on the
 Raspberry Pi. Remote aggregation, overlays, production, archival, and multi-user services belong
 behind Code Black Core APIs when those systems are available.
@@ -30,9 +31,12 @@ Primary boundaries:
 - `src/services/telemetry/`: BLE-first telemetry provider, HTTP fallback, simulator fallback types
 - `src/services/streaming.ts`: Mission Streaming status normalization and BLE/HTTP control client
 - `src/services/settings.ts`: Capacitor Preferences-backed app settings and subscriptions
+- `src/services/platformCapabilities.ts`, `locationTracking.ts`, `displayControlService.ts`,
+  `notificationService.ts`: platform-neutral capability and adapter boundaries
 - `src/services/nearby.ts`, `situational.ts`, `spotters.ts`, `watches.ts`: external weather/places/spotter data
 - `src/map/`: Mapbox GL JS layer managers and diagnostics
 - `android/app/src/main/java/com/codeblackwx/ops/`: native Android plugins and diagnostic activities
+- `ios/App/App.xcodeproj`: Capacitor iOS/iPadOS host using Swift Package Manager
 
 Do not introduce direct Pi, Core, streaming, or provider dependencies into UI components when a
 service module can own the contract.
@@ -99,6 +103,16 @@ Native components:
 Security-sensitive manifest settings currently include app backup enabled, global cleartext HTTP
 allowed, and an exported diagnostic recon activity. Treat changes to these as policy decisions.
 
+## Native iOS / iPadOS
+
+The existing iOS host is `ios/App/App.xcodeproj` with Capacitor Swift Package Manager dependencies
+under `ios/App/CapApp-SPM`. Bundle ID is `com.codeblackwx.ops`; deployment target is iOS 15.0.
+
+The iOS host currently supports shared WebView UI, mosaic radar, settings/session state, and
+foreground location permission preparation. Production-grade background Chase Tracking, iOS
+operational notifications, idle-timer control, and CoreBluetooth field validation remain native
+adapter work and must not be represented as complete until tested on Apple hardware.
+
 ## Validation
 
 Current supported validation is build/lint/device build oriented:
@@ -106,7 +120,9 @@ Current supported validation is build/lint/device build oriented:
 ```powershell
 npm run lint
 npm run build
+npm run cap:sync:ios
 npm run android:debug
 ```
 
-There is no committed unit test framework or test script at this time.
+Windows can run Capacitor iOS sync/static validation, but native iOS compilation requires macOS
+with Xcode.
