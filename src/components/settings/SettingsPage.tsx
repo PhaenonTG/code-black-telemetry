@@ -420,12 +420,13 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     setLocalChaseBusy(true);
     setChaseResult("");
     try {
+      const trackingStatus = await locationTrackingService.stop();
       await locationTrackingService.syncPendingObservations();
       await endMissionSession();
-      const trackingStatus = await locationTrackingService.stop();
       setChaseResult(trackingStatus.active ? "Chase ended, but persistent tracking still reports active." : "Local chase ended. Persistent chase tracking stopped.");
     } catch (error) {
-      setChaseResult(`Chase end failed: ${trackingIssueLabel(error instanceof Error ? error.message : "persistent tracking cleanup unavailable")}.`);
+      await endMissionSession();
+      setChaseResult(`Chase ended locally. Persistent tracking cleanup needs attention: ${trackingIssueLabel(error instanceof Error ? error.message : "persistent tracking cleanup unavailable")}.`);
     } finally {
       setLocalChaseBusy(false);
     }
