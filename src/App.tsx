@@ -58,8 +58,8 @@ const pages: Array<{ key: PageKey; label: string; path: string }> = [
   { key: "alerts", label: "Alerts", path: "/alerts" },
   { key: "report", label: "Report", path: "/report" },
   { key: "settings", label: "Settings", path: "/settings" },
-  // Not one of the 6 bottom-dock buttons -- reached via the dock corner's "CODE BLACK" button
-  // (see the bottom-dock nav below) or by swiping past Settings, same as any other page.
+  // Layers is intentionally a normal dock page now. Future layer/provider controls should land
+  // there instead of adding dead buttons to the operational map surface.
   { key: "layers", label: "Layers", path: "/layers" },
 ];
 const PAGE_PREF_KEY = "codeblack.activePage";
@@ -100,6 +100,10 @@ function chaseStatusParts(locationTracking: ReturnType<typeof useLocationTrackin
   return { tone: "degraded", tracking: "TRACKING DEGRADED", gps: locationTracking.lastError ? "CHECK SETTINGS" : "GPS WAITING" };
 }
 
+function appPageSupportsOperationalActions(page: PageKey) {
+  return page === "weather" || page === "locate" || page === "report";
+}
+
 export default function App() {
   const [page, setPage] = useState<PageKey>(() => pathToPage());
   const [cockpitMode, setCockpitMode] = useState<CockpitMode>("chase");
@@ -112,6 +116,7 @@ export default function App() {
   const [spotterOnboardingSeen, setSpotterOnboardingSeen] = useState(true);
   const pagerRef = useRef<HTMLDivElement | null>(null);
   const escapeTimerRef = useRef<number | null>(null);
+  const markBusyRef = useRef(false);
   const nativeRecoveryAttemptRef = useRef<string | null>(null);
   const { gps, canonicalLocation, external, tabletPermission } = useSituationalData();
   const missionSession = useMissionSession();
@@ -141,6 +146,14 @@ export default function App() {
   const missionSessionId = missionSession?.id ?? null;
   const piState = status?.piOnline ? `ONLINE · ${status.apiLatencyMs} ms` : status?.updatedAt ? `OFFLINE · LAST CHECK ${new Date(status.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "OFFLINE";
   const serviceState = status?.piOnline ? "VIA PI · CHECK DASHBOARD" : "VIA PI · OFFLINE";
+  const coreState = !status
+    ? "NOT READY"
+    : status.piOnline
+      ? `CONNECTED · ${status.apiLatencyMs} ms`
+      : status.updatedAt
+        ? `OFFLINE · ${status.dataAgeSeconds}s stale`
+        : "NOT CONFIGURED";
+  const showOperationalActions = appPageSupportsOperationalActions(page);
   const mapGps = useMemo(
     () => (gpsPoint ? { ...gpsPoint, headingDeg, speedMph, accuracyM } : null),
     [gpsPoint, headingDeg, speedMph, accuracyM],
@@ -278,6 +291,8 @@ export default function App() {
   useEffect(() => () => cancelEscapeHold(), []);
 
   const markCurrentPosition = async () => {
+    if (markBusyRef.current) return;
+    markBusyRef.current = true;
     await locationTrackingService.syncPendingObservations();
     const latestNativePoint = getLatestBreadcrumbPoint(missionSessionId);
     const nativeIsFresh = latestNativePoint && Date.now() - latestNativePoint.timestamp < 120_000;
@@ -287,10 +302,12 @@ export default function App() {
     if (!result.event) {
       setMarkStatus("MARK FAILED - NO GPS");
       window.setTimeout(() => setMarkStatus(""), 1800);
+      window.setTimeout(() => { markBusyRef.current = false; }, 700);
       return;
     }
     setMarkStatus("MARK SAVED");
     window.setTimeout(() => setMarkStatus(""), 1800);
+    window.setTimeout(() => { markBusyRef.current = false; }, 700);
   };
 
   const cancelEscapeHold = () => {
@@ -349,12 +366,17 @@ export default function App() {
       }, 1500);
     }).then((listener) => listeners.push(listener));
     void CapApp.addListener("backButton", ({ canGoBack }) => {
+      const openLayerPopover = document.querySelector(".atlas-layers-popover");
+      if (openLayerPopover) {
+        window.dispatchEvent(new Event("codeblack:close-map-popovers"));
+        return;
+      }
       const expandedRadar = document.querySelector(".radar-expanded--active");
       if (expandedRadar) {
         window.dispatchEvent(new Event("codeblack:close-radar"));
         return;
       }
-      const closeButton = document.querySelector<HTMLButtonElement>(".product-modal .icon-button");
+      const closeButton = document.querySelector<HTMLButtonElement>(".modal-backdrop .icon-button, .pin-style-modal .icon-button, .color-field-modal .icon-button");
       if (closeButton) {
         closeButton.click();
         return;
@@ -394,18 +416,22 @@ export default function App() {
   return (
     <div className={`app-shell app-shell--theme-${appTheme} app-shell--page-${page}${missionSession ? " app-shell--mission-active" : ""}`}>
       <SevereFlashOverlay />
-      <button
-        className="escape-button"
-        type="button"
-        onPointerDown={armEscapeHold}
-        onPointerUp={cancelEscapeHold}
-        onPointerLeave={cancelEscapeHold}
-        onPointerCancel={cancelEscapeHold}
-        aria-label="Hold to prepare escape context"
-      >
-        ESCAPE
-      </button>
-      <button className="mark-button" type="button" onClick={() => void markCurrentPosition()} aria-label="Mark current position">MARK</button>
+      {showOperationalActions && (
+        <>
+          <button
+            className="escape-button"
+            type="button"
+            onPointerDown={armEscapeHold}
+            onPointerUp={cancelEscapeHold}
+            onPointerLeave={cancelEscapeHold}
+            onPointerCancel={cancelEscapeHold}
+            aria-label="Hold to prepare escape context"
+          >
+            ESCAPE
+          </button>
+          <button className="mark-button" type="button" onClick={() => void markCurrentPosition()} aria-label="Mark current position">MARK</button>
+        </>
+      )}
       {markStatus && <div className="mark-toast" role="status">{markStatus}</div>}
       {escapeStatus && <div className="escape-toast" role="status">{escapeStatus}</div>}
       {!spotterAccount && !spotterOnboardingSeen && (
@@ -465,6 +491,7 @@ export default function App() {
                 <span>UI Mode</span><strong>{cockpitMode.toUpperCase()}</strong>
                 <span>Canonical GPS</span><strong>{canonicalLocation.validity} · {sourceLabel(canonicalLocation.source, deviceLabels.gps)}</strong>
                 <span>Resolved Place</span><strong>{canonicalLocation.resolvedCity ? `${canonicalLocation.resolvedCity}, ${canonicalLocation.resolvedState ?? ""}` : canonicalLocation.fallbackReason}</strong>
+                <span>Core / Pi</span><strong>{coreState}</strong>
                 <span>Services</span><strong>{serviceState}</strong>
                 <span>Logs</span><strong>RECENT EVENTS</strong>
               </div>

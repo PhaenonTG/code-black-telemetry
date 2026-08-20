@@ -28,6 +28,7 @@ function statusLabel(state: string) {
 export function ChaserNetPanel() {
   const [settings, setSettings] = useState<ChaserNetPresenceSettings>(DEFAULT_CHASER_NET_PRESENCE_SETTINGS);
   const serviceStatus = useMemo(() => getChaserNetServiceStatus(), []);
+  const backendConfigured = serviceStatus.state !== "not-configured";
 
   useEffect(() => {
     const unsubscribe = subscribeChaserNetPresenceSettings(setSettings);
@@ -54,8 +55,8 @@ export function ChaserNetPanel() {
         </div>
         <div className="chaser-net-card">
           <span>Presence Sharing</span>
-          <strong>{settings.sharePresence ? "Enabled locally" : "Off"}</strong>
-          <em>{settings.sharePresence ? "No backend publish occurs until Chaser Net is configured." : "Local Chase Tracking remains separate."}</em>
+          <strong>{backendConfigured && settings.sharePresence ? "Enabled" : "Off"}</strong>
+          <em>{backendConfigured ? "Local Chase Tracking remains separate." : "Backend not configured. Nothing is published."}</em>
         </div>
         <div className="chaser-net-card">
           <span>Application Workflow</span>
@@ -67,11 +68,11 @@ export function ChaserNetPanel() {
       <div className="settings-row">
         <div>
           <strong>Share Chaser Net Presence</strong>
-          <span>Controls network publication only. Local Chase breadcrumbs are not uploaded by this switch.</span>
+          <span>{backendConfigured ? "Controls network publication only. Local Chase breadcrumbs are not uploaded by this switch." : "Unavailable until Chaser Net backend/auth is configured."}</span>
         </div>
         <div className="mode-toggle" aria-label="Chaser Net presence sharing">
           <button className={settings.sharePresence ? "" : "active"} onClick={() => update({ sharePresence: false })}>Off</button>
-          <button className={settings.sharePresence ? "active" : ""} onClick={() => update({ sharePresence: true })}>On</button>
+          <button className={backendConfigured && settings.sharePresence ? "active" : ""} disabled={!backendConfigured} onClick={() => update({ sharePresence: true })}>On</button>
         </div>
       </div>
 

@@ -4,6 +4,27 @@ All changes logged newest-first.
 
 ---
 
+## OPS App Stabilization Pass - 2026-08-19
+
+Started the recovery-safe field-app stabilization branch.
+
+### Changed
+- Limited global MARK/ESCAPE controls to operational field pages so Settings, Operations, and
+  Layers stay uncluttered while MARK remains one-tap on Weather/Locate/Report.
+- Added a MARK double-tap guard to prevent accidental duplicate immediate markers.
+- Improved Android Back behavior so map layer popovers close before leaving the current page.
+- Made expanded map camera state clearer with explicit follow/free/panning status wording.
+- Locked Chaser Net presence sharing OFF while the production backend/auth provider is not
+  configured, while preserving visible privacy/readiness controls.
+- Normalized Pi endpoint save/test behavior and cleared stale endpoint test state after edits.
+- Clarified Core/Pi diagnostic state on the Operations page.
+
+### Validation Notes
+- Native Android Chase Tracking code was not changed.
+- Mosaic remains the only active radar UI; Level II remains deferred.
+
+---
+
 ## Code Black Chaser Net v0.2 Application Review Foundation - 2026-08-19
 
 Extended the Chaser Net foundation toward screened membership without enabling a public production
