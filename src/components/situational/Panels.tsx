@@ -318,7 +318,6 @@ function AtlasMapRadarPanel({
             expanded={!allowExpand && !compact}
             active={visible}
             rangeRings={rangeRings}
-            onRangeRingsChange={setRangeRings}
             onOpenExpanded={allowExpand ? () => setExpanded(true) : undefined}
             statusLines={mapStatusLines}
             alerts={alerts}

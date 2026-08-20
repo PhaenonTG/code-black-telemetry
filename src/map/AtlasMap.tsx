@@ -54,7 +54,6 @@ type AtlasMapProps = {
   // stale-catch-up animation when you swipe back.
   active?: boolean;
   rangeRings: AtlasRangeRingMode;
-  onRangeRingsChange: (mode: AtlasRangeRingMode) => void;
   onOpenExpanded?: () => void;
   statusLines: string[];
   alerts?: AlertProduct[];
@@ -82,14 +81,6 @@ const GPS_MIN_MOVE_METERS = 4;
 const GPS_MIN_HEADING_DEG = 5;
 const GPS_MIN_SPEED_MPH = 1;
 const GPS_MIN_ACCURACY_M = 5;
-
-function rangeRingNext(mode: AtlasRangeRingMode): AtlasRangeRingMode {
-  if (mode === "off") return "10";
-  if (mode === "10") return "25";
-  if (mode === "25") return "50";
-  if (mode === "50") return "100";
-  return "off";
-}
 
 function metersBetween(a: AtlasGpsPoint, b: AtlasGpsPoint) {
   const metersPerDegreeLat = 111_320;
@@ -120,7 +111,6 @@ export function AtlasMap({
   expanded = false,
   active = true,
   rangeRings,
-  onRangeRingsChange,
   onOpenExpanded,
   statusLines,
   alerts = EMPTY_ALERTS,
@@ -811,10 +801,7 @@ export function AtlasMap({
           corner button), not duplicated here. Pan/zoom still work via touch gestures. */}
       {!compact && (
         <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
-          <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) + 0.5, duration: 260 })}>ZOOM+</button>
-          <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>ZOOM-</button>
           <button type="button" aria-label="Toggle follow mode" title="Cycles between north-up follow, heading-up follow, and recenter from free pan" className={cameraMode === "FREE" ? "" : "active"} onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
-          <button type="button" aria-label="Toggle range rings" title="Distance rings around your position" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RINGS{rangeRings !== "off" ? ` ${rangeRings}NM` : ""}</button>
           <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
           <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
           <button type="button" aria-label="Map layers" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>

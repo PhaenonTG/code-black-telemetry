@@ -5334,28 +5334,27 @@ body {
 }
 
 /* Controls live in their own row below the map canvas now (not overlaid on top of it, and not
-   fighting the radar status chip for space) -- full-word labels since there's real room here,
-   replacing the cramped single-letter abbreviations (NUP/RNG/CLR/MSC/LYR) nobody could parse at a
-   glance. Wraps to a second row on narrower cards rather than clipping or shrinking below a real
-   touch target -- these get tapped in a moving vehicle, not on a desk. */
+   fighting the radar status chip for space. Keep the remaining controls compact so landscape keeps
+   more room for the map while preserving touch targets. */
 .atlas-map-controls {
   position: static !important;
   display: flex !important;
   flex-wrap: wrap;
   flex: 0 0 auto;
-  gap: 6px;
-  padding: 8px 10px;
+  justify-content: flex-end;
+  gap: 5px;
+  padding: 6px 8px;
   background: rgba(3, 5, 7, 0.92);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .atlas-map-controls button {
-  flex: 1 1 auto;
-  min-width: 64px;
-  height: 40px !important;
+  flex: 0 1 auto;
+  min-width: 72px;
+  height: 34px !important;
   width: auto !important;
-  padding: 0 10px;
-  font-size: 10px !important;
+  padding: 0 9px;
+  font-size: 9px !important;
   letter-spacing: 0.03em;
   white-space: nowrap;
 }

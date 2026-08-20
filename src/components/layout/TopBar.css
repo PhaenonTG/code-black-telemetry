@@ -306,15 +306,16 @@
     grid-row: 1 !important;
     position: static !important;
     justify-self: end !important;
-    align-self: start !important;
+    align-self: center !important;
     min-width: 0 !important;
     height: auto !important;
+    padding-top: 2px !important;
     transform: none !important;
   }
 
   .time-module .font-mono {
     font-size: clamp(17px, 5.2vw, 22px) !important;
-    line-height: 1 !important;
+    line-height: 1.12 !important;
     letter-spacing: 0.05em !important;
   }
 
@@ -395,6 +396,7 @@
 
   .time-module .font-mono {
     font-size: clamp(15px, 4.7vw, 18px) !important;
+    line-height: 1.12 !important;
   }
 
   .header-status {
@@ -456,7 +458,7 @@
 
   .time-module .font-mono {
     font-size: clamp(18px, 4.4dvh, 26px) !important;
-    line-height: 1 !important;
+    line-height: 1.12 !important;
   }
 
   .time-module span:last-child {
