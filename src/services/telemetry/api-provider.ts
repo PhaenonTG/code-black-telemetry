@@ -4,6 +4,17 @@ import { cardinalFromDeg, isFiniteNumber, readEvents, readNumber, readSensors, r
 import { getPiEndpoint, getTelemetryLinkEnabled, loadPiEndpoint, loadTelemetryLinkEnabled, subscribePiEndpoint, subscribeTelemetryLinkEnabled } from "../settings";
 import { Preferences } from "@capacitor/preferences";
 import { bleTelemetryClient, type BleTelemetryPayload } from "./ble-client";
+import {
+  classifyFetchError,
+  classifyHttpStatus,
+  createConnectionStatus,
+  dataFreshnessState,
+  fetchWithTimeout,
+  inferConnectionTransport,
+  nextBackoffDelayMs,
+  normalizeEndpointOrEmpty,
+  type ConnectionStatus,
+} from "../connection";
 
 const POLL_MS = 2000;
 const GPS_MAX_AGE_MS = 15_000;
@@ -79,6 +90,24 @@ function normalizeBleSnapshot(payload: BleTelemetryPayload, fallback: TelemetryS
       internetOnline: fallback.status.internetOnline,
       mode: "pi",
       updatedAt: now,
+      connection: createConnectionStatus({
+        ...fallback.status.connection,
+        endpoint: "ble",
+        connectionState: payload.health === "BACKEND_OFFLINE" ? "DEGRADED" : "CONNECTED",
+        lastAttemptAt: now,
+        lastConnectedAt: now,
+        lastSuccessfulResponseAt: now,
+        lastDataAt: now,
+        dataAgeMs: Math.max(0, (payload.age ?? 0) * 1000),
+        latencyMs: 0,
+        failureCount: 0,
+        lastErrorCode: payload.health === "BACKEND_OFFLINE" ? "NETWORK_ERROR" : null,
+        lastErrorSummary: payload.health === "BACKEND_OFFLINE" ? "BLE connected, Pi backend reports offline." : "",
+        retryAt: null,
+        provider: "telemetry",
+        transport: "ble",
+        isConfigured: true,
+      }),
     },
     events: fallback.events,
   };
@@ -174,15 +203,15 @@ function lastKnownSystem(system: SystemData): SystemData {
 
 function endpoint(path: string) {
   const configured = getPiEndpoint();
-  const envBase = (import.meta.env.VITE_PI_API_BASE as string | undefined)?.replace(/\/$/, "") ?? "";
+  const envBase = normalizeEndpointOrEmpty((import.meta.env.VITE_PI_API_BASE as string | undefined) ?? "");
   const base = configured || envBase;
   return `${base}${path}`;
 }
 
-function withTimeout(url: string, timeoutMs: number) {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { signal: controller.signal, cache: "no-store" }).finally(() => window.clearTimeout(timer));
+function configuredEndpointBase() {
+  const configured = getPiEndpoint();
+  const envBase = normalizeEndpointOrEmpty((import.meta.env.VITE_PI_API_BASE as string | undefined) ?? "");
+  return configured || envBase;
 }
 
 function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: number): TelemetrySnapshot {
@@ -274,6 +303,24 @@ function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: n
       internetOnline: fallback.status.internetOnline,
       mode: "pi",
       updatedAt: now,
+      connection: createConnectionStatus({
+        ...fallback.status.connection,
+        endpoint: configuredEndpointBase(),
+        connectionState: "CONNECTED",
+        lastAttemptAt: now,
+        lastConnectedAt: now,
+        lastSuccessfulResponseAt: now,
+        lastDataAt: now,
+        dataAgeMs: 0,
+        latencyMs: latency,
+        failureCount: 0,
+        lastErrorCode: null,
+        lastErrorSummary: "",
+        retryAt: null,
+        provider: "telemetry",
+        transport: inferConnectionTransport(configuredEndpointBase()),
+        isConfigured: Boolean(configuredEndpointBase()),
+      }),
     },
     events: readEvents(source, fallback.events),
   };
@@ -289,6 +336,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
   private failureCount = 0;
   private nextPollAt = 0;
   private lastBleAt = 0;
+  private inFlightPoll: AbortController | null = null;
 
   constructor() {
     void this.restoreLastSnapshot();
@@ -309,6 +357,8 @@ export class HybridTelemetryProvider implements TelemetryProvider {
         bleTelemetryClient.start();
         void this.poll();
       } else {
+        this.inFlightPoll?.abort();
+        this.inFlightPoll = null;
         bleTelemetryClient.stop();
         this.publish(this.applyTabletGps(this.offlineSnapshot(this.snapshot, "Pi/ESP link turned off in Settings")));
       }
@@ -334,7 +384,17 @@ export class HybridTelemetryProvider implements TelemetryProvider {
               ...snapshot,
               weather: { ...snapshot.weather, sourceLabel: "SIMULATOR", source: "simulator" },
               wind: { ...snapshot.wind, source: "simulator" },
-              status: { ...snapshot.status, piOnline: false, mode: "simulator", updatedAt: Date.now() },
+              status: {
+                ...snapshot.status,
+                piOnline: false,
+                mode: "simulator",
+                updatedAt: Date.now(),
+                connection: createConnectionStatus({
+                  ...snapshot.status.connection,
+                  connectionState: "DEGRADED",
+                  lastErrorSummary: "Simulator fallback active; Pi/Core telemetry is not live.",
+                }),
+              },
             }),
           );
         }
@@ -417,12 +477,36 @@ export class HybridTelemetryProvider implements TelemetryProvider {
         piOnline: false,
         mode: "tablet",
         updatedAt: now,
+        connection: this.offlineConnectionStatus(snapshot.status.connection, message, now),
       },
       events: [
         ...(shouldAddEvent ? [{ id: `evt-${now}-${Math.random().toString(36).slice(2, 8)}`, timestamp: now, level: "warn" as const, message }] : []),
         ...existingEvents,
       ].slice(0, 8),
     };
+  }
+
+  private offlineConnectionStatus(previous: ConnectionStatus, message: string, now: number): ConnectionStatus {
+    const endpointBase = configuredEndpointBase();
+    const isConfigured = Boolean(endpointBase);
+    const disabled = !getTelemetryLinkEnabled();
+    const noEndpoint = !isConfigured && !disabled;
+    const dataAgeMs = previous.lastDataAt ? Math.max(0, now - previous.lastDataAt) : null;
+    const freshness = dataFreshnessState(previous.lastDataAt, now, 30_000, 180_000);
+    const state = disabled ? "DISCONNECTED" : noEndpoint ? "NOT_CONFIGURED" : freshness === "STALE" ? "STALE" : "DISCONNECTED";
+    return createConnectionStatus({
+      ...previous,
+      endpoint: endpointBase,
+      connectionState: state,
+      dataAgeMs,
+      failureCount: noEndpoint || disabled ? 0 : this.failureCount,
+      lastErrorCode: noEndpoint ? "NOT_CONFIGURED" : disabled ? null : previous.lastErrorCode ?? "NETWORK_ERROR",
+      lastErrorSummary: noEndpoint ? "Pi endpoint is not configured." : disabled ? "Pi/ESP link is turned off." : message,
+      retryAt: this.nextPollAt || null,
+      provider: "telemetry",
+      transport: inferConnectionTransport(endpointBase),
+      isConfigured,
+    });
   }
 
   private async restoreLastSnapshot() {
@@ -446,25 +530,77 @@ export class HybridTelemetryProvider implements TelemetryProvider {
     const now = Date.now();
     if (now - this.lastBleAt < BLE_FRESH_WINDOW_MS) return;
     if (now < this.nextPollAt) return;
+    if (this.inFlightPoll) return;
     if (!getPiEndpoint() && !import.meta.env.VITE_PI_API_BASE) {
       this.nextPollAt = now + 30_000;
       this.publish(this.applyTabletGps(this.offlineSnapshot(this.snapshot, "Pi endpoint not configured")));
       return;
     }
+    const controller = new AbortController();
+    this.inFlightPoll = controller;
     const start = performance.now();
     try {
-      const response = await withTimeout(endpoint("/api/latest"), 1500);
-      if (!response.ok) throw new Error(`Pi API ${response.status}`);
+      const response = await fetchWithTimeout(endpoint("/api/latest"), 1500, { signal: controller.signal });
+      if (!response.ok) {
+        const classified = classifyHttpStatus(response.status, response.statusText);
+        this.failureCount++;
+        this.nextPollAt = Date.now() + nextBackoffDelayMs(this.failureCount, { baseMs: 1_500, maxMs: 45_000 });
+        this.snapshot = {
+          ...this.snapshot,
+          status: {
+            ...this.snapshot.status,
+            connection: createConnectionStatus({
+              ...this.snapshot.status.connection,
+              endpoint: configuredEndpointBase(),
+              connectionState: classified.connectionState,
+              lastAttemptAt: now,
+              failureCount: this.failureCount,
+              lastErrorCode: classified.lastErrorCode,
+              lastErrorSummary: classified.lastErrorSummary,
+              retryAt: this.nextPollAt,
+              provider: "telemetry",
+              transport: inferConnectionTransport(configuredEndpointBase()),
+              isConfigured: Boolean(configuredEndpointBase()),
+            }),
+          },
+        };
+        this.publish(this.applyTabletGps(this.offlineSnapshot(this.snapshot, classified.lastErrorSummary)));
+        return;
+      }
       const data: unknown = await response.json();
       const latency = Math.round(performance.now() - start);
       this.failureCount = 0;
+      this.nextPollAt = 0;
       const normalized = this.applyTabletGps(normalizeSnapshot(data, this.snapshot, latency));
       this.publish(normalized);
       this.persistLastSnapshot(normalized);
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted) return;
       this.failureCount++;
-      this.nextPollAt = Date.now() + Math.min(30_000, 1000 * 2 ** Math.min(5, this.failureCount));
-      this.publish(this.applyTabletGps(this.offlineSnapshot(this.snapshot, "Pi API offline")));
+      const classified = classifyFetchError(error);
+      this.nextPollAt = Date.now() + nextBackoffDelayMs(this.failureCount, { baseMs: 1_500, maxMs: 45_000 });
+      this.snapshot = {
+        ...this.snapshot,
+        status: {
+          ...this.snapshot.status,
+          connection: createConnectionStatus({
+            ...this.snapshot.status.connection,
+            endpoint: configuredEndpointBase(),
+            connectionState: classified.connectionState,
+            lastAttemptAt: now,
+            failureCount: this.failureCount,
+            lastErrorCode: classified.lastErrorCode,
+            lastErrorSummary: classified.lastErrorSummary,
+            retryAt: this.nextPollAt,
+            provider: "telemetry",
+            transport: inferConnectionTransport(configuredEndpointBase()),
+            isConfigured: Boolean(configuredEndpointBase()),
+          }),
+        },
+      };
+      this.publish(this.applyTabletGps(this.offlineSnapshot(this.snapshot, classified.lastErrorSummary || "Pi API offline")));
+    } finally {
+      if (this.inFlightPoll === controller) this.inFlightPoll = null;
     }
   }
 

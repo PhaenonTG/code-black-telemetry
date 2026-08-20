@@ -4,6 +4,36 @@ All changes logged newest-first.
 
 ---
 
+## Core / Pi Connectivity Hardening - 2026-08-20
+
+Hardened Code Black OPS connection handling for CodeBlack-Core, Raspberry Pi vehicle-node, and
+local field-network endpoints without adding a new backend or changing native Chase Tracking.
+
+### Changed
+- Added a shared platform-neutral connection status model for configured, connecting, connected,
+  degraded, stale, disconnected, and error states.
+- Normalized user-configured Pi/Core endpoint handling for LAN IPs, hostnames, HTTPS endpoints, and
+  Tailscale-style addresses while rejecting unsafe schemes and credential-bearing URLs.
+- Improved Pi endpoint test feedback with bounded timeouts and clearer failure categories such as
+  timeout, auth failure, HTTP error, malformed response, and network failure.
+- Centralized retry/backoff, freshness classification, endpoint transport inference, and cancellable
+  HTTP helpers for telemetry and streaming clients.
+- Separated connection reachability from telemetry freshness so the UI can show connected-but-stale
+  and disconnected-with-last-known-data states honestly.
+- Added Operations and Settings diagnostics for endpoint, transport, last success, data age, retry
+  timing, and sanitized error summaries.
+- Guarded streaming status refreshes and telemetry polling against stale in-flight responses
+  overwriting newer state.
+
+### Validation Notes
+- Native Android Chase Tracking service code was not changed.
+- Core/Pi health remains client-side and adapter-based; the real Pi backend is still a separate
+  field-node codebase and no production Core backend was added in this pass.
+- HTTP remains supported for explicitly configured local/Tailscale field endpoints; unsafe URL
+  schemes are rejected by the app before save/test.
+
+---
+
 ## iPhone / iPad Foundation Validation - 2026-08-20
 
 Hardened the shared platform boundary for iPhone/iPad readiness without expanding Chaser Net.

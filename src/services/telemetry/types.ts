@@ -67,6 +67,7 @@ export interface StatusData {
   internetOnline: boolean;
   mode: "pi" | "tablet" | "simulator";
   updatedAt: number;
+  connection: ConnectionStatus;
 }
 
 export interface EventEntry {
@@ -106,3 +107,4 @@ export interface TelemetryProvider {
   getLatest(): TelemetrySnapshot;
   disconnect(): void;
 }
+import type { ConnectionStatus } from "../connection";

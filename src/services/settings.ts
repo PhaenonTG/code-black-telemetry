@@ -1,4 +1,5 @@
 import { Preferences } from "@capacitor/preferences";
+import { normalizeEndpointInput, normalizeEndpointOrEmpty } from "./connection";
 
 const PI_ENDPOINT_KEY = "codeblack.piEndpoint";
 const DEFAULT_PI_ENDPOINT = "";
@@ -546,12 +547,7 @@ export function subscribeCustomPoiPins(listener: (pins: CustomPoiPin[]) => void)
   };
 }
 
-function normalizeEndpoint(value: string) {
-  const trimmed = value.trim().replace(/\/$/, "");
-  if (!trimmed) return "";
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return `http://${trimmed}`;
-}
+export { normalizeEndpointInput };
 
 const TELEMETRY_LINK_ENABLED_KEY = "codeblack.telemetryLinkEnabled";
 let currentTelemetryLinkEnabled = true;
@@ -589,13 +585,17 @@ export function subscribeTelemetryLinkEnabled(listener: (enabled: boolean) => vo
 
 export async function loadPiEndpoint() {
   const saved = await Preferences.get({ key: PI_ENDPOINT_KEY });
-  currentPiEndpoint = normalizeEndpoint(saved.value ?? DEFAULT_PI_ENDPOINT);
+  currentPiEndpoint = normalizeEndpointOrEmpty(saved.value ?? DEFAULT_PI_ENDPOINT);
   listeners.forEach((listener) => listener(currentPiEndpoint));
   return currentPiEndpoint;
 }
 
 export async function savePiEndpoint(value: string) {
-  currentPiEndpoint = normalizeEndpoint(value);
+  const normalized = normalizeEndpointInput(value);
+  if (!normalized.ok) {
+    throw new Error(normalized.errorSummary || "Invalid endpoint.");
+  }
+  currentPiEndpoint = normalized.endpoint;
   await Preferences.set({ key: PI_ENDPOINT_KEY, value: currentPiEndpoint });
   listeners.forEach((listener) => listener(currentPiEndpoint));
   return currentPiEndpoint;

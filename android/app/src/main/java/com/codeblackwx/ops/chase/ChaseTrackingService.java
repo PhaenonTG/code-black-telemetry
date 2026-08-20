@@ -14,6 +14,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
@@ -176,6 +177,10 @@ public class ChaseTrackingService extends Service implements LocationListener {
         if (manager == null) return;
         manager.cancel(NOTIFICATION_ID);
         manager.cancel(null, NOTIFICATION_ID);
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            manager.cancel(NOTIFICATION_ID);
+            manager.cancel(null, NOTIFICATION_ID);
+        }, 750L);
     }
 
     private boolean hasLocationPermission() {
@@ -226,7 +231,7 @@ public class ChaseTrackingService extends Service implements LocationListener {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("Code Black OPS - Chase Tracking Active")
             .setContentText("Location breadcrumbs are being recorded for this chase.")
-            .setOngoing(true)
+            .setOngoing(false)
             .setOnlyAlertOnce(true)
             .setShowWhen(true)
             .setContentIntent(pendingIntent)

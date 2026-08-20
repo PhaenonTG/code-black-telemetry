@@ -1,19 +1,15 @@
-import { useEffect, useState } from "react";
-import { loadPiEndpoint, savePiEndpoint, subscribePiEndpoint } from "../../services/settings";
+import { useEffect, useRef, useState } from "react";
+import { testHttpConnection } from "../../services/connection";
+import { loadPiEndpoint, normalizeEndpointInput, savePiEndpoint, subscribePiEndpoint } from "../../services/settings";
 
-type TestState = "idle" | "testing" | "ok" | "failed";
+type TestState = "idle" | "testing" | "ok" | "warn" | "failed";
 
 export function PiEndpointPanel() {
   const [endpoint, setEndpoint] = useState("");
   const [saved, setSaved] = useState("");
   const [testState, setTestState] = useState<TestState>("idle");
   const [message, setMessage] = useState("Configure LAN, hostname, or Tailscale endpoint.");
-
-  const normalizeEndpoint = (value: string) => {
-    const target = value.trim().replace(/\/$/, "");
-    if (!target) return "";
-    return /^https?:\/\//i.test(target) ? target : `http://${target}`;
-  };
+  const testRunRef = useRef(0);
 
   useEffect(() => {
     void loadPiEndpoint();
@@ -27,33 +23,38 @@ export function PiEndpointPanel() {
   }, []);
 
   const persist = async () => {
-    const normalized = await savePiEndpoint(normalizeEndpoint(endpoint));
-    setEndpoint(normalized);
-    setSaved(normalized);
-    setTestState("idle");
-    setMessage(normalized ? "Endpoint saved. Reconnect will happen automatically." : "Endpoint cleared. Running standalone until configured.");
+    try {
+      const normalized = await savePiEndpoint(endpoint);
+      setEndpoint(normalized);
+      setSaved(normalized);
+      setTestState("idle");
+      setMessage(normalized ? "Endpoint saved. Reconnect will happen automatically." : "Endpoint cleared. Running standalone until configured.");
+    } catch (error) {
+      setTestState("failed");
+      setMessage(error instanceof Error ? error.message : "Endpoint is not valid.");
+    }
   };
 
   const test = async () => {
-    const normalized = normalizeEndpoint(endpoint);
-    if (!normalized) {
+    const normalized = normalizeEndpointInput(endpoint);
+    if (!normalized.ok) {
+      setTestState("failed");
+      setMessage(normalized.errorSummary ?? "Endpoint is not valid.");
+      return;
+    }
+    if (!normalized.endpoint) {
       setTestState("failed");
       setMessage("Enter a Pi endpoint first.");
       return;
     }
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 3500);
+    const runId = ++testRunRef.current;
     setTestState("testing");
-    try {
-      const response = await fetch(`${normalized}/health`, { signal: controller.signal, cache: "no-store" });
-      setTestState(response.ok ? "ok" : "failed");
-      setMessage(response.ok ? `Health check OK at ${normalized}` : `Health check returned HTTP ${response.status}`);
-    } catch {
-      setTestState("failed");
-      setMessage(`No /health response from ${normalized}`);
-    } finally {
-      window.clearTimeout(timer);
-    }
+    setMessage(`Testing ${normalized.endpoint}...`);
+    const result = await testHttpConnection(normalized.endpoint);
+    if (runId !== testRunRef.current) return;
+    const state = result.status.connectionState;
+    setTestState(state === "CONNECTED" ? "ok" : state === "DEGRADED" ? "warn" : "failed");
+    setMessage(state === "CONNECTED" ? `${result.message} ${normalized.endpoint}` : `${normalized.endpoint}: ${result.message}`);
   };
 
   return (
@@ -66,6 +67,7 @@ export function PiEndpointPanel() {
             value={endpoint}
             onChange={(event) => {
               setEndpoint(event.target.value);
+              testRunRef.current += 1;
               setTestState("idle");
               setMessage("Endpoint changed. Save or test before relying on it.");
             }}

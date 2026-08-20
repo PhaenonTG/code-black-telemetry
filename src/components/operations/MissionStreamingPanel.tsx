@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useResumeTick } from "../../hooks/useResumeTick";
 import { loadBleCommandToken, loadPiEndpoint, subscribeBleCommandToken, subscribePiEndpoint } from "../../services/settings";
 import {
@@ -94,6 +94,7 @@ export function MissionStreamingPanel({ className = "" }: { className?: string }
   const [bleConnected, setBleConnected] = useState(() => bleTelemetryClient.isConnected());
   const [hasToken, setHasToken] = useState(false);
   const [endpointTick, setEndpointTick] = useState(0);
+  const refreshSeqRef = useRef(0);
   const resumeTick = useResumeTick();
 
   const stale = status.stale || !status.fetchedAt || Date.now() - status.fetchedAt > STALE_MS;
@@ -105,11 +106,14 @@ export function MissionStreamingPanel({ className = "" }: { className?: string }
   }, [status.camera.error, status.camera.fps, status.camera.resolution, stale]);
 
   const refresh = useCallback(async (clearMessage = true) => {
+    const seq = ++refreshSeqRef.current;
     try {
       const next = await getMissionStreamStatus();
+      if (seq !== refreshSeqRef.current) return;
       setStatus(next);
       if (clearMessage) setMessage("");
     } catch (error) {
+      if (seq !== refreshSeqRef.current) return;
       setStatus((current) => ({
         ...current,
         stale: true,

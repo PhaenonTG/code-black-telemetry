@@ -104,6 +104,27 @@ function appPageSupportsOperationalActions(page: PageKey) {
   return page === "weather" || page === "locate" || page === "report";
 }
 
+function formatConnectionSummary(status: ReturnType<typeof useStatus> | undefined | null) {
+  if (!status) return "NOT READY";
+  const connection = status.connection;
+  if (!connection?.isConfigured) return "NOT CONFIGURED";
+  if (connection.connectionState === "CONNECTED") {
+    const dataAge = connection.dataAgeMs && connection.dataAgeMs > 5_000 ? ` · DATA ${Math.round(connection.dataAgeMs / 1000)}s` : "";
+    return `CONNECTED · ${connection.latencyMs ?? status.apiLatencyMs} ms${dataAge}`;
+  }
+  if (connection.connectionState === "STALE") {
+    const age = connection.dataAgeMs == null ? "STALE" : `DATA ${Math.round(connection.dataAgeMs / 1000)}s OLD`;
+    return `STALE · ${age}`;
+  }
+  if (connection.connectionState === "DEGRADED") return `DEGRADED · ${connection.lastErrorSummary || "CHECK STATUS"}`;
+  if (connection.connectionState === "CONNECTING") return "CONNECTING";
+  if (connection.retryAt) {
+    const retrySeconds = Math.max(0, Math.round((connection.retryAt - Date.now()) / 1000));
+    return `${connection.connectionState} · RETRY ${retrySeconds}s`;
+  }
+  return `${connection.connectionState}${connection.lastErrorSummary ? ` · ${connection.lastErrorSummary}` : ""}`;
+}
+
 export default function App() {
   const [page, setPage] = useState<PageKey>(() => pathToPage());
   const [cockpitMode, setCockpitMode] = useState<CockpitMode>("chase");
@@ -144,15 +165,10 @@ export default function App() {
   const locationTracking = useLocationTracking();
   const chaseStatus = chaseStatusParts(locationTracking);
   const missionSessionId = missionSession?.id ?? null;
-  const piState = status?.piOnline ? `ONLINE · ${status.apiLatencyMs} ms` : status?.updatedAt ? `OFFLINE · LAST CHECK ${new Date(status.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "OFFLINE";
-  const serviceState = status?.piOnline ? "VIA PI · CHECK DASHBOARD" : "VIA PI · OFFLINE";
-  const coreState = !status
-    ? "NOT READY"
-    : status.piOnline
-      ? `CONNECTED · ${status.apiLatencyMs} ms`
-      : status.updatedAt
-        ? `OFFLINE · ${status.dataAgeSeconds}s stale`
-        : "NOT CONFIGURED";
+  const connectionSummary = formatConnectionSummary(status);
+  const piState = status?.connection ? connectionSummary : "OFFLINE";
+  const serviceState = status?.piOnline ? "VIA PI · LIVE" : status?.connection?.connectionState === "STALE" ? "VIA PI · STALE" : "VIA PI · OFFLINE";
+  const coreState = connectionSummary;
   const showOperationalActions = appPageSupportsOperationalActions(page);
   const mapGps = useMemo(
     () => (gpsPoint ? { ...gpsPoint, headingDeg, speedMph, accuracyM } : null),
@@ -472,7 +488,7 @@ export default function App() {
               <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Operational Mode</div>
               <div className="ops-mode">
                 <strong>{status?.mode === "pi" ? "PI CONNECTED" : status?.mode === "tablet" ? deviceLabels.standaloneMode : "DEVELOPMENT SIMULATOR"}</strong>
-                <span>PI {status?.piOnline ? "ONLINE" : "OFFLINE"} | INTERNET {status?.internetOnline ? "AVAILABLE" : "UNKNOWN"}</span>
+                <span>PI {status?.connection?.connectionState ?? "OFFLINE"} | INTERNET {status?.internetOnline ? "AVAILABLE" : "UNKNOWN"}</span>
                 <span className="ops-mode__hint">Cockpit display mode moved to Settings.</span>
               </div>
             </section>

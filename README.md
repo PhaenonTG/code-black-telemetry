@@ -57,6 +57,7 @@ Important variables:
 - `docs/on-device-radar-architecture.md`: retired native radar notes and mosaic-first radar status.
 - `docs/2026-08-06-audit-handoff.md`: latest audit findings, TODOs, streaming readiness, and networking review.
 - `docs/platform-status.md`: Android, iPhone/iPad, and Windows capability matrix.
+- `docs/core-pi-connectivity.md`: shared Core/Pi connection state, endpoint, retry, freshness, and diagnostics model.
 - `CHANGELOG.md`: newest-first change history.
 
 ## Guardrails

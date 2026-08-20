@@ -1,5 +1,6 @@
 import { getBleCommandToken, getPiEndpoint } from "./settings";
 import { bleTelemetryClient } from "./telemetry/ble-client";
+import { classifyFetchError, classifyHttpStatus, fetchWithTimeout, normalizeEndpointOrEmpty } from "./connection";
 
 export type StreamState = "OFF" | "STARTING" | "LIVE" | "DEGRADED" | "RECONNECTING" | "FAILED";
 export type StreamControlTarget = "knwa" | "codeBlack" | "recording";
@@ -79,13 +80,7 @@ function unknownCamera(): CameraStatus {
 function configuredBase(): string {
   const configured = getPiEndpoint();
   const envBase = (import.meta.env.VITE_PI_API_BASE as string | undefined)?.trim().replace(/\/$/, "") ?? "";
-  return configured || envBase;
-}
-
-function normalizeBase(value: string): string {
-  const trimmed = value.trim().replace(/\/$/, "");
-  if (!trimmed) return "";
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  return normalizeEndpointOrEmpty(configured || envBase);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -192,14 +187,17 @@ function normalizeCamera(raw: unknown): CameraStatus {
 }
 
 async function fetchJson(url: string, timeoutMs: number, options: RequestInit = {}): Promise<unknown> {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal, cache: "no-store" });
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const response = await fetchWithTimeout(url, timeoutMs, options);
+    if (!response.ok) {
+      const classified = classifyHttpStatus(response.status, response.statusText);
+      throw new Error(classified.lastErrorSummary);
+    }
     return await response.json().catch(() => ({}));
-  } finally {
-    window.clearTimeout(timer);
+  } catch (error) {
+    if (error instanceof Error && /^(HTTP|Authentication)/.test(error.message)) throw error;
+    const classified = classifyFetchError(error);
+    throw new Error(classified.lastErrorSummary);
   }
 }
 
@@ -216,7 +214,7 @@ export function emptyMissionStreamStatus(error = ""): MissionStreamStatus {
 }
 
 export async function getMissionStreamStatus(): Promise<MissionStreamStatus> {
-  const base = normalizeBase(configuredBase());
+  const base = configuredBase();
   if (!base) throw new Error("Pi endpoint not configured");
   const fetchedAt = Date.now();
   try {
@@ -269,7 +267,7 @@ export async function sendStreamControl(target: StreamControlTarget, action: Str
     return { transport: "ble", message: "Command sent over BLE." };
   }
 
-  const base = normalizeBase(configuredBase());
+  const base = configuredBase();
   if (!base) throw new Error("Pi endpoint not configured");
   const body = JSON.stringify({ token });
   await fetchJson(`${base}/api/local/stream/${config.path}/${action}`, COMMAND_TIMEOUT_MS, {

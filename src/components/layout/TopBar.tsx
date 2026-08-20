@@ -45,7 +45,12 @@ function useNow() {
 // Real signal, not decorative: piOnline drives good/bad, apiLatencyMs drives a "degraded but
 // connected" middle state. This is the initial wiring the user asked to have in place for future
 // refinement — not a fabricated value, both inputs already come from the live telemetry status.
-function piLinkState(piOnline: boolean | undefined, apiLatencyMs: number | undefined): "good" | "degraded" | "bad" {
+function piLinkState(status: ReturnType<typeof useStatus> | undefined | null): "good" | "degraded" | "bad" {
+  const connectionState = status?.connection?.connectionState;
+  if (connectionState === "STALE" || connectionState === "DEGRADED" || connectionState === "CONNECTING") return "degraded";
+  if (connectionState === "NOT_CONFIGURED" || connectionState === "DISCONNECTED" || connectionState === "ERROR") return "bad";
+  const piOnline = status?.piOnline;
+  const apiLatencyMs = status?.apiLatencyMs;
   if (!piOnline) return "bad";
   if ((apiLatencyMs ?? 0) > 800) return "degraded";
   return "good";
@@ -56,7 +61,7 @@ export function TopBar({ batteryLabel = "Device battery" }: { batteryLabel?: str
   const battery = useBattery();
   const now = useNow();
   const [clockMode, setClockMode] = useState<ClockMode>("local");
-  const linkState = piLinkState(status?.piOnline, status?.apiLatencyMs);
+  const linkState = piLinkState(status);
   const dateLabel = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
   const clock = formatOpsClock(now, clockMode);
 

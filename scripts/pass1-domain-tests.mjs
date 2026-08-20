@@ -22,6 +22,7 @@ const layerManager = await importTs("src/services/mapLayerManager.ts");
 const egress = await importTs("src/services/egress.ts");
 const locationObservation = await importTs("src/services/locationObservation.ts");
 const platformCapabilityModel = await importTs("src/services/platformCapabilityModel.ts");
+const connection = await importTs("src/services/connection.ts");
 
 const januaryCentral = clock.formatOpsClock(new Date("2026-01-15T18:15:00Z"), "central");
 const julyCentral = clock.formatOpsClock(new Date("2026-07-15T18:15:00Z"), "central");
@@ -266,5 +267,28 @@ assert.equal(webCapabilities.notifications, true);
 assert.equal(webCapabilities.nativeNotifications, false);
 assert.equal(webCapabilities.wakeLock, true);
 assert.equal(webCapabilities.desktopNotifications, true);
+
+assert.equal(connection.normalizeEndpointInput("192.168.4.1:5000").endpoint, "http://192.168.4.1:5000");
+assert.equal(connection.normalizeEndpointInput(" http://raspberrypi.local:5000/ ").endpoint, "http://raspberrypi.local:5000");
+assert.equal(connection.normalizeEndpointInput("https://core.example.com/api/").endpoint, "https://core.example.com/api");
+assert.equal(connection.normalizeEndpointInput("javascript:alert(1)").ok, false);
+assert.equal(connection.normalizeEndpointInput("http://user:pass@192.168.4.1").errorCode, "INVALID_ENDPOINT");
+assert.equal(connection.inferConnectionTransport("http://192.168.4.1:5000"), "local-network");
+assert.equal(connection.inferConnectionTransport("http://100.80.136.32:5000"), "tailscale");
+assert.equal(connection.classifyHttpStatus(401).lastErrorCode, "AUTH_REQUIRED");
+assert.equal(connection.classifyHttpStatus(403).lastErrorCode, "AUTH_FAILED");
+assert.equal(connection.classifyHttpStatus(503).connectionState, "DEGRADED");
+assert.equal(connection.classifyFetchError(new DOMException("The operation was aborted.", "AbortError")).lastErrorCode, "TIMEOUT");
+assert.equal(connection.dataFreshnessState(now - 5_000, now, 30_000, 180_000), "CONNECTED");
+assert.equal(connection.dataFreshnessState(now - 60_000, now, 30_000, 180_000), "STALE");
+assert.equal(connection.dataFreshnessState(now - 5 * 60_000, now, 30_000, 180_000), "DISCONNECTED");
+const backoffA = connection.nextBackoffDelayMs(1, { baseMs: 1000, maxMs: 30_000, jitterRatio: 0 });
+const backoffB = connection.nextBackoffDelayMs(5, { baseMs: 1000, maxMs: 30_000, jitterRatio: 0 });
+assert.equal(backoffA, 1000);
+assert.equal(backoffB, 16000);
+const configuredStatus = connection.createConnectionStatus({ endpoint: "http://192.168.4.1:5000", provider: "vehicle-node" });
+assert.equal(configuredStatus.isConfigured, true);
+assert.equal(configuredStatus.transport, "local-network");
+assert.equal(configuredStatus.connectionState, "DISCONNECTED");
 
 console.log("pass1-domain-tests: ok");
