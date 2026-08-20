@@ -11,6 +11,7 @@ capabilities such as background location, notifications, display control, Blueto
 | --- | --- | --- | --- |
 | Shared UI | Implemented through Capacitor WebView | Foundation through existing Capacitor iOS project | PWA/laptop preview foundation |
 | Mosaic radar | Implemented with shared Mapbox GL JS raster layer | Shared WebView path, pending physical iPhone/iPad validation | Shared web path |
+| Road/Cameras | Shared provider-backed map layers; Arkansas DOT IDrive v0.1 | Shared WebView/provider path; pending physical iPhone/iPad validation | Shared web/provider path |
 | MARK | Implemented in shared session/location flow | Shared flow ready; depends on available foreground location | Shared flow ready; location provider may be unavailable/external later |
 | Chase sessions | Implemented in shared mission session service | Shared session logic ready | Shared session logic ready |
 | Persistent background location | Implemented through Android native adapter | Pending native Core Location adapter; do not claim active | Pending desktop/external GPS adapter |

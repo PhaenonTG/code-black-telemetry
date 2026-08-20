@@ -4,6 +4,36 @@ All changes logged newest-first.
 
 ---
 
+## Road Conditions and Public Cameras v0.1 - 2026-08-20
+
+Wired the existing Road Conditions and Traffic / Public Cameras map-layer foundations to shared
+provider-backed data without adding Android-specific business logic or changing native Chase
+Tracking.
+
+### Changed
+- Added shared road/camera provider contracts, provider registry, viewport filtering, bounded
+  caching, request deduplication, cancellation, and stale-cache fallback behavior.
+- Added Arkansas DOT IDrive as the first concrete provider for road closures, lane closures,
+  construction points, and public traffic cameras.
+- Normalized road incidents and public cameras with provider IDs, provider record IDs, freshness,
+  provenance, validated coordinates, safe source URLs, and provider attribution.
+- Activated Road Conditions and Public Cameras toggles in the Locate layer popover and Layer
+  Configuration screen with honest provider/viewport state labels.
+- Added Atlas map marker renderers and compact detail popups for road incidents and public cameras;
+  camera stills load only when the marker detail is opened.
+- Added tests for coordinate/URL/text validation, provider coverage selection, freshness
+  classification, malformed data rejection, and normalized road/camera records.
+- Documented provider coverage, cache/freshness semantics, provenance, safety boundaries, and
+  future provider expansion in `docs/road-camera-providers.md`.
+
+### Validation Notes
+- Current concrete provider coverage is Arkansas only. Oklahoma, Kansas, Missouri, and Core-proxy
+  providers remain future adapter work.
+- Mosaic radar remains the active radar product; native Level II remains deferred.
+- Native Android Chase Tracking code was not changed.
+
+---
+
 ## Core / Pi Connectivity Hardening - 2026-08-20
 
 Hardened Code Black OPS connection handling for CodeBlack-Core, Raspberry Pi vehicle-node, and
