@@ -1,4 +1,5 @@
 import type { TelemetryProvider, TelemetrySnapshot, EventEntry } from "./types";
+import { createConnectionStatus } from "../connection";
 
 const TICK_MS = 1000;
 
@@ -94,6 +95,19 @@ function buildInitialSnapshot(): TelemetrySnapshot {
       internetOnline: true,
       mode: "simulator",
       updatedAt: Date.now(),
+      connection: createConnectionStatus({
+        endpoint: "simulator",
+        connectionState: "CONNECTED",
+        lastAttemptAt: Date.now(),
+        lastConnectedAt: Date.now(),
+        lastSuccessfulResponseAt: Date.now(),
+        lastDataAt: Date.now(),
+        dataAgeMs: 0,
+        latencyMs: 12,
+        provider: "telemetry",
+        transport: "unknown",
+        isConfigured: true,
+      }),
     },
     events: [
       { id: randomId(), timestamp: Date.now() - 5000, level: "info", message: "System started" },
@@ -171,7 +185,27 @@ export class SimulatorProvider implements TelemetryProvider {
       sensors,
       power: { mainBatteryV: mainV, auxBatteryV: auxV, charging: mainV > 13.5, source: "simulator", updatedAt: now },
       system: { cpuPercent: cpu, ramPercent: ram, storagePercent: s.system.storagePercent, uptimeSeconds: s.system.uptimeSeconds + 1, source: "simulator", updatedAt: now },
-      status: { apiLatencyMs: latency, dataAgeSeconds: 0, piOnline: true, internetOnline: true, mode: "simulator", updatedAt: now },
+      status: {
+        apiLatencyMs: latency,
+        dataAgeSeconds: 0,
+        piOnline: true,
+        internetOnline: true,
+        mode: "simulator",
+        updatedAt: now,
+        connection: createConnectionStatus({
+          ...s.status.connection,
+          connectionState: "CONNECTED",
+          lastAttemptAt: now,
+          lastConnectedAt: now,
+          lastSuccessfulResponseAt: now,
+          lastDataAt: now,
+          dataAgeMs: 0,
+          latencyMs: latency,
+          failureCount: 0,
+          lastErrorCode: null,
+          lastErrorSummary: "",
+        }),
+      },
       events,
     };
 

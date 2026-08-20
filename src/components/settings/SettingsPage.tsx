@@ -61,6 +61,7 @@ import { useMissionSession } from "../../hooks/useMissionSession";
 import { useLocationTracking } from "../../hooks/useLocationTracking";
 import { locationTrackingService } from "../../services/locationTracking";
 import { getPlatformCapabilities } from "../../services/platformCapabilities";
+import { useStatus } from "../../hooks/useTelemetry";
 
 // Mirrors lighting/api.py's PRESET_COLORS on the Pi -- same names, same swatches, so a preset here
 // maps to exactly one accepted preset string server-side rather than sending raw RGB that could
@@ -178,6 +179,7 @@ interface SettingsPageProps {
 export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnection, diagnostics, deviceLabels }: SettingsPageProps) {
   const missionSession = useMissionSession();
   const locationTracking = useLocationTracking();
+  const telemetryStatus = useStatus();
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [piEndpoint, setPiEndpoint] = useState("");
   const [telemetryLinkEnabled, setTelemetryLinkEnabled] = useState(true);
@@ -217,6 +219,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const platformCapabilities = getPlatformCapabilities();
   const buildTime = Number.isNaN(Date.parse(__BUILD_TIME__)) ? __BUILD_TIME__ : new Date(__BUILD_TIME__).toLocaleString();
   const trackingCopy = trackingStatusCopy(locationTracking);
+  const connection = telemetryStatus?.connection;
 
   useEffect(() => {
     const unsubscribe = subscribePiEndpoint(setPiEndpoint);
@@ -748,6 +751,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           <span>Services</span><strong>{diagnostics.serviceState}</strong>
           <span>Pi Endpoint</span><strong>{piEndpoint || "NOT SET"}</strong>
           <span>Pi Link</span><strong>{telemetryLinkEnabled ? "ON" : "OFF"}</strong>
+          <span>Pi State</span><strong>{connection?.connectionState ?? "UNKNOWN"}</strong>
+          <span>Pi Transport</span><strong>{connection?.transport?.toUpperCase() ?? "UNKNOWN"}</strong>
+          <span>Pi Last Success</span><strong>{connection?.lastSuccessfulResponseAt ? new Date(connection.lastSuccessfulResponseAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "NONE"}</strong>
+          <span>Pi Data Age</span><strong>{connection?.dataAgeMs == null ? "NO DATA" : `${Math.round(connection.dataAgeMs / 1000)}s`}</strong>
+          <span>Pi Retry</span><strong>{connection?.retryAt ? `${Math.max(0, Math.round((connection.retryAt - Date.now()) / 1000))}s` : "IDLE"}</strong>
+          <span>Pi Error</span><strong>{connection?.lastErrorSummary || "NONE"}</strong>
           <span>BLE</span><strong>{bleConnected ? "CONNECTED" : "DISCONNECTED"}</strong>
           <span>Spotter</span><strong>{spotterAccount ? spotterAccount.username : "SIGNED OUT"}</strong>
         </div>

@@ -18,7 +18,7 @@ capabilities such as background location, notifications, display control, Blueto
 | Notifications | Android foreground tracking notification | Pending UserNotifications/native adapter | Web/desktop notification boundary only |
 | Display keep-awake | Web Wake Lock where available | Pending iOS idle-timer adapter; brightness unsupported | Web Wake Lock where available |
 | BLE telemetry | Capacitor BLE boundary present | Plugin dependency present; CoreBluetooth behavior pending device validation | Future Windows Bluetooth adapter |
-| Core/Pi connectivity | Configurable LAN/hostname/Tailscale endpoint | Local-network privacy string prepared; ATS remains broad for field endpoints | Shared HTTP client path |
+| Core/Pi connectivity | Configurable LAN/hostname/Tailscale endpoint with shared connection/freshness model | Local-network privacy string prepared; shared endpoint validation path | Shared HTTP client path and status model |
 | Chaser Net | Shared contracts/foundation; production backend deferred | Same shared contracts; backend deferred | Same shared contracts; backend deferred |
 | Native Level II radar | Deferred | Deferred | Deferred |
 
@@ -66,3 +66,15 @@ intent names, or service lifecycle details. Those belong only inside Android nat
 - iOS notifications should map to UserNotifications through a native adapter before the UI claims
   operational notification support.
 - Windows location should support unavailable/status-only mode first, then external GPS later.
+
+## Core / Pi Connectivity Notes
+
+Core and Pi states use the shared connection model documented in `docs/core-pi-connectivity.md`.
+The app keeps endpoint reachability, service health, and data freshness separate so local field
+network outages do not invalidate unrelated local app behavior such as Chase Mode, MARK, or mosaic
+radar.
+
+The shared client accepts explicit local/Tailscale HTTP endpoints for field infrastructure, rejects
+unsafe URL schemes, and keeps iOS local-network privacy requirements visible for later device
+validation. No Bonjour/mDNS discovery, production Core backend, or Pi-side network topology changes
+were added in this pass.
