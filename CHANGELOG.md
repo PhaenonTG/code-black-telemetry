@@ -6,8 +6,7 @@ All changes logged newest-first.
 
 ## iPhone / iPad Foundation Validation - 2026-08-20
 
-Hardened the shared platform boundary for iPhone/iPad readiness without expanding Chaser Net or
-changing accepted Android native tracking code.
+Hardened the shared platform boundary for iPhone/iPad readiness without expanding Chaser Net.
 
 ### Changed
 - Kept the existing Capacitor iOS SPM project as the active iOS host and added an explicit
@@ -19,9 +18,15 @@ changing accepted Android native tracking code.
 - Added iOS local-network usage wording for user-configured Code Black Core/Pi endpoints.
 - Added `docs/platform-status.md` with Android, iPhone/iPad, and Windows capability status and
   deferred native adapter notes.
+- Fixed a focused Android stop-path race discovered during S24 regression: the native plugin now
+  lets `ChaseTrackingService` process its STOP intent and own foreground-notification cleanup
+  instead of immediately stopping the service out from under it.
+- Restored the expanded mosaic radar portal's phone-portrait height chain so the nested Atlas map
+  stays visible instead of collapsing below the header.
 
 ### Validation Notes
-- Native Android tracking code was not changed.
+- Native Android tracking sampling, permissions, storage, and background-tracking behavior were not
+  changed; only the plugin stop path was narrowed to preserve service-owned cleanup.
 - iOS native Xcode compile/runtime validation still requires macOS/Xcode; Windows validation is
   limited to shared build, Capacitor iOS sync/static project inspection, and Android regression.
 - Mosaic remains the active radar experience; native Level II remains deferred.
