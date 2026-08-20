@@ -173,7 +173,12 @@ export function AtlasMap({
     void loadMapLayerVisibility();
     return () => { unsubscribe(); };
   }, []);
-  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, breadcrumbs: breadcrumbsVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, probes: probesVisible, chaserNet: chaserNetVisible } = layerVisibility;
+  useEffect(() => {
+    const close = () => setLayersPopoverOpen(false);
+    window.addEventListener("codeblack:close-map-popovers", close);
+    return () => window.removeEventListener("codeblack:close-map-popovers", close);
+  }, []);
+  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
     void saveMapLayerVisibility({ ...layerVisibility, [key]: !layerVisibility[key] });
   };
@@ -717,7 +722,14 @@ export function AtlasMap({
     ? `${mapState}${loaded ? "" : " LOADING"} c${canvasCount} r${renderCount} i${idleCount} ${pixelSample}`
     : `${mapState}${loaded ? "" : " LOADING"}`;
 
-  const followLabel = cameraMode === "FOLLOW_HEADING" ? "HEADING UP" : cameraMode === "FREE" ? "RECENTER" : "NORTH UP";
+  const followLabel = cameraMode === "FOLLOW_HEADING" ? "HEADING" : cameraMode === "FREE" ? "RECENTER" : "NORTH";
+  const cameraStatusLabel = cameraMode === "FOLLOW_HEADING"
+    ? "FOLLOW HEADING"
+    : cameraMode === "FOLLOW_NORTH" || cameraMode === "RECENTERING"
+      ? "FOLLOW NORTH"
+      : cameraMode === "USER_INTERACTING"
+        ? "PANNING"
+        : "FREE";
 
   return (
     <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"}`}>
@@ -727,6 +739,7 @@ export function AtlasMap({
         {!compact && (
           <div className="radar-strip atlas-radar-strip">
             {statusLines.map((line, index) => <span key={index}>{line}</span>)}
+            <span>{cameraStatusLabel}</span>
           </div>
         )}
         {onOpenExpanded && (
@@ -772,20 +785,20 @@ export function AtlasMap({
               Breadcrumbs
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
-              <input type="checkbox" checked={roadConditionsVisible} onChange={() => toggleLayer("roadConditions")} />
-              Road conditions - not configured
+              <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+              Road conditions - unavailable
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
-              <input type="checkbox" checked={trafficCamerasVisible} onChange={() => toggleLayer("trafficCameras")} />
-              Traffic cameras - not configured
+              <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+              Traffic cameras - unavailable
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
-              <input type="checkbox" checked={probesVisible} onChange={() => toggleLayer("probes")} />
-              Probes - not configured
+              <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+              Probes - unavailable
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
-              <input type="checkbox" checked={chaserNetVisible} onChange={() => toggleLayer("chaserNet")} />
-              Chaser Net - not configured
+              <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+              Chaser Net - unavailable
             </label>
           </div>
         )}
@@ -800,7 +813,7 @@ export function AtlasMap({
         <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
           <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) + 0.5, duration: 260 })}>ZOOM+</button>
           <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: (mapRef.current?.getZoom() ?? 8) - 0.5, duration: 260 })}>ZOOM-</button>
-          <button type="button" aria-label="Toggle follow mode" title="Cycles between North-up, Heading-up, and Recenter" onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
+          <button type="button" aria-label="Toggle follow mode" title="Cycles between north-up follow, heading-up follow, and recenter from free pan" className={cameraMode === "FREE" ? "" : "active"} onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
           <button type="button" aria-label="Toggle range rings" title="Distance rings around your position" onClick={() => onRangeRingsChange(rangeRingNext(rangeRings))}>RINGS{rangeRings !== "off" ? ` ${rangeRings}NM` : ""}</button>
           <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
           <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>

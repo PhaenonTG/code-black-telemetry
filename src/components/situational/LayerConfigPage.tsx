@@ -28,7 +28,7 @@ const DEFAULT_VISIBILITY: MapLayerVisibility = {
   breadcrumbs: true,
 };
 
-const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description: string }> = [
+const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description: string; configured?: boolean }> = [
   {
     key: "mosaic",
     label: "Wide-Area Mosaic",
@@ -63,21 +63,25 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description:
     key: "roadConditions",
     label: "Road Conditions",
     description: "Prepared for closures, crashes, flooding, construction, winter, and route-impacting hazards. Provider not configured yet.",
+    configured: false,
   },
   {
     key: "trafficCameras",
     label: "Traffic / Public Cameras",
     description: "Prepared for lawful public cameras and user-authorized feeds. Provider not configured yet.",
+    configured: false,
   },
   {
     key: "probes",
     label: "Code Black Probes",
     description: "Prepared for future deployable probe observations. Live probe provider not configured yet.",
+    configured: false,
   },
   {
     key: "chaserNet",
     label: "Code Black Chaser Net",
     description: "Prepared for verified members, privacy-aware presence, and zoom clustering. Backend not configured yet.",
+    configured: false,
   },
 ];
 
@@ -152,7 +156,7 @@ export function LayerConfigPage() {
 
   return (
     <Panel title="Layer Configuration" className="layer-config-panel">
-      {LAYERS.map(({ key, label, description }) => (
+      {LAYERS.map(({ key, label, description, configured = true }) => (
         <div key={key} className="settings-row">
           <div>
             <strong>{label}</strong>
@@ -167,7 +171,7 @@ export function LayerConfigPage() {
             )}
             <div className="mode-toggle" aria-label={`${label} visibility`}>
               <button className={visibility[key] ? "" : "active"} onClick={() => setLayerVisible(key, false)}>Off</button>
-              <button className={visibility[key] ? "active" : ""} onClick={() => setLayerVisible(key, true)}>On</button>
+              <button className={configured && visibility[key] ? "active" : ""} disabled={!configured} onClick={() => setLayerVisible(key, true)}>{configured ? "On" : "Unavailable"}</button>
             </div>
           </div>
         </div>

@@ -4,6 +4,36 @@ All changes logged newest-first.
 
 ---
 
+## OPS App Stabilization Pass - 2026-08-19
+
+Started the recovery-safe field-app stabilization branch.
+
+### Changed
+- Limited global MARK/ESCAPE controls to operational field pages so Settings, Operations, and
+  Layers stay uncluttered while MARK remains one-tap on Weather/Locate/Report.
+- Added a MARK double-tap guard to prevent accidental duplicate immediate markers.
+- Improved Android Back behavior so map layer popovers close before leaving the current page.
+- Made expanded map camera state clearer with explicit follow/free/panning status wording.
+- Locked Chaser Net presence sharing OFF while the production backend/auth provider is not
+  configured, while preserving visible privacy/readiness controls.
+- Made future/provider-backed map layers display as unavailable instead of toggleable live layers
+  until Road Conditions, Traffic Cameras, Probes, and Chaser Net providers are actually configured.
+- Normalized Pi endpoint save/test behavior and cleared stale endpoint test state after edits.
+- Clarified Core/Pi diagnostic state on the Operations page.
+- Hardened native Android chase-stop cleanup so the service removes foreground state during both
+  explicit STOP handling and service destruction.
+
+### Validation Notes
+- Native Android Chase Tracking logic was not redesigned, but the stop/notification cleanup path
+  changed after S24 smoke found an orphaned pre-patch notification record.
+- S24 smoke verified start, active tracking status, MARK feedback, map rendering, and local UI end
+  state. The pre-patch Samsung notification record could not be cleared by app force-stop or shell
+  snooze, so final notification cleanup needs a fresh device notification state or reboot to
+  reaccept conclusively.
+- Mosaic remains the only active radar UI; Level II remains deferred.
+
+---
+
 ## Code Black Chaser Net v0.2 Application Review Foundation - 2026-08-19
 
 Extended the Chaser Net foundation toward screened membership without enabling a public production

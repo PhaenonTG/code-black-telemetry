@@ -86,6 +86,7 @@ public class ChaseTrackingService extends Service implements LocationListener {
     public void onDestroy() {
         removeLocationUpdates();
         if (!ChaseTrackingStore.status(this).optBoolean("active", false)) {
+            removeForegroundState();
             cancelForegroundNotification();
         }
         super.onDestroy();
@@ -150,13 +151,17 @@ public class ChaseTrackingService extends Service implements LocationListener {
     private void stopTracking() {
         removeLocationUpdates();
         ChaseTrackingStore.stop(this);
+        removeForegroundState();
+        cancelForegroundNotification();
+        stopSelf();
+    }
+
+    private void removeForegroundState() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE);
         } else {
             stopForeground(true);
         }
-        cancelForegroundNotification();
-        stopSelf();
     }
 
     private void cancelForegroundNotification() {

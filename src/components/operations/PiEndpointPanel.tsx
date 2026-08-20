@@ -9,6 +9,12 @@ export function PiEndpointPanel() {
   const [testState, setTestState] = useState<TestState>("idle");
   const [message, setMessage] = useState("Configure LAN, hostname, or Tailscale endpoint.");
 
+  const normalizeEndpoint = (value: string) => {
+    const target = value.trim().replace(/\/$/, "");
+    if (!target) return "";
+    return /^https?:\/\//i.test(target) ? target : `http://${target}`;
+  };
+
   useEffect(() => {
     void loadPiEndpoint();
     const unsubscribe = subscribePiEndpoint((value) => {
@@ -21,20 +27,20 @@ export function PiEndpointPanel() {
   }, []);
 
   const persist = async () => {
-    const normalized = await savePiEndpoint(endpoint);
+    const normalized = await savePiEndpoint(normalizeEndpoint(endpoint));
     setEndpoint(normalized);
     setSaved(normalized);
+    setTestState("idle");
     setMessage(normalized ? "Endpoint saved. Reconnect will happen automatically." : "Endpoint cleared. Running standalone until configured.");
   };
 
   const test = async () => {
-    const target = endpoint.trim().replace(/\/$/, "");
-    if (!target) {
+    const normalized = normalizeEndpoint(endpoint);
+    if (!normalized) {
       setTestState("failed");
       setMessage("Enter a Pi endpoint first.");
       return;
     }
-    const normalized = /^https?:\/\//i.test(target) ? target : `http://${target}`;
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 3500);
     setTestState("testing");
@@ -58,7 +64,11 @@ export function PiEndpointPanel() {
           <span>API base</span>
           <input
             value={endpoint}
-            onChange={(event) => setEndpoint(event.target.value)}
+            onChange={(event) => {
+              setEndpoint(event.target.value);
+              setTestState("idle");
+              setMessage("Endpoint changed. Save or test before relying on it.");
+            }}
             placeholder="http://192.168.0.209:5000 or http://raspberrypi.local:5000"
             autoCapitalize="none"
             autoCorrect="off"
