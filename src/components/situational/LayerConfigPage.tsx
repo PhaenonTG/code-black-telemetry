@@ -62,14 +62,12 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description:
   {
     key: "roadConditions",
     label: "Road Conditions",
-    description: "Prepared for closures, crashes, flooding, construction, winter, and route-impacting hazards. Provider not configured yet.",
-    configured: false,
+    description: "Public DOT closures, crashes, flooding, construction, lane restrictions, and route-impacting hazards. Coverage is provider-dependent.",
   },
   {
     key: "trafficCameras",
     label: "Traffic / Public Cameras",
-    description: "Prepared for lawful public cameras and user-authorized feeds. Provider not configured yet.",
-    configured: false,
+    description: "Legitimate public transportation cameras. Images load only when a marker detail is opened; streams open through provider URLs where available.",
   },
   {
     key: "probes",

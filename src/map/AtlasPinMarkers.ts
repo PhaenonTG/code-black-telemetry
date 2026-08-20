@@ -12,6 +12,11 @@ export interface PinPoint {
   group?: string;
   phone?: string;
   email?: string;
+  statusLine?: string;
+  detailRows?: Array<{ label: string; value: string }>;
+  imageUrl?: string | null;
+  actionUrl?: string | null;
+  actionLabel?: string;
   clusterCount?: number;
   family?: "team" | "chaser" | "report" | "probe" | "road" | "camera" | "mark";
   stale?: boolean;
@@ -81,6 +86,17 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
+function safePopupUrl(value: string | null | undefined) {
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    return escapeHtml(url.toString());
+  } catch {
+    return "";
+  }
+}
+
 // One shared popup per map instance (not per layer) -- clicking a spotter pin closes any team pin
 // popup already open and vice versa, matching how a single-selection map UI is expected to behave.
 const activePopups = new WeakMap<MapboxMap, Popup>();
@@ -91,13 +107,22 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
   // Computed fresh at click time (not whenever the marker last synced) so it's accurate to the
   // moment the popup is actually being read, not stale by however long since the last data poll.
   const age = point.updatedAtText ? spotterAgeText(point.updatedAtText) : "";
-  const pingLine = `<span>${age ? `Last ping: ${escapeHtml(age)}` : "No recent ping data"}</span>`;
+  const pingLine = point.statusLine
+    ? `<span>${escapeHtml(point.statusLine)}</span>`
+    : `<span>${age ? `Last ping: ${escapeHtml(age)}` : "No recent ping data"}</span>`;
   // group/phone/email are only ever set for Team pins (see AtlasTeamLayer.ts) -- Chaser pins never
   // carry contact info the owner didn't enter themselves, so these lines simply don't render there.
   const groupLine = point.group ? `<em>${escapeHtml(point.group)}</em>` : "";
   const phoneLine = point.phone ? `<span>${escapeHtml(point.phone)}</span>` : "";
   const emailLine = point.email ? `<span>${escapeHtml(point.email)}</span>` : "";
-  const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${phoneLine}${emailLine}`;
+  const details = point.detailRows?.length
+    ? `<div class="atlas-pin-popup__details">${point.detailRows.map((row) => `<span><b>${escapeHtml(row.label)}</b>${escapeHtml(row.value)}</span>`).join("")}</div>`
+    : "";
+  const imageUrl = safePopupUrl(point.imageUrl);
+  const image = imageUrl ? `<img class="atlas-pin-popup__image" src="${imageUrl}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : "";
+  const actionUrl = safePopupUrl(point.actionUrl);
+  const action = actionUrl ? `<a class="atlas-pin-popup__action" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(point.actionLabel ?? "Open source")}</a>` : "";
+  const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${details}${image}${phoneLine}${emailLine}${action}`;
   const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, offset: 16, className: "atlas-pin-popup" })
     .setLngLat([point.lon, point.lat])
     .setHTML(html)

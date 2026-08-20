@@ -21,14 +21,18 @@ import { chaserNetReportToMapPoint, updateAtlasChaserNetLayer, updateAtlasChaser
 import { startAtlasMosaicLayer } from "./AtlasMosaicLayer";
 import { updateAtlasPoiLayer } from "./AtlasPoiLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
+import { updateAtlasRoadConditionLayer } from "./AtlasRoadLayer";
 import { updateAtlasSpotterLayer } from "./AtlasSpotterLayer";
 import { tuneAtlasStyle } from "./AtlasStyleManager";
 import { updateAtlasTeamLayer } from "./AtlasTeamLayer";
+import { updateAtlasTrafficCameraLayer } from "./AtlasTrafficCameraLayer";
 import { updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import { updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRangeRingMode } from "./types";
 import { clusterViewportPoints, filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewport } from "./viewport";
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
+import { getRoadConditionsForViewport, getTrafficCamerasForViewport, type RoadConditionEvent, type TrafficCamera, type ViewportLayerResult } from "../services/mapLayerModels";
+import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
 
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
 // the real operating zoom for a "swoop to position" open on cold launch, rather than snapping.
@@ -168,7 +172,7 @@ export function AtlasMap({
     window.addEventListener("codeblack:close-map-popovers", close);
     return () => window.removeEventListener("codeblack:close-map-popovers", close);
   }, []);
-  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
+  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
     void saveMapLayerVisibility({ ...layerVisibility, [key]: !layerVisibility[key] });
   };
@@ -177,6 +181,10 @@ export function AtlasMap({
   const [watches, setWatches] = useState<WatchPolygon[]>([]);
   const [chaserNetMembers, setChaserNetMembers] = useState<ChaserNetMapMember[]>([]);
   const [chaserNetReports, setChaserNetReports] = useState<ChaserNetReport[]>([]);
+  const [roadConditions, setRoadConditions] = useState<RoadConditionEvent[]>([]);
+  const [trafficCameras, setTrafficCameras] = useState<TrafficCamera[]>([]);
+  const [roadLayerStatus, setRoadLayerStatus] = useState<ViewportLayerResult<RoadConditionEvent>["status"]>("not-configured");
+  const [cameraLayerStatus, setCameraLayerStatus] = useState<ViewportLayerResult<TrafficCamera>["status"]>("not-configured");
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
   const [viewport, setViewport] = useState<MapViewport | null>(null);
   const roster = useTeamRoster();
@@ -211,6 +219,8 @@ export function AtlasMap({
   const clusteredChaserSpotters = useMemo(() => (viewport ? clusterViewportPoints(visibleChaserSpotters, viewport) : visibleChaserSpotters), [visibleChaserSpotters, viewport]);
   const clusteredChaserNetMembers = useMemo(() => (viewport ? clusterViewportPoints(chaserNetMembers, viewport) : chaserNetMembers), [chaserNetMembers, viewport]);
   const clusteredChaserNetReports = useMemo(() => (viewport ? clusterViewportPoints(chaserNetReportPoints, viewport) : chaserNetReportPoints), [chaserNetReportPoints, viewport]);
+  const clusteredRoadConditions = useMemo(() => (viewport ? clusterViewportPoints(roadConditions, viewport) : roadConditions), [roadConditions, viewport]);
+  const clusteredTrafficCameras = useMemo(() => (viewport ? clusterViewportPoints(trafficCameras, viewport) : trafficCameras), [trafficCameras, viewport]);
 
   latestRef.current = { gps, rangeRings, expanded };
 
@@ -605,6 +615,48 @@ export function AtlasMap({
   }, [visiblePoiPlaces, nearbyBest, customPoiPins, poiVisible, loaded]);
 
   useEffect(() => {
+    if (!viewport || !roadConditionsVisible) {
+      setRoadConditions([]);
+      setRoadLayerStatus("not-configured");
+      return;
+    }
+    const controller = new AbortController();
+    const context = { viewport, detail: zoomDetailLevel(viewport.zoom), sessionId: null };
+    setRoadLayerStatus("ready");
+    void getRoadConditionsForViewport(context, controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
+      setRoadConditions(result.data);
+      setRoadLayerStatus(result.status);
+    }).catch(() => {
+      if (controller.signal.aborted) return;
+      setRoadConditions([]);
+      setRoadLayerStatus("error");
+    });
+    return () => controller.abort();
+  }, [viewport, roadConditionsVisible]);
+
+  useEffect(() => {
+    if (!viewport || !trafficCamerasVisible) {
+      setTrafficCameras([]);
+      setCameraLayerStatus("not-configured");
+      return;
+    }
+    const controller = new AbortController();
+    const context = { viewport, detail: zoomDetailLevel(viewport.zoom), sessionId: null };
+    setCameraLayerStatus("ready");
+    void getTrafficCamerasForViewport(context, controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
+      setTrafficCameras(result.data);
+      setCameraLayerStatus(result.status);
+    }).catch(() => {
+      if (controller.signal.aborted) return;
+      setTrafficCameras([]);
+      setCameraLayerStatus("error");
+    });
+    return () => controller.abort();
+  }, [viewport, trafficCamerasVisible]);
+
+  useEffect(() => {
     if (!viewport || !chaserNetVisible) {
       setChaserNetMembers([]);
       setChaserNetReports([]);
@@ -628,9 +680,11 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
+    updateAtlasRoadConditionLayer(map, clusteredRoadConditions, roadConditionsVisible);
+    updateAtlasTrafficCameraLayer(map, clusteredTrafficCameras, trafficCamerasVisible);
     updateAtlasChaserNetLayer(map, clusteredChaserNetMembers, chaserPinStyle, chaserNetVisible);
     updateAtlasChaserNetReportLayer(map, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible);
-  }, [clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
+  }, [clusteredRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
 
 
   useEffect(() => {
@@ -720,6 +774,15 @@ export function AtlasMap({
       : cameraMode === "USER_INTERACTING"
         ? "PANNING"
         : "FREE";
+  const roadProviderCount = viewport ? roadProvidersForViewport(viewport).length : 0;
+  const trafficCameraProviderCount = viewport ? trafficCameraProvidersForViewport(viewport).length : 0;
+  const providerStatusLabel = (status: ViewportLayerResult<unknown>["status"], count: number, providerCount: number) => {
+    if (status === "ready") return count > 0 ? `${count}` : "available";
+    if (status === "stale") return `${count} stale`;
+    if (status === "empty") return "none in view";
+    if (status === "unavailable" || status === "error") return "provider unavailable";
+    return providerCount > 0 ? "available" : "outside coverage";
+  };
 
   return (
     <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"}`}>
@@ -774,13 +837,13 @@ export function AtlasMap({
               <input type="checkbox" checked={breadcrumbsVisible} onChange={() => toggleLayer("breadcrumbs")} />
               Trail
             </label>
-            <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
-              <input type="checkbox" checked={false} disabled onChange={() => undefined} />
-              Road conditions - unavailable
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={roadConditionsVisible} onChange={() => toggleLayer("roadConditions")} />
+              Road Conditions - {providerStatusLabel(roadLayerStatus, roadConditions.length, roadProviderCount)}
             </label>
-            <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
-              <input type="checkbox" checked={false} disabled onChange={() => undefined} />
-              Traffic cameras - unavailable
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={trafficCamerasVisible} onChange={() => toggleLayer("trafficCameras")} />
+              Public Cameras - {providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount)}
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
               <input type="checkbox" checked={false} disabled onChange={() => undefined} />
