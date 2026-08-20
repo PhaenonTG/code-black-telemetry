@@ -13,7 +13,7 @@ export function getPlatformCapabilities(): PlatformCapabilities {
   return capabilitiesForRuntime({
     platform,
     nativeRuntime,
-    wakeLock: typeof navigator !== "undefined" && "wakeLock" in navigator,
+    wakeLockSupported: typeof navigator !== "undefined" && "wakeLock" in navigator,
   });
 }
 
