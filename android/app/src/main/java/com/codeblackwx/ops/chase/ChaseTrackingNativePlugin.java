@@ -54,16 +54,20 @@ public class ChaseTrackingNativePlugin extends Plugin {
 
     @PluginMethod
     public void stop(PluginCall call) {
-        ChaseTrackingStore.stop(getContext());
         Intent intent = new Intent(getContext(), ChaseTrackingService.class);
         intent.setAction(ChaseTrackingService.ACTION_STOP);
         if (isServiceRunning()) {
             getContext().startService(intent);
+            JSObject result = statusObject();
+            result.put("active", false);
+            result.put("lastServiceEvent", "tracking_stop_pending");
+            call.resolve(result);
         } else {
+            ChaseTrackingStore.stop(getContext());
             getContext().stopService(intent);
             cancelTrackingNotification();
+            call.resolve(statusObject());
         }
-        call.resolve(statusObject());
     }
 
     @PluginMethod
@@ -108,7 +112,9 @@ public class ChaseTrackingNativePlugin extends Plugin {
             result.put("lastError", "NATIVE_SERVICE_NOT_RUNNING");
             result.put("lastServiceEvent", "tracking_not_running");
         } else if (!storedActive && running) {
-            cancelTrackingNotification();
+            Intent intent = new Intent(getContext(), ChaseTrackingService.class);
+            intent.setAction(ChaseTrackingService.ACTION_STOP);
+            getContext().startService(intent);
             result.put("active", false);
             result.put("lastServiceEvent", "tracking_stop_pending");
         } else if (!storedActive && !running) {

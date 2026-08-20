@@ -4561,18 +4561,20 @@ body {
 
 .atlas-expand-button {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 12;
+  top: 10px;
+  right: 10px;
+  z-index: 60;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 5px;
   background: rgba(3, 5, 7, 0.78);
   color: #f8fafc;
   box-shadow: 0 0 16px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 /* Compact dashboard card's one deliberate exception to "no controls" -- small enough to not read
