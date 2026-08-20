@@ -14,6 +14,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
@@ -165,6 +166,8 @@ public class ChaseTrackingService extends Service implements LocationListener {
 
     private void removeForegroundState() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_DETACH);
+            cancelForegroundNotification();
             stopForeground(STOP_FOREGROUND_REMOVE);
         } else {
             stopForeground(true);
@@ -176,6 +179,12 @@ public class ChaseTrackingService extends Service implements LocationListener {
         if (manager == null) return;
         manager.cancel(NOTIFICATION_ID);
         manager.cancel(null, NOTIFICATION_ID);
+        manager.cancelAll();
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            manager.cancel(NOTIFICATION_ID);
+            manager.cancel(null, NOTIFICATION_ID);
+            manager.cancelAll();
+        }, 750L);
     }
 
     private boolean hasLocationPermission() {
