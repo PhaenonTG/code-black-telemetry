@@ -23,6 +23,7 @@ const egress = await importTs("src/services/egress.ts");
 const locationObservation = await importTs("src/services/locationObservation.ts");
 const platformCapabilityModel = await importTs("src/services/platformCapabilityModel.ts");
 const connection = await importTs("src/services/connection.ts");
+const roadCameraProviders = await importTs("src/services/roadCameraProviders.ts");
 
 const januaryCentral = clock.formatOpsClock(new Date("2026-01-15T18:15:00Z"), "central");
 const julyCentral = clock.formatOpsClock(new Date("2026-07-15T18:15:00Z"), "central");
@@ -185,6 +186,54 @@ assert.equal(layerManager.layerCanRender(unavailableRoads), false);
 assert.deepEqual(layerManager.sortOperationalLayers([{ order: 3 }, { order: 1 }]).map((item) => item.order), [1, 3]);
 assert.equal(layerManager.clampLayerOpacity(2), 1);
 assert.equal(layerManager.clampLayerOpacity(-1), 0);
+
+const roadCameraTest = roadCameraProviders.__roadCameraProviderTest;
+assert.equal(roadCameraTest.isValidCoordinate(36, -94), true);
+assert.equal(roadCameraTest.isValidCoordinate(136, -94), false);
+assert.equal(roadCameraTest.safeHttpUrl("javascript:alert(1)"), null);
+assert.equal(roadCameraTest.safeHttpUrl("https://example.test/camera#token"), "https://example.test/camera");
+assert.equal(roadCameraTest.sanitizeProviderText("<b>Flooded</b> road\nnear bridge"), "Flooded road near bridge");
+assert.equal(roadCameraTest.freshnessForTimestamp(now - 2 * 60_000, now), "fresh");
+assert.equal(roadCameraTest.freshnessForTimestamp(now - 30 * 60_000, now), "aging");
+assert.equal(roadCameraTest.freshnessForTimestamp(now - 2 * 60 * 60_000, now), "stale");
+assert.equal(roadCameraProviders.roadProvidersForViewport(testViewport).some((provider) => provider.id === "ardot-idrive"), true);
+assert.equal(roadCameraProviders.trafficCameraProvidersForViewport(testViewport).some((provider) => provider.id === "ardot-idrive"), true);
+const outsideArkansasViewport = { north: 40, south: 39, east: -100, west: -101, zoom: 8 };
+assert.equal(roadCameraProviders.roadProvidersForViewport(outsideArkansasViewport).length, 0);
+const normalizedRoad = roadCameraTest.normalizeRoadFeature({
+  properties: {
+    gid: 123,
+    reason_name: "Flooding",
+    description: "Water over roadway",
+    travel_direction_name: "Both",
+    route_type: "State Highway",
+    route: "59",
+    lanes: ["All"],
+    updated_date: "2026-08-18T12:00:00Z",
+  },
+  geometry: { type: "Point", coordinates: [-94.1, 36.2] },
+}, "test-provider", "closure");
+assert.ok(normalizedRoad);
+assert.equal(normalizedRoad.kind, "flooding");
+assert.equal(normalizedRoad.closureState, "closed");
+assert.equal(normalizedRoad.providerRecordId, "123");
+assert.equal(roadCameraTest.normalizeRoadFeature({ properties: { gid: 1 }, geometry: { type: "Point", coordinates: [-194, 36] } }, "test-provider", "closure"), null);
+const normalizedCamera = roadCameraTest.normalizeCameraFeature({
+  properties: {
+    id: 44,
+    status: "online",
+    name: "I-49 at Test",
+    direction_name: "North",
+    route_type: "Interstate",
+    route: "49",
+    hls_stream_protected: "https://example.test/feed.m3u8",
+  },
+  geometry: { type: "Point", coordinates: [-94.2, 36.3] },
+}, "test-provider");
+assert.ok(normalizedCamera);
+assert.equal(normalizedCamera.availability, "available");
+assert.equal(normalizedCamera.streamUrl, "https://example.test/feed.m3u8");
+assert.equal(roadCameraTest.normalizeCameraFeature({ properties: { id: 2 }, geometry: { type: "Point", coordinates: [-94, Number.NaN] } }, "test-provider"), null);
 
 const missingGpsContext = egress.createEgressContext({ chaseSessionId: "test", currentPosition: null, now: 1 });
 assert.equal(egress.summarizeEgressReadiness(missingGpsContext).state, "UNAVAILABLE");

@@ -4,6 +4,7 @@ export type ObservationProviderKind =
   | "NOAA/NEXRAD"
   | "NOAA/GOES"
   | "HRRR"
+  | "OFFICIAL/STATE_TRANSPORTATION"
   | "CHASERNET/HUMAN"
   | "CHASERNET/MESONET"
   | "CODEBLACK/PROBE"
@@ -32,11 +33,17 @@ export type RoadConditionKind =
   | "construction"
   | "winter-condition"
   | "debris-hazard"
+  | "disabled-vehicle"
+  | "weather-hazard"
+  | "fire-smoke-impact"
+  | "utility-power-issue"
+  | "other"
   | "unknown";
 
 export type RoadClosureState = "open" | "lane-restricted" | "closed" | "unknown";
-export type RoadEventSeverity = "low" | "medium" | "high" | "critical" | "unknown";
+export type RoadEventSeverity = "informational" | "low" | "medium" | "high" | "critical" | "unknown";
 export type RoadTravelDirection = "northbound" | "southbound" | "eastbound" | "westbound" | "both" | "unknown";
+export type LayerFreshnessState = "fresh" | "aging" | "stale" | "unavailable";
 
 export type LayerGeometry =
   | { type: "point"; lat: number; lon: number }
@@ -45,26 +52,35 @@ export type LayerGeometry =
 
 export interface RoadConditionEvent {
   id: string;
+  providerId: string;
+  providerRecordId: string;
   kind: RoadConditionKind;
   geometry: LayerGeometry;
   closureState: RoadClosureState;
   severity: RoadEventSeverity;
+  title: string;
   startsAt: number | null;
   endsAt: number | null;
   direction: RoadTravelDirection;
   roadway: string | null;
+  status: string;
   description: string;
   lat: number;
   lon: number;
   provider: ObservationProvenance;
   updatedAt: number;
+  freshness: LayerFreshnessState;
   stale: boolean;
+  sourceUrl: string | null;
+  rawSourceReference: string | null;
 }
 
 export type TrafficCameraAvailability = "available" | "stale" | "offline" | "unknown";
 
 export interface TrafficCamera {
   id: string;
+  providerId: string;
+  providerRecordId: string;
   name: string;
   lat: number;
   lon: number;
@@ -78,6 +94,9 @@ export interface TrafficCamera {
   thumbnailUrl: string | null;
   previewUrl: string | null;
   availability: TrafficCameraAvailability;
+  freshness: LayerFreshnessState;
+  sourceUrl: string | null;
+  attribution: string;
 }
 
 export interface ProbeObservation {
@@ -101,10 +120,12 @@ export interface ProbeObservation {
 
 export interface ViewportLayerResult<T> {
   data: T[];
-  status: "ready" | "empty" | "not-configured" | "error";
+  status: "ready" | "empty" | "stale" | "not-configured" | "unavailable" | "error";
   message: string;
   simulated: boolean;
   fetchedAt: number;
+  stale?: boolean;
+  providerIds?: string[];
 }
 
 const notConfiguredProvider = (name: string): ObservationProvenance => ({
@@ -116,13 +137,7 @@ const notConfiguredProvider = (name: string): ObservationProvenance => ({
   displayLabel: `${name} not configured`,
 });
 
-export async function getRoadConditionsForViewport(_context: LayerQueryContext): Promise<ViewportLayerResult<RoadConditionEvent>> {
-  return { data: [], status: "not-configured", message: "Road condition provider not configured.", simulated: false, fetchedAt: Date.now() };
-}
-
-export async function getTrafficCamerasForViewport(_context: LayerQueryContext): Promise<ViewportLayerResult<TrafficCamera>> {
-  return { data: [], status: "not-configured", message: "Traffic camera provider not configured.", simulated: false, fetchedAt: Date.now() };
-}
+export { getRoadConditionsForViewport, getTrafficCamerasForViewport } from "./roadCameraProviders";
 
 export async function getProbesForViewport(_context: LayerQueryContext): Promise<ViewportLayerResult<ProbeObservation>> {
   return { data: [], status: "not-configured", message: "Code Black probe provider not configured.", simulated: false, fetchedAt: Date.now() };
