@@ -20,9 +20,16 @@ Started the recovery-safe field-app stabilization branch.
   until Road Conditions, Traffic Cameras, Probes, and Chaser Net providers are actually configured.
 - Normalized Pi endpoint save/test behavior and cleared stale endpoint test state after edits.
 - Clarified Core/Pi diagnostic state on the Operations page.
+- Hardened native Android chase-stop cleanup so the service removes foreground state during both
+  explicit STOP handling and service destruction.
 
 ### Validation Notes
-- Native Android Chase Tracking code was not changed.
+- Native Android Chase Tracking logic was not redesigned, but the stop/notification cleanup path
+  changed after S24 smoke found an orphaned pre-patch notification record.
+- S24 smoke verified start, active tracking status, MARK feedback, map rendering, and local UI end
+  state. The pre-patch Samsung notification record could not be cleared by app force-stop or shell
+  snooze, so final notification cleanup needs a fresh device notification state or reboot to
+  reaccept conclusively.
 - Mosaic remains the only active radar UI; Level II remains deferred.
 
 ---

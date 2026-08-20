@@ -55,11 +55,10 @@ public class ChaseTrackingNativePlugin extends Plugin {
     @PluginMethod
     public void stop(PluginCall call) {
         ChaseTrackingStore.stop(getContext());
-        if (isServiceRunning()) {
-            Intent intent = new Intent(getContext(), ChaseTrackingService.class);
-            intent.setAction(ChaseTrackingService.ACTION_STOP);
-            getContext().startService(intent);
-        }
+        Intent intent = new Intent(getContext(), ChaseTrackingService.class);
+        intent.setAction(ChaseTrackingService.ACTION_STOP);
+        if (isServiceRunning()) getContext().startService(intent);
+        getContext().stopService(intent);
         cancelTrackingNotification();
         call.resolve(statusObject());
     }
