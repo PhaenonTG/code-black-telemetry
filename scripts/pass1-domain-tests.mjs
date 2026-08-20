@@ -252,12 +252,18 @@ assert.deepEqual(locationObservation.trackingPresetPolicy("battery-saver"), { mi
 const androidCapabilities = platformCapabilityModel.capabilitiesForRuntime({ platform: "android", nativeRuntime: true, wakeLockSupported: false });
 assert.equal(platformCapabilityModel.platformSupportsPersistentChaseTracking(androidCapabilities), true);
 assert.equal(androidCapabilities.nativePersistentLocation, true);
+assert.equal(androidCapabilities.notifications, true);
+assert.equal(androidCapabilities.nativeNotifications, true);
 const iosCapabilities = platformCapabilityModel.capabilitiesForRuntime({ platform: "ios", nativeRuntime: true, wakeLockSupported: false });
 assert.equal(platformCapabilityModel.platformSupportsPersistentChaseTracking(iosCapabilities), false);
 assert.equal(iosCapabilities.nativePersistentLocation, false);
+assert.equal(iosCapabilities.notifications, false);
+assert.equal(iosCapabilities.nativeNotifications, false);
 assert.equal(iosCapabilities.ble, true);
 const webCapabilities = platformCapabilityModel.capabilitiesForRuntime({ platform: "web", nativeRuntime: false, wakeLockSupported: true });
 assert.equal(platformCapabilityModel.platformSupportsPersistentChaseTracking(webCapabilities), false);
+assert.equal(webCapabilities.notifications, true);
+assert.equal(webCapabilities.nativeNotifications, false);
 assert.equal(webCapabilities.wakeLock, true);
 assert.equal(webCapabilities.desktopNotifications, true);
 

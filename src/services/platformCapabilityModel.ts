@@ -5,6 +5,7 @@ export interface PlatformCapabilities {
   backgroundExecution: boolean;
   nativePersistentLocation: boolean;
   notifications: boolean;
+  nativeNotifications: boolean;
   nativeBrightness: boolean;
   wakeLock: boolean;
   ble: boolean;
@@ -20,6 +21,8 @@ export function capabilitiesForRuntime(input: {
   const androidNative = input.platform === "android" && input.nativeRuntime;
   const iosNative = input.platform === "ios" && input.nativeRuntime;
   const web = input.platform === "web";
+  const webNotifications = web;
+  const nativeNotifications = androidNative;
 
   return {
     platform: input.platform,
@@ -27,7 +30,8 @@ export function capabilitiesForRuntime(input: {
     backgroundLocation: androidNative,
     backgroundExecution: androidNative,
     nativePersistentLocation: androidNative,
-    notifications: androidNative || iosNative || web,
+    notifications: nativeNotifications || webNotifications,
+    nativeNotifications,
     nativeBrightness: false,
     wakeLock: input.wakeLockSupported,
     ble: androidNative || iosNative || web,
