@@ -166,8 +166,6 @@ public class ChaseTrackingService extends Service implements LocationListener {
 
     private void removeForegroundState() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_DETACH);
-            cancelForegroundNotification();
             stopForeground(STOP_FOREGROUND_REMOVE);
         } else {
             stopForeground(true);
@@ -179,11 +177,9 @@ public class ChaseTrackingService extends Service implements LocationListener {
         if (manager == null) return;
         manager.cancel(NOTIFICATION_ID);
         manager.cancel(null, NOTIFICATION_ID);
-        manager.cancelAll();
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             manager.cancel(NOTIFICATION_ID);
             manager.cancel(null, NOTIFICATION_ID);
-            manager.cancelAll();
         }, 750L);
     }
 
@@ -235,7 +231,7 @@ public class ChaseTrackingService extends Service implements LocationListener {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("Code Black OPS - Chase Tracking Active")
             .setContentText("Location breadcrumbs are being recorded for this chase.")
-            .setOngoing(true)
+            .setOngoing(false)
             .setOnlyAlertOnce(true)
             .setShowWhen(true)
             .setContentIntent(pendingIntent)

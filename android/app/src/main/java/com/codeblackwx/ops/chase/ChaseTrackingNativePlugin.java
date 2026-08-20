@@ -166,11 +166,9 @@ public class ChaseTrackingNativePlugin extends Plugin {
         if (manager == null) return;
         manager.cancel(ChaseTrackingService.NOTIFICATION_ID);
         manager.cancel(null, ChaseTrackingService.NOTIFICATION_ID);
-        manager.cancelAll();
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             manager.cancel(ChaseTrackingService.NOTIFICATION_ID);
             manager.cancel(null, ChaseTrackingService.NOTIFICATION_ID);
-            manager.cancelAll();
         }, 750L);
     }
 
