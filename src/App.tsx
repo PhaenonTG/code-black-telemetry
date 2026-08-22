@@ -101,7 +101,7 @@ function chaseStatusParts(locationTracking: ReturnType<typeof useLocationTrackin
 }
 
 function appPageSupportsOperationalActions(page: PageKey) {
-  return page === "weather" || page === "locate" || page === "report";
+  return page === "locate";
 }
 
 function formatConnectionSummary(status: ReturnType<typeof useStatus> | undefined | null) {

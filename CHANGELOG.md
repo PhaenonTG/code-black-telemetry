@@ -4,6 +4,25 @@ All changes logged newest-first.
 
 ---
 
+## Full App Evaluation and Map-Only Operations - 2026-08-22
+
+Audited the current app shell, major reachable pages, map layers, provider states, and operational
+controls without starting new feature families.
+
+### Changed
+- Restricted global operational controls so MARK and ESCAPE render only on the Locate/map page.
+- Added a regression guard that keeps MARK/ESCAPE as map-only controls.
+- Added `docs/APP_EVALUATION.md` with current route/control inventory, system readiness,
+  platform status, security/privacy concerns, priority matrix, and the next five recommended
+  development passes.
+
+### Validation Notes
+- Native Android Chase Tracking code was not changed.
+- Chaser Net production backend, Level II radar products, production ESCAPE routing, mobile mesonet,
+  model/satellite products, CarPlay, Android Auto, and Windows packaging remain deferred.
+
+---
+
 ## Road Conditions and Public Cameras v0.1 - 2026-08-20
 
 Wired the existing Road Conditions and Traffic / Public Cameras map-layer foundations to shared
