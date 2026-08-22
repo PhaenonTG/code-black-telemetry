@@ -25,6 +25,13 @@ const platformCapabilityModel = await importTs("src/services/platformCapabilityM
 const connection = await importTs("src/services/connection.ts");
 const roadCameraProviders = await importTs("src/services/roadCameraProviders.ts");
 
+const appSource = await readFile("src/App.tsx", "utf8");
+assert.match(
+  appSource,
+  /function appPageSupportsOperationalActions\(page: PageKey\) \{\s*return page === "locate";\s*\}/,
+  "MARK/ESCAPE operational controls must remain Locate/map-only",
+);
+
 const januaryCentral = clock.formatOpsClock(new Date("2026-01-15T18:15:00Z"), "central");
 const julyCentral = clock.formatOpsClock(new Date("2026-07-15T18:15:00Z"), "central");
 const zulu = clock.formatOpsClock(new Date("2026-07-15T18:15:00Z"), "zulu");
@@ -93,7 +100,7 @@ const backend = new chaserNet.InMemoryChaserNetBackend({
     makeMember("member-c", "user-c", "team-2"),
     makeMember("member-admin", "user-admin", "team-admin", ["admin"]),
   ],
-}, { currentMs: 24 * 60 * 60_000, agingMs: 48 * 60 * 60_000, staleMs: 72 * 60 * 60_000 });
+}, { currentMs: Number.MAX_SAFE_INTEGER, agingMs: Number.MAX_SAFE_INTEGER, staleMs: Number.MAX_SAFE_INTEGER });
 const applicationDraft = backend.saveApplicationDraft(identityApplicant, {
   publicProfile: {
     displayName: "Test Applicant",
