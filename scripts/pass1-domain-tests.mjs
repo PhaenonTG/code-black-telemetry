@@ -34,6 +34,11 @@ assert.match(
   /function appPageSupportsOperationalActions\(page: PageKey\) \{\s*return page === "locate";\s*\}/,
   "MARK/ESCAPE operational controls must remain Locate/map-only",
 );
+assert.match(
+  appSource,
+  /nativeRecoveryAttemptRef\.current && nativeRecoveryAttemptRef\.current !== missionSession\.id[\s\S]*?locationTracking\.lastError !== "NATIVE_SERVICE_NOT_RUNNING"[\s\S]*?locationTracking\.sessionId && locationTracking\.sessionId !== missionSession\.id[\s\S]*?void endMissionSession\(\);/,
+  "A failed native recovery after package force-stop must clear false active Chase state",
+);
 
 const januaryCentral = clock.formatOpsClock(new Date("2026-01-15T18:15:00Z"), "central");
 const julyCentral = clock.formatOpsClock(new Date("2026-07-15T18:15:00Z"), "central");

@@ -94,7 +94,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Dashboard | Working / needs polish | Useful field data composition, but dense and mixed between live, stale, and unavailable provider states. |
 | Settings | Working / needs polish | Functional and persisted controls exist. Security-sensitive controls now mask saved secrets and use the shared credential boundary where supported. |
 | Themes/display | Ready / working | Dark, Light, Night, System and display/keep-awake abstractions exist. |
-| Chase Mode | Ready on Android; platform foundation elsewhere | Physical S24 lifecycle was reaccepted from a clean reboot state. Three Start/MARK/End cycles left no active `ChaseTrackingService` and no active notification key after End Chase. Samsung notification archive records may remain in `dumpsys` history and should not be treated as active leaks. iOS remains future native adapter work. |
+| Chase Mode | Ready on Android; platform foundation elsewhere | Physical S24 lifecycle was reaccepted from a clean reboot state. Three Start/MARK/End cycles left no active `ChaseTrackingService` and no active notification key after End Chase. Force-stop-while-active reconciliation now clears the persisted Chase banner if native tracking cannot be restored. Samsung notification archive records may remain in `dumpsys` history and should not be treated as active leaks. iOS remains future native adapter work. |
 | GPS/location state | Working / needs polish | Shared normalized states exist; UI should keep stale/degraded wording consistent across all cards. |
 | MARK | Ready after map-only fix | Immediate capture, duplicate guard, session association, and bounded persistence exist. Map-only placement is now guarded by test. |
 | ESCAPE | Foundation only | Context/readiness path exists; production routing is not active and must remain honestly labeled. |
@@ -183,7 +183,7 @@ active notification teardown passed repeat S24 acceptance without native code ch
 
 | Item | Size | Why it matters | Prerequisite |
 | --- | --- | --- | --- |
-| Physical S24 walkthrough automation depth | Medium | The Playwright suite covers rendered browser UI; S24 helper now includes active-Chase force-stop reconciliation, but native-device route/control walking still needs more selector robustness and should remain paired with manual acceptance for Chase service cleanup. | Current ADB helper and active-notification acceptance logic. |
+| Physical S24 walkthrough automation depth | Medium | The Playwright suite covers rendered browser UI; S24 helper now includes active-Chase force-stop reconciliation and requires either inactive/no-service or active/service-restored honesty, but native-device route/control walking still needs more selector robustness and should remain paired with manual acceptance for Chase service cleanup. | Current ADB helper and active-notification acceptance logic. |
 | Dedicated System diagnostics route or clearer Operations/System split | Medium | Field failures need a predictable place for status and diagnostics. | Current connection/provider diagnostic contracts. |
 | Telemetry zero/default display audit | Small | Avoids mistaking unavailable hardware values for real readings. | Existing telemetry freshness state. |
 | Weather/fallback freshness polish | Medium | Chasers need to know whether weather data is current, stale, or unavailable. | Existing fallback/provider timestamps. |

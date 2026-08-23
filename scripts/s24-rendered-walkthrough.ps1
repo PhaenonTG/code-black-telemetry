@@ -118,6 +118,31 @@ function Wait-ChaseActive([int]$TimeoutSeconds = 20) {
   throw "Chase did not start foreground service and active notification."
 }
 
+function Test-WebViewChaseActiveText {
+  $state = Invoke-WebViewExpression @"
+(() => document.body.innerText.includes('CHASE ACTIVE') ? 'ACTIVE' : 'INACTIVE')()
+"@
+  $state -match "ACTIVE"
+}
+
+function Wait-ForceStopRecovery([int]$TimeoutSeconds = 30) {
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  do {
+    if (Test-WebViewChaseActiveText) {
+      if (Test-ChaseActive) {
+        return "recovered-active-service-notification"
+      }
+    } else {
+      Assert-NoChaseService
+      Assert-NoActiveChaseNotification
+      return "inactive-no-service-no-active-notification"
+    }
+    Start-Sleep -Seconds 1
+  } while ((Get-Date) -lt $deadline)
+
+  throw "Force-stop while active did not settle into inactive/no-service or active/service-restored state."
+}
+
 Require-Command adb
 if (-not (Test-Path $ApkPath)) {
   throw "APK not found: $ApkPath"
@@ -212,32 +237,25 @@ Start-Sleep -Seconds 5
 Assert-NoChaseService
 Assert-NoActiveChaseNotification
 Run-Adb @("shell", "monkey", "-p", $PackageName, "-c", "android.intent.category.LAUNCHER", "1") | Out-Null
-Start-Sleep -Seconds 5
-$forceStopRecovery = Invoke-WebViewExpression @"
-(() => document.body.innerText.includes('CHASE ACTIVE') ? 'FALSE_ACTIVE_AFTER_FORCE_STOP' : 'INACTIVE_AFTER_FORCE_STOP')()
+Start-Sleep -Seconds 3
+$summary.chase.forceStopWhileActive = Wait-ForceStopRecovery
+if ($summary.chase.forceStopWhileActive -eq "inactive-no-service-no-active-notification") {
+  $startResult = Invoke-WebViewExpression @"
+  (async () => {
+    document.querySelector('[data-testid="dock-settings"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const start = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'START' && !button.disabled);
+    if (!start) return 'START_NOT_FOUND_AFTER_FORCE_STOP';
+    start.click();
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    return document.body.innerText.includes('CHASE ACTIVE') ? 'CHASE_ACTIVE' : document.body.innerText.slice(0, 200);
+  })()
 "@
-if ($forceStopRecovery -notmatch "INACTIVE_AFTER_FORCE_STOP") {
-  throw "Force-stop while active left false Chase state: $forceStopRecovery"
+  if ($startResult -notmatch "CHASE_ACTIVE") {
+    throw "WebView Start Chase after force-stop did not enter active state: $startResult"
+  }
+  Wait-ChaseActive
 }
-Assert-NoChaseService
-Assert-NoActiveChaseNotification
-$summary.chase.forceStopWhileActive = "inactive-no-service-no-active-notification"
-
-$startResult = Invoke-WebViewExpression @"
-(async () => {
-  document.querySelector('[data-testid="dock-settings"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  const start = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'START' && !button.disabled);
-  if (!start) return 'START_NOT_FOUND_AFTER_FORCE_STOP';
-  start.click();
-  await new Promise((resolve) => setTimeout(resolve, 900));
-  return document.body.innerText.includes('CHASE ACTIVE') ? 'CHASE_ACTIVE' : document.body.innerText.slice(0, 200);
-})()
-"@
-if ($startResult -notmatch "CHASE_ACTIVE") {
-  throw "WebView Start Chase after force-stop did not enter active state: $startResult"
-}
-Wait-ChaseActive
 
 $xml = Get-UiXml
 Tap-Node -Xml $xml -Pattern "Locate" -PreferBottom

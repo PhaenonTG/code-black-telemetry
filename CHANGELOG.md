@@ -23,8 +23,10 @@ Closed the remaining credential/security audit findings without adding new produ
   it into the iOS app target; native Xcode/device validation remains pending.
 - Changed locally blocked duplicate Spotter submissions to `ALREADY_SUBMITTED` instead of generic
   `FAILED`.
-- Extended the S24 walkthrough helper to cover force-stop while Chase is active and removed the
-  install-specific active-notification UID lookup.
+- Extended the S24 walkthrough helper to cover force-stop while Chase is active, accept only honest
+  relaunch reconciliation states, and remove the install-specific active-notification UID lookup.
+- Fixed force-stop recovery reconciliation so a persisted Chase session is cleared if native
+  foreground tracking cannot be restored and reports `NATIVE_SERVICE_NOT_RUNNING`.
 
 ### Validation Notes
 - iOS Keychain implementation was source/sync validated on Windows only. Native Xcode compile and
