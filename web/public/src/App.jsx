@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import shield from './assets/codeblack-shield.png'
+import heroStorm from './assets/hero-storm.mp4'
+import heroPoster from './assets/hero-poster.jpg'
+import fieldSky from './assets/field-sky.jpg'
 
 const NAV = [
   ['Home', 'home'],
@@ -65,9 +68,19 @@ function Header() {
 }
 
 function Hero() {
+  const [reducedMotion] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
   return (
     <section id="home" className="hero section-anchor">
-      <div className="hero-media" aria-hidden="true"><div className="hero-storm"/><div className="hero-horizon"/></div>
+      <div className="hero-media" aria-hidden="true">
+        {reducedMotion ? (
+          <img src={heroPoster} alt="" className="hero-video" />
+        ) : (
+          <video className="hero-video" src={heroStorm} poster={heroPoster} autoPlay muted loop playsInline preload="auto" />
+        )}
+        <div className="hero-horizon"/>
+      </div>
       <div className="hero-vignette"/>
       <div className="wrap hero-content">
         <p className="hero-label">SEVERE WEATHER INTELLIGENCE • FIELD OPERATIONS</p>
@@ -155,6 +168,10 @@ function Team() {
           <p className="section-kicker">FIELD + REMOTE</p>
           <h2>One mission. Two sides of the operation.</h2>
           <p>Code Black WX combines on-scene storm chasing with remote monitoring, live telemetry, and producer support so information moves from the field to the people who need it.</p>
+          <div className="team-photo">
+            <img src={fieldSky} alt="Storm sky over a field near Wellington, Kansas" loading="lazy" />
+            <span>Wellington, Kansas, June 17 2025</span>
+          </div>
         </div>
         <div className="team-rail">
           <article><div className="rail-icon"><Icon name="radio"/></div><div><span>FIELD TEAM</span><strong>Storm Chasing</strong><p>Observation, live video, spotter reporting, and intercept operations.</p></div></article>
