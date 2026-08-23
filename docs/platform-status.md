@@ -20,6 +20,7 @@ capabilities such as background location, notifications, display control, Blueto
 | Display keep-awake | Web Wake Lock where available | Pending iOS idle-timer adapter; brightness unsupported | Web Wake Lock where available |
 | BLE telemetry | Capacitor BLE boundary present | Plugin dependency present; CoreBluetooth behavior pending device validation | Future Windows Bluetooth adapter |
 | Core/Pi connectivity | Configurable LAN/hostname/Tailscale endpoint with shared connection/freshness model | Local-network privacy string prepared; shared endpoint validation path | Shared HTTP client path and status model |
+| Weather/telemetry integrity | Shared nullable measurement model distinguishes valid zero, missing, stale, and unavailable states | Shared WebView path; native weather-node hardware validation pending | Shared web path; external GPS/sensor adapters future |
 | Live overlay telemetry | Shared best-effort publisher; requires explicit Core endpoint/token and active Chase Mode | Shared publisher path; pending native iPhone/iPad Chase Tracking adapter and Core validation | Shared HTTP publisher path; future external GPS/source adapter |
 | Secure credentials | Android Keystore-backed credential plugin for Spotter, Pi/BLE, and overlay secrets; encrypted credential prefs excluded from backup | Keychain adapter source implemented; macOS/Xcode/device runtime validation pending | Shared boundary ready; Credential Manager adapter deferred |
 | Chaser Net | Shared contracts/foundation; production backend deferred | Same shared contracts; backend deferred | Same shared contracts; backend deferred |
@@ -81,6 +82,14 @@ The shared client accepts explicit local/Tailscale HTTP endpoints for field infr
 unsafe URL schemes, and keeps iOS local-network privacy requirements visible for later device
 validation. No Bonjour/mDNS discovery, production Core backend, or Pi-side network topology changes
 were added in this pass.
+
+## Weather / Telemetry Integrity Notes
+
+Weather and vehicle telemetry validity semantics are documented in
+`docs/telemetry-weather-integrity.md`. Shared logic keeps source reachability separate from
+observation freshness and no longer treats unavailable Pi power/system metrics as zero values.
+Valid physical zeros, such as stationary speed, calm wind, no rain, or freshly booted uptime, remain
+displayable only when explicitly reported by a trusted source.
 
 ## Live Overlay Telemetry Notes
 

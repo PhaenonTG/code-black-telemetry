@@ -21,7 +21,10 @@ export function useSituationalData() {
   const lon = canonicalLocation.longitude;
 
   useEffect(() => {
-    if (lat == null || lon == null) return;
+    if (lat == null || lon == null) {
+      setLocality(null);
+      return;
+    }
     const point = { lat, lon };
     const requestKey = locationRequestKey(point);
     let cancelled = false;
@@ -41,7 +44,10 @@ export function useSituationalData() {
   }, [lat, lon, canonicalLocation.requestKey]);
 
   useEffect(() => {
-    if (lat == null || lon == null) return;
+    if (lat == null || lon == null) {
+      setExternal(null);
+      return;
+    }
     const point = { lat, lon };
     let cancelled = false;
     getNearestObservation(point)

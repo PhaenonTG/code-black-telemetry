@@ -14,6 +14,11 @@ const ignoredConsolePatterns = [
   /Download the React DevTools/i,
   /Mapbox GL JS/i,
   /Failed to load resource.*(api\.mapbox\.com|events\.mapbox\.com)/i,
+  /Access to fetch at 'https:\/\/www\.spc\.noaa\.gov\/products\/outlook\//i,
+  /request failed: https:\/\/www\.spc\.noaa\.gov\/products\/outlook\//i,
+  /Failed to load resource: net::ERR_FAILED/i,
+  /Access to fetch at 'https:\/\/overpass\.kumi\.systems\/api\/interpreter'/i,
+  /request failed: https:\/\/overpass\.kumi\.systems\/api\/interpreter/i,
   /GL Driver Message .*GPU stall due to ReadPixels/i,
   /net::ERR_BLOCKED_BY_CLIENT/i,
   /favicon/i,
@@ -41,7 +46,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   page.on("requestfailed", (request) => {
     const url = request.url();
     const failure = request.failure()?.errorText ?? "";
-    if (/api\.mapbox\.com|events\.mapbox\.com|spotternetwork|weather\.gov/i.test(url)) return;
+    if (/api\.mapbox\.com|events\.mapbox\.com|spotternetwork|weather\.gov|spc\.noaa\.gov\/products\/outlook|overpass\.kumi\.systems\/api\/interpreter/i.test(url)) return;
     if (/net::ERR_ABORTED/i.test(failure)) return;
     consoleProblems.push(`request failed: ${url} ${failure}`);
   });
@@ -107,6 +112,80 @@ async function expectContainerHasArea(locator: Locator, label: string) {
   expect(box, `${label} should have a layout box`).not.toBeNull();
   expect(box!.width, `${label} width`).toBeGreaterThan(24);
   expect(box!.height, `${label} height`).toBeGreaterThan(24);
+}
+
+function telemetryFixture(overrides: Record<string, unknown> = {}) {
+  const now = Date.now();
+  return {
+    wind: { speedMph: null, gustMph: null, directionDeg: null, directionCardinal: "--", source: "unavailable", updatedAt: 0 },
+    weather: {
+      tempF: null,
+      dewpointF: null,
+      humidity: null,
+      pressureMb: null,
+      pressureTrend: null,
+      rainRateInHr: null,
+      rainTotalIn: null,
+      source: "unavailable",
+      sourceLabel: "UNAVAILABLE",
+      updatedAt: 0,
+    },
+    gps: {
+      speedMph: null,
+      headingDeg: null,
+      headingCardinal: "--",
+      elevationFt: null,
+      accuracyM: null,
+      hdop: null,
+      satellites: null,
+      hasFix: false,
+      lat: 0,
+      lon: 0,
+      source: "unavailable",
+      updatedAt: 0,
+    },
+    sensors: [
+      { id: "nav-esp", label: "nav-esp", online: false, lastPacketAt: 0, packetRateHz: 0 },
+      { id: "wx-esp", label: "wx-esp", online: false, lastPacketAt: 0, packetRateHz: 0 },
+    ],
+    power: { mainBatteryV: null, auxBatteryV: null, charging: null, source: "unavailable", updatedAt: 0 },
+    system: { cpuPercent: null, ramPercent: null, storagePercent: null, uptimeSeconds: null, source: "unavailable", updatedAt: 0 },
+    status: {
+      apiLatencyMs: 0,
+      dataAgeSeconds: 0,
+      piOnline: false,
+      internetOnline: true,
+      mode: "tablet",
+      updatedAt: now,
+      connection: {
+        endpoint: "",
+        connectionState: "NOT_CONFIGURED",
+        lastAttemptAt: now,
+        lastConnectedAt: null,
+        lastSuccessfulResponseAt: null,
+        lastDataAt: null,
+        dataAgeMs: null,
+        latencyMs: null,
+        failureCount: 0,
+        lastErrorCode: "NOT_CONFIGURED",
+        lastErrorSummary: "Fixture telemetry unavailable.",
+        retryAt: null,
+        provider: "telemetry",
+        transport: "unknown",
+        isConfigured: false,
+      },
+    },
+    events: [],
+    ...overrides,
+  };
+}
+
+async function injectTelemetry(page: Page, snapshot: ReturnType<typeof telemetryFixture>) {
+  await page.evaluate((nextSnapshot) => {
+    const hook = (window as typeof window & { __CODEBLACK_TEST_SET_TELEMETRY__?: (snapshot: unknown) => void }).__CODEBLACK_TEST_SET_TELEMETRY__;
+    if (!hook) throw new Error("Telemetry test injection hook is unavailable.");
+    hook(nextSnapshot);
+  }, snapshot);
 }
 
 test.describe("rendered route walkthrough", () => {
@@ -202,6 +281,67 @@ test("alerts and report surfaces render without accidental external submission",
   await expect(report).toContainText(/Spotter Network/i);
   await expect(page.getByTestId("map-action-mark")).toHaveCount(0);
   await expect(page.getByTestId("map-action-escape")).toHaveCount(0);
+});
+
+test("weather and telemetry distinguish valid zero from missing data", async ({ page }) => {
+  const now = Date.now();
+  const validZero = telemetryFixture({
+    wind: { speedMph: 0, gustMph: 0, directionDeg: 0, directionCardinal: "N", source: "vehicle", updatedAt: now },
+    weather: {
+      tempF: 0,
+      dewpointF: 0,
+      humidity: 0,
+      pressureMb: 1000,
+      pressureTrend: "steady",
+      rainRateInHr: 0,
+      rainTotalIn: 0,
+      source: "vehicle",
+      sourceLabel: "VEHICLE",
+      updatedAt: now,
+    },
+    gps: {
+      speedMph: 0,
+      headingDeg: null,
+      headingCardinal: "--",
+      elevationFt: 0,
+      accuracyM: 5,
+      hdop: null,
+      satellites: 8,
+      hasFix: true,
+      lat: 36.1867,
+      lon: -94.1288,
+      source: "tablet",
+      updatedAt: now,
+    },
+    power: { mainBatteryV: 0, auxBatteryV: 0, charging: false, source: "vehicle", updatedAt: now },
+    system: { cpuPercent: 0, ramPercent: 0, storagePercent: 0, uptimeSeconds: 0, source: "vehicle", updatedAt: now },
+  });
+  await injectTelemetry(page, validZero);
+  const weather = await goToRoute(page, "weather");
+  await expect(weather.locator(".metric-tile--temp strong").first()).toHaveText("0");
+  await expect(weather.locator(".metric-tile--dp strong, .metric-tile--dew strong").first()).toHaveText("0");
+  await expect(weather.locator(".wind-hero__item--speed strong").first()).toHaveText("0");
+  await expect(weather.locator(".metric-tile--heading strong").first()).toHaveText("--");
+
+  const ops = await goToRoute(page, "operations");
+  await expect(ops.locator(".ops-power-panel")).toContainText(/Main Batt\s*0\.00V/i);
+  await expect(ops.locator(".ops-system-panel")).toContainText(/CPU\s*0%/i);
+
+  await page.goto("/");
+  await page.locator(".cb-splash").waitFor({ state: "hidden", timeout: 12_000 }).catch(() => undefined);
+  await dismissSpotterPrompt(page);
+  await injectTelemetry(page, telemetryFixture());
+  const missingWeather = await activeRoute(page, "weather");
+  await expect(missingWeather.locator(".metric-tile--temp strong").first()).toHaveText("--");
+  await expect(missingWeather.locator(".metric-tile--dp strong, .metric-tile--dew strong").first()).toHaveText("--");
+  await expect(missingWeather.locator(".wind-hero__item--speed strong").first()).toHaveText("--");
+  await expect(missingWeather).toContainText(/SOURCE UNAVAILABLE|NO TRUSTED WIND|NO GPS FIX/i);
+
+  await goToRoute(page, "operations");
+  const missingOps = await activeRoute(page, "operations");
+  await expect(missingOps.locator(".ops-power-panel")).toContainText(/NO DATA EVER RECEIVED/i);
+  await expect(missingOps.locator(".ops-power-panel")).toContainText(/Main Batt\s*--/i);
+  await expect(missingOps.locator(".ops-system-panel")).toContainText(/CPU\s*--/i);
 });
 
 test("non-first-class routes remain out of primary navigation", async ({ page }) => {

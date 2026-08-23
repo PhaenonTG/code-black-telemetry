@@ -39,8 +39,12 @@ coverage-limited data is called out, and deferred systems remain deferred.
   first-class routes, major controls, MARK/ESCAPE map-only placement, deferred-state honesty, console
   errors, and phone/tablet/desktop layout structure. Physical S24 native Chase acceptance remains a
   separate device workflow.
+- Weather/Telemetry integrity now distinguishes valid physical zero from missing or unavailable
+  sensor data. Pi power/system fields are nullable, partial packets no longer inherit old values as
+  fresh, and stale external weather fallback clears when GPS/location is lost.
 - The largest remaining readiness risks are route/status clarity, iOS/Windows credential runtime
-  validation, broad provider coverage gaps, and native-device automation depth.
+  validation, real Pi/ESP field-node validation, broad provider coverage gaps, and native-device
+  automation depth.
 
 ## Route Inventory
 
@@ -104,8 +108,8 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Spotter Network layer | Partial / external dependency | Public/authenticated Spotter Network feeds are external and non-commercial-use constrained. Not Code Black Chaser Net. |
 | Reports layer/feed | Partial | NWS/Spotter reports are distinct from Chaser Net production reports. External submission requires caution. |
 | Probes | Foundation only | Layer model/visual language exists, production ingest absent. |
-| Weather | Working / needs polish | Hardware telemetry plus fallback/provider paths exist; forecast/model systems remain deferred. |
-| Telemetry | Working / needs polish | BLE/HTTP/last-known hybrid exists. Hardware-source freshness must stay visible to avoid fake readings. |
+| Weather | Working / needs polish | Current conditions distinguish vehicle, last-known, external fallback, simulator, and unavailable states. Missing values render unavailable rather than default zero; forecast/model systems remain deferred. |
+| Telemetry | Working / needs polish | BLE/HTTP/last-known hybrid exists. Power/system fields are nullable, partial packets preserve missing fields, and valid zeros are covered by tests. Real Pi/ESP payload validation remains pending. |
 | Core/Pi connectivity | Working / needs polish | Shared connection model, endpoint normalization, testing, backoff, freshness, and diagnostics exist. Real Core/Pi services are external. |
 | Live overlay telemetry | Foundation / partial | Shared client publisher, authenticated Core contract, latest-state store, Settings status, and secure station-token boundary exist. Production Core deployment and realtime overlay push remain pending. |
 | Alerts | Partial | Official NWS/SPC surfaces exist. Needs continued separation from OPS notices and Chaser Net observations. |
@@ -163,6 +167,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Road/camera providers | Strong for normalization, validation, freshness, coverage, and provider failure. |
 | Chaser Net contracts | Strong for domain/privacy/backend-contract logic; production backend absent. |
 | Navigation / rendered controls | Working / needs expansion | `npm run test:walkthrough` renders first-class routes across phone portrait, tablet landscape, and desktop; checks MARK/ESCAPE map-only placement, layer popovers, Settings/report states, shared Chase UI, console errors, and basic overflow. |
+| Weather/telemetry integrity | Working / needs field-node validation | Domain and rendered tests cover missing vs valid-zero, stale/missing measurement semantics, nullable Pi power/system values, and external fallback clearing when GPS is unavailable. |
 | Responsive UI | Partial; device QA has covered Android phone and some landscape paths, iPad physical QA pending. |
 
 ## Priority Matrix
@@ -185,8 +190,8 @@ active notification teardown passed repeat S24 acceptance without native code ch
 | --- | --- | --- | --- |
 | Physical S24 walkthrough automation depth | Medium | The Playwright suite covers rendered browser UI; S24 helper now includes active-Chase force-stop reconciliation and requires either inactive/no-service or active/service-restored honesty, but native-device route/control walking still needs more selector robustness and should remain paired with manual acceptance for Chase service cleanup. | Current ADB helper and active-notification acceptance logic. |
 | Dedicated System diagnostics route or clearer Operations/System split | Medium | Field failures need a predictable place for status and diagnostics. | Current connection/provider diagnostic contracts. |
-| Telemetry zero/default display audit | Small | Avoids mistaking unavailable hardware values for real readings. | Existing telemetry freshness state. |
-| Weather/fallback freshness polish | Medium | Chasers need to know whether weather data is current, stale, or unavailable. | Existing fallback/provider timestamps. |
+| Real Pi/ESP telemetry payload validation | Medium | Confirms the hardened parser against actual field-node BLE/HTTP packets, reconnects, and malformed packets. | Access to the vehicle Pi/ESP stack. |
+| Weather/telemetry UI detail polish | Small | Per-field age/QC detail could make partial packets even clearer without cluttering the main cockpit view. | Current nullable measurement model. |
 | Expand road/camera providers to OK/KS/MO | Medium | Current Arkansas-only coverage leaves core chase territory uncovered. | Existing provider registry. |
 
 ### P2 - Major Planned Capability
@@ -214,7 +219,7 @@ active notification teardown passed repeat S24 acceptance without native code ch
 2. **Native Device Walkthrough Automation Hardening** - expand the S24 helper into a more robust UIAutomator/DevTools hybrid for route walking, screenshots, Back behavior, and Chase service evidence.
 3. **iOS Keychain Runtime + Windows Credential Adapter Validation** - verify Keychain on Mac/iPhone/iPad and implement the Windows Credential Manager adapter behind the shared credential interface.
 4. **Road/Camera Regional Expansion** - add Oklahoma, Kansas, and Missouri provider adapters behind the existing registry, with coverage and attribution documented per provider.
-5. **Weather/Telemetry Freshness Stabilization** - harden current conditions, telemetry default/zero states, and stale hardware/provider behavior before new model/satellite products.
+5. **Real Pi/ESP Telemetry Field Validation** - run the hardened parser against the live vehicle node, disconnect/reconnect sensors, and capture malformed-packet behavior before mobile mesonet production work.
 
 ## Deferred Systems
 

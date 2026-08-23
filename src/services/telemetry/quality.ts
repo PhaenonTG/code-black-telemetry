@@ -18,6 +18,12 @@ export function readNumber(source: unknown, keys: string[]): number | null {
   return null;
 }
 
+export function readNumberInRange(source: unknown, keys: string[], min: number, max: number): number | null {
+  const value = readNumber(source, keys);
+  if (!isFiniteNumber(value) || value < min || value > max) return null;
+  return value;
+}
+
 export function readString(source: unknown, keys: string[]): string | null {
   if (!source || typeof source !== "object") return null;
   const record = source as Record<string, unknown>;

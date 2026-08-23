@@ -1,6 +1,6 @@
 import { SimulatorProvider } from "./simulator";
 import type { GpsData, PowerData, SystemData, TabletLocationInput, TelemetryProvider, TelemetrySnapshot, WeatherData, WindData } from "./types";
-import { cardinalFromDeg, isFiniteNumber, readEvents, readNumber, readSensors, readString, readTimestamp } from "./quality";
+import { cardinalFromDeg, isFiniteNumber, readEvents, readNumber, readNumberInRange, readSensors, readString, readTimestamp } from "./quality";
 import { getPiEndpoint, getTelemetryLinkEnabled, loadPiEndpoint, loadTelemetryLinkEnabled, subscribePiEndpoint, subscribeTelemetryLinkEnabled } from "../settings";
 import { Preferences } from "@capacitor/preferences";
 import { bleTelemetryClient, type BleTelemetryPayload } from "./ble-client";
@@ -184,20 +184,22 @@ function lastKnownWeather(weather: WeatherData): WeatherData {
 }
 
 function unavailablePower(): PowerData {
-  return { mainBatteryV: 0, auxBatteryV: 0, charging: false, source: "unavailable", updatedAt: 0 };
+  return { mainBatteryV: null, auxBatteryV: null, charging: null, source: "unavailable", updatedAt: 0 };
 }
 
 function lastKnownPower(power: PowerData): PowerData {
-  if (power.source === "unavailable" || power.source === "simulator") return unavailablePower();
+  const hasData = power.mainBatteryV !== null || power.auxBatteryV !== null || power.charging !== null;
+  if (!hasData || power.source === "unavailable" || power.source === "simulator") return unavailablePower();
   return { ...power, source: "last-known" };
 }
 
 function unavailableSystem(): SystemData {
-  return { cpuPercent: 0, ramPercent: 0, storagePercent: 0, uptimeSeconds: 0, source: "unavailable", updatedAt: 0 };
+  return { cpuPercent: null, ramPercent: null, storagePercent: null, uptimeSeconds: null, source: "unavailable", updatedAt: 0 };
 }
 
 function lastKnownSystem(system: SystemData): SystemData {
-  if (system.source === "unavailable" || system.source === "simulator") return unavailableSystem();
+  const hasData = system.cpuPercent !== null || system.ramPercent !== null || system.storagePercent !== null || system.uptimeSeconds !== null;
+  if (!hasData || system.source === "unavailable" || system.source === "simulator") return unavailableSystem();
   return { ...system, source: "last-known" };
 }
 
@@ -214,7 +216,7 @@ function configuredEndpointBase() {
   return configured || envBase;
 }
 
-function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: number): TelemetrySnapshot {
+export function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: number): TelemetrySnapshot {
   const source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const windRaw = (source.wind ?? source.weather ?? source.observation ?? source) as unknown;
   const weatherRaw = (source.weather ?? source.observation ?? source) as unknown;
@@ -223,7 +225,7 @@ function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: n
   const powerRaw = (source.power ?? source.vehiclePower ?? source) as unknown;
   const now = Date.now();
 
-  const windSpeed = readNumber(windRaw, [
+  const windSpeed = readNumberInRange(windRaw, [
     "speedMph",
     "windSpeedMph",
     "wind_speed_mph",
@@ -231,10 +233,11 @@ function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: n
     "speed_mph",
     "speed",
     "windSpeed",
-  ]);
-  const windGust = readNumber(windRaw, ["gustMph", "windGustMph", "wind_gust_mph", "gust_mph", "gust", "windGust"]);
-  const windDir = readNumber(windRaw, ["directionDeg", "windDirectionDeg", "wind_direction_deg", "direction_degrees", "dir", "direction"]);
+  ], 0, 250);
+  const windGust = readNumberInRange(windRaw, ["gustMph", "windGustMph", "wind_gust_mph", "gust_mph", "gust", "windGust"], 0, 300);
+  const windDir = readNumberInRange(windRaw, ["directionDeg", "windDirectionDeg", "wind_direction_deg", "direction_degrees", "dir", "direction"], 0, 360);
   const windUpdatedAt = readTimestamp(windRaw, ["updatedAt", "updated_at", "timestamp", "time"], now);
+  const hasWindData = windSpeed !== null || windGust !== null || windDir !== null;
 
   const lat = readNumber(gpsRaw, ["lat", "latitude"]);
   const lon = readNumber(gpsRaw, ["lon", "lng", "longitude"]);
@@ -243,59 +246,93 @@ function normalizeSnapshot(raw: unknown, fallback: TelemetrySnapshot, latency: n
   const vehicleGpsValid = validCoord(lat, lon) && gpsAge <= GPS_MAX_AGE_MS && readString(gpsRaw, ["fix", "fixType"]) !== "none";
   const gps: GpsData = vehicleGpsValid
     ? {
-        speedMph: readNumber(gpsRaw, ["speedMph", "speed_mph", "groundSpeedMph"]) ?? fallback.gps.speedMph,
-        headingDeg: readNumber(gpsRaw, ["headingDeg", "heading_deg", "courseDeg", "trackDeg"]) ?? fallback.gps.headingDeg,
-        headingCardinal: cardinalFromDeg(readNumber(gpsRaw, ["headingDeg", "heading_deg", "courseDeg", "trackDeg"]) ?? fallback.gps.headingDeg),
-        elevationFt: readNumber(gpsRaw, ["elevationFt", "elevation_ft", "altitudeFt", "altitude_ft"]) ?? fallback.gps.elevationFt,
-        accuracyM: readNumber(gpsRaw, ["accuracyM", "accuracy_m", "eph"]) ?? fallback.gps.accuracyM,
-        hdop: readNumber(gpsRaw, ["hdop"]) ?? fallback.gps.hdop,
-        satellites: readNumber(gpsRaw, ["satellites", "sats", "numSatellites"]) ?? fallback.gps.satellites,
+        speedMph: readNumberInRange(gpsRaw, ["speedMph", "speed_mph", "groundSpeedMph"], 0, 500),
+        headingDeg: readNumberInRange(gpsRaw, ["headingDeg", "heading_deg", "courseDeg", "trackDeg"], 0, 360),
+        headingCardinal: cardinalFromDeg(readNumberInRange(gpsRaw, ["headingDeg", "heading_deg", "courseDeg", "trackDeg"], 0, 360)),
+        elevationFt: readNumberInRange(gpsRaw, ["elevationFt", "elevation_ft", "altitudeFt", "altitude_ft"], -1500, 60000),
+        accuracyM: readNumberInRange(gpsRaw, ["accuracyM", "accuracy_m", "eph"], 0, 100000),
+        hdop: readNumberInRange(gpsRaw, ["hdop"], 0, 100),
+        satellites: readNumberInRange(gpsRaw, ["satellites", "sats", "numSatellites"], 0, 100),
         hasFix: true,
         lat: lat!,
         lon: lon!,
         source: readString(gpsRaw, ["source"]) === "esp" ? "esp" : "vehicle",
         updatedAt: gpsUpdatedAt,
-      }
+    }
     : fallback.gps;
+  const weatherTemp = readNumberInRange(weatherRaw, ["tempF", "temperatureF", "temperature_f", "temp_f"], -100, 160);
+  const weatherDewpoint = readNumberInRange(weatherRaw, ["dewpointF", "dewPointF", "dewpoint_f", "dew_point_f"], -120, 100);
+  const weatherHumidity = readNumberInRange(weatherRaw, ["humidity", "relativeHumidity", "relative_humidity"], 0, 100);
+  const weatherPressure = readNumberInRange(weatherRaw, ["pressureMb", "pressure_mb", "barometerMb", "barometricPressureMb"], 800, 1100);
+  const weatherRainRate = readNumberInRange(weatherRaw, ["rainRateInHr", "rain_rate_in_hr", "rainRate"], 0, 50);
+  const weatherRainTotal = readNumberInRange(weatherRaw, ["rainTotalIn", "rain_total_in", "rainAccumulationIn"], 0, 500);
+  const pressureTrendRaw = readString(weatherRaw, ["pressureTrend", "pressure_trend"]);
+  const weatherPressureTrend = pressureTrendRaw === "rising" || pressureTrendRaw === "steady" || pressureTrendRaw === "falling" ? pressureTrendRaw : null;
+  const hasWeatherData =
+    weatherTemp !== null ||
+    weatherDewpoint !== null ||
+    weatherHumidity !== null ||
+    weatherPressure !== null ||
+    weatherPressureTrend !== null ||
+    weatherRainRate !== null ||
+    weatherRainTotal !== null;
+  const powerMain = readNumberInRange(powerRaw, ["mainBatteryV", "main_battery_v", "batteryV"], 0, 60);
+  const powerAux = readNumberInRange(powerRaw, ["auxBatteryV", "aux_battery_v"], 0, 60);
+  const chargingRaw = powerRaw && typeof powerRaw === "object" ? (powerRaw as Record<string, unknown>).charging : undefined;
+  const charging = typeof chargingRaw === "boolean" ? chargingRaw : null;
+  const hasPowerData = powerMain !== null || powerAux !== null || charging !== null;
+  const cpuPercent = readNumberInRange(systemRaw, ["cpuPercent", "cpu_percent", "cpu"], 0, 100);
+  const ramPercent = readNumberInRange(systemRaw, ["ramPercent", "ram_percent", "memoryPercent"], 0, 100);
+  const storagePercent = readNumberInRange(systemRaw, ["storagePercent", "storage_percent", "diskPercent"], 0, 100);
+  const uptimeSeconds = readNumberInRange(systemRaw, ["uptimeSeconds", "uptime_seconds", "uptime"], 0, 31_536_000);
+  const hasSystemData = cpuPercent !== null || ramPercent !== null || storagePercent !== null || uptimeSeconds !== null;
 
   return {
-    wind: {
-      speedMph: windSpeed,
-      gustMph: windGust,
-      directionDeg: windDir,
-      directionCardinal: cardinalFromDeg(windDir),
-      source: windSpeed !== null || windGust !== null || windDir !== null ? "vehicle" : fallback.wind.source,
-      updatedAt: windSpeed !== null || windGust !== null || windDir !== null ? windUpdatedAt : fallback.wind.updatedAt,
-    },
-    weather: {
-      tempF: readNumber(weatherRaw, ["tempF", "temperatureF", "temperature_f", "temp_f"]) ?? fallback.weather.tempF,
-      dewpointF: readNumber(weatherRaw, ["dewpointF", "dewPointF", "dewpoint_f", "dew_point_f"]) ?? fallback.weather.dewpointF,
-      humidity: readNumber(weatherRaw, ["humidity", "relativeHumidity", "relative_humidity"]) ?? fallback.weather.humidity,
-      pressureMb: readNumber(weatherRaw, ["pressureMb", "pressure_mb", "barometerMb", "barometricPressureMb"]) ?? fallback.weather.pressureMb,
-      pressureTrend: (readString(weatherRaw, ["pressureTrend", "pressure_trend"]) as TelemetrySnapshot["weather"]["pressureTrend"]) ?? fallback.weather.pressureTrend,
-      rainRateInHr: readNumber(weatherRaw, ["rainRateInHr", "rain_rate_in_hr", "rainRate"]) ?? fallback.weather.rainRateInHr,
-      rainTotalIn: readNumber(weatherRaw, ["rainTotalIn", "rain_total_in", "rainAccumulationIn"]) ?? fallback.weather.rainTotalIn,
-      source: "vehicle",
-      sourceLabel: "VEHICLE",
-      updatedAt: readTimestamp(weatherRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
-    },
+    wind: hasWindData
+      ? {
+          speedMph: windSpeed,
+          gustMph: windGust,
+          directionDeg: windDir,
+          directionCardinal: cardinalFromDeg(windDir),
+          source: "vehicle",
+          updatedAt: windUpdatedAt,
+        }
+      : fallback.wind,
+    weather: hasWeatherData
+      ? {
+          tempF: weatherTemp,
+          dewpointF: weatherDewpoint,
+          humidity: weatherHumidity,
+          pressureMb: weatherPressure,
+          pressureTrend: weatherPressureTrend,
+          rainRateInHr: weatherRainRate,
+          rainTotalIn: weatherRainTotal,
+          source: "vehicle",
+          sourceLabel: "VEHICLE",
+          updatedAt: readTimestamp(weatherRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
+        }
+      : fallback.weather,
     gps,
     sensors: readSensors(source, fallback.sensors),
-    power: {
-      mainBatteryV: readNumber(powerRaw, ["mainBatteryV", "main_battery_v", "batteryV"]) ?? fallback.power.mainBatteryV,
-      auxBatteryV: readNumber(powerRaw, ["auxBatteryV", "aux_battery_v"]) ?? fallback.power.auxBatteryV,
-      charging: Boolean((powerRaw as Record<string, unknown>)?.charging ?? fallback.power.charging),
-      source: "vehicle",
-      updatedAt: readTimestamp(powerRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
-    },
-    system: {
-      cpuPercent: readNumber(systemRaw, ["cpuPercent", "cpu_percent", "cpu"]) ?? fallback.system.cpuPercent,
-      ramPercent: readNumber(systemRaw, ["ramPercent", "ram_percent", "memoryPercent"]) ?? fallback.system.ramPercent,
-      storagePercent: readNumber(systemRaw, ["storagePercent", "storage_percent", "diskPercent"]) ?? fallback.system.storagePercent,
-      uptimeSeconds: readNumber(systemRaw, ["uptimeSeconds", "uptime_seconds", "uptime"]) ?? fallback.system.uptimeSeconds,
-      source: "vehicle",
-      updatedAt: readTimestamp(systemRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
-    },
+    power: hasPowerData
+      ? {
+          mainBatteryV: powerMain,
+          auxBatteryV: powerAux,
+          charging,
+          source: "vehicle",
+          updatedAt: readTimestamp(powerRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
+        }
+      : fallback.power,
+    system: hasSystemData
+      ? {
+          cpuPercent,
+          ramPercent,
+          storagePercent,
+          uptimeSeconds,
+          source: "vehicle",
+          updatedAt: readTimestamp(systemRaw, ["updatedAt", "updated_at", "timestamp", "time"], now),
+        }
+      : fallback.system,
     status: {
       apiLatencyMs: latency,
       dataAgeSeconds: 0,
@@ -401,6 +438,11 @@ export class HybridTelemetryProvider implements TelemetryProvider {
       });
     }
     this.pollTimer = setInterval(() => void this.poll(), POLL_MS);
+    if (import.meta.env.DEV && typeof window !== "undefined") {
+      (window as typeof window & { __CODEBLACK_TEST_SET_TELEMETRY__?: (snapshot: TelemetrySnapshot) => void }).__CODEBLACK_TEST_SET_TELEMETRY__ = (snapshot) => {
+        this.publish(snapshot);
+      };
+    }
     void this.poll();
   }
 

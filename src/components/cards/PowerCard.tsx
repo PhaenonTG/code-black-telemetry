@@ -17,6 +17,9 @@ export const PowerCard = memo(function PowerCard({ className }: { className?: st
   if (!power) return null;
   const known = power.source !== "unavailable";
   const live = status?.piOnline ?? false;
+  const mainKnown = known && power.mainBatteryV !== null;
+  const auxKnown = known && power.auxBatteryV !== null;
+  const chargingKnown = known && power.charging !== null;
 
   return (
     <DashCard title="Vehicle Power" className={className}>
@@ -25,9 +28,9 @@ export const PowerCard = memo(function PowerCard({ className }: { className?: st
           {known ? `LAST KNOWN · ${ageLabel(power.updatedAt)}` : "NO DATA EVER RECEIVED"}
         </SourceBadge>
       )}
-      <MetricRow label="Main Batt" value={known ? power.mainBatteryV.toFixed(2) : "--"} unit="V" status={known ? battStatus(power.mainBatteryV) : "muted"} />
-      <MetricRow label="Aux Batt"  value={known ? power.auxBatteryV.toFixed(2) : "--"}  unit="V" status={known ? battStatus(power.auxBatteryV) : "muted"} />
-      <MetricRow label="Charging" value={known ? (power.charging ? "YES" : "NO") : "--"} status={known && power.charging ? "ok" : "muted"} />
+      <MetricRow label="Main Batt" value={mainKnown ? power.mainBatteryV!.toFixed(2) : "--"} unit={mainKnown ? "V" : undefined} status={mainKnown ? battStatus(power.mainBatteryV!) : "muted"} />
+      <MetricRow label="Aux Batt" value={auxKnown ? power.auxBatteryV!.toFixed(2) : "--"} unit={auxKnown ? "V" : undefined} status={auxKnown ? battStatus(power.auxBatteryV!) : "muted"} />
+      <MetricRow label="Charging" value={chargingKnown ? (power.charging ? "YES" : "NO") : "--"} status={chargingKnown && power.charging ? "ok" : "muted"} />
     </DashCard>
   );
 });
