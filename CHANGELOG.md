@@ -4,6 +4,19 @@ All changes logged newest-first.
 
 ---
 
+## Final Audit Reconciliation - 2026-08-23
+
+Closed the current audit-remediation cycle for the currently testable scope without changing app
+features.
+
+### Changed
+- Updated the app evaluation to separate closed P0/P1 audit items from blocked validation, external
+  decisions, and future product expansion.
+- Added a concise audit closeout document covering the remediation timeline, validation coverage,
+  remaining blocked hardware/platform validation, and conditions that should reopen the audit.
+
+---
+
 ## Native Device Walkthrough Hardening - 2026-08-23
 
 Hardened the physical Android QA harness without changing product features or native tracking code.
