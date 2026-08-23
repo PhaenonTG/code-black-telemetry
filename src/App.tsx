@@ -439,6 +439,7 @@ export default function App() {
           <button
             className="escape-button"
             type="button"
+            data-testid="map-action-escape"
             onPointerDown={armEscapeHold}
             onPointerUp={cancelEscapeHold}
             onPointerLeave={cancelEscapeHold}
@@ -447,7 +448,7 @@ export default function App() {
           >
             ESCAPE
           </button>
-          <button className="mark-button" type="button" onClick={() => void markCurrentPosition()} aria-label="Mark current position">MARK</button>
+          <button className="mark-button" type="button" data-testid="map-action-mark" onClick={() => void markCurrentPosition()} aria-label="Mark current position">MARK</button>
         </>
       )}
       {markStatus && <div className="mark-toast" role="status">{markStatus}</div>}
@@ -464,7 +465,7 @@ export default function App() {
         </div>
       )}
       <main className="page-viewport" ref={pagerRef} aria-label="Code Black dashboard pages">
-        <section className="page page--weather" aria-label="Situational Awareness">
+        <section className="page page--weather" aria-label="Situational Awareness" data-testid="route-weather" data-active={page === "weather"} aria-hidden={page !== "weather"}>
           <div className="page-grid page-grid--weather">
             <LocationMotionPanel
               tabletPermission={tabletPermission}
@@ -484,7 +485,7 @@ export default function App() {
             <MissionStreamingPanel className="phone-dashboard-only phone-dashboard-streaming" />
           </div>
         </section>
-        <section className="page page--operations" aria-label="Operations">
+        <section className="page page--operations" aria-label="Operations" data-testid="route-operations" data-active={page === "operations"} aria-hidden={page !== "operations"}>
           <div className="page-grid page-grid--operations">
             <section className="ops-summary cb-panel">
               <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Operational Mode</div>
@@ -516,17 +517,17 @@ export default function App() {
             </section>
           </div>
         </section>
-        <section className="page page--locate" aria-label="Locate">
+        <section className="page page--locate" aria-label="Locate" data-testid="route-locate" data-active={page === "locate"} aria-hidden={page !== "locate"}>
           <div className="page-grid page-grid--locate">
             <MapRadarPanel gps={mapGps} visible={page === "locate"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} nearbyBest={nearby.places} />
           </div>
         </section>
-        <section className="page page--alerts" aria-label="Alerts">
+        <section className="page page--alerts" aria-label="Alerts" data-testid="route-alerts" data-active={page === "alerts"} aria-hidden={page !== "alerts"}>
           <div className="page-grid page-grid--alerts">
             <AlertsFullPanel products={alertProducts.products} error={alertProducts.error} outlooks={spcOutlooks} onOpenReport={() => goToPage("report")} />
           </div>
         </section>
-        <section className="page page--report" aria-label="Submit Report">
+        <section className="page page--report" aria-label="Submit Report" data-testid="route-report" data-active={page === "report"} aria-hidden={page !== "report"}>
           <div className="page-grid page-grid--report">
             <ReportPage
               gps={gpsPoint}
@@ -537,7 +538,7 @@ export default function App() {
             />
           </div>
         </section>
-        <section className="page page--settings" aria-label="Settings">
+        <section className="page page--settings" aria-label="Settings" data-testid="route-settings" data-active={page === "settings"} aria-hidden={page !== "settings"}>
           <SettingsPage
             cockpitMode={cockpitMode}
             onChangeCockpitMode={changeCockpitMode}
@@ -556,7 +557,7 @@ export default function App() {
             deviceLabels={deviceLabels}
           />
         </section>
-        <section className="page page--layers" aria-label="Layer Configuration">
+        <section className="page page--layers" aria-label="Layer Configuration" data-testid="route-layers" data-active={page === "layers"} aria-hidden={page !== "layers"}>
           <div className="page-grid page-grid--layers">
             <LayerConfigPage />
             <ChaserNetPanel />
@@ -567,13 +568,13 @@ export default function App() {
         {pages.map((item) => <button key={item.key} aria-label={item.label} className={item.key === page ? "active" : ""} onClick={() => goToPage(item.key)} />)}
       </div>
       <nav className="bottom-dock" aria-label="Dashboard dock">
-        <button className={page === "weather" ? "active" : ""} onClick={() => goToPage("weather")}><DockIcon type="weather" /><span>Weather</span></button>
-        <button className={page === "operations" ? "active" : ""} onClick={() => goToPage("operations")}><DockIcon type="operations" /><span>Operations</span></button>
-        <button className={page === "locate" ? "active" : ""} onClick={() => { goToPage("locate"); window.dispatchEvent(new Event("codeblack:center-map")); }}><DockIcon type="locate" /><span>Locate</span></button>
-        <button className={page === "alerts" ? "active" : ""} onClick={() => goToPage("alerts")}><DockIcon type="alerts" /><span>Alerts</span></button>
-        <button className={page === "report" ? "active" : ""} onClick={() => goToPage("report")}><DockIcon type="report" /><span>Report</span></button>
-        <button className={page === "settings" ? "active" : ""} onClick={() => goToPage("settings")}><DockIcon type="settings" /><span>Settings</span></button>
-        <button className={page === "layers" ? "active" : ""} aria-label="Map layer configuration" onClick={() => goToPage("layers")}><DockIcon type="layers" /><span>Layers</span></button>
+        <button className={page === "weather" ? "active" : ""} data-testid="dock-weather" onClick={() => goToPage("weather")}><DockIcon type="weather" /><span>Weather</span></button>
+        <button className={page === "operations" ? "active" : ""} data-testid="dock-operations" onClick={() => goToPage("operations")}><DockIcon type="operations" /><span>Operations</span></button>
+        <button className={page === "locate" ? "active" : ""} data-testid="dock-locate" onClick={() => { goToPage("locate"); window.dispatchEvent(new Event("codeblack:center-map")); }}><DockIcon type="locate" /><span>Locate</span></button>
+        <button className={page === "alerts" ? "active" : ""} data-testid="dock-alerts" onClick={() => goToPage("alerts")}><DockIcon type="alerts" /><span>Alerts</span></button>
+        <button className={page === "report" ? "active" : ""} data-testid="dock-report" onClick={() => goToPage("report")}><DockIcon type="report" /><span>Report</span></button>
+        <button className={page === "settings" ? "active" : ""} data-testid="dock-settings" onClick={() => goToPage("settings")}><DockIcon type="settings" /><span>Settings</span></button>
+        <button className={page === "layers" ? "active" : ""} data-testid="dock-layers" aria-label="Map layer configuration" onClick={() => goToPage("layers")}><DockIcon type="layers" /><span>Layers</span></button>
       </nav>
     </div>
   );

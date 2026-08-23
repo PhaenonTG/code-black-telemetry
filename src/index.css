@@ -5359,6 +5359,14 @@ body {
   white-space: nowrap;
 }
 
+@media (min-width: 760px) {
+  .app-shell--page-locate .atlas-map-controls {
+    padding-left: 110px;
+    padding-right: 110px;
+    justify-content: center;
+  }
+}
+
 /* Compact map card (Weather page): only the Layers button remains, and it shouldn't stretch into
    a full-width bar just because it's the only flex child -- every other single-action control in
    this app (e.g. VIEW ALL ALERTS) is a compact right-aligned pill, not an edge-to-edge button. */
