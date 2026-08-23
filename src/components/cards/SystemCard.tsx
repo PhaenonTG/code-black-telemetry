@@ -1,5 +1,6 @@
 import { memo } from "react";
-import { useStatus, useSystem } from "../../hooks/useTelemetry";
+import { useSystem } from "../../hooks/useTelemetry";
+import { observationStateFromTimestamp } from "../../services/operationalStatus";
 import { ageLabel } from "../../services/telemetry/quality";
 import { DashCard } from "../ui/DashCard";
 import { MetricRow } from "../ui/MetricRow";
@@ -19,10 +20,14 @@ function uptime(s: number): string {
 
 export const SystemCard = memo(function SystemCard({ className }: { className?: string }) {
   const sys = useSystem();
-  const status = useStatus();
   if (!sys) return null;
   const known = sys.source !== "unavailable";
-  const live = status?.piOnline ?? false;
+  const freshness = observationStateFromTimestamp(known ? sys.updatedAt : null, Date.now(), {
+    agingMs: 30_000,
+    staleMs: 3 * 60_000,
+    offlineMs: 10 * 60_000,
+  });
+  const live = sys.source === "vehicle" && freshness === "LIVE";
   const cpuKnown = known && sys.cpuPercent !== null;
   const ramKnown = known && sys.ramPercent !== null;
   const storageKnown = known && sys.storagePercent !== null;
@@ -32,7 +37,7 @@ export const SystemCard = memo(function SystemCard({ className }: { className?: 
     <DashCard title="Pi System" className={className}>
       {!live && (
         <SourceBadge state={known ? "fallback" : "offline"}>
-          {known ? `LAST KNOWN · ${ageLabel(sys.updatedAt)}` : "NO DATA EVER RECEIVED"}
+          {known ? `${freshness} · ${ageLabel(sys.updatedAt)}` : "NO DATA EVER RECEIVED"}
         </SourceBadge>
       )}
       <MetricRow label="CPU" value={cpuKnown ? `${sys.cpuPercent!.toFixed(0)}%` : "--"} status={cpuKnown ? pctStatus(sys.cpuPercent!) : "muted"} />

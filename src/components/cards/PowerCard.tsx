@@ -1,5 +1,6 @@
 import { memo } from "react";
-import { usePower, useStatus } from "../../hooks/useTelemetry";
+import { usePower } from "../../hooks/useTelemetry";
+import { observationStateFromTimestamp } from "../../services/operationalStatus";
 import { ageLabel } from "../../services/telemetry/quality";
 import { DashCard } from "../ui/DashCard";
 import { MetricRow } from "../ui/MetricRow";
@@ -13,10 +14,14 @@ function battStatus(v: number): "ok" | "warn" | "critical" {
 
 export const PowerCard = memo(function PowerCard({ className }: { className?: string }) {
   const power = usePower();
-  const status = useStatus();
   if (!power) return null;
   const known = power.source !== "unavailable";
-  const live = status?.piOnline ?? false;
+  const freshness = observationStateFromTimestamp(known ? power.updatedAt : null, Date.now(), {
+    agingMs: 30_000,
+    staleMs: 3 * 60_000,
+    offlineMs: 10 * 60_000,
+  });
+  const live = power.source === "vehicle" && freshness === "LIVE";
   const mainKnown = known && power.mainBatteryV !== null;
   const auxKnown = known && power.auxBatteryV !== null;
   const chargingKnown = known && power.charging !== null;
@@ -25,7 +30,7 @@ export const PowerCard = memo(function PowerCard({ className }: { className?: st
     <DashCard title="Vehicle Power" className={className}>
       {!live && (
         <SourceBadge state={known ? "fallback" : "offline"}>
-          {known ? `LAST KNOWN · ${ageLabel(power.updatedAt)}` : "NO DATA EVER RECEIVED"}
+          {known ? `${freshness} · ${ageLabel(power.updatedAt)}` : "NO DATA EVER RECEIVED"}
         </SourceBadge>
       )}
       <MetricRow label="Main Batt" value={mainKnown ? power.mainBatteryV!.toFixed(2) : "--"} unit={mainKnown ? "V" : undefined} status={mainKnown ? battStatus(power.mainBatteryV!) : "muted"} />

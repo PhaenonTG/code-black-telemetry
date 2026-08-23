@@ -62,12 +62,12 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description:
   {
     key: "roadConditions",
     label: "Road Conditions",
-    description: "Public DOT closures, crashes, flooding, construction, lane restrictions, and route-impacting hazards. Coverage is provider-dependent.",
+    description: "Public DOT closures, crashes, flooding, construction, lane restrictions, and route-impacting hazards. v0.1 coverage: Arkansas DOT IDrive; other areas report outside coverage.",
   },
   {
     key: "trafficCameras",
     label: "Traffic / Public Cameras",
-    description: "Legitimate public transportation cameras. Images load only when a marker detail is opened; streams open through provider URLs where available.",
+    description: "Legitimate public transportation cameras. v0.1 coverage: Arkansas DOT IDrive; images load only when a marker detail is opened.",
   },
   {
     key: "probes",

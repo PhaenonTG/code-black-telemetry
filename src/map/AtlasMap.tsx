@@ -785,6 +785,8 @@ export function AtlasMap({
     if (status === "ready") return count > 0 ? `${count}` : "available";
     if (status === "stale") return `${count} stale`;
     if (status === "empty") return "none in view";
+    if (status === "outside-coverage") return "outside coverage";
+    if (status === "not-configured") return "not configured";
     if (status === "unavailable" || status === "error") return "provider unavailable";
     return providerCount > 0 ? "available" : "outside coverage";
   };

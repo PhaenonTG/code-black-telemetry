@@ -42,7 +42,10 @@ coverage-limited data is called out, and deferred systems remain deferred.
 - Weather/Telemetry integrity now distinguishes valid physical zero from missing or unavailable
   sensor data. Pi power/system fields are nullable, partial packets no longer inherit old values as
   fresh, and stale external weather fallback clears when GPS/location is lost.
-- The largest remaining readiness risks are route/status clarity, iOS/Windows credential runtime
+- System/Operations diagnostics now use a shared operational taxonomy. Pi transport, telemetry
+  freshness, sensor-service state, disabled overlay state, provider error, and outside-coverage
+  states are represented separately.
+- The largest remaining readiness risks are iOS/Windows credential runtime
   validation, real Pi/ESP field-node validation, broad provider coverage gaps, and native-device
   automation depth.
 
@@ -51,7 +54,7 @@ coverage-limited data is called out, and deferred systems remain deferred.
 | Surface | Reachable | Classification | Notes |
 | --- | --- | --- | --- |
 | Weather / Dashboard | Yes | Working / needs polish | Primary landing page; combines weather, radar preview, nearby, and operations context. Some data is provider/hardware dependent and must keep age/status visible. |
-| Operations | Yes | Working / needs polish | Holds Core/Pi/streaming/status diagnostics and actions. Some commands require BLE token and live vehicle node. |
+| Operations | Yes | Working / needs polish | Holds Core/Pi/streaming/status diagnostics and actions. Pi transport and telemetry freshness are now shown separately; some commands require BLE token and live vehicle node. |
 | Locate / Map | Yes | Working / needs polish | Primary map/radar surface with mosaic radar, own vehicle, trail, road/camera providers, Spotter Network pins, MARK, and ESCAPE. |
 | Alerts | Yes | Partial | NWS/SPC products are displayed where available; should keep official alert styling separate from OPS notices and Chaser Net reports. |
 | Report | Yes | Partial / security-sensitive | Spotter Network report submission path exists but requires credentials and external service availability. Not a Chaser Net production report flow. |
@@ -87,7 +90,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Broken | MARK/ESCAPE were globally available on non-map pages. Fixed in this pass. |
 | Partial | Spotter Network report submission, Pi/BLE command controls, streaming controls, road/camera provider coverage, Chaser Net panels. |
 | Placeholder/deferred | Probes, production Chaser Net backend/realtime, ESCAPE routing, AI route, Fleet route, GOES/GLM/HRRR/RAP/soundings, CarPlay, Android Auto, Windows packaging. |
-| Misleading risk | Any zero/default hardware telemetry can look live without freshness context; Spotter Network credentials may look like a normal production login/storage flow. |
+| Misleading risk | Hardware-dependent systems still require real Pi/ESP field validation; Spotter Network credentials may look like a normal production login/storage flow. |
 
 ## System Readiness
 
@@ -95,28 +98,28 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | --- | --- | --- |
 | Core app shell | Working / needs polish | Seven-page dock shell and swipe navigation are implemented. Route model is custom, not router-based. |
 | Navigation | Working / needs polish | Dock/page dots and Android Back handling exist. Back closes expanded map and modals first. `/system` alias to Operations should be made explicit. |
-| Dashboard | Working / needs polish | Useful field data composition, but dense and mixed between live, stale, and unavailable provider states. |
+| Dashboard | Working / needs polish | Useful field data composition; key weather/telemetry values now distinguish live, stale, and unavailable states, but the cockpit remains dense. |
 | Settings | Working / needs polish | Functional and persisted controls exist. Security-sensitive controls now mask saved secrets and use the shared credential boundary where supported. |
 | Themes/display | Ready / working | Dark, Light, Night, System and display/keep-awake abstractions exist. |
 | Chase Mode | Ready on Android; platform foundation elsewhere | Physical S24 lifecycle was reaccepted from a clean reboot state. Three Start/MARK/End cycles left no active `ChaseTrackingService` and no active notification key after End Chase. Force-stop-while-active reconciliation now clears the persisted Chase banner if native tracking cannot be restored. Samsung notification archive records may remain in `dumpsys` history and should not be treated as active leaks. iOS remains future native adapter work. |
-| GPS/location state | Working / needs polish | Shared normalized states exist; UI should keep stale/degraded wording consistent across all cards. |
+| GPS/location state | Working / needs polish | Shared normalized states exist and rendered tests preserve missing heading versus valid stationary speed. |
 | MARK | Ready after map-only fix | Immediate capture, duplicate guard, session association, and bounded persistence exist. Map-only placement is now guarded by test. |
 | ESCAPE | Foundation only | Context/readiness path exists; production routing is not active and must remain honestly labeled. |
-| Mosaic radar | Working / needs polish | Active radar experience. Mapbox/token/network availability still affects runtime. |
-| Road Conditions | Partial live v0.1 | Provider-backed with Arkansas DOT IDrive coverage only. Uses viewport filtering, provenance, validation, cache, stale fallback. |
-| Public Cameras | Partial live v0.1 | Arkansas DOT IDrive public cameras only. Images load on detail, not for every marker. |
+| Mosaic radar | Working / needs polish | Active radar experience. Static `LIVE` wording was removed where tile freshness is not directly known. Mapbox/token/network availability still affects runtime. |
+| Road Conditions | Partial live v0.1 | Provider-backed with Arkansas DOT IDrive coverage only. Uses viewport filtering, provenance, validation, cache, stale fallback, and outside-coverage state. |
+| Public Cameras | Partial live v0.1 | Arkansas DOT IDrive public cameras only. Images load on detail, not for every marker; outside-coverage is distinct from provider failure. |
 | Spotter Network layer | Partial / external dependency | Public/authenticated Spotter Network feeds are external and non-commercial-use constrained. Not Code Black Chaser Net. |
 | Reports layer/feed | Partial | NWS/Spotter reports are distinct from Chaser Net production reports. External submission requires caution. |
 | Probes | Foundation only | Layer model/visual language exists, production ingest absent. |
 | Weather | Working / needs polish | Current conditions distinguish vehicle, last-known, external fallback, simulator, and unavailable states. Missing values render unavailable rather than default zero; forecast/model systems remain deferred. |
-| Telemetry | Working / needs polish | BLE/HTTP/last-known hybrid exists. Power/system fields are nullable, partial packets preserve missing fields, and valid zeros are covered by tests. Real Pi/ESP payload validation remains pending. |
-| Core/Pi connectivity | Working / needs polish | Shared connection model, endpoint normalization, testing, backoff, freshness, and diagnostics exist. Real Core/Pi services are external. |
-| Live overlay telemetry | Foundation / partial | Shared client publisher, authenticated Core contract, latest-state store, Settings status, and secure station-token boundary exist. Production Core deployment and realtime overlay push remain pending. |
+| Telemetry | Working / needs polish | BLE/HTTP/last-known hybrid exists. Power/system fields are nullable, partial packets preserve missing fields, valid zeros are covered by tests, and operations diagnostics separate transport from stale data. Real Pi/ESP payload validation remains pending. |
+| Core/Pi connectivity | Working / needs polish | Shared connection model, endpoint normalization, testing, backoff, freshness, and diagnostics exist. Real Core/Pi services are external. Transport connectivity no longer implies telemetry is live. |
+| Live overlay telemetry | Foundation / partial | Shared client publisher, authenticated Core contract, latest-state store, Settings status, secure station-token boundary, and explicit disabled/not-configured/offline labels exist. Production Core deployment and realtime overlay push remain pending. |
 | Alerts | Partial | Official NWS/SPC surfaces exist. Needs continued separation from OPS notices and Chaser Net observations. |
 | AI | Not started / deferred | No primary route found. Project One/radar reasoning not implemented. |
 | Chaser Net | Foundation only | Contracts, in-memory service, applications/review, privacy, roles, audit, and UI status exist. Production backend/auth/realtime absent. |
 | Storage/persistence | Working / needs platform validation | Settings, sessions, breadcrumbs, MARK, endpoints, provider cache, and Spotter state persist. Spotter/Pi/overlay secrets use Android Keystore-backed storage with backup exclusion. iOS Keychain adapter source exists but needs Mac/device validation. Windows native secure-store adapter remains pending. |
-| Error handling | Partial | Error boundary exists and provider/service fallbacks exist. More user-facing categorization is needed in several hardware/provider paths. |
+| Error handling | Partial | Error boundary exists and provider/service fallbacks exist. Operational diagnostics now use safer categories for coverage, disabled state, stale data, and provider availability; deeper native/provider error UX remains future work. |
 | Performance | Working / needs monitoring | Map layers use memoization/cache/deduping; polling exists for telemetry/providers and should be watched on mobile battery. |
 
 ## Platform Readiness
@@ -163,11 +166,12 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Chase lifecycle / session ordering | Strong for shared domain; physical Android accepted previously. |
 | Native Android notification cleanup | Strong for active-notification acceptance; QA should use active notification APIs such as `cmd notification list` / `cmd notification get`, not broad archive-inclusive `dumpsys` matches. |
 | MARK | Partial; persistence/duplicate behavior exists and map-only placement is now source-guarded. |
-| Connection states | Strong for endpoint normalization and classification. |
+| Connection states | Strong for endpoint normalization, classification, and transport-versus-data freshness semantics. |
 | Road/camera providers | Strong for normalization, validation, freshness, coverage, and provider failure. |
 | Chaser Net contracts | Strong for domain/privacy/backend-contract logic; production backend absent. |
 | Navigation / rendered controls | Working / needs expansion | `npm run test:walkthrough` renders first-class routes across phone portrait, tablet landscape, and desktop; checks MARK/ESCAPE map-only placement, layer popovers, Settings/report states, shared Chase UI, console errors, and basic overflow. |
 | Weather/telemetry integrity | Working / needs field-node validation | Domain and rendered tests cover missing vs valid-zero, stale/missing measurement semantics, nullable Pi power/system values, and external fallback clearing when GPS is unavailable. |
+| System/Operations diagnostics | Working / needs field-node validation | Domain and rendered tests cover connected transport with stale telemetry, disabled overlay state, outside provider coverage, Settings diagnostics, and Operations summary wording. |
 | Responsive UI | Partial; device QA has covered Android phone and some landscape paths, iPad physical QA pending. |
 
 ## Priority Matrix
@@ -189,7 +193,7 @@ active notification teardown passed repeat S24 acceptance without native code ch
 | Item | Size | Why it matters | Prerequisite |
 | --- | --- | --- | --- |
 | Physical S24 walkthrough automation depth | Medium | The Playwright suite covers rendered browser UI; S24 helper now includes active-Chase force-stop reconciliation and requires either inactive/no-service or active/service-restored honesty, but native-device route/control walking still needs more selector robustness and should remain paired with manual acceptance for Chase service cleanup. | Current ADB helper and active-notification acceptance logic. |
-| Dedicated System diagnostics route or clearer Operations/System split | Medium | Field failures need a predictable place for status and diagnostics. | Current connection/provider diagnostic contracts. |
+| Native-device route/control walking robustness | Medium | S24 helper exists, but full control walking still needs more selector robustness and evidence summaries for repeated audit use. | Current rendered walkthrough and ADB helper. |
 | Real Pi/ESP telemetry payload validation | Medium | Confirms the hardened parser against actual field-node BLE/HTTP packets, reconnects, and malformed packets. | Access to the vehicle Pi/ESP stack. |
 | Weather/telemetry UI detail polish | Small | Per-field age/QC detail could make partial packets even clearer without cluttering the main cockpit view. | Current nullable measurement model. |
 | Expand road/camera providers to OK/KS/MO | Medium | Current Arkansas-only coverage leaves core chase territory uncovered. | Existing provider registry. |
@@ -215,11 +219,11 @@ active notification teardown passed repeat S24 acceptance without native code ch
 
 ## Recommended Next Five Passes
 
-1. **System Diagnostics and Field Status Polish** - make System/Operations status clearer, reduce fake-green risk, and surface provider/Core/Pi/GPS freshness in one consistent model.
-2. **Native Device Walkthrough Automation Hardening** - expand the S24 helper into a more robust UIAutomator/DevTools hybrid for route walking, screenshots, Back behavior, and Chase service evidence.
-3. **iOS Keychain Runtime + Windows Credential Adapter Validation** - verify Keychain on Mac/iPhone/iPad and implement the Windows Credential Manager adapter behind the shared credential interface.
+1. **Native Device Walkthrough Automation Hardening** - expand the S24 helper into a more robust UIAutomator/DevTools hybrid for route walking, screenshots, Back behavior, and Chase service evidence.
+2. **iOS Keychain Runtime + Windows Credential Adapter Validation** - verify Keychain on Mac/iPhone/iPad and implement the Windows Credential Manager adapter behind the shared credential interface.
+3. **Real Pi/ESP Telemetry Field Validation** - run the hardened parser against the live vehicle node, disconnect/reconnect sensors, and capture malformed-packet behavior before mobile mesonet production work.
 4. **Road/Camera Regional Expansion** - add Oklahoma, Kansas, and Missouri provider adapters behind the existing registry, with coverage and attribution documented per provider.
-5. **Real Pi/ESP Telemetry Field Validation** - run the hardened parser against the live vehicle node, disconnect/reconnect sensors, and capture malformed-packet behavior before mobile mesonet production work.
+5. **Spotter Network Provider-Policy Review** - confirm terms, credentials, and allowed external-submission behavior before treating Spotter submission as production-ready.
 
 ## Deferred Systems
 

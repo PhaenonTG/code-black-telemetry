@@ -307,7 +307,7 @@ function AtlasMapRadarPanel({
 }: MapRadarPanelProps) {
   const [rangeRings, setRangeRings] = useState<"off" | "10" | "25" | "50" | "100">("off");
   const [expanded, setExpanded] = useState(false);
-  const mapStatusLines = ["MOSAIC", "NEXRAD N0Q COMPOSITE", "LIVE"];
+  const mapStatusLines = ["MOSAIC", "NEXRAD N0Q COMPOSITE", "AUTO REFRESH"];
 
   return (
     <Panel title="Situational Map" className="map-panel map-panel--atlas">
@@ -378,7 +378,7 @@ function RadarExpandedView({
           <button className="icon-button radar-expanded__close" onClick={onClose} aria-label="Close radar">X</button>
           <strong>Wide-Area Mosaic</strong>
           <span>NEXRAD N0Q Composite Reflectivity - CONUS</span>
-          <em>LIVE</em>
+          <em>AUTO REFRESH</em>
         </header>
         <div className="radar-expanded__map">
           <MapRadarPanel gps={gps} visible allowExpand={false} />

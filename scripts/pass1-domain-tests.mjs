@@ -28,6 +28,7 @@ const liveOverlayTelemetry = await importTs("src/services/liveOverlayTelemetryMo
 const credentialSecurity = await importTs("src/services/credentialSecurity.ts");
 const spotterSubmissionPolicy = await importTs("src/services/spotterSubmissionPolicy.ts");
 const telemetryMeasurement = await importTs("src/services/telemetry/measurement.ts");
+const operationalStatus = await importTs("src/services/operationalStatus.ts");
 
 const appSource = await readFile("src/App.tsx", "utf8");
 assert.match(
@@ -216,6 +217,11 @@ assert.equal(roadCameraProviders.roadProvidersForViewport(testViewport).some((pr
 assert.equal(roadCameraProviders.trafficCameraProvidersForViewport(testViewport).some((provider) => provider.id === "ardot-idrive"), true);
 const outsideArkansasViewport = { north: 40, south: 39, east: -100, west: -101, zoom: 8 };
 assert.equal(roadCameraProviders.roadProvidersForViewport(outsideArkansasViewport).length, 0);
+const outsideRoadResult = await roadCameraProviders.getRoadConditionsForViewport({ viewport: outsideArkansasViewport, detail: "close" });
+assert.equal(outsideRoadResult.status, "outside-coverage");
+assert.match(outsideRoadResult.message, /Arkansas DOT IDrive/);
+const outsideCameraResult = await roadCameraProviders.getTrafficCamerasForViewport({ viewport: outsideArkansasViewport, detail: "close" });
+assert.equal(outsideCameraResult.status, "outside-coverage");
 const normalizedRoad = roadCameraTest.normalizeRoadFeature({
   properties: {
     gid: 123,
@@ -355,6 +361,27 @@ const configuredStatus = connection.createConnectionStatus({ endpoint: "http://1
 assert.equal(configuredStatus.isConfigured, true);
 assert.equal(configuredStatus.transport, "local-network");
 assert.equal(configuredStatus.connectionState, "DISCONNECTED");
+const staleConnectionStatus = {
+  ...configuredStatus,
+  connectionState: "CONNECTED",
+  lastSuccessfulResponseAt: now - 5_000,
+  lastDataAt: now - 4 * 60_000,
+  dataAgeMs: 4 * 60_000,
+  latencyMs: 22,
+};
+const transportSummary = operationalStatus.summarizeConnectionTransport(staleConnectionStatus);
+const staleTelemetrySummary = operationalStatus.summarizeTelemetryData({
+  mode: "pi",
+  piOnline: true,
+  lastUpdated: now - 4 * 60_000,
+  connection: staleConnectionStatus,
+}, now);
+assert.equal(transportSummary.state, "CONNECTED");
+assert.equal(staleTelemetrySummary.state, "STALE");
+assert.equal(operationalStatus.overlayStateLabel("disabled"), "DISABLED");
+assert.equal(operationalStatus.providerLayerStatusLabel("outside-coverage"), "OUTSIDE COVERAGE");
+assert.equal(operationalStatus.formatOperationalAgeFromMs(42_000), "42s");
+assert.equal(operationalStatus.summarizeConnectionTransport(null).state, "CHECKING");
 
 const overlayNow = Date.parse("2026-08-22T18:00:00Z");
 const overlayPayload = {

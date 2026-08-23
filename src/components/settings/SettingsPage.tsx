@@ -65,7 +65,7 @@ import { useMissionSession } from "../../hooks/useMissionSession";
 import { useLocationTracking } from "../../hooks/useLocationTracking";
 import { locationTrackingService } from "../../services/locationTracking";
 import { getPlatformCapabilities } from "../../services/platformCapabilities";
-import { useStatus } from "../../hooks/useTelemetry";
+import { useStatus, useTelemetry } from "../../hooks/useTelemetry";
 import {
   DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS,
   clearLiveOverlayTelemetryToken,
@@ -79,6 +79,7 @@ import {
   type LiveOverlayTelemetrySettings,
 } from "../../services/liveOverlayTelemetry";
 import { useLiveOverlayTelemetry } from "../../hooks/useLiveOverlayTelemetry";
+import { formatOperationalAgeFromMs, overlayStateLabel, summarizePiOperationalStatus } from "../../services/operationalStatus";
 
 // Mirrors lighting/api.py's PRESET_COLORS on the Pi -- same names, same swatches, so a preset here
 // maps to exactly one accepted preset string server-side rather than sending raw RGB that could
@@ -198,6 +199,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const missionSession = useMissionSession();
   const locationTracking = useLocationTracking();
   const telemetryStatus = useStatus();
+  const telemetry = useTelemetry();
   const liveOverlayStatus = useLiveOverlayTelemetry();
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [piEndpoint, setPiEndpoint] = useState("");
@@ -248,6 +250,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const buildTime = Number.isNaN(Date.parse(__BUILD_TIME__)) ? __BUILD_TIME__ : new Date(__BUILD_TIME__).toLocaleString();
   const trackingCopy = trackingStatusCopy(locationTracking);
   const connection = telemetryStatus?.connection;
+  const opsStatus = summarizePiOperationalStatus(telemetry);
 
   useEffect(() => {
     const unsubscribe = subscribePiEndpoint(setPiEndpoint);
@@ -730,7 +733,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
             <strong>Overlay Link</strong>
             <span>{liveOverlayStatus.lastErrorSummary || liveOverlayStatus.lastReason || "Publishes only while Chase Mode is active."}</span>
           </div>
-          <strong>{liveOverlayStatus.state.replace("-", " ").toUpperCase()}</strong>
+          <strong>{overlayStateLabel(liveOverlayStatus.state)}</strong>
         </div>
         <div className="settings-row settings-row--stack">
           <input
@@ -917,14 +920,15 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           <span>Native App</span><strong>{appInfo ? `${appInfo.version} (${appInfo.build})` : "WEB PREVIEW"}</strong>
           <span>GPS</span><strong>{diagnostics.gpsValidity.toUpperCase()} / {diagnostics.gpsSourceLabel}</strong>
           <span>GPS Permission</span><strong>{diagnostics.gpsPermission.toUpperCase()}</strong>
-          <span>Services</span><strong>{diagnostics.serviceState}</strong>
-          <span>Overlay Telemetry</span><strong>{diagnostics.overlayTelemetryState.toUpperCase()}</strong>
+          <span>Sensor Services</span><strong>{opsStatus.services.label}</strong>
+          <span>Telemetry Data</span><strong>{opsStatus.telemetry.label}</strong>
+          <span>Overlay Telemetry</span><strong>{overlayStateLabel(diagnostics.overlayTelemetryState)}</strong>
           <span>Pi Endpoint</span><strong>{piEndpoint || "NOT SET"}</strong>
           <span>Pi Link</span><strong>{telemetryLinkEnabled ? "ON" : "OFF"}</strong>
-          <span>Pi State</span><strong>{connection?.connectionState ?? "UNKNOWN"}</strong>
-          <span>Pi Transport</span><strong>{connection?.transport?.toUpperCase() ?? "UNKNOWN"}</strong>
+          <span>Pi Transport</span><strong>{opsStatus.transport.label}</strong>
+          <span>Pi Link Type</span><strong>{connection?.transport?.toUpperCase() ?? "UNKNOWN"}</strong>
           <span>Pi Last Success</span><strong>{connection?.lastSuccessfulResponseAt ? new Date(connection.lastSuccessfulResponseAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "NONE"}</strong>
-          <span>Pi Data Age</span><strong>{connection?.dataAgeMs == null ? "NO DATA" : `${Math.round(connection.dataAgeMs / 1000)}s`}</strong>
+          <span>Pi Data Age</span><strong>{connection?.dataAgeMs == null ? "NO DATA" : formatOperationalAgeFromMs(connection.dataAgeMs)}</strong>
           <span>Pi Retry</span><strong>{connection?.retryAt ? `${Math.max(0, Math.round((connection.retryAt - Date.now()) / 1000))}s` : "IDLE"}</strong>
           <span>Pi Error</span><strong>{connection?.lastErrorSummary || "NONE"}</strong>
           <span>BLE</span><strong>{bleConnected ? "CONNECTED" : "DISCONNECTED"}</strong>

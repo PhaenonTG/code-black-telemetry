@@ -31,7 +31,7 @@ import { useNearbyPlaces } from "./hooks/useNearbyPlaces";
 import { useNearbyPoiList } from "./hooks/useNearbyPoiList";
 import { useSituationalData } from "./hooks/useSituationalData";
 import { useSpotters } from "./hooks/useSpotters";
-import { useStatus, useWeather, useWind } from "./hooks/useTelemetry";
+import { useStatus, useTelemetry, useWeather, useWind } from "./hooks/useTelemetry";
 import { useDeviceLabels } from "./hooks/useDeviceLabels";
 import { useMissionSession } from "./hooks/useMissionSession";
 import { useLocationTracking } from "./hooks/useLocationTracking";
@@ -48,6 +48,7 @@ import { endMissionSession, recoverMissionSession } from "./services/missionSess
 import { setDisplayCockpitMode, startDisplayController } from "./services/displayController";
 import { createEgressContext, summarizeEgressReadiness } from "./services/egress";
 import { locationTrackingService } from "./services/locationTracking";
+import { summarizePiOperationalStatus } from "./services/operationalStatus";
 
 type PageKey = "weather" | "operations" | "locate" | "alerts" | "report" | "settings" | "layers";
 export type CockpitMode = "normal" | "chase";
@@ -105,27 +106,6 @@ function appPageSupportsOperationalActions(page: PageKey) {
   return page === "locate";
 }
 
-function formatConnectionSummary(status: ReturnType<typeof useStatus> | undefined | null) {
-  if (!status) return "NOT READY";
-  const connection = status.connection;
-  if (!connection?.isConfigured) return "NOT CONFIGURED";
-  if (connection.connectionState === "CONNECTED") {
-    const dataAge = connection.dataAgeMs && connection.dataAgeMs > 5_000 ? ` · DATA ${Math.round(connection.dataAgeMs / 1000)}s` : "";
-    return `CONNECTED · ${connection.latencyMs ?? status.apiLatencyMs} ms${dataAge}`;
-  }
-  if (connection.connectionState === "STALE") {
-    const age = connection.dataAgeMs == null ? "STALE" : `DATA ${Math.round(connection.dataAgeMs / 1000)}s OLD`;
-    return `STALE · ${age}`;
-  }
-  if (connection.connectionState === "DEGRADED") return `DEGRADED · ${connection.lastErrorSummary || "CHECK STATUS"}`;
-  if (connection.connectionState === "CONNECTING") return "CONNECTING";
-  if (connection.retryAt) {
-    const retrySeconds = Math.max(0, Math.round((connection.retryAt - Date.now()) / 1000));
-    return `${connection.connectionState} · RETRY ${retrySeconds}s`;
-  }
-  return `${connection.connectionState}${connection.lastErrorSummary ? ` · ${connection.lastErrorSummary}` : ""}`;
-}
-
 export default function App() {
   const [page, setPage] = useState<PageKey>(() => pathToPage());
   const [cockpitMode, setCockpitMode] = useState<CockpitMode>("chase");
@@ -144,6 +124,7 @@ export default function App() {
   const missionSession = useMissionSession();
   const deviceLabels = useDeviceLabels();
   const status = useStatus();
+  const telemetry = useTelemetry();
   const weather = useWeather();
   const wind = useWind();
   const lat = canonicalLocation.latitude;
@@ -167,10 +148,11 @@ export default function App() {
   const liveOverlayTelemetry = useLiveOverlayTelemetry();
   const chaseStatus = chaseStatusParts(locationTracking);
   const missionSessionId = missionSession?.id ?? null;
-  const connectionSummary = formatConnectionSummary(status);
-  const piState = status?.connection ? connectionSummary : "OFFLINE";
-  const serviceState = status?.piOnline ? "VIA PI · LIVE" : status?.connection?.connectionState === "STALE" ? "VIA PI · STALE" : "VIA PI · OFFLINE";
-  const coreState = connectionSummary;
+  const opsStatus = summarizePiOperationalStatus(telemetry);
+  const piState = opsStatus.transport.label;
+  const telemetryState = opsStatus.telemetry.label;
+  const serviceState = opsStatus.services.label;
+  const coreState = opsStatus.transport.label;
   const showOperationalActions = appPageSupportsOperationalActions(page);
   const mapGps = useMemo(
     () => (gpsPoint ? { ...gpsPoint, headingDeg, speedMph, accuracyM } : null),
@@ -499,8 +481,8 @@ export default function App() {
             <section className="ops-summary cb-panel">
               <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Operational Mode</div>
               <div className="ops-mode">
-                <strong>{status?.mode === "pi" ? "PI CONNECTED" : status?.mode === "tablet" ? deviceLabels.standaloneMode : "DEVELOPMENT SIMULATOR"}</strong>
-                <span>PI {status?.connection?.connectionState ?? "OFFLINE"} | INTERNET {status?.internetOnline ? "AVAILABLE" : "UNKNOWN"}</span>
+                <strong>{opsStatus.modeLabel}</strong>
+                <span>PI TRANSPORT · {opsStatus.transport.label} | TELEMETRY · {opsStatus.telemetry.label}</span>
                 <span className="ops-mode__hint">Cockpit display mode moved to Settings.</span>
               </div>
             </section>
@@ -513,14 +495,15 @@ export default function App() {
             <section className="cb-panel diagnostics-panel">
               <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Diagnostics</div>
               <div className="diagnostic-grid">
-                <span>PI API</span><strong>{piState}</strong>
+                <span>PI Transport</span><strong>{piState}</strong>
+                <span>Telemetry Data</span><strong>{telemetryState}</strong>
                 <span>Internet</span><strong>{status?.internetOnline ? "AVAILABLE" : "UNAVAILABLE"}</strong>
                 <span>{deviceLabels.gps}</span><strong>{gps ? `${gps.source === "tablet" ? deviceLabels.gps.toUpperCase() : gps.source.toUpperCase()} · ${gps.accuracyM ? `${Math.round(gps.accuracyM)} m` : "ACTIVE"}` : "WAITING"}</strong>
                 <span>UI Mode</span><strong>{cockpitMode.toUpperCase()}</strong>
                 <span>Canonical GPS</span><strong>{canonicalLocation.validity} · {sourceLabel(canonicalLocation.source, deviceLabels.gps)}</strong>
                 <span>Resolved Place</span><strong>{canonicalLocation.resolvedCity ? `${canonicalLocation.resolvedCity}, ${canonicalLocation.resolvedState ?? ""}` : canonicalLocation.fallbackReason}</strong>
                 <span>Core / Pi</span><strong>{coreState}</strong>
-                <span>Services</span><strong>{serviceState}</strong>
+                <span>Sensor Services</span><strong>{serviceState}</strong>
                 <span>Logs</span><strong>RECENT EVENTS</strong>
               </div>
             </section>
