@@ -62,6 +62,14 @@ import { useLocationTracking } from "../../hooks/useLocationTracking";
 import { locationTrackingService } from "../../services/locationTracking";
 import { getPlatformCapabilities } from "../../services/platformCapabilities";
 import { useStatus } from "../../hooks/useTelemetry";
+import {
+  DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS,
+  loadLiveOverlayTelemetrySettings,
+  saveLiveOverlayTelemetrySettings,
+  subscribeLiveOverlayTelemetrySettings,
+  type LiveOverlayTelemetrySettings,
+} from "../../services/liveOverlayTelemetry";
+import { useLiveOverlayTelemetry } from "../../hooks/useLiveOverlayTelemetry";
 
 // Mirrors lighting/api.py's PRESET_COLORS on the Pi -- same names, same swatches, so a preset here
 // maps to exactly one accepted preset string server-side rather than sending raw RGB that could
@@ -172,6 +180,7 @@ interface SettingsPageProps {
     gpsValidity: string;
     gpsPermission: string;
     serviceState: string;
+    overlayTelemetryState: string;
   };
   deviceLabels: DeviceLabels;
 }
@@ -180,9 +189,13 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const missionSession = useMissionSession();
   const locationTracking = useLocationTracking();
   const telemetryStatus = useStatus();
+  const liveOverlayStatus = useLiveOverlayTelemetry();
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [piEndpoint, setPiEndpoint] = useState("");
   const [telemetryLinkEnabled, setTelemetryLinkEnabled] = useState(true);
+  const [overlaySettings, setOverlaySettings] = useState<LiveOverlayTelemetrySettings>(DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS);
+  const [overlaySettingsSaved, setOverlaySettingsSaved] = useState(false);
+  const [overlaySettingsError, setOverlaySettingsError] = useState("");
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [spotterAccount, setSpotterAccount] = useState<SpotterAccount | null>(null);
   const [spotterUsername, setSpotterUsername] = useState("");
@@ -237,6 +250,32 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
 
   const toggleTelemetryLink = (enabled: boolean) => {
     void saveTelemetryLinkEnabled(enabled);
+  };
+
+  useEffect(() => {
+    const unsubscribe = subscribeLiveOverlayTelemetrySettings(setOverlaySettings);
+    void loadLiveOverlayTelemetrySettings();
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const updateOverlaySettingsDraft = (patch: Partial<LiveOverlayTelemetrySettings>) => {
+    setOverlaySettings((current) => ({ ...current, ...patch }));
+    setOverlaySettingsSaved(false);
+    setOverlaySettingsError("");
+  };
+
+  const saveOverlaySettings = async () => {
+    try {
+      const saved = await saveLiveOverlayTelemetrySettings(overlaySettings);
+      setOverlaySettings(saved);
+      setOverlaySettingsSaved(true);
+      setOverlaySettingsError("");
+      window.setTimeout(() => setOverlaySettingsSaved(false), 1600);
+    } catch (error) {
+      setOverlaySettingsError(error instanceof Error ? error.message : "Overlay telemetry settings could not be saved.");
+    }
   };
 
   useEffect(() => {
@@ -606,6 +645,55 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         </div>
       </Panel>
 
+      <Panel title="Live Overlay Telemetry" className="settings-overlay-panel">
+        <div className="settings-row">
+          <div>
+            <strong>Share Live Overlay Telemetry</strong>
+            <span>Publishes latest chase position to CodeBlack-Core for OBS overlays only. Separate from Spotter Network.</span>
+          </div>
+          <div className="mode-toggle" aria-label="Live overlay telemetry sharing">
+            <button className={overlaySettings.enabled ? "" : "active"} onClick={() => updateOverlaySettingsDraft({ enabled: false })}>Off</button>
+            <button className={overlaySettings.enabled ? "active" : ""} onClick={() => updateOverlaySettingsDraft({ enabled: true })}>On</button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Overlay Link</strong>
+            <span>{liveOverlayStatus.lastErrorSummary || liveOverlayStatus.lastReason || "Publishes only while Chase Mode is active."}</span>
+          </div>
+          <strong>{liveOverlayStatus.state.replace("-", " ").toUpperCase()}</strong>
+        </div>
+        <div className="settings-row settings-row--stack">
+          <input
+            className="settings-input"
+            placeholder="CodeBlack-Core endpoint"
+            autoCapitalize="none"
+            autoCorrect="off"
+            value={overlaySettings.coreEndpoint}
+            onChange={(event) => updateOverlaySettingsDraft({ coreEndpoint: event.target.value })}
+          />
+          <input
+            className="settings-input"
+            placeholder="Station ID"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            value={overlaySettings.stationId}
+            onChange={(event) => updateOverlaySettingsDraft({ stationId: event.target.value })}
+          />
+          <input
+            className="settings-input"
+            placeholder="Station token"
+            type="password"
+            autoCapitalize="none"
+            autoCorrect="off"
+            value={overlaySettings.stationToken}
+            onChange={(event) => updateOverlaySettingsDraft({ stationToken: event.target.value })}
+          />
+          <button className="settings-action" onClick={() => void saveOverlaySettings()}>{overlaySettingsSaved ? "Saved" : "Save"}</button>
+        </div>
+        {overlaySettingsError && <div className="cb-note cb-note--warn">{overlaySettingsError}</div>}
+      </Panel>
+
       <Panel title="Spotter Network" className="settings-spotter-panel">
         {spotterAccount ? (
           <div className="settings-row">
@@ -749,6 +837,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           <span>GPS</span><strong>{diagnostics.gpsValidity.toUpperCase()} / {diagnostics.gpsSourceLabel}</strong>
           <span>GPS Permission</span><strong>{diagnostics.gpsPermission.toUpperCase()}</strong>
           <span>Services</span><strong>{diagnostics.serviceState}</strong>
+          <span>Overlay Telemetry</span><strong>{diagnostics.overlayTelemetryState.toUpperCase()}</strong>
           <span>Pi Endpoint</span><strong>{piEndpoint || "NOT SET"}</strong>
           <span>Pi Link</span><strong>{telemetryLinkEnabled ? "ON" : "OFF"}</strong>
           <span>Pi State</span><strong>{connection?.connectionState ?? "UNKNOWN"}</strong>

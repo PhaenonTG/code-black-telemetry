@@ -24,6 +24,7 @@ const locationObservation = await importTs("src/services/locationObservation.ts"
 const platformCapabilityModel = await importTs("src/services/platformCapabilityModel.ts");
 const connection = await importTs("src/services/connection.ts");
 const roadCameraProviders = await importTs("src/services/roadCameraProviders.ts");
+const liveOverlayTelemetry = await importTs("src/services/liveOverlayTelemetryModel.ts");
 
 const appSource = await readFile("src/App.tsx", "utf8");
 assert.match(
@@ -346,5 +347,54 @@ const configuredStatus = connection.createConnectionStatus({ endpoint: "http://1
 assert.equal(configuredStatus.isConfigured, true);
 assert.equal(configuredStatus.transport, "local-network");
 assert.equal(configuredStatus.connectionState, "DISCONNECTED");
+
+const overlayNow = Date.parse("2026-08-22T18:00:00Z");
+const overlayPayload = {
+  stationId: "cbwx-001",
+  sessionId: "chase-20260822180000-test",
+  timestamp: overlayNow,
+  latitude: 36.18,
+  longitude: -94.12,
+  accuracyM: 8,
+  speedMps: 14,
+  headingDeg: 224,
+  source: "CODEBLACK_OPS",
+};
+const validatedOverlay = liveOverlayTelemetry.validateLiveOverlayTelemetryPayload(overlayPayload, overlayNow);
+assert.equal(validatedOverlay.ok, true);
+assert.equal(validatedOverlay.payload.stationId, "CBWX-001");
+assert.equal(liveOverlayTelemetry.validateLiveOverlayTelemetryPayload({ ...overlayPayload, latitude: 136 }, overlayNow).errorCode, "INVALID_COORDINATE");
+assert.equal(liveOverlayTelemetry.validateLiveOverlayTelemetryPayload({ ...overlayPayload, timestamp: overlayNow - 120_000 }, overlayNow).errorCode, "STALE_PACKET");
+assert.equal(liveOverlayTelemetry.validateLiveOverlayTelemetryPayload({ ...overlayPayload, source: "CHASERNET" }, overlayNow).errorCode, "INVALID_SOURCE");
+const overlayStore = new liveOverlayTelemetry.LiveOverlayTelemetryLatestStore([
+  { stationId: "CBWX-001", stationName: "Spencer", token: "test-token" },
+  { stationId: "CBWX-002", stationName: "Nick", token: "nick-token" },
+]);
+assert.equal(overlayStore.ingest(null, overlayPayload, overlayNow).errorCode, "AUTH_REQUIRED");
+assert.equal(overlayStore.ingest("Bearer wrong", overlayPayload, overlayNow).errorCode, "AUTH_FAILED");
+const ingestResult = overlayStore.ingest("Bearer test-token", overlayPayload, overlayNow);
+assert.equal(ingestResult.accepted, true);
+assert.equal(overlayStore.read("CBWX-001", overlayNow + 5_000).snapshot.freshness, "live");
+assert.equal(overlayStore.read("CBWX-001", overlayNow + 20_000).snapshot.freshness, "aging");
+assert.equal(overlayStore.read("CBWX-001", overlayNow + 60_000).snapshot.freshness, "stale");
+assert.equal(overlayStore.read("CBWX-001", overlayNow + 120_000).snapshot.freshness, "offline");
+assert.equal(overlayStore.read("CBWX-002", overlayNow).found, false);
+const olderOverlay = overlayStore.ingest("Bearer test-token", { ...overlayPayload, timestamp: overlayNow - 5_000 }, overlayNow);
+assert.equal(olderOverlay.accepted, false);
+assert.equal(olderOverlay.errorCode, "OLDER_PACKET");
+const movedOverlay = { ...overlayPayload, timestamp: overlayNow + 3_000, latitude: 36.181 };
+assert.equal(liveOverlayTelemetry.shouldPublishLiveOverlayTelemetry(null, overlayPayload, null, overlayNow).publish, true);
+assert.equal(liveOverlayTelemetry.shouldPublishLiveOverlayTelemetry(overlayPayload, { ...overlayPayload, timestamp: overlayNow + 1_000 }, overlayNow, overlayNow + 1_000).publish, false);
+assert.equal(liveOverlayTelemetry.shouldPublishLiveOverlayTelemetry(overlayPayload, movedOverlay, overlayNow, overlayNow + 3_000).reason, "movement");
+assert.equal(
+  liveOverlayTelemetry.shouldPublishLiveOverlayTelemetry(overlayPayload, { ...overlayPayload, timestamp: overlayNow + 3_000, headingDeg: 260 }, overlayNow, overlayNow + 3_000).reason,
+  "heading",
+);
+assert.equal(
+  liveOverlayTelemetry.shouldPublishLiveOverlayTelemetry(overlayPayload, { ...overlayPayload, timestamp: overlayNow + 6_000 }, overlayNow, overlayNow + 6_000).reason,
+  "elapsed",
+);
+assert.equal(liveOverlayTelemetry.createLiveOverlayIngestUrl("https://core.example.test/"), "https://core.example.test/api/telemetry/live/location");
+assert.equal(liveOverlayTelemetry.createLiveOverlayReadUrl("https://core.example.test/", "cbwx-001"), "https://core.example.test/api/telemetry/live/CBWX-001");
 
 console.log("pass1-domain-tests: ok");

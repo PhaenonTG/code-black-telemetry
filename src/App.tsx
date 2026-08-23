@@ -35,6 +35,7 @@ import { useStatus, useWeather, useWind } from "./hooks/useTelemetry";
 import { useDeviceLabels } from "./hooks/useDeviceLabels";
 import { useMissionSession } from "./hooks/useMissionSession";
 import { useLocationTracking } from "./hooks/useLocationTracking";
+import { useLiveOverlayTelemetry } from "./hooks/useLiveOverlayTelemetry";
 import { sourceLabel } from "./services/location";
 import { setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, startCodeBlackSoundPlayer } from "./services/sound";
 import { loadAppTheme, subscribeAppTheme, type AppThemeMode } from "./services/settings";
@@ -163,6 +164,7 @@ export default function App() {
   const poi = useNearbyPoiList(gpsPoint);
   const spotters = useSpotters(gpsPoint);
   const locationTracking = useLocationTracking();
+  const liveOverlayTelemetry = useLiveOverlayTelemetry();
   const chaseStatus = chaseStatusParts(locationTracking);
   const missionSessionId = missionSession?.id ?? null;
   const connectionSummary = formatConnectionSummary(status);
@@ -549,6 +551,7 @@ export default function App() {
               gpsValidity: canonicalLocation.validity,
               gpsPermission: tabletPermission,
               serviceState,
+              overlayTelemetryState: liveOverlayTelemetry.state,
             }}
             deviceLabels={deviceLabels}
           />

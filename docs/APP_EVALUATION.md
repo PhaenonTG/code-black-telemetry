@@ -24,6 +24,8 @@ coverage-limited data is called out, and deferred systems remain deferred.
   Arkansas DOT IDrive only.
 - Chaser Net has substantial contracts, application/review foundations, privacy models, and UI
   status handling, but production backend/auth/realtime deployment remains deferred.
+- Live Overlay Telemetry now has an explicit, off-by-default latest-state path for CodeBlack-Core
+  overlays. It is not Chaser Net and does not upload breadcrumb history.
 - The largest readiness risks are credential storage, external Spotter Network submission boundary,
   route/status clarity, and broad provider coverage gaps.
 
@@ -92,6 +94,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Weather | Working / needs polish | Hardware telemetry plus fallback/provider paths exist; forecast/model systems remain deferred. |
 | Telemetry | Working / needs polish | BLE/HTTP/last-known hybrid exists. Hardware-source freshness must stay visible to avoid fake readings. |
 | Core/Pi connectivity | Working / needs polish | Shared connection model, endpoint normalization, testing, backoff, freshness, and diagnostics exist. Real Core/Pi services are external. |
+| Live overlay telemetry | Foundation / partial | Shared client publisher, authenticated Core contract, latest-state store, and Settings status exist. Production Core deployment, secure storage, and realtime overlay push remain pending. |
 | Alerts | Partial | Official NWS/SPC surfaces exist. Needs continued separation from OPS notices and Chaser Net observations. |
 | AI | Not started / deferred | No primary route found. Project One/radar reasoning not implemented. |
 | Chaser Net | Foundation only | Contracts, in-memory service, applications/review, privacy, roles, audit, and UI status exist. Production backend/auth/realtime absent. |
@@ -126,7 +129,9 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 3. Spotter Network external submission must remain explicitly user-triggered and account-gated.
 4. Chaser Net live sharing remains off/not configured; local Chase Mode must never enable network
    presence automatically.
-5. Road/camera providers validate URLs/text/coordinates and do not implement ALPR, private-camera
+5. Live Overlay Telemetry is explicit and off by default; it uses latest-state only and must not
+   become a public tracker or hidden breadcrumb upload.
+6. Road/camera providers validate URLs/text/coordinates and do not implement ALPR, private-camera
    discovery, or police-evasion features.
 
 ## Test Coverage Assessment

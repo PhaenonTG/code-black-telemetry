@@ -20,6 +20,7 @@ capabilities such as background location, notifications, display control, Blueto
 | Display keep-awake | Web Wake Lock where available | Pending iOS idle-timer adapter; brightness unsupported | Web Wake Lock where available |
 | BLE telemetry | Capacitor BLE boundary present | Plugin dependency present; CoreBluetooth behavior pending device validation | Future Windows Bluetooth adapter |
 | Core/Pi connectivity | Configurable LAN/hostname/Tailscale endpoint with shared connection/freshness model | Local-network privacy string prepared; shared endpoint validation path | Shared HTTP client path and status model |
+| Live overlay telemetry | Shared best-effort publisher; requires explicit Core endpoint/token and active Chase Mode | Shared publisher path; pending native iPhone/iPad Chase Tracking adapter and Core validation | Shared HTTP publisher path; future external GPS/source adapter |
 | Chaser Net | Shared contracts/foundation; production backend deferred | Same shared contracts; backend deferred | Same shared contracts; backend deferred |
 | Native Level II radar | Deferred | Deferred | Deferred |
 
@@ -79,3 +80,15 @@ The shared client accepts explicit local/Tailscale HTTP endpoints for field infr
 unsafe URL schemes, and keeps iOS local-network privacy requirements visible for later device
 validation. No Bonjour/mDNS discovery, production Core backend, or Pi-side network topology changes
 were added in this pass.
+
+## Live Overlay Telemetry Notes
+
+Live Overlay Telemetry is an explicit, off-by-default setting for sending the latest Chase Mode
+location to CodeBlack-Core for OBS/browser overlays. It is not Chaser Net presence, does not upload
+breadcrumbs, and does not publish when local Chase Mode is inactive. The client uses the shared
+location tracking status and a platform-neutral HTTP contract; Android native tracking remains
+behind its existing adapter.
+
+The app currently supports bounded polling/latest-state semantics through the contract documented in
+`docs/live-overlay-telemetry.md`. Production Core deployment, secure credential storage, realtime
+WebSocket/SSE push, and overlay graphics remain future work.

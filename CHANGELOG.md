@@ -4,6 +4,29 @@ All changes logged newest-first.
 
 ---
 
+## Live Overlay Telemetry v0.1 - 2026-08-22
+
+Added an ephemeral current-position telemetry path for CodeBlack-Core livestream overlays without
+changing native Chase Tracking or Chaser Net presence behavior.
+
+### Changed
+- Added shared live overlay telemetry models, validation, freshness classification, station auth
+  checks, and latest-state storage semantics.
+- Added a best-effort app publisher that reads from the shared location tracking status, publishes
+  only while Chase Mode is active, drops stale packets, and never backfills breadcrumb history.
+- Added a Core fetch-handler contract for authenticated ingest and latest-state overlay reads.
+- Added Settings controls for `Share Live Overlay Telemetry`, Core endpoint, station ID, station
+  token, and visible link status.
+- Documented the data model, no-backfill rule, station identity, freshness thresholds, security
+  boundary, and deferred Core deployment work in `docs/live-overlay-telemetry.md`.
+
+### Validation Notes
+- Live overlay telemetry is independent from Chaser Net and does not enable network presence.
+- The repository contains the Core contract/store but not the deployed CodeBlack-Core service.
+- Native Android Chase Tracking code was not changed.
+
+---
+
 ## Full App Evaluation and Map-Only Operations - 2026-08-22
 
 Audited the current app shell, major reachable pages, map layers, provider states, and operational
