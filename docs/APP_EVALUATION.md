@@ -48,9 +48,9 @@ coverage-limited data is called out, and deferred systems remain deferred.
 - Native Chase startup reconciliation now persists a stored-active/no-running-service state as
   inactive and cancels the chase notification; the S24 walkthrough covers force-stop while active
   through relaunch reconciliation.
-- The largest remaining readiness risks are iOS/Windows credential runtime
-  validation, real Pi/ESP field-node validation, broad provider coverage gaps, and native-device
-  automation depth.
+- The largest remaining readiness risks are iOS/Windows credential runtime validation, real Pi/ESP
+  field-node validation, broad provider coverage gaps, and Android automation portability beyond
+  the accepted S24/Android 16 path.
 
 ## Route Inventory
 
@@ -172,7 +172,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Connection states | Strong for endpoint normalization, classification, and transport-versus-data freshness semantics. |
 | Road/camera providers | Strong for normalization, validation, freshness, coverage, and provider failure. |
 | Chaser Net contracts | Strong for domain/privacy/backend-contract logic; production backend absent. |
-| Navigation / rendered controls | Working / needs expansion | `npm run test:walkthrough` renders first-class routes across phone portrait, tablet landscape, and desktop; checks MARK/ESCAPE map-only placement, layer popovers, Settings/report states, shared Chase UI, console errors, and basic overflow. |
+| Navigation / rendered controls | Working / needs expansion | `npm run test:walkthrough` renders first-class routes across phone portrait, tablet landscape, and desktop; checks MARK/ESCAPE map-only placement, layer popovers, Settings/report states, shared Chase UI, console errors, and basic overflow. `npm run test:walkthrough:s24` now adds native S24 route/control, Android Back, Chase service, active notification, force-stop recovery, screenshot/hierarchy, and logcat evidence. |
 | Weather/telemetry integrity | Working / needs field-node validation | Domain and rendered tests cover missing vs valid-zero, stale/missing measurement semantics, nullable Pi power/system values, and external fallback clearing when GPS is unavailable. |
 | System/Operations diagnostics | Working / needs field-node validation | Domain and rendered tests cover connected transport with stale telemetry, disabled overlay state, outside provider coverage, Settings diagnostics, and Operations summary wording. |
 | Responsive UI | Partial; device QA has covered Android phone and some landscape paths, iPad physical QA pending. |
@@ -195,8 +195,7 @@ active notification teardown passed repeat S24 acceptance without native code ch
 
 | Item | Size | Why it matters | Prerequisite |
 | --- | --- | --- | --- |
-| Physical S24 walkthrough automation depth | Medium | The Playwright suite covers rendered browser UI; S24 helper now includes active-Chase force-stop reconciliation and requires either inactive/no-service or active/service-restored honesty, but native-device route/control walking still needs more selector robustness and should remain paired with manual acceptance for Chase service cleanup. | Current ADB helper and active-notification acceptance logic. |
-| Native-device route/control walking robustness | Medium | S24 helper exists, but full control walking still needs more selector robustness and evidence summaries for repeated audit use. | Current rendered walkthrough and ADB helper. |
+| Android walkthrough portability beyond accepted S24 | Small | The native harness is now robust on the accepted S24/Android 16 path, but other Android OEMs/tablets still need run evidence before being called accepted. | Current ADB/WebView/UIAutomator harness. |
 | Real Pi/ESP telemetry payload validation | Medium | Confirms the hardened parser against actual field-node BLE/HTTP packets, reconnects, and malformed packets. | Access to the vehicle Pi/ESP stack. |
 | Weather/telemetry UI detail polish | Small | Per-field age/QC detail could make partial packets even clearer without cluttering the main cockpit view. | Current nullable measurement model. |
 | Expand road/camera providers to OK/KS/MO | Medium | Current Arkansas-only coverage leaves core chase territory uncovered. | Existing provider registry. |

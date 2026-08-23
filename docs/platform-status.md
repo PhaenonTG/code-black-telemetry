@@ -117,3 +117,14 @@ the encrypted credential SharedPreferences file from backup/transfer. Web previe
 memory-only development fallback. iPhone/iPad Keychain source is present, but native runtime
 acceptance remains pending on macOS with a device or simulator. Windows Credential Manager runtime
 adapter remains future work.
+
+## Android Native Walkthrough Notes
+
+The S24 native walkthrough is documented in `docs/rendered-control-walkthrough.md`. It validates the
+current Android QA path on Samsung Galaxy S24 / Android 16, including route rendering, Android Back,
+MARK/ESCAPE map-only placement, Chase service state, active Chase notification state,
+force-stop-while-active relaunch reconciliation, and relevant logcat health. The harness records APK
+hash/version metadata and writes failure bundles under ignored artifacts.
+
+This does not claim full Android OEM coverage, real Pi/ESP hardware validation, iOS runtime
+validation, or Windows runtime validation.
