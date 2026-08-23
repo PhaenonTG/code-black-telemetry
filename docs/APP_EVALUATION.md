@@ -1,12 +1,63 @@
 # Code Black OPS App Evaluation
 
-Date: 2026-08-22
+Date: 2026-08-23
 
-Branch: `work/full-app-evaluation`
+Branch: `work/final-audit-reconciliation`
+
+Baseline: `34a0597 — Merge native walkthrough hardening`
 
 This evaluation is a product-readiness inventory of the current Code Black OPS field app. It is
 intentionally critical: contract-only systems are not counted as production-ready, fixture or
 coverage-limited data is called out, and deferred systems remain deferred.
+
+## Final Audit Closure Decision
+
+**Decision:** AUDIT REMEDIATION COMPLETE FOR CURRENTLY TESTABLE SCOPE.
+
+The original P0/P1 audit findings have been reconciled against current master. No remaining
+actionable P0 code defect is open for the currently testable Android/shared-app scope. Remaining
+items are either blocked validation, external provider/policy decisions, or future product
+expansion.
+
+This is an engineering audit-readiness decision, not an App Store, Play Store, public safety, or
+all-platform production certification.
+
+## Closed Audit Items
+
+| ID | Finding | Original priority | Current status | Evidence |
+| --- | --- | --- | --- | --- |
+| P0-01 | Secure credential storage and backup policy for Spotter Network password, Pi/BLE command token, and Live Overlay station token | P0 | Closed for Android/current testable scope | Shared credential boundary, Android Keystore-backed adapter, encrypted credential backup exclusions, write-before-state ordering, redacted read/migration diagnostics, and secure-token tests are present. |
+| P0-02 | MARK and ESCAPE appeared outside the map context | P0 | Closed | Controls are Locate/map-only in source and are guarded by rendered and S24 walkthrough assertions. |
+| P0-03 | External Spotter Network submission boundary needed review | P0 | Closed as engineering boundary | Submission requires explicit user action, duplicate local submissions use `ALREADY_SUBMITTED`, ambiguous timeout is not treated as safe retry, and MARK/Chase/Chaser Net/overlay paths do not auto-submit. Provider-policy approval remains external. |
+| P0-04 | Native Android Chase notification cleanup concern | P0 blocker during remediation | Closed | S24 root-cause work distinguishes active notifications from Samsung/Android archive records. The native harness checks active notification/service state and force-stop recovery. |
+| P1-01 | Rendered full-control walkthrough automation missing | P1 | Closed | Playwright walkthrough covers first-class routes, major controls, console errors, responsive viewports, MARK/ESCAPE scope, deferred honesty, Settings, layers, report, and shared Chase UI. |
+| P1-02 | System/Operations status was too vague | P1 | Closed | Shared operational taxonomy separates transport health, data freshness, disabled/offline, outside coverage, and provider unavailable states. |
+| P1-03 | Telemetry default-zero display risk | P1 | Closed for software integrity | Nullable measurement model, valid-zero tests, stale/missing states, and rendered checks prevent missing data from rendering as live zero. |
+| P1-04 | Weather freshness polish | P1 | Closed for current scope | Weather values now preserve timestamps/source/freshness and clear stale fallback when GPS/location is unavailable. |
+
+## Blocked Validation Items
+
+| ID | Item | Status | Required to revisit |
+| --- | --- | --- | --- |
+| BLK-01 | Real Pi/ESP telemetry packet and disconnect/reconnect field validation | Blocked | Connected Pi/ESP vehicle hardware and safe field-node test window. |
+| BLK-02 | iOS Keychain native runtime validation | Blocked | macOS/Xcode plus iPhone/iPad runtime validation. Source implementation and Capacitor sync are present; runtime acceptance is not claimed. |
+| BLK-03 | Windows secure credential runtime validation | Blocked/deferred | A real Windows native host/adapter path using Windows Credential Manager or equivalent. |
+
+## Deferred / Future Product Work
+
+- OK/KS/MO road and camera provider expansion is a product expansion, not a defect, while the UI
+  honestly reports Arkansas-only v0.1 coverage and `OUTSIDE COVERAGE`.
+- Chaser Net production backend, ESCAPE routing, mobile mesonet production ingest, probes, GOES,
+  GLM, HRRR, RAP, soundings, native Level II radar restoration, Windows packaging, CarPlay, and
+  Android Auto remain deferred roadmap work.
+- iPhone/iPad runtime acceptance remains platform-release work until native device validation is
+  available.
+
+## External Decisions
+
+- Spotter Network production/public use still needs provider-policy, terms, and human approval
+  review. No engineering vulnerability is currently identified in the explicit-submission boundary,
+  but this decision cannot be closed by code alone.
 
 ## Executive Findings
 
@@ -181,11 +232,14 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 
 ### P0 - Broken / Core Reliability
 
-| Item | Size | Why it matters | Prerequisite |
-| --- | --- | --- | --- |
-| iOS Keychain runtime validation and Windows secure adapter | Medium | Completes the cross-platform credential boundary beyond Android. | macOS/Xcode/iPhone test and Windows Credential Manager implementation. |
-| Keep MARK/ESCAPE map-only | Small | Prevents accidental operational actions outside the map context. | Fixed; keep regression guard. |
-| External Spotter Network provider-policy review | Medium | Avoids unsafe or unauthorized operational submissions and clarifies third-party terms. | Product policy and integration agreement review. |
+No remaining actionable P0 code defect is open for the currently testable scope.
+
+| Item | Current classification | Notes |
+| --- | --- | --- |
+| iOS Keychain runtime validation | Blocked validation | Source adapter exists and syncs; native runtime acceptance requires macOS/Xcode/iPhone or iPad. |
+| Windows secure credential runtime validation | Blocked/deferred platform validation | Shared boundary exists; native Windows adapter/host path is not yet a current app runtime. |
+| Keep MARK/ESCAPE map-only | Closed | Source, rendered walkthrough, and S24 walkthrough guard the map-only rule. |
+| External Spotter Network provider-policy review | External decision | Engineering boundary is closed; provider terms/permission review remains a product/legal decision. |
 
 Resolved during root-cause QA: the suspected persistent Chase foreground notification was a
 Samsung/Android notification archive record, not an active notification. The active service and
@@ -195,10 +249,10 @@ active notification teardown passed repeat S24 acceptance without native code ch
 
 | Item | Size | Why it matters | Prerequisite |
 | --- | --- | --- | --- |
-| Android walkthrough portability beyond accepted S24 | Small | The native harness is now robust on the accepted S24/Android 16 path, but other Android OEMs/tablets still need run evidence before being called accepted. | Current ADB/WebView/UIAutomator harness. |
-| Real Pi/ESP telemetry payload validation | Medium | Confirms the hardened parser against actual field-node BLE/HTTP packets, reconnects, and malformed packets. | Access to the vehicle Pi/ESP stack. |
-| Weather/telemetry UI detail polish | Small | Per-field age/QC detail could make partial packets even clearer without cluttering the main cockpit view. | Current nullable measurement model. |
-| Expand road/camera providers to OK/KS/MO | Medium | Current Arkansas-only coverage leaves core chase territory uncovered. | Existing provider registry. |
+| Android walkthrough portability beyond accepted S24 | Small | Productive follow-up, but not an open audit defect. Other Android OEMs/tablets need run evidence before being called accepted. | Current ADB/WebView/UIAutomator harness. |
+| Real Pi/ESP telemetry payload validation | Medium | Blocked field validation. Confirms the hardened parser against actual field-node BLE/HTTP packets, reconnects, and malformed packets. | Access to the vehicle Pi/ESP stack. |
+| Weather/telemetry UI detail polish | Small | Optional polish. Per-field age/QC detail could make partial packets even clearer without cluttering the main cockpit view. | Current nullable measurement model. |
+| Expand road/camera providers to OK/KS/MO | Medium | Product expansion. Current Arkansas-only coverage is acceptable when represented honestly as coverage-limited. | Existing provider registry. |
 
 ### P2 - Major Planned Capability
 
