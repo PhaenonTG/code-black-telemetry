@@ -23,8 +23,21 @@ Camera layer:
 
 - `https://layers.idrivearkansas.com/cameras.geojson`
 
-Camera details use public IDrive camera image/feed URLs only after a camera marker detail is opened.
-The app does not preload thumbnails or streams for every marker.
+Camera details use the public IDrive image endpoint only after a camera marker detail is opened.
+Direct checks on August 23, 2026 showed this endpoint returns a static PNG snapshot for provider
+camera IDs. IDrive also exposes protected HLS feed URLs in metadata, but direct browser/WebView
+requests can return provider denial; OPS does not advertise those protected URLs as playable
+streams in v0.1. The app does not preload thumbnails or streams for every marker.
+
+### Provider attribution / branding
+
+Layer rows and camera/road detail surfaces credit providers by name only (e.g. "Arkansas DOT
+IDrive", "Spotter Network") rather than displaying provider logo marks. This is a deliberate v0.1
+choice, not an oversight: none of the current providers have a clearly documented public-use/brand
+license for their logo, and the standardized layer glyph system (radar/road/camera/network icon
+family) already gives each layer a consistent, recognizable visual identity without borrowing
+provider branding. Revisit per-provider once a provider's logo usage terms are confirmed in
+writing.
 
 ## Normalized Models
 
@@ -42,7 +55,7 @@ Traffic cameras normalize to `TrafficCamera` with:
 - provider ID and provider record ID
 - name, point location, road, and view direction
 - operational state
-- still/preview URL and stream URL when legitimately provided
+- still/preview URL and stream URL only when legitimately playable by normal clients
 - freshness state, attribution, and provenance
 
 Provider text is stripped of HTML and length-limited before it reaches UI. Coordinates and provider
@@ -109,5 +122,5 @@ Deferred:
 - nationwide provider coverage
 - provider search/discovery UI
 - Core-side proxy/cache deployment
-- camera stream player integration inside OPS
+- camera stream player integration inside OPS where a provider exposes a playable stream contract
 - mobile mesonet and probe production ingestion

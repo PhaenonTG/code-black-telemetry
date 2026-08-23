@@ -294,7 +294,10 @@ function normalizeCameraFeature(feature: unknown, providerId: string): TrafficCa
     provider: { ...ARDOT_PROVENANCE, provider: "PUBLIC/TRAFFIC" },
     lastUpdateAt: updatedAt,
     imageUrl,
-    streamUrl: safeHttpUrl(props.hls_stream_protected ?? props.hls_stream),
+    // IDrive exposes `hls_stream_protected`, but direct browser/WebView requests return 403 without
+    // provider-controlled access. v0.1 therefore treats the public image endpoint as a refreshed
+    // snapshot and links back to IDrive instead of presenting the protected HLS URL as playable.
+    streamUrl: safeHttpUrl(props.hls_stream),
     thumbnailUrl: safeHttpUrl(props.thumbnail_url),
     previewUrl: imageUrl,
     availability,

@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useEffect, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Panel, MetricTile } from "./Panel";
 import { SourceBadge } from "../ui/SourceBadge";
@@ -281,6 +281,7 @@ type MapRadarPanelProps = {
   poiPlaces?: NearbyPlace[];
   nearbyBest?: Partial<Record<NearbyCategory, NearbyPlace>>;
   compact?: boolean;
+  escapeControl?: ReactNode;
 };
 
 // Both the Weather-page compact card and the Locate-page full map go through here -- App.tsx
@@ -304,6 +305,7 @@ function AtlasMapRadarPanel({
   poiPlaces = [],
   nearbyBest = {},
   compact = false,
+  escapeControl,
 }: MapRadarPanelProps) {
   const [rangeRings, setRangeRings] = useState<"off" | "10" | "25" | "50" | "100">("off");
   const [expanded, setExpanded] = useState(false);
@@ -325,6 +327,7 @@ function AtlasMapRadarPanel({
             poiPlaces={poiPlaces}
             nearbyBest={nearbyBest}
             controlsVariant={compact ? "compact" : "full"}
+            escapeControl={escapeControl}
           />
         </Suspense>
       </div>
@@ -335,6 +338,7 @@ function AtlasMapRadarPanel({
           rangeRings={rangeRings}
           setRangeRings={setRangeRings}
           onClose={() => setExpanded(false)}
+          escapeControl={escapeControl}
         />,
         document.body,
       )}
@@ -348,12 +352,14 @@ function RadarExpandedView({
   rangeRings,
   setRangeRings,
   onClose,
+  escapeControl,
 }: {
   active: boolean;
   gps: { lat: number; lon: number; headingDeg: number | null } | null;
   rangeRings: AtlasRangeRingMode;
   setRangeRings: (rings: AtlasRangeRingMode) => void;
   onClose: () => void;
+  escapeControl?: ReactNode;
 }) {
   useEffect(() => {
     if (!active) return;
@@ -381,7 +387,7 @@ function RadarExpandedView({
           <em>AUTO REFRESH</em>
         </header>
         <div className="radar-expanded__map">
-          <MapRadarPanel gps={gps} visible allowExpand={false} />
+          <MapRadarPanel gps={gps} visible allowExpand={false} escapeControl={escapeControl} />
           <div className="radar-expanded__overlay-note">National composite reflectivity, auto-refreshing every few minutes.</div>
         </div>
         <aside className="radar-expanded__controls">

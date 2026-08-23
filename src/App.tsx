@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
@@ -8,6 +8,7 @@ import { PowerCard } from "./components/cards/PowerCard";
 import { SensorHealthCard } from "./components/cards/SensorHealthCard";
 import { SystemCard } from "./components/cards/SystemCard";
 import { TopBar } from "./components/layout/TopBar";
+import { HomeOverviewPage } from "./components/home/HomeOverviewPage";
 import { MissionStreamingPanel } from "./components/operations/MissionStreamingPanel";
 import { PiEndpointPanel } from "./components/operations/PiEndpointPanel";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -50,38 +51,43 @@ import { createEgressContext, summarizeEgressReadiness } from "./services/egress
 import { locationTrackingService } from "./services/locationTracking";
 import { summarizePiOperationalStatus } from "./services/operationalStatus";
 
-type PageKey = "weather" | "operations" | "locate" | "alerts" | "report" | "settings" | "layers";
+type PageKey = "home" | "map" | "weather" | "operations" | "alerts" | "report" | "settings" | "layers" | "more";
 export type CockpitMode = "normal" | "chase";
 
 const pages: Array<{ key: PageKey; label: string; path: string }> = [
-  { key: "weather", label: "Weather", path: "/" },
+  { key: "home", label: "Home", path: "/" },
+  { key: "map", label: "Map", path: "/map" },
+  { key: "weather", label: "Weather", path: "/weather" },
   { key: "operations", label: "Operations", path: "/operations" },
-  { key: "locate", label: "Locate", path: "/locate" },
   { key: "alerts", label: "Alerts", path: "/alerts" },
   { key: "report", label: "Report", path: "/report" },
   { key: "settings", label: "Settings", path: "/settings" },
   // Layers is intentionally a normal dock page now. Future layer/provider controls should land
   // there instead of adding dead buttons to the operational map surface.
   { key: "layers", label: "Layers", path: "/layers" },
+  { key: "more", label: "More", path: "/more" },
 ];
 const PAGE_PREF_KEY = "codeblack.activePage";
 const COCKPIT_MODE_KEY = "codeblack.cockpitMode";
 
-function DockIcon({ type }: { type: "weather" | "operations" | "locate" | "alerts" | "report" | "settings" | "layers" }) {
+function DockIcon({ type }: { type: "home" | "weather" | "operations" | "map" | "alerts" | "report" | "settings" | "layers" | "more" }) {
   const common = { viewBox: "0 0 24 24", "aria-hidden": true, focusable: false } as const;
+  if (type === "home") return <svg {...common}><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /><path d="M10 20v-5h4v5" /></svg>;
   if (type === "weather") return <svg {...common}><path d="M7.4 17.4h7.8a4.1 4.1 0 0 0 .7-8.1 5.7 5.7 0 0 0-11 1.6A3.4 3.4 0 0 0 7.4 17.4Z" /><path d="m13.3 12.2-2.1 4.1h3l-1.5 4.3 4.1-5.9h-3l1.6-2.5h-2.1Z" /></svg>;
   if (type === "operations") return <svg {...common}><path d="M5 4h14v10H5z" /><path d="M9 20h6M12 14v6" /></svg>;
-  if (type === "locate") return <svg {...common}><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></svg>;
+  if (type === "map") return <svg {...common}><path d="M9 18 3 21V6l6-3 6 3 6-3v15l-6 3-6-3Z" /><path d="M9 3v15M15 6v15" /></svg>;
   if (type === "alerts") return <svg {...common}><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 8v5M12 17h.01" /></svg>;
   if (type === "report") return <svg {...common}><path d="M6 3h9l3 3v15H6z" /><path d="M9 8h7M9 12h7M9 16h4" /></svg>;
   if (type === "layers") return <svg {...common}><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 16 9 5 9-5" /></svg>;
+  if (type === "more") return <svg {...common}><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>;
   return <svg {...common}><circle cx="12" cy="12" r="3.2" /><path d="M12 2.8v3M12 18.2v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.8 12h3M18.2 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>;
 }
 
 function pathToPage(): PageKey {
+  if (window.location.pathname === "/locate") return "map";
   const match = pages.find((item) => item.path === window.location.pathname);
   if (match) return match.key;
-  return window.location.pathname === "/system" ? "operations" : "weather";
+  return window.location.pathname === "/system" ? "operations" : "home";
 }
 
 function chaseStatusParts(locationTracking: ReturnType<typeof useLocationTracking>) {
@@ -103,7 +109,7 @@ function chaseStatusParts(locationTracking: ReturnType<typeof useLocationTrackin
 }
 
 function appPageSupportsOperationalActions(page: PageKey) {
-  return page === "locate";
+  return page === "map";
 }
 
 export default function App() {
@@ -189,6 +195,10 @@ export default function App() {
   useEffect(() => {
     requestAnimationFrame(() => syncPageImmediately(pathToPage()));
     Preferences.get({ key: PAGE_PREF_KEY }).then(({ value }) => {
+      if (value === "locate") {
+        goToPage("map");
+        return;
+      }
       if (value && pages.some((item) => item.key === value)) goToPage(value as PageKey);
     });
     Preferences.get({ key: COCKPIT_MODE_KEY }).then(({ value }) => {
@@ -299,7 +309,7 @@ export default function App() {
 
   useEffect(() => () => cancelEscapeHold(), []);
 
-  const markCurrentPosition = async () => {
+  const markCurrentPosition = useCallback(async () => {
     if (markBusyRef.current) return;
     markBusyRef.current = true;
     await locationTrackingService.syncPendingObservations();
@@ -317,7 +327,15 @@ export default function App() {
     setMarkStatus("MARK SAVED");
     window.setTimeout(() => setMarkStatus(""), 1800);
     window.setTimeout(() => { markBusyRef.current = false; }, 700);
-  };
+  }, [locationTracking.active, mapGps, missionSessionId]);
+
+  useEffect(() => {
+    const handleInternalMark = () => {
+      void markCurrentPosition();
+    };
+    window.addEventListener("codeblack:mark-current-position", handleInternalMark);
+    return () => window.removeEventListener("codeblack:mark-current-position", handleInternalMark);
+  }, [markCurrentPosition]);
 
   const cancelEscapeHold = () => {
     if (escapeTimerRef.current == null) return;
@@ -390,8 +408,8 @@ export default function App() {
         closeButton.click();
         return;
       }
-      if (page !== "weather") {
-        goToPage("weather");
+      if (page !== "home") {
+        goToPage("home");
         return;
       }
       if (canGoBack) window.history.back();
@@ -425,23 +443,6 @@ export default function App() {
   return (
     <div className={`app-shell app-shell--theme-${appTheme} app-shell--page-${page}${missionSession ? " app-shell--mission-active" : ""}`}>
       <SevereFlashOverlay />
-      {showOperationalActions && (
-        <>
-          <button
-            className="escape-button"
-            type="button"
-            data-testid="map-action-escape"
-            onPointerDown={armEscapeHold}
-            onPointerUp={cancelEscapeHold}
-            onPointerLeave={cancelEscapeHold}
-            onPointerCancel={cancelEscapeHold}
-            aria-label="Hold to prepare escape context"
-          >
-            ESCAPE
-          </button>
-          <button className="mark-button" type="button" data-testid="map-action-mark" onClick={() => void markCurrentPosition()} aria-label="Mark current position">MARK</button>
-        </>
-      )}
       {markStatus && <div className="mark-toast" role="status">{markStatus}</div>}
       {escapeStatus && <div className="escape-toast" role="status">{escapeStatus}</div>}
       {!spotterAccount && !spotterOnboardingSeen && (
@@ -456,6 +457,57 @@ export default function App() {
         </div>
       )}
       <main className="page-viewport" ref={pagerRef} aria-label="Code Black dashboard pages">
+        <section className="page page--home" aria-label="Home Overview" data-testid="route-home" data-active={page === "home"} aria-hidden={page !== "home"}>
+          <HomeOverviewPage
+            missionActive={Boolean(missionSession)}
+            chaseTrackingLabel={chaseStatus.tracking}
+            chaseGpsLabel={chaseStatus.gps}
+            location={canonicalLocation}
+            external={external}
+            alerts={alertProducts.products}
+            alertError={alertProducts.error}
+            opsStatus={opsStatus}
+            overlayState={liveOverlayTelemetry.state}
+            mapGps={mapGps}
+            spotters={spotters.spotters}
+            poiPlaces={poi.places}
+            nearbyBest={nearby.places}
+            onNavigate={(target) => {
+              if (target === "map") {
+                goToPage("map");
+                window.dispatchEvent(new Event("codeblack:center-map"));
+              } else {
+                goToPage(target);
+              }
+            }}
+          />
+        </section>
+        <section className="page page--map" aria-label="Map" data-testid="route-map" data-active={page === "map"} aria-hidden={page !== "map"}>
+          <div className="page-grid page-grid--map">
+            <MapRadarPanel
+              gps={mapGps}
+              visible={page === "map"}
+              alerts={alertProducts.products}
+              spotters={spotters.spotters}
+              poiPlaces={poi.places}
+              nearbyBest={nearby.places}
+              escapeControl={showOperationalActions ? (
+                <button
+                  className="escape-button escape-button--map"
+                  type="button"
+                  data-testid="map-action-escape"
+                  onPointerDown={armEscapeHold}
+                  onPointerUp={cancelEscapeHold}
+                  onPointerLeave={cancelEscapeHold}
+                  onPointerCancel={cancelEscapeHold}
+                  aria-label="Hold to prepare escape context"
+                >
+                  ESCAPE
+                </button>
+              ) : undefined}
+            />
+          </div>
+        </section>
         <section className="page page--weather" aria-label="Situational Awareness" data-testid="route-weather" data-active={page === "weather"} aria-hidden={page !== "weather"}>
           <div className="page-grid page-grid--weather">
             <LocationMotionPanel
@@ -509,11 +561,6 @@ export default function App() {
             </section>
           </div>
         </section>
-        <section className="page page--locate" aria-label="Locate" data-testid="route-locate" data-active={page === "locate"} aria-hidden={page !== "locate"}>
-          <div className="page-grid page-grid--locate">
-            <MapRadarPanel gps={mapGps} visible={page === "locate"} alerts={alertProducts.products} spotters={spotters.spotters} poiPlaces={poi.places} nearbyBest={nearby.places} />
-          </div>
-        </section>
         <section className="page page--alerts" aria-label="Alerts" data-testid="route-alerts" data-active={page === "alerts"} aria-hidden={page !== "alerts"}>
           <div className="page-grid page-grid--alerts">
             <AlertsFullPanel products={alertProducts.products} error={alertProducts.error} outlooks={spcOutlooks} onOpenReport={() => goToPage("report")} />
@@ -555,18 +602,29 @@ export default function App() {
             <ChaserNetPanel />
           </div>
         </section>
+        <section className="page page--more" aria-label="More" data-testid="route-more" data-active={page === "more"} aria-hidden={page !== "more"}>
+          <div className="page-grid page-grid--more">
+            <section className="cb-panel more-panel">
+              <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />More</div>
+              <div className="more-grid">
+                <button type="button" data-testid="more-operations" onClick={() => goToPage("operations")}><DockIcon type="operations" /><span>Operations</span><em>System and stream status</em></button>
+                <button type="button" data-testid="more-report" onClick={() => goToPage("report")}><DockIcon type="report" /><span>Report</span><em>Local and Spotter Network report flow</em></button>
+                <button type="button" data-testid="more-layers" onClick={() => goToPage("layers")}><DockIcon type="layers" /><span>Layers</span><em>Map provider and layer controls</em></button>
+                <button type="button" data-testid="more-settings" onClick={() => goToPage("settings")}><DockIcon type="settings" /><span>Settings</span><em>Credentials, display, chase setup</em></button>
+              </div>
+            </section>
+          </div>
+        </section>
       </main>
       <div className="page-dots" aria-label="Page indicator">
         {pages.map((item) => <button key={item.key} aria-label={item.label} className={item.key === page ? "active" : ""} onClick={() => goToPage(item.key)} />)}
       </div>
       <nav className="bottom-dock" aria-label="Dashboard dock">
+        <button className={page === "home" ? "active" : ""} data-testid="dock-home" onClick={() => goToPage("home")}><DockIcon type="home" /><span>Home</span></button>
+        <button className={page === "map" ? "active" : ""} data-testid="dock-map" onClick={() => { goToPage("map"); window.dispatchEvent(new Event("codeblack:center-map")); }}><DockIcon type="map" /><span>Map</span></button>
         <button className={page === "weather" ? "active" : ""} data-testid="dock-weather" onClick={() => goToPage("weather")}><DockIcon type="weather" /><span>Weather</span></button>
-        <button className={page === "operations" ? "active" : ""} data-testid="dock-operations" onClick={() => goToPage("operations")}><DockIcon type="operations" /><span>Operations</span></button>
-        <button className={page === "locate" ? "active" : ""} data-testid="dock-locate" onClick={() => { goToPage("locate"); window.dispatchEvent(new Event("codeblack:center-map")); }}><DockIcon type="locate" /><span>Locate</span></button>
         <button className={page === "alerts" ? "active" : ""} data-testid="dock-alerts" onClick={() => goToPage("alerts")}><DockIcon type="alerts" /><span>Alerts</span></button>
-        <button className={page === "report" ? "active" : ""} data-testid="dock-report" onClick={() => goToPage("report")}><DockIcon type="report" /><span>Report</span></button>
-        <button className={page === "settings" ? "active" : ""} data-testid="dock-settings" onClick={() => goToPage("settings")}><DockIcon type="settings" /><span>Settings</span></button>
-        <button className={page === "layers" ? "active" : ""} data-testid="dock-layers" aria-label="Map layer configuration" onClick={() => goToPage("layers")}><DockIcon type="layers" /><span>Layers</span></button>
+        <button className={page === "more" || page === "operations" || page === "report" || page === "settings" || page === "layers" ? "active" : ""} data-testid="dock-more" onClick={() => goToPage("more")}><DockIcon type="more" /><span>More</span></button>
       </nav>
     </div>
   );

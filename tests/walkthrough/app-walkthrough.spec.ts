@@ -1,13 +1,15 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 const routes = [
-  { key: "weather", dock: "dock-weather", route: "route-weather", path: "/", heading: /LOCATION & MOTION|WEATHER OBSERVATIONS/i },
-  { key: "operations", dock: "dock-operations", route: "route-operations", path: "/operations", heading: /OPERATIONAL MODE/i },
-  { key: "locate", dock: "dock-locate", route: "route-locate", path: "/locate", heading: /MOSAIC|LAYERS|FOLLOW/i },
+  { key: "home", dock: "dock-home", route: "route-home", path: "/", heading: /FIELD OVERVIEW|CHASE \/ FIELD STATUS/i },
+  { key: "map", dock: "dock-map", route: "route-map", path: "/map", heading: /MOSAIC|LAYERS|FOLLOW/i },
+  { key: "weather", dock: "dock-weather", route: "route-weather", path: "/weather", heading: /LOCATION & MOTION|WEATHER OBSERVATIONS/i },
   { key: "alerts", dock: "dock-alerts", route: "route-alerts", path: "/alerts", heading: /ACTIVE ALERTS|ALL ACTIVE PRODUCTS/i },
-  { key: "report", dock: "dock-report", route: "route-report", path: "/report", heading: /SUBMIT REPORT|SPOTTER NETWORK/i },
-  { key: "settings", dock: "dock-settings", route: "route-settings", path: "/settings", heading: /DISPLAY|LIVE OVERLAY TELEMETRY|CHASE SESSION/i },
-  { key: "layers", dock: "dock-layers", route: "route-layers", path: "/layers", heading: /LAYER CONFIGURATION|CODE BLACK CHASER NET/i },
+  { key: "more", dock: "dock-more", route: "route-more", path: "/more", heading: /MORE|OPERATIONS|SETTINGS/i },
+  { key: "operations", more: "more-operations", route: "route-operations", path: "/operations", heading: /OPERATIONAL MODE/i },
+  { key: "report", more: "more-report", route: "route-report", path: "/report", heading: /SUBMIT REPORT|SPOTTER NETWORK/i },
+  { key: "settings", more: "more-settings", route: "route-settings", path: "/settings", heading: /DISPLAY|LIVE OVERLAY TELEMETRY|CHASE SESSION/i },
+  { key: "layers", more: "more-layers", route: "route-layers", path: "/layers", heading: /LAYER CONFIGURATION|CODE BLACK CHASER NET/i },
 ] as const;
 
 const ignoredConsolePatterns = [
@@ -93,7 +95,12 @@ async function activeRoute(page: Page, key: (typeof routes)[number]["key"]) {
 async function goToRoute(page: Page, key: (typeof routes)[number]["key"]) {
   const route = routes.find((item) => item.key === key);
   if (!route) throw new Error(`Unknown route ${key}`);
-  await page.getByTestId(route.dock).click();
+  if ("dock" in route) {
+    await page.getByTestId(route.dock).click();
+  } else {
+    await page.getByTestId("dock-more").click();
+    await page.getByTestId(route.more).click();
+  }
   await expect(page).toHaveURL(new RegExp(`${route.path === "/" ? "/$" : route.path.replace("/", "\\/")}$`));
   const section = await activeRoute(page, key);
   await expect(section).toHaveAttribute("data-active", "true");
@@ -202,24 +209,54 @@ test.describe("rendered route walkthrough", () => {
       await expectContainerHasArea(section, `${route.key} route`);
       await expectNoPageOverflow(page);
 
-      if (route.key === "locate") {
-        await expect(page.getByTestId("map-action-mark")).toBeVisible();
+      await expect(page.getByTestId("map-action-mark")).toHaveCount(0);
+      if (route.key === "map") {
         await expect(page.getByTestId("map-action-escape")).toBeVisible();
+        const escapeBox = await page.getByTestId("map-action-escape").boundingBox();
+        const mapBox = await section.getByTestId("atlas-map-primary").boundingBox();
+        expect(escapeBox, "ESCAPE should have bounds").not.toBeNull();
+        expect(mapBox, "map should have bounds").not.toBeNull();
+        expect(escapeBox!.x).toBeGreaterThanOrEqual(mapBox!.x);
+        expect(escapeBox!.y).toBeGreaterThanOrEqual(mapBox!.y);
+        expect(escapeBox!.x + escapeBox!.width).toBeLessThanOrEqual(mapBox!.x + mapBox!.width + 1);
+        expect(escapeBox!.y + escapeBox!.height).toBeLessThanOrEqual(mapBox!.y + mapBox!.height + 1);
       } else {
-        await expect(page.getByTestId("map-action-mark")).toHaveCount(0);
         await expect(page.getByTestId("map-action-escape")).toHaveCount(0);
       }
     });
   }
 });
 
-test("locate map, layer popover, and expanded radar are wired", async ({ page }) => {
-  const locate = await goToRoute(page, "locate");
-  await expectContainerHasArea(locate.getByTestId("atlas-map-primary"), "primary map shell");
-  await expectContainerHasArea(locate.getByTestId("atlas-map-canvas-primary"), "primary map canvas area");
+test("home modules render, customize, reorder, and navigate", async ({ page }) => {
+  const home = await goToRoute(page, "home");
+  await expect(home.getByTestId("home-module-chase")).toBeVisible();
+  await expect(home.getByTestId("home-module-radar")).toBeVisible();
+  await expect(home.getByTestId("home-module-weather")).toBeVisible();
 
-  await locate.getByTestId("atlas-map-layers-primary").click();
-  const layers = locate.getByTestId("atlas-map-layers-popover-primary");
+  await home.getByTestId("home-customize-toggle").click();
+  const customize = home.getByTestId("home-customize-panel");
+  await expect(customize).toBeVisible();
+  await customize.getByLabel(/Weather Now size/i).selectOption("compact");
+  await customize.getByLabel(/Move Radar Preview up/i).click();
+  await customize.getByTestId("home-customize-alerts").getByLabel(/ON/i).uncheck();
+  await expect(home.getByTestId("home-module-alerts")).toHaveCount(0);
+  await page.reload();
+  await page.locator(".cb-splash").waitFor({ state: "hidden", timeout: 12_000 }).catch(() => undefined);
+  await dismissSpotterPrompt(page);
+  await expect(page.getByTestId("home-module-alerts")).toHaveCount(0);
+  await page.getByTestId("home-module-radar").getByRole("button", { name: /open map/i }).click();
+  await expect(page).toHaveURL(/\/map$/);
+});
+
+test("map, layer popover, and expanded radar are wired", async ({ page }) => {
+  const map = await goToRoute(page, "map");
+  await expectContainerHasArea(map.getByTestId("atlas-map-primary"), "primary map shell");
+  await expectContainerHasArea(map.getByTestId("atlas-map-canvas-primary"), "primary map canvas area");
+  await expect(page.getByTestId("map-action-mark")).toHaveCount(0);
+  await expect(page.getByTestId("map-action-escape")).toBeVisible();
+
+  await map.getByTestId("atlas-map-layers-primary").click();
+  const layers = map.getByTestId("atlas-map-layers-popover-primary");
   await expect(layers).toBeVisible();
   await expect(layers).toContainText(/Spotter Network/i);
   await expect(layers).toContainText(/Trail/i);
@@ -227,10 +264,10 @@ test("locate map, layer popover, and expanded radar are wired", async ({ page })
   await expect(layers).toContainText(/Public Cameras/i);
   await expect(layers).toContainText(/Probes - unavailable/i);
   await expect(layers).toContainText(/Chaser Net - unavailable/i);
-  await locate.getByTestId("atlas-map-layers-primary").click();
+  await map.getByTestId("atlas-map-layers-close-primary").click();
   await expect(layers).toHaveCount(0);
 
-  await locate.getByRole("button", { name: /expand radar/i }).click();
+  await map.getByRole("button", { name: /expand radar/i }).click();
   const dialog = page.getByRole("dialog", { name: /expanded radar interrogation/i });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId("atlas-map-primary")).toBeVisible();
@@ -244,6 +281,7 @@ test("layers page exposes provider-backed and deferred layer states honestly", a
   await expect(section).toContainText(/Road Conditions/i);
   await expect(section).toContainText(/Public Cameras/i);
   await expect(section).toContainText(/Arkansas DOT IDrive/i);
+  await expect(section.getByTestId("layer-row-trafficCameras")).toContainText(/Arkansas public/i);
   await expect(section).toContainText(/Code Black Probes/i);
   await expect(section).toContainText(/unavailable/i);
   await expect(section).toContainText(/backend is not configured/i);
@@ -396,8 +434,16 @@ test("weather and telemetry distinguish valid zero from missing data", async ({ 
   await expect(missingOps.locator(".ops-system-panel")).toContainText(/CPU\s*--/i);
 });
 
-test("non-first-class routes remain out of primary navigation", async ({ page }) => {
+test("secondary routes remain under More instead of primary phone navigation", async ({ page }) => {
   const dockText = await page.getByRole("navigation", { name: /dashboard dock/i }).innerText();
+  expect(dockText).toMatch(/\bHome\b/i);
+  expect(dockText).toMatch(/\bMap\b/i);
+  expect(dockText).toMatch(/\bMore\b/i);
+  expect(dockText).not.toMatch(/\bLocate\b/i);
+  expect(dockText).not.toMatch(/\bOperations\b/i);
+  expect(dockText).not.toMatch(/\bReport\b/i);
+  expect(dockText).not.toMatch(/\bSettings\b/i);
+  expect(dockText).not.toMatch(/\bLayers\b/i);
   expect(dockText).not.toMatch(/\bAI\b/i);
   expect(dockText).not.toMatch(/\bFleet\b/i);
   expect(dockText).not.toMatch(/\bSystem\b/i);

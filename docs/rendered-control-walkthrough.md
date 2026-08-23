@@ -19,10 +19,12 @@ artifacts/rendered-control-walkthrough/
 
 The browser suite covers:
 
-- Weather, Operations, Locate, Alerts, Report, Settings, and Layers route rendering.
+- Home, Map, Weather, Alerts, and More primary phone navigation.
+- Operations, Report, Settings, and Layers as secondary destinations through More.
 - Phone portrait, tablet landscape, and desktop viewports.
-- MARK and ESCAPE presence on Locate only, and absence from non-map routes.
-- Locate map container, map layer popover, and expanded radar portal.
+- MARK absence from user-facing UI, with ESCAPE present only on the Map route.
+- Map container, map layer popover, and expanded radar portal.
+- Home module defaults, visibility, reorder persistence, and module tap navigation.
 - Layer page provider-backed and deferred-state wording.
 - Settings secure credential and live overlay status wording without exposing secrets.
 - Report locked-state behavior so Spotter Network submission is not triggered by navigation.
@@ -64,10 +66,10 @@ workflow until run and reviewed.
 
 The helper installs `android/app/build/outputs/apk/debug/app-debug.apk`, verifies APK path, size,
 timestamp, SHA-256 hash, package version, and version code, launches the app, waits for the WebView
-and DOM shell, captures route screenshots, checks MARK/ESCAPE map-only visibility, validates Android
-Back for the map layer popover and expanded radar portal, performs a targeted Chase start/MARK/end
-smoke, checks active service and active notification state, covers force-stop-while-active relaunch
-reconciliation, captures logcat, and writes:
+and DOM shell, captures route screenshots, checks MARK UI absence and Map-only ESCAPE visibility,
+validates Android Back for the map layer popover and expanded radar portal, performs a targeted
+Chase start/map-usable/end smoke, checks active service and active notification state, covers
+force-stop-while-active relaunch reconciliation, captures logcat, and writes:
 
 ```text
 artifacts/rendered-control-walkthrough/s24/s24-walkthrough-summary.json

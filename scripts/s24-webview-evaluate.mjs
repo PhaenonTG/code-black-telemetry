@@ -1,11 +1,15 @@
 import { execFileSync } from "node:child_process";
 
-const [, , serial, packageName, expression] = process.argv;
+const [, , serial, packageName, rawExpression] = process.argv;
 
-if (!serial || !packageName || !expression) {
+if (!serial || !packageName || !rawExpression) {
   console.error("Usage: node scripts/s24-webview-evaluate.mjs <serial> <package> <expression>");
   process.exit(2);
 }
+
+const expression = rawExpression.startsWith("base64:")
+  ? Buffer.from(rawExpression.slice("base64:".length), "base64").toString("utf8")
+  : rawExpression;
 
 function adb(args) {
   return execFileSync("adb", ["-s", serial, ...args], { encoding: "utf8" }).trim();
