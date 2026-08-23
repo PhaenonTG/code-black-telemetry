@@ -166,7 +166,8 @@ public class ChaseTrackingService extends Service implements LocationListener {
 
     private void removeForegroundState() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_DETACH);
+            stopForeground(STOP_FOREGROUND_REMOVE);
+            stopForeground(true);
         } else {
             stopForeground(true);
         }
