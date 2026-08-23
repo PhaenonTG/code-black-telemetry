@@ -29,6 +29,16 @@ camera IDs. IDrive also exposes protected HLS feed URLs in metadata, but direct 
 requests can return provider denial; OPS does not advertise those protected URLs as playable
 streams in v0.1. The app does not preload thumbnails or streams for every marker.
 
+### Provider attribution / branding
+
+Layer rows and camera/road detail surfaces credit providers by name only (e.g. "Arkansas DOT
+IDrive", "Spotter Network") rather than displaying provider logo marks. This is a deliberate v0.1
+choice, not an oversight: none of the current providers have a clearly documented public-use/brand
+license for their logo, and the standardized layer glyph system (radar/road/camera/network icon
+family) already gives each layer a consistent, recognizable visual identity without borrowing
+provider branding. Revisit per-provider once a provider's logo usage terms are confirmed in
+writing.
+
 ## Normalized Models
 
 Road incidents normalize to `RoadConditionEvent` with:

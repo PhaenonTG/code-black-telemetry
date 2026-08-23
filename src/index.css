@@ -5022,23 +5022,6 @@ body {
   font-style: italic;
 }
 
-/* Locate page: the same MapRadarPanel used compactly on Weather, given the whole page instead of
-   a grid cell. Its .map-panel positioning rules are grid-area/column/row values tuned for the
-   Weather page's specific column math — neutralize them here so it just fills this page's single
-   cell instead of trying to span line numbers that don't exist in a 1x1 grid. */
-.page-grid--locate {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.page--locate .map-panel {
-  grid-area: auto !important;
-  grid-column: auto !important;
-  grid-row: auto !important;
-  width: 100%;
-  height: 100%;
-}
-
 /* Alerts page: the same pill list as the compact Alerts card, uncapped, given the whole page. */
 .page-grid--alerts {
   grid-template-columns: minmax(0, 1fr);

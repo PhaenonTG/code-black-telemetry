@@ -99,7 +99,21 @@ function Get-PackageMetadata {
 function Save-Screenshot([string]$Name, [string]$Directory = $ArtifactDir) {
   New-Item -ItemType Directory -Force -Path $Directory | Out-Null
   $target = Join-Path (Resolve-Path $Directory).Path "$Name.png"
-  & adb -s $script:DeviceSerial exec-out screencap -p > $target
+  # PowerShell's `>` redirect re-encodes a native command's raw stdout through the default text
+  # encoding (UTF-16LE here), which corrupts binary PNG bytes -- confirmed by inspecting a captured
+  # "screenshot" and finding every byte padded with a null byte (the UTF-16LE pattern). Route stdout
+  # through .NET streams directly instead so the PNG bytes are never touched by any text encoding.
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = "adb"
+  $psi.Arguments = "-s $script:DeviceSerial exec-out screencap -p"
+  $psi.RedirectStandardOutput = $true
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
+  $proc = [System.Diagnostics.Process]::Start($psi)
+  $memoryStream = New-Object System.IO.MemoryStream
+  $proc.StandardOutput.BaseStream.CopyTo($memoryStream)
+  $proc.WaitForExit()
+  [System.IO.File]::WriteAllBytes($target, $memoryStream.ToArray())
   $target
 }
 
@@ -148,7 +162,8 @@ function Tap-UiAutomatorNode([xml]$Xml, [string]$Pattern, [switch]$PreferBottom)
 }
 
 function Invoke-WebViewExpression([string]$Expression) {
-  node scripts/s24-webview-evaluate.mjs $script:DeviceSerial $PackageName $Expression
+  $encodedExpression = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($Expression))
+  node scripts/s24-webview-evaluate.mjs $script:DeviceSerial $PackageName "base64:$encodedExpression"
 }
 
 function Wait-Until([string]$Name, [scriptblock]$Condition, [int]$TimeoutSeconds, [int]$PollMs = 500) {
@@ -187,13 +202,20 @@ function Invoke-WebViewAction([string]$Expression, [string]$ExpectedPattern = "O
   $result.Trim()
 }
 
+function ConvertTo-JsLiteral([string]$Value) {
+  $Value | ConvertTo-Json -Compress
+}
+
 function Assert-Route([string]$RouteKey, [string]$ExpectedTextPattern) {
+  $selectorLiteral = ConvertTo-JsLiteral "[data-testid=`"route-$RouteKey`"]"
+  $expectedPatternLiteral = ConvertTo-JsLiteral $ExpectedTextPattern
   $expr = @"
 (() => {
-  const route = document.querySelector('[data-testid="route-$RouteKey"]');
+  const route = document.querySelector($selectorLiteral);
   const active = route?.getAttribute('data-active') === 'true';
   const text = route?.innerText || '';
-  return active && /$ExpectedTextPattern/i.test(text) ? 'ROUTE_OK' : 'ROUTE_BAD active=' + active + ' text=' + text.slice(0, 160);
+  const expected = new RegExp($expectedPatternLiteral, 'i');
+  return active && expected.test(text) ? 'ROUTE_OK' : 'ROUTE_BAD active=' + active + ' text=' + text.slice(0, 160);
 })()
 "@
   Invoke-WebViewAction $expr "ROUTE_OK" $Timeouts.Route | Out-Null
@@ -308,30 +330,64 @@ function Wait-ChaseStopped {
   } $Timeouts.Notification 1000
 }
 
+function Clear-StaleChaseRuntimeState {
+  try { Run-Adb @("shell", "am", "stopservice", "-n", "$PackageName/.chase.ChaseTrackingService") | Out-Null } catch {}
+  try { Run-Adb @("shell", "run-as", $PackageName, "rm", "-f", "shared_prefs/CodeBlackChaseTracking.xml") | Out-Null } catch {}
+}
+
 function Stop-SharedChaseIfNeeded {
-  if (-not (Test-WebViewChaseActiveText)) {
+  Start-Sleep -Milliseconds 1500
+  if (-not (Test-WebViewChaseActiveText) -and -not (Test-ChaseNativeActive)) {
     Assert-ChaseServiceStopped
     Assert-ChaseNotificationAbsent
     return "already-inactive"
   }
 
+  Go-ToRoute "settings" "CHASE SESSION|Session"
   $result = Invoke-WebViewExpression @"
 (async () => {
-  document.querySelector('[data-testid="dock-more"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  document.querySelector('[data-testid="more-settings"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  const end = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'END' && !button.disabled);
+  const settings = document.querySelector('[data-testid="route-settings"][data-active="true"]');
+  if (!settings) return 'SETTINGS_NOT_ACTIVE';
+  const end = [...settings.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'END' && !button.disabled);
   if (!end) return 'END_NOT_FOUND';
   end.click();
-  await new Promise((resolve) => setTimeout(resolve, 1200));
-  return document.body.innerText.includes('CHASE ACTIVE') ? 'STILL_ACTIVE' : 'CHASE_INACTIVE';
+  const deadline = Date.now() + 6000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (!document.body.innerText.includes('CHASE ACTIVE')) return 'CHASE_INACTIVE';
+  }
+  return 'STILL_ACTIVE';
 })()
 "@
   if ($result -notmatch "CHASE_INACTIVE") {
-    throw "Unable to clear stale shared Chase state during preflight: $result"
+    $fallback = Invoke-WebViewExpression @"
+(async () => {
+  try {
+    await window.Capacitor?.Plugins?.ChaseTrackingNative?.stop?.();
+    await window.Capacitor?.Plugins?.Preferences?.remove?.({ key: 'codeblack.activeMissionSession' });
+    return 'PREFLIGHT_FORCED_INACTIVE';
+  } catch (error) {
+    return 'PREFLIGHT_FORCE_FAILED:' + String(error?.message || error);
   }
+})()
+"@
+    if ($fallback -notmatch "PREFLIGHT_FORCED_INACTIVE") {
+      throw "Unable to clear stale shared Chase state during preflight: $result / $fallback"
+    }
+  }
+  Invoke-WebViewExpression @"
+(async () => {
+  await window.Capacitor?.Plugins?.Preferences?.remove?.({ key: 'codeblack.activeMissionSession' });
+  return 'ACTIVE_SESSION_PREF_REMOVED';
+})()
+"@ | Out-Null
   Wait-ChaseStopped
+  Run-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
+  Start-Sleep -Seconds 2
+  Run-Adb @("shell", "monkey", "-p", $PackageName, "-c", "android.intent.category.LAUNCHER", "1") | Out-Null
+  Wait-WebViewReady
+  Assert-ChaseServiceStopped
+  Assert-ChaseNotificationAbsent
   "cleared-stale-active-ui"
 }
 
@@ -421,6 +477,8 @@ try {
 
   Add-Step "deterministic-start-state" {
     Run-Adb @("logcat", "-c") | Out-Null
+    Run-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
+    Clear-StaleChaseRuntimeState
     Run-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
     Start-Sleep -Seconds 2
     Assert-ChaseServiceStopped
@@ -519,13 +577,12 @@ try {
   }
 
   Add-Step "start-chase" {
+    Go-ToRoute "settings" "CHASE SESSION|Session"
     $result = Invoke-WebViewExpression @"
 (async () => {
-  document.querySelector('[data-testid="dock-more"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  document.querySelector('[data-testid="more-settings"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  const start = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'START' && !button.disabled);
+  const settings = document.querySelector('[data-testid="route-settings"][data-active="true"]');
+  if (!settings) return 'SETTINGS_NOT_ACTIVE';
+  const start = [...settings.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'START' && !button.disabled);
   if (!start) return 'START_NOT_FOUND';
   start.click();
   await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -555,13 +612,12 @@ try {
     if (Test-WebViewChaseActiveText -and (Test-ChaseNativeActive)) {
       return @{ action = "existing-active-chase-restored" }
     }
+    Go-ToRoute "settings" "CHASE SESSION|Session"
     $result = Invoke-WebViewExpression @"
 (async () => {
-  document.querySelector('[data-testid="dock-more"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  document.querySelector('[data-testid="more-settings"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  const start = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'START' && !button.disabled);
+  const settings = document.querySelector('[data-testid="route-settings"][data-active="true"]');
+  if (!settings) return 'SETTINGS_NOT_ACTIVE_AFTER_FORCE_STOP';
+  const start = [...settings.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'START' && !button.disabled);
   if (!start) return 'START_NOT_FOUND_AFTER_FORCE_STOP';
   start.click();
   await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -590,17 +646,20 @@ try {
   }
 
   Add-Step "end-chase" {
+    Go-ToRoute "settings" "CHASE SESSION|Session"
     $result = Invoke-WebViewExpression @"
 (async () => {
-  document.querySelector('[data-testid="dock-more"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  document.querySelector('[data-testid="more-settings"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  const end = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'END' && !button.disabled);
+  const settings = document.querySelector('[data-testid="route-settings"][data-active="true"]');
+  if (!settings) return 'SETTINGS_NOT_ACTIVE';
+  const end = [...settings.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'END' && !button.disabled);
   if (!end) return 'END_NOT_FOUND';
   end.click();
-  await new Promise((resolve) => setTimeout(resolve, 1200));
-  return document.body.innerText.includes('CHASE ACTIVE') ? 'STILL_ACTIVE' : 'CHASE_INACTIVE';
+  const deadline = Date.now() + 6000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (!document.body.innerText.includes('CHASE ACTIVE')) return 'CHASE_INACTIVE';
+  }
+  return 'STILL_ACTIVE';
 })()
 "@
     if ($result -notmatch "CHASE_INACTIVE") { throw "End Chase did not enter inactive UI state: $result" }
