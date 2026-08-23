@@ -1,10 +1,13 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import {
+  classifyCredentialReadFailure,
   credentialMigrationResult,
+  credentialReadResult,
   isKnownCredentialKey,
   normalizeCredentialValue,
   type CredentialKey,
   type CredentialMigrationResult,
+  type CredentialReadResult,
   type CredentialStorageSecurityLevel,
 } from "./credentialSecurity";
 
@@ -25,6 +28,7 @@ export interface CredentialStorageInfo {
 export interface CredentialStore {
   setCredential(key: CredentialKey, value: string): Promise<void>;
   getCredential(key: CredentialKey): Promise<string>;
+  getCredentialStatus(key: CredentialKey): Promise<CredentialReadResult>;
   deleteCredential(key: CredentialKey): Promise<void>;
   hasCredential(key: CredentialKey): Promise<boolean>;
   getStorageInfo(): CredentialStorageInfo;
@@ -49,10 +53,10 @@ function nativeStorageInfo(): CredentialStorageInfo {
   }
   if (platform === "ios" && Capacitor.isNativePlatform()) {
     return {
-      available: false,
-      securityLevel: "unavailable",
-      provider: "iOS Keychain pending",
-      detail: "The shared credential boundary is ready; native Keychain runtime validation remains pending on macOS/Xcode.",
+      available: true,
+      securityLevel: "native-secure",
+      provider: "iOS Keychain",
+      detail: "Secrets are stored in the app Keychain after first device unlock and do not sync through iCloud.",
     };
   }
   return {
@@ -84,14 +88,27 @@ export function createSecureCredentialStore(): CredentialStore {
       throw new Error(info.detail);
     },
     async getCredential(key) {
+      const result = await this.getCredentialStatus(key);
+      if (result.state === "configured" || result.state === "missing") return result.value;
+      throw new Error(result.error || "Credential could not be read securely.");
+    },
+    async getCredentialStatus(key) {
       assertKnownKey(key);
       const info = nativeStorageInfo();
       if (info.securityLevel === "native-secure") {
-        const result = await NativeSecureCredentials.getCredential({ key });
-        return result.value ?? "";
+        try {
+          const result = await NativeSecureCredentials.getCredential({ key });
+          const value = result.value ?? "";
+          return value ? credentialReadResult("configured", value) : credentialReadResult("missing");
+        } catch (error) {
+          return credentialReadResult(classifyCredentialReadFailure(error), "", error instanceof Error ? error.message : "Credential could not be read securely.");
+        }
       }
-      if (info.securityLevel === "memory-only-dev") return memoryFallback.get(key) ?? "";
-      return "";
+      if (info.securityLevel === "memory-only-dev") {
+        const value = memoryFallback.get(key) ?? "";
+        return value ? credentialReadResult("configured", value) : credentialReadResult("missing");
+      }
+      return credentialReadResult("unavailable", "", info.detail);
     },
     async deleteCredential(key) {
       assertKnownKey(key);
@@ -106,8 +123,12 @@ export function createSecureCredentialStore(): CredentialStore {
       assertKnownKey(key);
       const info = nativeStorageInfo();
       if (info.securityLevel === "native-secure") {
-        const result = await NativeSecureCredentials.hasCredential({ key });
-        return result.value;
+        try {
+          const result = await NativeSecureCredentials.hasCredential({ key });
+          return result.value;
+        } catch {
+          return false;
+        }
       }
       if (info.securityLevel === "memory-only-dev") return memoryFallback.has(key);
       return false;
@@ -152,6 +173,11 @@ export function createMemoryCredentialStore(): CredentialStore {
     async getCredential(key) {
       assertKnownKey(key);
       return values.get(key) ?? "";
+    },
+    async getCredentialStatus(key) {
+      assertKnownKey(key);
+      const value = values.get(key) ?? "";
+      return value ? credentialReadResult("configured", value) : credentialReadResult("missing");
     },
     async deleteCredential(key) {
       assertKnownKey(key);

@@ -30,10 +30,11 @@ coverage-limited data is called out, and deferred systems remain deferred.
   status handling, but production backend/auth/realtime deployment remains deferred.
 - Live Overlay Telemetry now has an explicit, off-by-default latest-state path for CodeBlack-Core
   overlays. It is not Chaser Net and does not upload breadcrumb history.
-- Credential storage and external Spotter Network submission P0 findings now have a first
-  remediation pass: Android secure credential storage, legacy migration, redacted diagnostics,
-  explicit submission intent, duplicate guards, and unknown-timeout handling exist. iOS Keychain
-  and Windows Credential Manager runtime adapters remain pending.
+- Credential storage and external Spotter Network submission P0 findings now have a completion
+  remediation pass: Android secure credential storage, backup exclusion, write-before-state
+  ordering, redacted read/migration diagnostics, explicit submission intent, duplicate guards, and
+  unknown-timeout handling exist. iOS Keychain source adapter is implemented; native Xcode/device
+  runtime validation remains pending. Windows Credential Manager remains pending.
 - The rendered-control automation gap now has a first remediation pass: Playwright coverage checks
   first-class routes, major controls, MARK/ESCAPE map-only placement, deferred-state honesty, console
   errors, and phone/tablet/desktop layout structure. Physical S24 native Chase acceptance remains a
@@ -110,7 +111,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Alerts | Partial | Official NWS/SPC surfaces exist. Needs continued separation from OPS notices and Chaser Net observations. |
 | AI | Not started / deferred | No primary route found. Project One/radar reasoning not implemented. |
 | Chaser Net | Foundation only | Contracts, in-memory service, applications/review, privacy, roles, audit, and UI status exist. Production backend/auth/realtime absent. |
-| Storage/persistence | Working / needs platform validation | Settings, sessions, breadcrumbs, MARK, endpoints, provider cache, and Spotter state persist. Spotter/Pi/overlay secrets moved behind a shared credential store on Android; iOS/Windows native secure-store adapters remain pending. |
+| Storage/persistence | Working / needs platform validation | Settings, sessions, breadcrumbs, MARK, endpoints, provider cache, and Spotter state persist. Spotter/Pi/overlay secrets use Android Keystore-backed storage with backup exclusion. iOS Keychain adapter source exists but needs Mac/device validation. Windows native secure-store adapter remains pending. |
 | Error handling | Partial | Error boundary exists and provider/service fallbacks exist. More user-facing categorization is needed in several hardware/provider paths. |
 | Performance | Working / needs monitoring | Map layers use memoization/cache/deduping; polling exists for telemetry/providers and should be watched on mobile battery. |
 
@@ -131,18 +132,19 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 - Provider caches are bounded in memory and visibly stale when reused.
 - Endpoint and display/settings state use shared preferences abstractions.
 - Spotter Network account metadata and non-secret settings still use Preferences. Spotter Network
-  password, Pi/BLE command token, and Live Overlay station token now migrate to the shared
-  credential store on Android.
+  password, Pi/BLE command token, and Live Overlay station token migrate to the shared credential
+  store. Android runtime path is Keystore-backed and excludes encrypted credential envelopes from
+  backup. iOS Keychain source is present but runtime validation is still pending.
 
 ## Security and Privacy Concerns
 
-1. iOS Keychain and Windows Credential Manager adapters still need native runtime validation before
-   broader cross-platform distribution.
+1. iOS Keychain adapter needs native Xcode/device runtime validation, and Windows Credential
+   Manager adapter remains unimplemented before broader cross-platform distribution.
 2. Spotter Network external submission is now explicitly user-triggered, validated, and locally
    guarded against duplicate/unknown-timeout resubmission, but provider-policy review remains
    required before production/public use.
-3. Android backup still deserves a follow-up policy decision for non-secret app data and encrypted
-   credential envelopes.
+3. Android encrypted credential envelopes are excluded from backup; non-secret app-data backup
+   policy still deserves a separate product decision.
 4. Chaser Net live sharing remains off/not configured; local Chase Mode must never enable network
    presence automatically.
 5. Live Overlay Telemetry is explicit and off by default; it uses latest-state only and must not
@@ -169,7 +171,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 
 | Item | Size | Why it matters | Prerequisite |
 | --- | --- | --- | --- |
-| iOS/Windows secure credential runtime adapters | Medium | Completes the cross-platform credential boundary beyond Android. | macOS/Xcode and Windows host validation. |
+| iOS Keychain runtime validation and Windows secure adapter | Medium | Completes the cross-platform credential boundary beyond Android. | macOS/Xcode/iPhone test and Windows Credential Manager implementation. |
 | Keep MARK/ESCAPE map-only | Small | Prevents accidental operational actions outside the map context. | Fixed; keep regression guard. |
 | External Spotter Network provider-policy review | Medium | Avoids unsafe or unauthorized operational submissions and clarifies third-party terms. | Product policy and integration agreement review. |
 
@@ -181,7 +183,7 @@ active notification teardown passed repeat S24 acceptance without native code ch
 
 | Item | Size | Why it matters | Prerequisite |
 | --- | --- | --- | --- |
-| Physical S24 walkthrough automation depth | Medium | The Playwright suite covers rendered browser UI; S24 helper automation exists, but native-device route/control walking still needs more selector robustness and should remain paired with manual acceptance for Chase service cleanup. | Current ADB helper and active-notification acceptance logic. |
+| Physical S24 walkthrough automation depth | Medium | The Playwright suite covers rendered browser UI; S24 helper now includes active-Chase force-stop reconciliation, but native-device route/control walking still needs more selector robustness and should remain paired with manual acceptance for Chase service cleanup. | Current ADB helper and active-notification acceptance logic. |
 | Dedicated System diagnostics route or clearer Operations/System split | Medium | Field failures need a predictable place for status and diagnostics. | Current connection/provider diagnostic contracts. |
 | Telemetry zero/default display audit | Small | Avoids mistaking unavailable hardware values for real readings. | Existing telemetry freshness state. |
 | Weather/fallback freshness polish | Medium | Chasers need to know whether weather data is current, stale, or unavailable. | Existing fallback/provider timestamps. |
@@ -210,7 +212,7 @@ active notification teardown passed repeat S24 acceptance without native code ch
 
 1. **System Diagnostics and Field Status Polish** - make System/Operations status clearer, reduce fake-green risk, and surface provider/Core/Pi/GPS freshness in one consistent model.
 2. **Native Device Walkthrough Automation Hardening** - expand the S24 helper into a more robust UIAutomator/DevTools hybrid for route walking, screenshots, Back behavior, and Chase service evidence.
-3. **iOS/Windows Secure Credential Adapter Validation** - complete native Keychain and Windows Credential Manager runtime paths behind the shared credential interface.
+3. **iOS Keychain Runtime + Windows Credential Adapter Validation** - verify Keychain on Mac/iPhone/iPad and implement the Windows Credential Manager adapter behind the shared credential interface.
 4. **Road/Camera Regional Expansion** - add Oklahoma, Kansas, and Missouri provider adapters behind the existing registry, with coverage and attribution documented per provider.
 5. **Weather/Telemetry Freshness Stabilization** - harden current conditions, telemetry default/zero states, and stale hardware/provider behavior before new model/satellite products.
 

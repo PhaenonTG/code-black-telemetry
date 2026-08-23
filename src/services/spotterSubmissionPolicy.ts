@@ -21,7 +21,7 @@ export interface SpotterSubmissionInput {
 
 export interface SubmissionLedgerEntry {
   fingerprint: string;
-  state: "SUBMITTED" | "UNKNOWN";
+  state: "SUBMITTED" | "UNKNOWN" | "ALREADY_SUBMITTED";
   updatedAt: number;
 }
 

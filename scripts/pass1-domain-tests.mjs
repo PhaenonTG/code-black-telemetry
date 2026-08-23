@@ -403,6 +403,14 @@ assert.equal(credentialSecurity.isKnownCredentialKey("spotter-network.password")
 assert.equal(credentialSecurity.isKnownCredentialKey("codeblack.bleCommandToken"), false);
 assert.equal(credentialSecurity.normalizeCredentialValue("  test-token  "), "test-token");
 assert.equal(credentialSecurity.credentialConfiguredLabel(true), "CONFIGURED");
+assert.equal(credentialSecurity.credentialReadStatusLabel({ state: "configured" }), "CONFIGURED");
+assert.equal(credentialSecurity.credentialReadStatusLabel({ state: "missing" }), "MISSING");
+assert.equal(credentialSecurity.credentialReadStatusLabel({ state: "unavailable" }), "SECURE STORAGE UNAVAILABLE");
+assert.equal(credentialSecurity.credentialReadStatusLabel({ state: "corrupt" }), "REAUTHENTICATION REQUIRED");
+assert.equal(credentialSecurity.classifyCredentialReadFailure(new Error("Credential decrypt failed because key was lost")), "corrupt");
+assert.equal(credentialSecurity.classifyCredentialReadFailure(new Error("Native secure storage unavailable")), "unavailable");
+assert.equal(credentialSecurity.credentialReadResult("configured", "secret").configured, true);
+assert.equal(credentialSecurity.credentialReadResult("error", "", "token=secret").error.includes("secret"), false);
 assert.equal(credentialSecurity.redactCredentialText("Authorization: Bearer secret-token"), "Authorization: Bearer [REDACTED]");
 assert.deepEqual(
   credentialSecurity.redactCredentialRecord({ nested: { stationToken: "secret", endpoint: "https://core.example.test" } }),
@@ -447,7 +455,52 @@ assert.equal(ledger.entries[0].state, "UNKNOWN");
 const submittedLedger = spotterSubmissionPolicy.upsertSpotterSubmissionLedger(ledger, reportFingerprintA, "SUBMITTED", now + 1);
 assert.equal(submittedLedger.entries.length, 1);
 assert.equal(submittedLedger.entries[0].state, "SUBMITTED");
+const duplicateLedger = spotterSubmissionPolicy.upsertSpotterSubmissionLedger(submittedLedger, reportFingerprintA, "ALREADY_SUBMITTED", now + 2);
+assert.equal(duplicateLedger.entries[0].state, "ALREADY_SUBMITTED");
 assert.equal(/submitSevereReport/.test(await readFile("src/services/markEvents.ts", "utf8")), false);
 assert.equal(/submitSevereReport/.test(await readFile("src/services/chaserNet.ts", "utf8")), false);
+
+const spotterAccountSource = await readFile("src/services/spotterAccount.ts", "utf8");
+assert.match(
+  spotterAccountSource,
+  /await secureCredentialStore\.setCredential\("spotter-network\.password", password\);[\s\S]*?const verified = await secureCredentialStore\.getCredentialStatus\("spotter-network\.password"\);[\s\S]*?currentAccount = nextAccount;/,
+  "Spotter login must persist and verify the password before mutating currentAccount",
+);
+assert.doesNotMatch(
+  spotterAccountSource,
+  /existing\?\.state === "SUBMITTED"\) return \{ success: false, state: "FAILED"/,
+  "Duplicate Spotter submission must not be reported as FAILED",
+);
+const settingsSource = await readFile("src/services/settings.ts", "utf8");
+assert.match(
+  settingsSource,
+  /const nextToken = value\.trim\(\);[\s\S]*?await secureCredentialStore\.setCredential\("vehicle-node\.command-token", nextToken\);[\s\S]*?currentBleCommandToken = nextToken;/,
+  "BLE token save must persist and verify before mutating currentBleCommandToken",
+);
+assert.doesNotMatch(
+  settingsSource,
+  /currentBleCommandToken = value\.trim\(\);/,
+  "BLE token save must not mutate state before secure persistence succeeds",
+);
+const overlaySource = await readFile("src/services/liveOverlayTelemetry.ts", "utf8");
+assert.match(
+  overlaySource,
+  /const nextToken = value\.trim\(\);[\s\S]*?await secureCredentialStore\.setCredential\("live-overlay\.station-token", nextToken\);[\s\S]*?currentStationToken = nextToken;/,
+  "Overlay token save must persist and verify before mutating currentStationToken",
+);
+const androidManifestSource = await readFile("android/app/src/main/AndroidManifest.xml", "utf8");
+assert.match(androidManifestSource, /android:dataExtractionRules="@xml\/data_extraction_rules"/);
+assert.match(androidManifestSource, /android:fullBackupContent="@xml\/backup_rules"/);
+const backupRulesSource = await readFile("android/app/src/main/res/xml/backup_rules.xml", "utf8");
+const dataExtractionRulesSource = await readFile("android/app/src/main/res/xml/data_extraction_rules.xml", "utf8");
+assert.match(backupRulesSource, /CodeBlackSecureCredentials\.xml/);
+assert.match(dataExtractionRulesSource, /CodeBlackSecureCredentials\.xml/);
+const iosKeychainSource = await readFile("ios/App/App/CodeBlackSecureCredentialsPlugin.swift", "utf8");
+assert.match(iosKeychainSource, /kSecClassGenericPassword/);
+assert.match(iosKeychainSource, /kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly/);
+assert.doesNotMatch(iosKeychainSource, /Synchronizable/);
+const s24WalkthroughSource = await readFile("scripts/s24-rendered-walkthrough.ps1", "utf8");
+assert.match(s24WalkthroughSource, /forceStopWhileActive/);
+assert.doesNotMatch(s24WalkthroughSource, /10150/);
 
 console.log("pass1-domain-tests: ok");

@@ -67,6 +67,8 @@ export const DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS: LiveOverlayTelemetrySettin
 
 let currentSettings = DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS;
 let currentStationToken = "";
+let lastOverlayCredentialMigrationError = "";
+let lastOverlayCredentialReadError = "";
 const settingsListeners = new Set<SettingsListener>();
 const tokenConfiguredListeners = new Set<TokenConfiguredListener>();
 
@@ -87,6 +89,8 @@ function normalizeLiveOverlayTelemetrySettings(input: Partial<LiveOverlayTelemet
 }
 
 export async function loadLiveOverlayTelemetrySettings() {
+  lastOverlayCredentialMigrationError = "";
+  lastOverlayCredentialReadError = "";
   const saved = await Preferences.get({ key: LIVE_OVERLAY_TELEMETRY_SETTINGS_KEY });
   if (saved.value) {
     try {
@@ -101,19 +105,30 @@ export async function loadLiveOverlayTelemetrySettings() {
             await Preferences.set({ key: LIVE_OVERLAY_TELEMETRY_SETTINGS_KEY, value: JSON.stringify(normalizeLiveOverlayTelemetrySettings(settings)) });
           },
         });
-        currentStationToken = migration.removedLegacy
-          ? await secureCredentialStore.getCredential("live-overlay.station-token")
-          : parsed.stationToken;
+        if (migration.error) lastOverlayCredentialMigrationError = migration.error;
+        if (migration.removedLegacy) {
+          const secureRead = await secureCredentialStore.getCredentialStatus("live-overlay.station-token");
+          currentStationToken = secureRead.value;
+          if (!secureRead.configured && secureRead.state !== "missing") lastOverlayCredentialReadError = secureRead.error || secureRead.state;
+        } else {
+          currentStationToken = parsed.stationToken;
+        }
       } else {
-        currentStationToken = await secureCredentialStore.getCredential("live-overlay.station-token");
+        const secureRead = await secureCredentialStore.getCredentialStatus("live-overlay.station-token");
+        currentStationToken = secureRead.value;
+        if (!secureRead.configured && secureRead.state !== "missing") lastOverlayCredentialReadError = secureRead.error || secureRead.state;
       }
     } catch {
       currentSettings = DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS;
-      currentStationToken = await secureCredentialStore.getCredential("live-overlay.station-token");
+      const secureRead = await secureCredentialStore.getCredentialStatus("live-overlay.station-token");
+      currentStationToken = secureRead.value;
+      if (!secureRead.configured && secureRead.state !== "missing") lastOverlayCredentialReadError = secureRead.error || secureRead.state;
     }
   } else {
     currentSettings = DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS;
-    currentStationToken = await secureCredentialStore.getCredential("live-overlay.station-token");
+    const secureRead = await secureCredentialStore.getCredentialStatus("live-overlay.station-token");
+    currentStationToken = secureRead.value;
+    if (!secureRead.configured && secureRead.state !== "missing") lastOverlayCredentialReadError = secureRead.error || secureRead.state;
   }
   settingsListeners.forEach((listener) => listener(currentSettings));
   tokenConfiguredListeners.forEach((listener) => listener(Boolean(currentStationToken)));
@@ -130,9 +145,16 @@ export async function saveLiveOverlayTelemetrySettings(settings: Partial<LiveOve
 }
 
 export async function saveLiveOverlayTelemetryToken(value: string) {
-  currentStationToken = value.trim();
-  if (currentStationToken) await secureCredentialStore.setCredential("live-overlay.station-token", currentStationToken);
+  const nextToken = value.trim();
+  if (nextToken) await secureCredentialStore.setCredential("live-overlay.station-token", nextToken);
   else await secureCredentialStore.deleteCredential("live-overlay.station-token");
+  const verified = nextToken ? await secureCredentialStore.getCredentialStatus("live-overlay.station-token") : { configured: false, state: "missing", value: "", error: "" };
+  if (nextToken && (!verified.configured || verified.value !== nextToken)) {
+    throw new Error(verified.error || "Credential was not saved securely.");
+  }
+  currentStationToken = nextToken;
+  lastOverlayCredentialMigrationError = "";
+  lastOverlayCredentialReadError = "";
   tokenConfiguredListeners.forEach((listener) => listener(Boolean(currentStationToken)));
   return Boolean(currentStationToken);
 }
@@ -145,8 +167,17 @@ export async function clearLiveOverlayTelemetryToken() {
 
 export async function hasLiveOverlayTelemetryToken() {
   if (currentStationToken) return true;
-  currentStationToken = await secureCredentialStore.getCredential("live-overlay.station-token");
+  const secureRead = await secureCredentialStore.getCredentialStatus("live-overlay.station-token");
+  currentStationToken = secureRead.value;
+  if (!secureRead.configured && secureRead.state !== "missing") lastOverlayCredentialReadError = secureRead.error || secureRead.state;
   return Boolean(currentStationToken);
+}
+
+export function getLiveOverlayTelemetryCredentialDiagnostic() {
+  return {
+    migrationError: lastOverlayCredentialMigrationError,
+    readError: lastOverlayCredentialReadError,
+  };
 }
 
 export function getLiveOverlayTelemetrySettings() {

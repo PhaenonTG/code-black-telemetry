@@ -376,9 +376,13 @@ export function subscribeVehicleMarkerStyle(listener: (style: VehicleMarkerStyle
 
 const BLE_COMMAND_TOKEN_KEY = "codeblack.bleCommandToken";
 let currentBleCommandToken = "";
+let lastBleCredentialMigrationError = "";
+let lastBleCredentialReadError = "";
 const bleCommandTokenListeners = new Set<(token: string) => void>();
 
 export async function loadBleCommandToken() {
+  lastBleCredentialMigrationError = "";
+  lastBleCredentialReadError = "";
   const saved = await Preferences.get({ key: BLE_COMMAND_TOKEN_KEY });
   if (saved.value) {
     const migration = await migrateLegacyCredential({
@@ -386,21 +390,35 @@ export async function loadBleCommandToken() {
       legacyValue: saved.value,
       removeLegacy: () => Preferences.remove({ key: BLE_COMMAND_TOKEN_KEY }),
     });
-    currentBleCommandToken = migration.removedLegacy
-      ? await secureCredentialStore.getCredential("vehicle-node.command-token")
-      : saved.value;
+    if (migration.error) lastBleCredentialMigrationError = migration.error;
+    if (migration.removedLegacy) {
+      const secureRead = await secureCredentialStore.getCredentialStatus("vehicle-node.command-token");
+      currentBleCommandToken = secureRead.value;
+      if (!secureRead.configured && secureRead.state !== "missing") lastBleCredentialReadError = secureRead.error || secureRead.state;
+    } else {
+      currentBleCommandToken = saved.value;
+    }
   } else {
-    currentBleCommandToken = await secureCredentialStore.getCredential("vehicle-node.command-token");
+    const secureRead = await secureCredentialStore.getCredentialStatus("vehicle-node.command-token");
+    currentBleCommandToken = secureRead.value;
+    if (!secureRead.configured && secureRead.state !== "missing") lastBleCredentialReadError = secureRead.error || secureRead.state;
   }
   bleCommandTokenListeners.forEach((listener) => listener(currentBleCommandToken));
   return currentBleCommandToken;
 }
 
 export async function saveBleCommandToken(value: string) {
-  currentBleCommandToken = value.trim();
-  if (currentBleCommandToken) await secureCredentialStore.setCredential("vehicle-node.command-token", currentBleCommandToken);
+  const nextToken = value.trim();
+  if (nextToken) await secureCredentialStore.setCredential("vehicle-node.command-token", nextToken);
   else await secureCredentialStore.deleteCredential("vehicle-node.command-token");
+  const verified = nextToken ? await secureCredentialStore.getCredentialStatus("vehicle-node.command-token") : { configured: false, state: "missing", value: "", error: "" };
+  if (nextToken && (!verified.configured || verified.value !== nextToken)) {
+    throw new Error(verified.error || "Credential was not saved securely.");
+  }
+  currentBleCommandToken = nextToken;
   await Preferences.remove({ key: BLE_COMMAND_TOKEN_KEY });
+  lastBleCredentialMigrationError = "";
+  lastBleCredentialReadError = "";
   bleCommandTokenListeners.forEach((listener) => listener(currentBleCommandToken));
   return currentBleCommandToken;
 }
@@ -410,6 +428,13 @@ export async function clearBleCommandToken() {
   await secureCredentialStore.deleteCredential("vehicle-node.command-token");
   await Preferences.remove({ key: BLE_COMMAND_TOKEN_KEY });
   bleCommandTokenListeners.forEach((listener) => listener(currentBleCommandToken));
+}
+
+export function getBleCommandTokenDiagnostic() {
+  return {
+    migrationError: lastBleCredentialMigrationError,
+    readError: lastBleCredentialReadError,
+  };
 }
 
 export function getBleCommandToken() {

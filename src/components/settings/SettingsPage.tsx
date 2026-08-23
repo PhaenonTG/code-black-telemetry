@@ -18,6 +18,7 @@ import {
   loadClockMode,
   loadChaseTrackingSettings,
   loadDisplaySettings,
+  getBleCommandTokenDiagnostic,
   loadReportFeedRadiusMiles,
   loadReportFeedRetentionHours,
   loadTeamMembers,
@@ -68,6 +69,7 @@ import { useStatus } from "../../hooks/useTelemetry";
 import {
   DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS,
   clearLiveOverlayTelemetryToken,
+  getLiveOverlayTelemetryCredentialDiagnostic,
   hasLiveOverlayTelemetryToken,
   loadLiveOverlayTelemetrySettings,
   saveLiveOverlayTelemetrySettings,
@@ -212,6 +214,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [spotterBusy, setSpotterBusy] = useState(false);
   const [spotterError, setSpotterError] = useState("");
   const [credentialStorageLabel, setCredentialStorageLabel] = useState("UNKNOWN");
+  const [credentialWarning, setCredentialWarning] = useState("");
   const [chaserRadiusMiles, setChaserRadiusMiles] = useState(DEFAULT_CHASER_RADIUS_MILES);
   const [chaserRadiusInput, setChaserRadiusInput] = useState(String(DEFAULT_CHASER_RADIUS_MILES));
   const [chaserRadiusSaved, setChaserRadiusSaved] = useState(false);
@@ -234,6 +237,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [bleTokenInput, setBleTokenInput] = useState("");
   const [bleTokenConfigured, setBleTokenConfigured] = useState(false);
   const [bleTokenSaved, setBleTokenSaved] = useState(false);
+  const [bleTokenError, setBleTokenError] = useState("");
   const [bleConnected, setBleConnected] = useState(false);
   const [lightingBusy, setLightingBusy] = useState(false);
   const [lightingResult, setLightingResult] = useState("");
@@ -266,8 +270,14 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   useEffect(() => {
     const unsubscribe = subscribeLiveOverlayTelemetrySettings(setOverlaySettings);
     const unsubscribeToken = subscribeLiveOverlayTelemetryTokenConfigured(setOverlayTokenConfigured);
-    void loadLiveOverlayTelemetrySettings();
-    void hasLiveOverlayTelemetryToken().then(setOverlayTokenConfigured);
+    void loadLiveOverlayTelemetrySettings().then(() => {
+      const diagnostic = getLiveOverlayTelemetryCredentialDiagnostic();
+      if (diagnostic.migrationError || diagnostic.readError) setCredentialWarning(diagnostic.migrationError || diagnostic.readError);
+    });
+    void hasLiveOverlayTelemetryToken().then(setOverlayTokenConfigured).catch((error: unknown) => {
+      setCredentialWarning(error instanceof Error ? error.message : "Credential status could not be read.");
+      setOverlayTokenConfigured(false);
+    });
     return () => {
       unsubscribe();
       unsubscribeToken();
@@ -298,7 +308,9 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
 
   useEffect(() => {
     const unsubscribe = subscribeSpotterAccount(setSpotterAccount);
-    void loadSpotterAccount();
+    void loadSpotterAccount().catch((error: unknown) => {
+      setCredentialWarning(error instanceof Error ? error.message : "Spotter Network credential status could not be read.");
+    });
     const storageInfo = secureCredentialStore.getStorageInfo();
     setCredentialStorageLabel(storageInfo.securityLevel === "native-secure" ? storageInfo.provider : storageInfo.securityLevel.toUpperCase());
     return () => {
@@ -377,10 +389,17 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   }, []);
 
   useEffect(() => {
-    void loadBleCommandToken().then((token) => {
-      setBleTokenConfigured(Boolean(token));
-      setBleTokenInput("");
-    });
+    void loadBleCommandToken()
+      .then((token) => {
+        const diagnostic = getBleCommandTokenDiagnostic();
+        if (diagnostic.migrationError || diagnostic.readError) setBleTokenError(diagnostic.migrationError || diagnostic.readError);
+        setBleTokenConfigured(Boolean(token));
+        setBleTokenInput("");
+      })
+      .catch((error: unknown) => {
+        setBleTokenConfigured(false);
+        setBleTokenError(error instanceof Error ? error.message : "Command token status could not be read.");
+      });
   }, []);
 
   useEffect(() => {
@@ -496,19 +515,30 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   };
 
   const saveBleToken = async () => {
-    await saveBleCommandToken(bleTokenInput);
-    setBleTokenConfigured(Boolean(bleTokenInput.trim()));
-    setBleTokenInput("");
-    setBleTokenSaved(true);
-    window.setTimeout(() => setBleTokenSaved(false), 1600);
+    setBleTokenError("");
+    try {
+      const savedToken = await saveBleCommandToken(bleTokenInput);
+      setBleTokenConfigured(Boolean(savedToken));
+      setBleTokenInput("");
+      setBleTokenSaved(true);
+      window.setTimeout(() => setBleTokenSaved(false), 1600);
+    } catch (error) {
+      setBleTokenSaved(false);
+      setBleTokenError(error instanceof Error ? error.message : "Credential not saved.");
+    }
   };
 
   const removeBleToken = async () => {
-    await clearBleCommandToken();
-    setBleTokenInput("");
-    setBleTokenConfigured(false);
-    setBleTokenSaved(true);
-    window.setTimeout(() => setBleTokenSaved(false), 1600);
+    setBleTokenError("");
+    try {
+      await clearBleCommandToken();
+      setBleTokenInput("");
+      setBleTokenConfigured(false);
+      setBleTokenSaved(true);
+      window.setTimeout(() => setBleTokenSaved(false), 1600);
+    } catch (error) {
+      setBleTokenError(error instanceof Error ? error.message : "Credential could not be removed.");
+    }
   };
 
   const removeOverlayToken = async () => {
@@ -742,6 +772,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           </div>
         </div>
         {overlaySettingsError && <div className="cb-note cb-note--warn">{overlaySettingsError}</div>}
+        {credentialWarning && <div className="cb-note cb-note--warn">{credentialWarning}</div>}
       </Panel>
 
       <Panel title="Spotter Network" className="settings-spotter-panel">
@@ -982,6 +1013,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           <button className="settings-action" disabled={!bleTokenInput.trim()} onClick={() => void saveBleToken()}>{bleTokenSaved ? "Saved" : "Save"}</button>
           <button className="settings-action" disabled={!bleTokenConfigured} onClick={() => void removeBleToken()}>Remove Token</button>
         </div>
+        {bleTokenError && <div className="cb-note cb-note--warn">{bleTokenError}</div>}
         <div className="settings-row">
           <div>
             <strong>Govee H7090</strong>

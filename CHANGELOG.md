@@ -4,6 +4,34 @@ All changes logged newest-first.
 
 ---
 
+## Credential Hardening Completion - 2026-08-22
+
+Closed the remaining credential/security audit findings without adding new product features.
+
+### Changed
+- Fixed Spotter Network sign-in ordering so secure password storage is written and verified before
+  account state is committed.
+- Fixed Pi/BLE and Live Overlay token save ordering so in-memory token state changes only after
+  secure persistence is verified.
+- Added secure credential read-state handling for missing, unavailable, corrupt/reauth-required,
+  and read-error states.
+- Added Settings error feedback for BLE token save/remove failures and credential migration/read
+  diagnostics.
+- Added Android backup/data-extraction exclusions for the Keystore-encrypted credential preference
+  file.
+- Added an iOS Keychain-backed `CodeBlackSecureCredentials` Capacitor adapter source file and wired
+  it into the iOS app target; native Xcode/device validation remains pending.
+- Changed locally blocked duplicate Spotter submissions to `ALREADY_SUBMITTED` instead of generic
+  `FAILED`.
+- Extended the S24 walkthrough helper to cover force-stop while Chase is active and removed the
+  install-specific active-notification UID lookup.
+
+### Validation Notes
+- iOS Keychain implementation was source/sync validated on Windows only. Native Xcode compile and
+  device runtime validation remain pending on macOS.
+
+---
+
 ## Rendered Control Walkthrough Automation - 2026-08-22
 
 Added repeatable rendered-app route/control coverage for desktop browser automation and S24 ADB
