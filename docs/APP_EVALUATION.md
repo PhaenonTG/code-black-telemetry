@@ -20,6 +20,10 @@ coverage-limited data is called out, and deferred systems remain deferred.
   intentionally deferred.
 - Native Android Chase Tracking remains the strongest accepted system. This pass does not change
   native tracking code.
+- The S24 Chase notification cleanup blocker was rechecked from a clean post-reboot device state.
+  `cmd notification list` and `cmd notification get` prove the Chase notification is removed from
+  the active notification set after End Chase; broad `dumpsys notification --noredact` continues to
+  show Samsung/Android `mArchive=Archive` history entries and those are not active notifications.
 - Road Conditions and Public Cameras are provider-backed v0.1 layers, but concrete live coverage is
   Arkansas DOT IDrive only.
 - Chaser Net has substantial contracts, application/review foundations, privacy models, and UI
@@ -85,7 +89,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Dashboard | Working / needs polish | Useful field data composition, but dense and mixed between live, stale, and unavailable provider states. |
 | Settings | Working / needs polish | Functional and persisted controls exist. Security-sensitive controls now mask saved secrets and use the shared credential boundary where supported. |
 | Themes/display | Ready / working | Dark, Light, Night, System and display/keep-awake abstractions exist. |
-| Chase Mode | Ready on Android; platform foundation elsewhere | Physical S24 lifecycle was accepted in prior passes. Native Android tracking unchanged in this audit. iOS remains future native adapter work. |
+| Chase Mode | Ready on Android; platform foundation elsewhere | Physical S24 lifecycle was reaccepted from a clean reboot state. Three Start/MARK/End cycles left no active `ChaseTrackingService` and no active notification key after End Chase. Samsung notification archive records may remain in `dumpsys` history and should not be treated as active leaks. iOS remains future native adapter work. |
 | GPS/location state | Working / needs polish | Shared normalized states exist; UI should keep stale/degraded wording consistent across all cards. |
 | MARK | Ready after map-only fix | Immediate capture, duplicate guard, session association, and bounded persistence exist. Map-only placement is now guarded by test. |
 | ESCAPE | Foundation only | Context/readiness path exists; production routing is not active and must remain honestly labeled. |
@@ -147,6 +151,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Area | Coverage |
 | --- | --- |
 | Chase lifecycle / session ordering | Strong for shared domain; physical Android accepted previously. |
+| Native Android notification cleanup | Strong for active-notification acceptance; QA should use active notification APIs such as `cmd notification list` / `cmd notification get`, not broad archive-inclusive `dumpsys` matches. |
 | MARK | Partial; persistence/duplicate behavior exists and map-only placement is now source-guarded. |
 | Connection states | Strong for endpoint normalization and classification. |
 | Road/camera providers | Strong for normalization, validation, freshness, coverage, and provider failure. |
@@ -163,6 +168,10 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | iOS/Windows secure credential runtime adapters | Medium | Completes the cross-platform credential boundary beyond Android. | macOS/Xcode and Windows host validation. |
 | Keep MARK/ESCAPE map-only | Small | Prevents accidental operational actions outside the map context. | Fixed; keep regression guard. |
 | External Spotter Network provider-policy review | Medium | Avoids unsafe or unauthorized operational submissions and clarifies third-party terms. | Product policy and integration agreement review. |
+
+Resolved during root-cause QA: the suspected persistent Chase foreground notification was a
+Samsung/Android notification archive record, not an active notification. The active service and
+active notification teardown passed repeat S24 acceptance without native code changes.
 
 ### P1 - Needed for Field Usability
 

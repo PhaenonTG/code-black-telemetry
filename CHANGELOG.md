@@ -4,6 +4,26 @@ All changes logged newest-first.
 
 ---
 
+## Native Chase Notification Root-Cause QA - 2026-08-22
+
+Re-ran physical S24 Chase notification cleanup acceptance from a clean post-reboot device state and
+resolved the blocked credential-hardening acceptance finding as a QA interpretation issue rather
+than an active foreground-notification leak.
+
+### Changed
+- Updated `docs/APP_EVALUATION.md` to distinguish active notification records from Samsung/Android
+  notification archive records for Chase Tracking acceptance.
+
+### Validation Notes
+- Native Android Chase Tracking code was not changed.
+- Three repeated Start Chase -> MARK -> End Chase cycles on the S24 showed the service and active
+  notification present while active, then no active `ChaseTrackingService` and no active
+  notification key after End Chase.
+- Broad `dumpsys notification --noredact` still lists Chase notification entries under
+  `mArchive=Archive`; those are historical records and are not active notifications.
+
+---
+
 ## Credential and External Submission Hardening - 2026-08-22
 
 Hardened P0 credential storage and external Spotter Network submission boundaries without adding
