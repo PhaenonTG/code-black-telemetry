@@ -6,6 +6,7 @@ import {
   upsertSpotterSubmissionLedger,
   validateSpotterSubmission,
   type SubmissionLedger,
+  type SubmissionLedgerEntry,
 } from "./spotterSubmissionPolicy";
 
 const ACCOUNT_KEY = "codeblack.spotterAccount";
@@ -62,6 +63,8 @@ export interface SpotterAccount {
 }
 
 let currentAccount: SpotterAccount | null = null;
+let lastCredentialMigrationError = "";
+let lastCredentialReadError = "";
 const listeners = new Set<(account: SpotterAccount | null) => void>();
 
 function notify() {
@@ -69,6 +72,8 @@ function notify() {
 }
 
 export async function loadSpotterAccount() {
+  lastCredentialMigrationError = "";
+  lastCredentialReadError = "";
   const saved = await Preferences.get({ key: ACCOUNT_KEY });
   if (!saved.value) {
     currentAccount = null;
@@ -85,6 +90,7 @@ export async function loadSpotterAccount() {
         await Preferences.set({ key: ACCOUNT_KEY, value: JSON.stringify(account) });
       },
     });
+    if (migration.error) lastCredentialMigrationError = migration.error;
     if (!migration.removedLegacy) {
       currentAccount = {
         username: parsed.username,
@@ -104,6 +110,13 @@ export async function loadSpotterAccount() {
   };
   notify();
   return currentAccount;
+}
+
+export function getSpotterCredentialStatus() {
+  return {
+    migrationError: lastCredentialMigrationError,
+    readError: lastCredentialReadError,
+  };
 }
 
 export function getSpotterAccount() {
@@ -157,7 +170,7 @@ export interface SevereReportInput {
 interface ReportResult {
   success: boolean;
   error: string;
-  state?: "SUBMITTED" | "FAILED" | "UNKNOWN";
+  state?: SubmissionLedgerEntry["state"] | "FAILED";
 }
 
 function isoStamp(date: Date) {
@@ -186,7 +199,8 @@ export async function submitSevereReport(input: SevereReportInput): Promise<Repo
   const fingerprint = spotterReportFingerprint(currentAccount.id, input);
   const ledger = await loadSubmissionLedger();
   const existing = ledger.entries.find((entry) => entry.fingerprint === fingerprint);
-  if (existing?.state === "SUBMITTED") return { success: false, state: "FAILED", error: "This report was already submitted from this device." };
+  if (existing?.state === "SUBMITTED") return { success: false, state: "ALREADY_SUBMITTED", error: "This report was already submitted from this device." };
+  if (existing?.state === "ALREADY_SUBMITTED") return { success: false, state: "ALREADY_SUBMITTED", error: "This report is already blocked as a duplicate on this device." };
   if (existing?.state === "UNKNOWN") return { success: false, state: "UNKNOWN", error: "A previous submission timed out and may have reached Spotter Network. Review before retrying to avoid a duplicate." };
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 15_000);
@@ -256,14 +270,21 @@ export async function spotterNetworkLogin(username: string, password: string): P
       const message = Array.isArray(body?.errors) ? body.errors.join(" ") : `${response.status} ${response.statusText}`;
       return { success: false, error: message || "Sign-in failed." };
     }
-    currentAccount = {
+    const nextAccount: SpotterAccount = {
       username,
       id: String(body.id ?? ""),
       marker: String(body.marker ?? ""),
       canReport: Boolean(body.CanReport),
     };
     await secureCredentialStore.setCredential("spotter-network.password", password);
-    await Preferences.set({ key: ACCOUNT_KEY, value: JSON.stringify(currentAccount) });
+    const verified = await secureCredentialStore.getCredentialStatus("spotter-network.password");
+    if (!verified.configured) {
+      return { success: false, error: verified.error || "Credential was not saved securely." };
+    }
+    await Preferences.set({ key: ACCOUNT_KEY, value: JSON.stringify(nextAccount) });
+    currentAccount = nextAccount;
+    lastCredentialMigrationError = "";
+    lastCredentialReadError = "";
     notify();
     return { success: true, error: "" };
   } catch (error) {

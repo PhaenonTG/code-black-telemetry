@@ -14,7 +14,7 @@ external Spotter Network report submission path. It does not add new Spotter Net
 ## Storage Boundary
 
 Shared code uses `src/services/secureCredentials.ts` for `setCredential`, `getCredential`,
-`deleteCredential`, and `hasCredential`.
+`getCredentialStatus`, `deleteCredential`, and `hasCredential`.
 
 The credential keys are allowlisted in `src/services/credentialSecurity.ts`. Unknown keys are
 rejected so arbitrary app state cannot drift into the secret store.
@@ -31,11 +31,20 @@ Raw secrets are no longer stored in Capacitor Preferences. Existing legacy value
 only after a secure write/read verification succeeds. If verification fails, the legacy value is
 left in place for a later retry rather than silently deleting the only copy.
 
+`CodeBlackSecureCredentials.xml` is excluded from Android cloud backup and device-transfer
+backup rules. The encrypted credential envelopes depend on an app-install/device-scoped Keystore
+key and should not be restored without that key.
+
 ### iPhone / iPad
 
-The shared credential abstraction is ready for a Keychain adapter, but native Keychain runtime
-validation remains pending on macOS/Xcode. The app does not call ordinary Preferences secure on
-iOS.
+The iOS app target now includes `CodeBlackSecureCredentialsPlugin.swift`, a Capacitor adapter
+backed by Keychain generic-password items. It uses
+`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`: credentials are unavailable before the first
+device unlock after boot and are not synchronized through iCloud Keychain.
+
+Because this pass was performed on Windows, native Xcode compile/runtime validation remains
+pending on macOS with an iPhone/iPad. The shared app no longer treats ordinary Preferences as
+secure on iOS.
 
 ### Web / Development
 
@@ -54,8 +63,10 @@ Non-secret settings remain in normal Preferences.
 
 ## Logging and Diagnostics
 
-Normal UI and diagnostics report whether credentials are configured, missing, or unavailable. They
-do not print raw passwords, bearer tokens, authorization headers, or command tokens.
+Normal UI and diagnostics report whether credentials are configured, missing, unavailable,
+corrupt/needs reauthentication, or read-error. They do not print raw passwords, bearer tokens,
+authorization headers, or command tokens. Spotter, BLE, and overlay credential saves now write and
+verify secure storage before committing in-memory/account state.
 
 ## Spotter Network Submission Boundary
 
@@ -77,6 +88,9 @@ speed before sending.
 The app keeps a bounded local submission ledger. A report with the same account, hazards,
 description, and rounded location cannot be submitted twice from this device after confirmed
 success.
+
+Known local duplicates are returned as `ALREADY_SUBMITTED`, not generic `FAILED`, so retry logic
+does not confuse a local duplicate block with a network/server failure.
 
 If a request times out after the report may have reached Spotter Network, the same report is marked
 `UNKNOWN` and blocked from blind automatic retry. The user must review/change intent before trying

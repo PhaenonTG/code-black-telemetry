@@ -47,6 +47,15 @@ export interface CredentialMigrationResult {
   error: string;
 }
 
+export type CredentialReadState = "configured" | "missing" | "unavailable" | "corrupt" | "error";
+
+export interface CredentialReadResult {
+  state: CredentialReadState;
+  configured: boolean;
+  value: string;
+  error: string;
+}
+
 export function credentialMigrationResult(
   migrated: boolean,
   removedLegacy: boolean,
@@ -58,4 +67,40 @@ export function credentialMigrationResult(
     preservedLegacy: Boolean(migrated && !removedLegacy),
     error: redactCredentialText(error),
   };
+}
+
+export function credentialReadResult(
+  state: CredentialReadState,
+  value = "",
+  error = "",
+): CredentialReadResult {
+  return {
+    state,
+    configured: state === "configured",
+    value: state === "configured" ? value : "",
+    error: redactCredentialText(error),
+  };
+}
+
+export function classifyCredentialReadFailure(error: unknown): CredentialReadState {
+  const message = error instanceof Error ? error.message : String(error);
+  const lower = message.toLowerCase();
+  if (lower.includes("unavailable") || lower.includes("pending") || lower.includes("not implemented") || lower.includes("not available")) return "unavailable";
+  if (lower.includes("corrupt") || lower.includes("decrypt") || lower.includes("decryption") || lower.includes("key") || lower.includes("envelope")) return "corrupt";
+  return "error";
+}
+
+export function credentialReadStatusLabel(result: Pick<CredentialReadResult, "state">) {
+  switch (result.state) {
+    case "configured":
+      return "CONFIGURED";
+    case "missing":
+      return "MISSING";
+    case "unavailable":
+      return "SECURE STORAGE UNAVAILABLE";
+    case "corrupt":
+      return "REAUTHENTICATION REQUIRED";
+    case "error":
+      return "READ ERROR";
+  }
 }

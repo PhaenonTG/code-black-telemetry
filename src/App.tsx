@@ -44,7 +44,7 @@ import { setTelemetryPaused } from "./services/telemetry";
 import { publishVehicleDisplaySnapshot } from "./services/vehicleDisplay";
 import { getLatestBreadcrumbPoint, recordBreadcrumbFromGps } from "./services/breadcrumbTrail";
 import { recordMarkEvent, recordMarkEventFromBreadcrumb } from "./services/markEvents";
-import { recoverMissionSession } from "./services/missionSession";
+import { endMissionSession, recoverMissionSession } from "./services/missionSession";
 import { setDisplayCockpitMode, startDisplayController } from "./services/displayController";
 import { createEgressContext, summarizeEgressReadiness } from "./services/egress";
 import { locationTrackingService } from "./services/locationTracking";
@@ -291,6 +291,15 @@ export default function App() {
     nativeRecoveryAttemptRef.current = missionSession.id;
     void locationTrackingService.start({ session: missionSession, detailPreset: "balanced", persistent: true });
   }, [missionSession, locationTracking.active, locationTracking.lastError, locationTracking.lastServiceEvent]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !missionSession || locationTracking.active) return;
+    if (nativeRecoveryAttemptRef.current && nativeRecoveryAttemptRef.current !== missionSession.id) return;
+    if (locationTracking.lastError !== "NATIVE_SERVICE_NOT_RUNNING" || locationTracking.lastServiceEvent !== "tracking_not_running") return;
+    if (locationTracking.sessionId && locationTracking.sessionId !== missionSession.id) return;
+    nativeRecoveryAttemptRef.current = null;
+    void endMissionSession();
+  }, [missionSession, locationTracking.active, locationTracking.lastError, locationTracking.lastServiceEvent, locationTracking.sessionId]);
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;

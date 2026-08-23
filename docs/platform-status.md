@@ -21,7 +21,7 @@ capabilities such as background location, notifications, display control, Blueto
 | BLE telemetry | Capacitor BLE boundary present | Plugin dependency present; CoreBluetooth behavior pending device validation | Future Windows Bluetooth adapter |
 | Core/Pi connectivity | Configurable LAN/hostname/Tailscale endpoint with shared connection/freshness model | Local-network privacy string prepared; shared endpoint validation path | Shared HTTP client path and status model |
 | Live overlay telemetry | Shared best-effort publisher; requires explicit Core endpoint/token and active Chase Mode | Shared publisher path; pending native iPhone/iPad Chase Tracking adapter and Core validation | Shared HTTP publisher path; future external GPS/source adapter |
-| Secure credentials | Android Keystore-backed credential plugin for Spotter, Pi/BLE, and overlay secrets | Shared boundary ready; Keychain adapter pending macOS/Xcode validation | Shared boundary ready; Credential Manager adapter deferred |
+| Secure credentials | Android Keystore-backed credential plugin for Spotter, Pi/BLE, and overlay secrets; encrypted credential prefs excluded from backup | Keychain adapter source implemented; macOS/Xcode/device runtime validation pending | Shared boundary ready; Credential Manager adapter deferred |
 | Chaser Net | Shared contracts/foundation; production backend deferred | Same shared contracts; backend deferred | Same shared contracts; backend deferred |
 | Native Level II radar | Deferred | Deferred | Deferred |
 
@@ -91,12 +91,15 @@ location tracking status and a platform-neutral HTTP contract; Android native tr
 behind its existing adapter.
 
 The app currently supports bounded polling/latest-state semantics through the contract documented in
-`docs/live-overlay-telemetry.md`. Production Core deployment, iOS/Windows native credential adapter
-validation, realtime WebSocket/SSE push, and overlay graphics remain future work.
+`docs/live-overlay-telemetry.md`. Production Core deployment, iOS Keychain runtime validation,
+Windows native credential adapter work, realtime WebSocket/SSE push, and overlay graphics remain
+future work.
 
 ## Secure Credential Notes
 
 The shared credential boundary is documented in `docs/credential-and-submission-hardening.md`.
-Android stores current sensitive app secrets through a Keystore-backed native plugin. Web preview
-uses a memory-only development fallback. iPhone/iPad Keychain and Windows Credential Manager
-runtime adapters remain future validation work and should not be represented as complete.
+Android stores current sensitive app secrets through a Keystore-backed native plugin and excludes
+the encrypted credential SharedPreferences file from backup/transfer. Web preview uses a
+memory-only development fallback. iPhone/iPad Keychain source is present, but native runtime
+acceptance remains pending on macOS with a device or simulator. Windows Credential Manager runtime
+adapter remains future work.

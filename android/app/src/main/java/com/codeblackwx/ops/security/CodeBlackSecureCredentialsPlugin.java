@@ -39,7 +39,10 @@ public class CodeBlackSecureCredentialsPlugin extends Plugin {
             return;
         }
         try {
-            getPrefs().edit().putString(key, encrypt(value)).apply();
+            if (!getPrefs().edit().putString(key, encrypt(value)).commit()) {
+                call.reject("Credential could not be stored securely.");
+                return;
+            }
             call.resolve();
         } catch (Exception ex) {
             call.reject("Credential could not be stored securely.");
@@ -75,8 +78,11 @@ public class CodeBlackSecureCredentialsPlugin extends Plugin {
             call.reject("Unknown credential key.");
             return;
         }
-        getPrefs().edit().remove(key).apply();
-        call.resolve();
+        if (getPrefs().edit().remove(key).commit()) {
+            call.resolve();
+        } else {
+            call.reject("Credential could not be removed securely.");
+        }
     }
 
     @PluginMethod

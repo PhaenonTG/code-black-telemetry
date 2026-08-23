@@ -79,13 +79,9 @@ function Save-Screenshot([string]$Name) {
 }
 
 function Assert-NoActiveChaseNotification {
-  $active = Run-Adb @("shell", "cmd", "notification", "list") | Select-String -Pattern "$PackageName|7319|codeblack_chase_tracking"
+  $active = Get-ActiveChaseNotificationLines
   if ($active) {
     throw "Active Chase notification still present: $active"
-  }
-  $getResult = Run-Adb @("shell", "cmd notification get '0|$PackageName|7319|null|10150'") 2>&1
-  if ($getResult -notmatch "no active notification") {
-    throw "Unexpected active notification get result: $getResult"
   }
 }
 
@@ -102,8 +98,15 @@ function Invoke-WebViewExpression([string]$Expression) {
 
 function Test-ChaseActive {
   $services = (Run-Adb @("shell", "dumpsys", "activity", "services", $PackageName)) -join "`n"
-  $notifications = (Run-Adb @("shell", "cmd", "notification", "list")) -join "`n"
-  ($services -match "ChaseTrackingService" -and $services -match "foregroundId=7319") -and ($notifications -match [regex]::Escape($PackageName) -and $notifications -match "7319")
+  ($services -match "ChaseTrackingService" -and $services -match "foregroundId=7319") -and [bool](Get-ActiveChaseNotificationLines)
+}
+
+function Get-ActiveChaseNotificationLines {
+  Run-Adb @("shell", "cmd", "notification", "list") |
+    Where-Object {
+      ($_ -match [regex]::Escape($PackageName) -and $_ -match "\b7319\b") -or
+      ($_ -match [regex]::Escape($PackageName) -and $_ -match "codeblack_chase_tracking")
+    }
 }
 
 function Wait-ChaseActive([int]$TimeoutSeconds = 20) {
@@ -113,6 +116,31 @@ function Wait-ChaseActive([int]$TimeoutSeconds = 20) {
     Start-Sleep -Seconds 1
   } while ((Get-Date) -lt $deadline)
   throw "Chase did not start foreground service and active notification."
+}
+
+function Test-WebViewChaseActiveText {
+  $state = Invoke-WebViewExpression @"
+(() => document.body.innerText.includes('CHASE ACTIVE') ? 'ACTIVE' : 'INACTIVE')()
+"@
+  $state -match "ACTIVE"
+}
+
+function Wait-ForceStopRecovery([int]$TimeoutSeconds = 30) {
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  do {
+    if (Test-WebViewChaseActiveText) {
+      if (Test-ChaseActive) {
+        return "recovered-active-service-notification"
+      }
+    } else {
+      Assert-NoChaseService
+      Assert-NoActiveChaseNotification
+      return "inactive-no-service-no-active-notification"
+    }
+    Start-Sleep -Seconds 1
+  } while ((Get-Date) -lt $deadline)
+
+  throw "Force-stop while active did not settle into inactive/no-service or active/service-restored state."
 }
 
 Require-Command adb
@@ -203,6 +231,31 @@ if ($startResult -notmatch "CHASE_ACTIVE") {
 }
 Wait-ChaseActive
 $summary.chase.started = $true
+
+Run-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
+Start-Sleep -Seconds 5
+Assert-NoChaseService
+Assert-NoActiveChaseNotification
+Run-Adb @("shell", "monkey", "-p", $PackageName, "-c", "android.intent.category.LAUNCHER", "1") | Out-Null
+Start-Sleep -Seconds 3
+$summary.chase.forceStopWhileActive = Wait-ForceStopRecovery
+if ($summary.chase.forceStopWhileActive -eq "inactive-no-service-no-active-notification") {
+  $startResult = Invoke-WebViewExpression @"
+  (async () => {
+    document.querySelector('[data-testid="dock-settings"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const start = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'START' && !button.disabled);
+    if (!start) return 'START_NOT_FOUND_AFTER_FORCE_STOP';
+    start.click();
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    return document.body.innerText.includes('CHASE ACTIVE') ? 'CHASE_ACTIVE' : document.body.innerText.slice(0, 200);
+  })()
+"@
+  if ($startResult -notmatch "CHASE_ACTIVE") {
+    throw "WebView Start Chase after force-stop did not enter active state: $startResult"
+  }
+  Wait-ChaseActive
+}
 
 $xml = Get-UiXml
 Tap-Node -Xml $xml -Pattern "Locate" -PreferBottom

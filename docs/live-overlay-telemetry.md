@@ -26,8 +26,8 @@ Required configuration:
 If enabled without those values, the UI reports `NOT CONFIGURED`. The station token is a secret and
 uses the shared credential boundary:
 
-- Android: Keystore-backed encrypted credential storage
-- iPhone/iPad: Keychain adapter pending macOS/Xcode runtime validation
+- Android: Keystore-backed encrypted credential storage with credential prefs excluded from backup
+- iPhone/iPad: Keychain adapter source implemented; macOS/Xcode/device runtime validation pending
 - Windows: Credential Manager adapter deferred
 - Web/dev preview: memory-only fallback, not persistent
 
@@ -133,7 +133,7 @@ Overlay publish failures are isolated:
 ## Deferred
 
 - Production Core deployment and route mounting
-- iOS/Windows native secure credential runtime validation
+- iOS Keychain runtime validation and Windows native secure credential adapter work
 - overlay frontend graphics
 - WebSocket/SSE push
 - fleet management UI
