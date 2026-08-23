@@ -4,6 +4,67 @@ All changes logged newest-first.
 
 ---
 
+## Flagship Phone Visual Polish - 2026-08-23
+
+First intentionally visible UI polish pass on top of the CSS foundation work. See
+`docs/UI_POLISH_RECOMMENDATIONS.md` for the full route-by-route review, before/after screenshot
+comparison, and recommendations kept out of this pass.
+
+### Changed
+- Flattened the shared `.cb-panel` surface (used by nearly every card in the app) -- replaced
+  chamfered corners, a triple-layer box-shadow, and an always-on red top wash with a plain rounded
+  corner, one soft inset highlight, and red reserved for panels actually flagged `--red`/`--spc`.
+- Trimmed the phone header height (~10%) and hid the "Situational Awareness" subtitle on phone,
+  where it repeated the brand identity already established on every screen.
+- Home: radar module is now sized as a real visual anchor (240px+ tall, full-bleed map); Chase/
+  Alerts/System modules shrink when there's nothing to report. Module order/visibility stays fully
+  user-controlled -- only each module's own visual weight changed.
+- Weather: Temp (WeatherObservationPanel) and Speed (WindCard) now render as a hero number via a
+  new `MetricTile` `hero` prop, instead of four/three equally-sized tiles.
+- Operations: added a "Field Status" summary panel (GPS/Core-Pi/Telemetry/Overlay in one glanceable
+  list, an unavailable-count line) above the existing detailed cards, built entirely from data
+  `App.tsx` already computes.
+- Weather's phone-only Sensor/System/Streaming panels are visually quieted (smaller, dimmer
+  titles) rather than removed -- same data is also on Home and Operations.
+- Bottom dock and More-page rows given a calmer, flatter treatment; dock active-tab is now a filled
+  rounded pill instead of a bare border.
+- Fixed a real bug: the Operations "Operational Mode" and "Mission Streaming" panel titles were
+  showing two icons side by side (a leftover CSS rule assumed they didn't already render one via
+  the shared `<Panel>` component).
+
+### Fixed
+- Map, landscape orientation: the toolbar (NORTH/CLEAR TRAIL/MOSAIC/LAYERS) no longer overlaps the
+  fullscreen-expand button on short viewports -- the toolbar now caps its own height and scrolls
+  internally instead.
+- Map: the Layers popover no longer sits behind/under ESCAPE's tap zone -- lifted above ESCAPE's
+  full height rather than relying on a percentage max-height that (measured on-device) had no
+  effect since its positioned ancestor has no definite height.
+- Map: camera/pin popups now pick their anchor and width from the actual room available on the map
+  card (a phone-width card can be as narrow as 312px, not the full device width), instead of always
+  requesting ~240px and letting Mapbox's anchor auto-detection run off whichever edge had less
+  room. Verified correct by direct on-device measurement of the failure case (marker at
+  container-relative x=191 in a 312px-wide card); full on-device screenshot confirmation of a
+  clicked popup was not obtained this pass (see Known Issues below).
+
+### Added
+- QA-only `window.__codeblackDebugJumpToCamera()` hook in `AtlasMap.tsx` is now scoped to the
+  primary (non-compact) map instance only -- Home's radar module and Weather's compact map also
+  mount `AtlasMap` and were racing to register the same window function.
+- `scripts/s24-ui-screenshot-baseline.ps1`: the camera-detail capture step now retries (3 attempts)
+  and skips gracefully (noted in the manifest) instead of aborting the entire run if a real
+  un-clustered camera marker doesn't come into view in time.
+
+### Known Issues (see docs/UI_POLISH_RECOMMENDATIONS.md for detail)
+- Camera popup placement fix could not be given a final on-device screenshot confirmation this
+  pass -- live provider marker clustering made scripted reproduction of the exact edge-case
+  unreliable across repeated attempts, independent of multiple map instances now correctly scoped.
+- One S24 hardware walkthrough step (`force-stop-while-active`) failed during this pass's
+  validation. Confirmed via isolation testing (same failure reproduces identically on an unmodified
+  master build, and survives a full device reboot) that this is a pre-existing, environment/device
+  condition unrelated to any change in this pass, not a regression.
+
+---
+
 ## CSS Foundation / Screenshot Baseline Repair - 2026-08-23
 
 Controlled UI foundation pass following the phone Home/Map/Layers structure work: repaired the

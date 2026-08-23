@@ -126,24 +126,30 @@ connecting the S24:
 
 ```powershell
 npm run android:debug
-powershell -ExecutionPolicy Bypass -File scripts\s24-ui-screenshot-baseline.ps1 -DeviceSerial RFCWC0D36KV
+powershell -ExecutionPolicy Bypass -File scripts\s24-ui-screenshot-baseline.ps1 -DeviceSerial RFCWC0D36KV -OutDir artifacts/ui-review/<pass-name>
 ```
 
-It captures 15 named screenshots under `artifacts/ui-review/s24-ui-foundation/` plus a
-`screenshot-manifest.json` recording, per file, the route/state, the selector that was verified
-before capture, a timestamp, and whether the content is live-provider or fixture-driven. Every
-capture asserts its target state against the live WebView DOM (route active, a dialog/popover
-present, a specific CSS class applied) before taking the screenshot -- it never uses a fixed delay
-as its readiness signal, which is what let a prior ad hoc capture pass silently mislabel 6 of its
-10 screenshots (e.g. two files both actually showing Settings, and four files that were all the
-same Expanded Radar crop).
+`-OutDir` defaults to `artifacts/ui-review/s24-ui-foundation`; pass a different path per baseline
+(e.g. `artifacts/ui-review/s24-flagship-polish`) to keep before/after sets side by side instead of
+overwriting the prior baseline.
+
+It captures 15 named screenshots plus a `screenshot-manifest.json` recording, per file, the
+route/state, the selector that was verified before capture, a timestamp, and whether the content is
+live-provider or fixture-driven. Every capture asserts its target state against the live WebView
+DOM (route active, a dialog/popover present, a specific CSS class applied) before taking the
+screenshot -- it never uses a fixed delay as its readiness signal, which is what let a prior ad hoc
+capture pass silently mislabel 6 of its 10 screenshots (e.g. two files both actually showing
+Settings, and four files that were all the same Expanded Radar crop).
 
 The camera-detail capture (`07-camera-detail.png`) is real live provider data: the script enables
 the Public Cameras layer, calls a QA-only `window.__codeblackDebugJumpToCamera()` hook (added to
 `AtlasMap.tsx`, not used anywhere in normal app UI) to center the map on a real, already-loaded
 Arkansas DOT IDrive camera's coordinates, then clicks whichever real camera marker that jump
 brought into view. The camera, its coordinates, and its image are never fabricated -- only the
-choice of *which* already-live camera to center on is scripted.
+choice of *which* already-live camera to center on is scripted. This step retries up to 3 times
+(live-provider clustering near the jumped-to coordinates isn't fully deterministic) and skips
+gracefully -- noted as `"routeState": "SKIPPED"` in the manifest, run continues -- rather than
+aborting the whole baseline if no un-clustered marker comes into view in time.
 
 Manual review still matters: after any run, open all 15 images and confirm each one actually shows
 what its filename and the manifest claim before treating it as a trustworthy design review input.

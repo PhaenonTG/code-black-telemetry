@@ -1,8 +1,43 @@
 # CSS / Design-System Notes
 
-Working notes from the 2026-08-23 CSS foundation pass. `src/index.css` is a single ~9,600-line
-stylesheet; this documents what's canonical now, what was cleaned up, and what's still real debt
-so a future pass doesn't have to re-derive it from scratch.
+Working notes from the 2026-08-23 CSS foundation pass, extended by the same-day flagship phone
+visual polish pass. `src/index.css` is a single ~9,600-line stylesheet; this documents what's
+canonical now, what was cleaned up, and what's still real debt so a future pass doesn't have to
+re-derive it from scratch.
+
+## Shared surface language (`.cb-panel`)
+
+`.cb-panel` (used by nearly every card in the app, directly or via the shared `<Panel>` component)
+had three superseded definitions layered in this file, each heavier than the last: a plain
+bordered box, then one adding `clip-path` chamfered corners and a red-tinted `::before` wash, then
+one adding a radial highlight and a three-layer box-shadow on top of that. The winning (heaviest)
+version was confirmed visible on real hardware -- the chamfer is subtle at this radius but real,
+and the always-on red wash meant every panel had a faint red tint regardless of whether it meant
+anything.
+
+A final override block (end of `src/index.css`, "FLAGSHIP PHONE VISUAL POLISH") replaces this with
+one flat rounded corner (`var(--cb-radius)`), a single soft inset highlight, and no `::before` wash
+except on `--red`/`--spc`-toned panels (a left border bar only, no glow). The three earlier
+generations were left in place rather than deleted -- the override wins on source order and every
+property it touches is `!important`, so deleting them was not required to get a clean, verified
+result, and it kept this pass's diff scoped to what was actually visually verified rather than
+re-opening the same full-file archaeology the CSS foundation pass already did once.
+
+## Home module visual weight
+
+`.home-module--radar` now gets real anchor treatment (240px+ min-height, matching map). Chase/
+Alerts/System modules get a smaller min-height when not in their "expanded" size, so a quiet Chase/
+Alerts state reads as quiet, not the same visual weight as an active one. This is presentation
+only -- `HomeOverviewPage.tsx`'s module order, visibility, and size preferences are untouched and
+remain fully user-controlled per module.
+
+## Weather hero metric
+
+`MetricTile` (`Panel.tsx`) gained an optional `hero` prop, applied only to Temp
+(`WeatherObservationPanel`) and Speed (`WindCard`). This is additive, not a rewrite of the
+`.metric-tile` cascade documented below -- deliberately, since that cascade is exactly as
+fragmented as `.bottom-dock` was (see below) and fighting it directly was out of scope for a
+polish pass.
 
 ## Canonical token system
 
@@ -46,6 +81,45 @@ each *property* independently. `getComputedStyle()` alone is necessary but not s
 it tells you the final value, not why it's dead code waiting to matter again the next time someone
 edits a neighboring rule.
 
+## Percentage `max-height` on an absolutely-positioned popover: doesn't do what it looks like
+
+While fixing the Layers popover/ESCAPE collision (map, phone), the first attempt set
+`.atlas-layers-popover { max-height: calc(100% - 76px) }`. Measured on-device, this had **zero**
+effect -- the popover's actual rendered height (295px) was already under the cap. The popover is
+`position: absolute` with no explicit height on its containing block, and CSS resolves a percentage
+`max-height` against the containing block's own height *only if that height is definite* -- against
+an `auto`-height ancestor, a percentage max-height computes to `none`. The fix used `min(58dvh,
+420px)` instead (viewport-relative, not containing-block-relative), and separately raised the
+popover's own `bottom` offset above ESCAPE's height, since the real conflict turned out to be
+vertical position (both bottom-anchored in the same strip), not height. Lesson for next time:
+percentage sizing on an absolutely-positioned element needs the containing block's own height
+verified as definite before trusting it to do anything.
+
+## `MetricTile`/`.metric-tile`: same fragmentation pattern as `.bottom-dock`
+
+Discovered while adding the Weather hero-metric treatment: `.metric-tile` and its size-scoped
+descendants (`.cockpit-primary .metric-tile strong`, `.cockpit-primary--conditions .metric-tile
+strong`, `.wx-panel .metric-tile strong`, etc.) are defined across roughly a dozen locations in
+`index.css`, the same "many generations, later-wins" pattern documented for `.bottom-dock` and
+`.cb-panel` above. There's even an existing but ineffective `.cockpit-primary--conditions
+.metric-tile--temp strong` rule that suggests someone already attempted a hero-temp treatment once
+and it got buried under later, equal-sized rules. This pass did not attempt to untangle it -- the
+new `hero` prop and `.metric-tile--hero` class are additive and placed in the final override
+section, which reliably wins on source order without needing to touch the existing rules. A future
+full `.metric-tile` consolidation would follow the same live-cascade-verification method as
+`.bottom-dock`, and is a reasonable candidate for the same kind of dedicated pass.
+
+## Debug/QA hooks and multiple mounted map instances
+
+`AtlasMap` can be mounted 2-3 times simultaneously on phone (Home's radar module in `compact`
+mode, Weather's compact map, and the primary Map-page instance in `full` mode -- the swipeable
+pager keeps every page alive, per the comment on `AtlasMapProps.active`). Any `window.*` debug
+hook registered from inside `AtlasMap`'s render body needs an explicit guard (this pass added
+`if (compact) return;` to `window.__codeblackDebugJumpToCamera`'s effect) or whichever instance's
+effect runs last silently wins the shared global, regardless of which map a test script actually
+intends to control. This cost real debugging time this pass (see
+`docs/UI_POLISH_RECOMMENDATIONS.md`'s camera-detail note) before being traced to its root cause.
+
 ## `.bottom-dock`: real duplication, deliberately not fully rewritten this pass
 
 `.bottom-dock` is touched by roughly 50 separate rule fragments across `index.css`'s ~51 media
@@ -67,6 +141,11 @@ breakpoint's actual rendered spacing/sizing silently changes. That's a full pass
 "low-risk, narrow-scope" edit, and `.bottom-dock` is the one component that's on every screen in a
 moving vehicle -- the wrong place to rush. Recommended as its own dedicated follow-up pass, using
 the same methodology documented above.
+
+**2026-08-23 update:** the flagship-polish pass added one more phone-portrait final-override block
+codifying the live-cascade-verified ground truth (5-column grid, height/padding/gap) that was
+already rendering, plus a calmer filled-pill active-tab treatment -- a safety/consolidation step,
+not the full rewrite described above, which remains open.
 
 ## Other confirmed-dead code found but not touched
 

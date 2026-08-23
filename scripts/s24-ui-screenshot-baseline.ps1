@@ -281,7 +281,15 @@ try {
 (() => { document.querySelector('[data-testid="atlas-map-layers-close-primary"]')?.click(); return 'OK'; })()
 "@ | Out-Null
   Start-Sleep -Milliseconds 800
-  $jumpResult = Invoke-WebViewExpression @"
+  # Camera marker visibility depends on live provider clustering at the jumped-to coordinates,
+  # which isn't fully deterministic (a camera-dense area can cluster the very marker just jumped
+  # to). Retried rather than one-shot; if it still can't find a real un-clustered marker after a
+  # few tries, this one capture is skipped (noted in the manifest) instead of aborting the whole
+  # baseline run over one best-effort screenshot.
+  $cameraFound = $false
+  $mediaState = "unknown"
+  for ($attempt = 1; $attempt -le 3 -and -not $cameraFound; $attempt++) {
+    $jumpResult = Invoke-WebViewExpression @"
 (() => {
   const fn = window.__codeblackDebugJumpToCamera;
   if (typeof fn !== 'function') return 'HOOK_NOT_FOUND';
@@ -289,10 +297,9 @@ try {
   return JSON.stringify(r);
 })()
 "@
-  if ($jumpResult -notmatch '"ok":true') { throw "Camera jump hook did not report a live camera: $jumpResult" }
-  Write-Host "Camera jump: $jumpResult"
-  Start-Sleep -Seconds 2
-  $clickResult = Invoke-WebViewExpression @"
+    Write-Host "Camera jump attempt ${attempt}: $jumpResult"
+    Start-Sleep -Seconds 3
+    $clickResult = Invoke-WebViewExpression @"
 (() => {
   const cams = [...document.querySelectorAll('.atlas-pin-marker--camera')];
   const nonCluster = cams.filter(el => !el.classList.contains('atlas-pin-marker--cluster'));
@@ -304,17 +311,39 @@ try {
   return 'CLICKED';
 })()
 "@
-  if ($clickResult -notmatch "CLICKED") { throw "No un-clustered live camera marker was in view after the jump: $clickResult" }
-  $cameraPopupExpr = @"
+    if ($clickResult -match "CLICKED") {
+      $cameraPopupExpr = @"
 (() => document.querySelector('[data-camera-media-state]') ? 'TRUE' : 'FALSE')()
 "@
-  Wait-Until "camera popup with media state visible" { Test-JsCondition $cameraPopupExpr } 6 300
-  $mediaStateExpr = @"
+      try {
+        Wait-Until "camera popup with media state visible" { Test-JsCondition $cameraPopupExpr } 6 300
+        $cameraFound = $true
+      } catch {
+        Write-Host "Popup did not open after click on attempt ${attempt}: $($_.Exception.Message)"
+      }
+    } else {
+      Write-Host "Attempt ${attempt}: $clickResult"
+    }
+  }
+  if ($cameraFound) {
+    $mediaStateExpr = @"
 (() => document.querySelector('[data-camera-media-state]')?.dataset.cameraMediaState || 'unknown')()
 "@
-  $mediaState = (Invoke-WebViewExpression $mediaStateExpr).Trim()
-  Capture-Entry "07-camera-detail" "route-map, real camera popup open (media state: $mediaState)" '[data-camera-media-state]' "live" "LIVE PROVIDER -- real Arkansas DOT IDrive camera, selected deterministically via a QA-only jump hook (window.__codeblackDebugJumpToCamera in AtlasMap.tsx) that centers the map on a real, already-loaded camera's coordinates; no camera or image data is fabricated."
-  Close-AnyOpenOverlay
+    $mediaState = (Invoke-WebViewExpression $mediaStateExpr).Trim()
+    Capture-Entry "07-camera-detail" "route-map, real camera popup open (media state: $mediaState)" '[data-camera-media-state]' "live" "LIVE PROVIDER -- real Arkansas DOT IDrive camera, selected deterministically via a QA-only jump hook (window.__codeblackDebugJumpToCamera in AtlasMap.tsx) that centers the map on a real, already-loaded camera's coordinates; no camera or image data is fabricated."
+    Close-AnyOpenOverlay
+  } else {
+    Write-Host "SKIPPED 07-camera-detail: no un-clustered live camera marker came into view after 3 attempts."
+    $script:manifest += [ordered]@{
+      filename = "07-camera-detail.png"
+      routeState = "SKIPPED"
+      selectorVerified = "n/a"
+      captureTimestamp = (Get-Date).ToString("o")
+      liveOrFixture = "n/a"
+      notes = "Could not deterministically bring an un-clustered live camera marker into view after 3 attempts this run. Not captured -- no fallback/fake image was substituted."
+      path = $null
+    }
+  }
 
   # 08: Weather
   Go-ToRoute "weather"
