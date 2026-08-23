@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import shield from './assets/codeblack-shield.png'
-import fieldVehicle from './assets/field-vehicle-web.jpg'
 
 const NAV = [
   ['Home', 'home'],
@@ -156,10 +155,6 @@ function Team() {
           <p className="section-kicker">FIELD + REMOTE</p>
           <h2>One mission. Two sides of the operation.</h2>
           <p>Code Black WX combines on-scene storm chasing with remote monitoring, live telemetry, and producer support so information moves from the field to the people who need it.</p>
-          <div className="team-photo">
-            <img src={fieldVehicle} alt="Code Black WX field vehicle, equipped for storm chasing" loading="lazy" />
-            <span>Field vehicle, equipped for chase operations</span>
-          </div>
         </div>
         <div className="team-rail">
           <article><div className="rail-icon"><Icon name="radio"/></div><div><span>FIELD TEAM</span><strong>Storm Chasing</strong><p>Observation, live video, spotter reporting, and intercept operations.</p></div></article>
