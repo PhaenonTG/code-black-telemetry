@@ -27,6 +27,7 @@ const roadCameraProviders = await importTs("src/services/roadCameraProviders.ts"
 const liveOverlayTelemetry = await importTs("src/services/liveOverlayTelemetryModel.ts");
 const credentialSecurity = await importTs("src/services/credentialSecurity.ts");
 const spotterSubmissionPolicy = await importTs("src/services/spotterSubmissionPolicy.ts");
+const telemetryMeasurement = await importTs("src/services/telemetry/measurement.ts");
 
 const appSource = await readFile("src/App.tsx", "utf8");
 assert.match(
@@ -464,6 +465,28 @@ const duplicateLedger = spotterSubmissionPolicy.upsertSpotterSubmissionLedger(su
 assert.equal(duplicateLedger.entries[0].state, "ALREADY_SUBMITTED");
 assert.equal(/submitSevereReport/.test(await readFile("src/services/markEvents.ts", "utf8")), false);
 assert.equal(/submitSevereReport/.test(await readFile("src/services/chaserNet.ts", "utf8")), false);
+
+const telemetryNow = 1_800_000;
+assert.equal(telemetryMeasurement.createMeasurement({ value: 0, timestamp: telemetryNow, source: "vehicle", now: telemetryNow }).quality, "VALID");
+assert.equal(telemetryMeasurement.createMeasurement({ value: null, timestamp: telemetryNow, source: "vehicle", now: telemetryNow }).quality, "MISSING");
+assert.equal(
+  telemetryMeasurement.createMeasurement({ value: 12.4, timestamp: telemetryNow - 240_000, source: "vehicle", now: telemetryNow }).quality,
+  "STALE",
+);
+assert.equal(telemetryMeasurement.createMeasurement({ value: Number.NaN, timestamp: telemetryNow, source: "vehicle", now: telemetryNow }).quality, "INVALID");
+assert.equal(telemetryMeasurement.measurementQuality(72, 0, telemetryNow), "MISSING");
+
+const telemetryTypesSource = await readFile("src/services/telemetry/types.ts", "utf8");
+assert.match(telemetryTypesSource, /mainBatteryV: number \| null;/, "Vehicle power voltage must be nullable, not default-zero");
+assert.match(telemetryTypesSource, /cpuPercent: number \| null;/, "Pi CPU percent must be nullable, not default-zero");
+const telemetryApiSource = await readFile("src/services/telemetry/api-provider.ts", "utf8");
+assert.match(telemetryApiSource, /function unavailablePower\(\): PowerData \{\s*return \{ mainBatteryV: null, auxBatteryV: null, charging: null/, "Unavailable power must not render as zero volts");
+assert.match(telemetryApiSource, /function unavailableSystem\(\): SystemData \{\s*return \{ cpuPercent: null, ramPercent: null, storagePercent: null, uptimeSeconds: null/, "Unavailable Pi system metrics must not render as zero");
+assert.match(telemetryApiSource, /weather: hasWeatherData[\s\S]*?tempF: weatherTemp,[\s\S]*?humidity: weatherHumidity,[\s\S]*?: fallback\.weather/, "Partial weather packets must not inherit missing fields as fresh values");
+assert.match(telemetryApiSource, /speedMph: readNumberInRange\(gpsRaw,[\s\S]*?0, 500\),[\s\S]*?headingDeg: readNumberInRange\(gpsRaw,[\s\S]*?0, 360\),/, "GPS speed zero must be valid while missing heading remains null");
+assert.match(telemetryApiSource, /__CODEBLACK_TEST_SET_TELEMETRY__/, "Rendered walkthroughs need deterministic telemetry state injection in dev only");
+const situationalHookSource = await readFile("src/hooks/useSituationalData.ts", "utf8");
+assert.match(situationalHookSource, /if \(lat == null \|\| lon == null\) \{\s*setExternal\(null\);/, "External weather fallback must clear when GPS/location becomes unavailable");
 
 const spotterAccountSource = await readFile("src/services/spotterAccount.ts", "utf8");
 assert.match(

@@ -4,6 +4,31 @@ All changes logged newest-first.
 
 ---
 
+## Telemetry and Weather Data Integrity - 2026-08-22
+
+Closed the audit findings around default-zero telemetry and weather freshness without adding new
+weather products or hardware features.
+
+### Changed
+- Added a normalized measurement contract for valid, aging, stale, missing, invalid, and unavailable
+  Weather/Telemetry values.
+- Changed Pi power/system telemetry fields to allow `null` so missing data cannot render as `0 V`,
+  `0%`, or `0h 0m`.
+- Hardened telemetry normalization so partial packets keep missing fields unavailable instead of
+  inheriting old values as fresh.
+- Added range-aware parsing for GPS, wind, weather, power, and Pi system fields while preserving
+  valid physical zeros.
+- Cleared stale external weather/locality fallback when the current GPS/location becomes
+  unavailable.
+- Added deterministic rendered walkthrough coverage for valid-zero and missing Weather/Telemetry
+  states.
+
+### Validation Notes
+- Physical S24 QA validates the app surfaces and Chase regression; real vehicle Pi/ESP hardware was
+  not available in this repo and remains a separate field-node validation step.
+
+---
+
 ## Credential Hardening Completion - 2026-08-22
 
 Closed the remaining credential/security audit findings without adding new product features.

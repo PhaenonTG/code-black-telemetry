@@ -44,18 +44,18 @@ export interface SensorHealth {
 }
 
 export interface PowerData {
-  mainBatteryV: number;
-  auxBatteryV: number;
-  charging: boolean;
+  mainBatteryV: number | null;
+  auxBatteryV: number | null;
+  charging: boolean | null;
   source: TelemetrySource;
   updatedAt: number;
 }
 
 export interface SystemData {
-  cpuPercent: number;
-  ramPercent: number;
-  storagePercent: number;
-  uptimeSeconds: number;
+  cpuPercent: number | null;
+  ramPercent: number | null;
+  storagePercent: number | null;
+  uptimeSeconds: number | null;
   source: TelemetrySource;
   updatedAt: number;
 }

@@ -148,12 +148,12 @@ export class SimulatorProvider implements TelemetryProvider {
     const sats     = clamp(Math.round((s.gps.satellites ?? 8) + (Math.random() > 0.9 ? (Math.random() > 0.5 ? 1 : -1) : 0)), 4, 12);
 
     // System
-    const cpu = walk(s.system.cpuPercent, 3, 5, 95);
-    const ram = walk(s.system.ramPercent, 1, 20, 90);
+    const cpu = walk(s.system.cpuPercent ?? 18, 3, 5, 95);
+    const ram = walk(s.system.ramPercent ?? 34, 1, 20, 90);
 
     // Battery — very slow drift
-    const mainV = clamp(s.power.mainBatteryV + (Math.random() - 0.5) * 0.02, 11.8, 14.4);
-    const auxV  = clamp(s.power.auxBatteryV  + (Math.random() - 0.5) * 0.02, 11.6, 14.2);
+    const mainV = clamp((s.power.mainBatteryV ?? 12.6) + (Math.random() - 0.5) * 0.02, 11.8, 14.4);
+    const auxV  = clamp((s.power.auxBatteryV ?? 12.4) + (Math.random() - 0.5) * 0.02, 11.6, 14.2);
 
     // API latency
     const latency = clamp(Math.round(s.status.apiLatencyMs + (Math.random() - 0.5) * 8), 2, 200);
@@ -184,7 +184,7 @@ export class SimulatorProvider implements TelemetryProvider {
       gps: { ...s.gps, speedMph: gpsSpeed, headingDeg: gpsHead, headingCardinal: cardinalFromDeg(gpsHead), satellites: sats, hasFix: sats >= 4, lat: s.gps.lat, lon: s.gps.lon, updatedAt: now },
       sensors,
       power: { mainBatteryV: mainV, auxBatteryV: auxV, charging: mainV > 13.5, source: "simulator", updatedAt: now },
-      system: { cpuPercent: cpu, ramPercent: ram, storagePercent: s.system.storagePercent, uptimeSeconds: s.system.uptimeSeconds + 1, source: "simulator", updatedAt: now },
+      system: { cpuPercent: cpu, ramPercent: ram, storagePercent: s.system.storagePercent, uptimeSeconds: (s.system.uptimeSeconds ?? 0) + 1, source: "simulator", updatedAt: now },
       status: {
         apiLatencyMs: latency,
         dataAgeSeconds: 0,

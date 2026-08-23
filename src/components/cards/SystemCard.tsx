@@ -23,6 +23,10 @@ export const SystemCard = memo(function SystemCard({ className }: { className?: 
   if (!sys) return null;
   const known = sys.source !== "unavailable";
   const live = status?.piOnline ?? false;
+  const cpuKnown = known && sys.cpuPercent !== null;
+  const ramKnown = known && sys.ramPercent !== null;
+  const storageKnown = known && sys.storagePercent !== null;
+  const uptimeKnown = known && sys.uptimeSeconds !== null;
 
   return (
     <DashCard title="Pi System" className={className}>
@@ -31,10 +35,10 @@ export const SystemCard = memo(function SystemCard({ className }: { className?: 
           {known ? `LAST KNOWN · ${ageLabel(sys.updatedAt)}` : "NO DATA EVER RECEIVED"}
         </SourceBadge>
       )}
-      <MetricRow label="CPU"     value={known ? `${sys.cpuPercent.toFixed(0)}%` : "--"}     status={known ? pctStatus(sys.cpuPercent) : "muted"} />
-      <MetricRow label="RAM"     value={known ? `${sys.ramPercent.toFixed(0)}%` : "--"}     status={known ? pctStatus(sys.ramPercent) : "muted"} />
-      <MetricRow label="Storage" value={known ? `${sys.storagePercent.toFixed(0)}%` : "--"} status={known ? pctStatus(sys.storagePercent) : "muted"} />
-      <MetricRow label="Uptime"  value={known ? uptime(sys.uptimeSeconds) : "--"} status="muted" />
+      <MetricRow label="CPU" value={cpuKnown ? `${sys.cpuPercent!.toFixed(0)}%` : "--"} status={cpuKnown ? pctStatus(sys.cpuPercent!) : "muted"} />
+      <MetricRow label="RAM" value={ramKnown ? `${sys.ramPercent!.toFixed(0)}%` : "--"} status={ramKnown ? pctStatus(sys.ramPercent!) : "muted"} />
+      <MetricRow label="Storage" value={storageKnown ? `${sys.storagePercent!.toFixed(0)}%` : "--"} status={storageKnown ? pctStatus(sys.storagePercent!) : "muted"} />
+      <MetricRow label="Uptime" value={uptimeKnown ? uptime(sys.uptimeSeconds!) : "--"} status="muted" />
     </DashCard>
   );
 });
