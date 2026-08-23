@@ -3133,10 +3133,6 @@ button {
   .map-panel { grid-area: map; min-height: 42dvh; }
   .nearby-panel { grid-area: threats; }
 
-  .bottom-dock {
-    grid-template-columns: repeat(5, 1fr);
-  }
-
   .dock-signature {
     display: none;
   }
@@ -4270,11 +4266,6 @@ body {
   .diagnostics-panel,
   .endpoint-panel {
     grid-column: auto;
-  }
-
-  .bottom-dock {
-    grid-template-columns: repeat(5, 1fr);
-    width: min(1080px, calc(100vw - 24px));
   }
 
   .dock-signature {
@@ -6957,12 +6948,6 @@ body {
     display: none !important;
   }
 
-  .bottom-dock {
-    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-    gap: 6px !important;
-    padding: 7px !important;
-  }
-
   .bottom-dock button {
     grid-template-columns: minmax(0, 1fr) !important;
     justify-items: center !important;
@@ -7185,15 +7170,17 @@ body {
   }
 
   .bottom-dock {
+    /* padding/grid-template-columns/gap used to be set here too -- removed as confirmed dead:
+       later same-condition rules (search this file for the final phone-portrait .bottom-dock
+       override) always win those three properties, and the repeat(7, ...) column count was wrong
+       besides (this dock has had 5 buttons since the earlier nav restructure). Everything below
+       is still live. */
     align-self: stretch !important;
     justify-self: stretch !important;
     width: 100% !important;
     height: 100% !important;
     max-width: none !important;
     margin: 0 !important;
-    padding: 4px 8px max(4px, env(safe-area-inset-bottom)) !important;
-    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-    gap: 5px !important;
     border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
   }
 
@@ -7281,7 +7268,10 @@ body {
 
   .page-grid--weather .wx-panel .cockpit-primary--conditions-full .metric-tile,
   .page-grid--weather .metric-tile {
-    min-height: 62px !important;
+    /* min-height was 62px !important here; a later same-condition rule (search this file for
+       "min-height: 52px !important" under the same max-aspect-ratio:13/10 query) always wins that
+       property, so 62px never actually applied -- removed rather than left as misleading dead
+       weight. Padding here is still live. */
     padding: 8px 8px 8px 28px !important;
   }
 
@@ -7542,11 +7532,6 @@ body {
   .status-cluster {
     gap: 7px !important;
     font-size: clamp(8px, 2.15vw, 10px) !important;
-  }
-
-  .bottom-dock {
-    padding: 3px 8px max(3px, env(safe-area-inset-bottom)) !important;
-    gap: 4px !important;
   }
 
   .bottom-dock button {
@@ -8118,10 +8103,6 @@ body {
 
   .page {
     padding: 8px 12px max(8px, env(safe-area-inset-bottom)) !important;
-  }
-
-  .bottom-dock {
-    padding: 3px 7px max(3px, env(safe-area-inset-bottom)) !important;
   }
 
   .bottom-dock button {
@@ -9293,6 +9274,13 @@ body {
   text-transform: uppercase;
 }
 
+/* Was a 2-child space-between (label left, state right); the chevron is a 3rd child now, so the
+   label alone gets pushed left via margin instead, keeping state+chevron together on the right
+   exactly where the state badge used to sit alone. */
+.home-module__head > span:first-child {
+  margin-right: auto;
+}
+
 .home-module__head strong {
   color: var(--cb-amber);
   text-align: right;
@@ -9889,4 +9877,50 @@ body {
 
 .atlas-pin-popup__details {
   max-width: 100% !important;
+}
+
+/* ==========================================================================
+   HOME DIRECT-ACTION — 2026-08-23
+   Removes the separate "Open ___" button per module -- the module itself is
+   now the navigation target (see HomeOverviewPage.tsx moduleNavProps). This
+   only styles the affordance/interaction states; role="button" is omitted
+   entirely (not just disabled) while Home Customize is active, so these
+   rules simply don't apply then -- no separate "disabled" look needed.
+   ========================================================================== */
+.home-module[role="button"] {
+  cursor: pointer;
+  transition: background-color var(--cb-fast, 160ms) ease, border-color var(--cb-fast, 160ms) ease;
+}
+
+.home-module[role="button"]:active {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.home-module[role="button"]:focus-visible {
+  outline: 2px solid rgba(255, 45, 53, 0.55);
+  outline-offset: 2px;
+}
+
+/* Restrained affordance: a small chevron in the header, not a colored border or a full-card glow --
+   only rendered on modules that are actually navigable right now (role="button" present). */
+.home-module__chevron {
+  display: none;
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  margin-left: 4px;
+  border-top: 1.5px solid var(--muted);
+  border-right: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+  opacity: 0.6;
+}
+
+.home-module[role="button"] .home-module__chevron {
+  display: inline-block;
+}
+
+/* The embedded radar preview map should never look like it's "inside a button" -- no pointer
+   cursor bleed from the parent, and its own hit area stays exactly its own bounds. */
+.home-module__map {
+  cursor: auto;
 }

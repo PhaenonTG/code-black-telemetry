@@ -244,8 +244,42 @@ test("home modules render, customize, reorder, and navigate", async ({ page }) =
   await page.locator(".cb-splash").waitFor({ state: "hidden", timeout: 12_000 }).catch(() => undefined);
   await dismissSpotterPrompt(page);
   await expect(page.getByTestId("home-module-alerts")).toHaveCount(0);
-  await page.getByTestId("home-module-radar").getByRole("button", { name: /open map/i }).click();
+
+  // Whole-module direct action: no more separate "Open ___" button per module (see
+  // HomeOverviewPage.tsx moduleNavProps). Clicking the module's header -- not its body -- for the
+  // radar module specifically, since the body is a real interactive map that intentionally stops
+  // its own clicks from bubbling up to the module's navigate action.
+  await page.getByTestId("home-module-radar").locator(".home-module__head").click();
   await expect(page).toHaveURL(/\/map$/);
+});
+
+test("home modules navigate to their destination route and customize mode suppresses it", async ({ page }) => {
+  const home = await goToRoute(page, "home");
+
+  await expect(home.getByTestId("home-module-weather")).toHaveAttribute("role", "button");
+  await home.getByTestId("home-module-weather").click();
+  await expect(page).toHaveURL(/\/weather$/);
+
+  await goToRoute(page, "home");
+  const alertsModule = page.getByTestId("home-module-alerts");
+  await expect(alertsModule).toHaveAttribute("aria-label", /Open Alerts/i);
+  await alertsModule.click();
+  await expect(page).toHaveURL(/\/alerts$/);
+
+  await goToRoute(page, "home");
+  await page.getByTestId("home-module-system").click();
+  await expect(page).toHaveURL(/\/operations$/);
+
+  // Customization mode: tapping a module being configured must not navigate away. No role="button"
+  // is rendered at all while customizing (not just a disabled handler), so this also doubles as
+  // confirming customize mode doesn't leave a dead/confusing focusable element behind.
+  await goToRoute(page, "home");
+  await page.getByTestId("home-customize-toggle").click();
+  await expect(page.getByTestId("home-customize-panel")).toBeVisible();
+  await expect(page.getByTestId("home-module-weather")).not.toHaveAttribute("role", "button");
+  await page.getByTestId("home-module-weather").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("home-customize-panel")).toBeVisible();
 });
 
 test("map, layer popover, and expanded radar are wired", async ({ page }) => {

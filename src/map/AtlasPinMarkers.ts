@@ -115,19 +115,45 @@ const activePopups = new WeakMap<MapboxMap, Popup>();
 const ATLAS_PIN_POPUP_MAX_WIDTH_PX = 240;
 const ATLAS_PIN_POPUP_MIN_WIDTH_PX = 160;
 const ATLAS_PIN_POPUP_EDGE_MARGIN_PX = 16;
+// A camera popup's real measured height (image + title + provider + 4 detail rows + status line)
+// on a real device; text-only pin popups (spotter/team/road, no image) are much shorter. Used only
+// to pick top-vs-bottom anchor -- Mapbox still sizes the actual box from its real content.
+const ATLAS_PIN_POPUP_HEIGHT_WITH_IMAGE_PX = 320;
+const ATLAS_PIN_POPUP_HEIGHT_TEXT_ONLY_PX = 140;
+// Bottom margin is larger than the edge margin: it also has to clear ESCAPE / the map toolbar,
+// which the plain edge margin (sized for the popup's own comfortable spacing) doesn't account for.
+const ATLAS_PIN_POPUP_BOTTOM_MARGIN_PX = 90;
 
-function pinPopupPlacementFor(map: MapboxMap, lon: number, lat: number): { anchor: "bottom" | "bottom-left" | "bottom-right"; maxWidthPx: number } {
+function pinPopupPlacementFor(
+  map: MapboxMap,
+  lon: number,
+  lat: number,
+  hasImage: boolean,
+): { anchor: "bottom" | "bottom-left" | "bottom-right" | "top" | "top-left" | "top-right"; maxWidthPx: number } {
   const point = map.project([lon, lat]);
-  const containerWidth = map.getContainer().clientWidth;
+  const container = map.getContainer();
+  const containerWidth = container.clientWidth;
+  const containerHeight = container.clientHeight;
   const roomLeft = point.x - ATLAS_PIN_POPUP_EDGE_MARGIN_PX;
   const roomRight = containerWidth - point.x - ATLAS_PIN_POPUP_EDGE_MARGIN_PX;
   const roomCentered = Math.min(point.x, containerWidth - point.x) * 2 - ATLAS_PIN_POPUP_EDGE_MARGIN_PX * 2;
-  if (roomCentered >= ATLAS_PIN_POPUP_MAX_WIDTH_PX) return { anchor: "bottom", maxWidthPx: ATLAS_PIN_POPUP_MAX_WIDTH_PX };
-  // Whichever side has more room, even if neither reaches the preferred width -- the popup is then
-  // sized to what that side can actually hold (floored so it never renders unreadably narrow).
-  const anchor = roomRight >= roomLeft ? "bottom-left" : "bottom-right";
-  const room = Math.max(roomLeft, roomRight);
-  return { anchor, maxWidthPx: Math.max(ATLAS_PIN_POPUP_MIN_WIDTH_PX, Math.min(ATLAS_PIN_POPUP_MAX_WIDTH_PX, room)) };
+  const horizontal: "" | "-left" | "-right" = roomCentered >= ATLAS_PIN_POPUP_MAX_WIDTH_PX ? "" : roomRight >= roomLeft ? "-left" : "-right";
+  const maxWidthPx = horizontal === ""
+    ? ATLAS_PIN_POPUP_MAX_WIDTH_PX
+    : Math.max(ATLAS_PIN_POPUP_MIN_WIDTH_PX, Math.min(ATLAS_PIN_POPUP_MAX_WIDTH_PX, Math.max(roomLeft, roomRight)));
+
+  // Vertical: Mapbox's anchor value names which edge of the *popup* sits at the marker, not which
+  // direction it extends -- anchor "top" means the popup's top is pinned to the marker, so its body
+  // extends downward (confirmed on-device: this was backwards on the first attempt, verified by
+  // reading the rendered .mapboxgl-popup-anchor-* class rather than assuming). To make the popup
+  // extend downward (the common case), request anchor "top"; to clear a bottom obstruction
+  // (ESCAPE/the map toolbar) by extending the popup upward instead, request anchor "bottom".
+  const estimatedHeight = hasImage ? ATLAS_PIN_POPUP_HEIGHT_WITH_IMAGE_PX : ATLAS_PIN_POPUP_HEIGHT_TEXT_ONLY_PX;
+  const roomBelow = containerHeight - point.y - ATLAS_PIN_POPUP_BOTTOM_MARGIN_PX;
+  const roomAbove = point.y - ATLAS_PIN_POPUP_EDGE_MARGIN_PX;
+  const vertical: "top" | "bottom" = roomBelow >= estimatedHeight || roomBelow >= roomAbove ? "top" : "bottom";
+
+  return { anchor: `${vertical}${horizontal}` as ReturnType<typeof pinPopupPlacementFor>["anchor"], maxWidthPx };
 }
 
 function showPinPopup(map: MapboxMap, point: PinPoint) {
@@ -154,7 +180,7 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
   const actionUrl = safePopupUrl(point.actionUrl);
   const action = actionUrl ? `<a class="atlas-pin-popup__action" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(point.actionLabel ?? "Open source")}</a>` : "";
   const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${details}${image}${phoneLine}${emailLine}${action}`;
-  const placement = pinPopupPlacementFor(map, point.lon, point.lat);
+  const placement = pinPopupPlacementFor(map, point.lon, point.lat, Boolean(imageUrl));
   const popup = new mapboxgl.Popup({
     closeButton: true,
     closeOnClick: false,

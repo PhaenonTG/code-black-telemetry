@@ -697,12 +697,30 @@ export function AtlasMap({
     // this effect, so without the !compact guard, whichever mounts last silently wins the shared
     // window function regardless of which map the screenshot script actually wants to control.
     if (compact) return;
-    (window as any).__codeblackDebugJumpToCamera = () => {
+    // Takes an index (default 0) rather than always the first valid camera -- repeated calls with
+    // different indices let a caller try several real cameras in turn, since whether a given one
+    // ends up alone on screen vs. clustered with its neighbors at the jumped-to zoom isn't knowable
+    // in advance from coordinates alone.
+    (window as any).__codeblackDebugJumpToCamera = (index = 0) => {
       const map = mapRef.current;
-      const camera = trafficCameras.find((c) => Number.isFinite(c.lat) && Number.isFinite(c.lon));
-      if (!map || !camera) return { ok: false, reason: !map ? "NO_MAP" : "NO_CAMERA_LOADED" };
+      const candidates = trafficCameras.filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lon));
+      const camera = candidates[index % Math.max(1, candidates.length)];
+      if (!map || !camera) return { ok: false, reason: !map ? "NO_MAP" : "NO_CAMERA_LOADED", total: candidates.length };
+      // map.jumpTo carries no originalEvent, so it's invisible to markUserInteraction/markFree
+      // (both gate on realOriginalEvent) -- without pausing auto-follow the same way a real drag
+      // does, the very next GPS tick's FOLLOW_* effect snaps the camera straight back to the live
+      // GPS position, undoing this jump within a second or two. Mirror markFree's real pause here
+      // so a debug jump behaves like a genuine user pan: 2-minute hold, then auto-resume.
+      setCameraMode((mode) => mode === "USER_INTERACTING" ? "FREE" : mode === "FOLLOW_NORTH" || mode === "FOLLOW_HEADING" || mode === "RECENTERING" ? "FREE" : mode);
+      interactionResumeAtRef.current = Date.now() + INTERACTION_PAUSE_MS;
+      if (interactionResumeTimerRef.current != null) window.clearTimeout(interactionResumeTimerRef.current);
+      interactionResumeTimerRef.current = window.setTimeout(() => {
+        interactionResumeAtRef.current = 0;
+        interactionResumeTimerRef.current = null;
+        recenterRef.current(autoModeRef.current);
+      }, INTERACTION_PAUSE_MS);
       map.jumpTo({ center: [camera.lon, camera.lat], zoom: 16 });
-      return { ok: true, cameraId: camera.id, lat: camera.lat, lon: camera.lon };
+      return { ok: true, cameraId: camera.id, lat: camera.lat, lon: camera.lon, total: candidates.length, index: index % Math.max(1, candidates.length) };
     };
     return () => {
       delete (window as any).__codeblackDebugJumpToCamera;

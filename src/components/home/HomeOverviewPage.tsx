@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { MapRadarPanel } from "../situational/Panels";
 import type { AlertProduct, ExternalObservation } from "../../services/situational";
 import type { CanonicalLocation } from "../../services/location";
@@ -77,6 +77,15 @@ function moduleClass(module: HomeModuleConfig) {
   return `home-module home-module--${module.key} home-module--${module.size}`;
 }
 
+const MODULE_DESTINATION_LABEL: Record<HomeModuleKey, string> = {
+  chase: "Operations",
+  radar: "Map",
+  weather: "Weather",
+  alerts: "Alerts",
+  system: "Operations",
+  location: "Map",
+};
+
 export function HomeOverviewPage({
   missionActive,
   chaseTrackingLabel,
@@ -120,36 +129,58 @@ export function HomeOverviewPage({
     persistModules(next);
   };
 
+  // The whole module is the navigation action (no more separate "Open X" button per module) --
+  // disabled while customizing since the user is tapping modules to configure them, not to leave
+  // the page. role="button"/tabIndex/onKeyDown make this keyboard-operable the same way a real
+  // <button> would be; a <section> was kept (not a <button>) because the radar module nests a real
+  // interactive map, and a <button> can never legally contain another interactive element.
+  const moduleNavProps = (key: HomeModuleKey, target: NavigateTarget) =>
+    customizing
+      ? {}
+      : {
+          role: "button" as const,
+          tabIndex: 0,
+          "aria-label": `Open ${MODULE_DESTINATION_LABEL[key]}`,
+          onClick: () => onNavigate(target),
+          onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onNavigate(target);
+            }
+          },
+        };
+
   const renderModule = (module: HomeModuleConfig) => {
     if (!module.enabled) return null;
     if (module.key === "chase") {
       return (
-        <section key={module.key} className={moduleClass(module)} data-testid="home-module-chase">
-          <div className="home-module__head"><span>Chase</span><strong>{missionActive ? "ACTIVE" : "READY"}</strong></div>
+        <section key={module.key} className={moduleClass(module)} data-testid="home-module-chase" {...moduleNavProps("chase", "operations")}>
+          <div className="home-module__head"><span>Chase</span><strong>{missionActive ? "ACTIVE" : "READY"}</strong><i className="home-module__chevron" aria-hidden="true" /></div>
           <div className="home-module__primary">{missionActive ? "Chase Mode Active" : "Field Status Ready"}</div>
           <div className="home-module__grid">
             <span>Tracking</span><b>{chaseTrackingLabel}</b>
             <span>GPS</span><b>{chaseGpsLabel}</b>
           </div>
-          <button type="button" className="home-module__open" onClick={() => onNavigate("operations")}>Open Operations</button>
         </section>
       );
     }
     if (module.key === "radar") {
       return (
-        <section key={module.key} className={moduleClass(module)} data-testid="home-module-radar">
-          <div className="home-module__head"><span>Radar</span><strong>MOSAIC</strong></div>
-          <div className="home-module__map">
+        <section key={module.key} className={moduleClass(module)} data-testid="home-module-radar" {...moduleNavProps("radar", "map")}>
+          <div className="home-module__head"><span>Radar</span><strong>MOSAIC</strong><i className="home-module__chevron" aria-hidden="true" /></div>
+          {/* The embedded preview is a real, independently interactive map (pan/pinch/marker taps) --
+              its own clicks are stopped from bubbling up so panning the preview doesn't also fire
+              the module's navigate-to-Map action underneath it. */}
+          <div className="home-module__map" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
             <MapRadarPanel gps={mapGps} compact visible={true} allowExpand={false} alerts={alerts} spotters={spotters} poiPlaces={poiPlaces} nearbyBest={nearbyBest} />
           </div>
-          <button type="button" className="home-module__open" onClick={() => onNavigate("map")}>Open Map</button>
         </section>
       );
     }
     if (module.key === "weather") {
       return (
-        <section key={module.key} className={moduleClass(module)} data-testid="home-module-weather">
-          <div className="home-module__head"><span>Weather</span><strong>{external ? formatAge(external.updatedAt) : "UNAVAILABLE"}</strong></div>
+        <section key={module.key} className={moduleClass(module)} data-testid="home-module-weather" {...moduleNavProps("weather", "weather")}>
+          <div className="home-module__head"><span>Weather</span><strong>{external ? formatAge(external.updatedAt) : "UNAVAILABLE"}</strong><i className="home-module__chevron" aria-hidden="true" /></div>
         <div className="home-module__primary">{formatNumber(external?.tempF, "F")}</div>
           <div className="home-module__grid home-module__grid--metrics">
             <span>Wind</span><b>{formatNumber(external?.windSpeedMph, " mph")}</b>
@@ -157,17 +188,15 @@ export function HomeOverviewPage({
             <span>RH</span><b>{formatNumber(external?.humidity, "%")}</b>
             <span>Dew</span><b>{formatNumber(external?.dewpointF, "F")}</b>
           </div>
-          <button type="button" className="home-module__open" onClick={() => onNavigate("weather")}>Open Weather</button>
         </section>
       );
     }
     if (module.key === "alerts") {
       return (
-        <section key={module.key} className={moduleClass(module)} data-testid="home-module-alerts">
-          <div className="home-module__head"><span>Alerts</span><strong>{alertError ? "UNAVAILABLE" : `${alerts.length}`}</strong></div>
+        <section key={module.key} className={moduleClass(module)} data-testid="home-module-alerts" {...moduleNavProps("alerts", "alerts")}>
+          <div className="home-module__head"><span>Alerts</span><strong>{alertError ? "UNAVAILABLE" : `${alerts.length}`}</strong><i className="home-module__chevron" aria-hidden="true" /></div>
           <div className="home-module__primary">{alertError ? "Alert Data Unavailable" : severityLabel(alerts)}</div>
           <p>{alertError || (alerts[0]?.headline ?? "No official active alerts at current position.")}</p>
-          <button type="button" className="home-module__open" onClick={() => onNavigate("alerts")}>Open Alerts</button>
         </section>
       );
     }
@@ -175,27 +204,25 @@ export function HomeOverviewPage({
       const transportTone = stateTone(opsStatus.transport.state);
       const telemetryTone = stateTone(opsStatus.telemetry.state);
       return (
-        <section key={module.key} className={moduleClass(module)} data-testid="home-module-system">
-          <div className="home-module__head"><span>System</span><strong>{opsStatus.modeLabel}</strong></div>
+        <section key={module.key} className={moduleClass(module)} data-testid="home-module-system" {...moduleNavProps("system", "operations")}>
+          <div className="home-module__head"><span>System</span><strong>{opsStatus.modeLabel}</strong><i className="home-module__chevron" aria-hidden="true" /></div>
           <div className="home-module__grid">
             <span>Core / Pi</span><b data-tone={transportTone}>{opsStatus.transport.label}</b>
             <span>Telemetry</span><b data-tone={telemetryTone}>{opsStatus.telemetry.label}</b>
             <span>Overlay</span><b>{overlayState.replace("-", " ").toUpperCase()}</b>
           </div>
-          <button type="button" className="home-module__open" onClick={() => onNavigate("operations")}>Open Operations</button>
         </section>
       );
     }
     return (
-      <section key={module.key} className={moduleClass(module)} data-testid="home-module-location">
-        <div className="home-module__head"><span>Location</span><strong>{location.freshness}</strong></div>
+      <section key={module.key} className={moduleClass(module)} data-testid="home-module-location" {...moduleNavProps("location", "map")}>
+        <div className="home-module__head"><span>Location</span><strong>{location.freshness}</strong><i className="home-module__chevron" aria-hidden="true" /></div>
         <div className="home-module__primary">{location.resolvedCity ? `${location.resolvedCity}, ${location.resolvedState ?? ""}` : location.fallbackReason}</div>
         <div className="home-module__grid">
           <span>Speed</span><b>{formatNumber(location.speedMph, " mph")}</b>
           <span>Heading</span><b>{location.headingDeg == null ? "--" : `${Math.round(location.headingDeg)} deg ${location.headingCardinal}`}</b>
           <span>Accuracy</span><b>{formatNumber(location.accuracyM, " m")}</b>
         </div>
-        <button type="button" className="home-module__open" onClick={() => onNavigate("map")}>Open Map</button>
       </section>
     );
   };
