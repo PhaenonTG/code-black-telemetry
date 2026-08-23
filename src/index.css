@@ -2,23 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* bg/panel/panel-2/border/text/muted/secondary/red/amber/green/blue/top-h/dock-h/dots-h/gap used to
+   be defined here too, but the second :root block below (which aliases them to the --cb-* palette)
+   always wins the cascade for every one of those names -- these literal values were never actually
+   reaching any consumer. --spc and the z-index scale below have no --cb-* equivalent and stay live
+   from here. */
 :root {
-  --bg: #070707;
-  --panel: #111;
-  --panel-2: #171717;
-  --border: #2a2a2a;
-  --text: #f8fafc;
-  --muted: #8b949e;
-  --secondary: #b6bec8;
-  --red: #ef4444;
-  --amber: #f59e0b;
-  --green: #22c55e;
-  --blue: #38bdf8;
   --spc: #a78bfa;
-  --top-h: clamp(34px, 3.7dvh, 44px);
-  --dock-h: clamp(58px, 8dvh, 84px);
-  --dots-h: 18px;
-  --gap: clamp(8px, 1.1dvh, 14px);
   --z-app-shell: 0;
   --z-card: 10;
   --z-dock: 20;
@@ -1366,10 +1356,10 @@ button {
     justify-self: stretch !important;
     align-self: stretch !important;
     margin: 5px 0 0 !important;
-    /* 7 even columns, matching the real 7-button dock (Weather/Operations/Locate/Alerts/Report/
-       Settings/Layers) -- this used to be repeat(5, ...) + a 190px slot for the now-removed
-       .dock-signature corner button, left stale after Report and Layers were added. */
-    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    /* This dock has 5 real buttons (Home/Map/Weather/Alerts/More) -- a stale grid-template-columns:
+       repeat(7, ...) used to live here from a since-removed 7-button layout and never actually won
+       the cascade (grid-template-columns for this element is set once, correctly, elsewhere), so it
+       has been removed rather than left as misleading dead weight. */
   }
 
   .alert-list,
@@ -2095,33 +2085,6 @@ button {
   z-index: -1;
 }
 
-.map-controls {
-  z-index: 10 !important;
-}
-
-.map-controls button {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--cb-radius, 6px);
-  background: rgba(3, 5, 7, 0.78);
-  color: var(--text);
-  font: 900 12px / 1 "JetBrains Mono", Consolas, monospace;
-  box-shadow: none;
-}
-
-.map-controls button:active {
-  color: var(--cb-red);
-  border-color: rgba(255, 45, 53, 0.42);
-  background: rgba(34, 4, 6, 0.84);
-}
-
-.map-controls span {
-  display: none;
-}
-
 .radar-expanded__map .map-canvas {
   background: #161c21 !important;
 }
@@ -2809,12 +2772,6 @@ button {
   z-index: 0;
 }
 
-.map-controls {
-  top: 13px;
-  left: 13px;
-  z-index: 4;
-}
-
 .map-controls span {
   width: 34px;
   height: 34px;
@@ -3215,9 +3172,6 @@ button {
     grid-template-columns: minmax(110px, auto) minmax(0, 1fr);
   }
 
-  .bottom-dock {
-    width: min(1080px, calc(100vw - 24px)) !important;
-  }
 }
 
 @media (max-width: 900px) and (orientation: landscape) {
@@ -3833,15 +3787,6 @@ body {
   filter: drop-shadow(0 0 10px rgba(20, 167, 255, 0.95));
 }
 
-.map-controls {
-  position: absolute;
-  left: 12px;
-  top: 12px;
-  z-index: 2;
-  display: grid;
-  gap: 6px;
-}
-
 .map-controls span,
 .map-status {
   display: grid;
@@ -4379,10 +4324,10 @@ body {
     justify-self: stretch !important;
     align-self: stretch !important;
     margin: 5px 0 0 !important;
-    /* 7 even columns, matching the real 7-button dock (Weather/Operations/Locate/Alerts/Report/
-       Settings/Layers) -- this used to be repeat(5, ...) + a 190px slot for the now-removed
-       .dock-signature corner button, left stale after Report and Layers were added. */
-    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    /* This dock has 5 real buttons (Home/Map/Weather/Alerts/More) -- a stale grid-template-columns:
+       repeat(7, ...) used to live here from a since-removed 7-button layout and never actually won
+       the cascade (grid-template-columns for this element is set once, correctly, elsewhere), so it
+       has been removed rather than left as misleading dead weight. */
   }
 
   .wx-panel {
@@ -4492,9 +4437,6 @@ body {
     grid-template-columns: minmax(110px, auto) minmax(0, 1fr);
   }
 
-  .bottom-dock {
-    width: min(1080px, calc(100vw - 24px)) !important;
-  }
 }
 
 /* OPERATION GLANCE FIRST: terminal Samsung landscape rules. */
@@ -5314,40 +5256,6 @@ body {
 
 .nearby-detail p strong {
   color: var(--text, #f8fafc);
-}
-
-/* Controls live in their own row below the map canvas now (not overlaid on top of it, and not
-   fighting the radar status chip for space. Keep the remaining controls compact so landscape keeps
-   more room for the map while preserving touch targets. */
-.atlas-map-controls {
-  position: static !important;
-  display: flex !important;
-  flex-wrap: wrap;
-  flex: 0 0 auto;
-  justify-content: flex-end;
-  gap: 5px;
-  padding: 6px 8px;
-  background: rgba(3, 5, 7, 0.92);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.atlas-map-controls button {
-  flex: 0 1 auto;
-  min-width: 72px;
-  height: 34px !important;
-  width: auto !important;
-  padding: 0 9px;
-  font-size: 9px !important;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-}
-
-@media (min-width: 760px) {
-  .app-shell--page-locate .atlas-map-controls {
-    padding-left: 110px;
-    padding-right: 110px;
-    justify-content: center;
-  }
 }
 
 /* Compact map card (Weather page): only the Layers button remains, and it shouldn't stretch into
@@ -6174,7 +6082,34 @@ body {
 .atlas-layers-popover__row input {
   width: 14px;
   height: 14px;
+  flex-shrink: 0;
   accent-color: var(--red, #ff2d35);
+}
+
+/* Same glyph family as the dedicated Layers page (.layer-config-row__icon) but without that row's
+   bordered tile -- this popover stays a dense quick-access list, not a second full page. */
+.atlas-layers-popover__icon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--muted, #8b949e);
+}
+
+.atlas-layers-popover__icon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.atlas-layers-popover__row--stub .atlas-layers-popover__icon {
+  color: var(--muted, #8b949e);
+  opacity: 0.5;
 }
 
 /* Tap a spotter/team pin -> name + last-ping age. Mapbox's default popup is a plain white card;
@@ -9492,8 +9427,16 @@ body {
   letter-spacing: 0.04em;
 }
 
+/* Sole position source for the primary map toolbar now -- two now-deleted legacy blocks (an
+   icon-span-era .map-controls rule and an earlier .atlas-map-controls redesign) used to leave
+   top:12px/left:12px unclaimed by any later rule, which silently stretched this container over the
+   full canvas and sat it directly on top of the .atlas-radar-strip legend (both anchored top-left).
+   Pinning top/left here too keeps this a small bottom-right button stack, matching the
+   right/bottom anchoring already in place. */
 .atlas-map-controls {
   position: absolute !important;
+  top: auto !important;
+  left: auto !important;
   right: 10px !important;
   bottom: 10px !important;
   display: grid !important;
