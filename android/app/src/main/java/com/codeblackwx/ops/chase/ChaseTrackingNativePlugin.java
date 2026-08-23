@@ -83,8 +83,6 @@ public class ChaseTrackingNativePlugin extends Plugin {
         intent.setAction(ChaseTrackingService.ACTION_STOP);
         if (isServiceRunning()) {
             getContext().startService(intent);
-            cancelTrackingNotificationDelayed(1500L);
-            cancelTrackingNotificationDelayed(3000L);
             JSObject result = statusObject();
             result.put("active", false);
             result.put("lastServiceEvent", "tracking_stop_pending");
@@ -168,16 +166,10 @@ public class ChaseTrackingNativePlugin extends Plugin {
         if (manager == null) return;
         manager.cancel(ChaseTrackingService.NOTIFICATION_ID);
         manager.cancel(null, ChaseTrackingService.NOTIFICATION_ID);
-        cancelTrackingNotificationDelayed(750L);
-    }
-
-    private void cancelTrackingNotificationDelayed(long delayMs) {
-        NotificationManager manager = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
-        if (manager == null) return;
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             manager.cancel(ChaseTrackingService.NOTIFICATION_ID);
             manager.cancel(null, ChaseTrackingService.NOTIFICATION_ID);
-        }, delayMs);
+        }, 750L);
     }
 
     private boolean hasLocationPermission() {
