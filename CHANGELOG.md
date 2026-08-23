@@ -4,6 +4,60 @@ All changes logged newest-first.
 
 ---
 
+## CSS Foundation / Screenshot Baseline Repair - 2026-08-23
+
+Controlled UI foundation pass following the phone Home/Map/Layers structure work: repaired the
+screenshot capture workflow, consolidated duplicated CSS, and fixed one confirmed map layout bug.
+No visual redesign of any page in this pass.
+
+### Fixed
+- Root-caused and fixed the "FOLLOW NORTH overflow" defect from the prior read-only UI audit. The
+  real cause was not text overflow: an old, dead `.map-controls` rule (from a since-replaced
+  icon-button toolbar design) left `top: 12px; left: 12px` unclaimed by any later rule, silently
+  stretching the current map toolbar over the entire canvas and anchoring it to the exact same
+  corner as the `.atlas-radar-strip` legend. Pinning `top`/`left` explicitly on the current toolbar
+  rule collapses it back to the small bottom-right button stack the code already intended, and
+  removes the legend/toolbar overlap as a side effect.
+- Layers popover on the map now shows the same `LayerGlyph` icon per row as the dedicated Layers
+  page (extracted to a shared `LayerGlyph` component), instead of an icon-less checkbox list.
+
+### Changed
+- Deleted three dead `.map-controls`/`.atlas-map-controls` rule blocks (an icon-span-era design
+  and a duplicate) and two `.bottom-dock` blocks (one stale/wrong 7-column comment+rule left over
+  from a since-removed 7-button dock, one exact triplicate collapsed to a single copy).
+  `.bottom-dock` still has real per-breakpoint duplication beyond this -- see
+  `docs/css-design-system-notes.md` for the full accounting and why a full rewrite was scoped out
+  of this pass.
+- Removed the shadowed half of the `:root` color/spacing token block. `--bg`/`--panel`/`--panel-2`/
+  `--border`/`--text`/`--muted`/`--secondary`/`--red`/`--amber`/`--green`/`--blue`/`--top-h`/
+  `--dock-h`/`--dots-h`/`--gap` were defined twice; the second `:root` block (aliasing to `--cb-*`)
+  always won the cascade, so the first block's literal values never reached any consumer. `--cb-*`
+  is now the documented canonical source; the short names remain as its public alias layer since
+  183 existing call sites already depend on them.
+- Removed a dead `.atlas-map-controls` media-query rule scoped to `.app-shell--page-locate`, a
+  class name that no longer exists after the Locate-to-Map rename.
+
+### Added
+- `scripts/s24-ui-screenshot-baseline.ps1`: a new, verified S24 screenshot capture script. Every
+  capture asserts the target route/state against the live WebView DOM before screenshotting
+  (never a fixed delay), replacing the prior ad hoc capture pass whose artifacts under
+  `artifacts/ui-review/s24-phone-structure-pass/` had 6 of 10 filenames not matching the screen
+  shown. See `docs/rendered-control-walkthrough.md` for usage and `docs/css-design-system-notes.md`
+  for the camera-detail capture method.
+- A QA-only `window.__codeblackDebugJumpToCamera()` hook in `AtlasMap.tsx`, used solely by the new
+  screenshot script to center the map on a real, already-loaded traffic camera so its detail popup
+  can be captured deterministically. It never fabricates a camera or its data -- it only re-centers
+  the map on coordinates already present in the live, provider-backed `trafficCameras` state.
+
+### Validation Notes
+- All 15 baseline screenshots under `artifacts/ui-review/s24-ui-foundation/` were captured with a
+  route/state assertion and then manually opened and visually confirmed to match their filename.
+- `npm test`, `npm run test:walkthrough` (54/54), `npm run lint`, `npm run build`,
+  `npm run android:debug`, `npm run cap:sync:ios`, and `npm run test:walkthrough:s24` (23/23) all
+  passed after these changes.
+
+---
+
 ## Phone Home / Map Structure / Layers - 2026-08-23
 
 Added the first post-audit phone UI structure pass without changing native Chase tracking.

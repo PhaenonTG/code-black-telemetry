@@ -111,12 +111,42 @@ PASS deterministic-start-state
 PASS launch-and-webview-ready
 ...
 PASS logcat-health
-21/21 checks passed
+23/23 checks passed
 0 relevant fatal logcat events
 ```
 
 Browser walkthrough success does not validate Android foreground services. S24 walkthrough success
 does not validate iOS Keychain runtime, Windows credential runtime, or real Pi/ESP hardware packets.
+
+## UI Screenshot Baseline
+
+A separate script captures a verified, labeled screenshot set for design/UX review -- it does not
+replace the pass/fail walkthrough above, and it is not run as part of it. Run after building and
+connecting the S24:
+
+```powershell
+npm run android:debug
+powershell -ExecutionPolicy Bypass -File scripts\s24-ui-screenshot-baseline.ps1 -DeviceSerial RFCWC0D36KV
+```
+
+It captures 15 named screenshots under `artifacts/ui-review/s24-ui-foundation/` plus a
+`screenshot-manifest.json` recording, per file, the route/state, the selector that was verified
+before capture, a timestamp, and whether the content is live-provider or fixture-driven. Every
+capture asserts its target state against the live WebView DOM (route active, a dialog/popover
+present, a specific CSS class applied) before taking the screenshot -- it never uses a fixed delay
+as its readiness signal, which is what let a prior ad hoc capture pass silently mislabel 6 of its
+10 screenshots (e.g. two files both actually showing Settings, and four files that were all the
+same Expanded Radar crop).
+
+The camera-detail capture (`07-camera-detail.png`) is real live provider data: the script enables
+the Public Cameras layer, calls a QA-only `window.__codeblackDebugJumpToCamera()` hook (added to
+`AtlasMap.tsx`, not used anywhere in normal app UI) to center the map on a real, already-loaded
+Arkansas DOT IDrive camera's coordinates, then clicks whichever real camera marker that jump
+brought into view. The camera, its coordinates, and its image are never fabricated -- only the
+choice of *which* already-live camera to center on is scripted.
+
+Manual review still matters: after any run, open all 15 images and confirm each one actually shows
+what its filename and the manifest claim before treating it as a trustworthy design review input.
 
 ## Fixtures And Live Providers
 
