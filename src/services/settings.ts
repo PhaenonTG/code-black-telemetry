@@ -670,6 +670,90 @@ export interface MapLayerVisibility {
   breadcrumbs: boolean;
 }
 
+export type HomeModuleKey = "chase" | "radar" | "weather" | "alerts" | "system" | "location";
+export type HomeModuleSize = "compact" | "standard" | "expanded";
+
+export interface HomeModuleConfig {
+  key: HomeModuleKey;
+  enabled: boolean;
+  size: HomeModuleSize;
+}
+
+const HOME_MODULES_KEY = "codeblack.homeModules";
+export const DEFAULT_HOME_MODULES: HomeModuleConfig[] = [
+  { key: "chase", enabled: true, size: "standard" },
+  { key: "radar", enabled: true, size: "expanded" },
+  { key: "weather", enabled: true, size: "standard" },
+  { key: "alerts", enabled: true, size: "compact" },
+  { key: "system", enabled: true, size: "compact" },
+  { key: "location", enabled: true, size: "compact" },
+];
+
+const HOME_MODULE_KEYS = new Set<HomeModuleKey>(DEFAULT_HOME_MODULES.map((module) => module.key));
+const HOME_MODULE_SIZES = new Set<HomeModuleSize>(["compact", "standard", "expanded"]);
+let currentHomeModules: HomeModuleConfig[] = DEFAULT_HOME_MODULES;
+const homeModuleListeners = new Set<(modules: HomeModuleConfig[]) => void>();
+
+function normalizeHomeModules(input: unknown): HomeModuleConfig[] {
+  const source = Array.isArray(input) ? input : [];
+  const byKey = new Map<HomeModuleKey, HomeModuleConfig>();
+  for (const item of source) {
+    if (!item || typeof item !== "object") continue;
+    const candidate = item as Partial<HomeModuleConfig>;
+    if (!candidate.key || !HOME_MODULE_KEYS.has(candidate.key)) continue;
+    byKey.set(candidate.key, {
+      key: candidate.key,
+      enabled: candidate.enabled !== false,
+      size: candidate.size && HOME_MODULE_SIZES.has(candidate.size) ? candidate.size : DEFAULT_HOME_MODULES.find((module) => module.key === candidate.key)?.size ?? "standard",
+    });
+  }
+  const ordered: HomeModuleConfig[] = [];
+  const seen = new Set<HomeModuleKey>();
+  for (const item of source) {
+    const key = item && typeof item === "object" ? (item as Partial<HomeModuleConfig>).key : null;
+    if (!key || !HOME_MODULE_KEYS.has(key) || seen.has(key)) continue;
+    const module = byKey.get(key);
+    if (!module) continue;
+    seen.add(key);
+    ordered.push(module);
+  }
+  return [...ordered, ...DEFAULT_HOME_MODULES.filter((module) => !seen.has(module.key))];
+}
+
+export async function loadHomeModules() {
+  const saved = await Preferences.get({ key: HOME_MODULES_KEY });
+  if (saved.value) {
+    try {
+      currentHomeModules = normalizeHomeModules(JSON.parse(saved.value));
+    } catch {
+      currentHomeModules = DEFAULT_HOME_MODULES;
+    }
+  } else {
+    currentHomeModules = DEFAULT_HOME_MODULES;
+  }
+  homeModuleListeners.forEach((listener) => listener(currentHomeModules));
+  return currentHomeModules;
+}
+
+export async function saveHomeModules(modules: HomeModuleConfig[]) {
+  currentHomeModules = normalizeHomeModules(modules);
+  await Preferences.set({ key: HOME_MODULES_KEY, value: JSON.stringify(currentHomeModules) });
+  homeModuleListeners.forEach((listener) => listener(currentHomeModules));
+  return currentHomeModules;
+}
+
+export function getHomeModules() {
+  return currentHomeModules;
+}
+
+export function subscribeHomeModules(listener: (modules: HomeModuleConfig[]) => void) {
+  homeModuleListeners.add(listener);
+  listener(currentHomeModules);
+  return () => {
+    homeModuleListeners.delete(listener);
+  };
+}
+
 const MAP_LAYER_VISIBILITY_KEY = "codeblack.mapLayerVisibility";
 const DEFAULT_MAP_LAYER_VISIBILITY: MapLayerVisibility = {
   alerts: true,

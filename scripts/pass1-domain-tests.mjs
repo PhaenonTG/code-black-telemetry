@@ -33,9 +33,11 @@ const operationalStatus = await importTs("src/services/operationalStatus.ts");
 const appSource = await readFile("src/App.tsx", "utf8");
 assert.match(
   appSource,
-  /function appPageSupportsOperationalActions\(page: PageKey\) \{\s*return page === "locate";\s*\}/,
-  "MARK/ESCAPE operational controls must remain Locate/map-only",
+  /function appPageSupportsOperationalActions\(page: PageKey\) \{\s*return page === "map";\s*\}/,
+  "ESCAPE operational control must remain Map-only",
 );
+assert.doesNotMatch(appSource, /data-testid="map-action-mark"/, "MARK must not render as a user-facing control");
+assert.match(appSource, /codeblack:mark-current-position/, "Underlying MARK service pathway should remain available internally");
 assert.match(
   appSource,
   /nativeRecoveryAttemptRef\.current && nativeRecoveryAttemptRef\.current !== missionSession\.id[\s\S]*?locationTracking\.lastError !== "NATIVE_SERVICE_NOT_RUNNING"[\s\S]*?locationTracking\.sessionId && locationTracking\.sessionId !== missionSession\.id[\s\S]*?void endMissionSession\(\);/,
@@ -254,7 +256,17 @@ const normalizedCamera = roadCameraTest.normalizeCameraFeature({
 }, "test-provider");
 assert.ok(normalizedCamera);
 assert.equal(normalizedCamera.availability, "available");
-assert.equal(normalizedCamera.streamUrl, "https://example.test/feed.m3u8");
+assert.equal(normalizedCamera.streamUrl, null);
+const normalizedPublicCamera = roadCameraTest.normalizeCameraFeature({
+  properties: {
+    id: 45,
+    status: "online",
+    hls_stream: "https://example.test/public-feed.m3u8",
+  },
+  geometry: { type: "Point", coordinates: [-94.25, 36.35] },
+}, "test-provider");
+assert.ok(normalizedPublicCamera);
+assert.equal(normalizedPublicCamera.streamUrl, "https://example.test/public-feed.m3u8");
 assert.equal(roadCameraTest.normalizeCameraFeature({ properties: { id: 2 }, geometry: { type: "Point", coordinates: [-94, Number.NaN] } }, "test-provider"), null);
 
 const missingGpsContext = egress.createEgressContext({ chaseSessionId: "test", currentPosition: null, now: 1 });

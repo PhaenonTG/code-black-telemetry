@@ -119,7 +119,9 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
     ? `<div class="atlas-pin-popup__details">${point.detailRows.map((row) => `<span><b>${escapeHtml(row.label)}</b>${escapeHtml(row.value)}</span>`).join("")}</div>`
     : "";
   const imageUrl = safePopupUrl(point.imageUrl);
-  const image = imageUrl ? `<img class="atlas-pin-popup__image" src="${imageUrl}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : "";
+  const image = imageUrl
+    ? `<div class="atlas-pin-popup__media" data-camera-media-state="loading"><span>LOADING CAMERA IMAGE</span><img class="atlas-pin-popup__image" src="${imageUrl}" alt="" loading="lazy" referrerpolicy="no-referrer" /></div>`
+    : "";
   const actionUrl = safePopupUrl(point.actionUrl);
   const action = actionUrl ? `<a class="atlas-pin-popup__action" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(point.actionLabel ?? "Open source")}</a>` : "";
   const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${details}${image}${phoneLine}${emailLine}${action}`;
@@ -127,6 +129,19 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
     .setLngLat([point.lon, point.lat])
     .setHTML(html)
     .addTo(map);
+  const media = popup.getElement()?.querySelector<HTMLElement>(".atlas-pin-popup__media");
+  const mediaStatus = media?.querySelector<HTMLElement>("span");
+  const mediaImage = media?.querySelector<HTMLImageElement>("img");
+  if (media && mediaStatus && mediaImage) {
+    mediaImage.addEventListener("load", () => {
+      media.dataset.cameraMediaState = "available";
+      mediaStatus.textContent = "SNAPSHOT AVAILABLE";
+    }, { once: true });
+    mediaImage.addEventListener("error", () => {
+      media.dataset.cameraMediaState = "blocked";
+      mediaStatus.textContent = "MEDIA BLOCKED OR UNAVAILABLE";
+    }, { once: true });
+  }
   activePopups.set(map, popup);
 }
 

@@ -28,62 +28,108 @@ const DEFAULT_VISIBILITY: MapLayerVisibility = {
   breadcrumbs: true,
 };
 
-const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; description: string; configured?: boolean }> = [
+type LayerVisual = "radar" | "alerts" | "team" | "spotter" | "poi" | "trail" | "road" | "camera" | "probe" | "network";
+
+const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; source: string; status: string; description: string; configured?: boolean; visual: LayerVisual }> = [
   {
     key: "mosaic",
     label: "Wide-Area Mosaic",
+    source: "IEM NEXRAD",
+    status: "Live mosaic",
+    visual: "radar",
     description: "National NEXRAD composite reflectivity, auto-refreshing every few minutes -- the default live radar view on the map.",
   },
   {
     key: "alerts",
     label: "Alerts (Watches + Warnings + MD)",
+    source: "NWS / SPC",
+    status: "Provider-backed",
+    visual: "alerts",
     description: "NWS watch/warning polygons and SPC Mesoscale Discussions. Tap a polygon on the map for details.",
   },
   {
     key: "team",
     label: "Team",
+    source: "Local roster",
+    status: "User-configured",
+    visual: "team",
     description: "Your curated team roster's positions, always shown regardless of distance. Manage the roster in Settings -> Teams.",
   },
   {
     key: "chasers",
     label: "Spotter Network",
+    source: "Spotter Network",
+    status: "Radius-bounded",
+    visual: "spotter",
     description: "Nearby Spotter Network positions, bounded by your search radius (Settings -> Nearby Chasers).",
   },
   {
     key: "poi",
     label: "Gas / Food / ER",
+    source: "OpenStreetMap",
+    status: "Filtered",
+    visual: "poi",
     description: "ER pins always show when nearby. Gas and food only show for the specific businesses below -- add one to put it on the map.",
   },
   {
     key: "breadcrumbs",
     label: "Trail",
+    source: "Local device",
+    status: "Local only",
+    visual: "trail",
     description: "Your local rolling chase trail. Captured independently of whether the map page is visible.",
   },
   {
     key: "roadConditions",
     label: "Road Conditions",
+    source: "Arkansas DOT IDrive",
+    status: "Arkansas coverage",
+    visual: "road",
     description: "Public DOT closures, crashes, flooding, construction, lane restrictions, and route-impacting hazards. v0.1 coverage: Arkansas DOT IDrive; other areas report outside coverage.",
   },
   {
     key: "trafficCameras",
     label: "Traffic / Public Cameras",
+    source: "Arkansas DOT IDrive",
+    status: "Arkansas public",
+    visual: "camera",
     description: "Legitimate public transportation cameras. v0.1 coverage: Arkansas DOT IDrive; images load only when a marker detail is opened.",
   },
   {
     key: "probes",
     label: "Code Black Probes",
+    source: "Code Black",
+    status: "Deferred",
+    visual: "probe",
     description: "Prepared for future deployable probe observations. Live probe provider not configured yet.",
     configured: false,
   },
   {
     key: "chaserNet",
     label: "Code Black Chaser Net",
+    source: "Code Black",
+    status: "Backend deferred",
+    visual: "network",
     description: "Prepared for verified members, privacy-aware presence, and zoom clustering. Backend not configured yet.",
     configured: false,
   },
 ];
 
 const CUSTOM_PIN_IMAGE_SIZE_PX = 64;
+
+function LayerGlyph({ visual }: { visual: LayerVisual }) {
+  const common = { viewBox: "0 0 24 24", "aria-hidden": true, focusable: false } as const;
+  if (visual === "radar") return <svg {...common}><circle cx="12" cy="12" r="8" /><path d="M12 12 18 8M12 12l2 7M4 12h16" /></svg>;
+  if (visual === "alerts") return <svg {...common}><path d="M12 3 3 20h18L12 3Z" /><path d="M12 8v5M12 17h.01" /></svg>;
+  if (visual === "team") return <svg {...common}><path d="M12 4 5 20h14L12 4Z" /><circle cx="12" cy="13" r="2" /></svg>;
+  if (visual === "spotter") return <svg {...common}><circle cx="8" cy="9" r="3" /><circle cx="16" cy="9" r="3" /><path d="M4 20c1-4 7-4 8 0M12 20c1-4 7-4 8 0" /></svg>;
+  if (visual === "poi") return <svg {...common}><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" /><circle cx="12" cy="10" r="2" /></svg>;
+  if (visual === "trail") return <svg {...common}><path d="M4 18c3-8 7 4 10-4 1.4-3.8 3-6 6-7" /><circle cx="4" cy="18" r="1.5" /><circle cx="20" cy="7" r="1.5" /></svg>;
+  if (visual === "road") return <svg {...common}><path d="M8 21 11 3M16 21 13 3M5 14h14M6 8h12" /></svg>;
+  if (visual === "camera") return <svg {...common}><path d="M4 8h4l2-3h4l2 3h4v11H4z" /><circle cx="12" cy="13" r="3" /></svg>;
+  if (visual === "probe") return <svg {...common}><path d="M12 3v11" /><circle cx="12" cy="17" r="4" /><path d="M8 21h8" /></svg>;
+  return <svg {...common}><circle cx="12" cy="12" r="3" /><path d="M4 12h5M15 12h5M12 4v5M12 15v5" /></svg>;
+}
 
 // A single page for every togglable map layer -- previously each layer's on/off state only lived
 // in a small on-map popover (still there, for quick access while looking at the map) with no way
@@ -154,11 +200,15 @@ export function LayerConfigPage() {
 
   return (
     <Panel title="Layer Configuration" className="layer-config-panel">
-      {LAYERS.map(({ key, label, description, configured = true }) => (
-        <div key={key} className="settings-row">
-          <div>
-            <strong>{label}</strong>
-            <span>{description}</span>
+      {LAYERS.map(({ key, label, source, status, description, visual, configured = true }) => (
+        <div key={key} className="settings-row layer-config-row" data-testid={`layer-row-${key}`}>
+          <div className="layer-config-row__summary">
+            <span className="layer-config-row__icon"><LayerGlyph visual={visual} /></span>
+            <div>
+              <strong>{label}</strong>
+              <span>{source} - {configured ? status : "Unavailable"}</span>
+              <em>{description}</em>
+            </div>
           </div>
           <div className="layer-row-controls">
             {key === "team" && (

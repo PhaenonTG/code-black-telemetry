@@ -170,9 +170,9 @@ function Wait-WebViewReady {
   Wait-Until "WebView readiness" {
     $state = Invoke-WebViewExpression @"
 (() => {
-  const root = document.querySelector('[data-testid="route-weather"], [data-testid="route-operations"], [data-testid="route-locate"]');
+  const root = document.querySelector('[data-testid="route-home"], [data-testid="route-map"], [data-testid="route-weather"]');
   const text = document.body?.innerText || '';
-  return root && /Weather|Operations|Locate|Settings|Layers/i.test(text) ? 'READY' : 'NOT_READY';
+  return root && /Home|Map|Weather|Settings|Layers/i.test(text) ? 'READY' : 'NOT_READY';
 })()
 "@
     $state.Trim() -eq "READY"
@@ -203,7 +203,15 @@ function Go-ToRoute([string]$RouteKey, [string]$ExpectedTextPattern) {
   Invoke-WebViewAction @"
 (() => {
   const button = document.querySelector('[data-testid="dock-$RouteKey"]');
-  if (!button) return 'DOCK_NOT_FOUND';
+  if (!button) {
+    const more = document.querySelector('[data-testid="dock-more"]');
+    if (!more) return 'DOCK_NOT_FOUND';
+    more.click();
+    const secondary = document.querySelector('[data-testid="more-$RouteKey"]');
+    if (!secondary) return 'SECONDARY_NOT_FOUND';
+    secondary.click();
+    return 'CLICKED';
+  }
   button.click();
   return 'CLICKED';
 })()
@@ -309,7 +317,9 @@ function Stop-SharedChaseIfNeeded {
 
   $result = Invoke-WebViewExpression @"
 (async () => {
-  document.querySelector('[data-testid="dock-settings"]')?.click();
+  document.querySelector('[data-testid="dock-more"]')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  document.querySelector('[data-testid="more-settings"]')?.click();
   await new Promise((resolve) => setTimeout(resolve, 500));
   const end = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'END' && !button.disabled);
   if (!end) return 'END_NOT_FOUND';
@@ -442,21 +452,23 @@ try {
   }
 
   $routeManifest = @(
+    @{ key = "home"; label = "Home"; text = "FIELD OVERVIEW|CHASE / FIELD STATUS" },
+    @{ key = "map"; label = "Map"; text = "MOSAIC|LAYERS|FOLLOW" },
     @{ key = "weather"; label = "Weather"; text = "LOCATION & MOTION|WEATHER OBSERVATIONS" },
     @{ key = "operations"; label = "Operations"; text = "OPERATIONAL MODE|PI TRANSPORT|TELEMETRY" },
-    @{ key = "locate"; label = "Locate"; text = "MOSAIC|LAYERS|FOLLOW" },
     @{ key = "alerts"; label = "Alerts"; text = "ACTIVE ALERTS|ALL ACTIVE PRODUCTS" },
     @{ key = "report"; label = "Report"; text = "SUBMIT REPORT|SPOTTER NETWORK" },
     @{ key = "settings"; label = "Settings"; text = "DISPLAY|LIVE OVERLAY TELEMETRY|CHASE SESSION" },
-    @{ key = "layers"; label = "Layers"; text = "LAYER CONFIGURATION|CODE BLACK CHASER NET" }
+    @{ key = "layers"; label = "Layers"; text = "LAYER CONFIGURATION|CODE BLACK CHASER NET" },
+    @{ key = "more"; label = "More"; text = "MORE|OPERATIONS|SETTINGS" }
   )
 
   foreach ($route in $routeManifest) {
     Add-Step "route-$($route.key)" {
       Go-ToRoute $route.key $route.text
       $scope = Get-MarkEscapeScope
-      if ($route.key -eq "locate") {
-        if (-not $scope.mark -or -not $scope.escape) { throw "Locate route is missing MARK/ESCAPE." }
+      if ($route.key -eq "map") {
+        if ($scope.mark -or -not $scope.escape) { throw "Map route should expose ESCAPE only, with MARK absent." }
       } elseif ($scope.mark -or $scope.escape) {
         throw "$($route.label) unexpectedly exposes MARK/ESCAPE."
       }
@@ -467,7 +479,7 @@ try {
   }
 
   Add-Step "android-back-map-popover" {
-    Go-ToRoute "locate" "MOSAIC|LAYERS|FOLLOW"
+    Go-ToRoute "map" "MOSAIC|LAYERS|FOLLOW"
     Invoke-WebViewAction "(() => { const b = document.querySelector('[data-testid=""atlas-map-layers-primary""]'); if (!b) return 'LAYERS_NOT_FOUND'; b.click(); return 'CLICKED'; })()" "CLICKED" | Out-Null
     Wait-Until "layers popover opens" {
       $state = Invoke-WebViewExpression "(() => document.querySelector('[data-testid=""atlas-map-layers-popover-primary""]') ? 'OPEN' : 'CLOSED')()"
@@ -482,7 +494,7 @@ try {
   }
 
   Add-Step "android-back-expanded-radar" {
-    Go-ToRoute "locate" "MOSAIC|LAYERS|FOLLOW"
+    Go-ToRoute "map" "MOSAIC|LAYERS|FOLLOW"
     Invoke-WebViewAction "(() => { const b = [...document.querySelectorAll('button')].find((button) => /expand radar/i.test(button.getAttribute('aria-label') || '')); if (!b) return 'EXPAND_NOT_FOUND'; b.click(); return 'CLICKED'; })()" "CLICKED" | Out-Null
     Wait-Until "expanded radar opens" {
       $state = Invoke-WebViewExpression "(() => document.querySelector('.radar-expanded--active') ? 'OPEN' : 'CLOSED')()"
@@ -509,7 +521,9 @@ try {
   Add-Step "start-chase" {
     $result = Invoke-WebViewExpression @"
 (async () => {
-  document.querySelector('[data-testid="dock-settings"]')?.click();
+  document.querySelector('[data-testid="dock-more"]')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  document.querySelector('[data-testid="more-settings"]')?.click();
   await new Promise((resolve) => setTimeout(resolve, 500));
   const start = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'START' && !button.disabled);
   if (!start) return 'START_NOT_FOUND';
@@ -543,7 +557,9 @@ try {
     }
     $result = Invoke-WebViewExpression @"
 (async () => {
-  document.querySelector('[data-testid="dock-settings"]')?.click();
+  document.querySelector('[data-testid="dock-more"]')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  document.querySelector('[data-testid="more-settings"]')?.click();
   await new Promise((resolve) => setTimeout(resolve, 500));
   const start = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'START' && !button.disabled);
   if (!start) return 'START_NOT_FOUND_AFTER_FORCE_STOP';
@@ -557,29 +573,28 @@ try {
     @{ action = "new-active-chase-started" }
   }
 
-  Add-Step "mark-from-map" {
-    Go-ToRoute "locate" "MOSAIC|LAYERS|FOLLOW"
-    Wait-Until "map MARK control available" {
-      $state = Invoke-WebViewExpression "(() => document.querySelector('[data-testid=""map-action-mark""]') ? 'FOUND' : 'MISSING')()"
-      $state.Trim() -eq "FOUND"
-    } $Timeouts.ShortUi 250
-    $result = Invoke-WebViewExpression @"
+  Add-Step "map-usable-while-chase-active" {
+    Go-ToRoute "map" "MOSAIC|LAYERS|FOLLOW"
+    $state = Invoke-WebViewExpression @"
 (() => {
+  const map = document.querySelector('[data-testid="atlas-map-primary"]');
+  const escape = document.querySelector('[data-testid="map-action-escape"]');
   const mark = document.querySelector('[data-testid="map-action-mark"]');
-  if (!mark) return 'MARK_NOT_FOUND';
-  mark.click();
-  return 'MARK_CLICKED';
+  const rect = map?.getBoundingClientRect();
+  return map && escape && !mark && rect && rect.width > 100 && rect.height > 100 ? 'MAP_OK' : 'MAP_BAD';
 })()
 "@
-    if ($result -notmatch "MARK_CLICKED") { throw "MARK action failed: $result" }
-    $script:summary.chase.markTapped = $true
-    @{ mark = "CLICKED" }
+    if ($state -notmatch "MAP_OK") { throw "Map is not usable during active Chase: $state" }
+    $script:summary.chase.mapUsable = $true
+    @{ map = "USABLE"; escape = "PRESENT"; mark = "ABSENT" }
   }
 
   Add-Step "end-chase" {
     $result = Invoke-WebViewExpression @"
 (async () => {
-  document.querySelector('[data-testid="dock-settings"]')?.click();
+  document.querySelector('[data-testid="dock-more"]')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  document.querySelector('[data-testid="more-settings"]')?.click();
   await new Promise((resolve) => setTimeout(resolve, 500));
   const end = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'END' && !button.disabled);
   if (!end) return 'END_NOT_FOUND';

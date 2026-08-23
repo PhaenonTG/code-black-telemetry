@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagnostics } from "../services/mapTiles";
@@ -68,6 +68,7 @@ type AtlasMapProps = {
   // north-up/rings/clear-trail/mosaic-toggle buttons and no single-site radar UI at all -- that
   // full toolbar only exists on the "full" Locate page, which has the room for it.
   controlsVariant?: "full" | "compact";
+  escapeControl?: ReactNode;
 };
 
 const EMPTY_MODIFIERS = { modifiedLayers: 0, firstSymbolLayerId: undefined as string | undefined, lastMapError: "" };
@@ -122,6 +123,7 @@ export function AtlasMap({
   poiPlaces = EMPTY_POI,
   nearbyBest = EMPTY_NEARBY_BEST,
   controlsVariant = "full",
+  escapeControl,
 }: AtlasMapProps) {
   const compact = controlsVariant === "compact";
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -796,6 +798,7 @@ export function AtlasMap({
       <div className="atlas-map-canvas-area">
         <div ref={containerRef} className="atlas-map" data-testid={compact ? "atlas-map-canvas-compact" : "atlas-map-canvas-primary"} data-camera-mode={cameraMode} />
         {visibleError && <div className="atlas-map-error">{visibleError}</div>}
+        {!compact && escapeControl && <div className="atlas-map-escape-slot" data-testid="atlas-map-escape-slot">{escapeControl}</div>}
         {!compact && (
           <div className="radar-strip atlas-radar-strip">
             {statusLines.map((line, index) => <span key={index}>{line}</span>)}
@@ -824,7 +827,10 @@ export function AtlasMap({
         )}
         {layersPopoverOpen && (
           <div className="atlas-layers-popover" role="dialog" aria-label="Map layers" data-testid={compact ? "atlas-map-layers-popover-compact" : "atlas-map-layers-popover-primary"}>
-            <div className="atlas-layers-popover__title">Layers</div>
+            <div className="atlas-layers-popover__header">
+              <div className="atlas-layers-popover__title">Layers</div>
+              <button type="button" data-testid={compact ? "atlas-map-layers-close-compact" : "atlas-map-layers-close-primary"} aria-label="Close map layers" onClick={() => setLayersPopoverOpen(false)}>Close</button>
+            </div>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={alertsVisible} onChange={() => toggleLayer("alerts")} />
               Alerts (watches + warnings + MD)

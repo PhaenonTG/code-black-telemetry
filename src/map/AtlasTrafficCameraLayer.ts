@@ -7,7 +7,7 @@ import { syncAtlasPinMarkers, type PinPoint } from "./AtlasPinMarkers";
 const cameraMarkersByMap = new WeakMap<MapboxMap, Record<string, Marker>>();
 
 const CAMERA_PIN_STYLE: PinStyle = {
-  color: "#b26bff",
+  color: "#38bdf8",
   shape: "square",
   sizeScale: 0.84,
 };
