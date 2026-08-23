@@ -456,13 +456,18 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    window.setTimeout(() => map.resize(), 80);
+    const timer = window.setTimeout(() => {
+      if (mapRef.current !== map) return;
+      map.resize();
+    }, 80);
+    return () => window.clearTimeout(timer);
   }, [expanded, loaded]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded || !active) return;
     const timers = [0, 120, 420].map((delay) => window.setTimeout(() => {
+      if (mapRef.current !== map) return;
       map.resize();
       const currentGps = latestRef.current.gps;
       if (currentGps) {
@@ -785,9 +790,9 @@ export function AtlasMap({
   };
 
   return (
-    <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"}`}>
+    <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"}`} data-testid={compact ? "atlas-map-compact" : "atlas-map-primary"}>
       <div className="atlas-map-canvas-area">
-        <div ref={containerRef} className="atlas-map" data-camera-mode={cameraMode} />
+        <div ref={containerRef} className="atlas-map" data-testid={compact ? "atlas-map-canvas-compact" : "atlas-map-canvas-primary"} data-camera-mode={cameraMode} />
         {visibleError && <div className="atlas-map-error">{visibleError}</div>}
         {!compact && (
           <div className="radar-strip atlas-radar-strip">
@@ -809,13 +814,14 @@ export function AtlasMap({
             type="button"
             className={layersPopoverOpen ? "atlas-layers-button active" : "atlas-layers-button"}
             aria-label="Map layers"
+            data-testid="atlas-map-layers-compact"
             onClick={(event) => { event.stopPropagation(); setLayersPopoverOpen((value) => !value); }}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5Z" /><path d="M2 12l10 5 10-5" /><path d="M2 17l10 5 10-5" /></svg>
           </button>
         )}
         {layersPopoverOpen && (
-          <div className="atlas-layers-popover" role="dialog" aria-label="Map layers">
+          <div className="atlas-layers-popover" role="dialog" aria-label="Map layers" data-testid={compact ? "atlas-map-layers-popover-compact" : "atlas-map-layers-popover-primary"}>
             <div className="atlas-layers-popover__title">Layers</div>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={alertsVisible} onChange={() => toggleLayer("alerts")} />
@@ -867,7 +873,7 @@ export function AtlasMap({
           <button type="button" aria-label="Toggle follow mode" title="Cycles between north-up follow, heading-up follow, and recenter from free pan" className={cameraMode === "FREE" ? "" : "active"} onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
           <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
           <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
-          <button type="button" aria-label="Map layers" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
+          <button type="button" aria-label="Map layers" data-testid="atlas-map-layers-primary" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
         </div>
       )}
     </div>

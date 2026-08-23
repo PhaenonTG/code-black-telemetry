@@ -34,8 +34,12 @@ coverage-limited data is called out, and deferred systems remain deferred.
   remediation pass: Android secure credential storage, legacy migration, redacted diagnostics,
   explicit submission intent, duplicate guards, and unknown-timeout handling exist. iOS Keychain
   and Windows Credential Manager runtime adapters remain pending.
-- The largest remaining readiness risks are rendered-control automation, route/status clarity,
-  iOS/Windows credential runtime validation, and broad provider coverage gaps.
+- The rendered-control automation gap now has a first remediation pass: Playwright coverage checks
+  first-class routes, major controls, MARK/ESCAPE map-only placement, deferred-state honesty, console
+  errors, and phone/tablet/desktop layout structure. Physical S24 native Chase acceptance remains a
+  separate device workflow.
+- The largest remaining readiness risks are route/status clarity, iOS/Windows credential runtime
+  validation, broad provider coverage gaps, and native-device automation depth.
 
 ## Route Inventory
 
@@ -156,7 +160,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Connection states | Strong for endpoint normalization and classification. |
 | Road/camera providers | Strong for normalization, validation, freshness, coverage, and provider failure. |
 | Chaser Net contracts | Strong for domain/privacy/backend-contract logic; production backend absent. |
-| Navigation / rendered controls | Partial; source-level audits exist, but broad automated route walkthrough tests are still needed. |
+| Navigation / rendered controls | Working / needs expansion | `npm run test:walkthrough` renders first-class routes across phone portrait, tablet landscape, and desktop; checks MARK/ESCAPE map-only placement, layer popovers, Settings/report states, shared Chase UI, console errors, and basic overflow. |
 | Responsive UI | Partial; device QA has covered Android phone and some landscape paths, iPad physical QA pending. |
 
 ## Priority Matrix
@@ -177,7 +181,7 @@ active notification teardown passed repeat S24 acceptance without native code ch
 
 | Item | Size | Why it matters | Prerequisite |
 | --- | --- | --- | --- |
-| Full rendered control walkthrough automation | Medium | Source audit is not enough for every route/control and every device posture. | Stable Playwright/ADB route harness. |
+| Physical S24 walkthrough automation depth | Medium | The Playwright suite covers rendered browser UI; S24 helper automation exists, but native-device route/control walking still needs more selector robustness and should remain paired with manual acceptance for Chase service cleanup. | Current ADB helper and active-notification acceptance logic. |
 | Dedicated System diagnostics route or clearer Operations/System split | Medium | Field failures need a predictable place for status and diagnostics. | Current connection/provider diagnostic contracts. |
 | Telemetry zero/default display audit | Small | Avoids mistaking unavailable hardware values for real readings. | Existing telemetry freshness state. |
 | Weather/fallback freshness polish | Medium | Chasers need to know whether weather data is current, stale, or unavailable. | Existing fallback/provider timestamps. |
@@ -204,8 +208,8 @@ active notification teardown passed repeat S24 acceptance without native code ch
 
 ## Recommended Next Five Passes
 
-1. **Rendered Control Walkthrough Automation** - build a repeatable route/control QA harness for Android WebView and desktop web so future audits are evidence-based rather than source-only.
-2. **System Diagnostics and Field Status Polish** - make System/Operations status clearer, reduce fake-green risk, and surface provider/Core/Pi/GPS freshness in one consistent model.
+1. **System Diagnostics and Field Status Polish** - make System/Operations status clearer, reduce fake-green risk, and surface provider/Core/Pi/GPS freshness in one consistent model.
+2. **Native Device Walkthrough Automation Hardening** - expand the S24 helper into a more robust UIAutomator/DevTools hybrid for route walking, screenshots, Back behavior, and Chase service evidence.
 3. **iOS/Windows Secure Credential Adapter Validation** - complete native Keychain and Windows Credential Manager runtime paths behind the shared credential interface.
 4. **Road/Camera Regional Expansion** - add Oklahoma, Kansas, and Missouri provider adapters behind the existing registry, with coverage and attribution documented per provider.
 5. **Weather/Telemetry Freshness Stabilization** - harden current conditions, telemetry default/zero states, and stale hardware/provider behavior before new model/satellite products.

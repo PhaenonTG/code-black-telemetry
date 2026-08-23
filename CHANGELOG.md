@@ -4,6 +4,35 @@ All changes logged newest-first.
 
 ---
 
+## Rendered Control Walkthrough Automation - 2026-08-22
+
+Added repeatable rendered-app route/control coverage for desktop browser automation and S24 ADB
+smoke workflows.
+
+### Changed
+- Added Playwright rendered walkthrough coverage for Weather, Operations, Locate, Alerts, Report,
+  Settings, Layers, and the expanded map/radar portal across phone portrait, tablet landscape, and
+  desktop viewports.
+- Added hard regression assertions that MARK and ESCAPE remain visible only on the Locate/map
+  surface.
+- Added checks for map layer popovers, provider-backed/deferred layer wording, credential/overlay
+  settings state, report-page locked external submission, shared Chase UI state, console/page errors,
+  and basic horizontal overflow.
+- Added stable selectors only where semantic selectors were ambiguous.
+- Added an ADB S24 walkthrough helper for route screenshots, MARK/ESCAPE map-only checks, Chase
+  start/end smoke, active-notification cleanup verification, and logcat capture.
+- Fixed a rendered Mapbox race where delayed resize callbacks could run after an Atlas map instance
+  was removed.
+- Added Locate-page map control spacing at tablet/desktop widths so fixed MARK/ESCAPE controls do
+  not intercept the map control row.
+
+### Validation Notes
+- Browser rendered walkthrough command: `npm run test:walkthrough`.
+- Browser rendered walkthrough validates shared UI rendering and control wiring; it does not replace
+  physical native Android Chase foreground-service acceptance.
+
+---
+
 ## Native Chase Notification Root-Cause QA - 2026-08-22
 
 Re-ran physical S24 Chase notification cleanup acceptance from a clean post-reboot device state and
