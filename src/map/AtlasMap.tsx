@@ -692,17 +692,22 @@ export function AtlasMap({
   // camera's coordinates so it can screenshot a genuine camera popup -- it never fabricates a
   // camera or its data, it only centers the already-live map on one that's already loaded.
   useEffect(() => {
+    // Home's radar module, the Weather page's compact map, and the primary Map/Expanded Radar
+    // instance can all be mounted at once (see the "active" prop comment above) -- each one runs
+    // this effect, so without the !compact guard, whichever mounts last silently wins the shared
+    // window function regardless of which map the screenshot script actually wants to control.
+    if (compact) return;
     (window as any).__codeblackDebugJumpToCamera = () => {
       const map = mapRef.current;
       const camera = trafficCameras.find((c) => Number.isFinite(c.lat) && Number.isFinite(c.lon));
       if (!map || !camera) return { ok: false, reason: !map ? "NO_MAP" : "NO_CAMERA_LOADED" };
-      map.jumpTo({ center: [camera.lon, camera.lat], zoom: 14 });
+      map.jumpTo({ center: [camera.lon, camera.lat], zoom: 16 });
       return { ok: true, cameraId: camera.id, lat: camera.lat, lon: camera.lon };
     };
     return () => {
       delete (window as any).__codeblackDebugJumpToCamera;
     };
-  }, [trafficCameras]);
+  }, [trafficCameras, compact]);
 
   useEffect(() => {
     const map = mapRef.current;

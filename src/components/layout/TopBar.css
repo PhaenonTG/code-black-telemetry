@@ -291,14 +291,12 @@
     letter-spacing: 0.04em !important;
   }
 
+  /* "Situational Awareness" repeats what the app already establishes with its icon/wordmark on
+     every single screen -- on a phone-width header that line was mostly costing vertical space,
+     not adding information. Hidden here rather than deleted so it still reads on wider headers
+     (tablet/desktop) where the extra width has room to spare. */
   .brand-subtitle {
-    margin-top: 3px !important;
-    max-width: 210px !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-    font-size: clamp(7px, 2.05vw, 9px) !important;
-    letter-spacing: 0.14em !important;
+    display: none !important;
   }
 
   .time-module {

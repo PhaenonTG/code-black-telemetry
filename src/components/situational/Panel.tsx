@@ -8,10 +8,10 @@ export function Panel({ title, children, className = "", tone = "default" }: { t
   );
 }
 
-export function MetricTile({ icon, label, value, unit, accent = "default" }: { icon?: string; label: string; value: React.ReactNode; unit?: React.ReactNode; accent?: "default" | "red" | "blue" | "amber" | "green" }) {
+export function MetricTile({ icon, label, value, unit, accent = "default", hero = false }: { icon?: string; label: string; value: React.ReactNode; unit?: React.ReactNode; accent?: "default" | "red" | "blue" | "amber" | "green"; hero?: boolean }) {
   const labelClass = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return (
-    <div className={`metric-tile metric-tile--${accent} metric-tile--${labelClass}`}>
+    <div className={`metric-tile metric-tile--${accent} metric-tile--${labelClass}${hero ? " metric-tile--hero" : ""}`}>
       {icon && <i aria-hidden="true">{icon}</i>}
       <strong>{value}</strong>
       <span>{label}</span>

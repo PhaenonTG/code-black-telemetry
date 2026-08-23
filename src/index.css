@@ -9607,3 +9607,286 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ==========================================================================
+   FLAGSHIP PHONE VISUAL POLISH — 2026-08-23
+   One authoritative final section rather than editing the many pre-existing
+   fragmented rules above -- consistent with this file's existing pattern of
+   later-wins refinement blocks, and lower-risk than untangling generations
+   of .cb-panel/.metric-tile/.bottom-dock rules that a live-cascade audit
+   found were 90+ fragments deep. See docs/css-design-system-notes.md.
+   ========================================================================== */
+
+/* --- Shared surface language: flatter, calmer, less "gaming HUD" bevel ---
+   The winning .cb-panel generation (three now-superseded definitions exist
+   earlier in this file) used clip-path chamfered corners, a triple-layer
+   box-shadow, and an always-on red-tinted top wash on every panel regardless
+   of importance. Replacing with one soft inset highlight + a plain rounded
+   corner keeps every panel visually distinct from the page background
+   without each one reading as its own separately-lit HUD module, and
+   reserves the red wash for panels that are actually flagged --red/--spc. */
+.cb-panel {
+  clip-path: none !important;
+  border-radius: var(--cb-radius, 8px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: linear-gradient(180deg, rgba(24, 25, 29, 0.94), rgba(9, 10, 12, 0.97)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+.cb-panel::before {
+  display: none !important;
+}
+
+.cb-panel--red {
+  border-color: rgba(255, 45, 53, 0.4) !important;
+  box-shadow: inset 3px 0 0 rgba(255, 45, 53, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+.cb-panel--spc {
+  border-color: rgba(167, 139, 250, 0.32) !important;
+}
+
+.cb-panel__title {
+  background: none !important;
+}
+
+/* --- Header: modest height trim now that the subtitle is hidden on phone (TopBar.css) ---
+   Same media condition as the rule this overrides (index.css, phone-portrait :root block) so it
+   wins on source order alone; env(safe-area-inset-top) is left untouched since that's real notch
+   space, not padding to trim. */
+@media (max-aspect-ratio: 13 / 10) {
+  :root {
+    --cb-header-h: calc(clamp(56px, 7.6dvh, 68px) + env(safe-area-inset-top)) !important;
+    --top-h: var(--cb-header-h) !important;
+  }
+}
+
+/* --- Operations: field-status-first summary ---
+   A single glanceable row of system states above the detailed cards, so
+   "is everything okay" is answerable in 1-2 seconds instead of reading
+   every card. Built from data App.tsx already computes (opsStatus, gps,
+   canonicalLocation, liveOverlayTelemetry) -- no new data source. */
+.ops-field-status-panel {
+  grid-column: 1 / -1;
+}
+
+.ops-field-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ops-field-status__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font: 700 12px / 1.2 Inter, sans-serif;
+}
+
+.ops-field-status__row:last-of-type {
+  border-bottom: none;
+}
+
+.ops-field-status__row span {
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.ops-field-status__row strong {
+  font: 800 11px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ops-field-status__row strong[data-tone="ok"] { color: var(--cb-green); }
+.ops-field-status__row strong[data-tone="warn"] { color: var(--cb-amber); }
+.ops-field-status__row strong[data-tone="bad"] { color: var(--cb-red); }
+
+.ops-field-status__summary {
+  padding: 10px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font: 700 11px / 1.3 Inter, sans-serif;
+}
+
+.ops-field-status__summary[data-tone="bad"] {
+  color: var(--cb-amber);
+}
+
+.ops-field-status__summary[data-tone="ok"] {
+  color: var(--cb-green);
+}
+
+/* An earlier rule (still above in this file) adds a ::before diamond to these 4 panels' titles on
+   the assumption they "hand-roll their title div instead of using the shared <Panel> component" --
+   true for none of them any more (ops-summary's own JSX already renders a .panel-glyph span, and
+   the other three now render through Panel.tsx, which always includes one). The result was two
+   icons side by side on every one of these titles. Since .panel-glyph is already guaranteed
+   present, the ::before is simply redundant now, not filling a real gap. */
+.ops-summary .cb-panel__title::before,
+.ops-stream-panel .cb-panel__title::before,
+.diagnostics-panel .cb-panel__title::before,
+.pi-endpoint-panel .cb-panel__title::before {
+  display: none !important;
+}
+
+/* --- Home: radar as the visual anchor, other modules quieter ---
+   Chase/Alerts/System modules stay small when there's nothing to report;
+   radar gets real room since it's the one module meant to be looked at, not
+   just read. Module order/visibility is still entirely user-controlled --
+   this only changes each module's own visual weight, never their order. */
+.home-module--radar {
+  min-height: 260px !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.home-module--radar .home-module__map {
+  min-height: 240px;
+  border-radius: calc(var(--cb-radius, 8px) - 2px);
+}
+
+.home-module--chase:not(.home-module--expanded),
+.home-module--system:not(.home-module--expanded) {
+  min-height: 96px !important;
+}
+
+.home-module--alerts:not(.home-module--expanded) {
+  min-height: 96px !important;
+}
+
+/* --- Weather: one hero number instead of four equal-weight tiles ---
+   .metric-tile already has many breakpoint-scoped rules earlier in this
+   file; rather than fight that cascade, .metric-tile--hero is a new,
+   additive modifier applied only to WeatherObservationPanel's Temp tile and
+   WindCard's Speed tile so those two read as the primary number on their
+   respective cards, matching how a real weather glance actually works
+   (temp and wind first, dewpoint/RH/pressure secondary). */
+.metric-tile--hero strong {
+  font-size: clamp(40px, 11vw, 56px) !important;
+  line-height: 0.9 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.metric-tile--hero span {
+  font-size: clamp(11px, 3vw, 13px) !important;
+}
+
+.metric-tile--hero i {
+  display: none !important;
+}
+
+.wind-hero__item--speed strong {
+  font-size: clamp(38px, 10.5vw, 52px) !important;
+  line-height: 0.9 !important;
+}
+
+/* --- Weather: the phone-only system panels stay, but read as secondary ---
+   SensorHealthCard/SystemCard/MissionStreamingPanel already render after the real weather content
+   (order: 7/8/9, set elsewhere in this file) -- same data is also reachable from Home's System
+   module and the full Operations page, so kept rather than removed (avoiding making data
+   unreachable), but visually quieted so they don't compete with Temp/Wind/Alerts for attention. */
+.page-grid--weather .phone-dashboard-only .cb-panel__title {
+  opacity: 0.75;
+  font-size: 10px !important;
+}
+
+/* --- Alerts: severity should dominate, not every card look the same ---
+   .alert-pill--tornado/pds already carry distinct color logic upstream in
+   this file; this reinforces the no-active-alert state staying visually
+   calm (neutral surface, not the same amber-tinted card as an active MD/
+   watch) so a clear day doesn't compete for attention with a real one. */
+.alerts-full-panel .cb-note,
+[class*="no-active"] {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* --- More: calmer row treatment, less "giant menu card" --- */
+.more-grid button {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+.more-grid button:active {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* --- Bottom dock: one authoritative phone-portrait definition ---
+   .bottom-dock is touched by ~50 rule fragments across this file's media queries (documented in
+   docs/css-design-system-notes.md) -- untangling all of them is out of scope for a visual-polish
+   pass, but the values below are the live-cascade-verified ground truth for the primary phone
+   breakpoint (measured via getComputedStyle on real S24 hardware before this change), codified
+   into one place so a future edit here has one clear, correct source instead of guessing which of
+   the ~50 older fragments currently wins. Values match what was already rendering -- this is a
+   safety change, not a visual one, aside from the active-tab pill below. */
+@media (max-aspect-ratio: 13 / 10) {
+  .bottom-dock {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    height: auto !important;
+    padding: 3px 7px max(3px, env(safe-area-inset-bottom)) !important;
+    gap: 4px !important;
+  }
+
+  /* A filled rounded pill instead of a plain border reads as "selected" faster at a glance, without
+     any glow/animation -- restrained per the stated direction. */
+  .bottom-dock button.active {
+    border-radius: 10px !important;
+    border-color: rgba(239, 68, 68, 0.4) !important;
+    background: rgba(239, 68, 68, 0.16) !important;
+  }
+}
+
+/* --- Map: fix the landscape toolbar / fullscreen-expand collision ---
+   .atlas-expand-button is top:10px;right:10px, 44px square. In landscape,
+   the .atlas-map-controls stack (bottom:10px;right:10px, auto height) can
+   grow tall enough to reach that same top-right corner on a short viewport.
+   Give the control stack a max-height that reserves the expand button's
+   footprint, with its own internal scroll as a last resort rather than
+   overlapping -- responsive to available height, not a hardcoded device
+   breakpoint. */
+@media (orientation: landscape) {
+  .atlas-map-controls {
+    max-height: min(78dvh, calc(100dvh - 76px)) !important;
+    overflow-y: auto !important;
+    scrollbar-width: none !important;
+  }
+
+  .atlas-map-controls::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* --- Map: Layers popover no longer competes with ESCAPE's tap zone ---
+   Measured on-device: the popover's own height (295px) was already well
+   under a max-height cap, so height was never the problem -- both the
+   popover (bottom:12px) and ESCAPE (bottom-left, ~42-54px tall, also
+   bottom-anchored) sit in the same bottom strip of the canvas, and the
+   popover's left edge falls inside ESCAPE's x-range too. Lifting the
+   popover's bottom offset above ESCAPE's full height clears the overlap
+   without moving ESCAPE or shrinking the popover's row list. */
+.atlas-map-shell:not(.atlas-map-shell--compact) .atlas-layers-popover {
+  bottom: 64px !important;
+}
+
+.atlas-layers-popover {
+  max-height: min(58dvh, 420px) !important;
+  overflow-y: auto !important;
+}
+
+/* --- Map: camera/pin popup no longer clips at the viewport edge ---
+   The real fix is in AtlasPinMarkers.ts (pinPopupPlacementFor) -- it picks
+   an anchor and a per-popup max-width computed from actual available room
+   on the map card, and sets both as inline styles Mapbox itself respects on
+   every re-render. No !important here so that inline width can win; this is
+   only a sane fallback ceiling for any popup that somehow bypasses it. */
+.atlas-pin-popup .mapboxgl-popup-content {
+  max-width: min(280px, calc(100vw - 32px));
+}
+
+.atlas-pin-popup__details {
+  max-width: 100% !important;
+}

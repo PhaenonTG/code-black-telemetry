@@ -49,7 +49,7 @@ import { endMissionSession, recoverMissionSession } from "./services/missionSess
 import { setDisplayCockpitMode, startDisplayController } from "./services/displayController";
 import { createEgressContext, summarizeEgressReadiness } from "./services/egress";
 import { locationTrackingService } from "./services/locationTracking";
-import { summarizePiOperationalStatus } from "./services/operationalStatus";
+import { stateTone, summarizePiOperationalStatus } from "./services/operationalStatus";
 
 type PageKey = "home" | "map" | "weather" | "operations" | "alerts" | "report" | "settings" | "layers" | "more";
 export type CockpitMode = "normal" | "chase";
@@ -440,6 +440,18 @@ export default function App() {
     };
   }, [page]);
 
+  // Operations "field status" summary -- built entirely from data App.tsx already computes for the
+  // diagnostics grid below it, just re-shaped as a glanceable list instead of requiring a full read
+  // of the detailed cards to answer "is anything down". Order is fixed (not severity-sorted) so the
+  // row layout doesn't jump around as states change.
+  const fieldStatusRows: Array<{ label: string; value: string; tone: "ok" | "warn" | "bad" | "neutral" }> = [
+    { label: "GPS", value: canonicalLocation.freshness, tone: canonicalLocation.validity === "VALID" ? "ok" : "bad" },
+    { label: "CORE / PI", value: opsStatus.transport.label, tone: stateTone(opsStatus.transport.state) },
+    { label: "TELEMETRY", value: opsStatus.telemetry.label, tone: stateTone(opsStatus.telemetry.state) },
+    { label: "OVERLAY", value: liveOverlayTelemetry.state.replace(/-/g, " ").toUpperCase(), tone: liveOverlayTelemetry.state === "disabled" ? "neutral" : stateTone(opsStatus.services.state) },
+  ];
+  const fieldStatusUnavailableCount = fieldStatusRows.filter((row) => row.tone === "bad").length;
+
   return (
     <div className={`app-shell app-shell--theme-${appTheme} app-shell--page-${page}${missionSession ? " app-shell--mission-active" : ""}`}>
       <SevereFlashOverlay />
@@ -530,6 +542,22 @@ export default function App() {
         </section>
         <section className="page page--operations" aria-label="Operations" data-testid="route-operations" data-active={page === "operations"} aria-hidden={page !== "operations"}>
           <div className="page-grid page-grid--operations">
+            <section className="cb-panel ops-field-status-panel" data-testid="ops-field-status">
+              <div className="cb-panel__title">Field Status</div>
+              <div className="ops-field-status">
+                {fieldStatusRows.map((row) => (
+                  <div className="ops-field-status__row" key={row.label}>
+                    <span>{row.label}</span>
+                    <strong data-tone={row.tone}>{row.value}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="ops-field-status__summary" data-tone={fieldStatusUnavailableCount > 0 ? "bad" : "ok"}>
+                {fieldStatusUnavailableCount > 0
+                  ? `${fieldStatusUnavailableCount} system${fieldStatusUnavailableCount === 1 ? "" : "s"} unavailable`
+                  : "All monitored systems reporting"}
+              </div>
+            </section>
             <section className="ops-summary cb-panel">
               <div className="cb-panel__title"><span className="panel-glyph" aria-hidden="true" />Operational Mode</div>
               <div className="ops-mode">
