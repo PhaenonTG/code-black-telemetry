@@ -11,17 +11,32 @@ function adb(args) {
   return execFileSync("adb", ["-s", serial, ...args], { encoding: "utf8" }).trim();
 }
 
-const pid = adb(["shell", "pidof", packageName]).split(/\s+/)[0];
+const deadline = Date.now() + 30_000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+let pid = "";
+while (Date.now() < deadline && !pid) {
+  pid = adb(["shell", "pidof", packageName]).split(/\s+/)[0] ?? "";
+  if (!pid) await sleep(500);
+}
 if (!pid) {
-  throw new Error(`Could not find running PID for ${packageName}`);
+  throw new Error(`Could not find running PID for ${packageName} within 30s`);
 }
 
 adb(["forward", "tcp:9222", `localabstract:webview_devtools_remote_${pid}`]);
 
-const targets = await fetch("http://127.0.0.1:9222/json").then((response) => response.json());
+let targets = [];
+while (Date.now() < deadline) {
+  targets = await fetch("http://127.0.0.1:9222/json").then((response) => response.json()).catch(() => []);
+  if (targets.some((item) => item.webSocketDebuggerUrl)) break;
+  await sleep(500);
+}
 const target = targets.find((item) => item.webSocketDebuggerUrl && item.type === "page") ?? targets.find((item) => item.webSocketDebuggerUrl);
 if (!target) {
-  throw new Error("No WebView DevTools target with a websocket debugger URL was found.");
+  throw new Error("No WebView DevTools target with a websocket debugger URL was found within 30s.");
 }
 
 const ws = new WebSocket(target.webSocketDebuggerUrl);
@@ -60,7 +75,13 @@ const result = await send("Runtime.evaluate", {
 ws.close();
 
 if (result.exceptionDetails) {
-  throw new Error(result.exceptionDetails.text || "WebView expression failed.");
+  const details = result.exceptionDetails;
+  const description =
+    details.exception?.description ||
+    details.exception?.value ||
+    details.text ||
+    "WebView expression failed.";
+  throw new Error(description);
 }
 
 const value = result.result?.value;

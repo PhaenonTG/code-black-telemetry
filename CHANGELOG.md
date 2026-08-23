@@ -4,6 +4,34 @@ All changes logged newest-first.
 
 ---
 
+## Native Device Walkthrough Hardening - 2026-08-23
+
+Hardened the physical Android QA harness without changing product features or native tracking code.
+
+### Changed
+- Refactored the S24 walkthrough helper around named steps, bounded waits, structured assertions,
+  machine-readable JSON summaries, and concise human-readable output.
+- Added explicit device discovery, unauthorized/offline/multiple-device handling, APK metadata,
+  SHA-256 hash capture, installed package version capture, and deterministic preflight runtime
+  checks without clearing app data.
+- Replaced fragile same-tick map assertions with WebView selector waits for route activation, layer
+  popovers, and expanded radar state.
+- Centralized active Chase notification and service checks without hardcoded app UID/full
+  notification key assumptions.
+- Added failure bundles with screenshots, UIAutomator hierarchy, logcat tail, service state,
+  active notification state, and WebView state.
+- Hardened force-stop-while-active reconciliation so the harness accepts only honest states:
+  inactive/no-service/no-active-notification or active UI plus active native service/notification.
+- Improved WebView evaluator readiness and exception reporting.
+
+### Validation Notes
+- The hardened S24 walkthrough passed on SM-S921U / RFCWC0D36KV / Android 16 with 21/21 checks and
+  zero relevant fatal logcat events.
+- Real Pi/ESP field packet validation, iOS Keychain native runtime validation, and Windows native
+  credential runtime validation remain blocked/open.
+
+---
+
 ## System / Operations Diagnostics Integrity - 2026-08-23
 
 Hardened field status wording without adding new features or changing native Chase tracking.
