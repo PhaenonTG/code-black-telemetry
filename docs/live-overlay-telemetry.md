@@ -23,13 +23,13 @@ Required configuration:
 - station ID, defaulting centrally to `CBWX-001`
 - station token
 
-If enabled without those values, the UI reports `NOT CONFIGURED`. The station token is a v0.1
-configuration secret stored with the same device preference mechanism as existing Pi command
-tokens. Production deployments should move it behind platform secure storage:
+If enabled without those values, the UI reports `NOT CONFIGURED`. The station token is a secret and
+uses the shared credential boundary:
 
-- iOS Keychain
-- Android Keystore
-- Windows Credential Manager
+- Android: Keystore-backed encrypted credential storage
+- iPhone/iPad: Keychain adapter pending macOS/Xcode runtime validation
+- Windows: Credential Manager adapter deferred
+- Web/dev preview: memory-only fallback, not persistent
 
 ## Payload
 
@@ -133,7 +133,7 @@ Overlay publish failures are isolated:
 ## Deferred
 
 - Production Core deployment and route mounting
-- secure credential storage
+- iOS/Windows native secure credential runtime validation
 - overlay frontend graphics
 - WebSocket/SSE push
 - fleet management UI

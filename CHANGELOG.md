@@ -4,6 +4,37 @@ All changes logged newest-first.
 
 ---
 
+## Credential and External Submission Hardening - 2026-08-22
+
+Hardened P0 credential storage and external Spotter Network submission boundaries without adding
+new feature families.
+
+### Changed
+- Added a shared secure credential abstraction with allowlisted keys for Spotter Network, Pi/BLE
+  command, and Live Overlay Telemetry station secrets.
+- Added an Android Capacitor plugin backed by Android Keystore AES-GCM encryption for credential
+  storage.
+- Migrated legacy Spotter Network password, Pi/BLE command token, and Live Overlay station token
+  out of Capacitor Preferences when secure write/read verification succeeds.
+- Updated Settings so saved secrets are shown only as configured/missing and can be replaced or
+  removed without redisplaying raw values.
+- Added credential redaction helpers for diagnostics/errors.
+- Tightened Spotter Network report submission with explicit user-action boundaries, field
+  validation, duplicate submission guards, and unknown-timeout handling.
+- Added domain tests covering redaction, migration-result safety, credential key allowlisting,
+  Spotter submission validation, duplicate ledger behavior, and MARK/Chaser Net non-submission
+  boundaries.
+- Documented the storage model, migration behavior, platform status, and external submission
+  limits in `docs/credential-and-submission-hardening.md`.
+
+### Validation Notes
+- Native Android Chase Tracking code was not changed.
+- iOS Keychain runtime validation remains pending on macOS/Xcode; Windows Credential Manager remains
+  a future adapter.
+- Web preview uses a memory-only development credential fallback and does not persist raw secrets.
+
+---
+
 ## Live Overlay Telemetry v0.1 - 2026-08-22
 
 Added an ephemeral current-position telemetry path for CodeBlack-Core livestream overlays without

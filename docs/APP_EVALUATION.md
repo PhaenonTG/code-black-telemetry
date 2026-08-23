@@ -26,8 +26,12 @@ coverage-limited data is called out, and deferred systems remain deferred.
   status handling, but production backend/auth/realtime deployment remains deferred.
 - Live Overlay Telemetry now has an explicit, off-by-default latest-state path for CodeBlack-Core
   overlays. It is not Chaser Net and does not upload breadcrumb history.
-- The largest readiness risks are credential storage, external Spotter Network submission boundary,
-  route/status clarity, and broad provider coverage gaps.
+- Credential storage and external Spotter Network submission P0 findings now have a first
+  remediation pass: Android secure credential storage, legacy migration, redacted diagnostics,
+  explicit submission intent, duplicate guards, and unknown-timeout handling exist. iOS Keychain
+  and Windows Credential Manager runtime adapters remain pending.
+- The largest remaining readiness risks are rendered-control automation, route/status clarity,
+  iOS/Windows credential runtime validation, and broad provider coverage gaps.
 
 ## Route Inventory
 
@@ -79,7 +83,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Core app shell | Working / needs polish | Seven-page dock shell and swipe navigation are implemented. Route model is custom, not router-based. |
 | Navigation | Working / needs polish | Dock/page dots and Android Back handling exist. Back closes expanded map and modals first. `/system` alias to Operations should be made explicit. |
 | Dashboard | Working / needs polish | Useful field data composition, but dense and mixed between live, stale, and unavailable provider states. |
-| Settings | Working / needs polish | Functional and persisted controls exist. Security-sensitive credential controls need a secure-storage pass. |
+| Settings | Working / needs polish | Functional and persisted controls exist. Security-sensitive controls now mask saved secrets and use the shared credential boundary where supported. |
 | Themes/display | Ready / working | Dark, Light, Night, System and display/keep-awake abstractions exist. |
 | Chase Mode | Ready on Android; platform foundation elsewhere | Physical S24 lifecycle was accepted in prior passes. Native Android tracking unchanged in this audit. iOS remains future native adapter work. |
 | GPS/location state | Working / needs polish | Shared normalized states exist; UI should keep stale/degraded wording consistent across all cards. |
@@ -94,11 +98,11 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Weather | Working / needs polish | Hardware telemetry plus fallback/provider paths exist; forecast/model systems remain deferred. |
 | Telemetry | Working / needs polish | BLE/HTTP/last-known hybrid exists. Hardware-source freshness must stay visible to avoid fake readings. |
 | Core/Pi connectivity | Working / needs polish | Shared connection model, endpoint normalization, testing, backoff, freshness, and diagnostics exist. Real Core/Pi services are external. |
-| Live overlay telemetry | Foundation / partial | Shared client publisher, authenticated Core contract, latest-state store, and Settings status exist. Production Core deployment, secure storage, and realtime overlay push remain pending. |
+| Live overlay telemetry | Foundation / partial | Shared client publisher, authenticated Core contract, latest-state store, Settings status, and secure station-token boundary exist. Production Core deployment and realtime overlay push remain pending. |
 | Alerts | Partial | Official NWS/SPC surfaces exist. Needs continued separation from OPS notices and Chaser Net observations. |
 | AI | Not started / deferred | No primary route found. Project One/radar reasoning not implemented. |
 | Chaser Net | Foundation only | Contracts, in-memory service, applications/review, privacy, roles, audit, and UI status exist. Production backend/auth/realtime absent. |
-| Storage/persistence | Working / needs security review | Settings, sessions, breadcrumbs, MARK, endpoints, provider cache, and Spotter state persist. Some histories are bounded. Credentials need secure-storage policy. |
+| Storage/persistence | Working / needs platform validation | Settings, sessions, breadcrumbs, MARK, endpoints, provider cache, and Spotter state persist. Spotter/Pi/overlay secrets moved behind a shared credential store on Android; iOS/Windows native secure-store adapters remain pending. |
 | Error handling | Partial | Error boundary exists and provider/service fallbacks exist. More user-facing categorization is needed in several hardware/provider paths. |
 | Performance | Working / needs monitoring | Map layers use memoization/cache/deduping; polling exists for telemetry/providers and should be watched on mobile battery. |
 
@@ -118,15 +122,19 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 - MARK events are bounded in `markEvents.ts`.
 - Provider caches are bounded in memory and visibly stale when reused.
 - Endpoint and display/settings state use shared preferences abstractions.
-- Spotter Network account and Pi/BLE command token persistence remain security-sensitive because they use app preferences. This must be resolved before broader distribution.
+- Spotter Network account metadata and non-secret settings still use Preferences. Spotter Network
+  password, Pi/BLE command token, and Live Overlay station token now migrate to the shared
+  credential store on Android.
 
 ## Security and Privacy Concerns
 
-1. Spotter Network password persistence should move to secure storage or a re-prompt model before
-   public distribution.
-2. BLE/Pi command token persistence and Android backup policy need a dedicated credential hardening
-   pass.
-3. Spotter Network external submission must remain explicitly user-triggered and account-gated.
+1. iOS Keychain and Windows Credential Manager adapters still need native runtime validation before
+   broader cross-platform distribution.
+2. Spotter Network external submission is now explicitly user-triggered, validated, and locally
+   guarded against duplicate/unknown-timeout resubmission, but provider-policy review remains
+   required before production/public use.
+3. Android backup still deserves a follow-up policy decision for non-secret app data and encrypted
+   credential envelopes.
 4. Chaser Net live sharing remains off/not configured; local Chase Mode must never enable network
    presence automatically.
 5. Live Overlay Telemetry is explicit and off by default; it uses latest-state only and must not
@@ -152,9 +160,9 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 
 | Item | Size | Why it matters | Prerequisite |
 | --- | --- | --- | --- |
-| Secure credential storage and backup policy for Spotter Network password and Pi/BLE command token | Medium | Prevents sensitive field credentials from living in plaintext preferences/backups. | Platform secure-storage adapter policy. |
-| Keep MARK/ESCAPE map-only | Small | Prevents accidental operational actions outside the map context. | Fixed in this pass; keep regression guard. |
-| External Spotter Network submission boundary review | Medium | Avoids unsafe or unauthorized operational submissions and clarifies third-party terms. | Product policy and integration agreement review. |
+| iOS/Windows secure credential runtime adapters | Medium | Completes the cross-platform credential boundary beyond Android. | macOS/Xcode and Windows host validation. |
+| Keep MARK/ESCAPE map-only | Small | Prevents accidental operational actions outside the map context. | Fixed; keep regression guard. |
+| External Spotter Network provider-policy review | Medium | Avoids unsafe or unauthorized operational submissions and clarifies third-party terms. | Product policy and integration agreement review. |
 
 ### P1 - Needed for Field Usability
 
@@ -187,9 +195,9 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 
 ## Recommended Next Five Passes
 
-1. **Credential and External Submission Hardening** - move sensitive Spotter Network and Pi/BLE command secrets behind a secure-storage policy, review Android backups, and tighten the external submission boundary.
-2. **Rendered Control Walkthrough Automation** - build a repeatable route/control QA harness for Android WebView and desktop web so future audits are evidence-based rather than source-only.
-3. **System Diagnostics and Field Status Polish** - make System/Operations status clearer, reduce fake-green risk, and surface provider/Core/Pi/GPS freshness in one consistent model.
+1. **Rendered Control Walkthrough Automation** - build a repeatable route/control QA harness for Android WebView and desktop web so future audits are evidence-based rather than source-only.
+2. **System Diagnostics and Field Status Polish** - make System/Operations status clearer, reduce fake-green risk, and surface provider/Core/Pi/GPS freshness in one consistent model.
+3. **iOS/Windows Secure Credential Adapter Validation** - complete native Keychain and Windows Credential Manager runtime paths behind the shared credential interface.
 4. **Road/Camera Regional Expansion** - add Oklahoma, Kansas, and Missouri provider adapters behind the existing registry, with coverage and attribution documented per provider.
 5. **Weather/Telemetry Freshness Stabilization** - harden current conditions, telemetry default/zero states, and stale hardware/provider behavior before new model/satellite products.
 

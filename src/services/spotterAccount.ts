@@ -130,11 +130,6 @@ interface LoginResult {
   error: string;
 }
 
-// Stores the account, including the raw password, in on-device Preferences (plaintext, unencrypted
-// storage on Android/iOS) so the app can silently re-authenticate later without prompting again.
-// This is an explicit, scoped decision for the pre-release/team-only phase of this app — revisit
-// before any public distribution (switch to re-prompting for password rather than storing it, or
-// ask Spotter Network for a dedicated non-personal app credential instead of a user login).
 export interface SevereReportInput {
   reportType: "S" | "W";
   tornado: boolean;
