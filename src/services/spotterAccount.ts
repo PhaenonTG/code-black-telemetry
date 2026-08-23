@@ -1,7 +1,17 @@
 import { Preferences } from "@capacitor/preferences";
+import { redactCredentialText } from "./credentialSecurity";
+import { migrateLegacyCredential, secureCredentialStore } from "./secureCredentials";
+import {
+  spotterReportFingerprint,
+  upsertSpotterSubmissionLedger,
+  validateSpotterSubmission,
+  type SubmissionLedger,
+} from "./spotterSubmissionPolicy";
 
 const ACCOUNT_KEY = "codeblack.spotterAccount";
 const ONBOARDING_SEEN_KEY = "codeblack.spotterOnboardingSeen";
+const SUBMISSION_LEDGER_KEY = "codeblack.spotterSubmissionLedger";
+const MAX_LEDGER_ENTRIES = 50;
 
 function readLocalSeenFallback() {
   try {
@@ -46,7 +56,6 @@ export async function markSpotterOnboardingSeen(): Promise<void> {
 
 export interface SpotterAccount {
   username: string;
-  password: string;
   id: string;
   marker: string;
   canReport: boolean;
@@ -61,7 +70,38 @@ function notify() {
 
 export async function loadSpotterAccount() {
   const saved = await Preferences.get({ key: ACCOUNT_KEY });
-  currentAccount = saved.value ? (JSON.parse(saved.value) as SpotterAccount) : null;
+  if (!saved.value) {
+    currentAccount = null;
+    notify();
+    return currentAccount;
+  }
+  const parsed = JSON.parse(saved.value) as SpotterAccount & { password?: string };
+  if (parsed.password) {
+    const migration = await migrateLegacyCredential({
+      key: "spotter-network.password",
+      legacyValue: parsed.password,
+      removeLegacy: async () => {
+        const { password: _password, ...account } = parsed;
+        await Preferences.set({ key: ACCOUNT_KEY, value: JSON.stringify(account) });
+      },
+    });
+    if (!migration.removedLegacy) {
+      currentAccount = {
+        username: parsed.username,
+        id: parsed.id,
+        marker: parsed.marker,
+        canReport: parsed.canReport,
+      };
+      notify();
+      return currentAccount;
+    }
+  }
+  currentAccount = {
+    username: parsed.username,
+    id: parsed.id,
+    marker: parsed.marker,
+    canReport: Boolean(parsed.canReport),
+  };
   notify();
   return currentAccount;
 }
@@ -81,6 +121,7 @@ export function subscribeSpotterAccount(listener: (account: SpotterAccount | nul
 export async function clearSpotterAccount() {
   currentAccount = null;
   await Preferences.remove({ key: ACCOUNT_KEY });
+  await secureCredentialStore.deleteCredential("spotter-network.password");
   notify();
 }
 
@@ -89,11 +130,6 @@ interface LoginResult {
   error: string;
 }
 
-// Stores the account, including the raw password, in on-device Preferences (plaintext, unencrypted
-// storage on Android/iOS) so the app can silently re-authenticate later without prompting again.
-// This is an explicit, scoped decision for the pre-release/team-only phase of this app — revisit
-// before any public distribution (switch to re-prompting for password rather than storing it, or
-// ask Spotter Network for a dedicated non-personal app credential instead of a user login).
 export interface SevereReportInput {
   reportType: "S" | "W";
   tornado: boolean;
@@ -121,14 +157,37 @@ export interface SevereReportInput {
 interface ReportResult {
   success: boolean;
   error: string;
+  state?: "SUBMITTED" | "FAILED" | "UNKNOWN";
 }
 
 function isoStamp(date: Date) {
   return date.toISOString().slice(0, 19).replace("T", " ");
 }
 
+async function loadSubmissionLedger(): Promise<SubmissionLedger> {
+  try {
+    const saved = await Preferences.get({ key: SUBMISSION_LEDGER_KEY });
+    const parsed = saved.value ? JSON.parse(saved.value) as SubmissionLedger : { entries: [] };
+    return { entries: Array.isArray(parsed.entries) ? parsed.entries.slice(0, MAX_LEDGER_ENTRIES) : [] };
+  } catch {
+    return { entries: [] };
+  }
+}
+
+async function saveSubmissionLedger(ledger: SubmissionLedger) {
+  await Preferences.set({ key: SUBMISSION_LEDGER_KEY, value: JSON.stringify({ entries: ledger.entries.slice(0, MAX_LEDGER_ENTRIES) }) });
+}
+
 export async function submitSevereReport(input: SevereReportInput): Promise<ReportResult> {
   if (!currentAccount) return { success: false, error: "Not signed in to Spotter Network." };
+  if (!currentAccount.canReport) return { success: false, error: "Spotter Network reporting is not enabled for this account." };
+  const validationError = validateSpotterSubmission(input);
+  if (validationError) return { success: false, error: validationError };
+  const fingerprint = spotterReportFingerprint(currentAccount.id, input);
+  const ledger = await loadSubmissionLedger();
+  const existing = ledger.entries.find((entry) => entry.fingerprint === fingerprint);
+  if (existing?.state === "SUBMITTED") return { success: false, state: "FAILED", error: "This report was already submitted from this device." };
+  if (existing?.state === "UNKNOWN") return { success: false, state: "UNKNOWN", error: "A previous submission timed out and may have reached Spotter Network. Review before retrying to avoid a duplicate." };
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 15_000);
   try {
@@ -166,11 +225,17 @@ export async function submitSevereReport(input: SevereReportInput): Promise<Repo
     const body = await response.json().catch(() => null);
     if (!response.ok) {
       const message = Array.isArray(body?.errors) ? body.errors.join(" ") : `${response.status} ${response.statusText}`;
-      return { success: false, error: message || "Report submission failed." };
+      return { success: false, state: "FAILED", error: redactCredentialText(message || "Report submission failed.") };
     }
-    return { success: true, error: "" };
+    await saveSubmissionLedger(upsertSpotterSubmissionLedger(ledger, fingerprint, "SUBMITTED"));
+    return { success: true, state: "SUBMITTED", error: "" };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Report submission failed." };
+    const aborted = error instanceof DOMException && error.name === "AbortError";
+    if (aborted) {
+      await saveSubmissionLedger(upsertSpotterSubmissionLedger(ledger, fingerprint, "UNKNOWN"));
+      return { success: false, state: "UNKNOWN", error: "Submission timed out. The result is unknown; do not blindly retry the same report." };
+    }
+    return { success: false, state: "FAILED", error: redactCredentialText(error instanceof Error ? error.message : "Report submission failed.") };
   } finally {
     window.clearTimeout(timer);
   }
@@ -193,16 +258,16 @@ export async function spotterNetworkLogin(username: string, password: string): P
     }
     currentAccount = {
       username,
-      password,
       id: String(body.id ?? ""),
       marker: String(body.marker ?? ""),
       canReport: Boolean(body.CanReport),
     };
+    await secureCredentialStore.setCredential("spotter-network.password", password);
     await Preferences.set({ key: ACCOUNT_KEY, value: JSON.stringify(currentAccount) });
     notify();
     return { success: true, error: "" };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Sign-in failed." };
+    return { success: false, error: redactCredentialText(error instanceof Error ? error.message : "Sign-in failed.") };
   } finally {
     window.clearTimeout(timer);
   }

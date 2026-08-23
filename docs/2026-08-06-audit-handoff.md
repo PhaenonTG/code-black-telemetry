@@ -57,6 +57,9 @@ No confirmed critical defects were fixed or newly introduced in this pass.
 ### HIGH
 
 1. Plaintext credentials can be included in Android backups
+   - Status update 2026-08-22: superseded by `docs/credential-and-submission-hardening.md`.
+     Spotter password, Pi/BLE command token, and Live Overlay station token now use the shared
+     credential boundary on Android with legacy Preferences migration.
    - Affected files: `android/app/src/main/AndroidManifest.xml`, `src/services/spotterAccount.ts`, `src/services/settings.ts`
    - Current behavior: `allowBackup="true"` while Spotter Network password and BLE command token are stored in Capacitor Preferences.
    - Expected behavior: pre-release policy may allow local plaintext, but backup/export policy should be explicit before field/public use.

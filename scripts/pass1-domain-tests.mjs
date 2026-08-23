@@ -25,6 +25,8 @@ const platformCapabilityModel = await importTs("src/services/platformCapabilityM
 const connection = await importTs("src/services/connection.ts");
 const roadCameraProviders = await importTs("src/services/roadCameraProviders.ts");
 const liveOverlayTelemetry = await importTs("src/services/liveOverlayTelemetryModel.ts");
+const credentialSecurity = await importTs("src/services/credentialSecurity.ts");
+const spotterSubmissionPolicy = await importTs("src/services/spotterSubmissionPolicy.ts");
 
 const appSource = await readFile("src/App.tsx", "utf8");
 assert.match(
@@ -396,5 +398,56 @@ assert.equal(
 );
 assert.equal(liveOverlayTelemetry.createLiveOverlayIngestUrl("https://core.example.test/"), "https://core.example.test/api/telemetry/live/location");
 assert.equal(liveOverlayTelemetry.createLiveOverlayReadUrl("https://core.example.test/", "cbwx-001"), "https://core.example.test/api/telemetry/live/CBWX-001");
+
+assert.equal(credentialSecurity.isKnownCredentialKey("spotter-network.password"), true);
+assert.equal(credentialSecurity.isKnownCredentialKey("codeblack.bleCommandToken"), false);
+assert.equal(credentialSecurity.normalizeCredentialValue("  test-token  "), "test-token");
+assert.equal(credentialSecurity.credentialConfiguredLabel(true), "CONFIGURED");
+assert.equal(credentialSecurity.redactCredentialText("Authorization: Bearer secret-token"), "Authorization: Bearer [REDACTED]");
+assert.deepEqual(
+  credentialSecurity.redactCredentialRecord({ nested: { stationToken: "secret", endpoint: "https://core.example.test" } }),
+  { nested: { stationToken: "[REDACTED]", endpoint: "https://core.example.test" } },
+);
+const migrationOk = credentialSecurity.credentialMigrationResult(true, true);
+assert.equal(migrationOk.migrated, true);
+assert.equal(migrationOk.removedLegacy, true);
+const migrationPreserved = credentialSecurity.credentialMigrationResult(true, false, "token=secret");
+assert.equal(migrationPreserved.preservedLegacy, true);
+assert.equal(migrationPreserved.error.includes("secret"), false);
+
+const spotterSubmission = {
+  reportType: "S",
+  tornado: false,
+  funnelCloud: false,
+  wallCloud: true,
+  rotation: false,
+  hail: false,
+  wind: false,
+  flood: false,
+  flashFlood: false,
+  other: false,
+  hailSizeIn: null,
+  windSpeedMph: null,
+  windMeasured: false,
+  damage: false,
+  injury: false,
+  narrative: "Wall cloud west of town",
+  lat: 36.18,
+  lon: -94.12,
+};
+assert.equal(spotterSubmissionPolicy.validateSpotterSubmission(spotterSubmission), "");
+assert.equal(spotterSubmissionPolicy.validateSpotterSubmission({ ...spotterSubmission, lat: 136 }), "Report location is invalid.");
+assert.equal(spotterSubmissionPolicy.validateSpotterSubmission({ ...spotterSubmission, wallCloud: false }), "Select at least one hazard type.");
+assert.equal(spotterSubmissionPolicy.validateSpotterSubmission({ ...spotterSubmission, narrative: "x".repeat(501) }), "Report narrative must be 500 characters or less.");
+const reportFingerprintA = spotterSubmissionPolicy.spotterReportFingerprint("123", spotterSubmission);
+const reportFingerprintB = spotterSubmissionPolicy.spotterReportFingerprint("123", { ...spotterSubmission, lat: 36.18001, lon: -94.12001 });
+assert.equal(reportFingerprintA, reportFingerprintB);
+const ledger = spotterSubmissionPolicy.upsertSpotterSubmissionLedger({ entries: [] }, reportFingerprintA, "UNKNOWN", now);
+assert.equal(ledger.entries[0].state, "UNKNOWN");
+const submittedLedger = spotterSubmissionPolicy.upsertSpotterSubmissionLedger(ledger, reportFingerprintA, "SUBMITTED", now + 1);
+assert.equal(submittedLedger.entries.length, 1);
+assert.equal(submittedLedger.entries[0].state, "SUBMITTED");
+assert.equal(/submitSevereReport/.test(await readFile("src/services/markEvents.ts", "utf8")), false);
+assert.equal(/submitSevereReport/.test(await readFile("src/services/chaserNet.ts", "utf8")), false);
 
 console.log("pass1-domain-tests: ok");
