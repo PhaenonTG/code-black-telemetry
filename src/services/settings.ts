@@ -1,5 +1,6 @@
 import { Preferences } from "@capacitor/preferences";
 import { normalizeEndpointInput, normalizeEndpointOrEmpty } from "./connection";
+import { secureCredentialStore, migrateLegacyCredential } from "./secureCredentials";
 
 const PI_ENDPOINT_KEY = "codeblack.piEndpoint";
 const DEFAULT_PI_ENDPOINT = "";
@@ -379,16 +380,36 @@ const bleCommandTokenListeners = new Set<(token: string) => void>();
 
 export async function loadBleCommandToken() {
   const saved = await Preferences.get({ key: BLE_COMMAND_TOKEN_KEY });
-  currentBleCommandToken = saved.value ?? "";
+  if (saved.value) {
+    const migration = await migrateLegacyCredential({
+      key: "vehicle-node.command-token",
+      legacyValue: saved.value,
+      removeLegacy: () => Preferences.remove({ key: BLE_COMMAND_TOKEN_KEY }),
+    });
+    currentBleCommandToken = migration.removedLegacy
+      ? await secureCredentialStore.getCredential("vehicle-node.command-token")
+      : saved.value;
+  } else {
+    currentBleCommandToken = await secureCredentialStore.getCredential("vehicle-node.command-token");
+  }
   bleCommandTokenListeners.forEach((listener) => listener(currentBleCommandToken));
   return currentBleCommandToken;
 }
 
 export async function saveBleCommandToken(value: string) {
   currentBleCommandToken = value.trim();
-  await Preferences.set({ key: BLE_COMMAND_TOKEN_KEY, value: currentBleCommandToken });
+  if (currentBleCommandToken) await secureCredentialStore.setCredential("vehicle-node.command-token", currentBleCommandToken);
+  else await secureCredentialStore.deleteCredential("vehicle-node.command-token");
+  await Preferences.remove({ key: BLE_COMMAND_TOKEN_KEY });
   bleCommandTokenListeners.forEach((listener) => listener(currentBleCommandToken));
   return currentBleCommandToken;
+}
+
+export async function clearBleCommandToken() {
+  currentBleCommandToken = "";
+  await secureCredentialStore.deleteCredential("vehicle-node.command-token");
+  await Preferences.remove({ key: BLE_COMMAND_TOKEN_KEY });
+  bleCommandTokenListeners.forEach((listener) => listener(currentBleCommandToken));
 }
 
 export function getBleCommandToken() {

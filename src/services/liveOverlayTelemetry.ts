@@ -1,5 +1,6 @@
 import { Preferences } from "@capacitor/preferences";
 import { classifyFetchError, classifyHttpStatus, fetchWithTimeout, normalizeEndpointInput, nextBackoffDelayMs } from "./connection";
+import { migrateLegacyCredential, secureCredentialStore } from "./secureCredentials";
 import { locationTrackingService, type LocationTrackingStatus } from "./locationTracking";
 import {
   createLiveOverlayIngestUrl,
@@ -18,7 +19,6 @@ export interface LiveOverlayTelemetrySettings {
   stationId: string;
   stationName: string;
   coreEndpoint: string;
-  stationToken: string;
 }
 
 export interface LiveOverlayTelemetryStatus {
@@ -38,6 +38,7 @@ export interface LiveOverlayTelemetryStatus {
 
 type StatusListener = (status: LiveOverlayTelemetryStatus) => void;
 type SettingsListener = (settings: LiveOverlayTelemetrySettings) => void;
+type TokenConfiguredListener = (configured: boolean) => void;
 
 interface LiveOverlayTelemetrySender {
   (settings: LiveOverlayTelemetrySettings, payload: LiveOverlayTelemetryPayload, signal: AbortSignal): Promise<void>;
@@ -62,11 +63,12 @@ export const DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS: LiveOverlayTelemetrySettin
   stationId: DEFAULT_STATION_ID,
   stationName: "Code Black Chase Vehicle",
   coreEndpoint: "",
-  stationToken: "",
 };
 
 let currentSettings = DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS;
+let currentStationToken = "";
 const settingsListeners = new Set<SettingsListener>();
+const tokenConfiguredListeners = new Set<TokenConfiguredListener>();
 
 function normalizeStationId(value: string) {
   const stationId = value.trim().toUpperCase();
@@ -81,7 +83,6 @@ function normalizeLiveOverlayTelemetrySettings(input: Partial<LiveOverlayTelemet
     stationName: String(input.stationName ?? DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS.stationName).trim().slice(0, 80)
       || DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS.stationName,
     coreEndpoint: normalizedEndpoint.ok ? normalizedEndpoint.endpoint : "",
-    stationToken: String(input.stationToken ?? "").trim(),
   };
 }
 
@@ -89,14 +90,33 @@ export async function loadLiveOverlayTelemetrySettings() {
   const saved = await Preferences.get({ key: LIVE_OVERLAY_TELEMETRY_SETTINGS_KEY });
   if (saved.value) {
     try {
-      currentSettings = normalizeLiveOverlayTelemetrySettings(JSON.parse(saved.value) as Partial<LiveOverlayTelemetrySettings>);
+      const parsed = JSON.parse(saved.value) as Partial<LiveOverlayTelemetrySettings> & { stationToken?: string };
+      currentSettings = normalizeLiveOverlayTelemetrySettings(parsed);
+      if (parsed.stationToken) {
+        const migration = await migrateLegacyCredential({
+          key: "live-overlay.station-token",
+          legacyValue: parsed.stationToken,
+          removeLegacy: async () => {
+            const { stationToken: _stationToken, ...settings } = parsed;
+            await Preferences.set({ key: LIVE_OVERLAY_TELEMETRY_SETTINGS_KEY, value: JSON.stringify(normalizeLiveOverlayTelemetrySettings(settings)) });
+          },
+        });
+        currentStationToken = migration.removedLegacy
+          ? await secureCredentialStore.getCredential("live-overlay.station-token")
+          : parsed.stationToken;
+      } else {
+        currentStationToken = await secureCredentialStore.getCredential("live-overlay.station-token");
+      }
     } catch {
       currentSettings = DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS;
+      currentStationToken = await secureCredentialStore.getCredential("live-overlay.station-token");
     }
   } else {
     currentSettings = DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS;
+    currentStationToken = await secureCredentialStore.getCredential("live-overlay.station-token");
   }
   settingsListeners.forEach((listener) => listener(currentSettings));
+  tokenConfiguredListeners.forEach((listener) => listener(Boolean(currentStationToken)));
   return currentSettings;
 }
 
@@ -109,6 +129,26 @@ export async function saveLiveOverlayTelemetrySettings(settings: Partial<LiveOve
   return currentSettings;
 }
 
+export async function saveLiveOverlayTelemetryToken(value: string) {
+  currentStationToken = value.trim();
+  if (currentStationToken) await secureCredentialStore.setCredential("live-overlay.station-token", currentStationToken);
+  else await secureCredentialStore.deleteCredential("live-overlay.station-token");
+  tokenConfiguredListeners.forEach((listener) => listener(Boolean(currentStationToken)));
+  return Boolean(currentStationToken);
+}
+
+export async function clearLiveOverlayTelemetryToken() {
+  currentStationToken = "";
+  await secureCredentialStore.deleteCredential("live-overlay.station-token");
+  tokenConfiguredListeners.forEach((listener) => listener(false));
+}
+
+export async function hasLiveOverlayTelemetryToken() {
+  if (currentStationToken) return true;
+  currentStationToken = await secureCredentialStore.getCredential("live-overlay.station-token");
+  return Boolean(currentStationToken);
+}
+
 export function getLiveOverlayTelemetrySettings() {
   return currentSettings;
 }
@@ -118,6 +158,14 @@ export function subscribeLiveOverlayTelemetrySettings(listener: SettingsListener
   listener(currentSettings);
   return () => {
     settingsListeners.delete(listener);
+  };
+}
+
+export function subscribeLiveOverlayTelemetryTokenConfigured(listener: TokenConfiguredListener) {
+  tokenConfiguredListeners.add(listener);
+  listener(Boolean(currentStationToken));
+  return () => {
+    tokenConfiguredListeners.delete(listener);
   };
 }
 
@@ -139,7 +187,7 @@ function emptyStatus(settings = currentSettings): LiveOverlayTelemetryStatus {
 }
 
 function isConfigured(settings: LiveOverlayTelemetrySettings) {
-  return Boolean(settings.enabled && settings.coreEndpoint && settings.stationId && settings.stationToken);
+  return Boolean(settings.enabled && settings.coreEndpoint && settings.stationId && currentStationToken);
 }
 
 function payloadFromObservation(settings: LiveOverlayTelemetrySettings, observation: LocationObservation): LiveOverlayTelemetryPayload | null {
@@ -165,7 +213,7 @@ async function postLiveOverlayTelemetry(settings: LiveOverlayTelemetrySettings, 
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.stationToken}`,
+      Authorization: `Bearer ${currentStationToken}`,
     },
     body: JSON.stringify(payload),
   });

@@ -10,6 +10,7 @@ import {
   DEFAULT_DISPLAY_SETTINGS,
   DEFAULT_REPORT_FEED_RADIUS_MILES,
   DEFAULT_REPORT_FEED_RETENTION_HOURS,
+  clearBleCommandToken,
   getBleCommandToken,
   loadAppTheme,
   loadBleCommandToken,
@@ -51,6 +52,8 @@ import {
   type DisplaySettings,
   type DisplayWakeMode,
 } from "../../services/settings";
+import { credentialConfiguredLabel } from "../../services/credentialSecurity";
+import { secureCredentialStore } from "../../services/secureCredentials";
 import { emitCodeBlackSound, setCodeBlackSoundEnabled, SOUND_ENABLED_PREF_KEY, subscribeCodeBlackSoundEnabled, type CodeBlackSoundEvent } from "../../services/sound";
 import { clearSpotterAccount, loadSpotterAccount, spotterNetworkLogin, subscribeSpotterAccount, type SpotterAccount } from "../../services/spotterAccount";
 import { bleTelemetryClient } from "../../services/telemetry/ble-client";
@@ -64,9 +67,13 @@ import { getPlatformCapabilities } from "../../services/platformCapabilities";
 import { useStatus } from "../../hooks/useTelemetry";
 import {
   DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS,
+  clearLiveOverlayTelemetryToken,
+  hasLiveOverlayTelemetryToken,
   loadLiveOverlayTelemetrySettings,
   saveLiveOverlayTelemetrySettings,
+  saveLiveOverlayTelemetryToken,
   subscribeLiveOverlayTelemetrySettings,
+  subscribeLiveOverlayTelemetryTokenConfigured,
   type LiveOverlayTelemetrySettings,
 } from "../../services/liveOverlayTelemetry";
 import { useLiveOverlayTelemetry } from "../../hooks/useLiveOverlayTelemetry";
@@ -194,6 +201,8 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [piEndpoint, setPiEndpoint] = useState("");
   const [telemetryLinkEnabled, setTelemetryLinkEnabled] = useState(true);
   const [overlaySettings, setOverlaySettings] = useState<LiveOverlayTelemetrySettings>(DEFAULT_LIVE_OVERLAY_TELEMETRY_SETTINGS);
+  const [overlayTokenInput, setOverlayTokenInput] = useState("");
+  const [overlayTokenConfigured, setOverlayTokenConfigured] = useState(false);
   const [overlaySettingsSaved, setOverlaySettingsSaved] = useState(false);
   const [overlaySettingsError, setOverlaySettingsError] = useState("");
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
@@ -202,6 +211,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [spotterPassword, setSpotterPassword] = useState("");
   const [spotterBusy, setSpotterBusy] = useState(false);
   const [spotterError, setSpotterError] = useState("");
+  const [credentialStorageLabel, setCredentialStorageLabel] = useState("UNKNOWN");
   const [chaserRadiusMiles, setChaserRadiusMiles] = useState(DEFAULT_CHASER_RADIUS_MILES);
   const [chaserRadiusInput, setChaserRadiusInput] = useState(String(DEFAULT_CHASER_RADIUS_MILES));
   const [chaserRadiusSaved, setChaserRadiusSaved] = useState(false);
@@ -222,6 +232,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const [chaseTrackingSettings, setChaseTrackingSettings] = useState<ChaseTrackingSettings>(DEFAULT_CHASE_TRACKING_SETTINGS);
   const [localChaseBusy, setLocalChaseBusy] = useState(false);
   const [bleTokenInput, setBleTokenInput] = useState("");
+  const [bleTokenConfigured, setBleTokenConfigured] = useState(false);
   const [bleTokenSaved, setBleTokenSaved] = useState(false);
   const [bleConnected, setBleConnected] = useState(false);
   const [lightingBusy, setLightingBusy] = useState(false);
@@ -254,9 +265,12 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
 
   useEffect(() => {
     const unsubscribe = subscribeLiveOverlayTelemetrySettings(setOverlaySettings);
+    const unsubscribeToken = subscribeLiveOverlayTelemetryTokenConfigured(setOverlayTokenConfigured);
     void loadLiveOverlayTelemetrySettings();
+    void hasLiveOverlayTelemetryToken().then(setOverlayTokenConfigured);
     return () => {
       unsubscribe();
+      unsubscribeToken();
     };
   }, []);
 
@@ -269,6 +283,10 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   const saveOverlaySettings = async () => {
     try {
       const saved = await saveLiveOverlayTelemetrySettings(overlaySettings);
+      if (overlayTokenInput.trim()) {
+        await saveLiveOverlayTelemetryToken(overlayTokenInput);
+        setOverlayTokenInput("");
+      }
       setOverlaySettings(saved);
       setOverlaySettingsSaved(true);
       setOverlaySettingsError("");
@@ -281,6 +299,8 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
   useEffect(() => {
     const unsubscribe = subscribeSpotterAccount(setSpotterAccount);
     void loadSpotterAccount();
+    const storageInfo = secureCredentialStore.getStorageInfo();
+    setCredentialStorageLabel(storageInfo.securityLevel === "native-secure" ? storageInfo.provider : storageInfo.securityLevel.toUpperCase());
     return () => {
       unsubscribe();
     };
@@ -358,7 +378,8 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
 
   useEffect(() => {
     void loadBleCommandToken().then((token) => {
-      setBleTokenInput(token);
+      setBleTokenConfigured(Boolean(token));
+      setBleTokenInput("");
     });
   }, []);
 
@@ -476,8 +497,26 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
 
   const saveBleToken = async () => {
     await saveBleCommandToken(bleTokenInput);
+    setBleTokenConfigured(Boolean(bleTokenInput.trim()));
+    setBleTokenInput("");
     setBleTokenSaved(true);
     window.setTimeout(() => setBleTokenSaved(false), 1600);
+  };
+
+  const removeBleToken = async () => {
+    await clearBleCommandToken();
+    setBleTokenInput("");
+    setBleTokenConfigured(false);
+    setBleTokenSaved(true);
+    window.setTimeout(() => setBleTokenSaved(false), 1600);
+  };
+
+  const removeOverlayToken = async () => {
+    await clearLiveOverlayTelemetryToken();
+    setOverlayTokenInput("");
+    setOverlayTokenConfigured(false);
+    setOverlaySettingsSaved(true);
+    window.setTimeout(() => setOverlaySettingsSaved(false), 1600);
   };
 
   const sendLighting = async (action: "power" | "brightness" | "color" | "profile", params: Record<string, unknown>) => {
@@ -682,14 +721,25 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           />
           <input
             className="settings-input"
-            placeholder="Station token"
+            placeholder={overlayTokenConfigured ? "Replace station token" : "Station token"}
             type="password"
             autoCapitalize="none"
             autoCorrect="off"
-            value={overlaySettings.stationToken}
-            onChange={(event) => updateOverlaySettingsDraft({ stationToken: event.target.value })}
+            value={overlayTokenInput}
+            onChange={(event) => {
+              setOverlayTokenInput(event.target.value);
+              setOverlaySettingsSaved(false);
+              setOverlaySettingsError("");
+            }}
           />
           <button className="settings-action" onClick={() => void saveOverlaySettings()}>{overlaySettingsSaved ? "Saved" : "Save"}</button>
+          <button className="settings-action" disabled={!overlayTokenConfigured} onClick={() => void removeOverlayToken()}>Remove Token</button>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>Station Token</strong>
+            <span>{credentialConfiguredLabel(overlayTokenConfigured)} · {credentialStorageLabel}</span>
+          </div>
         </div>
         {overlaySettingsError && <div className="cb-note cb-note--warn">{overlaySettingsError}</div>}
       </Panel>
@@ -699,7 +749,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
           <div className="settings-row">
             <div>
               <strong>Signed In</strong>
-              <span>{spotterAccount.username} · {spotterAccount.canReport ? "Can submit reports" : "Reporting not enabled on this account"}</span>
+              <span>{spotterAccount.username} · {spotterAccount.canReport ? "Can submit reports" : "Reporting not enabled on this account"} · credential {credentialStorageLabel}</span>
             </div>
             <button className="settings-action" onClick={signOutSpotter}>Sign Out</button>
           </div>
@@ -708,7 +758,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
             <div className="settings-row settings-row--stack">
               <div>
                 <strong>Sign In</strong>
-                <span>Powers Chasers + report submission. Stored on-device only.</span>
+                <span>Powers Spotter Network pins + explicit report submission. Password is not redisplayed after save.</span>
               </div>
             </div>
             <div className="settings-row settings-row--stack">
@@ -916,20 +966,21 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         <div className="settings-row">
           <div>
             <strong>Command Token</strong>
-            <span>Shared secret from the Pi. Required for lighting commands.</span>
+            <span>Shared secret from the Pi. Required for lighting commands. {credentialConfiguredLabel(bleTokenConfigured)} · {credentialStorageLabel}</span>
           </div>
         </div>
         <div className="settings-row settings-row--stack">
           <input
             className="settings-input"
-            placeholder="Command token"
+            placeholder={bleTokenConfigured ? "Replace command token" : "Command token"}
             type="password"
             autoCapitalize="none"
             autoCorrect="off"
             value={bleTokenInput}
             onChange={(event) => setBleTokenInput(event.target.value)}
           />
-          <button className="settings-action" onClick={() => void saveBleToken()}>{bleTokenSaved ? "Saved" : "Save"}</button>
+          <button className="settings-action" disabled={!bleTokenInput.trim()} onClick={() => void saveBleToken()}>{bleTokenSaved ? "Saved" : "Save"}</button>
+          <button className="settings-action" disabled={!bleTokenConfigured} onClick={() => void removeBleToken()}>Remove Token</button>
         </div>
         <div className="settings-row">
           <div>
