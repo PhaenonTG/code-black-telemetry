@@ -120,7 +120,19 @@ function Wait-ChaseActive([int]$TimeoutSeconds = 20) {
 
 function Test-WebViewChaseActiveText {
   $state = Invoke-WebViewExpression @"
-(() => document.body.innerText.includes('CHASE ACTIVE') ? 'ACTIVE' : 'INACTIVE')()
+(() => {
+  const isVisible = (element) => {
+    if (!element) return false;
+    const style = window.getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+  };
+  const activeStatus = [...document.querySelectorAll('[role="status"], .chase-status-strip')]
+    .some((element) => isVisible(element) && /\bCHASE ACTIVE\b/i.test(element.textContent || ''));
+  const visibleButtons = [...document.querySelectorAll('button')].filter(isVisible);
+  const enabledEnd = visibleButtons.some((button) => button.textContent?.trim().toUpperCase() === 'END' && !button.disabled);
+  return activeStatus && enabledEnd ? 'ACTIVE' : 'INACTIVE';
+})()
 "@
   $state -match "ACTIVE"
 }
