@@ -33,6 +33,7 @@ import { clusterViewportPoints, filterViewportPoints, viewportFromMap, zoomDetai
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, type RoadConditionEvent, type TrafficCamera, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
+import { LayerGlyph } from "../components/situational/LayerGlyph";
 
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
 // the real operating zoom for a "swoop to position" open on cold launch, rather than snapping.
@@ -684,6 +685,25 @@ export function AtlasMap({
     };
   }, [viewport, chaserNetVisible]);
 
+  // QA/screenshot-automation hook only -- not called from any in-app UI. Camera marker positions
+  // move with live provider coverage and viewport, which made landing on a real, un-clustered
+  // camera pin by panning/tapping alone unreliable for scripted capture. This lets an external
+  // script (e.g. the S24 screenshot baseline) jump the real map to a real, currently-loaded
+  // camera's coordinates so it can screenshot a genuine camera popup -- it never fabricates a
+  // camera or its data, it only centers the already-live map on one that's already loaded.
+  useEffect(() => {
+    (window as any).__codeblackDebugJumpToCamera = () => {
+      const map = mapRef.current;
+      const camera = trafficCameras.find((c) => Number.isFinite(c.lat) && Number.isFinite(c.lon));
+      if (!map || !camera) return { ok: false, reason: !map ? "NO_MAP" : "NO_CAMERA_LOADED" };
+      map.jumpTo({ center: [camera.lon, camera.lat], zoom: 14 });
+      return { ok: true, cameraId: camera.id, lat: camera.lat, lon: camera.lon };
+    };
+    return () => {
+      delete (window as any).__codeblackDebugJumpToCamera;
+    };
+  }, [trafficCameras]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
@@ -833,38 +853,47 @@ export function AtlasMap({
             </div>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={alertsVisible} onChange={() => toggleLayer("alerts")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="alerts" /></span>
               Alerts (watches + warnings + MD)
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={teamVisible} onChange={() => toggleLayer("team")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="team" /></span>
               Team
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={chasersVisible} onChange={() => toggleLayer("chasers")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="spotter" /></span>
               Spotter Network
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={poiVisible} onChange={() => toggleLayer("poi")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="poi" /></span>
               Nearby (gas / food / hotel / ER)
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={breadcrumbsVisible} onChange={() => toggleLayer("breadcrumbs")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="trail" /></span>
               Trail
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={roadConditionsVisible} onChange={() => toggleLayer("roadConditions")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="road" /></span>
               Road Conditions - {providerStatusLabel(roadLayerStatus, roadConditions.length, roadProviderCount)}
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={trafficCamerasVisible} onChange={() => toggleLayer("trafficCameras")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="camera" /></span>
               Public Cameras - {providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount)}
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
               <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="probe" /></span>
               Probes - unavailable
             </label>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
               <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="network" /></span>
               Chaser Net - unavailable
             </label>
           </div>
