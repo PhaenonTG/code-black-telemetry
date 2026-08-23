@@ -45,6 +45,9 @@ coverage-limited data is called out, and deferred systems remain deferred.
 - System/Operations diagnostics now use a shared operational taxonomy. Pi transport, telemetry
   freshness, sensor-service state, disabled overlay state, provider error, and outside-coverage
   states are represented separately.
+- Native Chase startup reconciliation now persists a stored-active/no-running-service state as
+  inactive and cancels the chase notification; the S24 walkthrough covers force-stop while active
+  through relaunch reconciliation.
 - The largest remaining readiness risks are iOS/Windows credential runtime
   validation, real Pi/ESP field-node validation, broad provider coverage gaps, and native-device
   automation depth.
@@ -101,7 +104,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Dashboard | Working / needs polish | Useful field data composition; key weather/telemetry values now distinguish live, stale, and unavailable states, but the cockpit remains dense. |
 | Settings | Working / needs polish | Functional and persisted controls exist. Security-sensitive controls now mask saved secrets and use the shared credential boundary where supported. |
 | Themes/display | Ready / working | Dark, Light, Night, System and display/keep-awake abstractions exist. |
-| Chase Mode | Ready on Android; platform foundation elsewhere | Physical S24 lifecycle was reaccepted from a clean reboot state. Three Start/MARK/End cycles left no active `ChaseTrackingService` and no active notification key after End Chase. Force-stop-while-active reconciliation now clears the persisted Chase banner if native tracking cannot be restored. Samsung notification archive records may remain in `dumpsys` history and should not be treated as active leaks. iOS remains future native adapter work. |
+| Chase Mode | Ready on Android; platform foundation elsewhere | Physical S24 lifecycle was reaccepted from a clean reboot state. Three Start/MARK/End cycles left no active `ChaseTrackingService` and no active notification key after End Chase. Force-stop-while-active reconciliation now clears stored active state and active notification if native tracking cannot be restored. Samsung notification archive records may remain in `dumpsys` history and should not be treated as active leaks. iOS remains future native adapter work. |
 | GPS/location state | Working / needs polish | Shared normalized states exist and rendered tests preserve missing heading versus valid stationary speed. |
 | MARK | Ready after map-only fix | Immediate capture, duplicate guard, session association, and bounded persistence exist. Map-only placement is now guarded by test. |
 | ESCAPE | Foundation only | Context/readiness path exists; production routing is not active and must remain honestly labeled. |

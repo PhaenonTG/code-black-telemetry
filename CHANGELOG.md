@@ -21,6 +21,10 @@ Hardened field status wording without adding new features or changing native Cha
   auto-refresh wording instead.
 - Added domain and rendered walkthrough checks for connected-but-stale telemetry, disabled overlay
   status, outside-coverage provider state, and Settings/Operations diagnostic wording.
+- Fixed the S24 force-stop-while-active walkthrough helper so it waits for relaunch reconciliation
+  instead of asserting an impossible pre-relaunch state.
+- Hardened native Chase status reconciliation so a stored-active/no-running-service state is
+  persisted inactive and the chase notification is canceled on startup reconciliation.
 
 ### Validation Notes
 - Real Pi/ESP field-node validation remains blocked because the hardware is unavailable. This pass

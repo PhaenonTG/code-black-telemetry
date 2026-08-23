@@ -132,8 +132,10 @@ public class ChaseTrackingNativePlugin extends Plugin {
         boolean storedActive = nativeStatus.optBoolean("active", false);
         boolean running = isServiceRunning();
         if (storedActive && !running) {
+            ChaseTrackingStore.stop(getContext());
             cancelTrackingNotification();
             result.put("active", false);
+            result.put("stoppedAt", ChaseTrackingStore.status(getContext()).optLong("stoppedAt", System.currentTimeMillis()));
             result.put("lastError", "NATIVE_SERVICE_NOT_RUNNING");
             result.put("lastServiceEvent", "tracking_not_running");
         } else if (!storedActive && running) {
