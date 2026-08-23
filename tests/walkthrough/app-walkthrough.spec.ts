@@ -26,7 +26,14 @@ const ignoredConsolePatterns = [
 
 const runtimeProblems = new WeakMap<Page, { consoleProblems: string[]; pageErrors: string[] }>();
 
-function isIgnoredConsoleMessage(message: string) {
+function isKnownExternalProviderUrl(url: string) {
+  return /api\.mapbox\.com|events\.mapbox\.com|spotternetwork|weather\.gov|spc\.noaa\.gov|overpass\.kumi\.systems/i.test(url);
+}
+
+function isIgnoredConsoleMessage(message: string, sourceUrl = "") {
+  if (/Failed to load resource: the server responded with a status of 429 \(Too Many Requests\)/i.test(message) && isKnownExternalProviderUrl(sourceUrl)) {
+    return true;
+  }
   return ignoredConsolePatterns.some((pattern) => pattern.test(message));
 }
 
@@ -38,7 +45,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   page.on("console", (message) => {
     if (!["error", "warning"].includes(message.type())) return;
     const text = message.text();
-    if (!isIgnoredConsoleMessage(text)) consoleProblems.push(`${message.type()}: ${text}`);
+    if (!isIgnoredConsoleMessage(text, message.location().url)) consoleProblems.push(`${message.type()}: ${text}`);
   });
   page.on("pageerror", (error) => {
     pageErrors.push(error.stack || error.message);
@@ -46,7 +53,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   page.on("requestfailed", (request) => {
     const url = request.url();
     const failure = request.failure()?.errorText ?? "";
-    if (/api\.mapbox\.com|events\.mapbox\.com|spotternetwork|weather\.gov|spc\.noaa\.gov\/products\/outlook|overpass\.kumi\.systems\/api\/interpreter/i.test(url)) return;
+    if (isKnownExternalProviderUrl(url)) return;
     if (/net::ERR_ABORTED/i.test(failure)) return;
     consoleProblems.push(`request failed: ${url} ${failure}`);
   });
@@ -236,6 +243,7 @@ test("layers page exposes provider-backed and deferred layer states honestly", a
   await expect(section).toContainText(/Wide-Area Mosaic/i);
   await expect(section).toContainText(/Road Conditions/i);
   await expect(section).toContainText(/Public Cameras/i);
+  await expect(section).toContainText(/Arkansas DOT IDrive/i);
   await expect(section).toContainText(/Code Black Probes/i);
   await expect(section).toContainText(/unavailable/i);
   await expect(section).toContainText(/backend is not configured/i);
@@ -254,6 +262,50 @@ test("settings controls expose secure credential and overlay state without showi
   await section.getByRole("button", { name: /^Off$/ }).first().click();
   await expect(page.getByTestId("map-action-mark")).toHaveCount(0);
   await expect(page.getByTestId("map-action-escape")).toHaveCount(0);
+});
+
+test("operations diagnostics separate transport health from telemetry freshness", async ({ page }) => {
+  const now = Date.now();
+  await injectTelemetry(page, telemetryFixture({
+    sensors: [
+      { id: "nav-esp", label: "nav-esp", online: true, lastPacketAt: now - 120_000, packetRateHz: 1.2 },
+    ],
+    status: {
+      apiLatencyMs: 22,
+      dataAgeSeconds: 240,
+      piOnline: true,
+      internetOnline: true,
+      mode: "pi",
+      updatedAt: now - 240_000,
+      connection: {
+        endpoint: "http://192.168.4.1:5000",
+        connectionState: "CONNECTED",
+        lastAttemptAt: now - 5_000,
+        lastConnectedAt: now - 5_000,
+        lastSuccessfulResponseAt: now - 5_000,
+        lastDataAt: now - 240_000,
+        dataAgeMs: 240_000,
+        latencyMs: 22,
+        failureCount: 0,
+        lastErrorCode: null,
+        lastErrorSummary: null,
+        retryAt: null,
+        provider: "vehicle-node",
+        transport: "local-network",
+        isConfigured: true,
+      },
+    },
+  }));
+  const operations = await goToRoute(page, "operations");
+  await expect(operations).toContainText(/VEHICLE NODE MODE/i);
+  await expect(operations).toContainText(/PI TRANSPORT · CONNECTED/i);
+  await expect(operations).toContainText(/TELEMETRY · STALE/i);
+
+  const settings = await goToRoute(page, "settings");
+  await expect(settings).toContainText(/Pi Transport/i);
+  await expect(settings).toContainText(/CONNECTED/i);
+  await expect(settings).toContainText(/Telemetry Data/i);
+  await expect(settings).toContainText(/STALE/i);
 });
 
 test("shared Chase UI starts and ends without native-service claims", async ({ page }) => {

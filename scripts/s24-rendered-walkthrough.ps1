@@ -134,7 +134,7 @@ function Test-WebViewChaseActiveText {
   return activeStatus && enabledEnd ? 'ACTIVE' : 'INACTIVE';
 })()
 "@
-  $state -match "ACTIVE"
+  ($state.Trim()) -eq "ACTIVE"
 }
 
 function Wait-ForceStopRecovery([int]$TimeoutSeconds = 30) {
@@ -246,8 +246,6 @@ $summary.chase.started = $true
 
 Run-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
 Start-Sleep -Seconds 5
-Assert-NoChaseService
-Assert-NoActiveChaseNotification
 Run-Adb @("shell", "monkey", "-p", $PackageName, "-c", "android.intent.category.LAUNCHER", "1") | Out-Null
 Start-Sleep -Seconds 3
 $summary.chase.forceStopWhileActive = Wait-ForceStopRecovery

@@ -71,3 +71,12 @@ last success, data age, retry timing, and sanitized error summaries.
 
 Diagnostics must not print auth tokens, credentials, full sensitive headers, or raw stack traces.
 
+Operations and Settings diagnostics should use the shared operational status taxonomy documented in
+`docs/system-operations-diagnostics.md`. In particular, `CONNECTED` only describes transport
+reachability. Telemetry, sensor services, weather-node data, power, and Pi system metrics must keep
+their own observation freshness state such as `LIVE`, `AGING`, `STALE`, `NO DATA`, or `OFFLINE`.
+
+Real Pi/ESP field validation is currently blocked until the hardware is connected. Deterministic
+fixtures are acceptable for UI/state regression tests, but they are not evidence that live BLE/HTTP
+field-node packets have passed acceptance.
+

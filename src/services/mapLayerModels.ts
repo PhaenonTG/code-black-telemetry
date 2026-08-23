@@ -120,7 +120,7 @@ export interface ProbeObservation {
 
 export interface ViewportLayerResult<T> {
   data: T[];
-  status: "ready" | "empty" | "stale" | "not-configured" | "unavailable" | "error";
+  status: "ready" | "empty" | "stale" | "outside-coverage" | "not-configured" | "unavailable" | "error";
   message: string;
   simulated: boolean;
   fetchedAt: number;

@@ -4,6 +4,34 @@ All changes logged newest-first.
 
 ---
 
+## System / Operations Diagnostics Integrity - 2026-08-23
+
+Hardened field status wording without adding new features or changing native Chase tracking.
+
+### Changed
+- Added a shared operational status helper for transport, telemetry freshness, sensor-service state,
+  overlay state labels, provider coverage labels, and compact age formatting.
+- Updated Operations and Settings diagnostics so Pi transport health is separate from telemetry
+  data freshness.
+- Updated Sensor Health, Pi System, and Vehicle Power cards to label aging/stale/offline
+  last-known data instead of treating Pi transport as proof of live observations.
+- Changed road/camera provider results to report `outside-coverage` for areas beyond current
+  Arkansas DOT IDrive v0.1 coverage.
+- Removed static radar `LIVE` wording where the app has no tile-freshness proof, using
+  auto-refresh wording instead.
+- Added domain and rendered walkthrough checks for connected-but-stale telemetry, disabled overlay
+  status, outside-coverage provider state, and Settings/Operations diagnostic wording.
+- Fixed the S24 force-stop-while-active walkthrough helper so it waits for relaunch reconciliation
+  instead of asserting an impossible pre-relaunch state.
+- Hardened native Chase status reconciliation so a stored-active/no-running-service state is
+  persisted inactive and the chase notification is canceled on startup reconciliation.
+
+### Validation Notes
+- Real Pi/ESP field-node validation remains blocked because the hardware is unavailable. This pass
+  uses source audit and deterministic fixtures for hardware-dependent status logic.
+
+---
+
 ## Telemetry and Weather Data Integrity - 2026-08-22
 
 Closed the audit findings around default-zero telemetry and weather freshness without adding new

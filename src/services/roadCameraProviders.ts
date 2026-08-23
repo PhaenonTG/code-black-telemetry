@@ -420,7 +420,7 @@ export async function getRoadConditionsForViewport(context: LayerQueryContext, s
   const providers = roadProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "not-configured", message: "No road-condition provider covers this viewport yet.", simulated: false, fetchedAt };
+    return { data: [], status: "outside-coverage", message: "Outside current road-condition provider coverage. v0.1 supports Arkansas DOT IDrive coverage.", simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("road", roadCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);
@@ -440,7 +440,7 @@ export async function getTrafficCamerasForViewport(context: LayerQueryContext, s
   const providers = trafficCameraProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "not-configured", message: "No public traffic-camera provider covers this viewport yet.", simulated: false, fetchedAt };
+    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. v0.1 supports Arkansas DOT IDrive coverage.", simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("camera", cameraCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);
