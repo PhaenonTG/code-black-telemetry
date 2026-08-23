@@ -13,19 +13,23 @@ function Require-Command($Name) {
   }
 }
 
-function Run-Adb([string[]]$Args) {
-  & adb -s $DeviceSerial @Args
+function Run-Adb([string[]]$AdbArgs) {
+  & adb -s $DeviceSerial @AdbArgs
 }
 
 function Get-UiXml {
   Run-Adb @("shell", "uiautomator", "dump", "/sdcard/codeblack-ui.xml") | Out-Null
-  $xmlText = Run-Adb @("exec-out", "cat", "/sdcard/codeblack-ui.xml")
+  $xmlText = (Run-Adb @("exec-out", "cat", "/sdcard/codeblack-ui.xml")) -join "`n"
   [xml]$xmlText
 }
 
 function Get-NodeByTextOrDescription([xml]$Xml, [string]$Pattern, [switch]$PreferBottom) {
   $nodes = $Xml.SelectNodes("//node") | Where-Object {
-    (($_.text -match $Pattern) -or ($_."content-desc" -match $Pattern)) -and $_.bounds -match "\[(\d+),(\d+)\]\[(\d+),(\d+)\]"
+    if (-not (($_.text -match $Pattern) -or ($_."content-desc" -match $Pattern))) { return $false }
+    if ($_.bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") { return $false }
+    $width = [int]$Matches[3] - [int]$Matches[1]
+    $height = [int]$Matches[4] - [int]$Matches[2]
+    $width -gt 0 -and $height -gt 0
   }
   if ($PreferBottom) {
     $nodes = $nodes | Sort-Object {
@@ -49,6 +53,21 @@ function Tap-Node([xml]$Xml, [string]$Pattern, [switch]$PreferBottom) {
   if (-not $node) { throw "UI node not found: $Pattern" }
   $center = Get-NodeCenter $node
   Run-Adb @("shell", "input", "tap", "$($center.X)", "$($center.Y)") | Out-Null
+}
+
+function Tap-NodeWithScroll([string]$Pattern, [int]$MaxScrolls = 8) {
+  for ($attempt = 0; $attempt -le $MaxScrolls; $attempt++) {
+    $xml = Get-UiXml
+    $node = Get-NodeByTextOrDescription -Xml $xml -Pattern $Pattern
+    if ($node) {
+      $center = Get-NodeCenter $node
+      Run-Adb @("shell", "input", "tap", "$($center.X)", "$($center.Y)") | Out-Null
+      return
+    }
+    Run-Adb @("shell", "input", "swipe", "540", "1900", "540", "760", "450") | Out-Null
+    Start-Sleep -Milliseconds 500
+  }
+  throw "Visible UI node not found after scrolling: $Pattern"
 }
 
 function Save-Screenshot([string]$Name) {
@@ -77,6 +96,25 @@ function Assert-NoChaseService {
   }
 }
 
+function Invoke-WebViewExpression([string]$Expression) {
+  node scripts/s24-webview-evaluate.mjs $DeviceSerial $PackageName $Expression
+}
+
+function Test-ChaseActive {
+  $services = (Run-Adb @("shell", "dumpsys", "activity", "services", $PackageName)) -join "`n"
+  $notifications = (Run-Adb @("shell", "cmd", "notification", "list")) -join "`n"
+  ($services -match "ChaseTrackingService" -and $services -match "foregroundId=7319") -and ($notifications -match [regex]::Escape($PackageName) -and $notifications -match "7319")
+}
+
+function Wait-ChaseActive([int]$TimeoutSeconds = 20) {
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  do {
+    if (Test-ChaseActive) { return }
+    Start-Sleep -Seconds 1
+  } while ((Get-Date) -lt $deadline)
+  throw "Chase did not start foreground service and active notification."
+}
+
 Require-Command adb
 if (-not (Test-Path $ApkPath)) {
   throw "APK not found: $ApkPath"
@@ -93,8 +131,8 @@ $summary = [ordered]@{
   chase = [ordered]@{}
 }
 
-$devices = adb devices -l
-if ($devices -notmatch $DeviceSerial -or $devices -notmatch "device") {
+$devices = (adb devices -l) -join "`n"
+if ($devices -notmatch $DeviceSerial -or $devices -notmatch "\bdevice\b") {
   throw "Device $DeviceSerial is not connected and authorized."
 }
 
@@ -103,6 +141,25 @@ Run-Adb @("logcat", "-c") | Out-Null
 Run-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
 Run-Adb @("shell", "monkey", "-p", $PackageName, "-c", "android.intent.category.LAUNCHER", "1") | Out-Null
 Start-Sleep -Seconds 5
+
+$preflightResult = Invoke-WebViewExpression @"
+(async () => {
+  if (!document.body.innerText.includes('CHASE ACTIVE')) return 'ALREADY_INACTIVE';
+  document.querySelector('[data-testid="dock-settings"]')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const end = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'END' && !button.disabled);
+  if (!end) return 'ACTIVE_END_NOT_FOUND';
+  end.click();
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  return document.body.innerText.includes('CHASE ACTIVE') ? 'STILL_ACTIVE' : 'ENDED';
+})()
+"@
+if ($preflightResult -match "ACTIVE_END_NOT_FOUND|STILL_ACTIVE") {
+  throw "Preflight could not clear restored Chase state: $preflightResult"
+}
+Start-Sleep -Seconds 5
+Assert-NoChaseService
+Assert-NoActiveChaseNotification
 
 $routePatterns = [ordered]@{
   Weather = "Weather"
@@ -130,17 +187,21 @@ foreach ($route in $routePatterns.Keys) {
   $summary.routes += [ordered]@{ route = $route; mark = $hasMark; escape = $hasEscape; screenshot = $shot }
 }
 
-$xml = Get-UiXml
-Tap-Node -Xml $xml -Pattern "Settings|Setup" -PreferBottom
-Start-Sleep -Seconds 1
-$xml = Get-UiXml
-Tap-Node -Xml $xml -Pattern "^Start$"
-Start-Sleep -Seconds 5
-$activeService = Run-Adb @("shell", "dumpsys", "activity", "services", $PackageName) | Select-String -Pattern "ChaseTrackingService|foregroundId=7319"
-$activeNotification = Run-Adb @("shell", "cmd", "notification", "list") | Select-String -Pattern "$PackageName|7319"
-if (-not $activeService -or -not $activeNotification) {
-  throw "Chase did not start foreground service and active notification."
+$startResult = Invoke-WebViewExpression @"
+(async () => {
+  document.querySelector('[data-testid="dock-settings"]')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const start = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'START' && !button.disabled);
+  if (!start) return 'START_NOT_FOUND';
+  start.click();
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  return document.body.innerText.includes('CHASE ACTIVE') ? 'CHASE_ACTIVE' : document.body.innerText.slice(0, 200);
+})()
+"@
+if ($startResult -notmatch "CHASE_ACTIVE") {
+  throw "WebView Start Chase did not enter active state: $startResult"
 }
+Wait-ChaseActive
 $summary.chase.started = $true
 
 $xml = Get-UiXml
@@ -150,11 +211,20 @@ $xml = Get-UiXml
 Tap-Node -Xml $xml -Pattern "Mark current position|^MARK$"
 $summary.chase.markTapped = $true
 
-$xml = Get-UiXml
-Tap-Node -Xml $xml -Pattern "Settings|Setup" -PreferBottom
-Start-Sleep -Seconds 1
-$xml = Get-UiXml
-Tap-Node -Xml $xml -Pattern "^End$"
+$endResult = Invoke-WebViewExpression @"
+(async () => {
+  document.querySelector('[data-testid="dock-settings"]')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const end = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim().toUpperCase() === 'END' && !button.disabled);
+  if (!end) return 'END_NOT_FOUND';
+  end.click();
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  return document.body.innerText.includes('CHASE ACTIVE') ? 'STILL_ACTIVE' : 'CHASE_INACTIVE';
+})()
+"@
+if ($endResult -notmatch "CHASE_INACTIVE") {
+  throw "WebView End Chase did not enter inactive state: $endResult"
+}
 Start-Sleep -Seconds 10
 Assert-NoChaseService
 Assert-NoActiveChaseNotification
@@ -173,7 +243,7 @@ $summary.chase.relaunchInactive = $true
 
 $logPath = Join-Path $ArtifactDir "logcat.txt"
 Run-Adb @("logcat", "-d", "-t", "1500") | Set-Content -Path $logPath
-$badLogs = Select-String -Path $logPath -Pattern "FATAL EXCEPTION|ANR|TypeError|ReferenceError|SecurityException|foreground service failure|stopForeground failure" -CaseSensitive:$false
+$badLogs = Select-String -Path $logPath -Pattern "FATAL EXCEPTION|\bANR\b|TypeError|ReferenceError|SecurityException|foreground service failure|stopForeground failure" -CaseSensitive:$false
 if ($badLogs) {
   throw "Relevant logcat issue found: $($badLogs | Select-Object -First 3)"
 }
