@@ -101,6 +101,35 @@ function safePopupUrl(value: string | null | undefined) {
 // popup already open and vice versa, matching how a single-selection map UI is expected to behave.
 const activePopups = new WeakMap<MapboxMap, Popup>();
 
+// Mapbox's own anchor auto-detection ("auto", the default when anchor isn't specified) picks a
+// corner based on the marker's position relative to the *map container*, then repositions the
+// popup on every subsequent render frame to keep tracking that corner -- so a one-time post-render
+// correction of the element's own transform gets silently overwritten within a frame or two (this
+// map re-renders continuously for the mosaic/pulse animations). The fix instead has to work with
+// Mapbox's own per-frame positioning: pick a fixed anchor up front (whichever side of the marker
+// actually has more room in the map's on-screen width) and size the popup to what that side can
+// actually hold, rather than assuming a fixed width always fits. On phone-width map cards
+// (measured as narrow as 312px, not the full device width) a fixed ~240px popup has no anchor that
+// avoids overflow for a marker in the middle third of the card -- whichever side has more room
+// still needs the popup sized to fit it, not just aimed at it.
+const ATLAS_PIN_POPUP_MAX_WIDTH_PX = 240;
+const ATLAS_PIN_POPUP_MIN_WIDTH_PX = 160;
+const ATLAS_PIN_POPUP_EDGE_MARGIN_PX = 16;
+
+function pinPopupPlacementFor(map: MapboxMap, lon: number, lat: number): { anchor: "bottom" | "bottom-left" | "bottom-right"; maxWidthPx: number } {
+  const point = map.project([lon, lat]);
+  const containerWidth = map.getContainer().clientWidth;
+  const roomLeft = point.x - ATLAS_PIN_POPUP_EDGE_MARGIN_PX;
+  const roomRight = containerWidth - point.x - ATLAS_PIN_POPUP_EDGE_MARGIN_PX;
+  const roomCentered = Math.min(point.x, containerWidth - point.x) * 2 - ATLAS_PIN_POPUP_EDGE_MARGIN_PX * 2;
+  if (roomCentered >= ATLAS_PIN_POPUP_MAX_WIDTH_PX) return { anchor: "bottom", maxWidthPx: ATLAS_PIN_POPUP_MAX_WIDTH_PX };
+  // Whichever side has more room, even if neither reaches the preferred width -- the popup is then
+  // sized to what that side can actually hold (floored so it never renders unreadably narrow).
+  const anchor = roomRight >= roomLeft ? "bottom-left" : "bottom-right";
+  const room = Math.max(roomLeft, roomRight);
+  return { anchor, maxWidthPx: Math.max(ATLAS_PIN_POPUP_MIN_WIDTH_PX, Math.min(ATLAS_PIN_POPUP_MAX_WIDTH_PX, room)) };
+}
+
 function showPinPopup(map: MapboxMap, point: PinPoint) {
   activePopups.get(map)?.remove();
   if (!point.name) return;
@@ -125,7 +154,15 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
   const actionUrl = safePopupUrl(point.actionUrl);
   const action = actionUrl ? `<a class="atlas-pin-popup__action" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(point.actionLabel ?? "Open source")}</a>` : "";
   const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${details}${image}${phoneLine}${emailLine}${action}`;
-  const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, offset: 16, className: "atlas-pin-popup" })
+  const placement = pinPopupPlacementFor(map, point.lon, point.lat);
+  const popup = new mapboxgl.Popup({
+    closeButton: true,
+    closeOnClick: false,
+    offset: 16,
+    className: "atlas-pin-popup",
+    anchor: placement.anchor,
+    maxWidth: `${placement.maxWidthPx}px`,
+  })
     .setLngLat([point.lon, point.lat])
     .setHTML(html)
     .addTo(map);

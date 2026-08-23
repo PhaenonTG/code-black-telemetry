@@ -84,7 +84,7 @@ export function WeatherObservationPanel({ external, mode }: { external: External
       <div className="cockpit-primary cockpit-primary--conditions cockpit-primary--conditions-full">
         {mode === "chase" ? (
           <>
-            <MetricTile icon="T" label="Temp" value={valueText(temp, 0)} unit="deg F" accent="red" />
+            <MetricTile icon="T" label="Temp" value={valueText(temp, 0)} unit="deg F" accent="red" hero />
             <MetricTile icon="D" label="DP" value={valueText(dew, 0)} unit="deg F" accent="blue" />
             <MetricTile icon="S" label="Spread" value={valueText(spread, 0)} unit="deg" accent="amber" />
             <MetricTile
@@ -102,7 +102,7 @@ export function WeatherObservationPanel({ external, mode }: { external: External
           </>
         ) : (
           <>
-            <MetricTile icon="T" label="Temp" value={valueText(temp, 0)} unit="deg F" accent="red" />
+            <MetricTile icon="T" label="Temp" value={valueText(temp, 0)} unit="deg F" accent="red" hero />
             <MetricTile icon="D" label="Dew" value={valueText(dew, 0)} unit="deg F" accent="blue" />
             <MetricTile icon="%" label="RH" value={valueText(humidity, 0)} unit="%" accent="blue" />
             <MetricTile icon="P" label="Pressure" value={valueText(pressure, 0)} unit="mb" accent={wx?.pressureTrend === "rising" ? "green" : "blue"} />
