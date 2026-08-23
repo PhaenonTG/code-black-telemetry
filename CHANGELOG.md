@@ -4,6 +4,30 @@ All changes logged newest-first.
 
 ---
 
+## Phone Home / Map Structure / Layers - 2026-08-23
+
+Added the first post-audit phone UI structure pass without changing native Chase tracking.
+
+### Changed
+- Added a phone-first Home / Field Overview route with modular Chase, radar, weather, alerts,
+  system, and location cards.
+- Added Home module preferences for visibility, order, and compact/standard/expanded sizing using
+  normal non-secret app settings.
+- Reduced the phone dock to Home, Map, Weather, Alerts, and More. Operations, Report, Layers, and
+  Settings remain reachable through More.
+- Renamed the user-facing Locate surface to Map while keeping `/locate` as a compatibility alias.
+- Removed the visible MARK control from normal UI while preserving the internal MARK service path.
+- Moved ESCAPE inside the map surface as a map overlay control and reduced map chrome footprint.
+- Compacted layer configuration rows and standardized layer glyph/category treatment.
+- Clarified Arkansas DOT IDrive camera behavior as static public snapshot media; protected HLS
+  URLs are not advertised as playable streams when direct clients receive provider denial.
+
+### Validation Notes
+- Rendered walkthrough expectations now assert MARK UI absence, Map-only ESCAPE, Home module
+  configuration, More navigation, and camera media state wording.
+
+---
+
 ## Final Audit Reconciliation - 2026-08-23
 
 Closed the current audit-remediation cycle for the currently testable scope without changing app

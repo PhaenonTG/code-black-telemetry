@@ -27,10 +27,10 @@ all-platform production certification.
 | ID | Finding | Original priority | Current status | Evidence |
 | --- | --- | --- | --- | --- |
 | P0-01 | Secure credential storage and backup policy for Spotter Network password, Pi/BLE command token, and Live Overlay station token | P0 | Closed for Android/current testable scope | Shared credential boundary, Android Keystore-backed adapter, encrypted credential backup exclusions, write-before-state ordering, redacted read/migration diagnostics, and secure-token tests are present. |
-| P0-02 | MARK and ESCAPE appeared outside the map context | P0 | Closed | Controls are Locate/map-only in source and are guarded by rendered and S24 walkthrough assertions. |
+| P0-02 | MARK and ESCAPE appeared outside the map context | P0 | Closed | MARK no longer renders as a user-facing control. ESCAPE renders only inside the Map surface and is guarded by rendered and S24 walkthrough assertions. |
 | P0-03 | External Spotter Network submission boundary needed review | P0 | Closed as engineering boundary | Submission requires explicit user action, duplicate local submissions use `ALREADY_SUBMITTED`, ambiguous timeout is not treated as safe retry, and MARK/Chase/Chaser Net/overlay paths do not auto-submit. Provider-policy approval remains external. |
 | P0-04 | Native Android Chase notification cleanup concern | P0 blocker during remediation | Closed | S24 root-cause work distinguishes active notifications from Samsung/Android archive records. The native harness checks active notification/service state and force-stop recovery. |
-| P1-01 | Rendered full-control walkthrough automation missing | P1 | Closed | Playwright walkthrough covers first-class routes, major controls, console errors, responsive viewports, MARK/ESCAPE scope, deferred honesty, Settings, layers, report, and shared Chase UI. |
+| P1-01 | Rendered full-control walkthrough automation missing | P1 | Closed | Playwright walkthrough covers first-class routes, Home customization, major controls, console errors, responsive viewports, MARK UI absence, Map-only ESCAPE scope, deferred honesty, Settings, layers, report, and shared Chase UI. |
 | P1-02 | System/Operations status was too vague | P1 | Closed | Shared operational taxonomy separates transport health, data freshness, disabled/offline, outside coverage, and provider unavailable states. |
 | P1-03 | Telemetry default-zero display risk | P1 | Closed for software integrity | Nullable measurement model, valid-zero tests, stale/missing states, and rendered checks prevent missing data from rendering as live zero. |
 | P1-04 | Weather freshness polish | P1 | Closed for current scope | Weather values now preserve timestamps/source/freshness and clear stale fallback when GPS/location is unavailable. |
@@ -61,12 +61,13 @@ all-platform production certification.
 
 ## Executive Findings
 
-- The active app shell exposes seven primary pages: Weather, Operations, Locate, Alerts, Report,
-  Settings, and Layers. System diagnostics are embedded in Operations/Settings rather than exposed
-  as a separate primary route. AI, Fleet, and full System pages are not currently first-class
-  reachable routes.
-- MARK and ESCAPE are now map-only controls. They appear only on the Locate/map page and preserve
-  existing MARK capture and ESCAPE context/deferred-routing behavior.
+- The active phone app shell now exposes five primary dock destinations: Home, Map, Weather,
+  Alerts, and More. Operations, Report, Layers, and Settings remain reachable under More. System
+  diagnostics are embedded in Operations/Settings rather than exposed as a separate primary route.
+  AI, Fleet, and full System pages are not currently first-class reachable routes.
+- MARK is no longer rendered as a visible normal-UI control, but the internal MARK service pathway
+  remains preserved for future approved workflows. ESCAPE is now visually inside the Map surface and
+  preserves its context/deferred-routing behavior.
 - Mosaic radar remains the only active radar product. Native Level II REF/VEL/SRV/CC remains
   intentionally deferred.
 - Native Android Chase Tracking remains the strongest accepted system. This pass does not change
@@ -87,7 +88,7 @@ all-platform production certification.
   unknown-timeout handling exist. iOS Keychain source adapter is implemented; native Xcode/device
   runtime validation remains pending. Windows Credential Manager remains pending.
 - The rendered-control automation gap now has a first remediation pass: Playwright coverage checks
-  first-class routes, major controls, MARK/ESCAPE map-only placement, deferred-state honesty, console
+  first-class routes, Home configuration, major controls, MARK UI absence, Map-only ESCAPE placement, deferred-state honesty, console
   errors, and phone/tablet/desktop layout structure. Physical S24 native Chase acceptance remains a
   separate device workflow.
 - Weather/Telemetry integrity now distinguishes valid physical zero from missing or unavailable
@@ -107,13 +108,14 @@ all-platform production certification.
 
 | Surface | Reachable | Classification | Notes |
 | --- | --- | --- | --- |
-| Weather / Dashboard | Yes | Working / needs polish | Primary landing page; combines weather, radar preview, nearby, and operations context. Some data is provider/hardware dependent and must keep age/status visible. |
+| Home / Field Overview | Yes | Working / needs polish | Primary phone landing page with modular Chase, radar, weather, alerts, system, and location cards. Module visibility/order/size persists in normal non-secret settings. |
+| Weather | Yes | Working / needs polish | Detailed weather page; some data is provider/hardware dependent and must keep age/status visible. |
 | Operations | Yes | Working / needs polish | Holds Core/Pi/streaming/status diagnostics and actions. Pi transport and telemetry freshness are now shown separately; some commands require BLE token and live vehicle node. |
-| Locate / Map | Yes | Working / needs polish | Primary map/radar surface with mosaic radar, own vehicle, trail, road/camera providers, Spotter Network pins, MARK, and ESCAPE. |
+| Map | Yes | Working / needs polish | Primary map/radar surface with mosaic radar, own vehicle, trail, road/camera providers, Spotter Network pins, and in-map ESCAPE. `/locate` remains a compatibility alias. |
 | Alerts | Yes | Partial | NWS/SPC products are displayed where available; should keep official alert styling separate from OPS notices and Chaser Net reports. |
 | Report | Yes | Partial / security-sensitive | Spotter Network report submission path exists but requires credentials and external service availability. Not a Chaser Net production report flow. |
 | Settings | Yes | Working / needs polish | Large but functional; many controls persist and are consumed. Some hardware/network controls depend on external configuration. |
-| Layers | Yes | Working / needs polish | Layer readiness is mostly honest; provider-backed road/camera layers coexist with disabled/deferred probes and Chaser Net. |
+| Layers | Yes, through More | Working / needs polish | Layer readiness is mostly honest; provider-backed road/camera layers coexist with disabled/deferred probes and Chaser Net. Rows now use standardized glyphs/source/status summaries. |
 | Expanded map/radar | Yes, modal/portal | Working / needs polish | Mosaic portal renders through shared map. Android Back closes it before route navigation. |
 | System | Alias/foundation | Partial | `/system` maps into Operations. A clearer dedicated diagnostics route remains useful. |
 | Chaser Net panel | Reachable from Settings/Layers context | Foundation only | Honest not-configured production backend state. |
@@ -141,7 +143,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 
 | Classification | Finding |
 | --- | --- |
-| Broken | MARK/ESCAPE were globally available on non-map pages. Fixed in this pass. |
+| Broken | Historical MARK/ESCAPE global availability is closed. MARK visible UI is now absent by product decision; ESCAPE is Map-only. |
 | Partial | Spotter Network report submission, Pi/BLE command controls, streaming controls, road/camera provider coverage, Chaser Net panels. |
 | Placeholder/deferred | Probes, production Chaser Net backend/realtime, ESCAPE routing, AI route, Fleet route, GOES/GLM/HRRR/RAP/soundings, CarPlay, Android Auto, Windows packaging. |
 | Misleading risk | Hardware-dependent systems still require real Pi/ESP field validation; Spotter Network credentials may look like a normal production login/storage flow. |
@@ -155,13 +157,13 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | Dashboard | Working / needs polish | Useful field data composition; key weather/telemetry values now distinguish live, stale, and unavailable states, but the cockpit remains dense. |
 | Settings | Working / needs polish | Functional and persisted controls exist. Security-sensitive controls now mask saved secrets and use the shared credential boundary where supported. |
 | Themes/display | Ready / working | Dark, Light, Night, System and display/keep-awake abstractions exist. |
-| Chase Mode | Ready on Android; platform foundation elsewhere | Physical S24 lifecycle was reaccepted from a clean reboot state. Three Start/MARK/End cycles left no active `ChaseTrackingService` and no active notification key after End Chase. Force-stop-while-active reconciliation now clears stored active state and active notification if native tracking cannot be restored. Samsung notification archive records may remain in `dumpsys` history and should not be treated as active leaks. iOS remains future native adapter work. |
+| Chase Mode | Ready on Android; platform foundation elsewhere | Physical S24 lifecycle was reaccepted from a clean reboot state. Start/End cycles leave no active `ChaseTrackingService` and no active notification key after End Chase. Current QA uses active service/notification/map usability rather than visible MARK as lifecycle proof. Force-stop-while-active reconciliation now clears stored active state and active notification if native tracking cannot be restored. Samsung notification archive records may remain in `dumpsys` history and should not be treated as active leaks. iOS remains future native adapter work. |
 | GPS/location state | Working / needs polish | Shared normalized states exist and rendered tests preserve missing heading versus valid stationary speed. |
-| MARK | Ready after map-only fix | Immediate capture, duplicate guard, session association, and bounded persistence exist. Map-only placement is now guarded by test. |
-| ESCAPE | Foundation only | Context/readiness path exists; production routing is not active and must remain honestly labeled. |
+| MARK | Internal capability preserved; visible UI removed | Immediate capture, duplicate guard, session association, and bounded persistence exist behind the service pathway. Normal user-facing MARK control is intentionally not rendered. |
+| ESCAPE | Foundation only | Context/readiness path exists inside the Map surface; production routing is not active and must remain honestly labeled. |
 | Mosaic radar | Working / needs polish | Active radar experience. Static `LIVE` wording was removed where tile freshness is not directly known. Mapbox/token/network availability still affects runtime. |
 | Road Conditions | Partial live v0.1 | Provider-backed with Arkansas DOT IDrive coverage only. Uses viewport filtering, provenance, validation, cache, stale fallback, and outside-coverage state. |
-| Public Cameras | Partial live v0.1 | Arkansas DOT IDrive public cameras only. Images load on detail, not for every marker; outside-coverage is distinct from provider failure. |
+| Public Cameras | Partial live v0.1 | Arkansas DOT IDrive public cameras only. Static PNG snapshots load on detail, not for every marker; protected HLS feed URLs are not advertised as playable streams when direct clients receive provider denial. Outside-coverage is distinct from provider failure. |
 | Spotter Network layer | Partial / external dependency | Public/authenticated Spotter Network feeds are external and non-commercial-use constrained. Not Code Black Chaser Net. |
 | Reports layer/feed | Partial | NWS/Spotter reports are distinct from Chaser Net production reports. External submission requires caution. |
 | Probes | Foundation only | Layer model/visual language exists, production ingest absent. |
@@ -180,7 +182,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 
 | Platform | Status | Notes |
 | --- | --- | --- |
-| Android phone/tablet | Working / accepted core | Native Chase Tracking, MARK, mosaic radar, and cleanup have physical S24 acceptance. |
+| Android phone/tablet | Working / accepted core | Native Chase Tracking, mosaic radar, Map-only ESCAPE, MARK UI absence, and cleanup have physical S24/rendered acceptance. |
 | iPhone | Foundation | Capacitor iOS host/sync and shared capability wording exist. Native Core Location/background tracking remains pending. |
 | iPad | Foundation | Shared responsive cockpit direction exists. Physical iPad validation remains pending. |
 | Windows | Foundation | Shared web app can serve as base; packaging, external GPS adapter, and desktop diagnostics remain deferred. |

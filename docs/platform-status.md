@@ -5,6 +5,10 @@ application owns mission state, MARK, mosaic radar, map layers, reports, setting
 contracts, and operational UI. Native projects should only own host behavior and platform-specific
 capabilities such as background location, notifications, display control, Bluetooth, and packaging.
 
+Phone navigation now starts on Home / Field Overview, uses Map as the user-facing situational map
+label, and keeps Operations, Report, Layers, and Settings under More on phone. The legacy `/locate`
+path remains a compatibility alias for Map.
+
 ## Current Matrix
 
 | Feature | Android | iPhone / iPad | Windows |
@@ -12,7 +16,7 @@ capabilities such as background location, notifications, display control, Blueto
 | Shared UI | Implemented through Capacitor WebView | Foundation through existing Capacitor iOS project | PWA/laptop preview foundation |
 | Mosaic radar | Implemented with shared Mapbox GL JS raster layer | Shared WebView path, pending physical iPhone/iPad validation | Shared web path |
 | Road/Cameras | Shared provider-backed map layers; Arkansas DOT IDrive v0.1 | Shared WebView/provider path; pending physical iPhone/iPad validation | Shared web/provider path |
-| MARK | Implemented in shared session/location flow | Shared flow ready; depends on available foreground location | Shared flow ready; location provider may be unavailable/external later |
+| MARK | Internal shared session/location flow preserved; visible phone control removed | Shared flow ready; future UI entry depends on approved foreground location workflow | Shared flow ready; location provider may be unavailable/external later |
 | Chase sessions | Implemented in shared mission session service | Shared session logic ready | Shared session logic ready |
 | Persistent background location | Implemented through Android native adapter | Pending native Core Location adapter; do not claim active | Pending desktop/external GPS adapter |
 | Location permissions | Android native adapter plus shared normalized status | Info.plist has foreground location wording; background adapter/permissions deferred | Provider-specific future work |
@@ -121,8 +125,8 @@ adapter remains future work.
 ## Android Native Walkthrough Notes
 
 The S24 native walkthrough is documented in `docs/rendered-control-walkthrough.md`. It validates the
-current Android QA path on Samsung Galaxy S24 / Android 16, including route rendering, Android Back,
-MARK/ESCAPE map-only placement, Chase service state, active Chase notification state,
+ current Android QA path on Samsung Galaxy S24 / Android 16, including route rendering, Android Back,
+MARK UI absence, ESCAPE Map-only placement, Chase service state, active Chase notification state,
 force-stop-while-active relaunch reconciliation, and relevant logcat health. The harness records APK
 hash/version metadata and writes failure bundles under ignored artifacts.
 
