@@ -278,7 +278,7 @@ export default function App() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !missionSession || locationTracking.active || locationTracking.lastError) return;
-    if (locationTracking.lastServiceEvent === "tracking_stopped" || locationTracking.lastServiceEvent === "tracking_stop_pending") return;
+    if (locationTracking.lastServiceEvent === "tracking_stop_pending") return;
     if (nativeRecoveryAttemptRef.current === missionSession.id) return;
     nativeRecoveryAttemptRef.current = missionSession.id;
     void locationTrackingService.start({ session: missionSession, detailPreset: "balanced", persistent: true });
@@ -287,11 +287,14 @@ export default function App() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !missionSession || locationTracking.active) return;
     if (nativeRecoveryAttemptRef.current && nativeRecoveryAttemptRef.current !== missionSession.id) return;
-    if (locationTracking.lastError !== "NATIVE_SERVICE_NOT_RUNNING" || locationTracking.lastServiceEvent !== "tracking_not_running") return;
+    const recoveryAlreadyAttempted = nativeRecoveryAttemptRef.current === missionSession.id;
+    const nativeReportedStopped = locationTracking.lastServiceEvent === "tracking_stopped" || (locationTracking.lastError === "NATIVE_SERVICE_NOT_RUNNING" && locationTracking.lastServiceEvent === "tracking_not_running");
+    const nativeReportedInactive = recoveryAlreadyAttempted && locationTracking.state !== "starting";
+    if (!nativeReportedStopped && !nativeReportedInactive) return;
     if (locationTracking.sessionId && locationTracking.sessionId !== missionSession.id) return;
     nativeRecoveryAttemptRef.current = null;
     void endMissionSession();
-  }, [missionSession, locationTracking.active, locationTracking.lastError, locationTracking.lastServiceEvent, locationTracking.sessionId]);
+  }, [missionSession, locationTracking.active, locationTracking.lastError, locationTracking.lastServiceEvent, locationTracking.sessionId, locationTracking.state]);
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;

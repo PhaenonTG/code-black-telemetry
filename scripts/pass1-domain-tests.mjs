@@ -40,7 +40,7 @@ assert.doesNotMatch(appSource, /data-testid="map-action-mark"/, "MARK must not r
 assert.match(appSource, /codeblack:mark-current-position/, "Underlying MARK service pathway should remain available internally");
 assert.match(
   appSource,
-  /nativeRecoveryAttemptRef\.current && nativeRecoveryAttemptRef\.current !== missionSession\.id[\s\S]*?locationTracking\.lastError !== "NATIVE_SERVICE_NOT_RUNNING"[\s\S]*?locationTracking\.sessionId && locationTracking\.sessionId !== missionSession\.id[\s\S]*?void endMissionSession\(\);/,
+  /locationTracking\.lastServiceEvent === "tracking_stop_pending"[\s\S]*?recoveryAlreadyAttempted = nativeRecoveryAttemptRef\.current === missionSession\.id[\s\S]*?nativeReportedStopped = locationTracking\.lastServiceEvent === "tracking_stopped"[\s\S]*?nativeReportedInactive = recoveryAlreadyAttempted && locationTracking\.state !== "starting"[\s\S]*?void endMissionSession\(\);/,
   "A failed native recovery after package force-stop must clear false active Chase state",
 );
 

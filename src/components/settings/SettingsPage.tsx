@@ -506,8 +506,8 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
     setChaseResult("");
     try {
       const trackingStatus = await locationTrackingService.stop();
-      await locationTrackingService.syncPendingObservations();
       await endMissionSession();
+      await locationTrackingService.syncPendingObservations();
       setChaseResult(trackingStatus.active ? "Chase ended, but persistent tracking still reports active." : "Local chase ended. Persistent chase tracking stopped.");
     } catch (error) {
       await endMissionSession();
