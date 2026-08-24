@@ -4,16 +4,6 @@ body{background:var(--cb-black);color:var(--cb-text);font-family:Inter,ui-sans-s
 a{color:inherit;text-decoration:none}
 button{font:inherit}
 
-/* ---- Auth gate ---- */
-.auth-gate{position:fixed;inset:0;display:grid;place-items:center;background:var(--cb-black);padding:24px;z-index:1000}
-.auth-gate__card{max-width:420px;border:1px solid var(--cb-line);background:var(--cb-panel);padding:28px;border-radius:var(--cb-radius)}
-.auth-gate__kicker{font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--cb-red);margin:0 0 14px}
-.auth-gate__card h1{font-size:22px;margin:0 0 12px}
-.auth-gate__body{font-size:13px;line-height:1.6;color:var(--cb-muted);margin:0 0 20px}
-.auth-gate__error{color:var(--cb-red);font-size:12px;margin:0 0 12px}
-.auth-gate__button{width:100%;min-height:44px;background:var(--cb-red);color:#fff;border:0;border-radius:var(--cb-radius);font-weight:800;letter-spacing:.05em;cursor:pointer}
-.auth-gate__button:hover{filter:brightness(1.08)}
-
 /* ---- Shell layout ---- */
 .shell{height:100dvh;width:100vw;display:flex;overflow:hidden}
 .shell__main{display:flex;flex-direction:column;flex:1;min-width:0;height:100%}

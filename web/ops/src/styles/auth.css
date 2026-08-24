@@ -1,0 +1,94 @@
+/* ---- Auth screens (login / unauthorized / password recovery / loading bootstrap) ----
+   Deliberately its own surface, not a themed variant of a generic form: a Code Black
+   operations terminal, not a SaaS/Supabase/Cloudflare login page. Restrained red accents only
+   -- no glow, no gradients, no "military grade" copy. */
+.auth-screen{
+  position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:28px;padding:24px;background:var(--cb-black);
+  background-image:
+    radial-gradient(ellipse 900px 600px at 50% 35%, rgba(255,45,53,.05), transparent 70%),
+    linear-gradient(var(--cb-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cb-line) 1px, transparent 1px);
+  background-size:auto, 34px 34px, 34px 34px;
+  background-position:center, center, center;
+}
+.auth-screen::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 100% 100% at 50% 50%, transparent 40%, var(--cb-black) 92%);
+}
+
+.auth-card{
+  position:relative;width:100%;max-width:380px;background:var(--cb-panel);border:1px solid var(--cb-line);
+  border-radius:var(--cb-radius);padding:32px 28px 28px;display:flex;flex-direction:column;align-items:center;
+  text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.5);
+}
+.auth-card::before{
+  content:"";position:absolute;top:0;left:16px;right:16px;height:2px;
+  background:linear-gradient(90deg, transparent, var(--cb-red), transparent);
+}
+.auth-card__shield{width:52px;height:52px;object-fit:contain;margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(255,45,53,.18))}
+.auth-card__kicker{font-size:10px;font-weight:800;letter-spacing:.22em;color:var(--cb-red);margin:0 0 8px}
+.auth-card__title{font-size:19px;font-weight:800;letter-spacing:.01em;margin:0 0 24px;color:var(--cb-text)}
+.auth-card__subtitle{font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--cb-muted);text-transform:uppercase;margin:0 0 26px}
+.auth-card__body{font-size:12px;line-height:1.6;color:var(--cb-muted);margin:0 0 22px}
+
+.auth-card form{width:100%;display:flex;flex-direction:column;gap:16px;text-align:left}
+.auth-field{display:flex;flex-direction:column;gap:7px}
+.auth-field span{font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--cb-dim)}
+.auth-field input{
+  width:100%;background:var(--cb-panel-low);border:1px solid var(--cb-line);border-radius:var(--cb-radius);
+  color:var(--cb-text);font-size:14px;padding:11px 13px;transition:border-color var(--cb-fast);
+}
+.auth-field input:focus{outline:none;border-color:var(--cb-red)}
+.auth-field__password{position:relative;display:flex}
+.auth-field__password input{flex:1;padding-right:42px}
+.auth-field__toggle{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);background:transparent;border:0;
+  color:var(--cb-dim);padding:6px;cursor:pointer;display:flex;
+}
+.auth-field__toggle:hover{color:var(--cb-muted)}
+
+.auth-submit{
+  width:100%;background:var(--cb-red);color:#0a0304;border:0;border-radius:var(--cb-radius);
+  font-size:12px;font-weight:800;letter-spacing:.1em;padding:13px;cursor:pointer;
+  transition:filter var(--cb-fast),opacity var(--cb-fast);
+}
+.auth-submit:hover:not(:disabled){filter:brightness(1.1)}
+.auth-submit:disabled{opacity:.55;cursor:default}
+
+.auth-card__link{
+  background:transparent;border:0;color:var(--cb-muted);font-size:11.5px;text-align:center;
+  padding:4px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;
+}
+.auth-card__link:hover{color:var(--cb-text)}
+
+.auth-card__status{font-size:11.5px;line-height:1.6;margin:-4px 0 0;font-weight:700}
+.auth-card__status--error{color:var(--cb-red)}
+.auth-card__status--ok{color:var(--cb-green)}
+
+.auth-screen__status{
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;row-gap:6px;
+  max-width:320px;font-size:9.5px;font-weight:800;letter-spacing:.16em;
+  color:var(--cb-dim);text-transform:uppercase;
+}
+.auth-screen__status span{white-space:nowrap}
+.auth-screen__status span:not(:last-child)::after{content:"·";margin-left:10px;color:var(--cb-line-strong)}
+.auth-screen__tagline{color:var(--cb-muted)}
+
+.auth-screen__loading{display:flex;flex-direction:column;align-items:center;gap:16px}
+.auth-screen__loading-shield{width:44px;height:44px;object-fit:contain;animation:auth-pulse 1.6s ease-in-out infinite}
+.auth-screen__loading-text{font-size:10px;font-weight:800;letter-spacing:.2em;color:var(--cb-dim)}
+@keyframes auth-pulse{0%,100%{opacity:.45}50%{opacity:1}}
+
+/* ---- Settings: session/logout ---- */
+.settings-role{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--cb-red)}
+.settings-logout{
+  display:flex;align-items:center;gap:8px;margin-top:14px;background:transparent;
+  border:1px solid var(--cb-line);border-radius:var(--cb-radius);color:var(--cb-text);
+  font-size:12px;font-weight:700;padding:10px 16px;cursor:pointer;
+}
+.settings-logout:hover{border-color:var(--cb-line-strong);color:var(--cb-red)}
+
+@media (max-width: 420px){
+  .auth-card{padding:26px 20px 22px}
+}

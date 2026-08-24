@@ -12,6 +12,9 @@ const PATHS: Record<string, string> = {
   chevron: "M9 6l6 6-6 6",
   lock: "M7 11V8a5 5 0 0110 0v3m-11 0h12v10H6V11z",
   gps: "M12 2v2m0 16v2M2 12h2m16 0h2M12 8a4 4 0 100 8 4 4 0 000-8z",
+  eye: "M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z M12 15a3 3 0 100-6 3 3 0 000 6z",
+  eyeOff: "M3 3l18 18 M10.6 10.6a3 3 0 004.2 4.2 M9.4 5.3A11 11 0 0112 5c7 0 11 7 11 7a13.4 13.4 0 01-3.2 3.9 M6.1 6.1A13.6 13.6 0 001 12s4 7 11 7c1.3 0 2.5-.2 3.6-.6",
+  logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9",
 }
 
 export function Icon({ name, className }: { name: keyof typeof PATHS; className?: string }) {
