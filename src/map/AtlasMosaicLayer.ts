@@ -5,6 +5,11 @@ const MOSAIC_SOURCE_ID = "atlas-mosaic-nexrad";
 const MOSAIC_LAYER_ID = "atlas-mosaic-nexrad-raster";
 const MOSAIC_OPACITY = 0.6;
 
+// Observed, not assumed: "ready" only after this source actually reports a completed tile load;
+// "unavailable" only after a real tile request error; "stale" only once we've had a real success
+// but it's aged past a couple of refresh cycles without a newer one. Never fabricated.
+export type MosaicStatus = "loading" | "ready" | "stale" | "unavailable";
+
 // Replaces the earlier RainViewer-backed animated frame loop (multi-layer frame cycling, prefetch
 // sweeps, pause-during-interaction bookkeeping) -- that machinery was the single most bug-prone
 // piece of this app across the whole project (choppy playback, sometimes not rendering at all,
@@ -67,12 +72,43 @@ function teardownAtlasMosaicLayer(map: Map) {
   if (map.getSource(MOSAIC_SOURCE_ID)) map.removeSource(MOSAIC_SOURCE_ID);
 }
 
+// A real tile source has aged past two refresh cycles with no newer success -- still showing the
+// last frame, but honestly no longer confirmed current.
+const STALE_AFTER_MS = REFRESH_MS * 2.5;
+
 // Started once per map instance rather than driven by a React effect keyed on frequently-changing
 // props -- the refresh cadence is time-based, not data- or prop-driven, so it doesn't need to react
 // to renders at all once running.
-export function startAtlasMosaicLayer(map: Map, isVisible: () => boolean, beforeLayerId?: string): () => void {
+export function startAtlasMosaicLayer(
+  map: Map,
+  isVisible: () => boolean,
+  beforeLayerId?: string,
+  onStatus?: (status: MosaicStatus) => void,
+): () => void {
   ensureAtlasMosaicLayer(map, beforeLayerId);
   let lastBucket = currentBucket();
+  let lastSuccessAt: number | null = null;
+  let current: MosaicStatus = "loading";
+
+  const report = (status: MosaicStatus) => {
+    if (status === current) return;
+    current = status;
+    onStatus?.(status);
+  };
+
+  const handleData = (event: { sourceId?: string; sourceDataType?: string; dataType?: string }) => {
+    if (event.sourceId !== MOSAIC_SOURCE_ID || event.dataType !== "source") return;
+    if (event.sourceDataType === "idle" || event.sourceDataType === undefined) {
+      lastSuccessAt = Date.now();
+      report("ready");
+    }
+  };
+  const handleError = (event: { sourceId?: string }) => {
+    if (event.sourceId !== MOSAIC_SOURCE_ID) return;
+    report("unavailable");
+  };
+  map.on("data", handleData as never);
+  map.on("error", handleError as never);
 
   const tick = () => {
     if (!map.getLayer(MOSAIC_LAYER_ID)) return;
@@ -83,12 +119,17 @@ export function startAtlasMosaicLayer(map: Map, isVisible: () => boolean, before
       const source = map.getSource(MOSAIC_SOURCE_ID);
       if (source && source.type === "raster") source.setTiles(tileUrlForBucket(bucket));
     }
+    if (lastSuccessAt !== null && current === "ready" && Date.now() - lastSuccessAt > STALE_AFTER_MS) {
+      report("stale");
+    }
   };
 
   tick();
   const timer = window.setInterval(tick, 2000);
   return () => {
     window.clearInterval(timer);
+    map.off("data", handleData as never);
+    map.off("error", handleError as never);
     teardownAtlasMosaicLayer(map);
   };
 }

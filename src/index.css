@@ -9462,6 +9462,16 @@ body {
 .atlas-radar-strip {
   max-width: calc(100% - 120px);
   padding: 5px 7px !important;
+  /* Map Update 3 added compact mosaic/road/camera status badges to this strip -- wrap to a
+     second line on narrow phones instead of clipping/overflowing rather than hiding real state. */
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.atlas-map-controls button {
+  /* Thumb-friendly minimum touch target (matches common ~44px platform guidance); the button's
+     own visual size/padding is unchanged otherwise. */
+  min-height: 44px !important;
 }
 
 .radar-expanded__shell {
