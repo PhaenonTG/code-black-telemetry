@@ -121,61 +121,99 @@ of crashing or faking success:
 
 ## Auth architecture
 
-There is no OPS account/login system in the codebase today (confirmed by direct search — the only
-password-flow code, `src/services/spotterAccount.ts`, is an *optional, explicitly non-gating*
-sign-in to the external Spotter Network service, unrelated to protecting this app).
+Production auth is **Supabase Auth, email + password**, enforced inside the app itself — not an
+edge gate. A dedicated Supabase project (`codeblack-ops`, Free plan, Auth only) holds the identity;
+Supabase handles password storage, hashing, session issuance, and refresh. Code Black owns only the
+UI and the authorization boundary on top of that identity (see below). This replaced an earlier
+Cloudflare Access edge gate, which is documented at the bottom of this section for history.
 
-This pass builds the **state machine** (`AUTH_REQUIRED → AUTHENTICATING → AUTHENTICATED |
-AUTH_ERROR`, `src/status/auth.ts`) the UI is built around, without a backend behind it. In
-development (`import.meta.env.DEV`), an `AuthGate` component shows a clearly-labeled
-"development preview, not a real login" screen with a single button that sets a `localStorage`
-flag — explicitly documented as not security, only so local dev doesn't look identical to a real
-authenticated state. In a production build, the gate renders nothing (`AUTHENTICATED, mode:
-"production"` immediately) because production protection is meant to happen **before** the
-browser ever receives this JS bundle.
+- **`src/lib/supabase.ts`** — the Supabase client, built from `VITE_SUPABASE_URL` and
+  `VITE_SUPABASE_PUBLISHABLE_KEY` (client-safe, non-secret; see "Client environment variables"
+  below). Session persistence is Supabase's own default (`localStorage`-backed, auto-refreshing) —
+  no custom token handling anywhere in this app.
+- **`src/auth/AuthProvider.tsx`** — bootstraps the session on load (`supabase.auth.getSession()`),
+  subscribes to `onAuthStateChange` for login/logout/refresh, and cross-checks every signed-in user
+  against `public.profiles` before treating them as authorized. State machine:
+  `loading → signed-out | unauthorized | authorized`. A valid Supabase account is necessary but not
+  sufficient — a user with no `profiles` row, or an `active = false` row, lands in `unauthorized`,
+  never `authorized`.
+- **`src/components/AuthGate.tsx`** — the actual gate. Protected content (`AppShell` and every
+  route inside it) only renders in the `authorized` branch; `loading`/`signed-out`/`unauthorized`
+  each render their own screen (`LoadingScreen`, `Login`, `Unauthorized`). Nothing protected mounts
+  before the session + authorization check resolves, so there is no flash of OPS content before
+  auth is known.
+- **`src/pages/Login.tsx`** — the tactical login screen (email/password, visibility toggle,
+  generic "AUTHENTICATION FAILED" / "CONNECTION FAILED" states, "Forgot password?"). Calls
+  `supabase.auth.signInWithPassword()` only — no custom credential handling.
+- **`src/pages/UpdatePassword.tsx`** — the landing route (`/update-password`) for the link
+  Supabase emails from `resetPasswordForEmail()`. Reachable regardless of auth state (it's outside
+  `AuthGate` in `App.tsx`) because the recovery link itself establishes a temporary session; the
+  page just waits for that, then calls `supabase.auth.updateUser({ password })`.
 
-### Recommendation: Cloudflare Access
+### Authorization: `public.profiles` (not "any valid Supabase user")
 
-For the first private deployment, **Cloudflare Access** in front of the Pages project is the right
-call, not a bespoke login:
+Public signup is disabled at the Supabase project level (Authentication → Providers → Email →
+"Allow new users to sign up" off), so the only way an account exists is an administrator creating
+it directly in the Supabase dashboard. But a valid account still isn't automatic OPS access — that
+boundary is a second, explicit table:
 
-- No credentials in the app bundle, ever — Access authenticates at Cloudflare's edge, before any
-  request reaches the static site.
-- Fastest safe path to a working private preview without building/hosting a real backend this
-  pass, which the brief explicitly didn't ask for.
-- Straightforward to layer real backend auth in later without changing this app's `AuthGate`
-  contract — swap what `AUTHENTICATED`/`AUTH_ERROR` mean, not the state machine itself.
+```sql
+create table public.profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text not null,
+  role text not null default 'OPERATOR' check (role in ('OWNER', 'ADMIN', 'OPERATOR')),
+  active boolean not null default false,
+  created_at timestamptz not null default now()
+);
 
-**Not done in this pass**: no Cloudflare Pages project was created for `ops`, and Access was not
-configured — per the brief's own stop condition ("do NOT deploy publicly without secure access
-protection"), and because actually verifying Access is configured correctly needs the user's own
-Cloudflare account interaction the same way the public site's deployment did. See "Deployment
-plan" below for the exact steps once that's greenlit.
+alter table public.profiles enable row level security;
 
-## Deployment plan (documented, not executed this pass)
+create policy "profiles_select_own"
+  on public.profiles for select to authenticated
+  using (auth.uid() = user_id);
+```
 
-- **Project root:** `web/ops`
-- **Build command:** `npm run build`
-- **Output directory:** `dist`
-- **Framework:** Vite / React (same pattern as the already-deployed `web/public` → `codeblackwx.com`)
-- **Domain:** `ops.codeblackwx.com`
-- **Access protection steps** (to run when ready to actually deploy):
-  1. Create the Cloudflare Pages project scoped to `web/ops` (same GitHub App connection already
-     authorized for this repo, scoped to `PhaenonTG/code-black-telemetry` only — see `web/public`'s
-     deployment history for how that connection was set up).
-  2. Attach `ops.codeblackwx.com` as a custom domain on that project.
-  3. In Cloudflare Zero Trust → Access → Applications, add a Self-hosted application for
-     `ops.codeblackwx.com`, with a policy restricted to the specific email(s)/identity provider
-     that should have access — not "Everyone."
-  4. Verify Access actually blocks an unauthenticated request (curl or a private browser window)
-     before considering it live.
-- **Environment variables:** `VITE_MAPBOX_ACCESS_TOKEN`, `VITE_ATLAS_MAPBOX_STYLE` — same public
-  Mapbox token convention as the root app; no secrets.
-- **Auth limitation to flag when this is actually deployed:** Access protects the *site*, not
-  individual API calls the app makes client-side (NWS, Mapbox, the mosaic radar tile source) — 
-  those are all public data sources already, so this is fine today, but if/when this app starts
-  calling private CodeBlack-Core endpoints directly from the browser, those endpoints need their
-  own auth, independent of Access sitting in front of the static site.
+RLS is enabled with exactly one policy: a signed-in user may `select` only their own row. There is
+no `insert`/`update`/`delete` policy for `authenticated` or `anon` — authorization records are
+managed by an administrator via the Supabase SQL editor/dashboard, never by the client app, and
+never via the `service_role` key in frontend code. `AuthProvider` reads this row after every sign-in
+and treats a missing row, or `active = false`, as `unauthorized` — the frontend never uses an
+email-comparison shortcut as the authorization boundary.
+
+### History: Cloudflare Access (superseded)
+
+The previous pass put **Cloudflare Access** in front of the Cloudflare Pages project as the only
+protection, since no backend auth existed yet. That was a reasonable bridge at the time (no
+credentials in the bundle, fast to stand up) but meant the app itself trusted the edge completely —
+anyone who reached the JS bundle was treated as authenticated. Once Supabase auth was implemented,
+built, deployed, and verified working on the live Cloudflare Pages deployment, the Access
+application/policy in front of `ops.codeblackwx.com` was removed — auth now lives in the app, so
+both the custom domain and the default `*.pages.dev` URL present the same Supabase login gate
+rather than one being Access-protected and the other not.
+
+## Client environment variables
+
+```
+VITE_MAPBOX_ACCESS_TOKEN=       # public, maps/styles read access only
+VITE_ATLAS_MAPBOX_STYLE=        # public
+VITE_SUPABASE_URL=              # project API URL, not secret
+VITE_SUPABASE_PUBLISHABLE_KEY=  # publishable key, not secret -- protected by RLS, not by hiding it
+```
+
+None of these are secrets by design — the Mapbox token is a `pk.`-scoped public token, and the
+Supabase publishable key is meant to ship in a browser bundle (Supabase's own security model is
+"this key is public, RLS is the boundary," matching the `profiles` policy above). What must never
+appear here or anywhere client-side: the Supabase `service_role` key, the database password, a
+Supabase management API token, or any Cloudflare/Core/stream credential. Real values live only in
+`web/ops/.env` (gitignored) locally and in the Cloudflare Pages project's environment variables in
+production — `web/ops/.env.example` documents the shape with empty values, never real ones.
+
+## Deployment
+
+Live: **Cloudflare Pages**, project `codeblack-ops`, root directory `web/ops`, build command
+`npm run build`, output directory `dist`, auto-deploying from `master`. Reachable at both
+`ops.codeblackwx.com` (custom domain) and `codeblack-ops.pages.dev` (default Pages URL) — both
+present the same Supabase login gate, since auth is enforced in-app rather than at the edge.
 
 ## Core-offline behavior
 

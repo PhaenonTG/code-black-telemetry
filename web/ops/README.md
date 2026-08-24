@@ -32,13 +32,14 @@ npm run dev      # http://localhost:5176 in this pass's testing; vite picks a fr
 npm run build
 ```
 
-Copy `.env.example` to `.env.local` and fill in a real Mapbox token to see the map/radar render
-locally (same variable names as the root app: `VITE_MAPBOX_ACCESS_TOKEN`, `VITE_ATLAS_MAPBOX_STYLE`).
+Copy `.env.example` to `.env` and fill in a real Mapbox token to see the map/radar render locally
+(same variable names as the root app: `VITE_MAPBOX_ACCESS_TOKEN`, `VITE_ATLAS_MAPBOX_STYLE`), plus
+the Supabase project's URL and publishable key (`VITE_SUPABASE_URL`,
+`VITE_SUPABASE_PUBLISHABLE_KEY`) to see the login screen actually authenticate.
 
-## Local development auth
+## Auth
 
-There's no production backend auth yet. In `npm run dev` / a non-production build, you'll see a
-clearly-labeled "development preview" gate — click through it once (it's stored in
-`localStorage`, not a real login) to see the app. In a production build (`npm run build`), the
-gate is skipped entirely because production protection is meant to be Cloudflare Access sitting in
-front of the deployment, not this app — see docs/ARCHITECTURE.md.
+Production auth is **Supabase Auth (email + password)**, enforced inside the app — see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#auth-architecture) for the full model (the
+`profiles` authorization table, RLS policy, and why a valid Supabase account alone isn't enough to
+reach OPS). There's no public signup; accounts are created directly in the Supabase dashboard.
