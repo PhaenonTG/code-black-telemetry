@@ -154,7 +154,7 @@ function pinPopupPlacementFor(map: MapboxMap, lon: number, lat: number): { ancho
   return { anchor, maxWidthPx: Math.max(ATLAS_PIN_POPUP_MIN_WIDTH_PX, Math.min(ATLAS_PIN_POPUP_MAX_WIDTH_PX, room)) };
 }
 
-function showPinPopup(map: MapboxMap, point: PinPoint) {
+export function showPinPopup(map: MapboxMap, point: PinPoint) {
   activePopups.get(map)?.remove();
   if (!point.name) return;
   // Computed fresh at click time (not whenever the marker last synced) so it's accurate to the

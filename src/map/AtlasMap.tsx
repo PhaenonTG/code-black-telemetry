@@ -22,6 +22,7 @@ import { startAtlasMosaicLayer, type MosaicStatus } from "./AtlasMosaicLayer";
 import { updateAtlasPoiLayer } from "./AtlasPoiLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
 import { updateAtlasRoadConditionLayer } from "./AtlasRoadLayer";
+import { updateAtlasRoadLineLayer } from "./AtlasRoadLineLayer";
 import { updateAtlasSpotterLayer } from "./AtlasSpotterLayer";
 import { tuneAtlasStyle } from "./AtlasStyleManager";
 import { updateAtlasTeamLayer } from "./AtlasTeamLayer";
@@ -230,7 +231,14 @@ export function AtlasMap({
   const clusteredChaserSpotters = useMemo(() => (viewport ? clusterViewportPoints(visibleChaserSpotters, viewport) : visibleChaserSpotters), [visibleChaserSpotters, viewport]);
   const clusteredChaserNetMembers = useMemo(() => (viewport ? clusterViewportPoints(chaserNetMembers, viewport) : chaserNetMembers), [chaserNetMembers, viewport]);
   const clusteredChaserNetReports = useMemo(() => (viewport ? clusterViewportPoints(chaserNetReportPoints, viewport) : chaserNetReportPoints), [chaserNetReportPoints, viewport]);
-  const clusteredRoadConditions = useMemo(() => (viewport ? clusterViewportPoints(roadConditions, viewport) : roadConditions), [roadConditions, viewport]);
+  // Road events with real line geometry (see roadCameraProviders.ts) are painted along the actual
+  // road via AtlasRoadLineLayer.ts and never clustered -- folding one into a "N reports" bubble
+  // would throw away its geometry along with its identity. Only the point-only remainder (ARDOT
+  // has no line source at all; other providers' events without a usable line) goes through the
+  // existing point-pin path, clustered same as before.
+  const lineRoadConditions = useMemo(() => roadConditions.filter((event) => event.geometry.type === "line"), [roadConditions]);
+  const pointOnlyRoadConditions = useMemo(() => roadConditions.filter((event) => event.geometry.type !== "line"), [roadConditions]);
+  const clusteredRoadConditions = useMemo(() => (viewport ? clusterViewportPoints(pointOnlyRoadConditions, viewport) : pointOnlyRoadConditions), [pointOnlyRoadConditions, viewport]);
   // Cameras deliberately never cluster -- owner wants every camera rendered at its exact real
   // location at all times, not folded into a "N cameras" bubble at low zoom like every other pin
   // family. Still viewport-filtered so off-screen cameras aren't rendered at all.
@@ -725,10 +733,11 @@ export function AtlasMap({
     const map = mapRef.current;
     if (!map || !loaded) return;
     updateAtlasRoadConditionLayer(map, clusteredRoadConditions, roadConditionsVisible);
+    updateAtlasRoadLineLayer(map, lineRoadConditions, roadConditionsVisible, styleInfoRef.current.firstSymbolLayerId);
     updateAtlasTrafficCameraLayer(map, clusteredTrafficCameras, trafficCamerasVisible);
     updateAtlasChaserNetLayer(map, clusteredChaserNetMembers, chaserPinStyle, chaserNetVisible);
     updateAtlasChaserNetReportLayer(map, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible);
-  }, [clusteredRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
+  }, [clusteredRoadConditions, lineRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
 
 
   useEffect(() => {

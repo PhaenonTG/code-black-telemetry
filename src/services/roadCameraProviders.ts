@@ -445,6 +445,7 @@ interface KandriveGeometry {
 interface KandriveFeature {
   geometry?: KandriveGeometry;
   type?: string;
+  properties?: Record<string, unknown>;
 }
 interface KandriveCameraView {
   url?: string | null;
@@ -484,6 +485,66 @@ function kandriveFirstPoint(item: KandriveMapItem): { lat: number; lon: number }
   return null;
 }
 
+// Standard Google-encoded-polyline decoder (precision 1e5) -- KanDrive's own map bundle imports
+// `google3$maps$api$javascript$geometry$lat_lng_bounds`, confirming this is the real Google Maps
+// polyline format, not a custom encoding.
+// Decodes each coordinate pair in encode order (first delta, second delta) without assuming which
+// is latitude -- KanDrive's own encoding turned out NOT to follow Google's usual lat-then-lon
+// convention (confirmed against two real closure segments: the first decoded value consistently
+// fell in Kansas's longitude range, the second in its latitude range). Returning [first, second]
+// keeps this decoder honestly generic; the caller decides the axis order for its actual source.
+function decodePolylinePairs(encoded: string): Array<[number, number]> {
+  const points: Array<[number, number]> = [];
+  let index = 0;
+  let first = 0;
+  let second = 0;
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte: number;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    first += result & 1 ? ~(result >> 1) : result >> 1;
+    shift = 0;
+    result = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    second += result & 1 ? ~(result >> 1) : result >> 1;
+    points.push([first / 1e5, second / 1e5]);
+  }
+  return points;
+}
+
+// KanDrive's encoded pairs decode as [longitude, latitude], not Google's usual [latitude,
+// longitude] -- verified against two real closure segments, both landed correctly only with lon
+// first.
+function decodeKandrivePolyline(encoded: string): Array<{ lat: number; lon: number }> {
+  return decodePolylinePairs(encoded).map(([lon, lat]) => ({ lat, lon }));
+}
+
+// KanDrive attaches the closure's own route trace as one LineString feature and, for closures with
+// a posted detour, a second LineString for the suggested alternate route -- with directional arrow
+// icons and `visible:false` (KanDrive's own app doesn't draw the detour by default either). Picking
+// the first LineString that isn't explicitly hidden reliably gets the closure's real extent without
+// hardcoding a stroke color that could differ by severity.
+function kandriveLineCoordinates(item: KandriveMapItem): Array<{ lat: number; lon: number }> | null {
+  for (const feature of item.features ?? []) {
+    if (feature.geometry?.type !== "LineString") continue;
+    if (feature.properties?.visible === false) continue;
+    const encoded = feature.geometry.coordinates;
+    if (typeof encoded !== "string" || !encoded) continue;
+    const decoded = decodeKandrivePolyline(encoded);
+    if (decoded.length > 1) return decoded;
+  }
+  return null;
+}
+
 function kandriveParseTitle(title: string) {
   const match = /^(.*?)\s+(northbound|southbound|eastbound|westbound|in both directions):/i.exec(title);
   if (!match) return { roadway: null, direction: "unknown" as RoadTravelDirection };
@@ -507,12 +568,13 @@ function normalizeKandriveEvent(item: KandriveMapItem, providerId: string, kindH
   // codebase's existing convention for other genuinely-unknown timestamps: the moment of this live
   // fetch, since the event is being observed as currently active right now.
   const updatedAt = nowMs();
+  const line = kandriveLineCoordinates(item);
   return {
     id: `${providerId}:road:${recordId}`,
     providerId,
     providerRecordId: recordId,
     kind,
-    geometry: { type: "point", lat: point.lat, lon: point.lon },
+    geometry: line ? { type: "line", coordinates: line } : { type: "point", lat: point.lat, lon: point.lon },
     closureState,
     severity,
     title: sanitizeProviderText(item.title, 160),
@@ -647,15 +709,20 @@ const MODOT_BASE_URL = "/api/modot";
 const MODOT_TRAVELER_MAP_URL = "https://traveler.modot.org/map/index.html";
 const MODOT_CAMERAS_URL = `${MODOT_BASE_URL}/NWSDATA/MapServer/0`;
 
+// Layer IDs point at MoDOT's *Line* variants (Incident Closed Line, Work Zone Closed Line, etc.),
+// not the Point variants used before -- same underlying closure records, but the Line layer's
+// geometry is the actual road segment, which normalizeModotRoadFeature below turns into painted
+// road geometry instead of a single dot. Each Line layer carries the same field schema as its Point
+// counterpart (confirmed via direct query), so the rest of the normalizer is unchanged.
 const MODOT_ROAD_LAYERS: Array<{ layer: number; kindHint: string }> = [
-  { layer: 0, kindHint: "flooding" },
-  { layer: 21, kindHint: "crash" },
-  { layer: 24, kindHint: "crash" },
-  { layer: 25, kindHint: "crash" },
-  { layer: 22, kindHint: "construction" },
-  { layer: 26, kindHint: "construction" },
-  { layer: 27, kindHint: "construction" },
-  { layer: 23, kindHint: "winter-condition" },
+  { layer: 10, kindHint: "flooding" }, // Flood Line
+  { layer: 12, kindHint: "crash" }, // Incident Closed Line
+  { layer: 31, kindHint: "crash" }, // Incident High Line
+  { layer: 32, kindHint: "crash" }, // Incident Medium Line
+  { layer: 29, kindHint: "construction" }, // Work Zone Closed Line
+  { layer: 33, kindHint: "construction" }, // Work Zone High Line
+  { layer: 34, kindHint: "construction" }, // Work Zone Medium Line
+  { layer: 30, kindHint: "winter-condition" }, // Winter Closed Line
 ];
 
 function arcgisEnvelopeQueryUrl(baseUrl: string, viewport: MapViewport, extraParams: Record<string, string> = {}) {
@@ -674,11 +741,25 @@ function arcgisEnvelopeQueryUrl(baseUrl: string, viewport: MapViewport, extraPar
 
 function normalizeModotRoadFeature(feature: unknown, providerId: string, kindHint: string): RoadConditionEvent | null {
   if (!feature || typeof feature !== "object") return null;
-  const candidate = feature as { properties?: Record<string, unknown>; geometry?: { coordinates?: unknown[] } };
+  const candidate = feature as { properties?: Record<string, unknown>; geometry?: { type?: string; coordinates?: unknown } };
   const props = candidate.properties ?? {};
-  const coordinates = candidate.geometry?.coordinates;
-  const lon = Array.isArray(coordinates) ? Number(coordinates[0]) : NaN;
-  const lat = Array.isArray(coordinates) ? Number(coordinates[1]) : NaN;
+  const geometryType = candidate.geometry?.type;
+  const rawCoordinates = candidate.geometry?.coordinates;
+  let lat: number;
+  let lon: number;
+  let lineCoordinates: Array<{ lat: number; lon: number }> | null = null;
+  if (geometryType === "LineString" && Array.isArray(rawCoordinates)) {
+    const points = rawCoordinates
+      .filter((pair): pair is [number, number] => Array.isArray(pair) && pair.length >= 2 && Number.isFinite(Number(pair[0])) && Number.isFinite(Number(pair[1])))
+      .map((pair) => ({ lat: Number(pair[1]), lon: Number(pair[0]) }));
+    if (points.length > 1) lineCoordinates = points;
+    const midpoint = points[Math.floor(points.length / 2)] ?? null;
+    lat = midpoint?.lat ?? NaN;
+    lon = midpoint?.lon ?? NaN;
+  } else {
+    lon = Array.isArray(rawCoordinates) ? Number(rawCoordinates[0]) : NaN;
+    lat = Array.isArray(rawCoordinates) ? Number(rawCoordinates[1]) : NaN;
+  }
   if (!isValidCoordinate(lat, lon)) return null;
   const recordId = sanitizeProviderText(props.OBJECT_ID ?? props.OBJECTID ?? props.ESRI_OID ?? props.DATA_ID ?? `${lat},${lon}`, 80);
   const impact = sanitizeProviderText(props.LEVEL_OF_IMPACT_CODE ?? props.LEVEL_OF_IMPACT, 80);
@@ -703,7 +784,7 @@ function normalizeModotRoadFeature(feature: unknown, providerId: string, kindHin
     providerId,
     providerRecordId: recordId,
     kind,
-    geometry: { type: "point", lat, lon },
+    geometry: lineCoordinates ? { type: "line", coordinates: lineCoordinates } : { type: "point", lat, lon },
     closureState,
     severity,
     title: [reason, roadway].filter(Boolean).join(" - ") || "Road condition",
@@ -824,13 +905,21 @@ function wzdxVehicleImpactToClosureState(vehicleImpact: unknown): RoadClosureSta
 
 function normalizeWzdxFeature(feature: unknown, providerId: string, kindHint: string): RoadConditionEvent | null {
   if (!feature || typeof feature !== "object") return null;
-  const candidate = feature as { id?: unknown; properties?: Record<string, unknown>; geometry?: { coordinates?: unknown } };
+  const candidate = feature as { id?: unknown; properties?: Record<string, unknown>; geometry?: { type?: string; coordinates?: unknown } };
   const props = candidate.properties ?? {};
   const core = (props.core_details ?? {}) as Record<string, unknown>;
   const coords = candidate.geometry?.coordinates;
+  // WZDx work zones are natively LineString (the full route segment) -- kept in full rather than
+  // reduced to a single point, so it can be painted along the actual affected road.
+  const lineCoordinates = candidate.geometry?.type === "LineString" && Array.isArray(coords)
+    ? coords
+        .filter((pair): pair is [number, number] => Array.isArray(pair) && pair.length >= 2 && Number.isFinite(Number(pair[0])) && Number.isFinite(Number(pair[1])))
+        .map((pair) => ({ lat: Number(pair[1]), lon: Number(pair[0]) }))
+    : null;
+  const midpoint = lineCoordinates && lineCoordinates.length > 1 ? lineCoordinates[Math.floor(lineCoordinates.length / 2)] : null;
   const firstPoint = Array.isArray(coords) ? (coords.find((c) => Array.isArray(c) && c.length >= 2) as unknown) ?? coords[0] : null;
-  const lon = Array.isArray(firstPoint) ? Number(firstPoint[0]) : NaN;
-  const lat = Array.isArray(firstPoint) ? Number(firstPoint[1]) : NaN;
+  const lon = midpoint ? midpoint.lon : Array.isArray(firstPoint) ? Number(firstPoint[0]) : NaN;
+  const lat = midpoint ? midpoint.lat : Array.isArray(firstPoint) ? Number(firstPoint[1]) : NaN;
   if (!isValidCoordinate(lat, lon)) return null;
   const recordId = sanitizeProviderText(candidate.id ?? `${lat},${lon}`, 80);
   const roadNames = Array.isArray(core.road_names) ? core.road_names.map((v) => sanitizeProviderText(v, 30)).filter(Boolean) : [];
@@ -848,7 +937,7 @@ function normalizeWzdxFeature(feature: unknown, providerId: string, kindHint: st
     providerId,
     providerRecordId: recordId,
     kind,
-    geometry: { type: "point", lat, lon },
+    geometry: lineCoordinates && lineCoordinates.length > 1 ? { type: "line", coordinates: lineCoordinates } : { type: "point", lat, lon },
     closureState,
     severity,
     title: [roadway, description].filter(Boolean).join(" - ") || "Road condition",

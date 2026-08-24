@@ -24,7 +24,7 @@ function kindLabel(kind: RoadConditionEvent["kind"]) {
   return kind.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
-function roadEventToPin(event: RoadConditionEvent | MapCluster<RoadConditionEvent>): PinPoint {
+export function roadEventToPin(event: RoadConditionEvent | MapCluster<RoadConditionEvent>): PinPoint {
   if ("count" in event) {
     return {
       id: `road-${event.id}`,
