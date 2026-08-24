@@ -8,7 +8,7 @@ const roadMarkersByMap = new WeakMap<MapboxMap, Record<string, Marker>>();
 
 const ROAD_PIN_STYLE: PinStyle = {
   color: "#ff7e30",
-  shape: "diamond",
+  shape: "circle",
   sizeScale: 0.92,
 };
 

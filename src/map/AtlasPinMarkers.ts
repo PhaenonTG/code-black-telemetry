@@ -54,12 +54,14 @@ function pinSizeForZoom(zoom: number, sizeScale: number) {
 function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number) {
   const size = pinSizeForZoom(zoom, style.sizeScale ?? 1);
   const borderWidth = Math.max(1, size / 10);
-  const glowBlur = Math.max(3, size / 2);
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
   el.style.backgroundColor = style.color;
   el.style.border = `${borderWidth}px solid rgba(0, 0, 0, 0.65)`;
-  el.style.boxShadow = `0 0 0 ${borderWidth}px rgba(0, 0, 0, 0.35), 0 0 ${glowBlur}px ${borderWidth}px ${style.color}`;
+  // Flat dot, no colored glow halo -- the earlier `0 0 <blur> <color>` shadow was the "glowing
+  // square" look the owner didn't want. Just enough neutral drop shadow to read against variable
+  // map/radar backgrounds, same as any ordinary map pin.
+  el.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.6)";
   el.style.borderRadius = style.shape === "circle" ? "50%" : style.shape === "square" ? "2px" : "0";
   el.style.clipPath = SHAPE_CLIP_PATH[style.shape] ?? "";
   el.style.cursor = "pointer";

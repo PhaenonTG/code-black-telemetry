@@ -8,7 +8,7 @@ const cameraMarkersByMap = new WeakMap<MapboxMap, Record<string, Marker>>();
 
 const CAMERA_PIN_STYLE: PinStyle = {
   color: "#38bdf8",
-  shape: "square",
+  shape: "circle",
   sizeScale: 0.84,
 };
 
