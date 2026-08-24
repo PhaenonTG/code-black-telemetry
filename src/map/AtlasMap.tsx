@@ -18,7 +18,7 @@ import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstanc
 import { updateAtlasAlertsLayer } from "./AtlasAlertsLayer";
 import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
 import { chaserNetReportToMapPoint, updateAtlasChaserNetLayer, updateAtlasChaserNetReportLayer } from "./AtlasChaserNetLayer";
-import { startAtlasMosaicLayer } from "./AtlasMosaicLayer";
+import { startAtlasMosaicLayer, type MosaicStatus } from "./AtlasMosaicLayer";
 import { updateAtlasPoiLayer } from "./AtlasPoiLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
 import { updateAtlasRoadConditionLayer } from "./AtlasRoadLayer";
@@ -188,6 +188,7 @@ export function AtlasMap({
   const [trafficCameras, setTrafficCameras] = useState<TrafficCamera[]>([]);
   const [roadLayerStatus, setRoadLayerStatus] = useState<ViewportLayerResult<RoadConditionEvent>["status"]>("not-configured");
   const [cameraLayerStatus, setCameraLayerStatus] = useState<ViewportLayerResult<TrafficCamera>["status"]>("not-configured");
+  const [mosaicStatus, setMosaicStatus] = useState<MosaicStatus>("loading");
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
   const [viewport, setViewport] = useState<MapViewport | null>(null);
   const roster = useTeamRoster();
@@ -403,6 +404,7 @@ export function AtlasMap({
           map,
           () => mosaicVisibleRef.current && activeRef.current,
           styleInfoRef.current.firstSymbolLayerId,
+          setMosaicStatus,
         );
         updateAtlasRangeRings(map, latestRef.current.gps, latestRef.current.rangeRings);
       };
@@ -817,6 +819,18 @@ export function AtlasMap({
     if (status === "unavailable" || status === "error") return "provider unavailable";
     return providerCount > 0 ? "available" : "outside coverage";
   };
+  // Compact, truthful field status -- reuses the same providerStatusLabel logic already driving
+  // the Layers popover rather than a second status vocabulary, and only surfaces a badge for a
+  // layer the user actually turned on (an off-by-choice layer isn't a failure worth a badge for).
+  const mosaicStatusLabel = mosaicVisible
+    ? { loading: "MOSAIC LOADING", ready: "MOSAIC LIVE", stale: "MOSAIC STALE", unavailable: "MOSAIC UNAVAILABLE" }[mosaicStatus]
+    : null;
+  const roadStatusLabel = roadConditionsVisible
+    ? `ROADS ${providerStatusLabel(roadLayerStatus, roadConditions.length, roadProviderCount).toUpperCase()}`
+    : null;
+  const cameraProviderStatusLabel = trafficCamerasVisible
+    ? `CAMS ${providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount).toUpperCase()}`
+    : null;
 
   return (
     <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"}`} data-testid={compact ? "atlas-map-compact" : "atlas-map-primary"}>
@@ -828,6 +842,9 @@ export function AtlasMap({
           <div className="radar-strip atlas-radar-strip">
             {statusLines.map((line, index) => <span key={index}>{line}</span>)}
             <span>{cameraStatusLabel}</span>
+            {mosaicStatusLabel && <span>{mosaicStatusLabel}</span>}
+            {roadStatusLabel && <span>{roadStatusLabel}</span>}
+            {cameraProviderStatusLabel && <span>{cameraProviderStatusLabel}</span>}
           </div>
         )}
         {onOpenExpanded && (
