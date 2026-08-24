@@ -1,7 +1,7 @@
 import mapboxgl from "mapbox-gl";
 import type { Map as MapboxMap, Marker, Popup } from "mapbox-gl";
 import type { PinShape, PinStyle } from "../services/settings";
-import type { TrafficCamera } from "../services/mapLayerModels";
+import type { RoadConditionEvent, TrafficCamera } from "../services/mapLayerModels";
 import { spotterAgeText } from "../services/spotters";
 
 export interface PinPoint {
@@ -19,6 +19,7 @@ export interface PinPoint {
   actionUrl?: string | null;
   actionLabel?: string;
   cameraData?: TrafficCamera | null;
+  roadData?: RoadConditionEvent | null;
   clusterCount?: number;
   family?: "team" | "chaser" | "report" | "probe" | "road" | "camera" | "mark";
   stale?: boolean;
@@ -157,8 +158,11 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
   const cameraAction = point.family === "camera" && point.cameraData
     ? `<button type="button" class="atlas-pin-popup__action atlas-pin-popup__camera-open">VIEW CAMERA</button>`
     : "";
+  const roadAction = point.family === "road" && point.roadData
+    ? `<button type="button" class="atlas-pin-popup__action atlas-pin-popup__road-open">VIEW DETAILS</button>`
+    : "";
   const action = actionUrl ? `<a class="atlas-pin-popup__action" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(point.actionLabel ?? "Open source")}</a>` : "";
-  const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${details}${image}${phoneLine}${emailLine}${cameraAction}${action}`;
+  const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${details}${image}${phoneLine}${emailLine}${cameraAction}${roadAction}${action}`;
   const placement = pinPopupPlacementFor(map, point.lon, point.lat);
   const popup = new mapboxgl.Popup({
     closeButton: true,
@@ -175,6 +179,12 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
   if (cameraOpen && point.cameraData) {
     cameraOpen.addEventListener("click", () => {
       window.dispatchEvent(new CustomEvent<TrafficCamera>("codeblack:map-camera-open", { detail: point.cameraData! }));
+    });
+  }
+  const roadOpen = popup.getElement()?.querySelector<HTMLButtonElement>(".atlas-pin-popup__road-open");
+  if (roadOpen && point.roadData) {
+    roadOpen.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent<RoadConditionEvent>("codeblack:map-road-open", { detail: point.roadData! }));
     });
   }
   const media = popup.getElement()?.querySelector<HTMLElement>(".atlas-pin-popup__media");

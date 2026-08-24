@@ -39,10 +39,25 @@ function attachWatchClickHandler(map: Map) {
     if (!id) return;
     const watch = latestWatchesById.get(map)?.[id];
     const alert = latestAlertsById.get(map)?.[id];
-    const title = alert?.title ?? watch?.prodType ?? "Watch";
-    const headline = alert?.headline ?? "";
-    const expires = alert?.expires ?? watch?.expires ?? "";
-    showAlertPopup(map, [event.lngLat.lng, event.lngLat.lat], { id, title, headline, expires });
+    // Prefer the full AlertProduct when this watch's CAP id matched one already fetched for the
+    // Alerts page -- it carries real description/instruction/area text the in-map details panel
+    // (Map Update 2) can show. When no match exists yet, fall back to a minimally-populated but
+    // honestly-typed AlertProduct built only from fields the ArcGIS watch polygon actually has;
+    // "watch" is a true value for type/severity here, not a placeholder guess.
+    const fallback: AlertProduct = alert ?? {
+      id,
+      type: "watch",
+      severity: "watch",
+      title: watch?.prodType ?? "Watch",
+      headline: "",
+      description: "",
+      instruction: "",
+      area: "",
+      sent: "",
+      expires: watch?.expires ?? "",
+      source: "NWS",
+    };
+    showAlertPopup(map, [event.lngLat.lng, event.lngLat.lat], fallback);
   };
   for (const layerId of [ATLAS_WATCHES_FILL_LAYER, ATLAS_WATCHES_LINE_LAYER]) {
     map.on("click", layerId, handleClick as (event: MapMouseEvent) => void);

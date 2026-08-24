@@ -54,6 +54,7 @@ function roadEventToPin(event: RoadConditionEvent | MapCluster<RoadConditionEven
     ],
     actionUrl: event.sourceUrl,
     actionLabel: "Open provider",
+    roadData: event,
     family: "road",
     stale: event.stale,
   };

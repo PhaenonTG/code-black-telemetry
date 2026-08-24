@@ -102,3 +102,12 @@
   .map-camera-viewer__media{min-height:180px}
   .map-camera-viewer__media video,.map-camera-viewer__media img{max-height:280px}
 }
+
+/* ---- Map situation panel: road/alert details stay on-map, Map Update 2. ---- */
+.map-situation-panel{position:absolute;z-index:29;top:16px;right:16px;width:min(420px,calc(100% - 32px));max-height:calc(100% - 32px);overflow:auto;border:1px solid var(--cb-line);background:rgba(13,13,13,.96);backdrop-filter:blur(12px);border-radius:var(--cb-radius);box-shadow:0 18px 50px rgba(0,0,0,.45)}
+.map-situation-panel header{display:flex;justify-content:space-between;gap:12px;padding:14px;border-bottom:1px solid var(--cb-line)}
+.map-situation-panel header p{margin:0 0 4px;color:var(--cb-red);font-size:9px;font-weight:800;letter-spacing:.14em}.map-situation-panel header h2{margin:0;font-size:15px}.map-situation-panel header button{width:34px;height:34px;border:1px solid var(--cb-line);background:var(--cb-panel);color:var(--cb-text);border-radius:4px;font-size:22px}
+.map-situation-panel__body{padding:14px}.map-situation-panel__body>strong{display:block;margin-bottom:12px;font-size:12px}.map-situation-panel dl{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--cb-line);margin:0 0 14px}.map-situation-panel dl>div{background:var(--cb-panel);padding:9px 10px}.map-situation-panel dt{font-size:8px;font-weight:800;letter-spacing:.1em;color:var(--cb-muted)}.map-situation-panel dd{margin:4px 0 0;font-size:11px}
+.map-situation-panel section{border-top:1px solid var(--cb-line);padding-top:12px;margin-top:12px}.map-situation-panel section h3{margin:0 0 6px;font-size:9px;color:var(--cb-muted)}.map-situation-panel section p{margin:0;font-size:11px;line-height:1.55;white-space:pre-wrap}.map-situation-panel footer{display:flex;justify-content:flex-end;padding:10px 12px;border-top:1px solid var(--cb-line)}.map-situation-panel footer a{color:var(--cb-text);font-size:9px;font-weight:800;text-decoration:none;border:1px solid var(--cb-line);padding:5px 7px}
+.atlas-layers-popover__section{padding:9px 10px 5px;color:var(--cb-dim);font-size:8px;font-weight:900;letter-spacing:.13em;border-top:1px solid var(--cb-line)}
+@media(max-width:599px){.map-situation-panel{top:auto;right:8px;left:8px;bottom:8px;width:auto;max-height:min(62vh,540px)}}
