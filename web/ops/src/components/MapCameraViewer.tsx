@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Hls from "hls.js"
 import type { TrafficCamera } from "../../../../src/services/mapLayerModels"
+import { fetchKandriveLiveCameraSource } from "../../../../src/services/mapLayerModels"
 
 type CameraMediaKind = "hls" | "mjpeg" | "video" | "image" | "unavailable"
 
@@ -35,7 +36,27 @@ export function MapCameraViewer({
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [mediaError, setMediaError] = useState("")
   const [imageTick, setImageTick] = useState(0)
-  const media = useMemo(() => mediaFor(camera), [camera])
+  const [liveStreamUrl, setLiveStreamUrl] = useState<string | null>(null)
+
+  // KanDrive cameras never carry a streamUrl from the viewport list/cache fetch -- its live HLS
+  // URLs are short-lived signed tokens that would go stale sitting in that cache. Fetch one fresh,
+  // on demand, only now that the viewer is actually open. Silent no-op on failure: the snapshot
+  // fallback below already covers it, so there's nothing to surface as an error.
+  useEffect(() => {
+    setLiveStreamUrl(null)
+    if (camera.providerId !== "kandrive-kdot" || camera.streamUrl) return
+    const controller = new AbortController()
+    void fetchKandriveLiveCameraSource({ lat: camera.lat, lon: camera.lon, providerRecordId: camera.providerRecordId }, controller.signal)
+      .then((url) => { if (!controller.signal.aborted) setLiveStreamUrl(url) })
+      .catch(() => undefined)
+    return () => controller.abort()
+  }, [camera.providerId, camera.providerRecordId, camera.lat, camera.lon, camera.streamUrl])
+
+  const effectiveCamera = useMemo(
+    () => (liveStreamUrl ? { ...camera, streamUrl: liveStreamUrl } : camera),
+    [camera, liveStreamUrl],
+  )
+  const media = useMemo(() => mediaFor(effectiveCamera), [effectiveCamera])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

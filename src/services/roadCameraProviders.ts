@@ -426,6 +426,13 @@ export async function fetchArdotTrafficCameras(context: LayerQueryContext, signa
 const KANDRIVE_GRAPHQL_URL = "https://www.kandrive.gov/api/graphql";
 const KANDRIVE_APP_URL = "https://www.kandrive.gov/";
 const KANDRIVE_MAP_FEATURES_QUERY = "query MapFeatures($input: MapFeaturesArgs!, $plowType: String) {\n\t\tmapFeaturesQuery(input: $input) {\n\t\t\tmapFeatures {\n\t\t\t\tbbox\n\t\t\t\ttitle\n\t\t\t\ttooltip\n\t\t\t\turi\n\t\t\t\tfeatures {\n\t\t\t\t\tid\n\t\t\t\t\tgeometry\n\t\t\t\t\tproperties\n\t\t\t\t\ttype\n\t\t\t\t}\n\t\t\t\t... on Cluster {\n\t\t\t\t\tmaxZoom\n\t\t\t\t}\n\t\t\t\t... on Sign {\n\t\t\t\t\tsignDisplayType\n\t\t\t\t}\n\t\t\t\t... on Event {\n\t\t\t\t\tpriority\n\t\t\t\t}\n\t\t\t\t__typename\n\t\t\t\t... on Camera {\n\t\t\t\t\tactive\n\t\t\t\t\tviews(limit: 5) {\n\t\t\t\t\t\turi\n\t\t\t\t\t\t... on CameraView {\n\t\t\t\t\t\t\turl\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcategory\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t... on Plow {\n\t\t\t\t\tviews(limit: 5, plowType: $plowType) {\n\t\t\t\t\t\turi\n\t\t\t\t\t\t... on PlowCameraView {\n\t\t\t\t\t\t\turl\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcategory\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t\terror {\n\t\t\t\tmessage\n\t\t\t\ttype\n\t\t\t}\n\t\t}\n\t}";
+// Same query as above, with one addition: `sources { type src }` inside the Camera view fragment.
+// Confirmed via direct request that this modified selection set is still accepted (unlike a
+// differently-formatted listCameraViewsQuery attempt, which was rejected outright) -- but `sources`
+// carries a short-lived signed HLS token, so this variant is deliberately used ONLY for an on-demand,
+// single-camera lookup at the moment a camera viewer actually opens, never for the viewport list/cache
+// path above, so a fetched token is never left to expire unused in the cache.
+const KANDRIVE_MAP_FEATURES_WITH_SOURCES_QUERY = "query MapFeatures($input: MapFeaturesArgs!, $plowType: String) {\n\t\tmapFeaturesQuery(input: $input) {\n\t\t\tmapFeatures {\n\t\t\t\tbbox\n\t\t\t\ttitle\n\t\t\t\ttooltip\n\t\t\t\turi\n\t\t\t\tfeatures {\n\t\t\t\t\tid\n\t\t\t\t\tgeometry\n\t\t\t\t\tproperties\n\t\t\t\t\ttype\n\t\t\t\t}\n\t\t\t\t... on Cluster {\n\t\t\t\t\tmaxZoom\n\t\t\t\t}\n\t\t\t\t... on Sign {\n\t\t\t\t\tsignDisplayType\n\t\t\t\t}\n\t\t\t\t... on Event {\n\t\t\t\t\tpriority\n\t\t\t\t}\n\t\t\t\t__typename\n\t\t\t\t... on Camera {\n\t\t\t\t\tactive\n\t\t\t\t\tviews(limit: 5) {\n\t\t\t\t\t\turi\n\t\t\t\t\t\t... on CameraView {\n\t\t\t\t\t\t\turl\n\t\t\t\t\t\t\tsources {\n\t\t\t\t\t\t\t\ttype\n\t\t\t\t\t\t\t\tsrc\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcategory\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t... on Plow {\n\t\t\t\t\tviews(limit: 5, plowType: $plowType) {\n\t\t\t\t\t\turi\n\t\t\t\t\t\t... on PlowCameraView {\n\t\t\t\t\t\t\turl\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcategory\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t\terror {\n\t\t\t\tmessage\n\t\t\t\ttype\n\t\t\t}\n\t\t}\n\t}";
 // Layers KDOT tags as official road-condition reports. Excludes "truckersReports" (crowd-submitted,
 // not agency-verified) and "otherStateInfo" (a pass-through of neighboring states' own feeds, which
 // this integration sources directly from each state instead).
@@ -442,6 +449,7 @@ interface KandriveFeature {
 interface KandriveCameraView {
   url?: string | null;
   category?: string | null;
+  sources?: Array<{ type?: string | null; src?: string | null }> | null;
 }
 interface KandriveMapItem {
   title?: string;
@@ -589,6 +597,36 @@ export async function fetchKandriveTrafficCameras(context: LayerQueryContext, si
   return dedupeById(results);
 }
 
+// On-demand, single-camera live source lookup for a KanDrive camera whose viewport-list entry has
+// no streamUrl. Called only when a camera viewer actually opens (a rare, human-paced action), never
+// on a polling/cache cadence -- so it can't turn into the kind of repeated automated traffic that
+// would risk the provider's own rate limiting, and the short-lived token it returns is used
+// immediately rather than cached. The lookup box is a tight envelope around the camera's own known
+// coordinates at a high zoom, which keeps it rendered as an individual Camera feature rather than
+// folded into a Cluster.
+export async function fetchKandriveLiveCameraSource(camera: { lat: number; lon: number; providerRecordId: string }, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<string | null> {
+  const pad = 0.01;
+  const body = JSON.stringify({
+    query: KANDRIVE_MAP_FEATURES_WITH_SOURCES_QUERY,
+    variables: {
+      input: { north: camera.lat + pad, south: camera.lat - pad, east: camera.lon + pad, west: camera.lon - pad, zoom: 16, layerSlugs: [] },
+      plowType: null,
+    },
+  });
+  const response = await fetcher(KANDRIVE_GRAPHQL_URL, DEFAULT_PROVIDER_TIMEOUT_MS, { method: "POST", signal, headers: { "Content-Type": "application/json" }, body });
+  if (!response.ok) return null;
+  const json = await response.json();
+  const items: KandriveMapItem[] = json?.data?.mapFeaturesQuery?.mapFeatures ?? [];
+  const targetUri = `camera/${camera.providerRecordId}`;
+  const match = items.find((item) => item.__typename === "Camera" && item.uri === targetUri);
+  for (const view of match?.views ?? []) {
+    const src = view.sources?.find((source) => safeHttpUrl(source?.src))?.src;
+    const safeSrc = safeHttpUrl(src);
+    if (safeSrc) return safeSrc;
+  }
+  return null;
+}
+
 // --- Missouri DOT Traveler Information --------------------------------------------------------
 //
 // MoDOT publishes its live road-event and camera data through its own ArcGIS Server REST services
@@ -596,11 +634,16 @@ export async function fetchKandriveTrafficCameras(context: LayerQueryContext, si
 // direct request: the service supports `f=geojson` output and is open to unauthenticated read-only
 // queries (no key, no login). Its CORS policy, however, only reflects `Access-Control-Allow-Origin`
 // for MoDOT's own domains (verified: an Origin of traveler.modot.org gets the header back, an
-// arbitrary origin does not) -- so browser-based fetches from this app's own origins will fail with
-// a CORS error rather than a data error until a same-origin proxy exists. That failure is still
-// handled honestly by the existing per-provider unavailable/stale path below; it is not treated as
-// "no data reported."
-const MODOT_BASE_URL = "https://mapping.modot.org/arcgis/rest/services/TravelerInformation";
+// arbitrary origin does not) -- so a direct browser fetch from this app's own origins fails CORS.
+//
+// Routed through this app's own same-origin proxy (web/ops/functions/api/modot/[[path]].ts, a
+// Cloudflare Pages Function that relays server-to-server, where CORS doesn't apply) instead of
+// mapping.modot.org directly. That function only exists on the web/ops (ops.codeblackwx.com)
+// deployment; the native app and web/public have no such route, so this same relative path 404s
+// there -- which the existing per-provider unavailable/stale path already handles honestly, exactly
+// as it did before this proxy existed. Nothing regresses where the proxy is absent; it only adds
+// function where it's present.
+const MODOT_BASE_URL = "/api/modot";
 const MODOT_TRAVELER_MAP_URL = "https://traveler.modot.org/map/index.html";
 const MODOT_CAMERAS_URL = `${MODOT_BASE_URL}/NWSDATA/MapServer/0`;
 
@@ -748,19 +791,21 @@ export async function fetchModotTrafficCameras(context: LayerQueryContext, signa
 //
 // ODOT publishes a public-domain (CC0) Work Zone Data Exchange (WZDx v4.0) feed at oktraffic.org,
 // registered with USDOT's national WZDx Feed Registry for third-party consumption -- this is a
-// federally-standardized open-data format, not a scrape. The access_token below is the one embedded
-// in ODOT's own registered public feed URL (a per-feed identifier the registry itself publishes so
-// third parties can query it -- confirmed working with no login and no request signing beyond this
-// token). Confirmed via direct request: no `Access-Control-Allow-Origin` is returned for an
-// arbitrary origin, so like MoDOT above, browser fetches from this app's origins will fail CORS
-// until a proxy exists; that is reported honestly through the existing unavailable/stale path.
+// federally-standardized open-data format, not a scrape. The registry-issued access token (a
+// per-feed identifier the registry itself publishes so third parties can query it) is held
+// server-side in web/ops/functions/api/odot/[[path]].ts, not shipped in this client bundle.
+//
+// Confirmed via direct request: no `Access-Control-Allow-Origin` is returned for an arbitrary
+// origin, so like MoDOT above, this is routed through the same-origin proxy Cloudflare Pages
+// Function (server-to-server, no CORS, token injected there) rather than oktraffic.org directly.
+// That function only exists on the web/ops deployment; elsewhere this relative path 404s, which
+// the existing unavailable/stale path already handles honestly -- no regression, proxy-only gain.
 //
 // ODOT's public camera map (oktraffic.org's own SPA) sits behind a Cloudflare bot-management
 // challenge with no separate public JSON endpoint found -- attempting to defeat that challenge
 // would be circumventing an access control, which is out of scope. No Oklahoma camera provider is
 // added this pass; ODOT road conditions are still covered via the WZDx feed below.
-const ODOT_WZDX_BASE_URL = "https://oktraffic.org/api/Geojsons";
-const ODOT_WZDX_ACCESS_TOKEN = "feOPynfHRJ5sdx8tf3IN5yOsGz89TAUuzHsN3V0jo1Fg41LcpoLhIRltaTPmDngD";
+const ODOT_WZDX_BASE_URL = "/api/odot";
 const ODOT_PUBLIC_MAP_URL = "https://oktraffic.org/";
 // WZDx only carries "work-zone" events today; ODOT's feed registry does not expose a separate
 // closures endpoint. Both feeds share this same set of two which mirrors what the state currently
@@ -827,7 +872,7 @@ function normalizeWzdxFeature(feature: unknown, providerId: string, kindHint: st
 export async function fetchOdotRoadConditions(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<RoadConditionEvent[]> {
   const results: RoadConditionEvent[] = [];
   for (const { path, kindHint } of ODOT_WZDX_FEEDS) {
-    const url = `${ODOT_WZDX_BASE_URL}/${path}?access_token=${ODOT_WZDX_ACCESS_TOKEN}`;
+    const url = `${ODOT_WZDX_BASE_URL}/${path}`;
     const json = await fetchJson(url, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher);
     const features = Array.isArray(json?.features) ? json.features : [];
     for (const feature of features) {

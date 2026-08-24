@@ -137,7 +137,7 @@ const notConfiguredProvider = (name: string): ObservationProvenance => ({
   displayLabel: `${name} not configured`,
 });
 
-export { getRoadConditionsForViewport, getTrafficCamerasForViewport } from "./roadCameraProviders";
+export { getRoadConditionsForViewport, getTrafficCamerasForViewport, fetchKandriveLiveCameraSource } from "./roadCameraProviders";
 
 export async function getProbesForViewport(_context: LayerQueryContext): Promise<ViewportLayerResult<ProbeObservation>> {
   return { data: [], status: "not-configured", message: "Code Black probe provider not configured.", simulated: false, fetchedAt: Date.now() };
