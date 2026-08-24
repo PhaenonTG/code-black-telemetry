@@ -1,6 +1,7 @@
 import mapboxgl from "mapbox-gl";
 import type { Map as MapboxMap, Marker, Popup } from "mapbox-gl";
 import type { PinShape, PinStyle } from "../services/settings";
+import type { TrafficCamera } from "../services/mapLayerModels";
 import { spotterAgeText } from "../services/spotters";
 
 export interface PinPoint {
@@ -17,6 +18,7 @@ export interface PinPoint {
   imageUrl?: string | null;
   actionUrl?: string | null;
   actionLabel?: string;
+  cameraData?: TrafficCamera | null;
   clusterCount?: number;
   family?: "team" | "chaser" | "report" | "probe" | "road" | "camera" | "mark";
   stale?: boolean;
@@ -152,8 +154,11 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
     ? `<div class="atlas-pin-popup__media" data-camera-media-state="loading"><span>LOADING CAMERA IMAGE</span><img class="atlas-pin-popup__image" src="${imageUrl}" alt="" loading="lazy" referrerpolicy="no-referrer" /></div>`
     : "";
   const actionUrl = safePopupUrl(point.actionUrl);
+  const cameraAction = point.family === "camera" && point.cameraData
+    ? `<button type="button" class="atlas-pin-popup__action atlas-pin-popup__camera-open">VIEW CAMERA</button>`
+    : "";
   const action = actionUrl ? `<a class="atlas-pin-popup__action" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(point.actionLabel ?? "Open source")}</a>` : "";
-  const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${details}${image}${phoneLine}${emailLine}${action}`;
+  const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${details}${image}${phoneLine}${emailLine}${cameraAction}${action}`;
   const placement = pinPopupPlacementFor(map, point.lon, point.lat);
   const popup = new mapboxgl.Popup({
     closeButton: true,
@@ -166,6 +171,12 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
     .setLngLat([point.lon, point.lat])
     .setHTML(html)
     .addTo(map);
+  const cameraOpen = popup.getElement()?.querySelector<HTMLButtonElement>(".atlas-pin-popup__camera-open");
+  if (cameraOpen && point.cameraData) {
+    cameraOpen.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent<TrafficCamera>("codeblack:map-camera-open", { detail: point.cameraData! }));
+    });
+  }
   const media = popup.getElement()?.querySelector<HTMLElement>(".atlas-pin-popup__media");
   const mediaStatus = media?.querySelector<HTMLElement>("span");
   const mediaImage = media?.querySelector<HTMLImageElement>("img");

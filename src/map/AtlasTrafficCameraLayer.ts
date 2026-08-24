@@ -52,6 +52,7 @@ function cameraToPin(camera: TrafficCamera | MapCluster<TrafficCamera>): PinPoin
     imageUrl: camera.previewUrl ?? camera.thumbnailUrl,
     actionUrl: camera.streamUrl ?? camera.sourceUrl,
     actionLabel: camera.streamUrl ? "Open stream" : "Open provider",
+    cameraData: camera,
     family: "camera",
     stale,
   };
