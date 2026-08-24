@@ -48,9 +48,12 @@ export function applyAtlasCamera(
   expanded: boolean,
   previousBearing: number,
   compact = false,
+  zoomLocked = false,
 ) {
   const moving = (gps.speedMph ?? 0) >= 4 && gps.headingDeg != null;
-  const targetZoom = zoomForSpeed(gps.speedMph, expanded, compact);
+  // Locked: hold whatever zoom is currently on screen instead of re-deriving it from speed, so
+  // position/heading keep following normally but the zoom level itself stops moving on its own.
+  const targetZoom = zoomLocked ? map.getZoom() : zoomForSpeed(gps.speedMph, expanded, compact);
   const targetBearing = mode === "FOLLOW_HEADING" && moving ? gps.headingDeg ?? previousBearing : 0;
   const bearing = mode === "FOLLOW_HEADING" ? smoothAngle(previousBearing, targetBearing, 0.22) : targetBearing;
   const pitch = mode === "FOLLOW_HEADING" && moving ? 18 : 0;

@@ -140,6 +140,13 @@ export function AtlasMap({
   const [cameraMode, setCameraMode] = useState<AtlasCameraMode>("FOLLOW_NORTH");
   const [bearing, setBearing] = useState(gps?.headingDeg ?? 0);
   const [pitch, setPitch] = useState(0);
+  // Speed-aware zoom (AtlasCameraController.zoomForSpeed) re-zooms the camera every time GPS speed
+  // crosses one of its bands -- useful hands-off, but disorienting when you deliberately zoomed in
+  // on something and don't want the next speed change to yank it back out. Session-only (not
+  // persisted), same as cameraMode itself.
+  const [zoomLocked, setZoomLocked] = useState(false);
+  const zoomLockedRef = useRef(zoomLocked);
+  zoomLockedRef.current = zoomLocked;
   const [mapError, setMapError] = useState("");
   const [mapState, setMapState] = useState<AtlasMapState>("INITIALIZING");
   const [renderCount, setRenderCount] = useState(0);
@@ -478,7 +485,7 @@ export function AtlasMap({
       if (currentGps) {
         map.jumpTo({
           center: [currentGps.lon, currentGps.lat],
-          zoom: zoomForSpeed(currentGps.speedMph, latestRef.current.expanded, compact),
+          zoom: zoomLockedRef.current ? map.getZoom() : zoomForSpeed(currentGps.speedMph, latestRef.current.expanded, compact),
           bearing,
           pitch,
         });
@@ -500,11 +507,11 @@ export function AtlasMap({
     // drives) isn't spent on a canvas nobody's looking at right now.
     if (!activeRef.current) return;
     if (cameraMode === "FOLLOW_NORTH" || cameraMode === "FOLLOW_HEADING" || cameraMode === "RECENTERING") {
-      const camera = applyAtlasCamera(map, gps, cameraMode, expanded, bearing, compact);
+      const camera = applyAtlasCamera(map, gps, cameraMode, expanded, bearing, compact, zoomLocked);
       setBearing(camera.bearing);
       setPitch(camera.pitch);
     }
-  }, [bearing, cameraMode, expanded, gps, loaded, compact]);
+  }, [bearing, cameraMode, expanded, gps, loaded, compact, zoomLocked]);
 
   // Catch the camera up the moment this instance becomes the visible one again -- the effect above
   // intentionally skipped every camera move while inactive, so without this the view would sit on
@@ -518,7 +525,7 @@ export function AtlasMap({
     if (cameraMode !== "FOLLOW_NORTH" && cameraMode !== "FOLLOW_HEADING" && cameraMode !== "RECENTERING") return;
     map.easeTo({
       center: [gps.lon, gps.lat],
-      zoom: zoomForSpeed(gps.speedMph, expanded, compact),
+      zoom: zoomLockedRef.current ? map.getZoom() : zoomForSpeed(gps.speedMph, expanded, compact),
       bearing,
       pitch,
       duration: 600,
@@ -940,6 +947,7 @@ export function AtlasMap({
         <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
           <button type="button" aria-label="Toggle follow mode" title="Cycles between north-up follow, heading-up follow, and recenter from free pan" className={cameraMode === "FREE" ? "" : "active"} onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
           <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
+          <button type="button" aria-label="Toggle zoom lock" title="Stops the camera from re-zooming automatically as your speed changes" className={zoomLocked ? "active" : ""} onClick={() => setZoomLocked((value) => !value)}>ZOOM LOCK</button>
           <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
           <button type="button" aria-label="Map layers" data-testid="atlas-map-layers-primary" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
         </div>

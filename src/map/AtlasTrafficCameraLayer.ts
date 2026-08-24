@@ -36,22 +36,17 @@ function cameraToPin(camera: TrafficCamera | MapCluster<TrafficCamera>): PinPoin
     };
   }
   const stale = camera.availability !== "available" || camera.freshness === "stale" || camera.freshness === "unavailable";
+  // Deliberately minimal: name, one-line status, snapshot preview, VIEW CAMERA. Road/direction/
+  // source/provider-link all duplicate what MapCameraViewer already shows in full once opened --
+  // this in-map popup is a quick "what is this and is it worth opening," not a second copy of the
+  // full detail view.
   return {
     id: `camera-${camera.id}`,
     lat: camera.lat,
     lon: camera.lon,
     name: camera.name,
-    group: camera.provider.displayLabel,
-    statusLine: `${camera.availability.toUpperCase()} - ${ageLabel(camera.lastUpdateAt)}`,
-    detailRows: [
-      { label: "Road", value: camera.roadway ?? "Not reported" },
-      { label: "View", value: camera.direction ?? "Not reported" },
-      { label: "State", value: camera.availability },
-      { label: "Source", value: camera.attribution },
-    ],
+    statusLine: camera.availability === "available" ? ageLabel(camera.lastUpdateAt) : camera.availability.toUpperCase(),
     imageUrl: camera.previewUrl ?? camera.thumbnailUrl,
-    actionUrl: camera.streamUrl ?? camera.sourceUrl,
-    actionLabel: camera.streamUrl ? "Open stream" : "Open provider",
     cameraData: camera,
     family: "camera",
     stale,

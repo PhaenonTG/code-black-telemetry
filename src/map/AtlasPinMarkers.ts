@@ -201,6 +201,31 @@ function showPinPopup(map: MapboxMap, point: PinPoint) {
     }, { once: true });
   }
   activePopups.set(map, popup);
+  ensurePopupVisible(map, popup);
+}
+
+// A popup anchored near the container's top edge (a common case once the map's own header/status
+// strip eats vertical space) can still render partly off-screen even with pinPopupPlacementFor's
+// horizontal-fit logic, since that only sizes width, not vertical position. Measures the actual
+// rendered popup after layout and, if any edge clips the container, pans by exactly that many
+// screen pixels -- letting Mapbox handle the lng/lat math rather than reprojecting by hand.
+function ensurePopupVisible(map: MapboxMap, popup: Popup) {
+  requestAnimationFrame(() => {
+    if (activePopups.get(map) !== popup) return;
+    const el = popup.getElement();
+    if (!el) return;
+    const containerRect = map.getContainer().getBoundingClientRect();
+    const popupRect = el.getBoundingClientRect();
+    const margin = 12;
+    let dx = 0;
+    let dy = 0;
+    if (popupRect.left < containerRect.left + margin) dx = popupRect.left - (containerRect.left + margin);
+    else if (popupRect.right > containerRect.right - margin) dx = popupRect.right - (containerRect.right - margin);
+    if (popupRect.top < containerRect.top + margin) dy = popupRect.top - (containerRect.top + margin);
+    else if (popupRect.bottom > containerRect.bottom - margin) dy = popupRect.bottom - (containerRect.bottom - margin);
+    if (dx === 0 && dy === 0) return;
+    map.panBy([dx, dy], { duration: 300, easing: (t) => 1 - (1 - t) ** 3 });
+  });
 }
 
 // Latest point data per marker id, keyed off the caller-owned `markers` record so a click handler
