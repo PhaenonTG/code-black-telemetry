@@ -96,9 +96,9 @@ export function startAtlasMosaicLayer(
     onStatus?.(status);
   };
 
-  const handleData = (event: { sourceId?: string; sourceDataType?: string; dataType?: string }) => {
+  const handleData = (event: { sourceId?: string; dataType?: string; isSourceLoaded?: boolean }) => {
     if (event.sourceId !== MOSAIC_SOURCE_ID || event.dataType !== "source") return;
-    if (event.sourceDataType === "idle" || event.sourceDataType === undefined) {
+    if (event.isSourceLoaded) {
       lastSuccessAt = Date.now();
       report("ready");
     }
