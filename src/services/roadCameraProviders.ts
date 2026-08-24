@@ -57,6 +57,57 @@ const ARDOT_PROVENANCE: ObservationProvenance = {
   displayLabel: "ARDOT IDrive",
 };
 
+const KANSAS_COVERAGE: ProviderCoverage = {
+  north: 40.01,
+  south: 36.99,
+  east: -94.58,
+  west: -102.06,
+  label: "Kansas",
+};
+
+const MISSOURI_COVERAGE: ProviderCoverage = {
+  north: 40.62,
+  south: 35.99,
+  east: -89.09,
+  west: -95.78,
+  label: "Missouri",
+};
+
+const OKLAHOMA_COVERAGE: ProviderCoverage = {
+  north: 37.01,
+  south: 33.61,
+  east: -94.42,
+  west: -103.01,
+  label: "Oklahoma",
+};
+
+const KANDRIVE_PROVENANCE: ObservationProvenance = {
+  provider: "OFFICIAL/STATE_TRANSPORTATION" as ObservationProvenance["provider"],
+  sourceId: "kandrive-kdot",
+  sourceName: "Kansas DOT KanDrive",
+  official: true,
+  experimental: false,
+  displayLabel: "KDOT KanDrive",
+};
+
+const MODOT_PROVENANCE: ObservationProvenance = {
+  provider: "OFFICIAL/STATE_TRANSPORTATION" as ObservationProvenance["provider"],
+  sourceId: "modot-traveler",
+  sourceName: "Missouri DOT Traveler Information",
+  official: true,
+  experimental: false,
+  displayLabel: "MoDOT Traveler Info",
+};
+
+const ODOT_PROVENANCE: ObservationProvenance = {
+  provider: "OFFICIAL/STATE_TRANSPORTATION" as ObservationProvenance["provider"],
+  sourceId: "odot-wzdx",
+  sourceName: "Oklahoma DOT Work Zone Data Exchange",
+  official: true,
+  experimental: false,
+  displayLabel: "ODOT WZDx",
+};
+
 const IDRIVE_LAYER_BASE_URL = "https://layers.idrivearkansas.com";
 const IDRIVE_APP_URL = "https://www.idrivearkansas.com/";
 const ROAD_CACHE_TTL_MS = 2 * 60_000;
@@ -136,8 +187,13 @@ export function sanitizeProviderText(value: unknown, maxLength = 220) {
 }
 
 function parseProviderTime(value: unknown) {
-  if (typeof value !== "string" && typeof value !== "number") return null;
-  const parsed = Date.parse(String(value));
+  // Some providers (MoDOT's ArcGIS date fields, KDOT/KanDrive's lastUpdated.timestamp) hand back
+  // an already-epoch-ms number rather than a date string. Date.parse(String(epochMs)) is NOT a
+  // valid date string and silently returns NaN, which would otherwise fall back to "now" and
+  // fabricate freshness for reports that may be hours or days old.
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -200,6 +256,10 @@ function normalizeRoadKind(kindHint: string, props: Record<string, unknown>): Ro
   if (text.includes("disabled")) return "disabled-vehicle";
   if (text.includes("construction") || text.includes("work zone") || kindHint.includes("construction") || kindHint.includes("lane")) return "construction";
   if (text.includes("closure") || text.includes("closed")) return "closure";
+  // Only a kindHint-exact match, never a text keyword -- a source-tagged "weather-hazard" feed
+  // (e.g. KanDrive's Weather-Related Impacts layer) is the only thing that lands here, so this
+  // can never change ARDOT's existing classification.
+  if (kindHint === "weather-hazard") return "weather-hazard";
   return "other";
 }
 
@@ -348,6 +408,437 @@ export async function fetchArdotTrafficCameras(context: LayerQueryContext, signa
   return dedupeById(cameras);
 }
 
+// --- Kansas DOT / KanDrive -------------------------------------------------------------------
+//
+// KanDrive (kandrive.gov) is KDOT's own official public traveler-information site. Its frontend
+// calls a first-party GraphQL API at kandrive.gov/api/graphql to render the exact same map this
+// integration reads -- confirmed served with `Access-Control-Allow-Origin: *`, i.e. deliberately
+// open for public/cross-origin consumption (unlike MoDOT and ODOT below). No key, no login, no
+// scraping of rendered HTML: this is the same JSON contract KDOT's own site depends on.
+//
+// The query text below is copied byte-for-byte (including whitespace) from KanDrive's own shipped
+// bundle. That turned out to matter: an equivalent but differently-formatted query for a *different*
+// KanDrive operation (listCameraViewsQuery) was silently rejected by their edge/CDN and fell back to
+// serving the SPA's index.html instead of an error -- while this exact byte-for-byte text has been
+// confirmed working via direct request outside the browser. So camera data is deliberately sourced
+// from this same MapFeatures query (which already includes Camera-typed features) rather than a
+// second, less certain endpoint.
+const KANDRIVE_GRAPHQL_URL = "https://www.kandrive.gov/api/graphql";
+const KANDRIVE_APP_URL = "https://www.kandrive.gov/";
+const KANDRIVE_MAP_FEATURES_QUERY = "query MapFeatures($input: MapFeaturesArgs!, $plowType: String) {\n\t\tmapFeaturesQuery(input: $input) {\n\t\t\tmapFeatures {\n\t\t\t\tbbox\n\t\t\t\ttitle\n\t\t\t\ttooltip\n\t\t\t\turi\n\t\t\t\tfeatures {\n\t\t\t\t\tid\n\t\t\t\t\tgeometry\n\t\t\t\t\tproperties\n\t\t\t\t\ttype\n\t\t\t\t}\n\t\t\t\t... on Cluster {\n\t\t\t\t\tmaxZoom\n\t\t\t\t}\n\t\t\t\t... on Sign {\n\t\t\t\t\tsignDisplayType\n\t\t\t\t}\n\t\t\t\t... on Event {\n\t\t\t\t\tpriority\n\t\t\t\t}\n\t\t\t\t__typename\n\t\t\t\t... on Camera {\n\t\t\t\t\tactive\n\t\t\t\t\tviews(limit: 5) {\n\t\t\t\t\t\turi\n\t\t\t\t\t\t... on CameraView {\n\t\t\t\t\t\t\turl\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcategory\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t... on Plow {\n\t\t\t\t\tviews(limit: 5, plowType: $plowType) {\n\t\t\t\t\t\turi\n\t\t\t\t\t\t... on PlowCameraView {\n\t\t\t\t\t\t\turl\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcategory\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t\terror {\n\t\t\t\tmessage\n\t\t\t\ttype\n\t\t\t}\n\t\t}\n\t}";
+// Layers KDOT tags as official road-condition reports. Excludes "truckersReports" (crowd-submitted,
+// not agency-verified) and "otherStateInfo" (a pass-through of neighboring states' own feeds, which
+// this integration sources directly from each state instead).
+const KANDRIVE_ROAD_LAYER_SLUGS = ["roadClosures", "roadReports", "constructionReports", "weatherRelatedImpacts", "winterDriving"];
+
+interface KandriveGeometry {
+  type?: string;
+  coordinates?: unknown;
+}
+interface KandriveFeature {
+  geometry?: KandriveGeometry;
+  type?: string;
+}
+interface KandriveCameraView {
+  url?: string | null;
+  category?: string | null;
+}
+interface KandriveMapItem {
+  title?: string;
+  tooltip?: string;
+  uri?: string;
+  __typename?: string;
+  features?: KandriveFeature[];
+  active?: boolean;
+  views?: KandriveCameraView[];
+}
+
+async function fetchKandriveMapFeatures(context: LayerQueryContext, layerSlugs: string[], signal: AbortSignal | undefined, fetcher: Fetcher) {
+  const { viewport } = context;
+  const body = JSON.stringify({
+    query: KANDRIVE_MAP_FEATURES_QUERY,
+    variables: { input: { north: viewport.north, south: viewport.south, east: viewport.east, west: viewport.west, zoom: Math.floor(viewport.zoom), layerSlugs }, plowType: null },
+  });
+  const response = await fetcher(KANDRIVE_GRAPHQL_URL, DEFAULT_PROVIDER_TIMEOUT_MS, { method: "POST", signal, headers: { "Content-Type": "application/json" }, body });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const json = await response.json();
+  const items: KandriveMapItem[] = json?.data?.mapFeaturesQuery?.mapFeatures ?? [];
+  return items;
+}
+
+function kandriveFirstPoint(item: KandriveMapItem): { lat: number; lon: number } | null {
+  for (const feature of item.features ?? []) {
+    if (feature.geometry?.type === "Point" && Array.isArray(feature.geometry.coordinates)) {
+      const [lon, lat] = feature.geometry.coordinates as [number, number];
+      if (isValidCoordinate(lat, lon)) return { lat, lon };
+    }
+  }
+  return null;
+}
+
+function kandriveParseTitle(title: string) {
+  const match = /^(.*?)\s+(northbound|southbound|eastbound|westbound|in both directions):/i.exec(title);
+  if (!match) return { roadway: null, direction: "unknown" as RoadTravelDirection };
+  const directionWord = match[2].toLowerCase() === "in both directions" ? "both" : match[2];
+  return { roadway: sanitizeProviderText(match[1], 60) || null, direction: normalizeDirection(directionWord) };
+}
+
+function normalizeKandriveEvent(item: KandriveMapItem, providerId: string, kindHintBySlug: string): RoadConditionEvent | null {
+  if (item.__typename !== "Event" || !item.title) return null;
+  const point = kandriveFirstPoint(item);
+  if (!point) return null;
+  const recordId = sanitizeProviderText((item.uri ?? "").replace(/^event\//, "") || `${point.lat},${point.lon}`, 80);
+  const { roadway, direction } = kandriveParseTitle(item.title);
+  const description = sanitizeProviderText(item.tooltip ?? item.title, 320);
+  const syntheticProps = { reason: item.title, description, status: item.title, travel_impact: description };
+  const kind = normalizeRoadKind(kindHintBySlug, syntheticProps);
+  const closureState = normalizeClosureState(syntheticProps, kindHintBySlug);
+  const severity = normalizeRoadSeverity(syntheticProps, closureState, kind);
+  // KanDrive's MapFeatures query does not expose a per-event lastUpdated field (only Camera and
+  // dashboard-only queries do). Rather than fabricate a timestamp, this is treated the same as the
+  // codebase's existing convention for other genuinely-unknown timestamps: the moment of this live
+  // fetch, since the event is being observed as currently active right now.
+  const updatedAt = nowMs();
+  return {
+    id: `${providerId}:road:${recordId}`,
+    providerId,
+    providerRecordId: recordId,
+    kind,
+    geometry: { type: "point", lat: point.lat, lon: point.lon },
+    closureState,
+    severity,
+    title: sanitizeProviderText(item.title, 160),
+    startsAt: null,
+    endsAt: null,
+    direction,
+    roadway,
+    status: sanitizeProviderText(item.title, 80),
+    description,
+    lat: point.lat,
+    lon: point.lon,
+    provider: KANDRIVE_PROVENANCE,
+    updatedAt,
+    freshness: freshnessForTimestamp(updatedAt),
+    stale: false,
+    sourceUrl: KANDRIVE_APP_URL,
+    rawSourceReference: recordId,
+  };
+}
+
+function normalizeKandriveCamera(item: KandriveMapItem, providerId: string): TrafficCamera | null {
+  if (item.__typename !== "Camera" || !item.title) return null;
+  const point = kandriveFirstPoint(item);
+  if (!point) return null;
+  const recordId = sanitizeProviderText((item.uri ?? "").replace(/^camera\//, "") || `${point.lat},${point.lon}`, 80);
+  const primaryView = (item.views ?? [])[0];
+  const previewUrl = safeHttpUrl(primaryView?.url);
+  const availability: TrafficCameraAvailability = item.active === false ? "offline" : item.active === true ? "available" : "unknown";
+  const updatedAt = availability === "offline" ? null : nowMs();
+  return {
+    id: `${providerId}:camera:${recordId}`,
+    providerId,
+    providerRecordId: recordId,
+    name: sanitizeProviderText(item.title, 120),
+    lat: point.lat,
+    lon: point.lon,
+    roadway: kandriveParseTitle(item.title).roadway,
+    direction: null,
+    source: "KDOT KanDrive",
+    provider: { ...KANDRIVE_PROVENANCE, provider: "PUBLIC/TRAFFIC" },
+    lastUpdateAt: updatedAt,
+    imageUrl: previewUrl,
+    // KanDrive's dashboard-only camera query exposes short-lived signed HLS tokens (~5 min expiry)
+    // for VIDEO-category cameras; caching that URL here would very likely hand back an already-
+    // expired stream by the time it's opened. Snapshot image + link back to KanDrive instead,
+    // matching the "protected/unembeddable streams stay source-link/snapshot fallback" pattern.
+    streamUrl: null,
+    thumbnailUrl: previewUrl,
+    previewUrl,
+    availability,
+    freshness: availability === "offline" ? "unavailable" : freshnessForTimestamp(updatedAt),
+    sourceUrl: `${KANDRIVE_APP_URL}${item.uri ?? ""}`,
+    attribution: "Kansas DOT KanDrive",
+  };
+}
+
+export async function fetchKandriveRoadConditions(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<RoadConditionEvent[]> {
+  const items = await fetchKandriveMapFeatures(context, KANDRIVE_ROAD_LAYER_SLUGS, signal, fetcher);
+  const kindHintForSlug = (item: KandriveMapItem) => {
+    const uri = item.uri ?? "";
+    if (uri.startsWith("event/")) {
+      const tooltip = `${item.title ?? ""} ${item.tooltip ?? ""}`.toLowerCase();
+      if (tooltip.includes("closed") || tooltip.includes("closure")) return "closure";
+    }
+    return "";
+  };
+  const results = items
+    .map((item) => normalizeKandriveEvent(item, "kandrive-kdot", kindHintForSlug(item)))
+    .filter((event): event is RoadConditionEvent => event != null)
+    .filter((event) => pointInViewport(event, context.viewport))
+    .slice(0, MAX_ROAD_RESULTS);
+  return dedupeById(results);
+}
+
+export async function fetchKandriveTrafficCameras(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<TrafficCamera[]> {
+  const items = await fetchKandriveMapFeatures(context, [], signal, fetcher);
+  const results = items
+    .map((item) => normalizeKandriveCamera(item, "kandrive-kdot"))
+    .filter((camera): camera is TrafficCamera => camera != null)
+    .filter((camera) => pointInViewport(camera, context.viewport))
+    .slice(0, MAX_CAMERA_RESULTS);
+  return dedupeById(results);
+}
+
+// --- Missouri DOT Traveler Information --------------------------------------------------------
+//
+// MoDOT publishes its live road-event and camera data through its own ArcGIS Server REST services
+// at mapping.modot.org -- the same backend traveler.modot.org's official map reads. Confirmed via
+// direct request: the service supports `f=geojson` output and is open to unauthenticated read-only
+// queries (no key, no login). Its CORS policy, however, only reflects `Access-Control-Allow-Origin`
+// for MoDOT's own domains (verified: an Origin of traveler.modot.org gets the header back, an
+// arbitrary origin does not) -- so browser-based fetches from this app's own origins will fail with
+// a CORS error rather than a data error until a same-origin proxy exists. That failure is still
+// handled honestly by the existing per-provider unavailable/stale path below; it is not treated as
+// "no data reported."
+const MODOT_BASE_URL = "https://mapping.modot.org/arcgis/rest/services/TravelerInformation";
+const MODOT_TRAVELER_MAP_URL = "https://traveler.modot.org/map/index.html";
+const MODOT_CAMERAS_URL = `${MODOT_BASE_URL}/NWSDATA/MapServer/0`;
+
+const MODOT_ROAD_LAYERS: Array<{ layer: number; kindHint: string }> = [
+  { layer: 0, kindHint: "flooding" },
+  { layer: 21, kindHint: "crash" },
+  { layer: 24, kindHint: "crash" },
+  { layer: 25, kindHint: "crash" },
+  { layer: 22, kindHint: "construction" },
+  { layer: 26, kindHint: "construction" },
+  { layer: 27, kindHint: "construction" },
+  { layer: 23, kindHint: "winter-condition" },
+];
+
+function arcgisEnvelopeQueryUrl(baseUrl: string, viewport: MapViewport, extraParams: Record<string, string> = {}) {
+  const params = new URLSearchParams({
+    f: "geojson",
+    outFields: "*",
+    geometry: `${viewport.west},${viewport.south},${viewport.east},${viewport.north}`,
+    geometryType: "esriGeometryEnvelope",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    resultRecordCount: "150",
+    ...extraParams,
+  });
+  return `${baseUrl}/query?${params.toString()}`;
+}
+
+function normalizeModotRoadFeature(feature: unknown, providerId: string, kindHint: string): RoadConditionEvent | null {
+  if (!feature || typeof feature !== "object") return null;
+  const candidate = feature as { properties?: Record<string, unknown>; geometry?: { coordinates?: unknown[] } };
+  const props = candidate.properties ?? {};
+  const coordinates = candidate.geometry?.coordinates;
+  const lon = Array.isArray(coordinates) ? Number(coordinates[0]) : NaN;
+  const lat = Array.isArray(coordinates) ? Number(coordinates[1]) : NaN;
+  if (!isValidCoordinate(lat, lon)) return null;
+  const recordId = sanitizeProviderText(props.OBJECT_ID ?? props.OBJECTID ?? props.ESRI_OID ?? props.DATA_ID ?? `${lat},${lon}`, 80);
+  const impact = sanitizeProviderText(props.LEVEL_OF_IMPACT_CODE ?? props.LEVEL_OF_IMPACT, 80);
+  const syntheticProps = {
+    reason: props.TYPE_CODE ?? props.WORK_TYPE ?? kindHint,
+    description: props.EXT_COMMENT ?? props.EXTERNAL_COMMENT ?? [props.BEGIN_DESCRIPTION, props.END_DESCRIPTION].filter(Boolean).join(" to "),
+    status: impact,
+    travel_impact: impact,
+    lanes_closed: props.NUMBER_LANES_CLOSED,
+    closure_type: impact,
+  };
+  const kind = normalizeRoadKind(kindHint, syntheticProps);
+  const closureState = normalizeClosureState(syntheticProps, kindHint);
+  const severity = normalizeRoadSeverity(syntheticProps, closureState, kind);
+  const updatedAt = parseProviderTime(props.LAST_CHANGED_DATE ?? props.STATUS_DATE ?? props.START_DATE) ?? nowMs();
+  const roadway = [props.DESIGNATION, props.TRAVELWAY_NAME].filter(Boolean).map((v) => sanitizeProviderText(v, 40)).join(" ").trim() || null;
+  const reason = sanitizeProviderText(syntheticProps.reason, 80);
+  const description = sanitizeProviderText(syntheticProps.description, 320);
+  const freshness = freshnessForTimestamp(updatedAt);
+  return {
+    id: `${providerId}:road:${recordId}`,
+    providerId,
+    providerRecordId: recordId,
+    kind,
+    geometry: { type: "point", lat, lon },
+    closureState,
+    severity,
+    title: [reason, roadway].filter(Boolean).join(" - ") || "Road condition",
+    startsAt: parseProviderTime(props.START_DATE),
+    endsAt: parseProviderTime(props.END_DATE),
+    direction: normalizeDirection(props.DIRECTION),
+    roadway,
+    status: sanitizeProviderText(impact || props.STATUS_CODE, 80) || closureState,
+    description,
+    lat,
+    lon,
+    provider: MODOT_PROVENANCE,
+    updatedAt,
+    freshness,
+    stale: freshness === "stale" || freshness === "unavailable",
+    sourceUrl: MODOT_TRAVELER_MAP_URL,
+    rawSourceReference: recordId,
+  };
+}
+
+function normalizeModotCamera(feature: unknown, providerId: string): TrafficCamera | null {
+  if (!feature || typeof feature !== "object") return null;
+  const candidate = feature as { properties?: Record<string, unknown>; geometry?: { coordinates?: unknown[] } };
+  const props = candidate.properties ?? {};
+  const coordinates = candidate.geometry?.coordinates;
+  const lon = Array.isArray(coordinates) ? Number(coordinates[0]) : Number(props.X);
+  const lat = Array.isArray(coordinates) ? Number(coordinates[1]) : Number(props.Y);
+  if (!isValidCoordinate(lat, lon)) return null;
+  const recordId = sanitizeProviderText(props.CAM_ID ?? `${lat},${lon}`, 80);
+  const streamError = sanitizeProviderText(props.STREAM_ERROR, 4).toUpperCase() === "Y";
+  const availability: TrafficCameraAvailability = streamError ? "offline" : "available";
+  const imageUrl = safeHttpUrl(props.URL1);
+  const streamUrl = safeHttpUrl(props.URL2);
+  const updatedAt = availability === "offline" ? null : nowMs();
+  return {
+    id: `${providerId}:camera:${recordId}`,
+    providerId,
+    providerRecordId: recordId,
+    name: sanitizeProviderText(props.DESCRIPTION ?? `Camera ${recordId}`, 120) || `Camera ${recordId}`,
+    lat,
+    lon,
+    roadway: null,
+    direction: null,
+    source: "MoDOT Traveler Information",
+    provider: { ...MODOT_PROVENANCE, provider: "PUBLIC/TRAFFIC" },
+    lastUpdateAt: updatedAt,
+    imageUrl,
+    streamUrl,
+    thumbnailUrl: imageUrl,
+    previewUrl: imageUrl ?? streamUrl,
+    availability,
+    freshness: availability === "offline" ? "unavailable" : freshnessForTimestamp(updatedAt),
+    sourceUrl: MODOT_TRAVELER_MAP_URL,
+    attribution: "Missouri DOT Traveler Information",
+  };
+}
+
+export async function fetchModotRoadConditions(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<RoadConditionEvent[]> {
+  const results: RoadConditionEvent[] = [];
+  for (const { layer, kindHint } of MODOT_ROAD_LAYERS) {
+    const url = arcgisEnvelopeQueryUrl(`${MODOT_BASE_URL}/TravelerInformationData/MapServer/${layer}`, context.viewport);
+    const json = await fetchJson(url, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher);
+    const features = Array.isArray(json?.features) ? json.features : [];
+    for (const feature of features) {
+      const event = normalizeModotRoadFeature(feature, "modot-traveler", kindHint);
+      if (event) results.push(event);
+      if (results.length >= MAX_ROAD_RESULTS) break;
+    }
+  }
+  return dedupeById(results).slice(0, MAX_ROAD_RESULTS);
+}
+
+export async function fetchModotTrafficCameras(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<TrafficCamera[]> {
+  const url = arcgisEnvelopeQueryUrl(MODOT_CAMERAS_URL, context.viewport);
+  const json = await fetchJson(url, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher);
+  const features = Array.isArray(json?.features) ? json.features : [];
+  const cameras = features
+    .map((feature: unknown) => normalizeModotCamera(feature, "modot-traveler"))
+    .filter((camera: TrafficCamera | null): camera is TrafficCamera => camera != null)
+    .slice(0, MAX_CAMERA_RESULTS);
+  return dedupeById(cameras);
+}
+
+// --- Oklahoma DOT Work Zone Data Exchange -------------------------------------------------------
+//
+// ODOT publishes a public-domain (CC0) Work Zone Data Exchange (WZDx v4.0) feed at oktraffic.org,
+// registered with USDOT's national WZDx Feed Registry for third-party consumption -- this is a
+// federally-standardized open-data format, not a scrape. The access_token below is the one embedded
+// in ODOT's own registered public feed URL (a per-feed identifier the registry itself publishes so
+// third parties can query it -- confirmed working with no login and no request signing beyond this
+// token). Confirmed via direct request: no `Access-Control-Allow-Origin` is returned for an
+// arbitrary origin, so like MoDOT above, browser fetches from this app's origins will fail CORS
+// until a proxy exists; that is reported honestly through the existing unavailable/stale path.
+//
+// ODOT's public camera map (oktraffic.org's own SPA) sits behind a Cloudflare bot-management
+// challenge with no separate public JSON endpoint found -- attempting to defeat that challenge
+// would be circumventing an access control, which is out of scope. No Oklahoma camera provider is
+// added this pass; ODOT road conditions are still covered via the WZDx feed below.
+const ODOT_WZDX_BASE_URL = "https://oktraffic.org/api/Geojsons";
+const ODOT_WZDX_ACCESS_TOKEN = "feOPynfHRJ5sdx8tf3IN5yOsGz89TAUuzHsN3V0jo1Fg41LcpoLhIRltaTPmDngD";
+const ODOT_PUBLIC_MAP_URL = "https://oktraffic.org/";
+// WZDx only carries "work-zone" events today; ODOT's feed registry does not expose a separate
+// closures endpoint. Both feeds share this same set of two which mirrors what the state currently
+// publishes.
+const ODOT_WZDX_FEEDS: Array<{ path: string; kindHint: string }> = [
+  { path: "workzones", kindHint: "construction" },
+  { path: "closures", kindHint: "closure" },
+];
+
+function wzdxVehicleImpactToClosureState(vehicleImpact: unknown): RoadClosureState {
+  const text = sanitizeProviderText(vehicleImpact, 40).toLowerCase();
+  if (text === "all-lanes-closed") return "closed";
+  if (text === "some-lanes-closed" || text === "alternating-one-way") return "lane-restricted";
+  return "unknown";
+}
+
+function normalizeWzdxFeature(feature: unknown, providerId: string, kindHint: string): RoadConditionEvent | null {
+  if (!feature || typeof feature !== "object") return null;
+  const candidate = feature as { id?: unknown; properties?: Record<string, unknown>; geometry?: { coordinates?: unknown } };
+  const props = candidate.properties ?? {};
+  const core = (props.core_details ?? {}) as Record<string, unknown>;
+  const coords = candidate.geometry?.coordinates;
+  const firstPoint = Array.isArray(coords) ? (coords.find((c) => Array.isArray(c) && c.length >= 2) as unknown) ?? coords[0] : null;
+  const lon = Array.isArray(firstPoint) ? Number(firstPoint[0]) : NaN;
+  const lat = Array.isArray(firstPoint) ? Number(firstPoint[1]) : NaN;
+  if (!isValidCoordinate(lat, lon)) return null;
+  const recordId = sanitizeProviderText(candidate.id ?? `${lat},${lon}`, 80);
+  const roadNames = Array.isArray(core.road_names) ? core.road_names.map((v) => sanitizeProviderText(v, 30)).filter(Boolean) : [];
+  const roadway = roadNames.join(" / ") || null;
+  const description = sanitizeProviderText(core.description, 320);
+  const vehicleImpact = props.vehicle_impact;
+  const closureState = wzdxVehicleImpactToClosureState(vehicleImpact);
+  const syntheticProps = { reason: description || kindHint, description, travel_impact: sanitizeProviderText(vehicleImpact, 40) };
+  const kind = normalizeRoadKind(kindHint, syntheticProps);
+  const severity = normalizeRoadSeverity(syntheticProps, closureState, kind);
+  const updatedAt = parseProviderTime(core.update_date) ?? nowMs();
+  const freshness = freshnessForTimestamp(updatedAt);
+  return {
+    id: `${providerId}:road:${recordId}`,
+    providerId,
+    providerRecordId: recordId,
+    kind,
+    geometry: { type: "point", lat, lon },
+    closureState,
+    severity,
+    title: [roadway, description].filter(Boolean).join(" - ") || "Road condition",
+    startsAt: parseProviderTime(props.start_date),
+    endsAt: parseProviderTime(props.end_date),
+    direction: normalizeDirection(core.direction),
+    roadway,
+    status: sanitizeProviderText(props.event_status ?? closureState, 80) || closureState,
+    description,
+    lat,
+    lon,
+    provider: ODOT_PROVENANCE,
+    updatedAt,
+    freshness,
+    stale: freshness === "stale" || freshness === "unavailable",
+    sourceUrl: ODOT_PUBLIC_MAP_URL,
+    rawSourceReference: recordId,
+  };
+}
+
+export async function fetchOdotRoadConditions(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<RoadConditionEvent[]> {
+  const results: RoadConditionEvent[] = [];
+  for (const { path, kindHint } of ODOT_WZDX_FEEDS) {
+    const url = `${ODOT_WZDX_BASE_URL}/${path}?access_token=${ODOT_WZDX_ACCESS_TOKEN}`;
+    const json = await fetchJson(url, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher);
+    const features = Array.isArray(json?.features) ? json.features : [];
+    for (const feature of features) {
+      const event = normalizeWzdxFeature(feature, "odot-wzdx", kindHint);
+      if (event && pointInViewport(event, context.viewport)) results.push(event);
+      if (results.length >= MAX_ROAD_RESULTS) break;
+    }
+  }
+  return dedupeById(results).slice(0, MAX_ROAD_RESULTS);
+}
+
 function dedupeById<T extends { id: string }>(items: T[]) {
   const byId = new Map<string, T>();
   for (const item of items) byId.set(item.id, item);
@@ -366,6 +857,39 @@ export const ROAD_CONDITION_PROVIDERS: RoadConditionProvider[] = [
     attribution: "Arkansas DOT IDrive Arkansas",
     fetchViewport: fetchArdotRoadConditions,
   },
+  {
+    id: "kandrive-kdot",
+    name: "Kansas DOT KanDrive",
+    coverage: KANSAS_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: ROAD_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Kansas DOT KanDrive",
+    fetchViewport: fetchKandriveRoadConditions,
+  },
+  {
+    id: "modot-traveler",
+    name: "Missouri DOT Traveler Information",
+    coverage: MISSOURI_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: ROAD_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Missouri DOT Traveler Information",
+    fetchViewport: fetchModotRoadConditions,
+  },
+  {
+    id: "odot-wzdx",
+    name: "Oklahoma DOT Work Zone Data Exchange",
+    coverage: OKLAHOMA_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: ROAD_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Oklahoma DOT Work Zone Data Exchange",
+    fetchViewport: fetchOdotRoadConditions,
+  },
 ];
 
 export const TRAFFIC_CAMERA_PROVIDERS: TrafficCameraProvider[] = [
@@ -379,6 +903,28 @@ export const TRAFFIC_CAMERA_PROVIDERS: TrafficCameraProvider[] = [
     timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
     attribution: "Arkansas DOT IDrive Arkansas",
     fetchViewport: fetchArdotTrafficCameras,
+  },
+  {
+    id: "kandrive-kdot",
+    name: "Kansas DOT KanDrive",
+    coverage: KANSAS_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: CAMERA_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Kansas DOT KanDrive",
+    fetchViewport: fetchKandriveTrafficCameras,
+  },
+  {
+    id: "modot-traveler",
+    name: "Missouri DOT Traveler Information",
+    coverage: MISSOURI_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: CAMERA_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Missouri DOT Traveler Information",
+    fetchViewport: fetchModotTrafficCameras,
   },
 ];
 
@@ -423,7 +969,7 @@ export async function getRoadConditionsForViewport(context: LayerQueryContext, s
   const providers = roadProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "outside-coverage", message: "Outside current road-condition provider coverage. v0.1 supports Arkansas DOT IDrive coverage.", simulated: false, fetchedAt };
+    return { data: [], status: "outside-coverage", message: "Outside current road-condition provider coverage. Supports Arkansas, Kansas, Missouri, and Oklahoma DOT coverage.", simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("road", roadCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);
@@ -443,7 +989,7 @@ export async function getTrafficCamerasForViewport(context: LayerQueryContext, s
   const providers = trafficCameraProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. v0.1 supports Arkansas DOT IDrive coverage.", simulated: false, fetchedAt };
+    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. Supports Arkansas, Kansas, and Missouri DOT coverage.", simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("camera", cameraCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);
