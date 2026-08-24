@@ -636,7 +636,7 @@ export async function fetchKandriveLiveCameraSource(camera: { lat: number; lon: 
 // for MoDOT's own domains (verified: an Origin of traveler.modot.org gets the header back, an
 // arbitrary origin does not) -- so a direct browser fetch from this app's own origins fails CORS.
 //
-// Routed through this app's own same-origin proxy (web/ops/functions/api/modot/[[path]].ts, a
+// Routed through this app's own same-origin proxy (functions/api/modot/[[path]].ts, a
 // Cloudflare Pages Function that relays server-to-server, where CORS doesn't apply) instead of
 // mapping.modot.org directly. That function only exists on the web/ops (ops.codeblackwx.com)
 // deployment; the native app and web/public have no such route, so this same relative path 404s
@@ -793,7 +793,7 @@ export async function fetchModotTrafficCameras(context: LayerQueryContext, signa
 // registered with USDOT's national WZDx Feed Registry for third-party consumption -- this is a
 // federally-standardized open-data format, not a scrape. The registry-issued access token (a
 // per-feed identifier the registry itself publishes so third parties can query it) is held
-// server-side in web/ops/functions/api/odot/[[path]].ts, not shipped in this client bundle.
+// server-side in functions/api/odot/[[path]].ts, not shipped in this client bundle.
 //
 // Confirmed via direct request: no `Access-Control-Allow-Origin` is returned for an arbitrary
 // origin, so like MoDOT above, this is routed through the same-origin proxy Cloudflare Pages
