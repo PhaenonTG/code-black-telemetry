@@ -1,0 +1,34 @@
+/* Reused from the existing OPS app's approved cockpit palette (src/index.css, "REFERENCE MATCH
+   PASS: approved Code Black OPS cockpit specification") rather than the public marketing site's
+   brand hexes -- this IS the existing Code Black branding system as already applied to OPS
+   specifically, and it's deliberately more restrained/operational than the public site. */
+:root {
+  --cb-black: #020203;
+  --cb-void: #050507;
+  --cb-shell: #0a0b0e;
+  --cb-panel: #0d0e11;
+  --cb-panel-hi: #18191d;
+  --cb-panel-low: #050608;
+  --cb-tile: #101114;
+  --cb-line: rgba(255, 255, 255, 0.09);
+  --cb-line-strong: rgba(255, 45, 53, 0.34);
+  --cb-red: #ff2d35;
+  --cb-red-deep: #4c080c;
+  --cb-warning: #a60e17;
+  --cb-amber: #f4b623;
+  --cb-orange: #ff7a1a;
+  --cb-blue: #12a8ff;
+  --cb-green: #20e36c;
+  --cb-gray: #707783;
+  --cb-text: #f4f6fa;
+  --cb-muted: #8b929f;
+  --cb-dim: #59606b;
+  --cb-radius: 6px;
+  --cb-fast: 160ms;
+  --cb-medium: 360ms;
+
+  --sidebar-w: 240px;
+  --sidebar-w-rail: 76px;
+  --statusbar-h: 48px;
+  --bottomnav-h: 64px;
+}
