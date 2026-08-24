@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { AtlasMap } from "../../../../src/map/AtlasMap"
 import { browserLocationAdapter, type LocationState } from "../adapters"
 import type { AtlasGpsPoint } from "../../../../src/map/types"
@@ -6,6 +6,10 @@ import type { TrafficCamera, RoadConditionEvent } from "../../../../src/services
 import type { AlertProduct } from "../../../../src/services/situational"
 import { MapCameraViewer } from "../components/MapCameraViewer"
 import { MapSituationPanel } from "../components/MapSituationPanel"
+import { useSpotters } from "../../../../src/hooks/useSpotters"
+import { useNearbyPoiList } from "../../../../src/hooks/useNearbyPoiList"
+import { useNearbyPlaces } from "../../../../src/hooks/useNearbyPlaces"
+import { useAlertProducts } from "../../../../src/hooks/useAlertProducts"
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null
@@ -28,5 +32,15 @@ export default function MapPage() {
     window.addEventListener("codeblack:map-camera-open",cam); window.addEventListener("codeblack:map-road-open",road); window.addEventListener("codeblack:map-alert-open",alert)
     return()=>{window.removeEventListener("codeblack:map-camera-open",cam);window.removeEventListener("codeblack:map-road-open",road);window.removeEventListener("codeblack:map-alert-open",alert)}
   },[])
-  return <div className="page-map"><AtlasMap gps={toAtlasGps(gps)} rangeRings="off" statusLines={[gpsStatusLine(gps)]} controlsVariant="full"/>{camera&&<MapCameraViewer camera={camera} onClose={()=>setCamera(null)}/>} {selection&&<MapSituationPanel selection={selection} onClose={()=>setSelection(null)}/>}</div>
+  const atlasGps = toAtlasGps(gps)
+  // AtlasMap's spotters/poiPlaces/nearbyBest/alerts props all default to empty when omitted -- this
+  // page never passed them, so Team/Spotter Network/Nearby/warning-polygon layers had nothing to
+  // show regardless of their Layers-panel toggle. Same hooks the native app's App.tsx already uses
+  // for the identical purpose, just wired up here too.
+  const gpsPoint = useMemo(() => (atlasGps ? { lat: atlasGps.lat, lon: atlasGps.lon } : null), [atlasGps])
+  const spotters = useSpotters(gpsPoint)
+  const poi = useNearbyPoiList(gpsPoint)
+  const nearby = useNearbyPlaces(gpsPoint)
+  const alertProducts = useAlertProducts(gpsPoint)
+  return <div className="page-map"><AtlasMap gps={atlasGps} rangeRings="off" statusLines={[gpsStatusLine(gps)]} controlsVariant="full" spotters={spotters.spotters} poiPlaces={poi.places} nearbyBest={nearby.places} alerts={alertProducts.products}/>{camera&&<MapCameraViewer camera={camera} onClose={()=>setCamera(null)}/>} {selection&&<MapSituationPanel selection={selection} onClose={()=>setSelection(null)}/>}</div>
 }
