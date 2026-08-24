@@ -1,0 +1,11 @@
+/* The reused AtlasMap component (src/map/AtlasMap.tsx) depends on companion CSS classes
+   (.atlas-map-shell, .atlas-layers-popover, .atlas-pin-popup, the mosaic/camera/range-ring
+   styling, etc.) defined in the root app's own index.css -- imported here rather than
+   hand-extracted, since that CSS is heavily fragmented/!important-laden (documented in prior
+   passes) and guessing a subset risks silently breaking the cascade. Every class name this
+   package defines itself was checked against the root file and renamed (ops-* prefix) wherever
+   it collided, so importing the whole file doesn't corrupt this shell's own styling. */
+@import "../../../../src/index.css";
+@import "./tokens.css";
+@import "./shell.css";
+@import "./pages.css";
