@@ -8800,6 +8800,17 @@ body {
   background-image: none !important;
 }
 
+.atlas-pin-marker svg {
+  width: 62%;
+  height: 62%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 .atlas-pin-marker--stale {
   opacity: 0.52;
   filter: saturate(0.55);

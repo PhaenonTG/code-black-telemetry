@@ -231,7 +231,10 @@ export function AtlasMap({
   const clusteredChaserNetMembers = useMemo(() => (viewport ? clusterViewportPoints(chaserNetMembers, viewport) : chaserNetMembers), [chaserNetMembers, viewport]);
   const clusteredChaserNetReports = useMemo(() => (viewport ? clusterViewportPoints(chaserNetReportPoints, viewport) : chaserNetReportPoints), [chaserNetReportPoints, viewport]);
   const clusteredRoadConditions = useMemo(() => (viewport ? clusterViewportPoints(roadConditions, viewport) : roadConditions), [roadConditions, viewport]);
-  const clusteredTrafficCameras = useMemo(() => (viewport ? clusterViewportPoints(trafficCameras, viewport) : trafficCameras), [trafficCameras, viewport]);
+  // Cameras deliberately never cluster -- owner wants every camera rendered at its exact real
+  // location at all times, not folded into a "N cameras" bubble at low zoom like every other pin
+  // family. Still viewport-filtered so off-screen cameras aren't rendered at all.
+  const clusteredTrafficCameras = useMemo(() => (viewport ? filterViewportPoints(trafficCameras, viewport) : trafficCameras), [trafficCameras, viewport]);
 
   latestRef.current = { gps, rangeRings, expanded };
 

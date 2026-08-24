@@ -75,8 +75,27 @@ function applyMarkerClasses(el: HTMLDivElement, point: PinPoint) {
   ].filter(Boolean).join(" ");
 }
 
+// Same glyph paths as LayerGlyph.tsx (the Layers popover's icon set) so a pin on the map and its
+// row in the Layers list read as the same thing at a glance, rather than inventing a second icon
+// language just for pins. "mark" (manual user-dropped pins) intentionally has no glyph -- a plain
+// dot is the correct "you put this here yourself" affordance, not a category to illustrate.
+const FAMILY_ICON_PATHS: Partial<Record<NonNullable<PinPoint["family"]>, string>> = {
+  camera: `<path d="M4 8h4l2-3h4l2 3h4v11H4z" /><circle cx="12" cy="13" r="3" />`,
+  road: `<path d="M8 21 11 3M16 21 13 3M5 14h14M6 8h12" />`,
+  team: `<path d="M12 4 5 20h14L12 4Z" /><circle cx="12" cy="13" r="2" />`,
+  chaser: `<circle cx="8" cy="9" r="3" /><circle cx="16" cy="9" r="3" /><path d="M4 20c1-4 7-4 8 0M12 20c1-4 7-4 8 0" />`,
+  report: `<circle cx="12" cy="12" r="3" /><path d="M4 12h5M15 12h5M12 4v5M12 15v5" />`,
+  probe: `<path d="M12 3v11" /><circle cx="12" cy="17" r="4" /><path d="M8 21h8" />`,
+};
+
 function applyClusterLabel(el: HTMLDivElement, count: number | undefined, family: string) {
-  el.textContent = count && count > 1 ? String(count) : "";
+  if (count && count > 1) {
+    el.textContent = String(count);
+  } else {
+    const iconPath = FAMILY_ICON_PATHS[family as NonNullable<PinPoint["family"]>];
+    el.textContent = "";
+    el.innerHTML = iconPath ? `<svg viewBox="0 0 24 24" aria-hidden="true">${iconPath}</svg>` : "";
+  }
   el.setAttribute("aria-label", count && count > 1 ? `${count} ${family} map objects` : `${family} map object`);
 }
 
