@@ -12,6 +12,17 @@ const repoRoot = path.resolve(dirname, '../..')
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    // Reused modules under ../../../src resolve `react`/`react-dom` relative
+    // to their own location, which would otherwise find the repo root's
+    // separate copy and produce a second React instance (breaking hooks
+    // with "Cannot read properties of null (reading 'useState')"). Force
+    // every import in this build's module graph to this package's copy.
+    alias: {
+      react: path.resolve(dirname, 'node_modules/react'),
+      'react-dom': path.resolve(dirname, 'node_modules/react-dom'),
+    },
+  },
   server: {
     fs: {
       allow: [dirname, repoRoot],
