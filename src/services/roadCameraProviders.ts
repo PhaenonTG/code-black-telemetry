@@ -981,6 +981,14 @@ export function trafficCameraProvidersForViewport(viewport: MapViewport, provide
   return providers.filter((provider) => provider.enabled && viewportIntersectsCoverage(viewport, provider.coverage)).sort((a, b) => a.priority - b.priority);
 }
 
+// A failed fetch was never cached (only successes were), so a provider that's currently down got
+// retried on every single viewport micro-adjustment -- e.g. FOLLOW mode's continuous small
+// re-centers -- hammering it every ~1-2s with no backoff. This cooldown makes a recent failure
+// itself a short-lived cache entry, so repeated requests against the same bucket back off instead
+// of retrying immediately, without changing how a genuinely fresh viewport is treated.
+const FAILURE_COOLDOWN_MS = 20_000;
+const failureCache = new Map<string, number>();
+
 async function fetchProviderWithCache<T extends { id: string; stale?: boolean; freshness?: string }>(
   keyPrefix: string,
   cache: Map<string, CacheEntry<T>>,
@@ -992,6 +1000,13 @@ async function fetchProviderWithCache<T extends { id: string; stale?: boolean; f
   const cached = cache.get(key);
   const now = nowMs();
   if (cached && now - cached.fetchedAt <= provider.minRefreshMs) return { data: cached.data, stale: false };
+  const lastFailedAt = failureCache.get(key);
+  if (lastFailedAt !== undefined && now - lastFailedAt < FAILURE_COOLDOWN_MS) {
+    if (cached && now - cached.fetchedAt <= STALE_CACHE_TTL_MS) {
+      return { data: cached.data.map((item) => ({ ...item, stale: true, freshness: "stale" })), stale: true };
+    }
+    throw new Error(`${provider.name} recently failed; cooling down before retry.`);
+  }
   const requestKey = `${key}:request`;
   let request = inFlight.get(requestKey) as Promise<T[]> | undefined;
   if (!request) {
@@ -1001,8 +1016,10 @@ async function fetchProviderWithCache<T extends { id: string; stale?: boolean; f
   try {
     const data = await request;
     cache.set(key, { data, fetchedAt: nowMs() });
+    failureCache.delete(key);
     return { data, stale: false };
   } catch (error) {
+    failureCache.set(key, nowMs());
     if (cached && now - cached.fetchedAt <= STALE_CACHE_TTL_MS) {
       return { data: cached.data.map((item) => ({ ...item, stale: true, freshness: "stale" })), stale: true };
     }

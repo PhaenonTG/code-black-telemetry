@@ -71,6 +71,30 @@ export function MapCameraViewer({
     if (media.kind !== "hls" || !media.url || !videoRef.current) return
 
     const video = videoRef.current
+
+    // Prefer hls.js (MSE-based) whenever it's actually supported -- Chrome/Firefox/Edge report
+    // canPlayType("application/vnd.apple.mpegurl") as "maybe" despite having no real native HLS
+    // demuxer, so trusting that check first silently handed those browsers an m3u8 as a native
+    // <video src>, which failed with DEMUXER_ERROR_COULD_NOT_PARSE and left the player frozen at
+    // 0:00 with no network request and no visible error. Only fall back to native playback when
+    // hls.js genuinely isn't supported (older Safari/iOS without full MSE).
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 30,
+      })
+      hls.loadSource(media.url)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        void video.play().catch(() => undefined)
+      })
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) setMediaError("Live stream unavailable.")
+      })
+      return () => hls.destroy()
+    }
+
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = media.url
       void video.play().catch(() => undefined)
@@ -81,26 +105,7 @@ export function MapCameraViewer({
       }
     }
 
-    if (!Hls.isSupported()) {
-      setMediaError("HLS playback is not supported in this browser.")
-      return
-    }
-
-    const hls = new Hls({
-      enableWorker: true,
-      lowLatencyMode: true,
-      backBufferLength: 30,
-    })
-    hls.loadSource(media.url)
-    hls.attachMedia(video)
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      void video.play().catch(() => undefined)
-    })
-    hls.on(Hls.Events.ERROR, (_event, data) => {
-      if (data.fatal) setMediaError("Live stream unavailable.")
-    })
-
-    return () => hls.destroy()
+    setMediaError("HLS playback is not supported in this browser.")
   }, [media])
 
   useEffect(() => {
