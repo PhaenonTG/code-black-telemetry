@@ -32,12 +32,7 @@ function attachAlertClickHandler(map: Map) {
     const id = features?.[0]?.properties?.id as string | undefined;
     const alert = id ? latestAlertsById.get(map)?.[id] : undefined;
     if (!alert) return;
-    showAlertPopup(map, [event.lngLat.lng, event.lngLat.lat], {
-      id: alert.id,
-      title: alert.title,
-      headline: alert.headline,
-      expires: alert.expires,
-    });
+    showAlertPopup(map, [event.lngLat.lng, event.lngLat.lat], alert);
   };
   for (const layerId of [ATLAS_ALERTS_FILL_LAYER, ATLAS_ALERTS_LINE_LAYER, ATLAS_MD_LINE_LAYER]) {
     map.on("click", layerId, handleClick as (event: MapMouseEvent) => void);

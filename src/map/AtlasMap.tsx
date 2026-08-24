@@ -856,11 +856,18 @@ export function AtlasMap({
               <div className="atlas-layers-popover__title">Layers</div>
               <button type="button" data-testid={compact ? "atlas-map-layers-close-compact" : "atlas-map-layers-close-primary"} aria-label="Close map layers" onClick={() => setLayersPopoverOpen(false)}>Close</button>
             </div>
+            <div className="atlas-layers-popover__section">WEATHER</div>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={alertsVisible} onChange={() => toggleLayer("alerts")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="alerts" /></span>
               Alerts (watches + warnings + MD)
             </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={mosaicVisible} onChange={() => toggleLayer("mosaic")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="radar" /></span>
+              NEXRAD Mosaic
+            </label>
+            <div className="atlas-layers-popover__section">PEOPLE + FIELD</div>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={teamVisible} onChange={() => toggleLayer("team")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="team" /></span>
@@ -881,6 +888,7 @@ export function AtlasMap({
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="trail" /></span>
               Trail
             </label>
+            <div className="atlas-layers-popover__section">ROADS + CAMERAS</div>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={roadConditionsVisible} onChange={() => toggleLayer("roadConditions")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="road" /></span>
@@ -891,6 +899,7 @@ export function AtlasMap({
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="camera" /></span>
               Public Cameras - {providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount)}
             </label>
+            <div className="atlas-layers-popover__section">FUTURE</div>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
               <input type="checkbox" checked={false} disabled onChange={() => undefined} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="probe" /></span>
