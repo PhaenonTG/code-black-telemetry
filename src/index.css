@@ -8789,7 +8789,9 @@ body {
 }
 
 .atlas-pin-marker--camera {
-  outline-color: rgba(178, 107, 255, 0.52);
+  /* Was rgba(178, 107, 255, ...) -- a purple outline that never matched the pin's actual sky-blue
+     fill (#38bdf8, see AtlasTrafficCameraLayer.ts). Corrected to match. */
+  outline-color: rgba(56, 189, 248, 0.52);
 }
 
 .atlas-pin-marker--cluster {

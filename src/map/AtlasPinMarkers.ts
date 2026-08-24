@@ -22,6 +22,10 @@ export interface PinPoint {
   roadData?: RoadConditionEvent | null;
   clusterCount?: number;
   family?: "team" | "chaser" | "report" | "probe" | "road" | "camera" | "mark";
+  // Only meaningful when family is "road" -- picks a kind-specific glyph (flood/crash/construction/
+  // etc.) instead of the generic road icon, so a glance tells you what's ahead, not just that
+  // something is. See RoadConditionKind in mapLayerModels.ts for the full value set.
+  roadKind?: string;
   stale?: boolean;
 }
 
@@ -40,8 +44,8 @@ const SHAPE_CLIP_PATH: Partial<Record<PinShape, string>> = {
 // -- turned into a wall of solid dots. Pins now shrink continuously with zoom: full size at the
 // zoom level you'd actually be chasing at, down to a small dot for a nationwide overview, with the
 // border/glow scaled down proportionally so they don't dominate the shrunken dot.
-const MIN_PIN_SIZE_PX = 7;
-const MAX_PIN_SIZE_PX = 20;
+const MIN_PIN_SIZE_PX = 10;
+const MAX_PIN_SIZE_PX = 22;
 const ZOOM_AT_MIN_SIZE = 3; // world/nationwide overview
 const ZOOM_AT_MAX_SIZE = 9; // local chase-range view
 
@@ -90,11 +94,26 @@ const FAMILY_ICON_PATHS: Partial<Record<NonNullable<PinPoint["family"]>, string>
   probe: `<path d="M12 3v11" /><circle cx="12" cy="17" r="4" /><path d="M8 21h8" />`,
 };
 
-function applyClusterLabel(el: HTMLDivElement, count: number | undefined, family: string) {
+// Road pins carry a lot of different real meanings under one family -- at a glance you want to know
+// *what's* ahead, not just that something is. Covers the kinds that actually show up in real
+// ARDOT/KanDrive/MoDOT/ODOT data this session; kinds without a dedicated glyph here (disabled-
+// vehicle, fire-smoke-impact, utility-power-issue, other, unknown -- all rare/synthetic in practice)
+// fall back to the generic road icon above rather than going unstyled.
+const ROAD_KIND_ICON_PATHS: Record<string, string> = {
+  closure: `<path d="M4 9h16M4 15h16M7 9V5M7 19v-4M17 9V5M17 19v-4" />`,
+  crash: `<path d="M5 5l14 14M19 5 5 19" />`,
+  flooding: `<path d="M2 9c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0M2 15c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0" />`,
+  construction: `<path d="M9.5 21h5l-1-15h-3z" /><path d="M8 21h8M8.7 15h6.6M9.4 9h5.2" />`,
+  "winter-condition": `<path d="M12 3v18M4.5 7.5l15 9M4.5 16.5l15-9" />`,
+  "debris-hazard": `<path d="M12 4 3 20h18L12 4Z" /><path d="M9 16h.01M12 17h.01M15 15h.01" />`,
+  "weather-hazard": `<path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z" />`,
+};
+
+function applyClusterLabel(el: HTMLDivElement, count: number | undefined, family: string, roadKind?: string) {
   if (count && count > 1) {
     el.textContent = String(count);
   } else {
-    const iconPath = FAMILY_ICON_PATHS[family as NonNullable<PinPoint["family"]>];
+    const iconPath = (family === "road" && roadKind ? ROAD_KIND_ICON_PATHS[roadKind] : undefined) ?? FAMILY_ICON_PATHS[family as NonNullable<PinPoint["family"]>];
     el.textContent = "";
     el.innerHTML = iconPath ? `<svg viewBox="0 0 24 24" aria-hidden="true">${iconPath}</svg>` : "";
   }
@@ -294,7 +313,7 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
       const element = marker.getElement() as HTMLDivElement;
       applyMarkerClasses(element, point);
       applyPinStyle(element, style, zoom);
-      applyClusterLabel(element, point.clusterCount, point.family ?? "chaser");
+      applyClusterLabel(element, point.clusterCount, point.family ?? "chaser", point.roadKind);
     }
   }
   for (const id of Object.keys(markers)) {
@@ -316,7 +335,7 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
         const point = latestPointsByMarkers.get(markers)?.[id];
         if (point) applyMarkerClasses(element, point);
         applyPinStyle(element, currentStyle, currentZoom);
-        applyClusterLabel(element, point?.clusterCount, point?.family ?? "chaser");
+        applyClusterLabel(element, point?.clusterCount, point?.family ?? "chaser", point?.roadKind);
       }
     });
   }

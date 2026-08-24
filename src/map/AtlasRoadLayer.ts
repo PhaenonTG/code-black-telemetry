@@ -56,6 +56,7 @@ export function roadEventToPin(event: RoadConditionEvent | MapCluster<RoadCondit
     actionLabel: "Open provider",
     roadData: event,
     family: "road",
+    roadKind: event.kind,
     stale: event.stale,
   };
 }

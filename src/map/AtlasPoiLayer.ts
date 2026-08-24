@@ -73,12 +73,14 @@ const CATEGORY_ICON: Record<NearbyCategory, string> = {
 // aren't curated by the owner the way custom pins are, they're just "whatever's actually nearest
 // right now" mirroring the Nearby card's own best-pick tiles, so a color per category plus its
 // fixed icon is enough to tell them apart from custom brand pins at a glance. No blue (this app's
-// palette rule); red is reserved for ER/vehicle/warnings.
+// palette rule); red is reserved for ER/vehicle/warnings. Food was the same green as Team's default
+// pin color (#3ddc70) -- different shape/icon, but a fast glance at high speed shouldn't have to
+// rely on that; teal keeps it in the same "fresh/positive" register without the collision.
 const BEST_PICK_COLOR: Partial<Record<NearbyCategory, string>> = {
   gas: "#ffbe3c",
   hospital: "#ff2d35",
   lodging: "#b26bff",
-  food: "#3ddc70",
+  food: "#2dd4bf",
 };
 
 // Icons render as background-image on the same colored rounded-square treatment the old letter
