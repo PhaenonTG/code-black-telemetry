@@ -9341,6 +9341,27 @@ body {
 .home-module__grid b[data-tone="warn"] { color: var(--cb-amber); }
 .home-module__grid b[data-tone="bad"] { color: var(--cb-red); }
 
+.home-module__outlook {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  font: 800 11px / 1.2 "JetBrains Mono", Consolas, monospace;
+}
+
+.home-module__outlook span {
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.home-module__outlook b {
+  color: var(--text);
+}
+
 .home-module__nearby-threat {
   display: flex;
   align-items: baseline;

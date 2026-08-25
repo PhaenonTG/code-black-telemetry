@@ -478,6 +478,7 @@ export default function App() {
             external={external}
             alerts={alertProducts.products}
             alertError={alertProducts.error}
+            outlooks={spcOutlooks}
             opsStatus={opsStatus}
             overlayState={liveOverlayTelemetry.state}
             mapGps={mapGps}

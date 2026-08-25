@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MapRadarPanel } from "../situational/Panels";
 import type { AlertProduct, ExternalObservation } from "../../services/situational";
+import type { SpcDayOutlook } from "../../services/spcOutlook";
 import { useNearbyStormThreats } from "../../hooks/useNearbyStormThreats";
 import type { CanonicalLocation } from "../../services/location";
 import type { PiOperationalSummary } from "../../services/operationalStatus";
@@ -28,6 +29,7 @@ type HomeOverviewPageProps = {
   external: ExternalObservation | null;
   alerts: AlertProduct[];
   alertError: string;
+  outlooks?: SpcDayOutlook[];
   opsStatus: PiOperationalSummary;
   overlayState: string;
   mapGps: AtlasGpsPoint | null;
@@ -86,6 +88,7 @@ export function HomeOverviewPage({
   external,
   alerts,
   alertError,
+  outlooks = [],
   opsStatus,
   overlayState,
   mapGps,
@@ -160,6 +163,19 @@ export function HomeOverviewPage({
             <span>RH</span><b>{formatNumber(external?.humidity, "%")}</b>
             <span>Dew</span><b>{formatNumber(external?.dewpointF, "F")}</b>
           </div>
+          {/* Day 1 categorical risk -- the first thing a chaser actually checks before deciding
+              whether today's even worth going out for. Fetched by App.tsx (useSpcOutlook) and
+              already wired into the Alerts page's full outlook table; was never surfaced here. */}
+          {(() => {
+            const day1 = outlooks.find((o) => o.day === 1)?.categorical;
+            if (!day1) return null;
+            return (
+              <div className="home-module__outlook">
+                <span>SPC DAY 1</span>
+                <b style={day1.color ? { color: day1.color } : undefined}>{day1.labelLong || day1.label}</b>
+              </div>
+            );
+          })()}
           <button type="button" className="home-module__open" onClick={() => onNavigate("weather")}>Open Weather</button>
         </section>
       );
