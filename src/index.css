@@ -10149,3 +10149,57 @@ body {
   background: rgba(34, 4, 6, 0.9);
   color: #ff3044;
 }
+
+/* Truck-wind vs storm-motion comparison -- tablet/dash-mount only. The phone experience is a
+   different, separately-designed "at a glance" surface, not a shrunk copy of this one, so this
+   stays hidden below the tablet breakpoint rather than cramming in one more line on a phone screen
+   that's already tight on space for the map itself. */
+.atlas-radar-instrument__sensor {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font: 800 10px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.atlas-radar-instrument__sensor-label {
+  color: var(--muted, #8b949e);
+}
+
+.atlas-radar-instrument__sensor-value {
+  color: #47bfff;
+}
+
+@media (min-width: 900px) {
+  .atlas-radar-instrument__sensor {
+    display: flex;
+  }
+
+  /* Dash-mounted use means a bouncing vehicle and a driver's thumb, not a mouse cursor -- 44px is
+     the standard minimum touch target size across iOS/Android platform guidance; the chips were
+     sized for a desktop browser tab (~31px) before this. */
+  .atlas-radar-chip {
+    min-height: 44px !important;
+    padding: 8px 14px !important;
+    font-size: 12px !important;
+  }
+
+  .atlas-radar-chip__swatch {
+    width: 20px;
+    height: 10px;
+  }
+
+  .atlas-storm-motion-entry__auto,
+  .atlas-storm-motion-entry__compass button {
+    min-height: 44px !important;
+  }
+
+  .atlas-radar-legend__labels,
+  .atlas-radar-legend__note {
+    font-size: 10px !important;
+  }
+}

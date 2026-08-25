@@ -36,6 +36,7 @@ import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, type RoadConditionEvent, type TrafficCamera, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
 import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, setRadarStormMotion, type RadarFrame, type RadarProduct, type StormMotion } from "../services/radar";
+import { useWind } from "../hooks/useTelemetry";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
 import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
 import { LayerGlyph } from "../components/situational/LayerGlyph";
@@ -209,6 +210,10 @@ export function AtlasMap({
   const [mosaicStatus, setMosaicStatus] = useState<MosaicStatus>("loading");
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
   const [viewport, setViewport] = useState<MapViewport | null>(null);
+  // Live vehicle mesonet wind, surfaced next to the radar instrument so a chaser can correlate
+  // "what the truck is feeling right now" against "what SRV shows the storm doing" -- the actual
+  // differentiator over a generic radar app, not something any of RadarScope/GR2Analyst can show.
+  const vehicleWind = useWind();
   const roster = useTeamRoster();
   const teamPinStyle = useTeamPinStyle();
   const chaserPinStyle = useChaserPinStyle();
@@ -1095,6 +1100,17 @@ export function AtlasMap({
             <div className={`atlas-radar-instrument__age atlas-radar-instrument__age--${radarFrame.freshness === "STALE" ? "stale" : radarFrame.ageSeconds < 120 ? "live" : "aging"}`}>
               <span className="atlas-radar-instrument__pulse" />
               {radarProduct} · {ageText(radarFrame.ageSeconds)} old{radarFrame.freshness === "STALE" ? " · STALE" : ""}
+            </div>
+          )}
+          {/* Tablet-only (see .atlas-radar-instrument__sensor's media query) -- this is the dash-mounted,
+              actively-chasing surface. Phone gets its own separate at-a-glance treatment, not this. */}
+          {vehicleWind?.speedMph != null && (
+            <div className="atlas-radar-instrument__sensor">
+              <span className="atlas-radar-instrument__sensor-label">TRUCK WIND</span>
+              <span className="atlas-radar-instrument__sensor-value">
+                {Math.round(vehicleWind.speedMph)}mph{vehicleWind.gustMph != null && vehicleWind.gustMph > vehicleWind.speedMph + 3 ? ` G${Math.round(vehicleWind.gustMph)}` : ""}
+                {vehicleWind.directionCardinal ? ` FROM ${vehicleWind.directionCardinal}` : vehicleWind.directionDeg != null ? ` @ ${Math.round(vehicleWind.directionDeg)}°` : ""}
+              </span>
             </div>
           )}
           {/* Nested in the instrument's own flex column rather than a separately absolutely-positioned
