@@ -4,34 +4,11 @@ import type { AlertProduct } from "../services/situational";
 
 const AUTO_DISMISS_MS = 5_000;
 
-// A silent visual-only flash is useless to a driver whose eyes are on the road, not the tablet.
-// Synthesized rather than an audio asset -- no file to fail to load, works offline, and a two-tone
-// alternating tone reads as "urgent alarm" without needing a real siren sample bundled/licensed.
-function playAlertTone() {
-  try {
-    const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextCtor) return;
-    const ctx = new AudioContextCtor();
-    const tones = [880, 660, 880, 660];
-    tones.forEach((freq, index) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "square";
-      osc.frequency.value = freq;
-      const start = ctx.currentTime + index * 0.3;
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.26);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(start);
-      osc.stop(start + 0.28);
-    });
-    window.setTimeout(() => void ctx.close(), tones.length * 300 + 200);
-  } catch {
-    // Audio is a courtesy, not a dependency -- the visual flash still fires regardless.
-  }
-}
-
+// Sound for this already happens in useAlertProducts.ts (emitCodeBlackSound(soundEventFor(product)),
+// fired the same moment triggerSevereFlash is) -- that system has per-severity tone patterns and
+// respects the user's sound-enabled preference. An earlier version of this component played its own
+// separate synthesized tone here too, which double-fired an uncoordinated second sound on every real
+// warning AND ignored the mute setting entirely. Don't reintroduce that -- this overlay is visual only.
 export function SevereFlashOverlay() {
   const [alert, setAlert] = useState<AlertProduct | null>(null);
   const dismissTimer = useRef<number | null>(null);
@@ -39,7 +16,6 @@ export function SevereFlashOverlay() {
   useEffect(() => {
     return subscribeSevereFlash((next) => {
       setAlert(next);
-      playAlertTone();
       if (dismissTimer.current) window.clearTimeout(dismissTimer.current);
       dismissTimer.current = window.setTimeout(() => setAlert(null), AUTO_DISMISS_MS);
     });
