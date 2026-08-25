@@ -506,7 +506,7 @@ button {
   height: 100dvh;
   min-height: 100vh;
   display: grid;
-  grid-template-rows: var(--top-h) minmax(0, 1fr) var(--dots-h) var(--dock-h);
+  grid-template-rows: var(--top-h) minmax(0, 1fr) var(--dock-h);
   overflow: hidden;
   padding-bottom: env(safe-area-inset-bottom);
   background:
@@ -926,26 +926,6 @@ button {
   color: var(--red);
 }
 
-.page-dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-}
-
-.page-dots button {
-  width: 7px;
-  height: 7px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: #3a3a3a;
-}
-
-.page-dots button.active {
-  width: 22px;
-  background: var(--red);
-}
 
 .bottom-dock {
   align-self: center;
@@ -1328,7 +1308,7 @@ button {
 /* REFERENCE MATCH CASCADE LOCK */
 @media (orientation: landscape) {
   .app-shell {
-    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dots-h) var(--cb-dock-h) !important;
+    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dock-h) !important;
     padding: 10px 12px 8px !important;
   }
 
@@ -2364,7 +2344,7 @@ button {
 }
 
 .app-shell {
-  grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dots-h) var(--cb-dock-h);
+  grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dock-h);
   padding: 10px 12px 8px;
   gap: 0;
   background:
@@ -2802,10 +2782,6 @@ button {
   bottom: 12px;
   left: 14px;
   z-index: 4;
-}
-
-.page-dots {
-  height: var(--cb-dots-h);
 }
 
 .bottom-dock {
@@ -3289,7 +3265,7 @@ body {
 .app-shell {
   position: relative;
   isolation: isolate;
-  grid-template-rows: var(--top-h) minmax(0, 1fr) var(--dots-h) var(--dock-h);
+  grid-template-rows: var(--top-h) minmax(0, 1fr) var(--dock-h);
   padding-bottom: 0;
   background:
     linear-gradient(90deg, rgba(255, 45, 53, 0.16) 0 1px, transparent 1px) 0 0 / 76px 76px,
@@ -3825,11 +3801,6 @@ body {
   letter-spacing: 0.04em;
 }
 
-.page-dots button {
-  width: 8px;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.22);
-}
 
 /* Map polish and camera pass: keep the locked cockpit layout, improve operational readability. */
 .map-canvas {
@@ -3943,11 +3914,6 @@ body {
   }
 }
 
-.page-dots button.active {
-  width: 26px;
-  background: var(--red);
-  box-shadow: 0 0 12px rgba(255, 45, 53, 0.7);
-}
 
 /* Flat tab bar, not a beveled panel: one flat background + one hairline top border on the bar
    itself, no clip-path/gradient/inset-shadow. Buttons are plain flat rectangles with a single
@@ -4285,7 +4251,7 @@ body {
 /* REFERENCE MATCH EOF OVERRIDE */
 @media (orientation: landscape) {
   .app-shell {
-    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dots-h) var(--cb-dock-h) !important;
+    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dock-h) !important;
     padding: 10px 12px 8px !important;
   }
 
@@ -7165,23 +7131,7 @@ body {
 
   .app-shell {
     padding: 0 !important;
-    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dots-h) var(--cb-dock-h) !important;
-  }
-
-  .page-dots {
-    height: var(--cb-dots-h) !important;
-    align-self: center !important;
-    padding: 0 !important;
-    gap: 5px !important;
-  }
-
-  .page-dots button {
-    width: 8px !important;
-    height: 8px !important;
-  }
-
-  .page-dots button.active {
-    width: 24px !important;
+    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dock-h) !important;
   }
 
   .bottom-dock {
@@ -7373,7 +7323,7 @@ body {
 
   .app-shell {
     padding-bottom: 0 !important;
-    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dots-h) var(--cb-dock-h) !important;
+    grid-template-rows: var(--cb-header-h) minmax(0, 1fr) var(--cb-dock-h) !important;
   }
 
   .bottom-dock {
@@ -7783,10 +7733,6 @@ body {
 
 .app-shell {
   grid-template-rows: var(--top-h) minmax(0, 1fr) var(--dock-h) !important;
-}
-
-.page-dots {
-  display: none !important;
 }
 
 .page {
@@ -9192,11 +9138,11 @@ body {
 /* Chase status strip participates in the shell layout. Without an explicit row, the strip can
    consume the main content row and push Settings/Radar content below the viewport after resume. */
 .app-shell {
-  grid-template-rows: var(--top-h) minmax(0, 1fr) var(--dots-h) var(--dock-h) !important;
+  grid-template-rows: var(--top-h) minmax(0, 1fr) var(--dock-h) !important;
 }
 
 .app-shell--mission-active {
-  grid-template-rows: var(--top-h) auto minmax(0, 1fr) var(--dots-h) var(--dock-h) !important;
+  grid-template-rows: var(--top-h) auto minmax(0, 1fr) var(--dock-h) !important;
 }
 
 .app-shell--mission-active .page-viewport {

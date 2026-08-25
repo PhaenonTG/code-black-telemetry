@@ -645,9 +645,6 @@ export default function App() {
           </div>
         </section>
       </main>
-      <div className="page-dots" aria-label="Page indicator">
-        {pages.map((item) => <button key={item.key} aria-label={item.label} className={item.key === page ? "active" : ""} onClick={() => goToPage(item.key)} />)}
-      </div>
       <nav className="bottom-dock" aria-label="Dashboard dock">
         <button className={page === "home" ? "active" : ""} data-testid="dock-home" onClick={() => goToPage("home")}><DockIcon type="home" /><span>Home</span></button>
         <button className={page === "map" ? "active" : ""} data-testid="dock-map" onClick={() => { goToPage("map"); window.dispatchEvent(new Event("codeblack:center-map")); }}><DockIcon type="map" /><span>Map</span></button>
