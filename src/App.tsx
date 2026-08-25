@@ -460,7 +460,7 @@ export default function App() {
       {!spotterAccount && !spotterOnboardingSeen && (
         <SpotterOnboardingPrompt onDismiss={() => setSpotterOnboardingSeen(true)} />
       )}
-      <TopBar batteryLabel={deviceLabels.battery} />
+      <TopBar batteryLabel={deviceLabels.battery} gps={gpsPoint} outlooks={spcOutlooks} />
       {missionSession && (
         <div className={`chase-status-strip chase-status-strip--${chaseStatus.tone}`} role="status">
           <span>CHASE ACTIVE</span>

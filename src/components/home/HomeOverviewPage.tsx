@@ -3,6 +3,7 @@ import { MapRadarPanel } from "../situational/Panels";
 import type { AlertProduct, ExternalObservation } from "../../services/situational";
 import type { SpcDayOutlook } from "../../services/spcOutlook";
 import { useNearbyStormThreats } from "../../hooks/useNearbyStormThreats";
+import { computeThreatHero } from "../../hooks/useThreatHero";
 import type { CanonicalLocation } from "../../services/location";
 import type { PiOperationalSummary } from "../../services/operationalStatus";
 import { stateTone } from "../../services/operationalStatus";
@@ -102,26 +103,8 @@ export function HomeOverviewPage({
   const { threats: nearbyThreats } = useNearbyStormThreats(mapGps ? { lat: mapGps.lat, lon: mapGps.lon } : null);
   const nearestThreat = nearbyThreats[0] ?? null;
   const day1Outlook = outlooks.find((o) => o.day === 1)?.categorical ?? null;
-  const ELEVATED_OUTLOOK = new Set(["ENH", "MDT", "HIGH"]);
-
-  // Single highest-priority fact, always visible without scrolling or opening anything -- an actual
-  // active/nearby polygon always outranks a day-level categorical outlook, which always outranks
-  // "nothing going on." This is the ONE thing a chaser glancing at a dash-mounted tablet needs first.
-  type HeroTone = "critical" | "elevated" | "watch" | "calm";
-  const hero: { tone: HeroTone; label: string; detail: string } = (() => {
-    if (nearestThreat) {
-      const critical = nearestThreat.alert.severity === "tornado" || nearestThreat.alert.severity === "pds";
-      return {
-        tone: critical ? "critical" : "elevated",
-        label: nearestThreat.alert.title.toUpperCase(),
-        detail: nearestThreat.inside ? "AT YOUR LOCATION" : `${Math.round(nearestThreat.distanceMi)} MI ${nearestThreat.bearingCardinal} OF YOU`,
-      };
-    }
-    if (day1Outlook && ELEVATED_OUTLOOK.has(day1Outlook.label)) {
-      return { tone: "watch", label: `${day1Outlook.labelLong || day1Outlook.label} TODAY`, detail: "SPC DAY 1 CATEGORICAL OUTLOOK" };
-    }
-    return { tone: "calm", label: "NO ACTIVE THREATS NEARBY", detail: day1Outlook ? `SPC DAY 1: ${day1Outlook.labelLong || day1Outlook.label}` : "AWAITING OUTLOOK DATA" };
-  })();
+  // Shared with the persistent tablet header strip (TopBar) so the two surfaces can never disagree.
+  const hero = computeThreatHero(nearestThreat, day1Outlook);
 
   useEffect(() => {
     const unsubscribe = subscribeHomeModules(setModules);

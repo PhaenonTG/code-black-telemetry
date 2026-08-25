@@ -9354,9 +9354,13 @@ body {
      the extra width did nothing but add whitespace between a narrow column and the screen edge.
      Real multi-column layout + the same instrument-panel glow/monospace language as the radar
      panel, so the dash-mounted tablet experience actually looks like a different, bigger device
-     and not a phone screen someone forgot to resize. */
+     and not a phone screen someone forgot to resize.
+
+     Home's own hero band is hidden here on purpose -- TopBar's persistent threat strip (see
+     TopBar.css) now covers this same job on every page at this width, including Home, so showing
+     both stacked directly on top of each other would just be the same sentence said twice. */
   .home-hero {
-    padding: 18px 22px;
+    display: none;
   }
 
   .home-hero__text strong {

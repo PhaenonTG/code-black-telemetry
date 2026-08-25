@@ -478,3 +478,81 @@
     font-size: clamp(8px, 2dvh, 10px) !important;
   }
 }
+
+/* .ops-header-wrap is the single direct child of .app-shell now (see TopBar.tsx for why that
+   matters -- .app-shell's grid-template-rows is positional, keyed to child order, not class
+   names). Plain block stacking of its two children (.ops-header, .ops-header-threat) is exactly
+   what's wanted here, just clearing default <header> margin. */
+.ops-header-wrap {
+  display: block;
+  margin: 0;
+}
+
+/* Persistent threat strip -- tablet only (Home's own hero band already covers phone, and a
+   second copy would just eat header space on a screen that's already tight). Deliberately thin
+   and understated compared to Home's hero: this lives on every page, including ones you're
+   actively looking at map/radar data on, so it must never compete for attention with what's
+   actually on screen -- it's a persistent fact, not a second alarm. */
+.ops-header-threat {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  /* .app-shell's row-1 height (--top-h) was sized for .ops-header alone across many breakpoint
+     rules elsewhere in index.css -- adding this strip without growing that row pushes the strip's
+     height out of row 1 into row 2's space, which is exactly the .page-viewport-collapses-to-0
+     bug this replaced. calc() on top of whatever --cb-header-h already resolves to (rather than a
+     guessed absolute) survives index.css changing that base value later; !important wins over the
+     non-!important --top-h declarations elsewhere at this same breakpoint. */
+  .app-shell {
+    --top-h: calc(var(--cb-header-h, 76px) + 30px) !important;
+  }
+
+  .ops-header-threat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font: 700 10px / 1.2 "JetBrains Mono", Consolas, monospace;
+    letter-spacing: 0.03em;
+    color: var(--muted, #8b949e);
+  }
+
+  .ops-header-threat strong {
+    color: var(--text, #f8fafc);
+    font-weight: 800;
+  }
+
+  .ops-header-threat__sep {
+    opacity: 0.4;
+  }
+
+  .ops-header-threat__pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted, #8b949e);
+    flex: 0 0 auto;
+  }
+
+  .ops-header-threat--watch strong,
+  .ops-header-threat--watch .ops-header-threat__pulse { color: #f5b942; background: #f5b942; }
+
+  .ops-header-threat--elevated strong,
+  .ops-header-threat--elevated .ops-header-threat__pulse { color: #ff8a00; background: #ff8a00; }
+
+  .ops-header-threat--critical strong,
+  .ops-header-threat--critical .ops-header-threat__pulse { color: #ff3044; background: #ff3044; }
+  .ops-header-threat--critical .ops-header-threat__pulse {
+    box-shadow: 0 0 0 0 rgba(255, 48, 68, 0.6);
+    animation: ops-header-threat-pulse 1.4s ease-out infinite;
+  }
+
+  @keyframes ops-header-threat-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 48, 68, 0.55); }
+    70% { box-shadow: 0 0 0 6px rgba(255, 48, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 48, 68, 0); }
+  }
+}

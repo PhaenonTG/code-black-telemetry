@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import codeblackShield from "../../assets/codeblack-shield.png";
 import { useStatus } from "../../hooks/useTelemetry";
 import { useBattery } from "../../hooks/useBattery";
+import { useNearbyStormThreats } from "../../hooks/useNearbyStormThreats";
+import { computeThreatHero } from "../../hooks/useThreatHero";
+import type { SpcDayOutlook } from "../../services/spcOutlook";
 import { formatOpsClock } from "../../services/clock";
 import { loadClockMode, subscribeClockMode, type ClockMode } from "../../services/settings";
 import "./TopBar.css";
@@ -56,7 +59,15 @@ function piLinkState(status: ReturnType<typeof useStatus> | undefined | null): "
   return "good";
 }
 
-export function TopBar({ batteryLabel = "Device battery" }: { batteryLabel?: string }) {
+export function TopBar({
+  batteryLabel = "Device battery",
+  gps = null,
+  outlooks = [],
+}: {
+  batteryLabel?: string;
+  gps?: { lat: number; lon: number } | null;
+  outlooks?: SpcDayOutlook[];
+}) {
   const status = useStatus();
   const battery = useBattery();
   const now = useNow();
@@ -64,6 +75,13 @@ export function TopBar({ batteryLabel = "Device battery" }: { batteryLabel?: str
   const linkState = piLinkState(status);
   const dateLabel = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
   const clock = formatOpsClock(now, clockMode);
+  // Persistent across every page (this component mounts once at the app root), unlike the Home
+  // hero band which only exists on Home -- the tablet dash-mount is meant to be glanced at from
+  // Map/Weather/Operations too without navigating back to Home first. Tablet-only, see TopBar.css;
+  // phone already gets this on Home and doesn't need a second copy competing for its small header.
+  const { threats } = useNearbyStormThreats(gps);
+  const day1Outlook = outlooks.find((o) => o.day === 1)?.categorical ?? null;
+  const hero = computeThreatHero(threats[0] ?? null, day1Outlook);
 
   useEffect(() => {
     const unsubscribe = subscribeClockMode(setClockMode);
@@ -81,32 +99,45 @@ export function TopBar({ batteryLabel = "Device battery" }: { batteryLabel?: str
   }, []);
 
   return (
-    <header className="ops-header">
-      <div className="brand-lockup" aria-label="Code Black OPS">
-        {/* Owner wants the full shield badge here, not a cropped icon -- sized up from the earlier
-            icon-only attempt so the shield outline and tornado mark actually read at a glance
-            instead of aliasing into a smudge (see .brand-mark--codeblack in TopBar.css). */}
-        <img className="brand-mark brand-mark--codeblack" src={codeblackShield} alt="Code Black" />
-        <div>
-          <div className="brand-title"><span>Code Black</span> <strong>OPS</strong></div>
-          <div className="brand-subtitle">Situational Awareness</div>
+    // Single root element -- .app-shell is a CSS grid keyed to a fixed row layout of its direct
+    // children (header row, content row, dock row). An earlier version of this returned a Fragment
+    // with the header and the threat strip as two separate top-level siblings, which silently
+    // inserted an extra grid item into .app-shell's flow and squeezed .page-viewport to 0 height
+    // app-wide. Nest everything inside one <header> instead.
+    <header className="ops-header-wrap">
+      <div className="ops-header">
+        <div className="brand-lockup" aria-label="Code Black OPS">
+          {/* Owner wants the full shield badge here, not a cropped icon -- sized up from the earlier
+              icon-only attempt so the shield outline and tornado mark actually read at a glance
+              instead of aliasing into a smudge (see .brand-mark--codeblack in TopBar.css). */}
+          <img className="brand-mark brand-mark--codeblack" src={codeblackShield} alt="Code Black" />
+          <div>
+            <div className="brand-title"><span>Code Black</span> <strong>OPS</strong></div>
+            <div className="brand-subtitle">Situational Awareness</div>
+          </div>
+        </div>
+
+        <div className="time-module">
+          <span className="font-mono text-sm tabular-nums text-white">
+            {clock.time}
+          </span>
+          <span>{clock.label} Time · {clock.zone}</span>
+        </div>
+
+        <div className="header-status">
+          <div className="header-date">{dateLabel}</div>
+          <div className="pi-link">
+            <span className={`pi-link__dot pi-link__dot--${linkState}`} aria-hidden="true" />
+            <span>Pi Link</span>
+          </div>
+          <BatteryChip level={battery.level} isCharging={battery.isCharging} label={batteryLabel} />
         </div>
       </div>
-
-      <div className="time-module">
-        <span className="font-mono text-sm tabular-nums text-white">
-          {clock.time}
-        </span>
-        <span>{clock.label} Time · {clock.zone}</span>
-      </div>
-
-      <div className="header-status">
-        <div className="header-date">{dateLabel}</div>
-        <div className="pi-link">
-          <span className={`pi-link__dot pi-link__dot--${linkState}`} aria-hidden="true" />
-          <span>Pi Link</span>
-        </div>
-        <BatteryChip level={battery.level} isCharging={battery.isCharging} label={batteryLabel} />
+      <div className={`ops-header-threat ops-header-threat--${hero.tone}`} data-testid="header-threat-strip" aria-live="polite">
+        <span className="ops-header-threat__pulse" aria-hidden="true" />
+        <strong>{hero.label}</strong>
+        <span className="ops-header-threat__sep">·</span>
+        <span>{hero.detail}</span>
       </div>
     </header>
   );
