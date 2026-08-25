@@ -665,8 +665,13 @@ export function AtlasMap({
   // to catch a debris-ball tornado confirmation. SRV additionally requires a storm motion vector set
   // (the worker 400s without one), so the product switcher and storm-motion control are paired.
   const [radarProduct, setRadarProduct] = useState<RadarProduct>("REF");
-  const [radarTilt, setRadarTilt] = useState(0.5);
-  const [radarAvailableTilts, setRadarAvailableTilts] = useState<number[]>([0.5]);
+  // The worker's "tilt" is an elevation CUT INDEX (1 = lowest), not a degree value -- degrees only
+  // exist per-fetched-frame as elevationAngle. Requesting a degree-shaped number here (e.g. 0.5) never
+  // matches a real index, so the worker silently falls back to the lowest cut every time regardless
+  // of what's selected. Index 1 is a truthful default; the button displays the real elevationAngle
+  // off the loaded frame once one exists, not this index.
+  const [radarTilt, setRadarTilt] = useState(1);
+  const [radarAvailableTilts, setRadarAvailableTilts] = useState<number[]>([1]);
   const [stormMotion, setStormMotionState] = useState<StormMotion | null>(null);
   const [stormMotionOpen, setStormMotionOpen] = useState(false);
   const applyStormMotion = async (directionDegrees: number, speedKnots: number) => {
@@ -1070,14 +1075,14 @@ export function AtlasMap({
               type="button"
               className="atlas-radar-chip atlas-radar-chip--tilt"
               aria-label="Cycle radar tilt"
-              title="Cycles through available elevation tilts for this site/product"
+              title={`Elevation cut ${radarTilt} of ${radarAvailableTilts.length} -- cycles to the next tilt`}
               onClick={() => {
                 const index = radarAvailableTilts.indexOf(radarTilt);
                 const next = radarAvailableTilts[(index + 1) % radarAvailableTilts.length] ?? radarTilt;
                 setRadarTilt(next);
               }}
             >
-              {radarTilt.toFixed(1)}°
+              {radarFrame?.elevationAngle != null ? `${radarFrame.elevationAngle.toFixed(1)}°` : `TILT ${radarTilt}`}
             </button>
             {radarProduct === "SRV" && (
               <button type="button" className={stormMotionOpen ? "atlas-radar-chip active" : "atlas-radar-chip"} onClick={() => setStormMotionOpen((value) => !value)}>
@@ -1092,10 +1097,13 @@ export function AtlasMap({
               {radarProduct} · {ageText(radarFrame.ageSeconds)} old{radarFrame.freshness === "STALE" ? " · STALE" : ""}
             </div>
           )}
+          {/* Nested in the instrument's own flex column rather than a separately absolutely-positioned
+              sibling -- a fixed pixel offset guessing the panel's height above it breaks the moment the
+              panel wraps to a second row (CC/SET MOTION chip) or the age line appears/disappears. */}
+          {stormMotionOpen && (
+            <StormMotionQuickEntry initial={stormMotion} onApply={applyStormMotion} onClose={() => setStormMotionOpen(false)} />
+          )}
         </div>
-      )}
-      {!compact && radarVisible && stormMotionOpen && (
-        <StormMotionQuickEntry initial={stormMotion} onApply={applyStormMotion} onClose={() => setStormMotionOpen(false)} />
       )}
       {/* Compact (Weather-page) card: no control row at all -- per the owner's explicit call,
           layer visibility now lives entirely on the Layer Configuration page (reached via the dock

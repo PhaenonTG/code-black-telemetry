@@ -516,7 +516,12 @@ const server = http.createServer(async (req, res) => {
       const tilt = Number(url.searchParams.get("tilt") || selectedTilt);
       const limit = Number(url.searchParams.get("limit") || 6);
       const frame = await ensureFrame(site, product, tilt);
-      let list = [...frames.values()].filter((item) => item.site.id === site && item.product === product).sort((a, b) => b.time - a.time).slice(0, limit);
+      // Must also filter by tilt (chosenTilt, since that's what's actually cached under -- the raw
+      // request tilt can differ if the volume didn't have that exact cut) -- otherwise switching
+      // tilts on an already-populated site/product returns a list still dominated by the PREVIOUS
+      // tilt's cached frames, silently showing the wrong elevation while labeled as the new one.
+      const resolvedTilt = frame.tilt;
+      let list = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === resolvedTilt).sort((a, b) => b.time - a.time).slice(0, limit);
       if (!list.find((item) => item.id === frame.id)) list.unshift(frame);
       // First request for a site/product this process has seen: backfill a real short history
       // instead of returning a single frame -- otherwise the client's "last N frames" loop has

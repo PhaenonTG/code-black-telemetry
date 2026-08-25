@@ -17,11 +17,11 @@ const VEL_STOPS: Stop[] = [
 ];
 
 const CC_BANDS: Array<{ max: number; rgb: [number, number, number]; label: string }> = [
-  { max: 0.65, rgb: [230, 50, 55], label: "<0.65 DEBRIS/NON-MET" },
-  { max: 0.8, rgb: [245, 210, 60], label: "0.65-0.80" },
-  { max: 0.9, rgb: [35, 210, 115], label: "0.80-0.90" },
-  { max: 0.96, rgb: [92, 190, 245], label: "0.90-0.96" },
-  { max: 1.05, rgb: [210, 220, 225], label: ">0.96 UNIFORM" },
+  { max: 0.65, rgb: [230, 50, 55], label: "<.65" },
+  { max: 0.8, rgb: [245, 210, 60], label: ".65" },
+  { max: 0.9, rgb: [35, 210, 115], label: ".80" },
+  { max: 0.96, rgb: [92, 190, 245], label: ".90" },
+  { max: 1.05, rgb: [210, 220, 225], label: ">.96" },
 ];
 
 function gradientCss(stops: Stop[], min: number, max: number) {
@@ -44,6 +44,7 @@ export function AtlasRadarLegend({ product }: { product: RadarProduct }) {
         <div className="atlas-radar-legend__labels">
           {CC_BANDS.map((band) => <span key={band.label}>{band.label}</span>)}
         </div>
+        <div className="atlas-radar-legend__note">LOW (RED) = DEBRIS / TORNADO SIGNATURE</div>
       </div>
     );
   }
