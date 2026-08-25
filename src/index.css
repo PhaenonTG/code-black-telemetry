@@ -9913,3 +9913,209 @@ body {
 .atlas-pin-popup__details {
   max-width: 100% !important;
 }
+
+/* --- EXPERIMENTAL: "instrument panel" radar concept -- veteran-chaser design pass, pending approval.
+   Departs from the plain circular map-controls buttons on purpose: this is meant to read like a
+   dedicated radar instrument bolted onto the map, not another row of nav chrome. Chip swatches use
+   the SAME color stops radar-worker/worker.cjs actually renders (see AtlasRadarLegend.tsx), so the
+   product picker doubles as a truthful mini-legend even before you've picked it. */
+.atlas-radar-instrument {
+  position: absolute !important;
+  left: 12px !important;
+  right: 12px !important;
+  bottom: 60px !important;
+  z-index: 14 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  padding: 10px !important;
+  border: 1px solid rgba(255, 45, 53, 0.3) !important;
+  border-radius: 10px !important;
+  background: linear-gradient(180deg, rgba(16, 17, 20, 0.92), rgba(6, 7, 9, 0.96)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 10px 24px rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+.atlas-radar-instrument__row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.atlas-radar-chip {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  width: auto !important;
+  height: auto !important;
+  min-width: 44px;
+  padding: 5px 10px !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--text, #f8fafc) !important;
+  font: 800 11px / 1 "JetBrains Mono", Consolas, monospace !important;
+  letter-spacing: 0.04em;
+}
+
+.atlas-radar-chip__swatch {
+  display: block;
+  width: 16px;
+  height: 8px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.atlas-radar-chip.active {
+  border-color: rgba(255, 47, 64, 0.85) !important;
+  background: rgba(34, 4, 6, 0.85) !important;
+  box-shadow: 0 0 0 1px rgba(255, 47, 64, 0.3), 0 0 14px rgba(255, 30, 45, 0.35) !important;
+  color: #ff3044 !important;
+}
+
+.atlas-radar-chip--tilt {
+  margin-left: auto;
+  color: var(--muted, #8b949e) !important;
+}
+
+.atlas-radar-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.atlas-radar-legend__bar {
+  height: 6px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.atlas-radar-legend__labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted, #8b949e);
+  font: 700 8px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.atlas-radar-legend--cc .atlas-radar-legend__labels {
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.atlas-radar-legend--cc .atlas-radar-legend__labels span {
+  flex: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atlas-radar-instrument__age {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 800 10px / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.atlas-radar-instrument__pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.atlas-radar-instrument__age--live { color: #2ee06c; }
+.atlas-radar-instrument__age--live .atlas-radar-instrument__pulse {
+  background: #2ee06c;
+  box-shadow: 0 0 0 0 rgba(46, 224, 108, 0.6);
+  animation: atlas-radar-pulse 1.6s ease-out infinite;
+}
+.atlas-radar-instrument__age--aging { color: #f5b942; }
+.atlas-radar-instrument__age--aging .atlas-radar-instrument__pulse { background: #f5b942; }
+.atlas-radar-instrument__age--stale { color: #ff3044; }
+.atlas-radar-instrument__age--stale .atlas-radar-instrument__pulse { background: #ff3044; }
+
+@keyframes atlas-radar-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(46, 224, 108, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(46, 224, 108, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(46, 224, 108, 0); }
+}
+
+.atlas-storm-motion-entry {
+  position: absolute !important;
+  left: 12px !important;
+  bottom: 170px !important;
+  z-index: 16 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  min-width: 220px !important;
+  padding: 12px !important;
+  border: 1px solid rgba(255, 45, 53, 0.35) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(180deg, rgba(23, 25, 29, 0.97), rgba(7, 8, 10, 0.98)) !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5) !important;
+  color: var(--text, #f8fafc);
+  font: 700 11px / 1.2 Consolas, "JetBrains Mono", monospace;
+}
+
+.atlas-storm-motion-entry__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.atlas-storm-motion-entry__row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted, #8b949e);
+}
+
+.atlas-storm-motion-entry__row input {
+  width: 48px;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text, #f8fafc);
+  font: inherit;
+}
+
+.atlas-storm-motion-entry__row button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 45, 53, 0.42);
+  border-radius: 6px;
+  background: rgba(34, 4, 6, 0.84);
+  color: var(--cb-red, #ff2d35);
+  font: 800 10px / 1 "JetBrains Mono", Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.atlas-storm-motion-entry__compass {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.atlas-storm-motion-entry__compass button {
+  min-height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text, #f8fafc);
+  font: 700 10px / 1 "JetBrains Mono", Consolas, monospace;
+}
+
+.atlas-storm-motion-entry__compass button.active {
+  border-color: rgba(255, 47, 64, 0.75);
+  background: rgba(34, 4, 6, 0.9);
+  color: #ff3044;
+}

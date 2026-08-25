@@ -35,7 +35,8 @@ import { filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewpor
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, type RoadConditionEvent, type TrafficCamera, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
-import { getNearestRadarSites, getRadarFrames, type RadarFrame } from "../services/radar";
+import { ageText, getNearestRadarSites, getRadarFrames, setRadarStormMotion, type RadarFrame, type RadarProduct, type StormMotion } from "../services/radar";
+import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
 import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
 import { LayerGlyph } from "../components/situational/LayerGlyph";
 
@@ -660,17 +661,34 @@ export function AtlasMap({
   const [radarFrames, setRadarFrames] = useState<RadarFrame[]>([]);
   const [radarPlaybackIndex, setRadarPlaybackIndex] = useState(0);
   const radarFrame = radarFrames[radarPlaybackIndex] ?? null;
+  // Reflectivity alone doesn't show rotation -- a chaser needs VEL/SRV to spot a mesocyclone and CC
+  // to catch a debris-ball tornado confirmation. SRV additionally requires a storm motion vector set
+  // (the worker 400s without one), so the product switcher and storm-motion control are paired.
+  const [radarProduct, setRadarProduct] = useState<RadarProduct>("REF");
+  const [radarTilt, setRadarTilt] = useState(0.5);
+  const [radarAvailableTilts, setRadarAvailableTilts] = useState<number[]>([0.5]);
+  const [stormMotion, setStormMotionState] = useState<StormMotion | null>(null);
+  const [stormMotionOpen, setStormMotionOpen] = useState(false);
+  const applyStormMotion = async (directionDegrees: number, speedKnots: number) => {
+    const motion = await setRadarStormMotion({ directionDegrees, speedKnots, source: "MANUAL" });
+    setStormMotionState(motion);
+    setStormMotionOpen(false);
+  };
   useEffect(() => {
     if (!radarVisible) {
       setRadarFrames([]);
       setRadarPlaybackIndex(0);
       return;
     }
+    if (radarProduct === "SRV" && !stormMotion) return;
     let cancelled = false;
     const load = async () => {
       const site = gps ? (await getNearestRadarSites(gps.lat, gps.lon))[0]?.id ?? "AUTO" : "AUTO";
-      const frames = await getRadarFrames(site, "REF", 0.5, RADAR_LOOP_FRAME_COUNT);
-      if (!cancelled) setRadarFrames(normalizeRadarFrames(frames, RADAR_LOOP_FRAME_COUNT));
+      const frames = await getRadarFrames(site, radarProduct, radarTilt, RADAR_LOOP_FRAME_COUNT);
+      if (cancelled) return;
+      setRadarFrames(normalizeRadarFrames(frames, RADAR_LOOP_FRAME_COUNT));
+      setRadarPlaybackIndex(0);
+      if (frames[0]?.availableTilts?.length) setRadarAvailableTilts(frames[0].availableTilts);
     };
     void load();
     const timer = window.setInterval(load, RADAR_REFRESH_MS);
@@ -678,7 +696,7 @@ export function AtlasMap({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [radarVisible, gps?.lat, gps?.lon]);
+  }, [radarVisible, radarProduct, radarTilt, stormMotion, gps?.lat, gps?.lon]);
 
   useEffect(() => {
     if (!radarVisible || radarFrames.length < 2) return;
@@ -909,6 +927,16 @@ export function AtlasMap({
   const cameraProviderStatusLabel = trafficCamerasVisible
     ? `CAMS ${providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount).toUpperCase()}`
     : null;
+  // A radar frame is only ever as fresh as the last successful worker fetch -- in a chase, a stale
+  // frame with no clear "this is old" signal is worse than no frame at all, since it can read as
+  // current when the actual storm has moved. Always show the age, not just a LIVE/CACHED enum.
+  const radarStatusLabel = radarVisible
+    ? radarProduct === "SRV" && !stormMotion
+      ? "SRV NEEDS STORM MOTION"
+      : radarFrame
+        ? `${radarProduct} ${ageText(radarFrame.ageSeconds)} OLD${radarFrame.freshness === "STALE" ? " - STALE" : ""}`
+        : "SINGLE-SITE LOADING"
+    : null;
 
   return (
     <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"}`} data-testid={compact ? "atlas-map-compact" : "atlas-map-primary"}>
@@ -921,6 +949,7 @@ export function AtlasMap({
             {statusLines.map((line, index) => <span key={index}>{line}</span>)}
             <span>{cameraStatusLabel}</span>
             {mosaicStatusLabel && <span>{mosaicStatusLabel}</span>}
+            {radarVisible && !radarFrame && <span>{radarStatusLabel}</span>}
             {roadStatusLabel && <span>{roadStatusLabel}</span>}
             {cameraProviderStatusLabel && <span>{cameraProviderStatusLabel}</span>}
           </div>
@@ -1016,6 +1045,58 @@ export function AtlasMap({
           <div className="map-status atlas-map-status">{visibleError || `${statusLines.join(" - ")} - ${atlasStateLabel}`}</div>
         )}
       </div>
+      {/* Reflectivity alone doesn't show rotation -- this row only exists when single-site radar is
+          on, since REF/VEL/SRV/CC + tilt are meaningless for the wide-area mosaic. SRV needs a storm
+          motion vector or the worker refuses it, so picking SRV without one opens the inline entry
+          instead of silently doing nothing. */}
+      {!compact && radarVisible && (
+        <div className="atlas-radar-instrument" aria-label="Single-site radar product and tilt">
+          <div className="atlas-radar-instrument__row">
+            {(["REF", "VEL", "SRV", "CC"] as RadarProduct[]).map((product) => (
+              <button
+                key={product}
+                type="button"
+                className={radarProduct === product ? "atlas-radar-chip active" : "atlas-radar-chip"}
+                onClick={() => {
+                  setRadarProduct(product);
+                  if (product === "SRV" && !stormMotion) setStormMotionOpen(true);
+                }}
+              >
+                <span className="atlas-radar-chip__swatch" style={{ background: radarSwatchCss(product) }} />
+                {product}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="atlas-radar-chip atlas-radar-chip--tilt"
+              aria-label="Cycle radar tilt"
+              title="Cycles through available elevation tilts for this site/product"
+              onClick={() => {
+                const index = radarAvailableTilts.indexOf(radarTilt);
+                const next = radarAvailableTilts[(index + 1) % radarAvailableTilts.length] ?? radarTilt;
+                setRadarTilt(next);
+              }}
+            >
+              {radarTilt.toFixed(1)}°
+            </button>
+            {radarProduct === "SRV" && (
+              <button type="button" className={stormMotionOpen ? "atlas-radar-chip active" : "atlas-radar-chip"} onClick={() => setStormMotionOpen((value) => !value)}>
+                {stormMotion ? `${Math.round(stormMotion.directionDegrees)}° / ${Math.round(stormMotion.speedKnots)}kt` : "SET MOTION"}
+              </button>
+            )}
+          </div>
+          <AtlasRadarLegend product={radarProduct} />
+          {radarFrame && (
+            <div className={`atlas-radar-instrument__age atlas-radar-instrument__age--${radarFrame.freshness === "STALE" ? "stale" : radarFrame.ageSeconds < 120 ? "live" : "aging"}`}>
+              <span className="atlas-radar-instrument__pulse" />
+              {radarProduct} · {ageText(radarFrame.ageSeconds)} old{radarFrame.freshness === "STALE" ? " · STALE" : ""}
+            </div>
+          )}
+        </div>
+      )}
+      {!compact && radarVisible && stormMotionOpen && (
+        <StormMotionQuickEntry initial={stormMotion} onApply={applyStormMotion} onClose={() => setStormMotionOpen(false)} />
+      )}
       {/* Compact (Weather-page) card: no control row at all -- per the owner's explicit call,
           layer visibility now lives entirely on the Layer Configuration page (reached via the dock
           corner button), not duplicated here. Pan/zoom still work via touch gestures. */}
@@ -1028,6 +1109,50 @@ export function AtlasMap({
           <button type="button" aria-label="Map layers" data-testid="atlas-map-layers-primary" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
         </div>
       )}
+    </div>
+  );
+}
+
+// Storm-relative velocity is useless without a motion vector, and typing exact numbers mid-chase is
+// unrealistic -- direction is a compass drag/8-point quick-pick, speed is a coarse slider, both
+// editable by hand for a precise SPC-mesoanalysis-informed value when there's time to look one up.
+function StormMotionQuickEntry({
+  initial,
+  onApply,
+  onClose,
+}: {
+  initial: StormMotion | null;
+  onApply: (directionDegrees: number, speedKnots: number) => void;
+  onClose: () => void;
+}) {
+  const [direction, setDirection] = useState(initial?.directionDegrees ?? 225);
+  const [speed, setSpeed] = useState(initial?.speedKnots ?? 30);
+  const compassPoints: Array<[string, number]> = [
+    ["N", 0], ["NE", 45], ["E", 90], ["SE", 135],
+    ["S", 180], ["SW", 225], ["W", 270], ["NW", 315],
+  ];
+  return (
+    <div className="atlas-storm-motion-entry" role="dialog" aria-label="Set storm motion for SRV">
+      <div className="atlas-storm-motion-entry__row">
+        <span>STORM MOTION (FROM)</span>
+        <button type="button" aria-label="Close storm motion entry" onClick={onClose}>Close</button>
+      </div>
+      <div className="atlas-storm-motion-entry__compass">
+        {compassPoints.map(([label, deg]) => (
+          <button key={label} type="button" className={direction === deg ? "active" : ""} onClick={() => setDirection(deg)}>{label}</button>
+        ))}
+      </div>
+      <div className="atlas-storm-motion-entry__row">
+        <label>
+          Dir
+          <input type="number" min={0} max={359} value={Math.round(direction)} onChange={(event) => setDirection(Number(event.target.value) || 0)} />°
+        </label>
+        <label>
+          Speed
+          <input type="number" min={0} max={80} value={Math.round(speed)} onChange={(event) => setSpeed(Number(event.target.value) || 0)} />kt
+        </label>
+        <button type="button" onClick={() => onApply(direction, speed)}>Apply</button>
+      </div>
     </div>
   );
 }
