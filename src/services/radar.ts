@@ -317,8 +317,43 @@ export async function getNearestRadarSites(lat: number, lon: number) {
 
 export async function setRadarStormMotion(motion: { directionDegrees: number; speedKnots: number; source?: string }) {
   await ensureInitialized();
+  if (webRadarEnabled()) {
+    const response = await fetch(`${radarWorkerBase()}/api/v1/radar/storm-motion`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(motion),
+    });
+    if (!response.ok) throw new Error(`radar worker ${response.status}`);
+    return response.json() as Promise<StormMotion>;
+  }
   if (!Capacitor.isNativePlatform()) return { ...motion, source: motion.source ?? "MANUAL", updatedAt: Date.now() };
   return RadarNative.setStormMotion(motion);
+}
+
+export interface StormMotionEstimate {
+  ok: boolean;
+  reason?: string;
+  framesAvailable?: number;
+  directionDegrees?: number;
+  speedKnots?: number;
+  confidence?: "LOW" | "MEDIUM" | "HIGH";
+  sampleSpanMinutes?: number;
+}
+
+// Weighted-centroid tracking across two REF frames, computed server-side where the raw radial data
+// already lives -- not a substitute for reading the storm yourself, but realistic to actually use
+// while driving instead of typing a bearing into a number field at highway speed.
+export async function getStormMotionEstimate(site: string): Promise<StormMotionEstimate> {
+  if (!webRadarEnabled()) return { ok: false, reason: "WORKER_NOT_CONFIGURED" };
+  try {
+    const params = new URLSearchParams();
+    if (site !== "AUTO") params.set("site", site);
+    const response = await fetch(`${radarWorkerBase()}/api/v1/radar/storm-motion/estimate?${params}`);
+    if (!response.ok) return { ok: false, reason: `HTTP_${response.status}` };
+    return response.json() as Promise<StormMotionEstimate>;
+  } catch {
+    return { ok: false, reason: "REQUEST_FAILED" };
+  }
 }
 
 export async function getRadarCacheStatus() {

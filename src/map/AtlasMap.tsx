@@ -35,7 +35,7 @@ import { filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewpor
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, type RoadConditionEvent, type TrafficCamera, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
-import { ageText, getNearestRadarSites, getRadarFrames, setRadarStormMotion, type RadarFrame, type RadarProduct, type StormMotion } from "../services/radar";
+import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, setRadarStormMotion, type RadarFrame, type RadarProduct, type StormMotion } from "../services/radar";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
 import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
 import { LayerGlyph } from "../components/situational/LayerGlyph";
@@ -1101,7 +1101,7 @@ export function AtlasMap({
               sibling -- a fixed pixel offset guessing the panel's height above it breaks the moment the
               panel wraps to a second row (CC/SET MOTION chip) or the age line appears/disappears. */}
           {stormMotionOpen && (
-            <StormMotionQuickEntry initial={stormMotion} onApply={applyStormMotion} onClose={() => setStormMotionOpen(false)} />
+            <StormMotionQuickEntry initial={stormMotion} site={radarFrame?.site.id ?? "AUTO"} onApply={applyStormMotion} onClose={() => setStormMotionOpen(false)} />
           )}
         </div>
       )}
@@ -1122,29 +1122,56 @@ export function AtlasMap({
 }
 
 // Storm-relative velocity is useless without a motion vector, and typing exact numbers mid-chase is
-// unrealistic -- direction is a compass drag/8-point quick-pick, speed is a coarse slider, both
-// editable by hand for a precise SPC-mesoanalysis-informed value when there's time to look one up.
+// unrealistic -- AUTO pulls a real centroid-tracked estimate from the worker (see estimateStormMotion
+// in radar-worker/worker.cjs) so the driver doesn't have to compute or type anything; the compass/
+// number fields stay for correcting it or entering a SPC-mesoanalysis-informed value by hand.
 function StormMotionQuickEntry({
   initial,
+  site,
   onApply,
   onClose,
 }: {
   initial: StormMotion | null;
+  site: string;
   onApply: (directionDegrees: number, speedKnots: number) => void;
   onClose: () => void;
 }) {
   const [direction, setDirection] = useState(initial?.directionDegrees ?? 225);
   const [speed, setSpeed] = useState(initial?.speedKnots ?? 30);
+  const [autoState, setAutoState] = useState<"idle" | "loading" | "ok" | "failed">("idle");
+  const [autoDetail, setAutoDetail] = useState("");
   const compassPoints: Array<[string, number]> = [
     ["N", 0], ["NE", 45], ["E", 90], ["SE", 135],
     ["S", 180], ["SW", 225], ["W", 270], ["NW", 315],
   ];
+  const runAuto = async () => {
+    setAutoState("loading");
+    const estimate = await getStormMotionEstimate(site);
+    if (!estimate.ok || estimate.directionDegrees == null || estimate.speedKnots == null) {
+      setAutoState("failed");
+      setAutoDetail(
+        estimate.reason === "NEED_TWO_REF_FRAMES" ? `Need REF history (${estimate.framesAvailable ?? 0}/2 frames)`
+        : estimate.reason === "NO_SIGNIFICANT_ECHO" ? "No storm strong enough to track nearby"
+        : estimate.reason === "WORKER_NOT_CONFIGURED" ? "Radar worker not configured"
+        : "Couldn't estimate -- enter manually",
+      );
+      return;
+    }
+    setDirection(estimate.directionDegrees);
+    setSpeed(estimate.speedKnots);
+    setAutoState("ok");
+    setAutoDetail(`${estimate.confidence} confidence -- ${estimate.sampleSpanMinutes}min sample`);
+  };
   return (
     <div className="atlas-storm-motion-entry" role="dialog" aria-label="Set storm motion for SRV">
       <div className="atlas-storm-motion-entry__row">
         <span>STORM MOTION (FROM)</span>
         <button type="button" aria-label="Close storm motion entry" onClick={onClose}>Close</button>
       </div>
+      <button type="button" className="atlas-storm-motion-entry__auto" onClick={() => void runAuto()} disabled={autoState === "loading"}>
+        {autoState === "loading" ? "TRACKING STORM..." : "AUTO-ESTIMATE FROM RADAR"}
+      </button>
+      {autoDetail && <div className={`atlas-storm-motion-entry__auto-detail atlas-storm-motion-entry__auto-detail--${autoState}`}>{autoDetail}</div>}
       <div className="atlas-storm-motion-entry__compass">
         {compassPoints.map(([label, deg]) => (
           <button key={label} type="button" className={direction === deg ? "active" : ""} onClick={() => setDirection(deg)}>{label}</button>

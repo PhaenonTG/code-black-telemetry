@@ -82,6 +82,82 @@ function bearingDeg(from, to) {
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
+// Real, simplified storm-motion estimation -- not a lie, but not full SCIT-style multi-cell
+// tracking either: weighted centroid of REF gates above threshold, tracked between two frames.
+// Good enough for a single dominant cell (the common chase case: you're on ONE storm), degrades
+// gracefully (low confidence) with multiple cells in view since the centroid drifts toward
+// whichever is bigger/closer rather than tracking either one correctly -- the client must show
+// confidence, not just a bare number, so a chaser isn't trusting a blended-cell artifact.
+const STORM_CENTROID_DBZ_THRESHOLD = 35;
+const STORM_CENTROID_MAX_RANGE_KM = 230;
+
+function stormCentroid(frame) {
+  if (!frame?.data || frame.product !== "REF") return null;
+  let sumEast = 0;
+  let sumNorth = 0;
+  let sumWeight = 0;
+  const siteLatRad = (frame.site.lat * Math.PI) / 180;
+  for (let i = 0; i < frame.data.length; i += 1) {
+    const radial = frame.data[i];
+    if (!radial?.moment_data) continue;
+    const azRad = ((frame.azimuths[i] ?? 0) * Math.PI) / 180;
+    const eastPerKm = Math.sin(azRad);
+    const northPerKm = Math.cos(azRad);
+    for (let g = 0; g < radial.moment_data.length; g += 1) {
+      const value = radial.moment_data[g];
+      if (value == null || value < STORM_CENTROID_DBZ_THRESHOLD) continue;
+      const rangeKm = radial.first_gate + g * radial.gate_size;
+      if (rangeKm > STORM_CENTROID_MAX_RANGE_KM) continue;
+      const weight = value - STORM_CENTROID_DBZ_THRESHOLD + 1;
+      sumEast += eastPerKm * rangeKm * weight;
+      sumNorth += northPerKm * rangeKm * weight;
+      sumWeight += weight;
+    }
+  }
+  if (sumWeight <= 0) return null;
+  const meanEastKm = sumEast / sumWeight;
+  const meanNorthKm = sumNorth / sumWeight;
+  return {
+    lat: frame.site.lat + meanNorthKm / 111.32,
+    lon: frame.site.lon + meanEastKm / (111.32 * Math.cos(siteLatRad)),
+    weight: sumWeight,
+    time: frame.time,
+  };
+}
+
+function estimateStormMotion(site) {
+  const candidates = [...frames.values()]
+    .filter((item) => item.site.id === site && item.product === "REF")
+    .sort((a, b) => b.time - a.time);
+  if (candidates.length < 2) return { ok: false, reason: "NEED_TWO_REF_FRAMES", framesAvailable: candidates.length };
+  const newest = candidates[0];
+  // Prefer a baseline frame at least 4 minutes older than newest (too close together and any GPS/gate
+  // rounding noise dominates the real displacement) but not more than 20 (storm may have evolved/split).
+  const baseline = candidates.find((item) => newest.time - item.time >= 4 * 60_000 && newest.time - item.time <= 20 * 60_000) ?? candidates[candidates.length - 1];
+  if (baseline.id === newest.id) return { ok: false, reason: "NEED_TIME_SEPARATION" };
+  const c1 = stormCentroid(baseline);
+  const c2 = stormCentroid(newest);
+  if (!c1 || !c2) return { ok: false, reason: "NO_SIGNIFICANT_ECHO" };
+  const distanceKm = distanceMiles(c1, c2) * 1.60934;
+  const elapsedHours = (c2.time - c1.time) / 3_600_000;
+  if (elapsedHours <= 0) return { ok: false, reason: "NEED_TIME_SEPARATION" };
+  const speedKnots = (distanceKm / elapsedHours) / 1.852;
+  const movementBearing = bearingDeg(c1, c2);
+  const directionDegrees = (movementBearing + 180) % 360; // "FROM" convention, matches the UI
+  // A cell that barely moved between samples produces a noisy/meaningless bearing (a few hundred
+  // meters of centroid jitter can swing 90+ degrees) -- flag low confidence rather than asserting it.
+  const confidence = distanceKm < 1.5 ? "LOW" : distanceKm < 4 ? "MEDIUM" : "HIGH";
+  return {
+    ok: true,
+    directionDegrees,
+    speedKnots,
+    confidence,
+    sampleSpanMinutes: Math.round(elapsedHours * 60),
+    baselineFrameId: baseline.id,
+    newestFrameId: newest.id,
+  };
+}
+
 function tileToLonLat(z, x, y, px, py) {
   const n = 2 ** z;
   const lon = ((x + px / TILE_SIZE) / n) * 360 - 180;
@@ -558,6 +634,10 @@ const server = http.createServer(async (req, res) => {
       if (PRODUCTS.includes(body.product)) selectedProduct = body.product;
       if (body.tilt) selectedTilt = Number(body.tilt);
       return send(res, 200, { selectedSite, selectedProduct, selectedTilt });
+    }
+    if (url.pathname === "/api/v1/radar/storm-motion/estimate") {
+      const site = currentSiteForUrl(url);
+      return send(res, 200, estimateStormMotion(site));
     }
     if (url.pathname === "/api/v1/radar/storm-motion" && req.method === "POST") {
       const body = await jsonBody(req);
