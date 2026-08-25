@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MapRadarPanel } from "../situational/Panels";
 import type { AlertProduct, ExternalObservation } from "../../services/situational";
+import { useNearbyStormThreats } from "../../hooks/useNearbyStormThreats";
 import type { CanonicalLocation } from "../../services/location";
 import type { PiOperationalSummary } from "../../services/operationalStatus";
 import { stateTone } from "../../services/operationalStatus";
@@ -95,6 +96,8 @@ export function HomeOverviewPage({
 }: HomeOverviewPageProps) {
   const [modules, setModules] = useState<HomeModuleConfig[]>(DEFAULT_HOME_MODULES);
   const [customizing, setCustomizing] = useState(false);
+  const { threats: nearbyThreats } = useNearbyStormThreats(mapGps ? { lat: mapGps.lat, lon: mapGps.lon } : null);
+  const nearestThreat = nearbyThreats[0] ?? null;
 
   useEffect(() => {
     const unsubscribe = subscribeHomeModules(setModules);
@@ -167,6 +170,15 @@ export function HomeOverviewPage({
           <div className="home-module__head"><span>Alerts</span><strong>{alertError ? "UNAVAILABLE" : `${alerts.length}`}</strong></div>
           <div className="home-module__primary">{alertError ? "Alert Data Unavailable" : severityLabel(alerts)}</div>
           <p>{alertError || (alerts[0]?.headline ?? "No official active alerts at current position.")}</p>
+          {/* Distinct from the alerts list above (which is "am I inside a warning right now") --
+              this is "what's nearby even if it hasn't reached me," the actual at-a-glance question
+              a chaser pulling this out of their pocket wants answered. */}
+          {nearestThreat && (
+            <div className="home-module__nearby-threat" data-tone={nearestThreat.alert.severity}>
+              <span>{nearestThreat.inside ? "AT YOUR LOCATION" : `${Math.round(nearestThreat.distanceMi)}MI ${nearestThreat.bearingCardinal}`}</span>
+              <b>{nearestThreat.alert.title}</b>
+            </div>
+          )}
           <button type="button" className="home-module__open" onClick={() => onNavigate("alerts")}>Open Alerts</button>
         </section>
       );

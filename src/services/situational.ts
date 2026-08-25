@@ -1,4 +1,4 @@
-import { distanceMiles, readNumber } from "./telemetry/quality";
+import { cardinalFromDeg, distanceMiles, readNumber } from "./telemetry/quality";
 import { Preferences } from "@capacitor/preferences";
 import { mapboxReverseGeocodeUrl } from "./mapTiles";
 
@@ -160,6 +160,93 @@ export async function getNwsAlerts(pos: Position): Promise<AlertProduct[]> {
     return products;
   } catch {
     return readNativeCache<AlertProduct[]>(LAST_ALERTS_KEY, []);
+  }
+}
+
+export interface NearbyThreat {
+  alert: AlertProduct;
+  distanceMi: number;
+  bearingDeg: number;
+  bearingCardinal: string;
+  inside: boolean;
+}
+
+function bearingDeg(from: Position, to: Position): number {
+  const lat1 = (from.lat * Math.PI) / 180;
+  const lat2 = (to.lat * Math.PI) / 180;
+  const dLon = ((to.lon - from.lon) * Math.PI) / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+// Nearest VERTEX distance, not nearest EDGE -- an approximation, not exact geometry. Good enough for
+// an at-a-glance "how far" stat on a warning polygon (typically a small quadrilateral), not precise
+// enough for anything safety-decision-grade. Deliberately separate from getNwsAlerts' point-in-polygon
+// "am I inside this warning" query (which drives the severe flash overlay and alert sound) -- this
+// answers a different question ("what's nearby") and must never be wired into that trigger path.
+function nearestVertexDistance(pos: Position, coordinates: unknown): { distanceMi: number; point: Position } | null {
+  if (!Array.isArray(coordinates)) return null;
+  const polygons = typeof coordinates[0]?.[0]?.[0] === "number" ? [coordinates] : coordinates;
+  let best: { distanceMi: number; point: Position } | null = null;
+  for (const polygon of polygons as unknown[]) {
+    const ring = Array.isArray(polygon) ? (polygon[0] as number[][] | undefined) : undefined;
+    if (!Array.isArray(ring)) continue;
+    for (const vertex of ring) {
+      if (!Array.isArray(vertex) || vertex.length < 2) continue;
+      const point = { lat: vertex[1], lon: vertex[0] };
+      const distanceMi = distanceMiles(pos, point);
+      if (!best || distanceMi < best.distanceMi) best = { distanceMi, point };
+    }
+  }
+  return best;
+}
+
+const NEARBY_THREAT_SEVERITIES: AlertProduct["severity"][] = ["tornado", "pds", "severe", "flash-flood"];
+
+// State-wide query (NWS's area= param) rather than a point query -- deliberately broader than "am I
+// inside a warning" so a storm that's still 20-40mi out and hasn't reached the chaser yet still shows
+// up. stateAbbr should be a real 2-letter USPS code (radar site data already carries this -- see
+// getNearestRadarSites -- cheaper than reverse-geocoding just for this).
+export async function getNearbyStormThreats(pos: Position, stateAbbr: string): Promise<NearbyThreat[]> {
+  if (!stateAbbr) return [];
+  const url = `https://api.weather.gov/alerts/active?area=${encodeURIComponent(stateAbbr)}`;
+  try {
+    const data = await fetchJson<{ features?: Array<{ id: string; properties?: Record<string, string>; geometry?: AlertGeometry | null }> }>(url);
+    const threats: NearbyThreat[] = [];
+    for (const feature of data.features ?? []) {
+      const p = feature.properties ?? {};
+      const severity = classifyAlert(p.event, p.headline);
+      if (!NEARBY_THREAT_SEVERITIES.includes(severity)) continue;
+      const geometry = feature.geometry ?? null;
+      if (!geometry?.coordinates) continue;
+      const inside = pointInPolygon(pos, geometry.coordinates);
+      const nearest = inside ? { distanceMi: 0, point: pos } : nearestVertexDistance(pos, geometry.coordinates);
+      if (!nearest) continue;
+      threats.push({
+        alert: {
+          id: feature.id,
+          type: "warning",
+          severity,
+          title: p.event ?? "NWS Product",
+          headline: p.headline ?? p.event ?? "Active NWS product",
+          description: p.description ?? "",
+          instruction: p.instruction ?? "",
+          area: p.areaDesc ?? "",
+          sent: p.sent ?? "",
+          expires: p.expires ?? p.ends ?? "",
+          source: "NWS",
+          geometry,
+        },
+        distanceMi: nearest.distanceMi,
+        bearingDeg: inside ? 0 : bearingDeg(pos, nearest.point),
+        bearingCardinal: inside ? "" : cardinalFromDeg(bearingDeg(pos, nearest.point)),
+        inside,
+      });
+    }
+    return threats.sort((a, b) => a.distanceMi - b.distanceMi).slice(0, 5);
+  } catch {
+    return [];
   }
 }
 
