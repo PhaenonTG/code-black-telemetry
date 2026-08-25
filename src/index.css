@@ -9276,9 +9276,119 @@ body {
   text-transform: uppercase;
 }
 
+/* Hero band -- always visible, no scrolling/tapping required, one fact only: the single highest-
+   priority thing on the page. Calm state stays deliberately muted (a green "all clear" band that
+   pulsed or glowed would train the eye to ignore real alerts later -- alarm fatigue is a real
+   design failure mode for a safety tool, not just an aesthetic nitpick). */
+.home-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.home-hero__pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--muted);
+}
+
+.home-hero__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-hero__text strong {
+  color: var(--text);
+  font: 800 clamp(16px, 4.4vw, 22px) / 1.1 "Rajdhani", Inter, sans-serif;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+
+.home-hero__text span {
+  color: var(--muted);
+  font: 700 10px / 1.2 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.home-hero--watch {
+  border-color: rgba(245, 185, 66, 0.4);
+  background: rgba(40, 28, 4, 0.35);
+}
+.home-hero--watch .home-hero__pulse { background: #f5b942; }
+.home-hero--watch .home-hero__text strong { color: #f5b942; }
+
+.home-hero--elevated {
+  border-color: rgba(255, 138, 0, 0.5);
+  background: rgba(45, 20, 0, 0.4);
+}
+.home-hero--elevated .home-hero__pulse { background: #ff8a00; }
+.home-hero--elevated .home-hero__text strong { color: #ff8a00; }
+
+.home-hero--critical {
+  border-color: rgba(255, 45, 53, 0.6);
+  background: rgba(45, 4, 6, 0.5);
+}
+.home-hero--critical .home-hero__pulse {
+  background: #ff3044;
+  box-shadow: 0 0 0 0 rgba(255, 48, 68, 0.6);
+  animation: atlas-radar-pulse 1.4s ease-out infinite;
+}
+.home-hero--critical .home-hero__text strong { color: #ff3044; }
+
 .home-module-list {
   display: grid;
   gap: var(--phone-home-gap);
+}
+
+@media (min-width: 900px) {
+  /* Tablet was previously the exact same single-column phone stack, just stretched wider -- all
+     the extra width did nothing but add whitespace between a narrow column and the screen edge.
+     Real multi-column layout + the same instrument-panel glow/monospace language as the radar
+     panel, so the dash-mounted tablet experience actually looks like a different, bigger device
+     and not a phone screen someone forgot to resize. */
+  .home-hero {
+    padding: 18px 22px;
+  }
+
+  .home-hero__text strong {
+    font-size: 28px;
+  }
+
+  .home-module-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .home-module--expanded {
+    grid-column: span 2;
+  }
+
+  .home-module {
+    padding: 16px;
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .home-module__head {
+    font-size: 11px;
+  }
+
+  .home-module__primary {
+    font-size: clamp(22px, 2.6vw, 32px);
+  }
+
+  .home-module__open {
+    min-height: 44px;
+  }
 }
 
 .home-module {

@@ -101,6 +101,27 @@ export function HomeOverviewPage({
   const [customizing, setCustomizing] = useState(false);
   const { threats: nearbyThreats } = useNearbyStormThreats(mapGps ? { lat: mapGps.lat, lon: mapGps.lon } : null);
   const nearestThreat = nearbyThreats[0] ?? null;
+  const day1Outlook = outlooks.find((o) => o.day === 1)?.categorical ?? null;
+  const ELEVATED_OUTLOOK = new Set(["ENH", "MDT", "HIGH"]);
+
+  // Single highest-priority fact, always visible without scrolling or opening anything -- an actual
+  // active/nearby polygon always outranks a day-level categorical outlook, which always outranks
+  // "nothing going on." This is the ONE thing a chaser glancing at a dash-mounted tablet needs first.
+  type HeroTone = "critical" | "elevated" | "watch" | "calm";
+  const hero: { tone: HeroTone; label: string; detail: string } = (() => {
+    if (nearestThreat) {
+      const critical = nearestThreat.alert.severity === "tornado" || nearestThreat.alert.severity === "pds";
+      return {
+        tone: critical ? "critical" : "elevated",
+        label: nearestThreat.alert.title.toUpperCase(),
+        detail: nearestThreat.inside ? "AT YOUR LOCATION" : `${Math.round(nearestThreat.distanceMi)} MI ${nearestThreat.bearingCardinal} OF YOU`,
+      };
+    }
+    if (day1Outlook && ELEVATED_OUTLOOK.has(day1Outlook.label)) {
+      return { tone: "watch", label: `${day1Outlook.labelLong || day1Outlook.label} TODAY`, detail: "SPC DAY 1 CATEGORICAL OUTLOOK" };
+    }
+    return { tone: "calm", label: "NO ACTIVE THREATS NEARBY", detail: day1Outlook ? `SPC DAY 1: ${day1Outlook.labelLong || day1Outlook.label}` : "AWAITING OUTLOOK DATA" };
+  })();
 
   useEffect(() => {
     const unsubscribe = subscribeHomeModules(setModules);
@@ -186,15 +207,9 @@ export function HomeOverviewPage({
           <div className="home-module__head"><span>Alerts</span><strong>{alertError ? "UNAVAILABLE" : `${alerts.length}`}</strong></div>
           <div className="home-module__primary">{alertError ? "Alert Data Unavailable" : severityLabel(alerts)}</div>
           <p>{alertError || (alerts[0]?.headline ?? "No official active alerts at current position.")}</p>
-          {/* Distinct from the alerts list above (which is "am I inside a warning right now") --
-              this is "what's nearby even if it hasn't reached me," the actual at-a-glance question
-              a chaser pulling this out of their pocket wants answered. */}
-          {nearestThreat && (
-            <div className="home-module__nearby-threat" data-tone={nearestThreat.alert.severity}>
-              <span>{nearestThreat.inside ? "AT YOUR LOCATION" : `${Math.round(nearestThreat.distanceMi)}MI ${nearestThreat.bearingCardinal}`}</span>
-              <b>{nearestThreat.alert.title}</b>
-            </div>
-          )}
+          {/* The nearby-but-not-inside-yet distance/bearing now lives in the hero band up top
+              (the single highest-priority fact on the page) -- showing it again here would just be
+              the same sentence twice in two places. */}
           <button type="button" className="home-module__open" onClick={() => onNavigate("alerts")}>Open Alerts</button>
         </section>
       );
@@ -239,6 +254,13 @@ export function HomeOverviewPage({
           {customizing ? "Done" : "Customize Home"}
         </button>
       </header>
+      <section className={`home-hero home-hero--${hero.tone}`} data-testid="home-hero" aria-live="polite">
+        <span className="home-hero__pulse" aria-hidden="true" />
+        <div className="home-hero__text">
+          <strong>{hero.label}</strong>
+          <span>{hero.detail}</span>
+        </div>
+      </section>
       {customizing && (
         <section className="home-customize" data-testid="home-customize-panel" aria-label="Customize Home">
           {modules.map((module, index) => (
