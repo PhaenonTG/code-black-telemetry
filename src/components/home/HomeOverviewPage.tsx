@@ -77,8 +77,28 @@ function severityLabel(products: AlertProduct[]) {
   return top.title || top.headline || "ACTIVE ALERT";
 }
 
-function moduleClass(module: HomeModuleConfig) {
-  return `home-module home-module--${module.key} home-module--${module.size}`;
+function moduleClass(module: HomeModuleConfig, tone?: "calm" | "watch" | "elevated" | "critical") {
+  const base = `home-module home-module--${module.key} home-module--${module.size}`;
+  return tone ? `${base} home-module--tone-${tone}` : base;
+}
+
+// Same four-step scale as computeThreatHero (calm/watch/elevated/critical) so a chaser who has
+// learned what those colors mean on the header strip doesn't have to learn a second vocabulary
+// for the module cards -- red always means the same thing everywhere in this app.
+function alertModuleTone(alerts: AlertProduct[], alertError: string): "calm" | "watch" | "elevated" | "critical" | undefined {
+  if (alertError) return undefined;
+  const top = alerts[0];
+  if (!top) return "calm";
+  if (top.severity === "tornado" || top.severity === "pds") return "critical";
+  if (top.severity === "severe" || top.severity === "flash-flood") return "elevated";
+  if (top.severity === "watch") return "watch";
+  return "elevated";
+}
+
+function worstTone(...tones: Array<"ok" | "warn" | "bad" | "neutral">): "calm" | "watch" | "critical" {
+  if (tones.includes("bad")) return "critical";
+  if (tones.includes("warn")) return "watch";
+  return "calm";
 }
 
 export function HomeOverviewPage({
@@ -134,7 +154,7 @@ export function HomeOverviewPage({
     if (!module.enabled) return null;
     if (module.key === "chase") {
       return (
-        <section key={module.key} className={moduleClass(module)} data-testid="home-module-chase">
+        <section key={module.key} className={moduleClass(module, missionActive ? "elevated" : "calm")} data-testid="home-module-chase">
           <div className="home-module__head"><span>Chase</span><strong>{missionActive ? "ACTIVE" : "READY"}</strong></div>
           <div className="home-module__primary">{missionActive ? "Chase Mode Active" : "Field Status Ready"}</div>
           <div className="home-module__grid">
@@ -186,7 +206,7 @@ export function HomeOverviewPage({
     }
     if (module.key === "alerts") {
       return (
-        <section key={module.key} className={moduleClass(module)} data-testid="home-module-alerts">
+        <section key={module.key} className={moduleClass(module, alertModuleTone(alerts, alertError))} data-testid="home-module-alerts">
           <div className="home-module__head"><span>Alerts</span><strong>{alertError ? "UNAVAILABLE" : `${alerts.length}`}</strong></div>
           <div className="home-module__primary">{alertError ? "Alert Data Unavailable" : severityLabel(alerts)}</div>
           <p>{alertError || (alerts[0]?.headline ?? "No official active alerts at current position.")}</p>
@@ -201,7 +221,7 @@ export function HomeOverviewPage({
       const transportTone = stateTone(opsStatus.transport.state);
       const telemetryTone = stateTone(opsStatus.telemetry.state);
       return (
-        <section key={module.key} className={moduleClass(module)} data-testid="home-module-system">
+        <section key={module.key} className={moduleClass(module, worstTone(transportTone, telemetryTone))} data-testid="home-module-system">
           <div className="home-module__head"><span>System</span><strong>{opsStatus.modeLabel}</strong></div>
           <div className="home-module__grid">
             <span>Core / Pi</span><b data-tone={transportTone}>{opsStatus.transport.label}</b>

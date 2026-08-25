@@ -9323,9 +9323,60 @@ body {
   }
 
   .home-module {
-    padding: 16px;
+    position: relative;
+    overflow: hidden;
+    padding: 16px 16px 16px 19px;
     border-color: rgba(255, 255, 255, 0.12);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: transform 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out;
+    animation: cb-instrument-power-on 380ms ease-out;
+  }
+
+  /* Left accent bar -- color is never decorative, it's the same tone this card's own numbers
+     already imply (see moduleClass()/alertModuleTone()/worstTone() in HomeOverviewPage.tsx). A
+     chaser scanning the grid at a glance reads the color strip before the text. */
+  .home-module::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--cb-blue);
+    opacity: 0.55;
+  }
+
+  .home-module--tone-calm::before { background: var(--cb-green); }
+  .home-module--tone-watch::before { background: #f5b942; }
+  .home-module--tone-elevated::before { background: #ff8a00; }
+  .home-module--tone-critical::before { background: var(--cb-red); opacity: 0.9; }
+
+  .home-module:hover,
+  .home-module:focus-within {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 26px -14px rgba(0, 0, 0, 0.7);
+  }
+
+  .home-module--tone-calm:hover, .home-module--tone-calm:focus-within {
+    border-color: rgba(32, 227, 108, 0.4);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(32, 227, 108, 0.16), 0 12px 26px -14px rgba(0, 0, 0, 0.7);
+  }
+  .home-module--tone-watch:hover, .home-module--tone-watch:focus-within {
+    border-color: rgba(245, 185, 66, 0.45);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(245, 185, 66, 0.18), 0 12px 26px -14px rgba(0, 0, 0, 0.7);
+  }
+  .home-module--tone-elevated:hover, .home-module--tone-elevated:focus-within {
+    border-color: rgba(255, 138, 0, 0.5);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(255, 138, 0, 0.2), 0 12px 26px -14px rgba(0, 0, 0, 0.7);
+  }
+  .home-module--tone-critical:hover, .home-module--tone-critical:focus-within {
+    border-color: rgba(255, 45, 53, 0.6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(255, 45, 53, 0.28), 0 12px 26px -14px rgba(0, 0, 0, 0.7);
+  }
+
+  /* A live tornado/PDS-tagged alert on the Alerts card is the one card-level state worth a loop
+     animation -- everything else on this page stays still so this genuinely stands out. */
+  .home-module--tone-critical {
+    animation: cb-instrument-power-on 380ms ease-out, cb-alert-module-pulse 1.6s ease-in-out infinite;
   }
 
   .home-module__head {
@@ -9338,6 +9389,20 @@ body {
 
   .home-module__open {
     min-height: 44px;
+  }
+}
+
+@keyframes cb-alert-module-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 rgba(255, 45, 53, 0), 0 0 0 rgba(255, 45, 53, 0); }
+  50% { box-shadow: inset 0 0 20px rgba(255, 45, 53, 0.22), 0 0 18px rgba(255, 45, 53, 0.16); }
+}
+
+@media (min-width: 900px) and (prefers-reduced-motion: reduce) {
+  .home-module {
+    animation: none;
+  }
+  .home-module--tone-critical {
+    animation: none;
   }
 }
 
@@ -10424,14 +10489,45 @@ body {
 .home-module__open:active,
 .ops-header-threat:active,
 .bottom-dock button:active,
-.atlas-storm-motion-entry__auto:active {
+.atlas-storm-motion-entry__auto:active,
+.settings-action:not(:disabled):active,
+.icon-button:active,
+.home-overview__header button:active,
+.home-customize button:active,
+.more-grid button:active {
   transform: scale(0.96);
 }
 
 .atlas-radar-chip,
 .home-module__open,
-.atlas-storm-motion-entry__auto {
+.atlas-storm-motion-entry__auto,
+.settings-action,
+.icon-button,
+.home-overview__header button,
+.home-customize button,
+.more-grid button {
   transition: transform 90ms ease-out;
+}
+
+/* Every text field in the app was reachable by keyboard/tab but gave zero visual confirmation of
+   focus -- a real gap for a dash-mounted device meant to be usable without staring at it. Same red
+   accent the rest of the app already uses for "this is the thing that matters right now". */
+.settings-input:focus-visible,
+.settings-input:focus {
+  outline: none;
+  border-color: rgba(255, 45, 53, 0.55);
+  box-shadow: 0 0 0 3px rgba(255, 45, 53, 0.18);
+}
+
+.settings-action:focus-visible,
+.icon-button:focus-visible,
+.home-overview__header button:focus-visible,
+.home-customize button:focus-visible,
+.home-customize select:focus-visible,
+.more-grid button:focus-visible,
+.bottom-dock button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 45, 53, 0.28);
 }
 
 /* Instrument power-on -- the radar panel earns a brief presence when it first mounts (toggling the
@@ -10460,7 +10556,12 @@ body {
 
   .atlas-radar-chip,
   .home-module__open,
-  .atlas-storm-motion-entry__auto {
+  .atlas-storm-motion-entry__auto,
+  .settings-action,
+  .icon-button,
+  .home-overview__header button,
+  .home-customize button,
+  .more-grid button {
     transition: none;
   }
 }
