@@ -512,12 +512,28 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    width: 100%;
     padding: 5px 20px;
-    background: rgba(255, 255, 255, 0.02);
+    border: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.02);
     font: 700 10px / 1.2 "JetBrains Mono", Consolas, monospace;
     letter-spacing: 0.03em;
     color: var(--muted, #8b949e);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .ops-header-threat:active {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .ops-header-threat__go {
+    margin-left: auto;
+    flex: 0 0 auto;
+    color: var(--muted, #8b949e);
+    opacity: 0.75;
   }
 
   .ops-header-threat strong {

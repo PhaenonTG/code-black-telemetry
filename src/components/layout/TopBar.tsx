@@ -63,10 +63,12 @@ export function TopBar({
   batteryLabel = "Device battery",
   gps = null,
   outlooks = [],
+  onNavigate,
 }: {
   batteryLabel?: string;
   gps?: { lat: number; lon: number } | null;
   outlooks?: SpcDayOutlook[];
+  onNavigate?: (page: "alerts" | "map") => void;
 }) {
   const status = useStatus();
   const battery = useBattery();
@@ -133,12 +135,19 @@ export function TopBar({
           <BatteryChip level={battery.level} isCharging={battery.isCharging} label={batteryLabel} />
         </div>
       </div>
-      <div className={`ops-header-threat ops-header-threat--${hero.tone}`} data-testid="header-threat-strip" aria-live="polite">
+      <button
+        type="button"
+        className={`ops-header-threat ops-header-threat--${hero.tone}`}
+        data-testid="header-threat-strip"
+        aria-live="polite"
+        onClick={() => onNavigate?.(hero.tone === "calm" ? "map" : "alerts")}
+      >
         <span className="ops-header-threat__pulse" aria-hidden="true" />
         <strong>{hero.label}</strong>
         <span className="ops-header-threat__sep">·</span>
         <span>{hero.detail}</span>
-      </div>
+        <span className="ops-header-threat__go" aria-hidden="true">{hero.tone === "calm" ? "VIEW MAP →" : "VIEW ALERTS →"}</span>
+      </button>
     </header>
   );
 }
