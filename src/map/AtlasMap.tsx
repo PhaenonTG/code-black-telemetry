@@ -1184,7 +1184,7 @@ function StormMotionQuickEntry({
         <span>STORM MOTION (FROM)</span>
         <button type="button" aria-label="Close storm motion entry" onClick={onClose}>Close</button>
       </div>
-      <button type="button" className="atlas-storm-motion-entry__auto" onClick={() => void runAuto()} disabled={autoState === "loading"}>
+      <button type="button" className={`atlas-storm-motion-entry__auto${autoState === "loading" ? " atlas-storm-motion-entry__auto--scanning" : ""}`} onClick={() => void runAuto()} disabled={autoState === "loading"}>
         {autoState === "loading" ? "TRACKING STORM..." : "AUTO-ESTIMATE FROM RADAR"}
       </button>
       {autoDetail && <div className={`atlas-storm-motion-entry__auto-detail atlas-storm-motion-entry__auto-detail--${autoState}`}>{autoDetail}</div>}

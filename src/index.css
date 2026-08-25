@@ -10553,6 +10553,68 @@ body {
   animation-duration: 4.5s;
 }
 
+/* Sweep TEMPO is tied to actual threat tone, not decoration -- this is the "make it make sense"
+   version: calm goes back to slow and barely-there (nothing to react to, nothing to communicate),
+   and each tier up genuinely speeds up and brightens, the same way a Geiger counter or a heart
+   monitor reads faster as the real number climbs. A chaser should be able to tell tone from the
+   CORNER OF THEIR EYE without reading the text, just from how agitated the sweep looks. */
+.ops-header-threat--calm::after,
+.home-hero--calm::after {
+  animation-duration: 9s;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.05) 50%, transparent 100%);
+}
+
+.ops-header-threat--watch::after,
+.home-hero--watch::after {
+  animation-duration: 5s;
+  background: linear-gradient(100deg, transparent, rgba(245, 185, 66, 0.18) 55%, rgba(255, 255, 255, 0.2) 80%, transparent 100%);
+}
+
+.ops-header-threat--elevated::after,
+.home-hero--elevated::after {
+  animation-duration: 3s;
+  background: linear-gradient(100deg, transparent, rgba(255, 138, 0, 0.22) 55%, rgba(255, 255, 255, 0.24) 80%, transparent 100%);
+}
+
+.ops-header-threat--critical::after,
+.home-hero--critical::after {
+  animation-duration: 1.6s;
+  width: 36%;
+  background: linear-gradient(100deg, transparent, rgba(255, 45, 53, 0.3) 55%, rgba(255, 255, 255, 0.3) 80%, transparent 100%);
+}
+
+/* Genuine scanning state -- this sweep only exists while getStormMotionEstimate() is actually an
+   in-flight request. Same visual language as the ambient sweeps above, but here it's not
+   decoration: the animation literally represents the worker walking two REF frames looking for a
+   trackable centroid, and it stops the instant the real request resolves either way. */
+@keyframes cb-scanning-sweep {
+  0% { left: -30%; }
+  100% { left: 130%; }
+}
+
+.atlas-storm-motion-entry__auto {
+  position: relative;
+  overflow: hidden;
+}
+
+.atlas-storm-motion-entry__auto--scanning::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 25%;
+  background: linear-gradient(90deg, transparent, rgba(46, 224, 108, 0.45), transparent);
+  animation: cb-scanning-sweep 900ms linear infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atlas-storm-motion-entry__auto--scanning::before {
+    animation: none;
+    display: none;
+  }
+}
+
 /* Live moving grid texture on the instrument panel -- a tactical minimap/targeting-computer feel.
    Pure background-position animation, no extra DOM. Kept to the panel's own background only (never
    behind text) so it never hurts legibility. */
