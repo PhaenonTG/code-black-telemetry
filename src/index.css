@@ -10381,3 +10381,140 @@ body {
     font-size: 10px !important;
   }
 }
+
+/* ============================================================
+   TACTICAL POLISH PASS -- HUD corner brackets, scan sweeps, tap
+   feedback, entrance animation. Pure CSS (no extra DOM/markup),
+   Code Black red/black only, and every motion effect respects
+   prefers-reduced-motion. Still a safety tool first: nothing
+   here is louder or more attention-grabbing than the tornado
+   flash overlay or the threat strip's own critical pulse --
+   this is chrome, not competition for real alerts.
+   ============================================================ */
+
+/* Target-lock corner brackets -- 8 short line segments via background layers, no extra markup.
+   currentColor-driven so any element just needs `color` set to pick a bracket color. */
+.hud-corners {
+  position: relative;
+}
+
+.hud-corners::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  pointer-events: none;
+  background-image:
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-size: 9px 2px, 2px 9px, 9px 2px, 2px 9px, 9px 2px, 2px 9px, 9px 2px, 2px 9px;
+  background-position:
+    0 0, 0 0,
+    100% 0, 100% 0,
+    0 100%, 0 100%,
+    100% 100%, 100% 100%;
+  opacity: 0.85;
+}
+
+/* Active radar product chip gets a lock-on frame instead of just a glow border -- reads as
+   "this is the one currently selected" the way a HUD marks a tracked target. */
+.atlas-radar-chip.active {
+  color: #ff3044;
+}
+
+@media (min-width: 900px) {
+  .atlas-radar-chip.active {
+    position: relative;
+  }
+
+  .atlas-radar-chip.active::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    pointer-events: none;
+    background-image:
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-size: 9px 2px, 2px 9px, 9px 2px, 2px 9px, 9px 2px, 2px 9px, 9px 2px, 2px 9px;
+    background-position: 0 0, 0 0, 100% 0, 100% 0, 0 100%, 0 100%, 100% 100%, 100% 100%;
+    color: #ff3044;
+  }
+}
+
+/* Scan sweep -- a slow, faint diagonal light band drifting across the persistent threat strip and
+   Home hero. Tactical-HUD signature move, kept subtle (8% peak opacity) specifically so it reads as
+   ambient chrome, not as something demanding attention next to a real alert. */
+@keyframes cb-scan-sweep {
+  0% { transform: translateX(-140%); }
+  100% { transform: translateX(240%); }
+}
+
+.ops-header-threat,
+.home-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.ops-header-threat::after,
+.home-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.06) 45%, transparent 90%);
+  animation: cb-scan-sweep 7s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Tap/press feedback -- a quick scale-down on every primary interactive surface. Small (4%) and
+   fast (90ms) on purpose: this needs to read as "acknowledged" on a touchscreen in a moving
+   vehicle, not as a bouncy animation that gets in the way of the next tap. */
+.atlas-radar-chip:active,
+.home-module__open:active,
+.ops-header-threat:active,
+.bottom-dock button:active,
+.atlas-storm-motion-entry__auto:active {
+  transform: scale(0.96);
+}
+
+.atlas-radar-chip,
+.home-module__open,
+.atlas-storm-motion-entry__auto {
+  transition: transform 90ms ease-out;
+}
+
+/* Instrument power-on -- the radar panel earns a brief presence when it first mounts (toggling the
+   layer on) instead of just popping into existence. One-shot, not a loop; ~350ms so it never feels
+   like the app is slow to respond to the toggle. */
+@keyframes cb-instrument-power-on {
+  0% { opacity: 0; transform: translateY(6px); filter: brightness(1.8); }
+  60% { filter: brightness(1.15); }
+  100% { opacity: 1; transform: translateY(0); filter: brightness(1); }
+}
+
+.atlas-radar-instrument {
+  animation: cb-instrument-power-on 360ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-header-threat::after,
+  .home-hero::after {
+    animation: none;
+    display: none;
+  }
+
+  .atlas-radar-instrument {
+    animation: none;
+  }
+
+  .atlas-radar-chip,
+  .home-module__open,
+  .atlas-storm-motion-entry__auto {
+    transition: none;
+  }
+}
