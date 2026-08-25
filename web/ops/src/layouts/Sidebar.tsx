@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom"
 import { Icon } from "../components/Icon"
 import { ROUTES } from "../app/routes"
+import codeblackShield from "../../../../src/assets/codeblack-shield.png"
 
 // Full labeled sidebar on desktop, icon-only rail on tablet (still all 7 destinations -- tablet
 // has room for a rail even though it doesn't have room for full labels).
@@ -8,7 +9,7 @@ export function Sidebar({ rail }: { rail: boolean }) {
   return (
     <nav className={rail ? "sidebar sidebar--rail" : "sidebar"} aria-label="Primary">
       <div className="sidebar__brand">
-        <span className="sidebar__brand-mark">CB</span>
+        <img className="sidebar__brand-mark" src={codeblackShield} alt="Code Black" />
         {!rail && <span className="sidebar__brand-text">CODE BLACK<b>OPS</b></span>}
       </div>
       <div className="sidebar__links">

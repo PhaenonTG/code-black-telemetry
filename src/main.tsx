@@ -14,13 +14,32 @@ const AtlasReconGlPage = lazy(() => import('./map/AtlasReconGlPage.tsx').then((m
 const reconScreen = (import.meta.env.VITE_RECON_SCREEN as string | undefined)?.trim().toLowerCase()
 const Root = reconScreen === "atlas-gl" ? AtlasReconGlPage : App
 
+const SPLASH_SEEN_KEY = "codeblack.splashSeenThisSession"
+
 // Splash overlays the real app while it mounts underneath (not gating data fetch on it) —
-// purely cosmetic cover for the native-splash-to-WebView handoff. Skipped for the recon screen.
+// purely cosmetic cover for the native-splash-to-WebView handoff. Skipped for the recon screen,
+// and skipped on a warm reload (sessionStorage survives a page refresh but not a fresh tab/process,
+// so it only shows once per real cold start, not on every reload within the same session).
 function RootWithSplash({ enableSplash }: { enableSplash: boolean }) {
-  const [showSplash, setShowSplash] = useState(enableSplash)
+  const [showSplash, setShowSplash] = useState(() => {
+    if (!enableSplash) return false
+    try {
+      return sessionStorage.getItem(SPLASH_SEEN_KEY) !== "1"
+    } catch {
+      return true
+    }
+  })
+  const complete = () => {
+    try {
+      sessionStorage.setItem(SPLASH_SEEN_KEY, "1")
+    } catch {
+      // Best-effort -- worst case the splash shows again next reload.
+    }
+    setShowSplash(false)
+  }
   return (
     <>
-      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
+      {showSplash && <SplashScreen onComplete={complete} />}
       <Suspense fallback={null}>
         <Root />
       </Suspense>

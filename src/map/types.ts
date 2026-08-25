@@ -12,6 +12,8 @@ export type AtlasRangeRingMode = "off" | "10" | "25" | "50" | "100";
 
 export type AtlasMapState = "INITIALIZING" | "READY" | "STYLE_ERROR" | "WEBGL_ERROR" | "TOKEN_MISSING" | "CONTAINER_INVALID";
 
+export type AtlasRadarState = "FRAME_MISSING" | "IMAGE_MISSING" | "BOUNDS_INVALID" | "CACHED" | "STALE" | "LIVE";
+
 export type AtlasLifecycleCounters = {
   reactMounts: number;
   reactUnmounts: number;
@@ -21,6 +23,7 @@ export type AtlasLifecycleCounters = {
   sourceCreations: number;
   layerCreations: number;
   sourceUpdates: number;
+  radarImageUpdates: number;
 };
 
 export type AtlasDiagnosticsSnapshot = {
@@ -42,6 +45,7 @@ export type AtlasDiagnosticsSnapshot = {
   center: { lat: number; lon: number } | null;
   gps: AtlasGpsPoint | null;
   mosaicVisible: boolean;
+  radarLayerLoaded: boolean;
   canvas: { cssWidth: number; cssHeight: number; backingWidth: number; backingHeight: number; devicePixelRatio: number } | null;
   canvasPixelSample: string;
   sourceCount: number;

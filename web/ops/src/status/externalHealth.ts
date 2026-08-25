@@ -1,4 +1,5 @@
 import { hasMapboxToken, readMapRuntimeDiagnostics } from "../../../../src/services/mapTiles"
+import { radarWorkerBase } from "../../../../src/services/radar"
 import type { OperationalState } from "../../../../src/services/operationalStatus"
 
 export interface ExternalHealthResult {
@@ -9,6 +10,7 @@ export interface ExternalHealthResult {
 export interface ExternalHealthSnapshot {
   map: ExternalHealthResult
   radar: ExternalHealthResult
+  singleSiteRadar: ExternalHealthResult
   weather: ExternalHealthResult
   alerts: ExternalHealthResult
   checkedAt: number
@@ -117,6 +119,19 @@ export async function probeRadarHealth(): Promise<ExternalHealthResult> {
   )
 }
 
+export async function probeSingleSiteRadarHealth(): Promise<ExternalHealthResult> {
+  const base = radarWorkerBase()
+  if (!base) {
+    return { state: "NOT_CONFIGURED", detail: "VITE_RADAR_WORKER_URL is not set" }
+  }
+  return probeUrl(
+    `${base}/api/v1/radar/health?health=${Date.now()}`,
+    "application/json",
+    "radar-worker reachable",
+    "radar-worker unreachable",
+  )
+}
+
 export async function probeWeatherHealth(): Promise<ExternalHealthResult> {
   return probeUrl(
     WEATHER_PROBE_URL,
@@ -136,8 +151,9 @@ export async function probeAlertsHealth(): Promise<ExternalHealthResult> {
 }
 
 export async function probeExternalHealth(): Promise<ExternalHealthSnapshot> {
-  const [radar, weather, alerts] = await Promise.all([
+  const [radar, singleSiteRadar, weather, alerts] = await Promise.all([
     probeRadarHealth(),
+    probeSingleSiteRadarHealth(),
     probeWeatherHealth(),
     probeAlertsHealth(),
   ])
@@ -145,6 +161,7 @@ export async function probeExternalHealth(): Promise<ExternalHealthSnapshot> {
   return {
     map: readMapHealth(),
     radar,
+    singleSiteRadar,
     weather,
     alerts,
     checkedAt: Date.now(),

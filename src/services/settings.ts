@@ -663,6 +663,7 @@ export interface MapLayerVisibility {
   chasers: boolean;
   poi: boolean;
   mosaic: boolean;
+  radar: boolean;
   roadConditions: boolean;
   trafficCameras: boolean;
   probes: boolean;
@@ -761,6 +762,7 @@ const DEFAULT_MAP_LAYER_VISIBILITY: MapLayerVisibility = {
   chasers: true,
   poi: true,
   mosaic: true,
+  radar: false,
   roadConditions: false,
   trafficCameras: false,
   probes: false,
@@ -794,8 +796,8 @@ export async function loadMapLayerVisibility() {
 
 export async function saveMapLayerVisibility(visibility: MapLayerVisibility) {
   currentMapLayerVisibility = visibility;
-  await Preferences.set({ key: MAP_LAYER_VISIBILITY_KEY, value: JSON.stringify(visibility) });
   mapLayerVisibilityListeners.forEach((listener) => listener(currentMapLayerVisibility));
+  await Preferences.set({ key: MAP_LAYER_VISIBILITY_KEY, value: JSON.stringify(visibility) });
   return currentMapLayerVisibility;
 }
 

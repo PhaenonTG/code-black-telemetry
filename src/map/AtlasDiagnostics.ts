@@ -11,6 +11,7 @@ const counters: AtlasLifecycleCounters = {
   sourceCreations: 0,
   layerCreations: 0,
   sourceUpdates: 0,
+  radarImageUpdates: 0,
 };
 
 export function incrementAtlasMapInstances() {

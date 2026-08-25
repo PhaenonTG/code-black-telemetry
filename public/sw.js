@@ -1,6 +1,6 @@
-const CACHE = "code-black-runtime-v3";
+const CACHE = "code-black-runtime-v4";
 const TILE_HOSTS = ["api.mapbox.com", "tile.openstreetmap.org", "mesonet.agron.iastate.edu"];
-const APP_ASSETS = ["/", "/manifest.webmanifest", "/favicon.svg"];
+const APP_ASSETS = ["/", "/manifest.webmanifest", "/favicon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_ASSETS)).then(() => self.skipWaiting()));

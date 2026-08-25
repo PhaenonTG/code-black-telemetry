@@ -906,7 +906,7 @@ export function SettingsPage({ cockpitMode, onChangeCockpitMode, onOpenPiConnect
         <div className="settings-row">
           <div>
             <strong>Radar View</strong>
-            <span>Wide-area NEXRAD mosaic</span>
+            <span>Wide-area NEXRAD mosaic, single-site NOAA Level II (worker-backed)</span>
           </div>
         </div>
       </Panel>

@@ -22,6 +22,7 @@ const DEFAULT_VISIBILITY: MapLayerVisibility = {
   chasers: true,
   poi: true,
   mosaic: true,
+  radar: false,
   roadConditions: false,
   trafficCameras: false,
   probes: false,
@@ -37,6 +38,14 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; source: stri
     status: "Live mosaic",
     visual: "radar",
     description: "National NEXRAD composite reflectivity, auto-refreshing every few minutes -- the default live radar view on the map.",
+  },
+  {
+    key: "radar",
+    label: "Single-Site Radar",
+    source: "NOAA Level II",
+    status: "Worker-backed",
+    visual: "dish",
+    description: "Full-resolution single-site radar from the nearest NEXRAD station, rendered by the local radar-worker process. Requires the worker to be running and reachable.",
   },
   {
     key: "alerts",

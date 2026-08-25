@@ -26,8 +26,24 @@ function fromPosition(pos: GeolocationPosition): LocationState {
   };
 }
 
+// Local dev/QA convenience: set VITE_DEV_FIXED_LOCATION="lat,lon" in web/ops/.env to bypass the
+// browser's real geolocation prompt entirely -- useful when testing on a plain dev-server tab that
+// has no way to grant a location permission (sandboxed preview browsers, headless test runners).
+// Never set in a real deployment's environment, so production behavior is untouched.
+function devFixedLocation(): LocationState | null {
+  const raw = (import.meta.env.VITE_DEV_FIXED_LOCATION as string | undefined)?.trim();
+  if (!raw) return null;
+  const [latStr, lonStr] = raw.split(",").map((part) => part.trim());
+  const lat = Number(latStr);
+  const lon = Number(lonStr);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return { status: "ready", lat, lon, accuracyM: 15, headingDeg: null, speedMph: null, at: Date.now() };
+}
+
 export const browserLocationAdapter: LocationAdapter = {
   async getCurrent() {
+    const fixed = devFixedLocation();
+    if (fixed) return fixed;
     if (typeof navigator === "undefined" || !navigator.geolocation) return { status: "unavailable" };
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
@@ -38,6 +54,11 @@ export const browserLocationAdapter: LocationAdapter = {
     });
   },
   watch(onUpdate) {
+    const fixed = devFixedLocation();
+    if (fixed) {
+      onUpdate(fixed);
+      return () => {};
+    }
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       onUpdate({ status: "unavailable" });
       return () => {};

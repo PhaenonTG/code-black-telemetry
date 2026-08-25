@@ -17,6 +17,7 @@ function initialHealth(): ExternalHealthSnapshot {
   return {
     map: readMapHealth(),
     radar: CHECKING,
+    singleSiteRadar: CHECKING,
     weather: CHECKING,
     alerts: CHECKING,
     checkedAt: 0,
@@ -71,6 +72,7 @@ export default function Operations() {
     coreReachable: false,
     map: health.map,
     radar: health.radar,
+    singleSiteRadar: health.singleSiteRadar,
     weather: health.weather,
     alerts: health.alerts,
   })

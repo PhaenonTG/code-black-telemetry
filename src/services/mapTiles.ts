@@ -35,6 +35,8 @@ export type MapRuntimeDiagnostics = {
   gpsAccuracyM: number | null;
   speedMph: number | null;
   mosaicVisible: boolean;
+  radarOpacity: number;
+  product: string;
   provider: BasemapProvider;
   updatedAt: number;
 };

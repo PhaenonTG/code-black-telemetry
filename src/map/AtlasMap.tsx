@@ -7,7 +7,7 @@ import type { Spotter } from "../services/spotters";
 import type { NearbyCategory, NearbyPlace } from "../services/nearby";
 import { resolveTeamPositions } from "../services/teamPositions";
 import { clearBreadcrumbTrail } from "../services/breadcrumbTrail";
-import { DEFAULT_CHASER_RADIUS_MILES, loadChaserRadiusMiles, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
+import { DEFAULT_CHASER_RADIUS_MILES, getMapLayerVisibility, loadChaserRadiusMiles, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
 import { getChaserNetMembersForViewport, getChaserNetReportsForViewport, type ChaserNetMapMember, type ChaserNetReport } from "../services/chaserNet";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
 import { useTeamRoster } from "../hooks/useTeamRoster";
@@ -20,6 +20,7 @@ import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
 import { chaserNetReportToMapPoint, updateAtlasChaserNetLayer, updateAtlasChaserNetReportLayer } from "./AtlasChaserNetLayer";
 import { startAtlasMosaicLayer, type MosaicStatus } from "./AtlasMosaicLayer";
 import { updateAtlasPoiLayer } from "./AtlasPoiLayer";
+import { removeAtlasRadarLayer, updateAtlasRadarLayer } from "./AtlasRadarLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
 import { updateAtlasRoadConditionLayer } from "./AtlasRoadLayer";
 import { updateAtlasRoadLineLayer } from "./AtlasRoadLineLayer";
@@ -34,7 +35,14 @@ import { filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewpor
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, type RoadConditionEvent, type TrafficCamera, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
+import { getNearestRadarSites, getRadarFrames, type RadarFrame } from "../services/radar";
+import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
 import { LayerGlyph } from "../components/situational/LayerGlyph";
+
+const RADAR_REFRESH_MS = 90_000; // Poll the worker for a fresher scan well inside NEXRAD's ~4-6 min
+// volume-scan cadence, without hammering it every render.
+const RADAR_LOOP_FRAME_COUNT = 8; // "Last so many frames" loop depth -- long enough to show real
+// storm motion, short enough that a slow worker/connection doesn't stall the toggle for ages.
 
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
 // the real operating zoom for a "swoop to position" open on cold launch, rather than snapping.
@@ -172,7 +180,7 @@ export function AtlasMap({
   // shared get/save/subscribe store in services/settings.ts so the Weather page's compact map, the
   // Locate page's full map, and the new config screen all read/write the exact same state instead
   // of each map instance keeping its own independent (and previously non-persisted) copy.
-  const [layerVisibility, setLayerVisibility] = useState({ alerts: true, team: true, chasers: true, poi: true, mosaic: true, roadConditions: false, trafficCameras: false, probes: false, chaserNet: false, breadcrumbs: true });
+  const [layerVisibility, setLayerVisibility] = useState({ alerts: true, team: true, chasers: true, poi: true, mosaic: true, radar: false, roadConditions: false, trafficCameras: false, probes: false, chaserNet: false, breadcrumbs: true });
   useEffect(() => {
     const unsubscribe = subscribeMapLayerVisibility(setLayerVisibility);
     void loadMapLayerVisibility();
@@ -183,9 +191,10 @@ export function AtlasMap({
     window.addEventListener("codeblack:close-map-popovers", close);
     return () => window.removeEventListener("codeblack:close-map-popovers", close);
   }, []);
-  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
+  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, radar: radarVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
-    void saveMapLayerVisibility({ ...layerVisibility, [key]: !layerVisibility[key] });
+    const current = getMapLayerVisibility();
+    void saveMapLayerVisibility({ ...current, [key]: !current[key] });
   };
   const mosaicVisibleRef = useRef(mosaicVisible);
   mosaicVisibleRef.current = mosaicVisible;
@@ -645,6 +654,50 @@ export function AtlasMap({
     updateAtlasPoiLayer(map, visiblePoiPlaces, nearbyBest, customPoiPins, poiVisible);
   }, [visiblePoiPlaces, nearbyBest, customPoiPins, poiVisible, loaded]);
 
+  // Loops the last RADAR_LOOP_FRAME_COUNT scans (newest-first from the worker) rather than showing
+  // a single static frame -- radarPlaybackIndex 0 is always the newest/live frame; the interval
+  // below walks it back through history and wraps to 0, matching a normal radar-loop UX.
+  const [radarFrames, setRadarFrames] = useState<RadarFrame[]>([]);
+  const [radarPlaybackIndex, setRadarPlaybackIndex] = useState(0);
+  const radarFrame = radarFrames[radarPlaybackIndex] ?? null;
+  useEffect(() => {
+    if (!radarVisible) {
+      setRadarFrames([]);
+      setRadarPlaybackIndex(0);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const site = gps ? (await getNearestRadarSites(gps.lat, gps.lon))[0]?.id ?? "AUTO" : "AUTO";
+      const frames = await getRadarFrames(site, "REF", 0.5, RADAR_LOOP_FRAME_COUNT);
+      if (!cancelled) setRadarFrames(normalizeRadarFrames(frames, RADAR_LOOP_FRAME_COUNT));
+    };
+    void load();
+    const timer = window.setInterval(load, RADAR_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [radarVisible, gps?.lat, gps?.lon]);
+
+  useEffect(() => {
+    if (!radarVisible || radarFrames.length < 2) return;
+    const timer = window.setInterval(() => {
+      setRadarPlaybackIndex((index) => nextPlaybackIndex(index, radarFrames.length));
+    }, playbackDelayMs(1));
+    return () => window.clearInterval(timer);
+  }, [radarVisible, radarFrames.length]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    if (!radarVisible) {
+      removeAtlasRadarLayer(map);
+      return;
+    }
+    updateAtlasRadarLayer(map, radarFrame, 0.75, styleInfoRef.current.firstSymbolLayerId);
+  }, [radarFrame, radarVisible, loaded]);
+
   useEffect(() => {
     if (!viewport || !roadConditionsVisible) {
       setRoadConditions([]);
@@ -784,6 +837,7 @@ export function AtlasMap({
       center: center ? { lat: Number(center.lat.toFixed(5)), lon: Number(center.lng.toFixed(5)) } : null,
       gps,
       mosaicVisible,
+      radarLayerLoaded: radarVisible && Boolean(radarFrame),
       canvas: canvas && rect ? {
         cssWidth: Math.round(rect.width),
         cssHeight: Math.round(rect.height),
@@ -811,10 +865,12 @@ export function AtlasMap({
       gpsAccuracyM: gps?.accuracyM ?? null,
       speedMph: gps?.speedMph ?? null,
       mosaicVisible,
+      radarOpacity: radarVisible ? 0.75 : 0,
+      product: "REF",
       provider: "mapbox",
       updatedAt: Date.now(),
     });
-  }, [bearing, cameraMode, gps, idleCount, loaded, mapError, mapState, mosaicVisible, pitch, pixelSample, renderCount, styleUri]);
+  }, [bearing, cameraMode, gps, idleCount, loaded, mapError, mapState, mosaicVisible, pitch, pixelSample, radarFrame, radarVisible, renderCount, styleUri]);
 
   const visibleError = mapError && mapState !== "READY" ? mapError : "";
   const canvasCount = containerRef.current?.querySelectorAll("canvas").length ?? 0;
@@ -905,6 +961,11 @@ export function AtlasMap({
               <input type="checkbox" checked={mosaicVisible} onChange={() => toggleLayer("mosaic")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="radar" /></span>
               NEXRAD Mosaic
+            </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={radarVisible} onChange={() => toggleLayer("radar")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="dish" /></span>
+              Single-Site Radar
             </label>
             <div className="atlas-layers-popover__section">PEOPLE + FIELD</div>
             <label className="atlas-layers-popover__row">

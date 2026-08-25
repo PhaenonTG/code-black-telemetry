@@ -18,7 +18,8 @@
     "test": "node scripts/pass1-domain-tests.mjs",
     "test:walkthrough": "playwright test --config=playwright.config.ts",
     "test:walkthrough:s24": "powershell -ExecutionPolicy Bypass -File scripts/s24-rendered-walkthrough.ps1",
-    "release:sanity": "node scripts/release-sanity.mjs"
+    "release:sanity": "node scripts/release-sanity.mjs",
+    "radar:worker": "node radar-worker/worker.cjs"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^8.2.0",
@@ -34,13 +35,16 @@
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "mapbox-gl": "^3.27.0",
+    "nexrad-level-2-data": "^2.4.3",
+    "nexrad-level-3-data": "^0.6.1",
+    "pngjs": "^7.0.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@types/node": "^24.13.2",
     "@playwright/test": "^1.62.1",
+    "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",

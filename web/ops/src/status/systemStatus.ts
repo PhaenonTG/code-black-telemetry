@@ -23,6 +23,7 @@ export function buildSystemStatus(params: {
   coreReachable: boolean
   map: ObservableHealth
   radar: ObservableHealth
+  singleSiteRadar: ObservableHealth
   weather: ObservableHealth
   alerts: ObservableHealth
 }): SystemStatusLine[] {
@@ -45,6 +46,7 @@ export function buildSystemStatus(params: {
     },
     { key: "map", label: "MAP DATA", ...params.map },
     { key: "radar", label: "RADAR", ...params.radar },
+    { key: "singleSiteRadar", label: "SINGLE-SITE RADAR", ...params.singleSiteRadar },
     { key: "weather", label: "WEATHER", ...params.weather },
     { key: "alerts", label: "ALERTS", ...params.alerts },
     {
