@@ -10518,3 +10518,90 @@ body {
     transition: none;
   }
 }
+
+/* ============================================================
+   EXTREME PASS -- angular cut-corner panels, a brighter/colored
+   scan sweep, a real lock-on snap on chip selection, and a live
+   moving grid texture on the instrument panel. Still red/black,
+   still capped below the severe-flash overlay in intensity --
+   "extreme" means bolder chrome, not louder alerts.
+   ============================================================ */
+
+/* Cut-corner tactical panel shape -- replaces the plain rounded rect on the three main
+   instrument surfaces. A matching 1px diagonal line is drawn under the clip via the border color
+   already on the element, so the cut edge doesn't just look like a clipping glitch. */
+.atlas-radar-instrument,
+.ops-header-threat,
+.home-hero {
+  border-radius: 0 !important;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}
+
+/* Brighter, colored scan sweep -- the calm pass was intentionally very faint; this version has a
+   visible white-hot leading edge with a red trailing glow, still capped at a peak that reads as
+   "ambient tech" rather than a second alert. */
+@keyframes cb-scan-sweep-hot {
+  0% { transform: translateX(-140%); }
+  100% { transform: translateX(240%); }
+}
+
+.ops-header-threat::after,
+.home-hero::after {
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 45, 53, 0.16) 55%, rgba(255, 255, 255, 0.22) 80%, transparent 100%);
+  animation-name: cb-scan-sweep-hot;
+  animation-duration: 4.5s;
+}
+
+/* Live moving grid texture on the instrument panel -- a tactical minimap/targeting-computer feel.
+   Pure background-position animation, no extra DOM. Kept to the panel's own background only (never
+   behind text) so it never hurts legibility. */
+@keyframes cb-grid-drift {
+  0% { background-position: 0 0, 0 0; }
+  100% { background-position: 26px 26px, 26px 26px; }
+}
+
+.atlas-radar-instrument {
+  background-image:
+    linear-gradient(180deg, rgba(16, 17, 20, 0.94), rgba(6, 7, 9, 0.97)),
+    linear-gradient(rgba(255, 45, 53, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 45, 53, 0.07) 1px, transparent 1px) !important;
+  background-size: auto, 26px 26px, 26px 26px;
+  animation: cb-instrument-power-on 360ms ease-out, cb-grid-drift 6s linear infinite;
+}
+
+/* Lock-on snap -- brackets and chip punch in from slightly oversized with a brightness flash
+   instead of just appearing. React re-adding the `active` class on selection re-triggers this
+   every time a different product is picked, which is the point: it should feel like a fresh lock,
+   not a static highlight. */
+@keyframes cb-lock-on {
+  0% { transform: scale(1.35); opacity: 0; filter: brightness(2.2); }
+  60% { transform: scale(0.97); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; filter: brightness(1); }
+}
+
+@media (min-width: 900px) {
+  .atlas-radar-chip.active::after {
+    animation: cb-lock-on 260ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+  }
+}
+
+.atlas-radar-chip.active {
+  animation: cb-lock-on 260ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-header-threat::after,
+  .home-hero::after {
+    animation: none !important;
+  }
+
+  .atlas-radar-instrument {
+    animation: none !important;
+  }
+
+  .atlas-radar-chip.active,
+  .atlas-radar-chip.active::after {
+    animation: none !important;
+  }
+}
