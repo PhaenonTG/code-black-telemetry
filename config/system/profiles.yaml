@@ -1,0 +1,77 @@
+profiles:
+  start-chase:
+    display_name: Start Chase
+    intent: "Prepare local vehicle systems for chase operation without requiring CodeBlack-Core."
+    execution_policy: design-only
+    steps:
+      - verify cockpit-ops
+      - verify vehicle-gps
+      - verify atlas-map
+      - verify radar
+      - verify vehicle-weather
+      - verify vehicle-telemetry
+      - verify network
+      - prepare streaming
+    failure_policy:
+      cockpit-ops: critical
+      vehicle-gps: critical
+      atlas-map: critical
+      radar: critical
+      vehicle-weather: important
+      vehicle-telemetry: important
+      network: important
+      streaming: optional
+      codeblack-core: optional
+
+  start-stream:
+    display_name: Start Stream
+    intent: "Bring up camera ingest, KNWA/Code Black outputs, and optional recording."
+    execution_policy: design-only
+    steps:
+      - verify charger-pi
+      - verify camera-input
+      - verify ffmpeg
+      - verify mediamtx
+      - verify network
+      - start selected stream target
+      - verify stream health
+    failure_policy:
+      charger-pi: important
+      camera-input: important
+      ffmpeg: important
+      mediamtx: important
+      network: important
+      recording: optional
+
+  safe-shutdown:
+    display_name: Safe Shutdown
+    intent: "Stop optional outputs before powering down vehicle systems."
+    execution_policy: design-only
+    steps:
+      - stop streaming
+      - stop recording
+      - flush telemetry logs
+      - preserve last-known system state
+      - report final node status
+    failure_policy:
+      streaming: optional
+      recording: optional
+      telemetry-logs: important
+
+  system-check:
+    display_name: System Check
+    intent: "Run read-only checks across nodes, services, and capabilities."
+    execution_policy: design-only
+    steps:
+      - load node inventory
+      - load service inventory
+      - check local cockpit build/runtime
+      - check Pi reachability if configured
+      - check BLE state if native platform
+      - check radar readiness
+      - check GPS source
+      - check weather source
+      - check stream stack status if configured
+      - summarize chase readiness
+    failure_policy:
+      all_checks: read-only

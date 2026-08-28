@@ -1,0 +1,52 @@
+readiness_states:
+  READY:
+    meaning: "All critical and important systems are operational."
+  CHASE_CAPABLE:
+    meaning: "Critical local chase systems are operational. Important or optional systems may be degraded."
+  DEGRADED:
+    meaning: "At least one critical fallback is in use, or multiple important systems are degraded, but chase operation may continue with caution."
+  NOT_READY:
+    meaning: "A critical local chase capability is unavailable with no acceptable fallback."
+
+critical:
+  - cockpit-ops
+  - atlas-map
+  - radar
+  - vehicle-gps
+
+important:
+  - vehicle-weather
+  - vehicle-telemetry
+  - network
+  - power-awareness
+
+optional:
+  - streaming
+  - recording
+  - codeblack-core
+  - codeblack-control
+  - fleet
+  - public-site
+  - road-cameras
+
+rules:
+  core_outage:
+    capability: codeblack-core
+    maximum_impact: CHASE_CAPABLE
+    note: "Core unavailable must not make the vehicle NOT_READY if local radar/GPS/map remain operational."
+  streaming_outage:
+    capability: streaming
+    maximum_impact: CHASE_CAPABLE
+    note: "Broadcast unavailable, chase unaffected."
+  vehicle_weather_outage_with_nws_fallback:
+    capability: vehicle-weather
+    maximum_impact: DEGRADED
+    note: "Local measurements unavailable, external weather may remain useful."
+  vehicle_gps_outage_with_tablet_fallback:
+    capability: vehicle-gps
+    maximum_impact: DEGRADED
+    note: "Navigation continues on tablet GPS but vehicle source must be labeled degraded."
+  radar_unavailable:
+    capability: radar
+    maximum_impact: NOT_READY
+    note: "Radar is chase-critical unless the operator explicitly accepts a no-radar chase context."

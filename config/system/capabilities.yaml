@@ -1,0 +1,180 @@
+capabilities:
+  cockpit-ops:
+    description: Vehicle operational cockpit for active chase work.
+    required_nodes:
+      - samsung-cockpit
+    providers:
+      - ops-capacitor-app
+    offline_capable: true
+    criticality: critical
+    shared_interface: CockpitShell
+    platform_implementations:
+      android: Capacitor WebView plus Android plugins
+      ios: Capacitor iOS project, runtime validation pending
+      web: limited preview
+
+  atlas-map:
+    description: Situational map engine with radar, alerts, watches, team, POI, road, and camera layers.
+    required_nodes:
+      - samsung-cockpit
+    providers:
+      - src/map/AtlasMap.tsx
+    offline_capable: partial
+    criticality: critical
+    shared_interface: MapProvider
+    platform_implementations:
+      android: Mapbox GL JS in Capacitor WebView
+      ios: shared WebView path pending device validation
+      web: Mapbox GL JS browser path
+
+  radar:
+    description: Radar awareness for chase decisions.
+    providers:
+      - atlas-mosaic-radar
+      - radar-worker
+      - native-radar-reference
+    primary_provider: atlas-mosaic-radar
+    fallback_order:
+      - atlas-mosaic-radar
+      - cached-map-radar
+      - radar-worker
+    required_nodes:
+      - samsung-cockpit
+    optional_nodes:
+      - windows-dev-producer
+    offline_capable: partial
+    criticality: critical
+    shared_interface: RadarProvider
+    platform_implementations:
+      android: mosaic Mapbox raster layer; retired Rust/JNI path exists as reference only
+      ios: mosaic WebView path; future Rust/FFI bridge if single-site radar returns
+      web: mosaic Mapbox raster layer; development radar-worker optional
+
+  vehicle-gps:
+    description: Position, speed, heading, and navigation telemetry.
+    providers:
+      - navigation-esp
+      - tablet-gps
+      - last-known-gps
+    fallback_order:
+      - navigation-esp
+      - tablet-gps
+      - last-known-gps
+    required_nodes:
+      - samsung-cockpit
+    optional_nodes:
+      - charger-pi
+      - navigation-esp
+    offline_capable: true
+    criticality: critical
+    shared_interface: GPSProvider
+    platform_implementations:
+      android: Android location plugin/service plus vehicle telemetry provider
+      ios: Core Location adapter planned
+      web: navigator.geolocation where available
+
+  vehicle-weather:
+    description: Local vehicle weather and wind observations.
+    providers:
+      - weather-esp
+      - nearest-nws-station
+      - last-known-weather
+    fallback_order:
+      - weather-esp
+      - nearest-nws-station
+      - last-known-weather
+    required_nodes:
+      - samsung-cockpit
+    optional_nodes:
+      - charger-pi
+      - weather-esp
+    offline_capable: partial
+    criticality: important
+    shared_interface: WeatherProvider
+    platform_implementations:
+      android: shared telemetry/weather services
+      ios: shared telemetry/weather services pending hardware validation
+      web: shared weather provider path
+
+  vehicle-telemetry:
+    description: Vehicle sensor, power, Pi health, and ESP packet state.
+    providers:
+      - ble-telemetry-link
+      - pi-http-telemetry-api
+      - last-known-telemetry
+    fallback_order:
+      - ble-telemetry-link
+      - pi-http-telemetry-api
+      - last-known-telemetry
+    required_nodes:
+      - samsung-cockpit
+    optional_nodes:
+      - charger-pi
+      - navigation-esp
+      - weather-esp
+    offline_capable: partial
+    criticality: important
+    shared_interface: TelemetryProvider
+    platform_implementations:
+      android: Capacitor BLE plus HTTP fallback
+      ios: Capacitor/CoreBluetooth validation pending
+      web: HTTP/control-plane provider planned; no BLE assumption
+
+  streaming:
+    description: Camera ingest, KNWA/Code Black stream targets, and recording.
+    primary_node: charger-pi
+    optional_nodes:
+      - windows-dev-producer
+      - codeblack-core
+    providers:
+      - pi-streaming-stack
+      - mission-streaming-client
+    offline_capable: false
+    criticality: optional
+    shared_interface: StreamingControlProvider
+    platform_implementations:
+      android: shared tablet controls via BLE/HTTP
+      ios: shared controls pending command/auth validation
+      web: future Code Black Control stream controls
+
+  codeblack-control:
+    description: Remote system management and control-plane UI.
+    providers:
+      - code-black-control-web
+      - future-control-api
+    required_nodes: []
+    optional_nodes:
+      - codeblack-core
+      - charger-pi
+      - windows-dev-producer
+    offline_capable: partial
+    criticality: optional
+    shared_interface: ControlPlaneClient
+    platform_implementations:
+      phone: responsive browser/PWA target
+      tablet: responsive browser/PWA target
+      laptop: browser target
+
+  codeblack-core:
+    description: Central ingest, archive, remote producer, fleet, and control authority when available.
+    providers:
+      - codeblack-core
+    required_nodes: []
+    optional_nodes:
+      - codeblack-core
+    offline_capable: false
+    criticality: optional
+    failure_policy: "Core outage must not make local vehicle chase operation NOT_READY."
+
+  fleet:
+    description: Multi-vehicle and future probe coordination.
+    providers:
+      - codeblack-core
+      - future-vehicle-nodes
+    required_nodes: []
+    optional_nodes:
+      - nick-vehicle-node
+      - future-probes
+    offline_capable: false
+    criticality: optional
+    maturity: planned

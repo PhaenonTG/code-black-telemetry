@@ -1,0 +1,85 @@
+network:
+  endpoints:
+    - id: root-vite-dev
+      service: ops-capacitor-app
+      node: windows-dev-producer
+      protocol: http
+      port: 5173
+      purpose: Root OPS Vite development server.
+      exposure: localhost
+      required: false
+      optional: true
+      known_from: vite default and package scripts
+
+    - id: control-vite-dev
+      service: code-black-control-web
+      node: windows-dev-producer
+      protocol: http
+      port: 5174
+      purpose: Code Black Control development server.
+      exposure: localhost
+      required: false
+      optional: true
+      known_from: web/telemetry/vite.config.ts
+
+    - id: radar-worker-dev
+      service: radar-worker
+      node: windows-dev-producer
+      protocol: http
+      port: 8787
+      purpose: Development radar worker API.
+      exposure: localhost-development
+      required: false
+      optional: true
+      known_from: radar-worker/worker.cjs CODEBLACK_RADAR_PORT default
+
+    - id: pi-http-api-example
+      service: pi-http-telemetry-api
+      node: charger-pi
+      protocol: http
+      port: 5000
+      purpose: Example configured Pi HTTP API base for telemetry and stream controls.
+      exposure: lan-or-tailscale
+      required: false
+      optional: true
+      known_from: .env.example and PiEndpointPanel presets
+      notes: "Example only until the real Pi-side service is inspected."
+
+    - id: android-webview-debug
+      service: s24-webview-evaluate
+      node: samsung-cockpit
+      protocol: http-json
+      port: 9222
+      purpose: Chrome/WebView remote debugging target discovery for QA scripts.
+      exposure: adb-forward-localhost
+      required: false
+      optional: true
+      known_from: scripts/s24-webview-evaluate.mjs
+
+  external_upstreams:
+    - id: mapbox
+      purpose: Map tiles/styles for Atlas.
+      configured_by: VITE_MAPBOX_ACCESS_TOKEN
+      required_for: atlas-map-online
+    - id: iem-nexrad-mosaic
+      purpose: NEXRAD N0Q mosaic raster radar.
+      required_for: radar-online
+    - id: unidata-nexrad-level2
+      purpose: Development radar-worker Level II archive.
+      required_for: radar-worker
+    - id: unidata-nexrad-level3
+      purpose: Development radar-worker Level III archive.
+      required_for: radar-worker
+    - id: supabase
+      purpose: web/ops authentication and authorization.
+      required_for: web-ops
+    - id: cloudflare-pages
+      purpose: hosted web/ops, public site, and Pages functions.
+      required_for: public-remote-web
+
+  unknowns:
+    - charger-pi production API port and process manager
+    - charger-pi MediaMTX ports
+    - charger-pi FFmpeg supervisor interface
+    - CodeBlack-Core public/private API ports
+    - ESP transport details between Pi and ESP32 devices
