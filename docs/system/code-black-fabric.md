@@ -155,3 +155,35 @@ Public stream overlays must not introduce vehicle names by default. Phase 1 fixt
 - Exact MQTT topic names, certificates, retry intervals, and Core endpoint configuration.
 - Physical iPad/Core foreground reconnection behavior against live Core.
 - Which existing firmware sources are authoritative for Navigation ESP, Weather ESP, and Wind ESP.
+
+## Phase 2 Core Service Status
+
+Phase 2 implementation belongs in the Core backend foundation, not inside the OPS frontend. The correct service target discovered during the backend audit is:
+
+`C:\Users\glenn\Documents\Code Black\services\core-api`
+
+That Core API service now owns the first working Core-facing Fabric live state implementation:
+
+- Registry for STRIKER / Spencer and TESSA / Nick.
+- Current-state manager for registered devices.
+- Central presence recalculation.
+- Unit aggregation using the Phase 1 presence semantics.
+- Validated ingest route: `POST /api/fabric/v1/ingest`.
+- REST snapshot routes:
+  - `GET /api/fabric/v1/units`
+  - `GET /api/fabric/v1/units/{unit_id}`
+  - `GET /api/fabric/v1/devices`
+  - `GET /api/fabric/v1/devices/{device_id}`
+  - `GET /api/fabric/v1/health`
+- WebSocket route: `/api/fabric/v1/ws`.
+- Event envelope with `event_type`, `schema_version`, `timestamp`, `unit_id`, `device_id`, and `payload`.
+- MQTT topic proposal:
+
+```text
+cbwx/v1/units/{unit_id}/devices/{device_id}/telemetry
+cbwx/v1/units/{unit_id}/devices/{device_id}/presence
+```
+
+TESSA remains gatewayless in the registry and has no Pi dependency. STRIKER remains gateway-backed through the STRIKER Pi where appropriate.
+
+Phase 2 is not yet deployed to live Core hardware. Physical STRIKER Pi validation, TESSA direct ESP-to-Core validation, production auth, TLS/MQTT broker setup, and durable persistence remain blocked/deferred.
