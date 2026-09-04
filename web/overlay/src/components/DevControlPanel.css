@@ -1,0 +1,85 @@
+.dev-panel {
+  position: absolute;
+  bottom: var(--safe-margin);
+  right: var(--safe-margin);
+  width: 220px;
+  background: rgba(0, 0, 0, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 10px 12px 12px;
+  font-family: var(--cbwx-font-mono);
+  font-size: 11px;
+  color: #d8dde3;
+  z-index: 100;
+  pointer-events: auto;
+}
+
+.dev-panel__title {
+  font-size: 9px;
+  color: #ffb84d;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.dev-panel__row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 7px;
+}
+
+.dev-panel__row select,
+.dev-panel__row input {
+  width: 100%;
+  background: #16181c;
+  color: #d8dde3;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 4px;
+}
+
+.dev-panel__section {
+  margin: 8px 0 6px;
+  font-size: 9px;
+  color: #8a94a1;
+  letter-spacing: 0.04em;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 6px;
+}
+
+.dev-panel__takeovers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.dev-panel__takeovers button {
+  background: #16181c;
+  color: #d8dde3;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  font-size: 9px;
+  padding: 5px 3px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.dev-panel__takeovers button:hover {
+  border-color: #ff3b3b;
+  color: #ff3b3b;
+}
+
+.dev-panel__dismiss {
+  margin-top: 7px;
+  width: 100%;
+  background: #2a1416;
+  color: #ff8a8a;
+  border: 1px solid rgba(255, 59, 59, 0.4);
+  border-radius: 4px;
+  font-size: 10px;
+  padding: 5px;
+  cursor: pointer;
+  font-family: inherit;
+}

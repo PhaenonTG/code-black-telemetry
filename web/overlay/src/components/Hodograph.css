@@ -1,0 +1,165 @@
+.hodo-card {
+  position: absolute;
+  top: var(--safe-margin);
+  left: var(--safe-margin);
+  width: 260px;
+  background: var(--cbwx-panel);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid var(--cbwx-glass-border);
+  border-radius: var(--cbwx-radius-md);
+  box-shadow: var(--cbwx-shadow-panel);
+  padding: 14px 16px;
+  animation: si-enter var(--cbwx-motion-med) var(--cbwx-ease) both;
+}
+
+.hodo-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.hodo-card__title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--cbwx-text-soft);
+}
+
+.hodo-card__fresh {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+}
+
+.hodo-card__fresh.freshness-current {
+  color: var(--freshness-current);
+}
+.hodo-card__fresh.freshness-aging {
+  color: var(--freshness-aging);
+}
+.hodo-card__fresh.freshness-stale {
+  color: var(--freshness-stale);
+}
+.hodo-card__fresh.freshness-unavailable,
+.hodo-card__fresh.freshness-unknown {
+  color: var(--freshness-unavailable);
+}
+
+.hodo-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 4px 0;
+}
+
+.hodo-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.09);
+  stroke-width: 1;
+}
+
+.hodo-axis {
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 1;
+}
+
+.hodo-axis-label {
+  fill: var(--cbwx-text-muted);
+  font-size: 9px;
+  font-family: var(--cbwx-font-mono);
+}
+
+.hodo-trace {
+  fill: none;
+  stroke: var(--cbwx-red);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: hodo-draw 1.4s var(--cbwx-ease) forwards;
+  animation-delay: 150ms;
+}
+
+@keyframes hodo-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.hodo-node {
+  opacity: 0;
+  animation: hodo-node-in var(--cbwx-motion-fast) var(--cbwx-ease) forwards;
+}
+
+@keyframes hodo-node-in {
+  to {
+    opacity: 1;
+  }
+}
+
+.hodo-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--cbwx-text-muted);
+  margin-bottom: 8px;
+}
+
+.hodo-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hodo-legend__swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.hodo-stats {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--cbwx-glass-border);
+  padding-top: 8px;
+}
+
+.hodo-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hodo-stat__label {
+  font-size: 8px;
+  color: var(--cbwx-text-muted);
+  letter-spacing: 0.03em;
+}
+
+.hodo-stat__value {
+  font-family: var(--cbwx-font-mono);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.hodo-stat__unit {
+  font-size: 9px;
+  color: var(--cbwx-text-muted);
+  margin-left: 2px;
+  font-weight: 400;
+}
+
+.hodo-unavailable {
+  padding: 30px 0;
+  text-align: center;
+  color: var(--cbwx-text-muted);
+  font-size: 12px;
+}
