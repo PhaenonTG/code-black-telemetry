@@ -37,6 +37,34 @@ export type MetricKey =
 
 export type StormIntelFreshness = "current" | "aging" | "stale" | "unavailable" | "unknown";
 
+/**
+ * Explicit provenance class for a metric value. Core's real `MetricSource` (see
+ * `services/core-api/.../storm_intel/models.py`) does not carry this as a field -- it is
+ * *derived* client-side from `source.provider`/`runTime`/`validTime` by
+ * `stormIntel/dataClass.ts`. Today Core only ships an HRRR provider (a pure NWP model), so real
+ * metrics are always MODEL_ANALYSIS or MODEL_FORECAST, never OBSERVATION -- that reserved case
+ * exists for a future observation-network provider (METAR/ASOS/mesonet), not a current one.
+ * Never presented to the viewer as if a model value were an observation.
+ */
+export type DataClass = "OBSERVATION" | "MODEL_ANALYSIS" | "MODEL_FORECAST";
+
+/** Mirrors Core Fabric's `PresenceState` (codeblack_core_api/fabric.py). */
+export type PresenceState = "LIVE" | "DEGRADED" | "STALE" | "OFFLINE" | "NOT_CONFIGURED";
+
+/** Overlay-facing subset of Fabric's `FabricUnitState` -- only what context resolution needs. */
+export interface UnitIdentity {
+  unitId: string;
+  displayName: string;
+  operatorName: string;
+  overallHealth: PresenceState;
+  lastSeen: string | null;
+}
+
+/** Which data source is actually feeding the overlay right now. Orthogonal to a snapshot's own
+ * `simulation` flag -- Core itself may run its own simulation provider even when LIVE_CORE
+ * transport is connected, per its `storm_intel_provider` setting. */
+export type OverlayMode = "SIMULATION" | "FIXTURE" | "LIVE_CORE";
+
 export interface MetricSource {
   provider: string;
   product: string;
@@ -65,6 +93,8 @@ export interface NormalizedMetric {
   unavailableReason: string | null;
   trend: MetricTrend | null;
   derivation: string | null;
+  /** Null only when `source` itself is null (e.g. an unavailable metric). */
+  dataClass: DataClass | null;
 }
 
 export interface ContextLocation {

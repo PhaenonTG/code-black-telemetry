@@ -5,7 +5,7 @@ import { DevControlPanel } from "./components/DevControlPanel";
 import { EventTakeover } from "./components/EventTakeover";
 import { readOverlayConfig } from "./config/overlayConfig";
 import type { OverlayConfig } from "./config/overlayConfig";
-import { getOverlayProvider, useOverlayState } from "./stormIntel/store";
+import { getOverlayMode, getOverlayProvider, useOverlayState } from "./stormIntel/store";
 import "./styles/app.css";
 
 const STAGE_WIDTH = 1920;
@@ -67,6 +67,7 @@ export function App() {
           <DevControlPanel
             state={state}
             config={config}
+            mode={getOverlayMode()}
             onScenarioChange={(scenario) => provider.setScenario(scenario)}
             onContextChange={(contextType) => provider.setContextType(contextType)}
             onTakeover={(kind) => provider.triggerTakeover(kind)}

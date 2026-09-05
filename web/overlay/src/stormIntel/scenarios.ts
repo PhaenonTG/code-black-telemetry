@@ -9,6 +9,7 @@ import type {
   StormIntelScore,
   WindProfileLevel,
 } from "./types";
+import { classifyDataClass } from "./dataClass";
 
 const LABELS: Record<MetricKey, string> = {
   sbcape: "Surface-Based CAPE",
@@ -206,6 +207,7 @@ export function buildMetrics(
             : "No current position is available for this unit.",
         trend: null,
         derivation: null,
+        dataClass: null,
       })),
     };
   }
@@ -229,13 +231,14 @@ export function buildMetrics(
 
   const metrics = ALL_KEYS.map((key): NormalizedMetric => {
     const value = values[key];
+    const metricSource = { ...source, formulation: formulationFor(key) };
     if (value === undefined) {
       return {
         key,
         label: LABELS[key],
         value: null,
         unit: null,
-        source: { ...source, formulation: formulationFor(key) },
+        source: metricSource,
         retrievedAt: now.toISOString(),
         ageSeconds,
         freshness,
@@ -244,6 +247,7 @@ export function buildMetrics(
         unavailableReason: `simulation did not provide ${LABELS[key]} at this point.`,
         trend: null,
         derivation: null,
+        dataClass: classifyDataClass(metricSource),
       };
     }
     return {
@@ -251,7 +255,7 @@ export function buildMetrics(
       label: LABELS[key],
       value,
       unit: UNITS[key],
-      source: { ...source, formulation: formulationFor(key) },
+      source: metricSource,
       retrievedAt: now.toISOString(),
       ageSeconds,
       freshness,
@@ -260,6 +264,7 @@ export function buildMetrics(
       unavailableReason: null,
       trend: null,
       derivation: null,
+      dataClass: classifyDataClass(metricSource),
     };
   });
 

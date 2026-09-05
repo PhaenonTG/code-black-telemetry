@@ -1,5 +1,5 @@
 import { SIMULATION_SCENARIOS } from "../stormIntel/types";
-import type { ContextType, EventTakeoverKind, OverlayState, SimulationScenario } from "../stormIntel/types";
+import type { ContextType, EventTakeoverKind, OverlayMode, OverlayState, SimulationScenario } from "../stormIntel/types";
 import type { OverlayConfig, PreviewBackground } from "../config/overlayConfig";
 import "./DevControlPanel.css";
 
@@ -16,6 +16,7 @@ const TAKEOVERS: EventTakeoverKind[] = [
 export function DevControlPanel({
   state,
   config,
+  mode,
   onScenarioChange,
   onContextChange,
   onTakeover,
@@ -24,6 +25,7 @@ export function DevControlPanel({
 }: {
   state: OverlayState;
   config: OverlayConfig;
+  mode: OverlayMode;
   onScenarioChange: (scenario: SimulationScenario) => void;
   onContextChange: (contextType: ContextType) => void;
   onTakeover: (kind: EventTakeoverKind) => void;
@@ -33,6 +35,11 @@ export function DevControlPanel({
   return (
     <div className="dev-panel">
       <div className="dev-panel__title">DEV CONTROLS -- not part of the broadcast overlay</div>
+
+      <div className={`dev-panel__mode dev-panel__mode--${mode.toLowerCase()}`}>
+        MODE: {mode}
+        {mode !== "LIVE_CORE" && " (not live data)"}
+      </div>
 
       <div className="dev-panel__row">
         <span>Scenario</span>

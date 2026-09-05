@@ -4,48 +4,15 @@ import {
   publicLocationFor,
   scoreFromMetrics,
 } from "./scenarios";
+import { TakeoverController } from "./takeoverController";
 import type {
   ContextType,
-  EventTakeover,
   EventTakeoverKind,
   OverlayState,
   SimulationScenario,
   StormIntelProvider,
   StormIntelSnapshot,
 } from "./types";
-
-const TAKEOVER_HEADLINES: Record<EventTakeoverKind, { headline: string; detail: string; holdMs: number }> = {
-  TOR_WARNING: {
-    headline: "TORNADO WARNING",
-    detail: "Radar-indicated rotation. Take shelter now.",
-    holdMs: 9000,
-  },
-  SVR_WARNING: {
-    headline: "SEVERE THUNDERSTORM WARNING",
-    detail: "Damaging wind and large hail possible.",
-    holdMs: 7000,
-  },
-  MESO_DISCUSSION: {
-    headline: "MESOSCALE DISCUSSION",
-    detail: "SPC monitoring developing severe potential.",
-    holdMs: 6000,
-  },
-  TOR_WATCH: {
-    headline: "TORNADO WATCH",
-    detail: "Conditions favorable for tornadoes.",
-    holdMs: 6000,
-  },
-  PDS_TOR_WATCH: {
-    headline: "PDS TORNADO WATCH",
-    detail: "Particularly Dangerous Situation. Stay alert.",
-    holdMs: 8000,
-  },
-  OBSERVED_TORNADO: {
-    headline: "TORNADO OBSERVED",
-    detail: "Confirmed tornado on the ground.",
-    holdMs: 10000,
-  },
-};
 
 /**
  * Deterministic, explicit simulation provider. Mirrors the shape a real
@@ -59,8 +26,10 @@ export class StormIntelSimulator implements StormIntelProvider {
   private listeners = new Set<() => void>();
   private contextType: ContextType;
   private scenario: SimulationScenario;
-  private takeover: EventTakeover | null = null;
-  private takeoverTimer: ReturnType<typeof setTimeout> | null = null;
+  private takeoverController = new TakeoverController(() => {
+    this.snapshot = { ...this.snapshot, takeover: this.takeoverController.get() };
+    this.emit();
+  });
   private tickTimer: ReturnType<typeof setInterval>;
   private snapshot: OverlayState;
 
@@ -142,7 +111,7 @@ export class StormIntelSimulator implements StormIntelProvider {
       snapshot,
       hodograph,
       publicLocation,
-      takeover: this.takeover,
+      takeover: this.takeoverController.get(),
     };
   }
 
@@ -174,37 +143,16 @@ export class StormIntelSimulator implements StormIntelProvider {
   }
 
   triggerTakeover(kind: EventTakeoverKind): void {
-    if (this.takeoverTimer) clearTimeout(this.takeoverTimer);
-    const config = TAKEOVER_HEADLINES[kind];
-    const takeover: EventTakeover = {
-      id: `${kind}-${Date.now()}`,
-      kind,
-      headline: config.headline,
-      detail: config.detail,
-      issuedAt: new Date().toISOString(),
-      holdMs: config.holdMs,
-    };
-    this.takeover = takeover;
-    this.snapshot = { ...this.snapshot, takeover };
-    this.emit();
-    this.takeoverTimer = setTimeout(() => {
-      this.dismissTakeover();
-    }, config.holdMs);
+    this.takeoverController.trigger(kind);
   }
 
   dismissTakeover(): void {
-    if (this.takeoverTimer) {
-      clearTimeout(this.takeoverTimer);
-      this.takeoverTimer = null;
-    }
-    this.takeover = null;
-    this.snapshot = { ...this.snapshot, takeover: null };
-    this.emit();
+    this.takeoverController.dismiss();
   }
 
   disconnect(): void {
     clearInterval(this.tickTimer);
-    if (this.takeoverTimer) clearTimeout(this.takeoverTimer);
+    this.takeoverController.disconnect();
     this.listeners.clear();
   }
 }

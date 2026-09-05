@@ -18,6 +18,7 @@ function metric(overrides: Partial<NormalizedMetric>): NormalizedMetric {
     unavailableReason: null,
     trend: null,
     derivation: null,
+    dataClass: null,
     ...overrides,
   };
 }
