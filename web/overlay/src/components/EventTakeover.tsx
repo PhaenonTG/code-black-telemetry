@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import shield from "../assets/codeblack-shield.png";
 import type { EventTakeover as EventTakeoverData, EventTakeoverKind } from "../stormIntel/types";
 import "./EventTakeover.css";
 
@@ -39,10 +40,13 @@ export function EventTakeover({ takeover }: { takeover: EventTakeoverData | null
       className={`takeover ${KIND_CLASS[rendered.kind]}${exiting ? " takeover--exit" : ""}`}
       role="alert"
     >
-      <div className="takeover__inner">
-        <span className="takeover__kicker">CODE BLACK WX</span>
-        <span className="takeover__headline">{rendered.headline}</span>
-        <span className="takeover__detail">{rendered.detail}</span>
+      <div className="cb-chassis takeover__inner">
+        <img src={shield} alt="" className="takeover__bug" aria-hidden="true" />
+        <div className="takeover__text">
+          <span className="cb-kicker takeover__kicker">CODE BLACK WX</span>
+          <span className="takeover__headline">{rendered.headline}</span>
+          <span className="takeover__detail">{rendered.detail}</span>
+        </div>
         {!exiting && (
           <div className="takeover__bar-track">
             <div className="takeover__bar" style={{ animationDuration: `${rendered.holdMs}ms` }} />

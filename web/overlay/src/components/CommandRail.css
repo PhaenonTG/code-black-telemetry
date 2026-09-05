@@ -1,0 +1,142 @@
+.command-rail {
+  position: absolute;
+  left: var(--safe-margin);
+  right: var(--safe-margin);
+  bottom: var(--safe-margin);
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  justify-content: center;
+  animation: cb-wipe-in var(--cb-motion-slow) var(--cb-ease) both;
+}
+
+.rail-main {
+  --cb-edge-color: var(--cb-signal-red);
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 14px 26px 14px 18px;
+  max-width: 1320px;
+}
+
+.rail-block {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+}
+
+.rail-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--cb-hairline);
+  margin: 2px 0;
+}
+
+.rail-identity {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  min-width: 150px;
+  padding-left: 4px;
+}
+
+.rail-identity__city {
+  font-family: var(--cb-font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 18px;
+  letter-spacing: 0.01em;
+  color: var(--cb-white);
+}
+
+.rail-identity__elev {
+  font-size: 11px;
+  color: var(--cb-utility-gray);
+}
+
+.rail-score {
+  flex-direction: column;
+  gap: 3px;
+  min-width: 96px;
+}
+
+.rail-score__value {
+  font-family: var(--cb-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--cb-white);
+}
+
+.rail-score__value[data-tier="mid"] {
+  color: var(--cb-warn-severe);
+}
+
+.rail-score__value[data-tier="high"],
+.rail-score__value[data-tier="extreme"] {
+  color: var(--cb-signal-red);
+}
+
+.rail-score__value[data-tier="none"] {
+  color: var(--cb-utility-gray);
+}
+
+.rail-score__max {
+  font-size: 13px;
+  color: var(--cb-utility-gray);
+  font-weight: 500;
+}
+
+.rail-status {
+  gap: 10px;
+  min-width: 128px;
+}
+
+.rail-status__dot {
+  width: 7px;
+  height: 7px;
+  background: var(--cb-utility-gray-dim);
+  flex: none;
+}
+
+.rail-status__dot.freshness-current {
+  background: var(--cb-white);
+}
+
+.rail-status__dot.freshness-aging {
+  background: var(--cb-warn-severe);
+}
+
+.rail-status__dot.freshness-stale {
+  background: var(--cb-signal-red);
+}
+
+.rail-status__label {
+  font-family: var(--cb-font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--cb-white);
+}
+
+.rail-status__age {
+  font-size: 12px;
+  color: var(--cb-utility-gray);
+}
+
+.rail-sim-badge {
+  font-family: var(--cb-font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  color: var(--cb-warn-severe);
+  border: 1px solid var(--cb-warn-severe);
+}
+
+.rail-status__chasers {
+  font-size: 11px;
+  color: var(--cb-utility-gray);
+}

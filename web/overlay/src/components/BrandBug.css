@@ -1,0 +1,7 @@
+.brand-bug {
+  position: absolute;
+  top: var(--safe-margin);
+  left: var(--safe-margin);
+  height: 56px;
+  z-index: 10;
+}

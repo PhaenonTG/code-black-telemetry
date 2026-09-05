@@ -3,16 +3,16 @@ import { presentFreshness } from "../utils/freshness";
 import type { HodographData, WindProfileLevel } from "../stormIntel/types";
 import "./Hodograph.css";
 
-const SIZE = 240;
+const SIZE = 120;
 const CENTER = SIZE / 2;
 const RINGS = [20, 40, 60, 80];
-const MAX_RADIUS = CENTER - 26;
+const MAX_RADIUS = CENTER - 14;
 
 const BAND_COLOR: Record<WindProfileLevel["band"], string> = {
-  surface: "#f4f6f8",
-  low: "#42d67d",
-  mid: "#f2b84b",
-  upper: "#ff3b3b",
+  surface: "#ffffff",
+  low: "#8d949b",
+  mid: "#ffcc00",
+  upper: "#ff2a0c",
 };
 
 function toPoint(level: WindProfileLevel): { x: number; y: number } {
@@ -35,16 +35,16 @@ export function Hodograph({ data }: { data: HodographData }) {
   const unavailable = points.length === 0;
 
   return (
-    <div className="hodo-card">
-      <div className="hodo-card__header">
-        <span className="hodo-card__title">HODOGRAPH</span>
-        <span className={`hodo-card__fresh ${fresh.className}`}>{fresh.label}</span>
+    <div className="cb-chassis hodo-module">
+      <div className="hodo-module__header">
+        <span className="cb-kicker">HODOGRAPH</span>
+        <span className={`hodo-module__fresh ${fresh.className}`}>{fresh.label}</span>
       </div>
 
       {unavailable ? (
         <div className="hodo-unavailable">Wind profile unavailable</div>
       ) : (
-        <>
+        <div className="hodo-module__body">
           <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="hodo-svg" role="img" aria-label="Hodograph">
             {RINGS.map((ring) => (
               <circle
@@ -55,9 +55,9 @@ export function Hodograph({ data }: { data: HodographData }) {
                 className="hodo-ring"
               />
             ))}
-            <line x1={CENTER} y1={8} x2={CENTER} y2={SIZE - 8} className="hodo-axis" />
-            <line x1={8} y1={CENTER} x2={SIZE - 8} y2={CENTER} className="hodo-axis" />
-            <text x={CENTER + 4} y={16} className="hodo-axis-label">
+            <line x1={CENTER} y1={4} x2={CENTER} y2={SIZE - 4} className="hodo-axis" />
+            <line x1={4} y1={CENTER} x2={SIZE - 4} y2={CENTER} className="hodo-axis" />
+            <text x={CENTER + 3} y={11} className="hodo-axis-label">
               N
             </text>
 
@@ -68,7 +68,7 @@ export function Hodograph({ data }: { data: HodographData }) {
                 key={i}
                 cx={point.x}
                 cy={point.y}
-                r={i === 0 ? 4.5 : 3}
+                r={i === 0 ? 3.5 : 2.4}
                 fill={BAND_COLOR[level.band]}
                 className="hodo-node"
                 style={{ animationDelay: `${300 + i * 140}ms` }}
@@ -76,19 +76,21 @@ export function Hodograph({ data }: { data: HodographData }) {
             ))}
           </svg>
 
-          <div className="hodo-legend">
-            <LegendDot band="surface" label="SFC" />
-            <LegendDot band="low" label="0-1km" />
-            <LegendDot band="mid" label="1-6km" />
-            <LegendDot band="upper" label="6-9km" />
-          </div>
+          <div className="hodo-module__data">
+            <div className="hodo-legend">
+              <LegendDot band="surface" label="SFC" />
+              <LegendDot band="low" label="0-1KM" />
+              <LegendDot band="mid" label="1-6KM" />
+              <LegendDot band="upper" label="6-9KM" />
+            </div>
 
-          <div className="hodo-stats">
-            <Stat label="0-1km SRH" value={data.srh01} unit="m²/s²" />
-            <Stat label="0-3km SRH" value={data.srh03} unit="m²/s²" />
-            <Stat label="0-6km Shear" value={data.shear06} unit="kt" />
+            <div className="hodo-stats">
+              <Stat label="0-1KM SRH" value={data.srh01} unit="m²/s²" />
+              <Stat label="0-3KM SRH" value={data.srh03} unit="m²/s²" />
+              <Stat label="0-6KM SHEAR" value={data.shear06} unit="kt" />
+            </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -106,8 +108,8 @@ function LegendDot({ band, label }: { band: WindProfileLevel["band"]; label: str
 function Stat({ label, value, unit }: { label: string; value: number | null; unit: string }) {
   return (
     <div className="hodo-stat">
-      <span className="hodo-stat__label">{label}</span>
-      <span className="hodo-stat__value">
+      <span className="cb-label">{label}</span>
+      <span className="hodo-stat__value cb-mono">
         {value === null ? "--" : Math.round(value)}
         {value !== null && <span className="hodo-stat__unit">{unit}</span>}
       </span>

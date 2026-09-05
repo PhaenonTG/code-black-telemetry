@@ -43,10 +43,15 @@ matching a real browser-source capture.
 - `src/stormIntel/store.ts` -- exposes the active provider to React via
   `useSyncExternalStore`, exactly matching `web/telemetry`'s store
   pattern.
-- `src/components/` -- `LowerThird`, `StormIntelCards`, `Hodograph`,
-  `EventTakeover`, `DevControlPanel` (dev-only, stripped via `?dev=0`).
+- `src/components/` -- `CommandRail` (persistent bottom chassis: identity,
+  `FeaturedMetricBay`, score, freshness, with `Hodograph` docked as an attached
+  module), `EventTakeover`, `BrandBug` (corner shield mark), `DevControlPanel`
+  (dev-only, stripped via `?dev=0`).
 - `src/config/overlayConfig.ts` -- reads OBS-facing config
   (`scale`/`opacity`/`position`/`bg`/`dev`) from the URL query string.
+- `src/styles/brand.css` -- Code Black WX brand tokens/chassis implementing
+  `docs/design/code-black-brand-reference-v1.md`. See
+  `docs/design/overlay-design-system-v1.md` for the full design-system writeup.
 
 A future real Core provider only needs to implement `StormIntelProvider`
 (REST polling `/api/storm-intel/v1/...` plus subscribing to the

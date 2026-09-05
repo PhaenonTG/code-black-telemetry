@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { BrandBug } from "./components/BrandBug";
+import { CommandRail } from "./components/CommandRail";
 import { DevControlPanel } from "./components/DevControlPanel";
 import { EventTakeover } from "./components/EventTakeover";
-import { Hodograph } from "./components/Hodograph";
-import { LowerThird } from "./components/LowerThird";
-import { StormIntelCards } from "./components/StormIntelCards";
 import { readOverlayConfig } from "./config/overlayConfig";
 import type { OverlayConfig } from "./config/overlayConfig";
 import { getOverlayProvider, useOverlayState } from "./stormIntel/store";
@@ -48,9 +47,8 @@ export function App() {
       <div className="stage-frame" data-bg={config.background}>
         <div className="overlay-root">
           <div className="overlay-scale" data-position={config.position} style={overlayStyle}>
-            <Hodograph data={state.hodograph} />
-            <StormIntelCards snapshot={state.snapshot} />
-            <LowerThird state={state} />
+            <BrandBug />
+            <CommandRail state={state} />
           </div>
           <EventTakeover takeover={state.takeover} />
         </div>
