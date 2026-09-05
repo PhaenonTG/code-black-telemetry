@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { presentFreshness } from "../utils/freshness";
 import type { HodographData, WindProfileLevel } from "../stormIntel/types";
 import "./Hodograph.css";
@@ -33,6 +33,10 @@ export function Hodograph({ data }: { data: HodographData }) {
 
   const fresh = presentFreshness(data.freshness);
   const unavailable = points.length === 0;
+
+  // Per-node stagger is a JS-computed inline delay -- CSS custom properties can't collapse it,
+  // so reduced-motion is honored explicitly here instead.
+  const [reducedMotion] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   return (
     <div className="cb-chassis hodo-module">
@@ -71,7 +75,7 @@ export function Hodograph({ data }: { data: HodographData }) {
                 r={i === 0 ? 3.5 : 2.4}
                 fill={BAND_COLOR[level.band]}
                 className="hodo-node"
-                style={{ animationDelay: `${300 + i * 140}ms` }}
+                style={{ animationDelay: reducedMotion ? "0ms" : `${300 + i * 140}ms` }}
               />
             ))}
           </svg>

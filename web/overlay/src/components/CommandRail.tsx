@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { presentFreshness } from "../utils/freshness";
 import { formatAge, formatScore } from "../utils/format";
 import { FeaturedMetricBay } from "./FeaturedMetricBay";
@@ -18,6 +19,20 @@ export function CommandRail({ state }: { state: OverlayState }) {
   const { score } = snapshot;
   const overallFreshness = presentFreshness(snapshot.metrics[0]?.freshness ?? "unknown");
   const worstAge = snapshot.metrics[0]?.ageSeconds ?? null;
+
+  // Urgency that decays: a single flash on the transition into "stale" -- never a constant pulse.
+  const [flashStale, setFlashStale] = useState(false);
+  const prevFreshnessClass = useRef(overallFreshness.className);
+  useEffect(() => {
+    if (prevFreshnessClass.current !== overallFreshness.className) {
+      prevFreshnessClass.current = overallFreshness.className;
+      if (overallFreshness.className === "freshness-stale") {
+        setFlashStale(true);
+        const timer = setTimeout(() => setFlashStale(false), 1900);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [overallFreshness.className]);
 
   return (
     <div className="command-rail">
@@ -51,7 +66,7 @@ export function CommandRail({ state }: { state: OverlayState }) {
         <div className="rail-divider" />
 
         <section className="rail-block rail-status">
-          <span className={`rail-status__dot ${overallFreshness.className}`} />
+          <span className={`rail-status__dot ${overallFreshness.className}${flashStale ? " cb-flash-once" : ""}`} />
           <span className="rail-status__label">{overallFreshness.label}</span>
           <span className="rail-status__age cb-mono">{formatAge(worstAge)}</span>
           {snapshot.simulation && <span className="rail-sim-badge">SIM</span>}

@@ -75,8 +75,8 @@
   stroke-linejoin: round;
   stroke-dasharray: 100;
   stroke-dashoffset: 100;
-  animation: hodo-draw 1.2s var(--cb-ease) forwards;
-  animation-delay: 120ms;
+  animation: hodo-draw var(--cb-motion-hodo-draw) var(--cb-ease) forwards;
+  animation-delay: var(--cb-motion-hodo-delay);
 }
 
 @keyframes hodo-draw {

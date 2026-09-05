@@ -10,7 +10,10 @@
   --cb-utility-gray: #8d949b;
   --cb-utility-gray-dim: #5c6167;
 
-  /* Semantic operational colors -- never decorative, never substituted for brand red/yellow. */
+  /* Semantic operational colors -- never decorative, never substituted for brand red/yellow.
+     LOCKED: --cb-warn-tornado, --cb-warn-severe (see docs/design/overlay-semantic-colors-v1.md).
+     PROVISIONAL: --cb-warn-watch, --cb-warn-discussion -- placeholders pending a dedicated
+     semantic-color review; do not treat as final Code Black brand colors. */
   --cb-warn-tornado: #ff2a0c;
   --cb-warn-severe: #ffcc00;
   --cb-warn-watch: #ff6a4d;
@@ -36,6 +39,8 @@
   --cb-motion-fast: 160ms;
   --cb-motion-med: 300ms;
   --cb-motion-slow: 420ms;
+  --cb-motion-hodo-draw: 1.2s;
+  --cb-motion-hodo-delay: 120ms;
   --cb-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
@@ -44,6 +49,8 @@
     --cb-motion-fast: 1ms;
     --cb-motion-med: 1ms;
     --cb-motion-slow: 1ms;
+    --cb-motion-hodo-draw: 1ms;
+    --cb-motion-hodo-delay: 0ms;
   }
 }
 
