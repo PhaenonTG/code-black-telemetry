@@ -36,8 +36,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   const [gps, setGps] = useState<LocationState>({ status: "requesting" });
   const [camera, setCamera] = useState<TrafficCamera | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [selectedPoint, setSelectedPoint] = useState<AtlasSelectedPoint | null>(null);
-  const { config, state: coreState } = useCoreOps(selectedPoint);
+  const { config, state: coreState, selectedPoint, selectPoint } = useCoreOps();
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +87,8 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
           poiPlaces={poi.places}
           nearbyBest={nearby.places}
           alerts={alertProducts.products}
-          onPointSelect={setSelectedPoint}
+          selectedPoint={selectedPoint}
+          onPointSelect={(point: AtlasSelectedPoint) => selectPoint(point)}
         />
         <div className="ops-map-overlay ops-map-overlay--top">
           <div>

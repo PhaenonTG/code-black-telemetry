@@ -71,6 +71,11 @@ export interface MetricSource {
   runTime: string | null;
   validTime: string | null;
   formulation: string | null;
+  forecastHour: number | null;
+  dataClass: DataClass | null;
+  resolvedLatitude: number | null;
+  resolvedLongitude: number | null;
+  gridDistanceKm: number | null;
 }
 
 export interface MetricTrend {

@@ -56,12 +56,24 @@ function normalizeMetricSource(raw: unknown): MetricSource | null {
   if (provider === null || product === null) {
     throw new StormIntelNormalizationError("metrics[].source requires string provider/product");
   }
+  const runTime = str(r.run_time);
+  const validTime = str(r.valid_time);
+  const formulation = str(r.formulation);
+  const sourceDataClass =
+    r.data_class === "OBSERVATION" || r.data_class === "MODEL_ANALYSIS" || r.data_class === "MODEL_FORECAST"
+      ? r.data_class
+      : null;
   return {
     provider,
     product,
-    runTime: str(r.run_time),
-    validTime: str(r.valid_time),
-    formulation: str(r.formulation),
+    runTime,
+    validTime,
+    formulation,
+    forecastHour: num(r.forecast_hour),
+    dataClass: sourceDataClass ?? classifyDataClass({ provider, product, runTime, validTime, formulation, forecastHour: num(r.forecast_hour), dataClass: null, resolvedLatitude: null, resolvedLongitude: null, gridDistanceKm: null }),
+    resolvedLatitude: num(r.resolved_latitude),
+    resolvedLongitude: num(r.resolved_longitude),
+    gridDistanceKm: num(r.grid_distance_km),
   };
 }
 
@@ -112,7 +124,7 @@ function normalizeMetric(raw: unknown): NormalizedMetric {
     unavailableReason: str(r.unavailable_reason),
     trend: normalizeMetricTrend(r.trend ?? null),
     derivation: str(r.derivation),
-    dataClass: classifyDataClass(source),
+    dataClass: source?.dataClass ?? classifyDataClass(source),
   };
 }
 

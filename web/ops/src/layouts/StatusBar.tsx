@@ -7,7 +7,7 @@ import { OpsStatusPill } from "../components/OpsStatusPill"
 // handful of things worth glancing at without navigating away from whatever workspace is open.
 export function StatusBar({ locationLabel }: { locationLabel: string }) {
   const [now, setNow] = useState(() => new Date())
-  const { state, config } = useCoreOps(null)
+  const { state, config } = useCoreOps()
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000)
     return () => window.clearInterval(id)

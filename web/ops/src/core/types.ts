@@ -17,6 +17,8 @@ export interface FabricSnapshotState {
   units: FabricNormalizedState | null;
   wsState: "disabled" | "connecting" | "open" | "closed" | "error";
   lastWsEventAt: number | null;
+  lastContactAt: number | null;
+  error: string | null;
 }
 
 export interface StormIntelState {
@@ -25,6 +27,8 @@ export interface StormIntelState {
   checkedAt: number;
   health: unknown | null;
   selectedPoint: { lat: number; lon: number } | null;
+  pointLoading: boolean;
+  requestId: number;
   pointSnapshot: StormIntelSnapshot | null;
   pointError: string | null;
 }

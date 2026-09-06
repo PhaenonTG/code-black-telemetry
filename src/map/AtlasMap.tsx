@@ -81,6 +81,7 @@ type AtlasMapProps = {
   // full toolbar only exists on the "full" Locate page, which has the room for it.
   controlsVariant?: "full" | "compact";
   escapeControl?: ReactNode;
+  selectedPoint?: AtlasSelectedPoint | null;
   onPointSelect?: (point: AtlasSelectedPoint) => void;
 };
 
@@ -90,6 +91,9 @@ export interface AtlasSelectedPoint {
 }
 
 const EMPTY_MODIFIERS = { modifiedLayers: 0, firstSymbolLayerId: undefined as string | undefined, lastMapError: "" };
+const SELECTED_POINT_SOURCE_ID = "codeblack-selected-point-source";
+const SELECTED_POINT_RING_LAYER_ID = "codeblack-selected-point-ring";
+const SELECTED_POINT_CORE_LAYER_ID = "codeblack-selected-point-core";
 // Stable references for the default-prop case -- a fresh `[]` literal in the destructured default
 // would otherwise be recreated on every render, changing identity and re-firing every effect keyed
 // off `alerts`/`spotters` even though nothing actually changed.
@@ -129,6 +133,53 @@ function shouldApplyGpsUpdate(previous: { gps: AtlasGpsPoint; at: number } | nul
   return false;
 }
 
+function updateAtlasSelectedPoint(map: mapboxgl.Map, point: AtlasSelectedPoint | null) {
+  if (!map.isStyleLoaded()) return;
+  const data = {
+    type: "FeatureCollection",
+    features: point
+      ? [{
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: [point.lon, point.lat] },
+      }]
+      : [],
+  } as const;
+  const existing = map.getSource(SELECTED_POINT_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+  if (existing) {
+    existing.setData(data);
+  } else {
+    map.addSource(SELECTED_POINT_SOURCE_ID, { type: "geojson", data });
+  }
+  if (!map.getLayer(SELECTED_POINT_RING_LAYER_ID)) {
+    map.addLayer({
+      id: SELECTED_POINT_RING_LAYER_ID,
+      type: "circle",
+      source: SELECTED_POINT_SOURCE_ID,
+      paint: {
+        "circle-radius": 13,
+        "circle-color": "rgba(0,0,0,0)",
+        "circle-stroke-color": "#FF2A0C",
+        "circle-stroke-width": 2,
+        "circle-opacity": 0.95,
+      },
+    });
+  }
+  if (!map.getLayer(SELECTED_POINT_CORE_LAYER_ID)) {
+    map.addLayer({
+      id: SELECTED_POINT_CORE_LAYER_ID,
+      type: "circle",
+      source: SELECTED_POINT_SOURCE_ID,
+      paint: {
+        "circle-radius": 4,
+        "circle-color": "#FFFFFF",
+        "circle-stroke-color": "#000000",
+        "circle-stroke-width": 1,
+      },
+    });
+  }
+}
+
 export function AtlasMap({
   gps,
   expanded = false,
@@ -142,6 +193,7 @@ export function AtlasMap({
   nearbyBest = EMPTY_NEARBY_BEST,
   controlsVariant = "full",
   escapeControl,
+  selectedPoint = null,
   onPointSelect,
 }: AtlasMapProps) {
   const compact = controlsVariant === "compact";
@@ -457,6 +509,7 @@ export function AtlasMap({
           styleInfoRef.current.firstSymbolLayerId,
           setMosaicStatus,
         );
+        updateAtlasSelectedPoint(map, selectedPoint);
         updateAtlasRangeRings(map, latestRef.current.gps, latestRef.current.rangeRings);
       };
       map.on("load", initializeStyle);
@@ -844,6 +897,12 @@ export function AtlasMap({
     if (!map || !loaded) return;
     updateAtlasRangeRings(map, gps, rangeRings);
   }, [gps, loaded, rangeRings]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    updateAtlasSelectedPoint(map, selectedPoint);
+  }, [loaded, selectedPoint]);
 
   useEffect(() => {
     const map = mapRef.current;

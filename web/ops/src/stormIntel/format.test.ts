@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMetric, metricProvenance, stormIntelSummary } from "./format";
+import { formatMetric, metricProvenance, sourceSemantics, stormIntelSummary } from "./format";
 import type { NormalizedMetric, StormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/types";
 
 function metric(overrides: Partial<NormalizedMetric> = {}): NormalizedMetric {
@@ -14,6 +14,11 @@ function metric(overrides: Partial<NormalizedMetric> = {}): NormalizedMetric {
       runTime: "2026-09-06T12:00:00Z",
       validTime: "2026-09-06T18:00:00Z",
       formulation: "direct",
+      forecastHour: 6,
+      dataClass: "MODEL_FORECAST",
+      resolvedLatitude: 35.22,
+      resolvedLongitude: -97.44,
+      gridDistanceKm: 1.2,
     },
     retrievedAt: "2026-09-06T12:10:00Z",
     ageSeconds: 120,
@@ -36,6 +41,14 @@ describe("Storm Intel formatting", () => {
   it("prints data class and model provenance", () => {
     expect(metricProvenance(metric())).toContain("MODEL_FORECAST");
     expect(metricProvenance(metric())).toContain("hrrr-nomads");
+    expect(metricProvenance(metric())).toContain("FH 6");
+  });
+
+  it("labels direct, calculated, proxy, and unavailable semantics", () => {
+    expect(sourceSemantics(metric({ derivation: "direct model field" }))).toBe("DIRECT");
+    expect(sourceSemantics(metric({ derivation: "calculated from profile" }))).toBe("CALCULATED");
+    expect(sourceSemantics(metric({ derivation: "MUCAPE proxy" }))).toBe("PROXY");
+    expect(sourceSemantics(metric({ availability: "unavailable", value: null }))).toBe("UNAVAILABLE");
   });
 
   it("summarizes unavailable snapshots honestly", () => {

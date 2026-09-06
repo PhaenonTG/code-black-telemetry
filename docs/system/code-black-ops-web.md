@@ -1,22 +1,63 @@
 # Code Black OPS Website
 
-Status: Phase 0/1 development chassis. Not deployed publicly.
+Status: Phase 2 development workstation. Not deployed publicly.
 
 ## Architecture Decision
 
-The OPS website lives in `web/ops`. Phase 0/1 extends that existing React/Vite package rather than
-creating a second frontend or backend.
+The OPS website lives in `web/ops`. Phase 2 continues extending that existing React/Vite package
+rather than creating another frontend or backend.
 
-Reasons:
-- `web/ops` already owns the authenticated OPS website shell.
-- It already reuses the root `src/map/AtlasMap.tsx` map implementation instead of copying radar,
-  warning, vehicle, road, camera, and breadcrumb layers.
-- It already has Supabase auth, responsive shell code, and the supplied Code Black shield asset.
-- `web/telemetry` remains Code Black Control, and `web/overlay` remains the livestream overlay.
+The application now has one shared `CoreOpsProvider` mounted inside the authenticated shell. It owns:
+
+- Core REST health polling
+- Fabric REST bootstrap
+- one Fabric WebSocket connection for the application
+- reconnect with bounded backoff
+- Fabric snapshot/update state
+- selected map point state
+- cancellable Storm Intel point requests
+- LIVE_CORE versus explicit SIMULATION mode
+
+Components consume `useCoreOps()` and do not create independent Core sockets.
+
+## Private Core Access
+
+CodeBlack-Core remains private and loopback-bound on Core. Local OPS development uses an SSH tunnel:
+
+```text
+ssh -N -L 127.0.0.1:18000:127.0.0.1:8000 codeblack@100.96.77.89
+```
+
+Run Vite through the same-origin proxy:
+
+```text
+VITE_OPS_DATA_MODE=LIVE_CORE
+VITE_CODEBLACK_CORE_BASE_URL=/core-api
+VITE_CODEBLACK_CORE_WS_URL=ws://127.0.0.1:5177/core-ws
+CODEBLACK_CORE_PROXY_TARGET=http://127.0.0.1:18000
+npm run dev -- --host 127.0.0.1 --port 5177
+```
+
+This avoids browser CORS changes and does not alter Core firewall, listeners, Tailscale, MQTT,
+systemd, or production configuration.
+
+## Verified Production Contracts
+
+Verified through the tunnel on 2026-09-06:
+
+- `GET /health`
+- `GET /api/fabric/v1/health`
+- `GET /api/fabric/v1/units`
+- `WS /api/fabric/v1/ws`
+- `GET /api/storm-intel/v1/health`
+- `GET /api/storm-intel/v1/point?latitude=&longitude=`
+
+The production Storm Intel point contract currently exposes current/latest point data. A valid-time
+query parameter was not present in OpenAPI, so the OPS timeline is marked current-only/development.
 
 ## Routes
 
-Primary navigation is designed for the approved OPS families:
+Primary navigation:
 
 - `/` - LIVE OPS
 - `/radar` - RADAR
@@ -30,90 +71,48 @@ Primary navigation is designed for the approved OPS families:
 - `/system` - SYSTEM
 - `/settings` - SETTINGS
 
-Legacy aliases `/map`, `/weather`, `/alerts`, and `/operations` are retained locally for existing
-links during this transition.
+Legacy aliases `/map`, `/weather`, `/alerts`, and `/operations` remain during transition.
 
-## Data Sources
+## Data Semantics
 
-The browser consumes normalized CodeBlack-Core contracts only when explicitly configured:
+The browser consumes normalized CodeBlack-Core contracts only. It does not fetch NOAA/NCEP GRIB,
+does not connect to MQTT, and does not derive a second meteorological truth.
 
-- `GET /health`
-- `GET /api/fabric/v1/health`
-- `GET /api/fabric/v1/units`
-- `WS /api/fabric/v1/ws`
-- `GET /api/storm-intel/v1/health`
-- `GET /api/storm-intel/v1/point?latitude=&longitude=`
+Storm Intel rendering preserves:
 
-The browser does not fetch NOAA/NCEP GRIB data. Storm Intel display uses the existing overlay
-normalization boundary so snake_case Core payloads become the shared camelCase client contract.
+- requested latitude/longitude
+- resolved grid latitude/longitude
+- grid distance
+- provider and product
+- model run and valid time
+- forecast hour
+- `OBSERVATION`, `MODEL_ANALYSIS`, and `MODEL_FORECAST`
+- `DIRECT`, `CALCULATED`, `PROXY`, and `UNAVAILABLE`
+- freshness and unavailable reasons
 
-## Configuration
+Unsupported metrics remain unavailable. Sounding Snapshot and Consensus stay architectural only.
 
-Client environment variables:
+## Map Interaction
 
-- `VITE_OPS_DATA_MODE=LIVE_CORE` or `SIMULATION`
-- `VITE_CODEBLACK_CORE_BASE_URL`
-- `VITE_CODEBLACK_CORE_WS_URL`
-- `VITE_CODEBLACK_DEFAULT_UNIT_ID`
-- `VITE_CODEBLACK_STORM_INTEL_POLL_SECONDS`
+Map click/tap immediately updates:
 
-Simulation is explicit only. If Core URLs are missing, the UI shows `UNAVAILABLE`; it does not
-silently substitute simulated live data.
+- selected coordinate in shared app state
+- selected-point marker on the map
+- Point Inspector loading state
 
-For local visual QA only, the Vite dev server supports `?phase1Preview=1` on `127.0.0.1` while
-`import.meta.env.DEV` is true. Built production deployments still require Supabase authorization.
+Each click starts a new Storm Intel request and clears the previous point snapshot. Slow older
+responses are ignored so a stale response cannot be displayed as the newest selected point.
 
 ## Map Technology
 
-Phase 1 reuses `AtlasMap` from the root app. That preserves:
-
-- Mapbox basemap
-- IEM NEXRAD mosaic radar
-- NWS warning polygons
-- NWS watch polygons
-- SPC mesoscale discussion geometry where available
-- unit marker layer
-- breadcrumbs/history layer
-- road conditions
-- traffic cameras
-- Spotter Network / Chaser Net layer hooks
-- viewport-bounded layer fetch behavior where existing providers support it
-
-The only root map change in Phase 1 is an optional `onPointSelect` callback used by the OPS
-workstation inspector.
-
-## Interaction Contract
-
-Map click/tap selects a coordinate and sends it to the Point Inspector. The inspector then requests
-the normalized Storm Intel point endpoint when Core is configured and reachable.
-
-Future Sounding Snapshot and Consensus entry points attach to this same selected-point state.
-No Skew-T, hodograph, consensus matrix, chase target, or severity score is fabricated in Phase 1.
+Phase 2 still reuses `AtlasMap` from the root app, preserving Mapbox, IEM NEXRAD mosaic radar,
+warning/watch geometry, unit markers, breadcrumbs, road/camera layers, Spotter Network hooks, and
+viewport-bounded behavior where existing providers support it.
 
 ## Visual System
 
-Brand Reference v1 is authoritative:
-
-- black-first canvas
-- white-led hierarchy
-- Signal Red `#FF2A0C` as sparse identity accent
-- Gunmetal `#171A1D`
-- Utility Gray `#8D949B`
-- clipped geometry
-- thin tactical rules
-- no glassmorphism as the primary language
-- no RGB/neon/gamer treatment
-
-## Known Limitations
-
-- Core production is loopback-only on Core unless exposed through an approved private proxy path.
-  This pass does not alter Core networking.
-- Fabric WebSocket is connected only when `VITE_CODEBLACK_CORE_WS_URL` is reachable from the
-  browser.
-- Soundings and Consensus are route/component architecture only.
-- Weather/model values shown in Storm Intel are limited to the current production Core contract.
-- The top status bar and workstation currently each create their own read-only Core subscription;
-  a shared app-level Core state provider is the recommended Phase 2 cleanup.
+Brand Reference v1 remains authoritative: black-first, white-led information hierarchy, sparse
+Signal Red `#FF2A0C`, clipped geometry, thin tactical rules, and map-first composition.
 
 ## Validation
 
@@ -125,3 +124,15 @@ npm run typecheck
 npm run lint
 npm run build
 ```
+
+Browser QA should use `?phase1Preview=1` only on `127.0.0.1` in dev mode. Production builds remain
+behind Supabase authorization.
+
+## Known Limitations
+
+- The local browser needs the SSH tunnel and Vite proxy for real Core data.
+- React StrictMode in dev opens and closes one preliminary WebSocket before the steady shared socket;
+  production does not perform that dev-only double effect.
+- Soundings require a future normalized vertical profile endpoint.
+- Consensus requires future model-matrix/target-corridor contracts.
+- The Vite build still bundles Mapbox heavily; code-splitting is a later performance pass.

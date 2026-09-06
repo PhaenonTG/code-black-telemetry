@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { AuthProvider } from "../auth/AuthProvider"
 import { AuthGate } from "../components/AuthGate"
+import { CoreOpsProvider } from "../core/CoreOpsProvider"
 import { AppShell } from "../layouts/AppShell"
 import UpdatePassword from "../pages/UpdatePassword"
 import OpsWorkstation from "../pages/OpsWorkstation"
@@ -24,26 +25,28 @@ export default function App() {
             path="/*"
             element={
               <AuthGate>
-                <AppShell>
-                  <Routes>
-                    <Route path="/" element={<OpsWorkstation focus="LIVE OPS" />} />
-                    <Route path="/radar" element={<OpsWorkstation focus="RADAR" />} />
-                    <Route path="/storm-intel" element={<OpsWorkstation focus="STORM INTEL" />} />
-                    <Route path="/models" element={<DevelopmentPage title="MODELS" />} />
-                    <Route path="/soundings" element={<DevelopmentPage title="SOUNDINGS" detail="Vertical profile endpoint not yet available. Sounding Snapshot will enter here when Core exposes normalized profile data." />} />
-                    <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 1." />} />
-                    <Route path="/targets" element={<DevelopmentPage title="TARGETS" detail="Target corridors are reserved for the future Consensus workflow. Phase 1 does not create automated chase targets." />} />
-                    <Route path="/fleet" element={<Fleet />} />
-                    <Route path="/stream" element={<DevelopmentPage title="STREAM" detail="Stream control integration is reserved. No producer controls or public stream switching are exposed in Phase 1." />} />
-                    <Route path="/system" element={<Operations />} />
-                    <Route path="/map" element={<OpsWorkstation focus="RADAR" />} />
-                    <Route path="/weather" element={<OpsWorkstation focus="STORM INTEL" />} />
-                    <Route path="/alerts" element={<OpsWorkstation focus="LIVE OPS" />} />
-                    <Route path="/operations" element={<Operations />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/more" element={<More />} />
-                  </Routes>
-                </AppShell>
+                <CoreOpsProvider>
+                  <AppShell>
+                    <Routes>
+                      <Route path="/" element={<OpsWorkstation focus="LIVE OPS" />} />
+                      <Route path="/radar" element={<OpsWorkstation focus="RADAR" />} />
+                      <Route path="/storm-intel" element={<OpsWorkstation focus="STORM INTEL" />} />
+                      <Route path="/models" element={<DevelopmentPage title="MODELS" />} />
+                      <Route path="/soundings" element={<DevelopmentPage title="SOUNDINGS" detail="Vertical profile endpoint not yet available. Sounding Snapshot will enter here when Core exposes normalized profile data." />} />
+                      <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 2." />} />
+                      <Route path="/targets" element={<DevelopmentPage title="TARGETS" detail="Target corridors are reserved for the future Consensus workflow. Phase 2 does not create automated chase targets." />} />
+                      <Route path="/fleet" element={<Fleet />} />
+                      <Route path="/stream" element={<DevelopmentPage title="STREAM" detail="Stream control integration is reserved. No producer controls or public stream switching are exposed in Phase 2." />} />
+                      <Route path="/system" element={<Operations />} />
+                      <Route path="/map" element={<OpsWorkstation focus="RADAR" />} />
+                      <Route path="/weather" element={<OpsWorkstation focus="STORM INTEL" />} />
+                      <Route path="/alerts" element={<OpsWorkstation focus="LIVE OPS" />} />
+                      <Route path="/operations" element={<Operations />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="/more" element={<More />} />
+                    </Routes>
+                  </AppShell>
+                </CoreOpsProvider>
               </AuthGate>
             }
           />

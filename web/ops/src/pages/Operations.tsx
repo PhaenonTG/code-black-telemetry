@@ -31,7 +31,7 @@ function initialHealth(): ExternalHealthSnapshot {
 // hard-coded READY state.
 export default function Operations() {
   const [health, setHealth] = useState<ExternalHealthSnapshot>(initialHealth)
-  const { state: coreState } = useCoreOps(null)
+  const { state: coreState } = useCoreOps()
 
   useEffect(() => {
     let cancelled = false

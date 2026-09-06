@@ -4,7 +4,8 @@ export function TimelineRail() {
     <div className="ops-timeline" aria-label="Forecast timeline">
       <div>
         <span>VALID TIME</span>
-        <b>Architecture Ready</b>
+        <b>Current only</b>
+        <em>Future valid-time selection awaits Core contract support</em>
       </div>
       <div className="ops-timeline__ticks">
         {hours.map((hour, index) => (

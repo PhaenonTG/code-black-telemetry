@@ -16,6 +16,8 @@ function state(): OpsCoreState {
       units: null,
       wsState: "disabled",
       lastWsEventAt: null,
+      lastContactAt: null,
+      error: null,
     },
     stormIntel: {
       state: "UNAVAILABLE",
@@ -23,6 +25,8 @@ function state(): OpsCoreState {
       checkedAt: now,
       health: null,
       selectedPoint: null,
+      pointLoading: false,
+      requestId: 0,
       pointSnapshot: null,
       pointError: null,
     },

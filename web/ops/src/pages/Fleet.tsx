@@ -6,7 +6,7 @@ import { useCoreOps } from "../core/useCoreOps"
 // setup; today there are zero live nodes because CodeBlack-Core is offline, so the honest state is
 // an empty list with an explanation, not an invented vehicle.
 export default function Fleet() {
-  const { state } = useCoreOps(null)
+  const { state } = useCoreOps()
   const units = state.fabric.units?.units ?? []
 
   return (

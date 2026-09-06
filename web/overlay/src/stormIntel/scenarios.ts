@@ -227,6 +227,11 @@ export function buildMetrics(
     runTime: runTime.toISOString(),
     validTime: validTime.toISOString(),
     formulation: null,
+    forecastHour: 0,
+    dataClass: "MODEL_ANALYSIS",
+    resolvedLatitude: location.latitude,
+    resolvedLongitude: location.longitude,
+    gridDistanceKm: 0,
   };
 
   const metrics = ALL_KEYS.map((key): NormalizedMetric => {

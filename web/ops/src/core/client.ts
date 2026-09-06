@@ -4,13 +4,19 @@ import type { FabricNormalizedState } from "../../../../src/services/fabric";
 import { coreConfigured, type OpsCoreConfig } from "./config";
 import type { CoreHealthSnapshot, FabricSnapshotState, OpsConnectionState, StormIntelState } from "./types";
 
-const REQUEST_TIMEOUT_MS = 5_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 
 export class OpsCoreClientError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "OpsCoreClientError";
   }
+}
+
+export interface FabricWsEvent {
+  eventType: string;
+  timestamp: string | null;
+  payload: unknown;
 }
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -23,17 +29,20 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, outerSignal?: AbortSignal): Promise<T> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const abort = () => controller.abort();
+  outerSignal?.addEventListener("abort", abort, { once: true });
   try {
     return await work(controller.signal);
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new OpsCoreClientError("request timeout");
+      throw new OpsCoreClientError(outerSignal?.aborted ? "request cancelled" : "request timeout");
     }
     throw error;
   } finally {
+    outerSignal?.removeEventListener("abort", abort);
     window.clearTimeout(timer);
   }
 }
@@ -61,11 +70,11 @@ export async function fetchCoreHealth(config: OpsCoreConfig): Promise<CoreHealth
   }
 }
 
-export async function fetchFabricState(config: OpsCoreConfig, previous?: Pick<FabricSnapshotState, "wsState" | "lastWsEventAt">): Promise<FabricSnapshotState> {
+export async function fetchFabricRest(config: OpsCoreConfig, previous?: Pick<FabricSnapshotState, "wsState" | "lastWsEventAt" | "lastContactAt" | "error">): Promise<FabricSnapshotState> {
   const now = Date.now();
   const unavailable = unavailableState(config, "Fabric");
   if (!coreConfigured(config)) {
-    return { ...unavailable, checkedAt: now, health: null, units: null, wsState: "disabled", lastWsEventAt: null };
+    return { ...unavailable, checkedAt: now, health: null, units: null, wsState: "disabled", lastWsEventAt: null, lastContactAt: null, error: null };
   }
   try {
     const [health, units] = await Promise.all([
@@ -81,6 +90,8 @@ export async function fetchFabricState(config: OpsCoreConfig, previous?: Pick<Fa
       units,
       wsState: previous?.wsState ?? "disabled",
       lastWsEventAt: previous?.lastWsEventAt ?? null,
+      lastContactAt: Date.now(),
+      error: previous?.error ?? null,
     };
   } catch (error) {
     return {
@@ -91,53 +102,51 @@ export async function fetchFabricState(config: OpsCoreConfig, previous?: Pick<Fa
       units: null,
       wsState: previous?.wsState ?? "disabled",
       lastWsEventAt: previous?.lastWsEventAt ?? null,
+      lastContactAt: previous?.lastContactAt ?? null,
+      error: error instanceof Error ? error.message : "Fabric REST failed",
     };
   }
 }
 
-export async function fetchStormIntelHealth(config: OpsCoreConfig, point: { lat: number; lon: number } | null): Promise<StormIntelState> {
+export async function fetchStormIntelHealth(config: OpsCoreConfig): Promise<Pick<StormIntelState, "state" | "detail" | "checkedAt" | "health">> {
   const now = Date.now();
   const unavailable = unavailableState(config, "Storm Intel");
-  if (!coreConfigured(config)) {
-    return { ...unavailable, checkedAt: now, health: null, selectedPoint: point, pointSnapshot: null, pointError: null };
-  }
-
-  let health: unknown | null = null;
-  let pointSnapshot: StormIntelSnapshot | null = null;
-  let pointError: string | null = null;
+  if (!coreConfigured(config)) return { ...unavailable, checkedAt: now, health: null };
   try {
-    health = await withTimeout((signal) => fetchJson<unknown>(`${config.coreBaseUrl}/api/storm-intel/v1/health`, signal));
+    const health = await withTimeout((signal) => fetchJson<unknown>(`${config.coreBaseUrl}/api/storm-intel/v1/health`, signal));
+    return { state: "LIVE", detail: "Storm Intel API ready; select a map point for quick intel", checkedAt: Date.now(), health };
   } catch (error) {
     return {
       state: "UNAVAILABLE",
       detail: error instanceof Error ? `Storm Intel health failed: ${error.message}` : "Storm Intel health failed",
       checkedAt: Date.now(),
       health: null,
-      selectedPoint: point,
-      pointSnapshot: null,
-      pointError: null,
     };
   }
+}
 
-  if (point) {
-    try {
-      const raw = await withTimeout((signal) =>
-        fetchJson<unknown>(`${config.coreBaseUrl}/api/storm-intel/v1/point?latitude=${point.lat}&longitude=${point.lon}`, signal),
-      );
-      pointSnapshot = normalizeStormIntelSnapshot(raw);
-    } catch (error) {
-      pointError = error instanceof Error ? error.message : "point request failed";
-    }
+export async function fetchStormIntelPoint(config: OpsCoreConfig, point: { lat: number; lon: number }, signal?: AbortSignal): Promise<StormIntelSnapshot> {
+  if (!coreConfigured(config)) throw new OpsCoreClientError(unavailableState(config, "Storm Intel point").detail);
+  const params = new URLSearchParams({ latitude: String(point.lat), longitude: String(point.lon) });
+  const raw = await withTimeout((timeoutSignal) => fetchJson<unknown>(`${config.coreBaseUrl}/api/storm-intel/v1/point?${params}`, timeoutSignal), signal);
+  return normalizeStormIntelSnapshot(raw);
+}
+
+export function normalizeFabricWsEvent(raw: string): FabricWsEvent {
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    throw new OpsCoreClientError("Malformed Fabric WebSocket JSON");
   }
-
+  if (typeof body !== "object" || body === null || Array.isArray(body)) throw new OpsCoreClientError("Malformed Fabric WebSocket event");
+  const record = body as Record<string, unknown>;
+  const eventType = typeof record.event_type === "string" ? record.event_type : "";
+  if (!eventType) throw new OpsCoreClientError("Fabric WebSocket event missing event_type");
   return {
-    state: pointError ? "DEGRADED" : "LIVE",
-    detail: point ? (pointSnapshot ? "Storm Intel point snapshot ready" : `Point snapshot unavailable: ${pointError}`) : "Storm Intel API ready; select a map point for quick intel",
-    checkedAt: Date.now(),
-    health,
-    selectedPoint: point,
-    pointSnapshot,
-    pointError,
+    eventType,
+    timestamp: typeof record.timestamp === "string" ? record.timestamp : null,
+    payload: record.payload,
   };
 }
 

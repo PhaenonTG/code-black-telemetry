@@ -1,6 +1,6 @@
 import { OpsStatusPill } from "./OpsStatusPill";
 import type { OpsCoreState } from "../core/types";
-import { PRIMARY_STORM_METRICS, formatMetric, metricByKey, metricProvenance, stormIntelSummary } from "../stormIntel/format";
+import { PRIMARY_STORM_METRICS, firstAvailableSource, formatMetric, metricByKey, metricProvenance, sourceSemantics, stormIntelSummary } from "../stormIntel/format";
 
 function timeLabel(value: number | string | null | undefined) {
   if (!value) return "NO DATA";
@@ -18,13 +18,15 @@ export function PointInspector({
 }) {
   const snapshot = coreState.stormIntel.pointSnapshot;
   const units = coreState.fabric.units?.units ?? [];
+  const source = firstAvailableSource(snapshot);
+  const location = snapshot?.context.location;
 
   return (
     <aside className="ops-inspector" aria-label="Point and system inspector">
       <section className="ops-inspector__block ops-inspector__block--command">
         <div className="ops-inspector__eyebrow">POINT INSPECTOR</div>
         <h2>{selectedPoint ? `${selectedPoint.lat.toFixed(3)}, ${selectedPoint.lon.toFixed(3)}` : "No point selected"}</h2>
-        <p>{selectedPoint ? "Map point selected. Quick Intel will use the Core Storm Intel point contract when reachable." : "Click or tap the map to stage a point-in-time weather intelligence request."}</p>
+        <p>{selectedPoint ? "Map point selected. Quick Intel is requested from the Core Storm Intel point contract." : "Click or tap the map to stage a point-in-time weather intelligence request."}</p>
       </section>
 
       <section className="ops-inspector__block">
@@ -51,14 +53,28 @@ export function PointInspector({
           <OpsStatusPill state={coreState.stormIntel.state} />
         </div>
         <p>{coreState.stormIntel.detail}</p>
+        {coreState.stormIntel.pointLoading && <p className="ops-loading">Loading newest selected point...</p>}
+        {coreState.stormIntel.pointError && <p className="ops-error-text">{coreState.stormIntel.pointError}</p>}
         <p>{stormIntelSummary(snapshot)}</p>
+        <div className="ops-provenance-grid">
+          <span>Requested</span><b>{selectedPoint ? `${selectedPoint.lat.toFixed(4)}, ${selectedPoint.lon.toFixed(4)}` : "NO POINT"}</b>
+          <span>Resolved grid</span><b>{source?.resolvedLatitude != null && source.resolvedLongitude != null ? `${source.resolvedLatitude.toFixed(4)}, ${source.resolvedLongitude.toFixed(4)}` : "UNAVAILABLE"}</b>
+          <span>Grid distance</span><b>{source?.gridDistanceKm != null ? `${source.gridDistanceKm.toFixed(2)} km` : "UNAVAILABLE"}</b>
+          <span>Provider</span><b>{source?.provider ?? snapshot?.providerName ?? "UNAVAILABLE"}</b>
+          <span>Product</span><b>{source?.product ?? "UNAVAILABLE"}</b>
+          <span>Run / valid</span><b>{source?.runTime && source.validTime ? `${new Date(source.runTime).toISOString().slice(11, 16)}Z / ${new Date(source.validTime).toISOString().slice(11, 16)}Z` : "UNAVAILABLE"}</b>
+          <span>Forecast hour</span><b>{source?.forecastHour ?? "UNAVAILABLE"}</b>
+          <span>Data class</span><b>{source?.dataClass ?? snapshot?.metrics.find((metric) => metric.dataClass)?.dataClass ?? "UNAVAILABLE"}</b>
+          <span>Location source</span><b>{location?.resolvedFrom ?? "UNAVAILABLE"}</b>
+        </div>
         <div className="ops-metric-stack">
-          {PRIMARY_STORM_METRICS.slice(0, 8).map((key) => {
+          {PRIMARY_STORM_METRICS.map((key) => {
             const metric = metricByKey(snapshot, key);
             return (
               <div className="ops-metric-line" key={key}>
                 <span>{metric?.label ?? key.replace(/_/g, " ").toUpperCase()}</span>
                 <b>{formatMetric(metric)}</b>
+                <em>{sourceSemantics(metric)}</em>
                 <small>{metricProvenance(metric)}</small>
               </div>
             );
@@ -84,12 +100,12 @@ export function PointInspector({
 
       <section className="ops-inspector__block">
         <div className="ops-inspector__eyebrow">SOUNDING SNAPSHOT</div>
-        <p>Vertical profile endpoint not yet available. No Skew-T or hodograph data is fabricated in Phase 1.</p>
+        <p>Vertical profile endpoint not yet available. Selected point context is ready, but no Skew-T or browser-side GRIB data is fabricated in Phase 2.</p>
       </section>
 
       <section className="ops-inspector__block">
         <div className="ops-inspector__eyebrow">CONSENSUS</div>
-        <p>Consensus chassis reserved. No model matrix, target corridor, or percentage score is generated yet.</p>
+        <p>Consensus chassis reserved. No averaging, target corridor, percentage score, or tornado probability is generated in Phase 2.</p>
       </section>
     </aside>
   );

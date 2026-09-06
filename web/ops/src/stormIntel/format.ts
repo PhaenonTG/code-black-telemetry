@@ -30,7 +30,8 @@ export function metricProvenance(metric: NormalizedMetric | null): string {
   if (!metric?.source) return metric?.unavailableReason ?? "No source";
   const run = metric.source.runTime ? new Date(metric.source.runTime).toISOString().slice(11, 16) + "Z" : "run unknown";
   const valid = metric.source.validTime ? new Date(metric.source.validTime).toISOString().slice(11, 16) + "Z" : "valid unknown";
-  return `${metric.dataClass ?? "UNKNOWN"} · ${metric.source.provider} ${metric.source.product} · ${run} / ${valid}`;
+  const fh = metric.source.forecastHour === null ? "FH ?" : `FH ${metric.source.forecastHour}`;
+  return `${metric.dataClass ?? "UNKNOWN"} · ${metric.source.provider} ${metric.source.product} · ${run} / ${valid} · ${fh}`;
 }
 
 export function stormIntelSummary(snapshot: StormIntelSnapshot | null): string {
@@ -38,4 +39,16 @@ export function stormIntelSummary(snapshot: StormIntelSnapshot | null): string {
   if (!snapshot.available) return snapshot.unavailableReason ?? "Storm Intel unavailable.";
   const score = snapshot.score.available && snapshot.score.value !== null ? `${Math.round(snapshot.score.value)}` : "NO SCORE";
   return `${snapshot.providerName} · ${score} · ${snapshot.context.contextType}`;
+}
+
+export function sourceSemantics(metric: NormalizedMetric | null): "DIRECT" | "CALCULATED" | "PROXY" | "UNAVAILABLE" {
+  if (!metric || metric.availability !== "available") return "UNAVAILABLE";
+  const text = `${metric.derivation ?? ""} ${metric.source?.formulation ?? ""}`.toLowerCase();
+  if (text.includes("proxy")) return "PROXY";
+  if (text.includes("calculat") || text.includes("derived")) return "CALCULATED";
+  return "DIRECT";
+}
+
+export function firstAvailableSource(snapshot: StormIntelSnapshot | null) {
+  return snapshot?.metrics.find((metric) => metric.source)?.source ?? null;
 }
