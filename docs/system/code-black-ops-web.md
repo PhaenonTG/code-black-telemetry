@@ -1,6 +1,11 @@
 # Code Black OPS Website
 
-Status: Phase 3 production web deployment is live behind Supabase Auth.
+Status: Phase 3 production web deployment is live behind Supabase Auth. Phase 4 (secure Core
+gateway) added an authenticated, allowlisted Cloudflare Pages Function for future production Core
+access -- see `docs/system/code-black-core-gateway.md` for the full design. It is not live yet: the
+Core-side private transport it depends on was deliberately not built this pass (Safety Gate). The
+deployed site continues to correctly report Core/Fabric/Storm Intel as unavailable, exactly as
+before Phase 4.
 
 ## Architecture Decision
 
@@ -45,6 +50,13 @@ Production Core access is intentionally not wired directly from the public-hoste
 site. Do not bake the local SSH tunnel, `127.0.0.1:18000`, or Core's Tailscale IP into production.
 Until a reviewed secure Core gateway/proxy exists, the deployed site should report Core/Fabric/Storm
 Intel as unavailable rather than silently using simulation or exposing Core publicly.
+
+A reviewed Cloudflare-side half of that gateway now exists (`web/ops/functions/api/core/[[path]].ts`,
+Phase 4) -- authenticated, allowlisted, no open-proxy behavior, fully tested. It is not wired to
+live Core data yet because the Core-side private transport (recommended: Cloudflare Tunnel) was
+deliberately not installed this pass, per the standing instruction to stop before making a
+significant Core-side networking change without separate explicit approval. Full detail, including
+exactly what that Core-side change would involve, is in `docs/system/code-black-core-gateway.md`.
 
 ## Production Deployment
 
@@ -247,6 +259,16 @@ behind Supabase authorization.
 ## Known Limitations
 
 - The local browser needs the SSH tunnel and Vite proxy for real Core data.
+- The production Cloudflare gateway (`/api/core/*`) is deployed and tested but not yet backed by a
+  live Core-side transport -- production Core/Fabric/Storm Intel remain `UNAVAILABLE` in production
+  until that separate, explicitly-approved Core-side change is made. See
+  `docs/system/code-black-core-gateway.md`.
+- `src/core/client.ts` does not yet attach a Supabase bearer token to its Core requests -- required
+  before the production gateway's auth check can succeed, deliberately deferred alongside the
+  Core-side transport (see the gateway doc's "Client wiring still needed" section).
+- The gateway's live Fabric WebSocket route is designed but not implemented; production Fabric
+  would launch REST-only (health + units, polled), which the existing `CoreOpsProvider` already
+  supports with no code changes.
 - React StrictMode in dev opens and closes one preliminary WebSocket before the steady shared socket;
   production does not perform that dev-only double effect.
 - Soundings require a future normalized vertical profile endpoint.
