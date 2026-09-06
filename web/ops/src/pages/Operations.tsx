@@ -7,6 +7,7 @@ import {
 } from "../status/externalHealth"
 import { StatusBadge } from "../components/StatusBadge"
 import { PageHeader } from "../components/PageHeader"
+import { useCoreOps } from "../core/useCoreOps"
 
 const CHECKING: ObservableHealth = {
   state: "CHECKING",
@@ -30,6 +31,7 @@ function initialHealth(): ExternalHealthSnapshot {
 // hard-coded READY state.
 export default function Operations() {
   const [health, setHealth] = useState<ExternalHealthSnapshot>(initialHealth)
+  const { state: coreState } = useCoreOps(null)
 
   useEffect(() => {
     let cancelled = false
@@ -69,7 +71,7 @@ export default function Operations() {
   }, [])
 
   const rows = buildSystemStatus({
-    coreReachable: false,
+    coreReachable: coreState.core.state === "LIVE",
     map: health.map,
     radar: health.radar,
     singleSiteRadar: health.singleSiteRadar,
@@ -80,6 +82,23 @@ export default function Operations() {
   return (
     <div className="page page-operations">
       <PageHeader title="Operations" kicker="SYSTEM STATUS" />
+      <div className="ops-system-grid">
+        <section>
+          <span>CORE HEALTH</span>
+          <b>{coreState.core.state}</b>
+          <p>{coreState.core.detail}</p>
+        </section>
+        <section>
+          <span>FABRIC</span>
+          <b>{coreState.fabric.wsState.toUpperCase()}</b>
+          <p>{coreState.fabric.detail}</p>
+        </section>
+        <section>
+          <span>STORM INTEL</span>
+          <b>{coreState.stormIntel.state}</b>
+          <p>{coreState.stormIntel.detail}</p>
+        </section>
+      </div>
       <div className="status-table">
         {rows.map((row) => (
           <div key={row.key} className="status-row">

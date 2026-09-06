@@ -10,6 +10,68 @@
 .page-map{position:absolute;inset:0}
 .page-map,.page-map>div{height:100%;width:100%}
 
+/* ---- Phase 1 OPS workstation chassis ---- */
+.ops-workstation{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) 380px;background:var(--cb-black);overflow:hidden}
+.ops-map-stage{position:relative;min-width:0;min-height:0;background:#000}
+.ops-map-stage>.atlas-map-shell{height:100%;width:100%}
+.ops-map-overlay{position:absolute;z-index:20;left:18px;right:18px;display:flex;align-items:center;gap:10px;pointer-events:none}
+.ops-map-overlay--top{top:14px}
+.ops-map-overlay>div{background:rgba(0,0,0,.86);border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);padding:9px 14px;min-width:180px}
+.ops-map-overlay span,.ops-timeline span,.ops-inspector__eyebrow{display:block;font-size:9px;font-weight:900;letter-spacing:.16em;color:var(--cb-red);text-transform:uppercase}
+.ops-map-overlay b{display:block;margin-top:2px;font-size:16px;font-weight:900;letter-spacing:.04em;color:var(--cb-text)}
+.ops-timeline{position:absolute;z-index:20;left:18px;right:18px;bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:18px;background:rgba(0,0,0,.9);border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);padding:10px 14px}
+.ops-timeline b{display:block;margin-top:2px;font-size:12px;color:var(--cb-text);letter-spacing:.08em;text-transform:uppercase}
+.ops-timeline__ticks{display:grid;grid-template-columns:repeat(6,minmax(54px,1fr));gap:6px;min-width:min(560px,65%)}
+.ops-timeline__ticks button{height:30px;background:var(--cb-panel-low);border:1px solid var(--cb-line);color:var(--cb-muted);font-size:10px;font-weight:900;letter-spacing:.08em;cursor:pointer;clip-path:polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,0 100%)}
+.ops-timeline__ticks button.active{color:#000;background:var(--cb-red);border-color:var(--cb-red)}
+.ops-inspector{min-width:0;overflow:auto;background:var(--cb-shell);border-left:1px solid var(--cb-line);padding:14px;display:flex;flex-direction:column;gap:10px}
+.ops-inspector__block{background:var(--cb-panel);border:1px solid var(--cb-line);border-top:2px solid rgba(255,255,255,.16);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);padding:14px}
+.ops-inspector__block--command{border-top-color:var(--cb-red);background:linear-gradient(135deg,var(--cb-panel),#050506)}
+.ops-inspector h2{margin:4px 0 8px;font-size:20px;line-height:1.05;letter-spacing:.02em;text-transform:uppercase}
+.ops-inspector p{margin:6px 0 0;color:var(--cb-muted);font-size:11px;line-height:1.55}
+.ops-inspector__row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 6px}
+.ops-inspector__row span{color:var(--cb-text);font-size:11px;font-weight:900;letter-spacing:.09em;text-transform:uppercase}
+.ops-inspector__row b{font-size:10px;color:var(--cb-muted);letter-spacing:.08em}
+.ops-metric-stack{display:flex;flex-direction:column;margin-top:10px;border-top:1px solid var(--cb-line)}
+.ops-metric-line{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:9px 0;border-bottom:1px solid var(--cb-line)}
+.ops-metric-line span{font-size:10px;font-weight:900;letter-spacing:.08em;color:var(--cb-muted);text-transform:uppercase}
+.ops-metric-line b{font-size:15px;font-variant-numeric:tabular-nums;color:var(--cb-text)}
+.ops-metric-line small{grid-column:1/-1;color:var(--cb-dim);font-size:9px;line-height:1.35}
+.ops-unit-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.ops-unit-row{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--cb-line);padding-top:8px;font-size:11px}
+.ops-unit-row span{font-weight:800;color:var(--cb-text)}
+.ops-unit-row b{color:var(--cb-muted)}
+.ops-dev-panel{max-width:760px;border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);background:var(--cb-panel);padding:24px}
+.ops-dev-panel h2{margin:0 0 10px;font-size:28px;letter-spacing:.04em}
+.ops-dev-panel p{margin:0 0 10px;color:var(--cb-muted);line-height:1.6}
+.ops-system-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.ops-system-grid section,.ops-fleet-card{border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%);background:var(--cb-panel);padding:14px}
+.ops-system-grid span,.ops-fleet-card p{display:block;margin:0 0 6px;font-size:9px;font-weight:900;letter-spacing:.12em;color:var(--cb-muted);text-transform:uppercase}
+.ops-system-grid b,.ops-fleet-card b{display:block;font-size:18px;color:var(--cb-text)}
+.ops-system-grid p,.ops-fleet-card span{display:block;margin:6px 0 0;color:var(--cb-muted);font-size:11px;line-height:1.4}
+.ops-fleet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.ops-fleet-card h2{margin:0 0 10px;font-size:20px;text-transform:uppercase}
+
+@media (max-width:1199px){
+  .ops-workstation{grid-template-columns:minmax(0,1fr) 320px}
+  .ops-timeline__ticks{min-width:min(460px,68%)}
+}
+@media (max-width:767px){
+  .ops-workstation{position:relative;display:flex;flex-direction:column;height:100%;overflow:auto}
+  .ops-map-stage{height:58vh;min-height:420px;flex:0 0 auto}
+  .ops-inspector{border-left:0;border-top:1px solid var(--cb-line);overflow:visible}
+  .ops-map-overlay{left:10px;right:10px;top:10px;flex-wrap:wrap}
+  .ops-map-overlay>div{min-width:145px}
+  .ops-map-overlay .ops-pill{display:none}
+  .ops-timeline{left:10px;right:10px;bottom:10px;display:block}
+  .ops-timeline__ticks{min-width:0;width:100%;grid-template-columns:repeat(3,1fr);margin-top:8px}
+  .ops-system-grid{grid-template-columns:1fr}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:1ms!important;transition-duration:1ms!important;scroll-behavior:auto!important}
+}
+
 /* ---- Metric grid (Weather) ---- */
 .ops-metric-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
 .ops-metric-tile{border:1px solid var(--cb-line);background:var(--cb-panel);border-radius:var(--cb-radius);padding:12px 14px;display:flex;flex-direction:column;gap:6px}

@@ -10,6 +10,12 @@ import { LoadingScreen } from "./LoadingScreen"
 // auth is known (see AuthProvider for the session bootstrap + onAuthStateChange wiring).
 export function AuthGate({ children }: { children: ReactNode }) {
   const auth = useAuth()
+  const localPreview =
+    import.meta.env.DEV &&
+    window.location.hostname === "127.0.0.1" &&
+    new URLSearchParams(window.location.search).get("phase1Preview") === "1"
+
+  if (localPreview) return <>{children}</>
 
   switch (auth.status) {
     case "loading":

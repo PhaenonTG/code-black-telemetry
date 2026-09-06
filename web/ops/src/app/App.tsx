@@ -3,10 +3,8 @@ import { AuthProvider } from "../auth/AuthProvider"
 import { AuthGate } from "../components/AuthGate"
 import { AppShell } from "../layouts/AppShell"
 import UpdatePassword from "../pages/UpdatePassword"
-import Home from "../pages/Home"
-import MapPage from "../pages/Map"
-import Weather from "../pages/Weather"
-import Alerts from "../pages/Alerts"
+import OpsWorkstation from "../pages/OpsWorkstation"
+import DevelopmentPage from "../pages/DevelopmentPage"
 import Fleet from "../pages/Fleet"
 import Operations from "../pages/Operations"
 import Settings from "../pages/Settings"
@@ -28,11 +26,19 @@ export default function App() {
               <AuthGate>
                 <AppShell>
                   <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/map" element={<MapPage />} />
-                    <Route path="/weather" element={<Weather />} />
-                    <Route path="/alerts" element={<Alerts />} />
+                    <Route path="/" element={<OpsWorkstation focus="LIVE OPS" />} />
+                    <Route path="/radar" element={<OpsWorkstation focus="RADAR" />} />
+                    <Route path="/storm-intel" element={<OpsWorkstation focus="STORM INTEL" />} />
+                    <Route path="/models" element={<DevelopmentPage title="MODELS" />} />
+                    <Route path="/soundings" element={<DevelopmentPage title="SOUNDINGS" detail="Vertical profile endpoint not yet available. Sounding Snapshot will enter here when Core exposes normalized profile data." />} />
+                    <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 1." />} />
+                    <Route path="/targets" element={<DevelopmentPage title="TARGETS" detail="Target corridors are reserved for the future Consensus workflow. Phase 1 does not create automated chase targets." />} />
                     <Route path="/fleet" element={<Fleet />} />
+                    <Route path="/stream" element={<DevelopmentPage title="STREAM" detail="Stream control integration is reserved. No producer controls or public stream switching are exposed in Phase 1." />} />
+                    <Route path="/system" element={<Operations />} />
+                    <Route path="/map" element={<OpsWorkstation focus="RADAR" />} />
+                    <Route path="/weather" element={<OpsWorkstation focus="STORM INTEL" />} />
+                    <Route path="/alerts" element={<OpsWorkstation focus="LIVE OPS" />} />
                     <Route path="/operations" element={<Operations />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/more" element={<More />} />

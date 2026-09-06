@@ -81,7 +81,13 @@ type AtlasMapProps = {
   // full toolbar only exists on the "full" Locate page, which has the room for it.
   controlsVariant?: "full" | "compact";
   escapeControl?: ReactNode;
+  onPointSelect?: (point: AtlasSelectedPoint) => void;
 };
+
+export interface AtlasSelectedPoint {
+  lat: number;
+  lon: number;
+}
 
 const EMPTY_MODIFIERS = { modifiedLayers: 0, firstSymbolLayerId: undefined as string | undefined, lastMapError: "" };
 // Stable references for the default-prop case -- a fresh `[]` literal in the destructured default
@@ -136,6 +142,7 @@ export function AtlasMap({
   nearbyBest = EMPTY_NEARBY_BEST,
   controlsVariant = "full",
   escapeControl,
+  onPointSelect,
 }: AtlasMapProps) {
   const compact = controlsVariant === "compact";
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -148,6 +155,8 @@ export function AtlasMap({
   // below for why they can't share one gate.
   const introAppliedRef = useRef(false);
   const latestRef = useRef({ gps, rangeRings, expanded });
+  const onPointSelectRef = useRef(onPointSelect);
+  onPointSelectRef.current = onPointSelect;
   const [cameraMode, setCameraMode] = useState<AtlasCameraMode>("FOLLOW_NORTH");
   const [bearing, setBearing] = useState(gps?.headingDeg ?? 0);
   const [pitch, setPitch] = useState(0);
@@ -409,6 +418,12 @@ export function AtlasMap({
       });
       map.on("moveend", () => setViewport(viewportFromMap(map)));
       map.on("zoomend", () => setViewport(viewportFromMap(map)));
+      map.on("click", (event) => {
+        onPointSelectRef.current?.({
+          lat: Number(event.lngLat.lat.toFixed(5)),
+          lon: Number(event.lngLat.lng.toFixed(5)),
+        });
+      });
       map.getCanvas().addEventListener("webglcontextlost", () => {
         setMapState("WEBGL_ERROR");
         setMapError("WEBGL_CONTEXT_LOST");
@@ -901,6 +916,10 @@ export function AtlasMap({
   }, [bearing, cameraMode, gps, idleCount, loaded, mapError, mapState, mosaicVisible, pitch, pixelSample, radarFrame, radarVisible, renderCount, styleUri]);
 
   const visibleError = mapError && mapState !== "READY" ? mapError : "";
+  const visibleErrorTitle = visibleError === "WEBGL_CONTEXT_LOST" ? "Map Renderer Unavailable" : visibleError;
+  const visibleErrorDetail = visibleError === "WEBGL_CONTEXT_LOST"
+    ? "WebGL rendering is unavailable in this browser session. Live data panels and point workflow remain isolated from the renderer."
+    : "Atlas could not initialize the map renderer for this session.";
   const canvasCount = containerRef.current?.querySelectorAll("canvas").length ?? 0;
   const atlasStateLabel = ATLAS_DIAGNOSTICS_ENABLED
     ? `${mapState}${loaded ? "" : " LOADING"} c${canvasCount} r${renderCount} i${idleCount} ${pixelSample}`
@@ -949,10 +968,15 @@ export function AtlasMap({
     : null;
 
   return (
-    <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"}`} data-testid={compact ? "atlas-map-compact" : "atlas-map-primary"}>
+    <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"} ${visibleError ? "atlas-map-shell--error" : ""}`} data-testid={compact ? "atlas-map-compact" : "atlas-map-primary"}>
       <div className="atlas-map-canvas-area">
         <div ref={containerRef} className="atlas-map" data-testid={compact ? "atlas-map-canvas-compact" : "atlas-map-canvas-primary"} data-camera-mode={cameraMode} />
-        {visibleError && <div className="atlas-map-error">{visibleError}</div>}
+        {visibleError && (
+          <div className="atlas-map-error" role="status" aria-live="polite">
+            <strong>{visibleErrorTitle}</strong>
+            <span>{visibleErrorDetail}</span>
+          </div>
+        )}
         {!compact && escapeControl && <div className="atlas-map-escape-slot" data-testid="atlas-map-escape-slot">{escapeControl}</div>}
         {!compact && (
           <div className="radar-strip atlas-radar-strip">

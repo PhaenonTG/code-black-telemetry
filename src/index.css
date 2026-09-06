@@ -2206,13 +2206,34 @@ button {
   inset: 0;
   z-index: 20;
   display: grid;
+  gap: 8px;
   place-items: center;
+  align-content: center;
   padding: 16px;
   background: rgba(0, 0, 0, 0.72);
-  color: var(--cb-red);
+  color: #fff;
   font: 900 12px / 1.25 "JetBrains Mono", Consolas, monospace;
   text-align: center;
   text-transform: uppercase;
+  pointer-events: none;
+}
+
+.atlas-map-error strong {
+  color: var(--cb-red);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+
+.atlas-map-error span {
+  max-width: min(430px, calc(100% - 96px));
+  color: rgba(222, 232, 240, 0.82);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.atlas-map-shell--error .atlas-map-controls {
+  opacity: 0.24;
 }
 
 .atlas-radar-strip {

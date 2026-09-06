@@ -17,6 +17,7 @@ export function Sidebar({ rail }: { rail: boolean }) {
           <NavLink key={r.path} to={r.path} className={({ isActive }) => `sidebar__link${isActive ? " active" : ""}`} end={r.path === "/"}>
             <Icon name={r.icon} />
             {!rail && <span>{r.label}</span>}
+            {!rail && r.state === "DEVELOPMENT" && <small>DEV</small>}
           </NavLink>
         ))}
       </div>
