@@ -1,6 +1,6 @@
 # Code Black OPS Website
 
-Status: Phase 2 development workstation. Not deployed publicly.
+Status: Phase 3 production web deployment is live behind Supabase Auth.
 
 ## Architecture Decision
 
@@ -40,6 +40,47 @@ npm run dev -- --host 127.0.0.1 --port 5177
 
 This avoids browser CORS changes and does not alter Core firewall, listeners, Tailscale, MQTT,
 systemd, or production configuration.
+
+Production Core access is intentionally not wired directly from the public-hosted Cloudflare Pages
+site. Do not bake the local SSH tunnel, `127.0.0.1:18000`, or Core's Tailscale IP into production.
+Until a reviewed secure Core gateway/proxy exists, the deployed site should report Core/Fabric/Storm
+Intel as unavailable rather than silently using simulation or exposing Core publicly.
+
+## Production Deployment
+
+Production OPS is deployed by the existing Cloudflare Pages Git integration:
+
+- Provider: Cloudflare Pages.
+- Project: `codeblack-ops`.
+- Production URL: `https://ops.codeblackwx.com`.
+- Default Pages URL: `https://codeblack-ops.pages.dev`.
+- Source branch: `master`.
+- Root directory: `web/ops`.
+- Build command: `npm run build`.
+- Output directory: `dist`.
+
+Deployment record:
+
+- Deployed commit: `1f41646099532ee54f261ab799e8c37f9b0f4db6`.
+- Deployment date: 2026-09-06.
+- Method used: fast-forward push of verified `feature/ops-web-v1` HEAD to `origin/master`.
+- Previous production source commit: `bc0933c3e4e1ff3e98aef0a56f7b756eeface9c9`.
+- Rollback method: revert/reset the Cloudflare Pages production branch back to the previous
+  production source commit or use Cloudflare Pages' previous deployment rollback in the dashboard.
+
+Production QA verified the Supabase login gate, `/update-password` route delivery, Phase 3 bundle
+contents, and responsive unauthenticated screens. Authenticated route QA requires a working OPS
+account session/password and was not completed during the deployment pass.
+
+Supabase Auth callback requirement:
+
+```text
+https://ops.codeblackwx.com/update-password
+https://codeblack-ops.pages.dev/update-password
+```
+
+Confirm those origins/routes are allowed in the Supabase Auth URL configuration before relying on
+password recovery for production operations.
 
 ## Verified Production Contracts
 
