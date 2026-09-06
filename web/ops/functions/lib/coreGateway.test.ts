@@ -129,6 +129,36 @@ describe("forwardToCore (open-proxy prevention + bounded behavior)", () => {
     expect(requestedUrl).not.toContain("admin=1");
   });
 
+  it("sends Cloudflare Access Service Token headers to the upstream when configured", async () => {
+    let sentHeaders: Record<string, string> = {};
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      sentHeaders = (init?.headers as Record<string, string>) ?? {};
+      return jsonResponse(200, { ok: true });
+    }) as typeof fetch;
+    await forwardToCore(route, new URL("https://ops.codeblackwx.com/api/core/storm-intel/point"), {
+      CORE_GATEWAY_UPSTREAM_BASE: "https://core-gateway.internal.example",
+      CORE_GATEWAY_CF_ACCESS_CLIENT_ID: "access-client-id",
+      CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET: "access-client-secret",
+    }, fetchImpl);
+    expect(sentHeaders["CF-Access-Client-Id"]).toBe("access-client-id");
+    expect(sentHeaders["CF-Access-Client-Secret"]).toBe("access-client-secret");
+    expect(sentHeaders["X-Core-Gateway-Secret"]).toBeUndefined();
+  });
+
+  it("falls back to the shared-secret header only when Access Service Token credentials are absent", async () => {
+    let sentHeaders: Record<string, string> = {};
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      sentHeaders = (init?.headers as Record<string, string>) ?? {};
+      return jsonResponse(200, { ok: true });
+    }) as typeof fetch;
+    await forwardToCore(route, new URL("https://ops.codeblackwx.com/api/core/storm-intel/point"), {
+      CORE_GATEWAY_UPSTREAM_BASE: "https://core-gateway.internal.example",
+      CORE_GATEWAY_SHARED_SECRET: "plain-shared-secret",
+    }, fetchImpl);
+    expect(sentHeaders["X-Core-Gateway-Secret"]).toBe("plain-shared-secret");
+    expect(sentHeaders["CF-Access-Client-Id"]).toBeUndefined();
+  });
+
   it("maps a fetch/abort failure to CORE_TIMEOUT", async () => {
     const fetchImpl = (async () => {
       throw new DOMException("aborted", "AbortError");

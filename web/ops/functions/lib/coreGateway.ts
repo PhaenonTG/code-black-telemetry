@@ -11,7 +11,17 @@ export interface GatewayEnv {
   // CORE_UNAVAILABLE honestly instead of guessing at an upstream.
   CORE_GATEWAY_UPSTREAM_BASE?: string;
   // Optional defense-in-depth header sent to the upstream transport. Never sent to the browser.
+  // Superseded by the Cloudflare Access Service Token pair below when both are configured --
+  // Access validates at Cloudflare's edge before the request ever reaches the tunnel, which is
+  // strictly stronger than a header Core-side code would have to check itself. Kept as a fallback
+  // for a plain shared-secret-header tunnel setup if Access is not used.
   CORE_GATEWAY_SHARED_SECRET?: string;
+  // Cloudflare Access Service Token credentials, if the tunnel hostname is protected by a Zero
+  // Trust Access application + service-token policy (the platform-native, recommended option --
+  // see docs/system/code-black-core-gateway.md). Cloudflare's edge rejects the request before it
+  // reaches the tunnel/Core if these are absent or wrong; Core itself needs no new code either way.
+  CORE_GATEWAY_CF_ACCESS_CLIENT_ID?: string;
+  CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET?: string;
 }
 
 export interface AllowlistRoute {
@@ -154,7 +164,12 @@ export async function forwardToCore(
   const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   try {
     const headers: Record<string, string> = { Accept: "application/json" };
-    if (env.CORE_GATEWAY_SHARED_SECRET) headers["X-Core-Gateway-Secret"] = env.CORE_GATEWAY_SHARED_SECRET;
+    if (env.CORE_GATEWAY_CF_ACCESS_CLIENT_ID && env.CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET) {
+      headers["CF-Access-Client-Id"] = env.CORE_GATEWAY_CF_ACCESS_CLIENT_ID;
+      headers["CF-Access-Client-Secret"] = env.CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET;
+    } else if (env.CORE_GATEWAY_SHARED_SECRET) {
+      headers["X-Core-Gateway-Secret"] = env.CORE_GATEWAY_SHARED_SECRET;
+    }
 
     const upstreamResponse = await fetchImpl(upstreamUrl.toString(), { signal: controller.signal, headers });
 

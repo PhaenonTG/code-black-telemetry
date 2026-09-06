@@ -96,8 +96,10 @@ VITE_CODEBLACK_CORE_BASE_URL       # set to /api/core in production
 Server-side only (Cloudflare Pages Function environment, never inlined into the browser bundle):
 
 ```
-CORE_GATEWAY_UPSTREAM_BASE     # NOT SET in production yet -- see Safety Gate
-CORE_GATEWAY_SHARED_SECRET     # optional defense-in-depth header to the Core-side transport, NOT SET yet
+CORE_GATEWAY_UPSTREAM_BASE              # NOT SET yet -- see "Stage 2: Core-side tunnel"
+CORE_GATEWAY_CF_ACCESS_CLIENT_ID        # recommended; NOT SET yet
+CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET    # recommended; NOT SET yet
+CORE_GATEWAY_SHARED_SECRET              # fallback if Access is not used; NOT SET yet
 ```
 
 The Function also reads `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` directly (Cloudflare
@@ -142,64 +144,96 @@ transport also supporting a WebSocket upgrade through it, and adds real addition
 complexity/attack surface that deserves its own reviewed pass once the REST path is proven live in
 production.
 
-## Safety gate: what is NOT done
+## Stage 2: Core-side tunnel -- installed, not yet activated
 
-`CORE_GATEWAY_UPSTREAM_BASE` is intentionally unset. Until it is, every allowlisted route
-correctly and honestly returns `502 CORE_UNAVAILABLE` -- this was verified by the test suite and
-is the same "report unavailable, never simulate" principle already established in
-`web/ops/docs/ARCHITECTURE.md`.
+Approved and installed in Stage 2 (2026-09-06): the official `cloudflared` package (v2026.8.3,
+official `.deb` from `github.com/cloudflare/cloudflared` releases, amd64) is now installed on
+CodeBlack-Core. Verified before and after installation: Core API healthy on `127.0.0.1:8000` only
+(no `0.0.0.0` listener), Tailscale `BackendState: Running`, `ssh.service` active, both
+`codeblack-mqtt-broker.service` and `codeblack-mqtt-bridge.service` active, 0 failed systemd units.
+Installing the package alone starts no service and opens no port -- `cloudflared` is inert on disk
+until a tunnel is created and installed as a systemd service with a token, which is the remaining
+step below.
 
-The reason it is unset: Cloudflare Pages Functions run on Cloudflare's Workers network, which has
-no route to a private Tailscale address (`100.96.77.89`) or to `127.0.0.1` on a machine it isn't
-running on. The only way to bridge Cloudflare's edge to Core's loopback-bound API without exposing
-a public port on Core is an **outbound-initiated** tunnel -- Core (or a jump host with loopback
-access to Core) must dial out to Cloudflare, not the other way around.
+`CORE_GATEWAY_UPSTREAM_BASE` remains intentionally unset in Cloudflare Pages. Until it is, every
+allowlisted route correctly and honestly returns `502 CORE_UNAVAILABLE` -- verified by the test
+suite, same "report unavailable, never simulate" principle as `web/ops/docs/ARCHITECTURE.md`.
 
-**Recommended Core-side component: Cloudflare Tunnel (`cloudflared`).** It is purpose-built for
-exactly this (outbound-only, no inbound port opened, no firewall change), is free at Cloudflare's
-base tier, and would be configured to forward only `127.0.0.1:8000` -- nothing else -- through a
-tunnel to a non-public, non-indexed hostname, additionally protected by
-`CORE_GATEWAY_SHARED_SECRET` as a header check before Core's API ever sees the request.
+### Remaining steps (Cloudflare account/dashboard -- cannot be done from this session)
 
-**This was not installed or configured in this pass**, per the explicit instruction: *"If the
-chosen architecture requires installing/configuring a significant new Core-side daemon or changing
-production networking: STOP after the audit/architecture proposal and report exactly what would be
-changed."* Installing `cloudflared` is exactly that. What it would require, if approved separately:
+These require your own Cloudflare login and were not attempted here, consistent with never asking
+for account credentials, API tokens, or secrets to be pasted into chat:
 
-- Install the `cloudflared` package on CodeBlack-Core (or a host with loopback access to it).
-- Authenticate it to the Cloudflare account/zone (one-time `cloudflared tunnel login`).
-- Create one named tunnel forwarding a single ingress rule -- `<chosen-hostname> -> 127.0.0.1:8000`
-  -- and nothing else (no catch-all, no additional services).
-- Run it as a systemd service: least-privilege user, `Restart=on-failure`, no secrets logged.
-- Set `CORE_GATEWAY_UPSTREAM_BASE` and `CORE_GATEWAY_SHARED_SECRET` in the Cloudflare Pages project
-  once the tunnel hostname exists, then redeploy (or just update env vars -- no code change needed).
-- Rollback is trivial and non-destructive either direction: `systemctl stop cloudflared` (or
-  `disable` it) removes the tunnel entirely with zero effect on SSH, Tailscale, the Core API
-  process, or MQTT, since none of those are touched by installing it; unsetting
-  `CORE_GATEWAY_UPSTREAM_BASE` on the Cloudflare side instantly reverts the gateway to its current
-  honest `CORE_UNAVAILABLE` state with no redeploy required for that half.
+1. **Cloudflare Zero Trust dashboard -> Networks -> Tunnels -> Create a tunnel** (connector type
+   "Cloudflared"). Name it something like `codeblack-core-gateway`. The dashboard gives a one-line
+   install command containing a tunnel token, e.g.:
+   ```
+   sudo cloudflared service install <TOKEN>
+   ```
+   Run that command directly on CodeBlack-Core yourself (or paste me only the resulting command
+   with the token still in place and I will run it via SSH without echoing it back -- your choice).
+   This installs and starts `cloudflared` as a systemd service (`cloudflared.service`), pointed at
+   Cloudflare's control plane; ingress rules are then configured in the dashboard, not in a local
+   file.
+2. In the same tunnel's **Public Hostname** tab, add exactly one hostname (e.g.
+   `core-gateway.codeblackwx.com` or a non-guessable subdomain of your choosing) with:
+   - Service: `HTTP` -> `127.0.0.1:8000`
+   - Nothing else -- no catch-all rule, no additional public hostnames on this tunnel.
+3. **Protect that hostname with Cloudflare Access** (recommended over a plain shared secret):
+   Zero Trust -> Access -> Applications -> Add an application -> Self-hosted, pointed at the same
+   hostname, with a policy requiring a **Service Token** (Access -> Service Auth -> Service Tokens
+   -> Create Service Token). This gives a Client ID and Client Secret. Access validates these at
+   Cloudflare's edge *before* the request ever reaches the tunnel or Core -- Core needs zero new
+   code either way.
+4. In the **Cloudflare Pages project (`codeblack-ops`) -> Settings -> Environment variables
+   (Production)**, set:
+   ```
+   CORE_GATEWAY_UPSTREAM_BASE = https://<the tunnel hostname from step 2>
+   CORE_GATEWAY_CF_ACCESS_CLIENT_ID = <Client ID from step 3>
+   CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET = <Client Secret from step 3>
+   VITE_CODEBLACK_CORE_BASE_URL = /api/core
+   VITE_OPS_DATA_MODE = LIVE_CORE
+   ```
+   (If Access is skipped in favor of a plain shared secret instead, set `CORE_GATEWAY_SHARED_SECRET`
+   there instead of the two `CF_ACCESS_*` vars -- the gateway code already supports both, preferring
+   Access when both are present.)
+5. Redeploy (or trigger a new Pages deployment) so the Function picks up the new environment
+   variables -- Pages Functions read env vars at request time from the deployment's configuration,
+   so a redeploy after changing them is the safe way to guarantee they're live.
 
-This change was **not made**. It requires a separate, explicit decision before any Core-side
-installation happens.
+Rollback at any point is non-destructive: `sudo systemctl stop cloudflared && sudo systemctl
+disable cloudflared` removes the tunnel entirely with zero effect on SSH, Tailscale, the Core API
+process, or MQTT (none of those are touched by cloudflared); unsetting
+`CORE_GATEWAY_UPSTREAM_BASE` in Cloudflare Pages instantly reverts the gateway to its current
+honest `CORE_UNAVAILABLE` state with no redeploy required for that half.
 
-## Client wiring still needed (small, additive, not yet done)
+Once steps 1-5 above are complete, the next pass should run the full production validation in
+`docs/system/code-black-ops-web.md` before this doc is updated to "Core data live."
 
-`src/core/client.ts`'s `fetchJson` does not currently attach an `Authorization` header. For the
-gateway's auth check to succeed in production, one addition is needed: read the current Supabase
-session (`supabase.auth.getSession()`) and attach `Authorization: Bearer <access_token>` to the
-four REST calls in `client.ts`. This is a small, low-risk frontend change, deliberately **not**
-made in this pass because it has no effect until `CORE_GATEWAY_UPSTREAM_BASE` exists on the Core
-side -- shipping it now would be inert code with no way to verify it end-to-end. Tracked here so it
-is not forgotten when the Core-side tunnel decision is made.
+## Client wiring: done (Stage 2)
+
+`src/core/client.ts` now attaches `Authorization: Bearer <access_token>` to every Core request.
+`currentAccessToken()` reads `supabase.auth.getSession()` fresh on every call (no caching), so it
+transparently reflects "no session," "expired session with failed refresh" (both resolve to
+`session: null`, correctly falling through to the gateway's `401 AUTH_REQUIRED`), and "session
+just refreshed" (supabase-js's own auto-refresh updates what `getSession()` returns, picked up on
+the very next request with no extra code). `buildCoreRequestHeaders()` omits the `Authorization`
+header entirely when there is no token, rather than sending an empty/fake bearer value. Both are
+exported and unit tested in `web/ops/src/core/authHeader.test.ts` (7 tests) with a mocked Supabase
+client -- no live Supabase dependency in the test suite. This has no visible effect against the
+local dev SSH-tunnel path (Core's own API has no auth check today) and will only start mattering
+once the production gateway has a real upstream.
 
 ## Testing
 
 `web/ops/functions/lib/coreGateway.ts` is pure (only `fetch`/`Response`/`URL`/`AbortController`,
 all standard) and unit tested directly with Vitest in
-`web/ops/functions/lib/coreGateway.test.ts` (15 tests): unauthorized request, invalid/expired
+`web/ops/functions/lib/coreGateway.test.ts` (17 tests): unauthorized request, invalid/expired
 token, valid auth + active profile, valid auth + inactive/missing profile, allowlisted route
 resolution, rejected non-allowlisted routes (including path-traversal and MQTT/admin/SSH-shaped
 attempts), open-proxy prevention (a caller-supplied `host`/`admin` query param is proven to never
-reach the outgoing request), Core-unconfigured, Core timeout, Core network failure, malformed
-upstream JSON, non-2xx upstream mapped without leaking upstream error detail, and a
-successful Storm Intel point proxy. No live Core or live Supabase dependency in the test suite.
+reach the outgoing request), Cloudflare Access Service Token headers sent when configured (and
+correctly preferred over the plain shared-secret fallback), Core-unconfigured, Core timeout, Core
+network failure, malformed upstream JSON, non-2xx upstream mapped without leaking upstream error
+detail, and a successful Storm Intel point proxy. No live Core or live Supabase dependency in the
+test suite.

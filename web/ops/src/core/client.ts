@@ -1,6 +1,7 @@
 import { normalizeStormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/normalize";
 import type { StormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/types";
 import type { FabricNormalizedState } from "../../../../src/services/fabric";
+import { supabase } from "../lib/supabase";
 import { coreConfigured, type OpsCoreConfig } from "./config";
 import type { CoreHealthSnapshot, FabricSnapshotState, OpsConnectionState, StormIntelState } from "./types";
 
@@ -19,11 +20,31 @@ export interface FabricWsEvent {
   payload: unknown;
 }
 
+// The production gateway (web/ops/functions/api/core) requires this on every request; the local
+// dev SSH-tunnel path (Core reached directly, no gateway in front) ignores it harmlessly since
+// Core's own API has no auth check. Reads the current Supabase session fresh on every call rather
+// than caching it -- supabase-js keeps this in-memory/localStorage and transparently refreshes it,
+// so this always reflects the current token (including right after a refresh) with no extra
+// network round trip of its own. Returns null for "no session" and "expired with failed refresh"
+// alike; both cases correctly fall through to the gateway's own 401, which each caller below
+// already surfaces as an honest UNAVAILABLE detail rather than fabricating a different failure.
+export async function currentAccessToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+export function buildCoreRequestHeaders(token: string | null): Record<string, string> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const token = await currentAccessToken();
   const response = await fetch(url, {
     cache: "no-store",
     signal,
-    headers: { Accept: "application/json" },
+    headers: buildCoreRequestHeaders(token),
   });
   if (!response.ok) throw new OpsCoreClientError(`HTTP ${response.status}`);
   return response.json() as Promise<T>;

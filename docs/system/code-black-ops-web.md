@@ -261,11 +261,12 @@ behind Supabase authorization.
 - The local browser needs the SSH tunnel and Vite proxy for real Core data.
 - The production Cloudflare gateway (`/api/core/*`) is deployed and tested but not yet backed by a
   live Core-side transport -- production Core/Fabric/Storm Intel remain `UNAVAILABLE` in production
-  until that separate, explicitly-approved Core-side change is made. See
-  `docs/system/code-black-core-gateway.md`.
-- `src/core/client.ts` does not yet attach a Supabase bearer token to its Core requests -- required
-  before the production gateway's auth check can succeed, deliberately deferred alongside the
-  Core-side transport (see the gateway doc's "Client wiring still needed" section).
+  until the remaining Cloudflare account setup (Tunnel + Access, dashboard-only steps) is completed.
+  `cloudflared` is now installed on CodeBlack-Core (Stage 2) but not yet activated as a running
+  tunnel. See `docs/system/code-black-core-gateway.md`, "Stage 2: Core-side tunnel."
+- `src/core/client.ts` now attaches a Supabase bearer token to every Core request (Stage 2) -- this
+  has no visible effect yet since the dev SSH-tunnel path doesn't check it and the production
+  gateway has no live upstream yet, but it is wired, tested, and ready for when the tunnel exists.
 - The gateway's live Fabric WebSocket route is designed but not implemented; production Fabric
   would launch REST-only (health + units, polled), which the existing `CoreOpsProvider` already
   supports with no code changes.
