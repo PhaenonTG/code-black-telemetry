@@ -92,6 +92,81 @@ Storm Intel rendering preserves:
 
 Unsupported metrics remain unavailable. Sounding Snapshot and Consensus stay architectural only.
 
+## Phase 3 Storm Intel Workspace
+
+`/storm-intel` is now a dedicated forecasting workspace rather than a duplicate LIVE OPS view. It
+keeps the map as the primary surface, but adds a Storm Intel command header, point provenance,
+bounded recent-point history, grouped severe-environment metrics, and disabled future workflow
+actions for Sounding Snapshot and Consensus.
+
+Metric groups are intentionally meteorological instead of a flat dashboard wall:
+
+- INSTABILITY: SBCAPE, SBCIN, MLCAPE, MLCIN, MUCAPE, MUCIN when supplied.
+- LOW-LEVEL / TORNADO ENVIRONMENT: LCL, 0-1 km SRH, 0-3 km SRH when supplied.
+- SHEAR / STORM MOTION: currently 0-6 km bulk shear when supplied.
+- THERMODYNAMICS: surface temperature, surface dewpoint, RH, lapse rates when supplied.
+- SUPPORTED INDEX: fixed-layer STP only when Core supplies it.
+
+The UI does not invent SCP, effective-layer fields, effective SRH, effective shear, EL, warning
+classification, tornado probability, consensus score, or model weights. Each rendered metric keeps
+its normalized source semantic visible: `DIRECT`, `CALCULATED`, `PROXY`, or `UNAVAILABLE`.
+
+Point history is frontend state only. It is bounded to 12 recent points and deduplicates
+near-identical coordinates before inserting the newest entry. A history row stores selected-time
+metadata and enough provenance to identify the point, but selecting it reloads the coordinate
+through the live point endpoint. The app does not present old cached history metrics as fresh live
+data.
+
+The current production OpenAPI for `/api/storm-intel/v1/point` accepts only:
+
+- `latitude`
+- `longitude`
+
+It does not expose explicit `valid_time`, `forecast_hour`, model selection, run selection, or
+historical point retrieval. The timeline remains a DEVELOPMENT/CURRENT ONLY affordance until Core
+adds a backward-compatible contract for those fields.
+
+Future Sounding Snapshot integration should consume a normalized Core vertical-profile endpoint
+using the selected point plus model/run/valid/FH context. The browser must not decode GRIB or
+fabricate a Skew-T. Future Consensus should consume an authoritative model-matrix/target-corridor
+contract; a consensus percentage must not be treated as tornado probability.
+
+## Auth Reset UX
+
+The forgot-password flow still uses Supabase Auth and the existing `/update-password` recovery
+route. The Phase 3 change is limited to client UX hardening: `resetPasswordForEmail()` errors are
+now checked and displayed as safe generic failures while successful requests keep the
+non-enumerating message. The UI still does not reveal whether an unauthenticated email address
+exists in Supabase.
+
+Supabase email delivery, SMTP, site URL, and allowed redirect URLs remain provider-side
+configuration. The expected redirect remains:
+
+```text
+<OPS origin>/update-password
+```
+
+## Live Core Dev Tunnel
+
+For local live development, keep Core loopback-only and use the approved tunnel:
+
+```text
+ssh -N -L 18000:127.0.0.1:8000 codeblack@100.96.77.89
+```
+
+Browser CORS blocks direct requests to `http://127.0.0.1:18000`, so Vite should proxy the app
+through `/core-api` and `/core-ws` while the proxy target points at the tunnel:
+
+```text
+CODEBLACK_CORE_PROXY_TARGET=http://127.0.0.1:18000
+VITE_CODEBLACK_CORE_BASE_URL=/core-api
+VITE_CODEBLACK_CORE_WS_URL=ws://127.0.0.1:<vite-port>/core-ws
+VITE_OPS_DATA_MODE=LIVE_CORE
+```
+
+Do not broaden Core firewall/listeners, change Tailscale, or expose Core publicly for frontend
+development.
+
 ## Map Interaction
 
 Map click/tap immediately updates:
@@ -136,3 +211,5 @@ behind Supabase authorization.
 - Soundings require a future normalized vertical profile endpoint.
 - Consensus requires future model-matrix/target-corridor contracts.
 - The Vite build still bundles Mapbox heavily; code-splitting is a later performance pass.
+- Headless Chromium may report WebGL unavailable during screenshot QA. That validates the existing
+  renderer-fallback state but is not a substitute for a headed browser/GPU map rendering pass.

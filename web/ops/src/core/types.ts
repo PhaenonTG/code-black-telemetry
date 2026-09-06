@@ -31,6 +31,7 @@ export interface StormIntelState {
   requestId: number;
   pointSnapshot: StormIntelSnapshot | null;
   pointError: string | null;
+  pointHistory: StormIntelHistoryEntry[];
 }
 
 export interface OpsCoreState {
@@ -38,4 +39,19 @@ export interface OpsCoreState {
   fabric: FabricSnapshotState;
   stormIntel: StormIntelState;
   refreshedAt: number;
+}
+
+export interface StormIntelHistoryEntry {
+  id: string;
+  requested: { lat: number; lon: number };
+  resolved: { lat: number; lon: number } | null;
+  gridDistanceKm: number | null;
+  provider: string;
+  product: string | null;
+  runTime: string | null;
+  validTime: string | null;
+  forecastHour: number | null;
+  dataClass: string | null;
+  selectedAt: number;
+  summary: string;
 }

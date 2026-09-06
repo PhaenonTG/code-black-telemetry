@@ -2,27 +2,27 @@ import { useState, type FormEvent } from "react"
 import shield from "../../../../src/assets/codeblack-shield.png"
 import { Icon } from "../components/Icon"
 import { supabase } from "../lib/supabase"
+import { requestPasswordReset } from "../auth/reset"
 
 type LoginPhase = "idle" | "submitting" | "invalid" | "network-error"
-type ResetPhase = "idle" | "submitting" | "sent"
-
-function redirectTo(path: string): string {
-  return `${window.location.origin}${path}`
-}
+type ResetPhase = "idle" | "submitting" | "sent" | "error"
 
 function ForgotPassword({ onBack }: { onBack: () => void }) {
   const [email, setEmail] = useState("")
   const [phase, setPhase] = useState<ResetPhase>("idle")
+  const [error, setError] = useState("")
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setPhase("submitting")
-    // Supabase's own response here does not distinguish "no such user" from "sent" -- the
-    // client shows one generic outcome either way, so the UI can't leak account existence.
-    await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: redirectTo("/update-password"),
-    })
-    setPhase("sent")
+    setError("")
+    const result = await requestPasswordReset(supabase, email, window.location.origin)
+    if (result.ok) {
+      setPhase("sent")
+      return
+    }
+    setError(result.message)
+    setPhase("error")
   }
 
   return (
@@ -50,6 +50,13 @@ function ForgotPassword({ onBack }: { onBack: () => void }) {
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
+          {phase === "error" && (
+            <p className="auth-card__status auth-card__status--error">
+              RESET REQUEST FAILED
+              <br />
+              {error}
+            </p>
+          )}
           <button type="submit" className="auth-submit" disabled={phase === "submitting"}>
             {phase === "submitting" ? "SENDING..." : "SEND RESET LINK"}
           </button>

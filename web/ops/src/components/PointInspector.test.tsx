@@ -29,6 +29,7 @@ function state(): OpsCoreState {
       requestId: 0,
       pointSnapshot: null,
       pointError: null,
+      pointHistory: [],
     },
   };
 }

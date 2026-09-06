@@ -5,6 +5,7 @@ import { CoreOpsContext, type OpsSelectedPoint } from "./CoreOpsContext";
 import { fabricWsUrl, fetchCoreHealth, fetchFabricRest, fetchStormIntelHealth, fetchStormIntelPoint, normalizeFabricWsEvent } from "./client";
 import { fabricStateFromSnapshot } from "./fabricSnapshot";
 import { LatestRequestGate } from "./requestGate";
+import { addPointHistoryEntry, historyEntryFromSnapshot } from "../stormIntel/pointHistory";
 import type { OpsCoreState } from "./types";
 
 function initialState(): OpsCoreState {
@@ -33,6 +34,7 @@ function initialState(): OpsCoreState {
       requestId: 0,
       pointSnapshot: null,
       pointError: null,
+      pointHistory: [],
     },
   };
 }
@@ -193,6 +195,9 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
             requestId,
             pointSnapshot: snapshot,
             pointError: snapshot.available ? null : snapshot.unavailableReason,
+            pointHistory: snapshot.available
+              ? addPointHistoryEntry(current.stormIntel.pointHistory, historyEntryFromSnapshot(selectedPoint, snapshot))
+              : current.stormIntel.pointHistory,
           },
         }));
       })
@@ -220,6 +225,20 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
     setSelectedPoint(point);
   }, []);
 
-  const value = useMemo(() => ({ config, state, selectedPoint, selectPoint }), [config, state, selectedPoint, selectPoint]);
+  const selectHistoryPoint = useCallback((entry: { requested: OpsSelectedPoint }) => {
+    setSelectedPoint(entry.requested);
+  }, []);
+
+  const value = useMemo(
+    () => ({
+      config,
+      state,
+      selectedPoint,
+      pointHistory: state.stormIntel.pointHistory,
+      selectPoint,
+      selectHistoryPoint,
+    }),
+    [config, state, selectedPoint, selectPoint, selectHistoryPoint],
+  );
   return <CoreOpsContext.Provider value={value}>{children}</CoreOpsContext.Provider>;
 }

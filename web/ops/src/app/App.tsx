@@ -5,6 +5,7 @@ import { CoreOpsProvider } from "../core/CoreOpsProvider"
 import { AppShell } from "../layouts/AppShell"
 import UpdatePassword from "../pages/UpdatePassword"
 import OpsWorkstation from "../pages/OpsWorkstation"
+import StormIntelWorkspace from "../pages/StormIntelWorkspace"
 import DevelopmentPage from "../pages/DevelopmentPage"
 import Fleet from "../pages/Fleet"
 import Operations from "../pages/Operations"
@@ -30,7 +31,7 @@ export default function App() {
                     <Routes>
                       <Route path="/" element={<OpsWorkstation focus="LIVE OPS" />} />
                       <Route path="/radar" element={<OpsWorkstation focus="RADAR" />} />
-                      <Route path="/storm-intel" element={<OpsWorkstation focus="STORM INTEL" />} />
+                      <Route path="/storm-intel" element={<StormIntelWorkspace />} />
                       <Route path="/models" element={<DevelopmentPage title="MODELS" />} />
                       <Route path="/soundings" element={<DevelopmentPage title="SOUNDINGS" detail="Vertical profile endpoint not yet available. Sounding Snapshot will enter here when Core exposes normalized profile data." />} />
                       <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 2." />} />
