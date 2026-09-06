@@ -4,3 +4,8 @@ dist/
 .env.*
 !.env.example
 .DS_Store
+
+# Local-only record of Cloudflare resource IDs created by scripts/bootstrap-cloudflare-gateway.ps1.
+# Contains no secrets (service token secrets are never written to disk), but is still local
+# operational state, not something to version.
+.cloudflare-bootstrap-state.json
