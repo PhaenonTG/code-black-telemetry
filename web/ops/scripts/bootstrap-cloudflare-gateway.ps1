@@ -75,14 +75,27 @@ function Stop-Bootstrap($reason) {
 }
 
 # ---------------------------------------------------------------------------
-# 1. Token acquisition -- never echoed, never written to disk
+# 1. Credential acquisition -- never echoed, never written to disk
+#
+# Two supported auth modes:
+#   - Scoped API Token (preferred): Authorization: Bearer <token>
+#   - Global API Key (broader, account-wide): X-Auth-Email + X-Auth-Key headers. Global Key
+#     mode is selected automatically whenever $env:CLOUDFLARE_API_EMAIL is also set, since a
+#     scoped token never needs an email paired with it.
 # ---------------------------------------------------------------------------
-Write-Phase "Cloudflare API Token"
-Write-Host "This token is used only in this process's memory for this run. It is never printed," -ForegroundColor Gray
-Write-Host "logged, written to disk, or committed." -ForegroundColor Gray
+Write-Phase "Cloudflare credentials"
+Write-Host "Used only in this process's memory for this run. Never printed, logged, written to disk, or committed." -ForegroundColor Gray
 
-if ($env:CLOUDFLARE_API_TOKEN) {
-    Write-Info "Using `$env:CLOUDFLARE_API_TOKEN already set in this session."
+$UsingGlobalKey = $false
+
+if ($env:CLOUDFLARE_API_EMAIL) {
+    $UsingGlobalKey = $true
+    Write-Info "Using Global API Key mode (`$env:CLOUDFLARE_API_EMAIL is set)."
+    if (-not $env:CLOUDFLARE_API_TOKEN) { Stop-Bootstrap "`$env:CLOUDFLARE_API_EMAIL is set but `$env:CLOUDFLARE_API_TOKEN (holding the Global API Key value) is not." }
+    $Token = $env:CLOUDFLARE_API_TOKEN
+    $AccountEmail = $env:CLOUDFLARE_API_EMAIL
+} elseif ($env:CLOUDFLARE_API_TOKEN) {
+    Write-Info "Using scoped API Token mode (`$env:CLOUDFLARE_API_TOKEN already set in this session)."
     $Token = $env:CLOUDFLARE_API_TOKEN
 } else {
     $secureToken = Read-Host -Prompt "Paste your Cloudflare API token" -AsSecureString
@@ -95,9 +108,14 @@ if ($env:CLOUDFLARE_API_TOKEN) {
     }
     Remove-Variable secureToken -ErrorAction SilentlyContinue
 }
-if ([string]::IsNullOrWhiteSpace($Token)) { Stop-Bootstrap "Empty token." }
+if ([string]::IsNullOrWhiteSpace($Token)) { Stop-Bootstrap "Empty credential." }
 
-$Headers = @{ Authorization = "Bearer $Token"; "Content-Type" = "application/json" }
+if ($UsingGlobalKey) {
+    if ([string]::IsNullOrWhiteSpace($AccountEmail)) { Stop-Bootstrap "Empty account email." }
+    $Headers = @{ "X-Auth-Email" = $AccountEmail; "X-Auth-Key" = $Token; "Content-Type" = "application/json" }
+} else {
+    $Headers = @{ Authorization = "Bearer $Token"; "Content-Type" = "application/json" }
+}
 
 # ---------------------------------------------------------------------------
 # Cloudflare API helper -- PS 5.1-compatible error body extraction.
@@ -157,14 +175,25 @@ function Format-CFErrors($errors) {
 }
 
 # ---------------------------------------------------------------------------
-# 2. Verify token
+# 2. Verify credential
+#    /user/tokens/verify only applies to scoped API Tokens -- a Global API Key authenticates
+#    as the full user account and has no "token" object to verify, so GET /user is used instead.
 # ---------------------------------------------------------------------------
-Write-Phase "Verify token"
-$verify = Invoke-CF -Method GET -Path "/user/tokens/verify"
-if (-not $verify.Success) {
-    Stop-Bootstrap "Token verification failed (HTTP $($verify.HttpStatus)): $(Format-CFErrors $verify.Errors)"
+Write-Phase "Verify credential"
+if ($UsingGlobalKey) {
+    $verify = Invoke-CF -Method GET -Path "/user"
+    if (-not $verify.Success) {
+        Stop-Bootstrap "Global API Key verification failed (HTTP $($verify.HttpStatus)): $(Format-CFErrors $verify.Errors)"
+    }
+    Write-Ok "Global API Key valid for account: $($verify.Result.email)"
+    Write-Warn2 "Global API Key grants full, unscoped account access -- broader than this workflow needs. Every permission probe below will trivially pass regardless of what's actually required."
+} else {
+    $verify = Invoke-CF -Method GET -Path "/user/tokens/verify"
+    if (-not $verify.Success) {
+        Stop-Bootstrap "Token verification failed (HTTP $($verify.HttpStatus)): $(Format-CFErrors $verify.Errors)"
+    }
+    Write-Ok "Token is valid (status: $($verify.Result.status))"
 }
-Write-Ok "Token is valid (status: $($verify.Result.status))"
 
 # ---------------------------------------------------------------------------
 # 3. Discover account ID, zone ID, Pages project
