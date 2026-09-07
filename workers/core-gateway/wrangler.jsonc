@@ -11,20 +11,16 @@
   // Deliberately no "routes" and no custom domain configuration above -- do not add either
   // without re-reading the security requirements in README.md first.
 
-  // --- Future Workers VPC Service binding -------------------------------------------------
-  // NOT created yet. No Cloudflare VPC Service exists for this Worker as of this scaffold.
-  // Do not invent a service_id -- create the real VPC Service first (see README.md "Next
-  // phase: Cloudflare resources to create"), then uncomment and fill in the real ID below:
-  //
-  // "vpc_services": [
-  //   {
-  //     "binding": "CORE_VPC",
-  //     "service_id": "<REAL_VPC_SERVICE_ID_FROM_DASHBOARD_OR_WRANGLER_VPC_SERVICE_CREATE>",
-  //     "remote": true
-  //   }
-  // ]
-  //
-  // Until this is uncommented and deployed, env.CORE_VPC is undefined at runtime and
-  // src/index.ts responds 502 { error: "VPC_NOT_CONFIGURED" } for every request rather than
-  // throwing -- see src/index.ts and src/index.test.ts.
+  // --- Workers VPC Service binding ---------------------------------------------------------
+  // Points at the "codeblack-core-api" VPC Service (created via the dashboard), which is
+  // itself bound to the codeblack-core-gateway Tunnel (35a17aa9-2532-4583-98ca-00f5b7a20c85)
+  // targeting 127.0.0.1:8000 HTTP -- see README.md "Next phase" and
+  // ../../docs/system/code-black-core-gateway.md for the full rollout record.
+  "vpc_services": [
+    {
+      "binding": "CORE_VPC",
+      "service_id": "01a07ab2-e9b9-7072-8d86-bb514e27712c",
+      "remote": true
+    }
+  ]
 }
