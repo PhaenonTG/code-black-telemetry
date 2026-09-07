@@ -21,7 +21,12 @@
 .ops-map-overlay{position:absolute;z-index:20;right:18px;left:auto;display:flex;align-items:center;gap:10px;pointer-events:none;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 200px)}
 .ops-map-overlay--top{top:14px}
 .ops-map-overlay>div{background:rgba(0,0,0,.86);border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);padding:9px 14px;min-width:180px}
-.ops-map-overlay span,.ops-timeline span,.ops-inspector__eyebrow{display:block;font-size:9px;font-weight:900;letter-spacing:.16em;color:var(--cb-red);text-transform:uppercase}
+/* Scoped to >div>span (the FOCUS/VALID TIME eyebrow labels only), not a bare descendant
+   selector -- OpsStatusPill's own <span class="ops-pill ..."> sits as a direct child of
+   .ops-map-overlay too, and a bare ".ops-map-overlay span" rule has higher specificity than
+   ".ops-pill--ok" etc, silently forcing every status pill on the map overlay to this red
+   regardless of its actual LIVE/DEGRADED/OFFLINE tone. */
+.ops-map-overlay>div>span,.ops-timeline>div>span,.ops-inspector__eyebrow{display:block;font-size:9px;font-weight:900;letter-spacing:.16em;color:var(--cb-red);text-transform:uppercase}
 .ops-map-overlay b{display:block;margin-top:2px;font-size:16px;font-weight:900;letter-spacing:.04em;color:var(--cb-text)}
 /* right:100px, not right:18px -- AtlasMap's own control stack (North/Clear Trail/Zoom Lock/
    Layers, .atlas-map-controls in src/index.css) is pinned bottom-right of the same map and is
