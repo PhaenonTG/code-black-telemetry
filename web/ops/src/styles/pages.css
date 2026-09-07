@@ -46,7 +46,8 @@
    (see PointInspector.tsx) and toned down here so weather content reads as the priority. */
 .ops-inspector__block--system{padding:10px 14px;opacity:.72}
 .ops-inspector__block--system .ops-inspector__eyebrow{color:var(--cb-muted)}
-.ops-inspector h2{margin:4px 0 8px;font-size:20px;line-height:1.05;letter-spacing:.02em;text-transform:uppercase}
+.ops-inspector h2{margin:4px 0 0;font-size:20px;line-height:1.05;letter-spacing:.02em;text-transform:uppercase}
+.ops-inspector__coords{display:block;margin-top:3px;color:var(--cb-dim);font-size:10px;font-weight:700;letter-spacing:.04em;font-variant-numeric:tabular-nums}
 .ops-inspector p{margin:6px 0 0;color:var(--cb-muted);font-size:11px;line-height:1.55}
 .ops-inspector__row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 6px}
 .ops-inspector__row span{color:var(--cb-text);font-size:11px;font-weight:900;letter-spacing:.09em;text-transform:uppercase}
@@ -60,7 +61,9 @@
 .ops-metric-line b[data-threat="high"]{color:var(--cb-red)}
 .ops-metric-line em{grid-column:1/-1;width:fit-content;border:1px solid var(--cb-line);padding:2px 5px;color:var(--cb-muted);font-size:8px;font-style:normal;font-weight:900;letter-spacing:.11em}
 .ops-metric-line small{grid-column:1/-1;color:var(--cb-dim);font-size:9px;line-height:1.35}
-.ops-provenance-grid{display:grid;grid-template-columns:96px 1fr;gap:5px 10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--cb-line)}
+.ops-provenance-details{margin-top:10px;padding-top:10px;border-top:1px solid var(--cb-line)}
+.ops-provenance-details summary{cursor:pointer;color:var(--cb-dim);font-size:9px;font-weight:900;letter-spacing:.11em;text-transform:uppercase}
+.ops-provenance-grid{display:grid;grid-template-columns:96px 1fr;gap:5px 10px;margin-top:10px}
 .ops-provenance-grid span{color:var(--cb-dim);font-size:8px;font-weight:900;letter-spacing:.11em;text-transform:uppercase}
 .ops-provenance-grid b{min-width:0;color:var(--cb-text);font-size:10px;font-weight:900;letter-spacing:.03em;overflow-wrap:anywhere}
 .ops-loading{color:var(--cb-red)!important;font-weight:900;text-transform:uppercase;letter-spacing:.08em}

@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { OpsStatusPill } from "./OpsStatusPill";
 import type { OpsCoreState } from "../core/types";
 import { PRIMARY_STORM_METRICS, firstAvailableSource, formatMetric, metricByKey, metricProvenance, metricThreatLevel, sourceSemantics, stormIntelSummary } from "../stormIntel/format";
+import { getReverseLocality, type LocalityResult } from "../../../../src/services/situational";
 
 function timeLabel(value: number | string | null | undefined) {
   if (!value) return "NO DATA";
@@ -21,11 +23,22 @@ export function PointInspector({
   const source = firstAvailableSource(snapshot);
   const location = snapshot?.context.location;
 
+  const [locality, setLocality] = useState<LocalityResult | null>(null);
+  useEffect(() => {
+    if (!selectedPoint) { setLocality(null); return; }
+    let cancelled = false;
+    void getReverseLocality({ lat: selectedPoint.lat, lon: selectedPoint.lon }).then((result) => {
+      if (!cancelled) setLocality(result);
+    });
+    return () => { cancelled = true; };
+  }, [selectedPoint]);
+
   return (
     <aside className="ops-inspector" aria-label="Point and system inspector">
       <section className="ops-inspector__block ops-inspector__block--command">
         <div className="ops-inspector__eyebrow">POINT INSPECTOR</div>
-        <h2>{selectedPoint ? `${selectedPoint.lat.toFixed(3)}, ${selectedPoint.lon.toFixed(3)}` : "No point selected"}</h2>
+        <h2>{selectedPoint ? (locality?.displayName ?? "RESOLVING LOCATION…") : "No point selected"}</h2>
+        {selectedPoint && <small className="ops-inspector__coords">{selectedPoint.lat.toFixed(3)}, {selectedPoint.lon.toFixed(3)}</small>}
         <p>{selectedPoint ? "Requesting Storm Intel for this point." : "Tap the map to request Storm Intel for a point."}</p>
       </section>
 
@@ -44,17 +57,6 @@ export function PointInspector({
         <p>{stormIntelSummary(snapshot)}</p>
         {selectedPoint ? (
           <>
-            <div className="ops-provenance-grid">
-              <span>Requested</span><b>{`${selectedPoint.lat.toFixed(4)}, ${selectedPoint.lon.toFixed(4)}`}</b>
-              <span>Resolved grid</span><b>{source?.resolvedLatitude != null && source.resolvedLongitude != null ? `${source.resolvedLatitude.toFixed(4)}, ${source.resolvedLongitude.toFixed(4)}` : "UNAVAILABLE"}</b>
-              <span>Grid distance</span><b>{source?.gridDistanceKm != null ? `${source.gridDistanceKm.toFixed(2)} km` : "UNAVAILABLE"}</b>
-              <span>Provider</span><b>{source?.provider ?? snapshot?.providerName ?? "UNAVAILABLE"}</b>
-              <span>Product</span><b>{source?.product ?? "UNAVAILABLE"}</b>
-              <span>Run / valid</span><b>{source?.runTime && source.validTime ? `${new Date(source.runTime).toISOString().slice(11, 16)}Z / ${new Date(source.validTime).toISOString().slice(11, 16)}Z` : "UNAVAILABLE"}</b>
-              <span>Forecast hour</span><b>{source?.forecastHour ?? "UNAVAILABLE"}</b>
-              <span>Data class</span><b>{source?.dataClass ?? snapshot?.metrics.find((metric) => metric.dataClass)?.dataClass ?? "UNAVAILABLE"}</b>
-              <span>Location source</span><b>{location?.resolvedFrom ?? "UNAVAILABLE"}</b>
-            </div>
             <div className="ops-metric-stack">
               {PRIMARY_STORM_METRICS.map((key) => {
                 const metric = metricByKey(snapshot, key);
@@ -68,6 +70,20 @@ export function PointInspector({
                 );
               })}
             </div>
+            <details className="ops-provenance-details">
+              <summary>Provenance</summary>
+              <div className="ops-provenance-grid">
+                <span>Requested</span><b>{`${selectedPoint.lat.toFixed(4)}, ${selectedPoint.lon.toFixed(4)}`}</b>
+                <span>Resolved grid</span><b>{source?.resolvedLatitude != null && source.resolvedLongitude != null ? `${source.resolvedLatitude.toFixed(4)}, ${source.resolvedLongitude.toFixed(4)}` : "UNAVAILABLE"}</b>
+                <span>Grid distance</span><b>{source?.gridDistanceKm != null ? `${source.gridDistanceKm.toFixed(2)} km` : "UNAVAILABLE"}</b>
+                <span>Provider</span><b>{source?.provider ?? snapshot?.providerName ?? "UNAVAILABLE"}</b>
+                <span>Product</span><b>{source?.product ?? "UNAVAILABLE"}</b>
+                <span>Run / valid</span><b>{source?.runTime && source.validTime ? `${new Date(source.runTime).toISOString().slice(11, 16)}Z / ${new Date(source.validTime).toISOString().slice(11, 16)}Z` : "UNAVAILABLE"}</b>
+                <span>Forecast hour</span><b>{source?.forecastHour ?? "UNAVAILABLE"}</b>
+                <span>Data class</span><b>{source?.dataClass ?? snapshot?.metrics.find((metric) => metric.dataClass)?.dataClass ?? "UNAVAILABLE"}</b>
+                <span>Location source</span><b>{location?.resolvedFrom ?? "UNAVAILABLE"}</b>
+              </div>
+            </details>
           </>
         ) : (
           <p className="ops-inspector__prompt">Tap the map to load provenance and metrics.</p>
