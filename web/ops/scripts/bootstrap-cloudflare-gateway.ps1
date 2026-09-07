@@ -75,49 +75,43 @@ function Stop-Bootstrap($reason) {
 }
 
 # ---------------------------------------------------------------------------
-# 1. Credential acquisition -- never echoed, never written to disk
+# 1. Credential acquisition -- always interactive, never echoed, never written to disk.
 #
 # Two supported auth modes:
-#   - Scoped API Token (preferred): Authorization: Bearer <token>
-#   - Global API Key (broader, account-wide): X-Auth-Email + X-Auth-Key headers. Global Key
-#     mode is selected automatically whenever $env:CLOUDFLARE_API_EMAIL is also set, since a
-#     scoped token never needs an email paired with it.
+#   - Scoped API Token (preferred): Authorization: Bearer <token> -- leave the email prompt
+#     blank to select this mode.
+#   - Global API Key (broader, account-wide): X-Auth-Email + X-Auth-Key headers.
 # ---------------------------------------------------------------------------
 Write-Phase "Cloudflare credentials"
 Write-Host "Used only in this process's memory for this run. Never printed, logged, written to disk, or committed." -ForegroundColor Gray
 
-$UsingGlobalKey = $false
+$AccountEmail = Read-Host -Prompt "Cloudflare account email (leave BLANK if you have a scoped API Token, not a Global API Key)"
+$AccountEmail = $AccountEmail.Trim()
+$UsingGlobalKey = -not [string]::IsNullOrWhiteSpace($AccountEmail)
 
-if ($env:CLOUDFLARE_API_EMAIL) {
-    $UsingGlobalKey = $true
-    Write-Info "Using Global API Key mode (`$env:CLOUDFLARE_API_EMAIL is set)."
-    if (-not $env:CLOUDFLARE_API_TOKEN) { Stop-Bootstrap "`$env:CLOUDFLARE_API_EMAIL is set but `$env:CLOUDFLARE_API_TOKEN (holding the Global API Key value) is not." }
-    $Token = $env:CLOUDFLARE_API_TOKEN
-    $AccountEmail = $env:CLOUDFLARE_API_EMAIL
-} elseif ($env:CLOUDFLARE_API_TOKEN) {
-    Write-Info "Using scoped API Token mode (`$env:CLOUDFLARE_API_TOKEN already set in this session)."
-    $Token = $env:CLOUDFLARE_API_TOKEN
+if ($UsingGlobalKey) {
+    $promptLabel = "Cloudflare Global API Key"
 } else {
-    $secureToken = Read-Host -Prompt "Paste your Cloudflare API token" -AsSecureString
-    if ($secureToken.Length -eq 0) { Stop-Bootstrap "No token entered." }
-    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
-    try {
-        $Token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-    } finally {
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-    }
-    Remove-Variable secureToken -ErrorAction SilentlyContinue
+    $promptLabel = "Cloudflare API Token"
 }
-if ([string]::IsNullOrWhiteSpace($Token)) { Stop-Bootstrap "Empty credential." }
+$secureToken = Read-Host -Prompt $promptLabel -AsSecureString
+if ($secureToken.Length -eq 0) { Stop-Bootstrap "Nothing entered." }
+$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+try {
+    $Token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+} finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+}
+Remove-Variable secureToken -ErrorAction SilentlyContinue
 
 # Trim defensively -- a stray trailing newline/space from copy-paste is a common cause of
 # ".NET rejects this as an invalid header value" failures that never even reach Cloudflare.
 # Trimming whitespace is not a secret-exposing operation.
-$Token = $Token.Trim()
-if ($UsingGlobalKey) { $AccountEmail = $AccountEmail.Trim() }
+if ($Token) { $Token = $Token.Trim() }
+if ([string]::IsNullOrWhiteSpace($Token)) { Stop-Bootstrap "Empty credential." }
 
 if ($UsingGlobalKey) {
-    if ([string]::IsNullOrWhiteSpace($AccountEmail)) { Stop-Bootstrap "Empty account email." }
+    Write-Info "Using Global API Key mode for account: $AccountEmail"
     $Headers = @{ "X-Auth-Email" = $AccountEmail; "X-Auth-Key" = $Token }
 } else {
     $Headers = @{ Authorization = "Bearer $Token" }
@@ -649,30 +643,28 @@ Save-State
 # Final report
 # ---------------------------------------------------------------------------
 Write-Phase "STAGE 3 BOOTSTRAP COMPLETE -- ONE MANUAL STEP REMAINS"
-Write-Host @"
-
-Everything scriptable is done:
-  - Tunnel '$TunnelName' ($($State.tunnelId)) -> $CoreOrigin only
-  - DNS: $TunnelHostname -> tunnel (proxied)
-  - Access application + policy requiring a service token protect that hostname
-  - Access Service Token issued (client id: $ClientId) and configured server-side in Pages
-  - cloudflared active on CodeBlack-Core; Core API still 127.0.0.1:8000-only; SSH/Tailscale/MQTT
-    all confirmed healthy; no public port opened
-  - feature/ops-web-v1 pushed to origin/master; Cloudflare Pages deployment triggered
-  - Infrastructure-level checks passed (tunnel reachable, unauthenticated gateway request rejected)
-
-ONE thing this script cannot do, by design: prove Storm Intel actually renders correctly for a
-real signed-in OPS user (Pea Ridge, Norman, an arbitrary CONUS point) against the live gateway.
-That requires an actual human browser session with your existing Supabase login -- please open:
-
-    https://ops.codeblackwx.com
-
-and confirm Core health / Fabric / Storm Intel now show live data instead of UNAVAILABLE, and
-that a Storm Intel point query for Pea Ridge AR, Norman OK, and one other point returns real
-provenance (provider, run/valid time, forecast hour, data class) rather than a fake/simulated
-value. Nothing in this pipeline can fabricate that check on your behalf.
-
-Resource IDs were recorded (no secrets) in:
-    $StateFile
-Re-running this script is safe -- it will reuse every resource above instead of duplicating it.
-"@ -ForegroundColor White
+Write-Host ""
+Write-Host "Everything scriptable is done:" -ForegroundColor White
+Write-Host "  - Tunnel '$TunnelName' ($($State.tunnelId)) -> $CoreOrigin only"
+Write-Host "  - DNS: $TunnelHostname -> tunnel (proxied)"
+Write-Host "  - Access application + policy requiring a service token protect that hostname"
+Write-Host "  - Access Service Token issued (client id: $ClientId) and configured server-side in Pages"
+Write-Host "  - cloudflared active on CodeBlack-Core; Core API still 127.0.0.1:8000-only; SSH/Tailscale/MQTT"
+Write-Host "    all confirmed healthy; no public port opened"
+Write-Host "  - feature/ops-web-v1 pushed to origin/master; Cloudflare Pages deployment triggered"
+Write-Host "  - Infrastructure-level checks passed (tunnel reachable, unauthenticated gateway request rejected)"
+Write-Host ""
+Write-Host "ONE thing this script cannot do, by design: prove Storm Intel actually renders correctly for a" -ForegroundColor White
+Write-Host "real signed-in OPS user (Pea Ridge, Norman, an arbitrary CONUS point) against the live gateway."
+Write-Host "That requires an actual human browser session with your existing Supabase login -- please open:"
+Write-Host ""
+Write-Host "    https://ops.codeblackwx.com" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "and confirm Core health / Fabric / Storm Intel now show live data instead of UNAVAILABLE, and"
+Write-Host "that a Storm Intel point query for Pea Ridge AR, Norman OK, and one other point returns real"
+Write-Host "provenance (provider, run/valid time, forecast hour, data class) rather than a fake/simulated"
+Write-Host "value. Nothing in this pipeline can fabricate that check on your behalf."
+Write-Host ""
+Write-Host "Resource IDs were recorded (no secrets) in:"
+Write-Host "    $StateFile"
+Write-Host "Re-running this script is safe -- it will reuse every resource above instead of duplicating it."
