@@ -92,7 +92,10 @@
 .storm-workspace__body{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;min-height:0}
 .storm-workspace__map{position:relative;min-width:0;min-height:0;border:1px solid var(--cb-line);background:#000}
 .storm-workspace__map>.atlas-map-shell{height:100%;width:100%}
-.storm-map-command{position:absolute;z-index:20;left:14px;right:14px;top:14px;display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:1px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.12);pointer-events:none}
+/* top:64px, not top:14px -- AtlasMap's own GPS/mode/mosaic strip (.atlas-radar-strip in
+   src/index.css) is also pinned top-left of this same map, and a command bar spanning
+   left:14/right:14 at top:14 sat directly on top of it, garbling both. */
+.storm-map-command{position:absolute;z-index:20;left:14px;right:14px;top:64px;display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:1px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.12);pointer-events:none}
 .storm-map-command>div{background:rgba(0,0,0,.9);padding:9px 11px;min-width:0}
 .storm-map-command b{display:block;margin-top:3px;color:var(--cb-text);font-size:12px;font-weight:900;letter-spacing:.04em;overflow-wrap:anywhere}
 .storm-workspace__context{display:flex;flex-direction:column;gap:10px;min-width:0;overflow:auto}
@@ -156,7 +159,7 @@
   .storm-workspace__body{display:flex;flex-direction:column}
   .storm-workspace__map{height:58vh;min-height:420px;flex:0 0 auto}
   .storm-workspace__context{overflow:visible}
-  .storm-map-command{left:8px;right:8px;top:8px;grid-template-columns:1fr}
+  .storm-map-command{left:8px;right:8px;top:64px;grid-template-columns:1fr}
   .storm-map-command>div{padding:7px 9px}
   .storm-workspace__metrics{grid-template-columns:1fr}
   .storm-provenance dl{grid-template-columns:1fr}

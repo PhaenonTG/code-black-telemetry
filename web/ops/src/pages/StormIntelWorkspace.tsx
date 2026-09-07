@@ -63,8 +63,6 @@ export default function StormIntelWorkspace() {
           <p>{stormIntelSummary(snapshot)}</p>
         </div>
         <div className="storm-workspace__status">
-          <OpsStatusPill state={coreState.core.state} label={`CORE ${coreState.core.state}`} />
-          <OpsStatusPill state={coreState.fabric.wsState === "open" ? "LIVE" : coreState.fabric.state} label={`FABRIC ${coreState.fabric.wsState.toUpperCase()}`} />
           <OpsStatusPill state={coreState.stormIntel.state} label={`INTEL ${coreState.stormIntel.state}`} />
         </div>
       </header>
@@ -74,7 +72,7 @@ export default function StormIntelWorkspace() {
           <AtlasMap
             gps={atlasGps}
             rangeRings="off"
-            statusLines={[`MODE ${config.mode}`, "STORM INTEL", coreState.stormIntel.pointLoading ? "POINT REQUEST ACTIVE" : "CLICK MAP FOR POINT INTEL"]}
+            statusLines={[coreState.stormIntel.pointLoading ? "POINT REQUEST ACTIVE" : "CLICK MAP FOR POINT INTEL"]}
             controlsVariant="full"
             spotters={spotters.spotters}
             poiPlaces={poi.places}
