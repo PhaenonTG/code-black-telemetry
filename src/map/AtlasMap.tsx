@@ -243,7 +243,7 @@ export function AtlasMap({
   // shared get/save/subscribe store in services/settings.ts so the Weather page's compact map, the
   // Locate page's full map, and the new config screen all read/write the exact same state instead
   // of each map instance keeping its own independent (and previously non-persisted) copy.
-  const [layerVisibility, setLayerVisibility] = useState({ alerts: true, team: true, chasers: true, poi: true, mosaic: true, radar: false, roadConditions: false, trafficCameras: false, probes: false, chaserNet: false, breadcrumbs: true });
+  const [layerVisibility, setLayerVisibility] = useState({ warnings: true, watches: true, mesoscaleDiscussions: true, specialStatements: true, team: true, chasers: true, poi: true, mosaic: true, radar: false, roadConditions: false, trafficCameras: false, probes: false, chaserNet: false, breadcrumbs: true });
   useEffect(() => {
     const unsubscribe = subscribeMapLayerVisibility(setLayerVisibility);
     void loadMapLayerVisibility();
@@ -254,7 +254,7 @@ export function AtlasMap({
     window.addEventListener("codeblack:close-map-popovers", close);
     return () => window.removeEventListener("codeblack:close-map-popovers", close);
   }, []);
-  const { alerts: alertsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, radar: radarVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
+  const { warnings: warningsVisible, watches: watchesVisible, mesoscaleDiscussions: mesoscaleDiscussionsVisible, specialStatements: specialStatementsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, radar: radarVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
     const current = getMapLayerVisibility();
     void saveMapLayerVisibility({ ...current, [key]: !current[key] });
@@ -686,11 +686,11 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    updateAtlasAlertsLayer(map, alerts, alertsVisible, styleInfoRef.current.firstSymbolLayerId);
-  }, [alerts, alertsVisible, loaded]);
+    updateAtlasAlertsLayer(map, alerts, { warnings: warningsVisible, watches: watchesVisible, mesoscaleDiscussions: mesoscaleDiscussionsVisible, specialStatements: specialStatementsVisible }, styleInfoRef.current.firstSymbolLayerId);
+  }, [alerts, warningsVisible, watchesVisible, mesoscaleDiscussionsVisible, specialStatementsVisible, loaded]);
 
   useEffect(() => {
-    if (!alertsVisible) return;
+    if (!watchesVisible) return;
     let cancelled = false;
     const load = async () => {
       const polygons = await getActiveWatchPolygons();
@@ -702,13 +702,13 @@ export function AtlasMap({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [alertsVisible]);
+  }, [watchesVisible]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    updateAtlasWatchesLayer(map, watches, alerts, alertsVisible, styleInfoRef.current.firstSymbolLayerId);
-  }, [watches, alerts, alertsVisible, loaded]);
+    updateAtlasWatchesLayer(map, watches, alerts, watchesVisible, styleInfoRef.current.firstSymbolLayerId);
+  }, [watches, alerts, watchesVisible, loaded]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1075,9 +1075,24 @@ export function AtlasMap({
             </div>
             <div className="atlas-layers-popover__section">WEATHER</div>
             <label className="atlas-layers-popover__row">
-              <input type="checkbox" checked={alertsVisible} onChange={() => toggleLayer("alerts")} />
-              <span className="atlas-layers-popover__icon"><LayerGlyph visual="alerts" /></span>
-              Alerts (watches + warnings + MD)
+              <input type="checkbox" checked={warningsVisible} onChange={() => toggleLayer("warnings")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="warning" /></span>
+              Warnings
+            </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={watchesVisible} onChange={() => toggleLayer("watches")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="watch" /></span>
+              Watches
+            </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={mesoscaleDiscussionsVisible} onChange={() => toggleLayer("mesoscaleDiscussions")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="mesoscaleDiscussion" /></span>
+              Mesoscale Discussions
+            </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={specialStatementsVisible} onChange={() => toggleLayer("specialStatements")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="specialStatement" /></span>
+              Special Statements
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={mosaicVisible} onChange={() => toggleLayer("mosaic")} />

@@ -1,4 +1,4 @@
-export type LayerVisual = "radar" | "dish" | "alerts" | "team" | "spotter" | "poi" | "trail" | "road" | "camera" | "probe" | "network";
+export type LayerVisual = "radar" | "dish" | "alerts" | "warning" | "watch" | "mesoscaleDiscussion" | "specialStatement" | "team" | "spotter" | "poi" | "trail" | "road" | "camera" | "probe" | "network";
 
 // Shared between the dedicated Layers page and the on-map layers popover so both surfaces use the
 // same icon per layer instead of the popover staying icon-less while the page has a full glyph set.
@@ -7,6 +7,18 @@ export function LayerGlyph({ visual }: { visual: LayerVisual }) {
   if (visual === "radar") return <svg {...common}><circle cx="12" cy="12" r="8" /><path d="M12 12 18 8M12 12l2 7M4 12h16" /></svg>;
   if (visual === "dish") return <svg {...common}><path d="M3 16a9 9 0 0 1 15-6.5" /><path d="M3 16 12 16" /><path d="M12 16v5" /><path d="M9 21h6" /><circle cx="18" cy="7" r="1.3" /><path d="M19.6 5.4a4 4 0 0 1 0 5.6" /></svg>;
   if (visual === "alerts") return <svg {...common}><path d="M12 3 3 20h18L12 3Z" /><path d="M12 8v5M12 17h.01" /></svg>;
+  // Filled warning triangle -- the highest-severity, precise-polygon product (tornado/severe/flash
+  // flood warnings), so it reads as the "most solid/urgent" glyph of the four alert variants.
+  if (visual === "warning") return <svg {...common}><path d="M12 3 3 20h18L12 3Z" fill="currentColor" fillOpacity="0.35" /><path d="M12 3 3 20h18L12 3Z" /><path d="M12 8v5M12 17h.01" /></svg>;
+  // Outlined (unfilled) triangle -- a watch is the "conditions favorable" precursor to a warning,
+  // so it shares the warning glyph's shape but reads as one step less urgent/solid.
+  if (visual === "watch") return <svg {...common}><path d="M12 3 3 20h18L12 3Z" /><path d="M12 9v4" /></svg>;
+  // Dashed discussion bubble -- MDs are a forecaster discussion, not a warning/watch polygon, so
+  // this deliberately breaks from the triangle family entirely.
+  if (visual === "mesoscaleDiscussion") return <svg {...common}><path d="M4 5h16v11H9l-4 4V5Z" strokeDasharray="3 2" /></svg>;
+  // Circled exclamation -- special statements/advisories are informational, not threat-polygon
+  // products, so this uses the app's generic "info/notice" shape instead of the triangle family.
+  if (visual === "specialStatement") return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 17h.01" /></svg>;
   if (visual === "team") return <svg {...common}><path d="M12 4 5 20h14L12 4Z" /><circle cx="12" cy="13" r="2" /></svg>;
   if (visual === "spotter") return <svg {...common}><circle cx="8" cy="9" r="3" /><circle cx="16" cy="9" r="3" /><path d="M4 20c1-4 7-4 8 0M12 20c1-4 7-4 8 0" /></svg>;
   if (visual === "poi") return <svg {...common}><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" /><circle cx="12" cy="10" r="2" /></svg>;

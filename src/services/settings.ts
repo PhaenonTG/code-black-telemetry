@@ -658,7 +658,10 @@ export function subscribePiEndpoint(listener: (endpoint: string) => void) {
 }
 
 export interface MapLayerVisibility {
-  alerts: boolean;
+  warnings: boolean;
+  watches: boolean;
+  mesoscaleDiscussions: boolean;
+  specialStatements: boolean;
   team: boolean;
   chasers: boolean;
   poi: boolean;
@@ -757,7 +760,10 @@ export function subscribeHomeModules(listener: (modules: HomeModuleConfig[]) => 
 
 const MAP_LAYER_VISIBILITY_KEY = "codeblack.mapLayerVisibility";
 const DEFAULT_MAP_LAYER_VISIBILITY: MapLayerVisibility = {
-  alerts: true,
+  warnings: true,
+  watches: true,
+  mesoscaleDiscussions: true,
+  specialStatements: true,
   team: true,
   chasers: true,
   poi: true,
@@ -778,12 +784,29 @@ const DEFAULT_MAP_LAYER_VISIBILITY: MapLayerVisibility = {
 let currentMapLayerVisibility: MapLayerVisibility = DEFAULT_MAP_LAYER_VISIBILITY;
 const mapLayerVisibilityListeners = new Set<(visibility: MapLayerVisibility) => void>();
 
+// The single "alerts" boolean this key used to store split into four independently toggleable
+// layers (warnings/watches/MDs/special statements). A device with a pre-split saved value would
+// otherwise silently lose an explicit "alerts off" choice the moment it loads under the new
+// shape (the four new keys would just fall back to their own defaults, all true) -- carry the old
+// value onto all four new keys instead when this device hasn't chosen any of them explicitly yet.
+function migrateLegacyAlertsKey(parsed: Partial<MapLayerVisibility> & { alerts?: boolean }): Partial<MapLayerVisibility> {
+  if (parsed.alerts === undefined) return parsed;
+  const { alerts, ...rest } = parsed;
+  return {
+    warnings: alerts,
+    watches: alerts,
+    mesoscaleDiscussions: alerts,
+    specialStatements: alerts,
+    ...rest,
+  };
+}
+
 export async function loadMapLayerVisibility() {
   const saved = await Preferences.get({ key: MAP_LAYER_VISIBILITY_KEY });
   if (saved.value) {
     try {
-      const parsed = JSON.parse(saved.value) as Partial<MapLayerVisibility>;
-      currentMapLayerVisibility = { ...DEFAULT_MAP_LAYER_VISIBILITY, ...parsed };
+      const parsed = JSON.parse(saved.value) as Partial<MapLayerVisibility> & { alerts?: boolean };
+      currentMapLayerVisibility = { ...DEFAULT_MAP_LAYER_VISIBILITY, ...migrateLegacyAlertsKey(parsed) };
     } catch {
       currentMapLayerVisibility = DEFAULT_MAP_LAYER_VISIBILITY;
     }

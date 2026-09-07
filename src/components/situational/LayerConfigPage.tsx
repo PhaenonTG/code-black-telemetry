@@ -17,7 +17,10 @@ import { downscaleImageToDataUrl } from "../../utils/image";
 import { LayerGlyph, type LayerVisual } from "./LayerGlyph";
 
 const DEFAULT_VISIBILITY: MapLayerVisibility = {
-  alerts: true,
+  warnings: true,
+  watches: true,
+  mesoscaleDiscussions: true,
+  specialStatements: true,
   team: true,
   chasers: true,
   poi: true,
@@ -48,12 +51,36 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; source: stri
     description: "Full-resolution single-site radar from the nearest NEXRAD station, rendered by the local radar-worker process. Requires the worker to be running and reachable.",
   },
   {
-    key: "alerts",
-    label: "Alerts (Watches + Warnings + MD)",
+    key: "warnings",
+    label: "Warnings",
+    source: "NWS",
+    status: "Provider-backed",
+    visual: "warning",
+    description: "Tornado, PDS, Severe Thunderstorm, and Flash Flood Warning polygons -- the highest-confidence, precise-boundary product NWS issues. Tap a polygon on the map for details.",
+  },
+  {
+    key: "watches",
+    label: "Watches",
     source: "NWS / SPC",
     status: "Provider-backed",
-    visual: "alerts",
-    description: "NWS watch/warning polygons and SPC Mesoscale Discussions. Tap a polygon on the map for details.",
+    visual: "watch",
+    description: "Tornado and Severe Thunderstorm Watch boxes -- conditions favorable for severe weather, ahead of any specific warning. Tap a polygon on the map for details.",
+  },
+  {
+    key: "mesoscaleDiscussions",
+    label: "Mesoscale Discussions",
+    source: "SPC",
+    status: "Provider-backed",
+    visual: "mesoscaleDiscussion",
+    description: "SPC's own forecaster reasoning about a developing threat area, ahead of any watch or warning. A discussion, not yet an official product boundary.",
+  },
+  {
+    key: "specialStatements",
+    label: "Special Statements",
+    source: "NWS",
+    status: "Provider-backed",
+    visual: "specialStatement",
+    description: "Special Weather Statements and other advisory-level NWS products that carry a map polygon but aren't a Watch, Warning, or MD.",
   },
   {
     key: "team",

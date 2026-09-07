@@ -11,7 +11,10 @@ const THEME_OPTIONS: AppThemeMode[] = ["dark", "night", "system", "light"]
 // this is the one place they get a human-readable name and a one-line description of what
 // toggling them actually does, instead of surfacing the raw camelCase key to the user.
 const LAYER_LABELS: Record<string, { label: string; description: string }> = {
-  alerts: { label: "Weather alerts", description: "NWS warning and watch polygons on the map" },
+  warnings: { label: "Warnings", description: "Tornado, PDS, Severe Thunderstorm, and Flash Flood Warning polygons" },
+  watches: { label: "Watches", description: "Tornado and Severe Thunderstorm Watch boxes" },
+  mesoscaleDiscussions: { label: "Mesoscale discussions", description: "SPC forecaster discussions ahead of a watch or warning" },
+  specialStatements: { label: "Special statements", description: "Special Weather Statements and other advisory-level NWS products" },
   team: { label: "Team positions", description: "Live location of other Code Black team members" },
   chasers: { label: "Spotter network", description: "Nearby public storm spotter positions" },
   poi: { label: "Points of interest", description: "Named landmarks and reference points" },

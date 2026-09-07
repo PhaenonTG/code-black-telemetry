@@ -6,17 +6,38 @@ import { showAlertPopup } from "./AtlasAlertPopup";
 const ATLAS_ALERTS_SOURCE = "atlas-alerts";
 const ATLAS_ALERTS_FILL_LAYER = "atlas-alerts-fill";
 const ATLAS_ALERTS_LINE_LAYER = "atlas-alerts-line";
+const ATLAS_ALERTS_WATCH_LINE_LAYER = "atlas-alerts-watch-line";
+const ATLAS_ALERTS_STATEMENT_LINE_LAYER = "atlas-alerts-statement-line";
 const ATLAS_MD_LINE_LAYER = "atlas-md-line";
+
+const ALL_ALERT_LAYER_IDS = [
+  ATLAS_ALERTS_FILL_LAYER,
+  ATLAS_ALERTS_LINE_LAYER,
+  ATLAS_ALERTS_WATCH_LINE_LAYER,
+  ATLAS_ALERTS_STATEMENT_LINE_LAYER,
+  ATLAS_MD_LINE_LAYER,
+];
 
 // Core storm-based warnings (the ones that actually carry a precise NWS polygon, per research --
 // most watches/statements are zone-based with no geometry at all) render filled + solid red.
-// Anything else with geometry (rare, but not impossible) still gets a solid outline in the app's
-// established amber "watch" color rather than being silently dropped. MDs get their own dashed,
-// unfilled outline -- they're a discussion, not yet a warning, and should read that way at a glance.
+// Watch-severity and "other" (special statements/advisories) items that do carry geometry get
+// their own amber/blue outline layers instead of being silently dropped or lumped together --
+// each is independently toggleable (see visibility param below), matching the four layers a
+// chaser actually wants to turn on/off separately: Warnings, Watches, Mesoscale Discussions,
+// Special Statements. MDs get their own dashed, unfilled outline -- they're a discussion, not yet
+// a warning, and should read that way at a glance.
 const WARNING_SEVERITIES = ["tornado", "pds", "severe", "flash-flood"];
 const RED = "#ff2d35";
 const AMBER = "#f4b623";
+const BLUE = "#4da3ff";
 const MD_COLOR = "#f4f6fa";
+
+export interface AlertLayerVisibility {
+  warnings: boolean;
+  watches: boolean;
+  mesoscaleDiscussions: boolean;
+  specialStatements: boolean;
+}
 
 // Latest alert data per map, keyed off the same id embedded in each GeoJSON feature's properties
 // -- the click handler below is attached once and reads this fresh on every click rather than
@@ -34,7 +55,7 @@ function attachAlertClickHandler(map: Map) {
     if (!alert) return;
     showAlertPopup(map, [event.lngLat.lng, event.lngLat.lat], alert);
   };
-  for (const layerId of [ATLAS_ALERTS_FILL_LAYER, ATLAS_ALERTS_LINE_LAYER, ATLAS_MD_LINE_LAYER]) {
+  for (const layerId of ALL_ALERT_LAYER_IDS) {
     map.on("click", layerId, handleClick as (event: MapMouseEvent) => void);
     map.on("mouseenter", layerId, () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", layerId, () => { map.getCanvas().style.cursor = ""; });
@@ -54,7 +75,7 @@ function toFeatureCollection(alerts: AlertProduct[]) {
   };
 }
 
-export function updateAtlasAlertsLayer(map: Map, alerts: AlertProduct[], visible: boolean, beforeLayerId?: string) {
+export function updateAtlasAlertsLayer(map: Map, alerts: AlertProduct[], visibility: AlertLayerVisibility, beforeLayerId?: string) {
   const collection = toFeatureCollection(alerts);
   latestAlertsById.set(map, Object.fromEntries(alerts.map((alert) => [alert.id, alert])));
 
@@ -83,12 +104,33 @@ export function updateAtlasAlertsLayer(map: Map, alerts: AlertProduct[], visible
       id: ATLAS_ALERTS_LINE_LAYER,
       type: "line",
       source: ATLAS_ALERTS_SOURCE,
-      filter: ["!=", ["get", "severity"], "md"],
+      filter: ["in", ["get", "severity"], ["literal", WARNING_SEVERITIES]],
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: {
-        "line-color": ["match", ["get", "severity"], WARNING_SEVERITIES, RED, AMBER],
-        "line-width": 2,
-      },
+      paint: { "line-color": RED, "line-width": 2 },
+    }, beforeLayerId);
+    incrementAtlasCounter("layerCreations");
+  }
+
+  if (!map.getLayer(ATLAS_ALERTS_WATCH_LINE_LAYER)) {
+    map.addLayer({
+      id: ATLAS_ALERTS_WATCH_LINE_LAYER,
+      type: "line",
+      source: ATLAS_ALERTS_SOURCE,
+      filter: ["==", ["get", "severity"], "watch"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": AMBER, "line-width": 2 },
+    }, beforeLayerId);
+    incrementAtlasCounter("layerCreations");
+  }
+
+  if (!map.getLayer(ATLAS_ALERTS_STATEMENT_LINE_LAYER)) {
+    map.addLayer({
+      id: ATLAS_ALERTS_STATEMENT_LINE_LAYER,
+      type: "line",
+      source: ATLAS_ALERTS_SOURCE,
+      filter: ["==", ["get", "severity"], "other"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": BLUE, "line-width": 1.5, "line-dasharray": [3, 1.5] },
     }, beforeLayerId);
     incrementAtlasCounter("layerCreations");
   }
@@ -112,8 +154,12 @@ export function updateAtlasAlertsLayer(map: Map, alerts: AlertProduct[], visible
 
   attachAlertClickHandler(map);
 
-  const visibility = visible ? "visible" : "none";
-  for (const layerId of [ATLAS_ALERTS_FILL_LAYER, ATLAS_ALERTS_LINE_LAYER, ATLAS_MD_LINE_LAYER]) {
-    if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", visibility);
-  }
+  const setVisible = (layerId: string, visible: boolean) => {
+    if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+  };
+  setVisible(ATLAS_ALERTS_FILL_LAYER, visibility.warnings);
+  setVisible(ATLAS_ALERTS_LINE_LAYER, visibility.warnings);
+  setVisible(ATLAS_ALERTS_WATCH_LINE_LAYER, visibility.watches);
+  setVisible(ATLAS_ALERTS_STATEMENT_LINE_LAYER, visibility.specialStatements);
+  setVisible(ATLAS_MD_LINE_LAYER, visibility.mesoscaleDiscussions);
 }
