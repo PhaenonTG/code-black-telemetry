@@ -204,3 +204,68 @@ describe("forwardToCore (open-proxy prevention + bounded behavior)", () => {
     expect(result).toEqual({ status: 200, body: payload });
   });
 });
+
+describe("forwardToCore (opt-in Service Binding / VPC transport path)", () => {
+  const route = { upstreamPath: "/api/storm-intel/v1/point", allowedQueryParams: ["latitude", "longitude"] };
+
+  it("routes through CORE_GATEWAY_WORKER instead of public fetch when it is bound", async () => {
+    let publicFetchCalled = false;
+    const publicFetchImpl = (async () => { publicFetchCalled = true; return jsonResponse(200, {}); }) as typeof fetch;
+    const workerFetch = async () => jsonResponse(200, { ok: true, via: "vpc" });
+    const result = await forwardToCore(
+      route,
+      new URL("https://ops.codeblackwx.com/api/core/storm-intel/point?latitude=36.5&longitude=-93.7"),
+      {
+        CORE_GATEWAY_UPSTREAM_BASE: "https://core-gateway.internal.example",
+        CORE_GATEWAY_WORKER: { fetch: workerFetch },
+      },
+      publicFetchImpl,
+    );
+    expect(publicFetchCalled).toBe(false);
+    expect(result).toEqual({ status: 200, body: { ok: true, via: "vpc" } });
+  });
+
+  it("forwards only the allowlisted query params to the transport Worker", async () => {
+    let requestedUrl = "";
+    const workerFetch = async (url: string | URL) => { requestedUrl = String(url); return jsonResponse(200, {}); };
+    await forwardToCore(
+      route,
+      new URL("https://ops.codeblackwx.com/api/core/storm-intel/point?latitude=36.5&longitude=-93.7&admin=1"),
+      { CORE_GATEWAY_WORKER: { fetch: workerFetch } },
+    );
+    expect(requestedUrl).toContain("latitude=36.5");
+    expect(requestedUrl).toContain("longitude=-93.7");
+    expect(requestedUrl).not.toContain("admin=1");
+  });
+
+  it("sends no Cloudflare Access headers on the VPC transport path", async () => {
+    let sentHeaders: Record<string, string> = {};
+    const workerFetch = async (_url: string | URL, init?: RequestInit) => {
+      sentHeaders = (init?.headers as Record<string, string>) ?? {};
+      return jsonResponse(200, {});
+    };
+    await forwardToCore(route, new URL("https://ops.codeblackwx.com/api/core/storm-intel/point"), {
+      CORE_GATEWAY_WORKER: { fetch: workerFetch },
+      CORE_GATEWAY_CF_ACCESS_CLIENT_ID: "should-not-be-used",
+      CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET: "should-not-be-used",
+    });
+    expect(sentHeaders["CF-Access-Client-Id"]).toBeUndefined();
+    expect(sentHeaders["CF-Access-Client-Secret"]).toBeUndefined();
+  });
+
+  it("maps a Service Binding fetch failure to CORE_UNAVAILABLE without leaking detail", async () => {
+    const workerFetch = async () => { throw new Error("internal: connect ECONNREFUSED 10.0.4.17:8000"); };
+    const result = await forwardToCore(route, new URL("https://ops.codeblackwx.com/api/core/storm-intel/point"), {
+      CORE_GATEWAY_WORKER: { fetch: workerFetch },
+    });
+    expect(result).toEqual({ status: 504, reason: "CORE_UNAVAILABLE" });
+  });
+
+  it("maps a non-2xx response from the transport Worker to CORE_UNAVAILABLE", async () => {
+    const workerFetch = async () => jsonResponse(502, { error: "VPC_NOT_CONFIGURED" });
+    const result = await forwardToCore(route, new URL("https://ops.codeblackwx.com/api/core/storm-intel/point"), {
+      CORE_GATEWAY_WORKER: { fetch: workerFetch },
+    });
+    expect(result).toEqual({ status: 502, reason: "CORE_UNAVAILABLE" });
+  });
+});

@@ -1,0 +1,30 @@
+{
+  // Standalone Core Gateway VPC transport Worker. NOT the OPS Pages project -- see
+  // ../../web/ops for that. This Worker's entire job is described in README.md.
+  "name": "codeblack-core-gateway-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-07",
+
+  // Never publicly reachable. This Worker is called only via a Cloudflare Service Binding
+  // from the OPS Pages project's own Worker -- see README.md "Trust boundary".
+  "workers_dev": false,
+  // Deliberately no "routes" and no custom domain configuration above -- do not add either
+  // without re-reading the security requirements in README.md first.
+
+  // --- Future Workers VPC Service binding -------------------------------------------------
+  // NOT created yet. No Cloudflare VPC Service exists for this Worker as of this scaffold.
+  // Do not invent a service_id -- create the real VPC Service first (see README.md "Next
+  // phase: Cloudflare resources to create"), then uncomment and fill in the real ID below:
+  //
+  // "vpc_services": [
+  //   {
+  //     "binding": "CORE_VPC",
+  //     "service_id": "<REAL_VPC_SERVICE_ID_FROM_DASHBOARD_OR_WRANGLER_VPC_SERVICE_CREATE>",
+  //     "remote": true
+  //   }
+  // ]
+  //
+  // Until this is uncommented and deployed, env.CORE_VPC is undefined at runtime and
+  // src/index.ts responds 502 { error: "VPC_NOT_CONFIGURED" } for every request rather than
+  // throwing -- see src/index.ts and src/index.test.ts.
+}

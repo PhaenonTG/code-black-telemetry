@@ -22,6 +22,13 @@ export interface GatewayEnv {
   // reaches the tunnel/Core if these are absent or wrong; Core itself needs no new code either way.
   CORE_GATEWAY_CF_ACCESS_CLIENT_ID?: string;
   CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET?: string;
+  // Optional internal Service Binding to the standalone Core Gateway VPC transport Worker
+  // (workers/core-gateway/). When present, forwardToCore() routes through it -- and through
+  // Workers VPC to Core -- instead of the public Access-protected tunnel hostname above.
+  // Absent in production today: nothing binds this yet, so the public-fetch path below
+  // remains the active, proven transport until the VPC path is created and verified end to
+  // end. See workers/core-gateway/README.md for the full rollout plan.
+  CORE_GATEWAY_WORKER?: { fetch(input: string | URL, init?: RequestInit): Promise<Response> };
 }
 
 export interface AllowlistRoute {
@@ -157,6 +164,13 @@ export async function forwardToCore(
   env: GatewayEnv,
   fetchImpl: typeof fetch = fetch,
 ): Promise<UpstreamResult> {
+  // Opt-in VPC transport path -- see the CORE_GATEWAY_WORKER doc comment on GatewayEnv above.
+  // Only taken when something has actually bound CORE_GATEWAY_WORKER; every existing
+  // deployment and every existing test that does not set it is completely unaffected.
+  if (env.CORE_GATEWAY_WORKER) {
+    return forwardToCoreViaServiceBinding(route, incomingUrl, env.CORE_GATEWAY_WORKER);
+  }
+
   if (!env.CORE_GATEWAY_UPSTREAM_BASE) {
     return { status: 502, reason: "CORE_UNAVAILABLE" };
   }
@@ -206,5 +220,46 @@ export async function forwardToCore(
     return { status: 504, reason: timedOut ? "CORE_TIMEOUT" : "CORE_UNAVAILABLE" };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+// Routes a request to the standalone Core Gateway VPC transport Worker (workers/core-gateway)
+// over an internal Cloudflare Service Binding, instead of the public Access-protected tunnel
+// hostname. The target path mirrors Core's real REST paths 1:1 (that Worker's own allowlist
+// keys are exactly these paths) -- see workers/core-gateway/src/allowlist.ts. Deliberately
+// sends no CF-Access-Client-Id / CF-Access-Client-Secret headers: the VPC path authenticates
+// at the Cloudflare network layer, not via a header.
+async function forwardToCoreViaServiceBinding(
+  route: AllowlistRoute,
+  incomingUrl: URL,
+  worker: { fetch(input: string | URL, init?: RequestInit): Promise<Response> },
+): Promise<UpstreamResult> {
+  const targetUrl = new URL(route.upstreamPath, "https://internal-core-gateway-worker");
+  for (const key of route.allowedQueryParams) {
+    const value = incomingUrl.searchParams.get(key);
+    if (value !== null) targetUrl.searchParams.set(key, value);
+  }
+
+  try {
+    const response = await worker.fetch(targetUrl.toString(), { headers: { Accept: "application/json" } });
+
+    const text = await response.text();
+    if (text.length > MAX_UPSTREAM_BODY_BYTES) {
+      return { status: 502, reason: "CORE_MALFORMED_RESPONSE" };
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = text.length ? JSON.parse(text) : null;
+    } catch {
+      return { status: 502, reason: "CORE_MALFORMED_RESPONSE" };
+    }
+
+    if (!response.ok) {
+      return { status: 502, reason: "CORE_UNAVAILABLE" };
+    }
+    return { status: 200, body: parsed };
+  } catch {
+    return { status: 504, reason: "CORE_UNAVAILABLE" };
   }
 }
