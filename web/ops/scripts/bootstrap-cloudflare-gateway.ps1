@@ -744,7 +744,12 @@ $forbiddenPatterns = @(
     @{ Label = "Direct tunnel hostname literal"; Pattern = [regex]::Escape($TunnelHostname) }
 )
 
-$distFiles = Get-ChildItem -Path $distPath -Recurse -File -Include *.js,*.css,*.html,*.map
+# _worker.js is excluded deliberately: it's the Cloudflare Pages Advanced Mode gateway entry,
+# which (like the functions/ code it replaced) executes server-side on Cloudflare's edge and is
+# never fetched by the browser. It legitimately references CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET
+# by NAME (env.CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET) to read the secret at request time -- that
+# is not a leak, the same way functions/lib/coreGateway.ts referencing it was never one.
+$distFiles = Get-ChildItem -Path $distPath -Recurse -File -Include *.js,*.css,*.html,*.map | Where-Object { $_.Name -ne "_worker.js" }
 $leakFound = $false
 foreach ($pat in $forbiddenPatterns) {
     $hits = $distFiles | Select-String -Pattern $pat.Pattern -List
