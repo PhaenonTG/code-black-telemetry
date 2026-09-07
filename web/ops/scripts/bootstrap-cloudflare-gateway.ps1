@@ -569,8 +569,15 @@ if ($existingCloudflaredState -eq "active") {
 # "bash -s" rather than as a literal argument in an interactive shell, so it is not recorded in
 # Core's own bash history either. (cloudflared's own installer does persist the token into its
 # systemd unit/config on Core -- that is expected and required for unattended boot operation.)
+#
+# Deliberately NOT using "2>&1" here: under Windows PowerShell 5.1 with $ErrorActionPreference =
+# "Stop", merging a native command's stderr into the success stream wraps every stderr line
+# (including cloudflared's ordinary informational "INF ..." install logging, not just real
+# errors) in a terminating NativeCommandError and aborts the script. Leaving stderr unredirected
+# lets it print straight to the console as plain text, which is all that's needed here -- nothing
+# downstream reads the captured output anyway.
 $installCmd = "sudo cloudflared service install $TunnelConnectorToken"
-$sshResult = $installCmd | ssh $CoreSshAlias "bash -s" 2>&1
+$installCmd | ssh $CoreSshAlias "bash -s"
 Remove-Variable TunnelConnectorToken, installCmd -ErrorAction SilentlyContinue
 
 Start-Sleep -Seconds 3
