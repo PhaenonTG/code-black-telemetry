@@ -5,6 +5,16 @@ import { Sidebar } from "./Sidebar"
 import { BottomNav } from "./BottomNav"
 import { StatusBar } from "./StatusBar"
 
+const SIDEBAR_COLLAPSED_KEY = "codeblack.ops.sidebarCollapsed"
+
+function readSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
 function locationLabel(state: LocationState): string {
   switch (state.status) {
     case "ready": return `GPS ${state.lat.toFixed(3)}, ${state.lon.toFixed(3)}`
@@ -17,6 +27,7 @@ function locationLabel(state: LocationState): string {
 export function AppShell({ children }: { children: ReactNode }) {
   const viewport = useViewport()
   const [location, setLocation] = useState<LocationState>({ status: "requesting" })
+  const [collapsed, setCollapsed] = useState(readSidebarCollapsed)
 
   useEffect(() => {
     let cancelled = false
@@ -34,10 +45,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     )
   }
 
-  const rail = viewport === "tablet"
+  const collapsible = viewport === "desktop"
+  const rail = viewport === "tablet" || (collapsible && collapsed)
+  const toggleCollapsed = () => {
+    setCollapsed((value) => {
+      const next = !value
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0") } catch { /* private browsing etc -- collapse still works this session */ }
+      return next
+    })
+  }
   return (
     <div className={rail ? "shell shell--tablet" : "shell shell--desktop"}>
-      <Sidebar rail={rail} />
+      <Sidebar rail={rail} collapsible={collapsible} onToggleCollapse={collapsible ? toggleCollapsed : undefined} />
       <div className="shell__main">
         <StatusBar locationLabel={locationLabel(location)} />
         <main className="shell__content">{children}</main>

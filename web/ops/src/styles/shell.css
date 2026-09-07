@@ -23,6 +23,9 @@ button{font:inherit}
 .sidebar__link small{margin-left:auto;font-size:8px;color:var(--cb-dim);letter-spacing:.12em}
 .sidebar__link:hover{background:var(--cb-panel);color:var(--cb-text)}
 .sidebar__link.active{background:var(--cb-panel-hi);color:var(--cb-text);box-shadow:inset 2px 0 0 var(--cb-red)}
+.sidebar__collapse-toggle{margin-top:auto;align-self:stretch;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1px solid var(--cb-line);background:transparent;color:var(--cb-muted);cursor:pointer;transition:background var(--cb-fast),color var(--cb-fast)}
+.sidebar__collapse-toggle:hover{background:var(--cb-panel);color:var(--cb-text)}
+.sidebar--rail .sidebar__collapse-toggle{padding:10px 6px}
 
 /* Top status bar (desktop/tablet only) */
 .statusbar{height:var(--statusbar-h);flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:0 18px;border-bottom:1px solid var(--cb-line);background:var(--cb-void);font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--cb-muted)}

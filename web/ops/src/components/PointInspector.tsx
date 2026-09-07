@@ -29,24 +29,10 @@ export function PointInspector({
         <p>{selectedPoint ? "Requesting Storm Intel for this point." : "Tap the map to request Storm Intel for a point."}</p>
       </section>
 
-      <section className="ops-inspector__block">
-        <div className="ops-inspector__row">
-          <span>Core</span>
-          <OpsStatusPill state={coreState.core.state} />
-        </div>
-        <p>{coreState.core.detail}</p>
-        <div className="ops-inspector__row">
-          <span>Fabric REST</span>
-          <OpsStatusPill state={coreState.fabric.state} />
-        </div>
-        <p>{coreState.fabric.detail}</p>
-        <div className="ops-inspector__row">
-          <span>Fabric WS</span>
-          <b>{coreState.fabric.wsState.toUpperCase()}</b>
-        </div>
-        <p>Last WS event: {timeLabel(coreState.fabric.lastWsEventAt)}</p>
-      </section>
-
+      {/* Weather content leads this panel -- Storm Intel, then the still-in-progress weather
+          sections (Sounding, Consensus). System/fleet health is real information but it's not
+          what a chaser opens this panel to read, so it moves to the bottom instead of pushing the
+          actual weather data below the fold. */}
       <section className="ops-inspector__block">
         <div className="ops-inspector__row">
           <span>Storm Intel</span>
@@ -89,6 +75,33 @@ export function PointInspector({
       </section>
 
       <section className="ops-inspector__block">
+        <div className="ops-inspector__eyebrow">SOUNDING SNAPSHOT</div>
+        <p>Vertical profile endpoint not yet available. Selected point context is ready, but no Skew-T or browser-side GRIB data is fabricated in Phase 2.</p>
+      </section>
+
+      <section className="ops-inspector__block">
+        <div className="ops-inspector__eyebrow">CONSENSUS</div>
+        <p>Consensus chassis reserved. No averaging, target corridor, percentage score, or tornado probability is generated in Phase 2.</p>
+      </section>
+
+      <section className="ops-inspector__block ops-inspector__block--system">
+        <div className="ops-inspector__eyebrow">SYSTEM</div>
+        <div className="ops-inspector__row">
+          <span>Core</span>
+          <OpsStatusPill state={coreState.core.state} />
+        </div>
+        <div className="ops-inspector__row">
+          <span>Fabric REST</span>
+          <OpsStatusPill state={coreState.fabric.state} />
+        </div>
+        <div className="ops-inspector__row">
+          <span>Fabric WS</span>
+          <b>{coreState.fabric.wsState.toUpperCase()}</b>
+        </div>
+        <p>Last WS event: {timeLabel(coreState.fabric.lastWsEventAt)}</p>
+      </section>
+
+      <section className="ops-inspector__block ops-inspector__block--system">
         <div className="ops-inspector__eyebrow">FLEET</div>
         {units.length === 0 ? (
           <p>No Fabric unit snapshot is available in this browser session.</p>
@@ -102,16 +115,6 @@ export function PointInspector({
             ))}
           </div>
         )}
-      </section>
-
-      <section className="ops-inspector__block">
-        <div className="ops-inspector__eyebrow">SOUNDING SNAPSHOT</div>
-        <p>Vertical profile endpoint not yet available. Selected point context is ready, but no Skew-T or browser-side GRIB data is fabricated in Phase 2.</p>
-      </section>
-
-      <section className="ops-inspector__block">
-        <div className="ops-inspector__eyebrow">CONSENSUS</div>
-        <p>Consensus chassis reserved. No averaging, target corridor, percentage score, or tornado probability is generated in Phase 2.</p>
       </section>
     </aside>
   );

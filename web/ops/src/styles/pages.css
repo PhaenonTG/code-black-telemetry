@@ -42,6 +42,10 @@
 .ops-inspector{min-width:0;overflow:auto;background:var(--cb-shell);border-left:1px solid var(--cb-line);padding:14px;display:flex;flex-direction:column;gap:10px}
 .ops-inspector__block{background:var(--cb-panel);border:1px solid var(--cb-line);border-top:2px solid rgba(255,255,255,.16);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);padding:14px}
 .ops-inspector__block--command{border-top-color:var(--cb-red);background:linear-gradient(135deg,var(--cb-panel),#050506)}
+/* System/fleet health is real, but it's not what this panel is for -- pushed to the bottom
+   (see PointInspector.tsx) and toned down here so weather content reads as the priority. */
+.ops-inspector__block--system{padding:10px 14px;opacity:.72}
+.ops-inspector__block--system .ops-inspector__eyebrow{color:var(--cb-muted)}
 .ops-inspector h2{margin:4px 0 8px;font-size:20px;line-height:1.05;letter-spacing:.02em;text-transform:uppercase}
 .ops-inspector p{margin:6px 0 0;color:var(--cb-muted);font-size:11px;line-height:1.55}
 .ops-inspector__row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 6px}

@@ -16,6 +16,8 @@ const PATHS: Record<string, string> = {
   stream: "M4 6h16v10H4zM8 20h8M12 16v4M10 9l5 2.8-5 2.8z",
   system: "M4 6h16M4 12h16M4 18h16M7 6v.01M7 12v.01M7 18v.01",
   chevron: "M9 6l6 6-6 6",
+  "chevron-right": "M9 6l6 6-6 6",
+  "chevron-left": "M15 6l-6 6 6 6",
   lock: "M7 11V8a5 5 0 0110 0v3m-11 0h12v10H6V11z",
   gps: "M12 2v2m0 16v2M2 12h2m16 0h2M12 8a4 4 0 100 8 4 4 0 000-8z",
   eye: "M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z M12 15a3 3 0 100-6 3 3 0 000 6z",
