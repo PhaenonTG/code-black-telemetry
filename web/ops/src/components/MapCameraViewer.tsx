@@ -10,7 +10,10 @@ function mediaFor(camera: TrafficCamera): { kind: CameraMediaKind; url: string |
   const image = camera.previewUrl?.trim() || camera.imageUrl?.trim() || camera.thumbnailUrl?.trim() || null
 
   if (stream) {
-    if (/\.m3u8(?:$|\?)/i.test(stream)) return { kind: "hls", url: stream }
+    // The ARDOT relay's own URL is /api/ardot-camera-stream?url=<encoded upstream m3u8> -- the
+    // literal ".m3u8" only shows up percent-encoded inside that query value, not as this URL's own
+    // suffix, so it needs its own check rather than relying on the plain suffix match below.
+    if (stream.startsWith("/api/ardot-camera-stream") || /\.m3u8(?:$|\?)/i.test(stream)) return { kind: "hls", url: stream }
     if (/mjpeg|mjpg|multipart|axis-cgi\/mjpg/i.test(stream)) return { kind: "mjpeg", url: stream }
     if (/\.(?:mp4|webm|ogg)(?:$|\?)/i.test(stream)) return { kind: "video", url: stream }
   }

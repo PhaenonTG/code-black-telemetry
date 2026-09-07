@@ -168,6 +168,19 @@ async function saveLastGood<T>(key: string, data: T[], fetchedAt: number) {
   }
 }
 
+// Same dynamic-import-with-fallback reasoning as loadPreferences above: only web/ops has the
+// ardot-camera-stream Pages Function deployed alongside it, so the relay URL is only safe to hand
+// out on a non-native build. Defaults to "not native" (i.e. tries the relay) if Capacitor's own
+// module can't be resolved at all, which matches every context that actually lacks a real native
+// shell -- the domain-test harness included.
+async function isNativePlatform(): Promise<boolean> {
+  try {
+    return (await import("@capacitor/core")).Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
 async function loadLastGood<T extends { id: string; stale?: boolean; freshness?: string }>(key: string): Promise<LastGoodSnapshot<T> | null> {
   const preferences = await loadPreferences();
   if (!preferences) return null;
@@ -390,7 +403,7 @@ function normalizeRoadFeature(feature: unknown, providerId: string, kindHint: st
   };
 }
 
-function normalizeCameraFeature(feature: unknown, providerId: string): TrafficCamera | null {
+function normalizeCameraFeature(feature: unknown, providerId: string, useStreamRelay: boolean): TrafficCamera | null {
   if (!feature || typeof feature !== "object") return null;
   const candidate = feature as { properties?: Record<string, unknown>; geometry?: { type?: string; coordinates?: unknown[] } };
   const props = candidate.properties ?? (feature as Record<string, unknown>);
@@ -417,10 +430,18 @@ function normalizeCameraFeature(feature: unknown, providerId: string): TrafficCa
     provider: { ...ARDOT_PROVENANCE, provider: "PUBLIC/TRAFFIC" },
     lastUpdateAt: updatedAt,
     imageUrl,
-    // IDrive exposes `hls_stream_protected`, but direct browser/WebView requests return 403 without
-    // provider-controlled access. v0.1 therefore treats the public image endpoint as a refreshed
-    // snapshot and links back to IDrive instead of presenting the protected HLS URL as playable.
-    streamUrl: safeHttpUrl(props.hls_stream),
+    // IDrive's HLS URL (`hls_stream_protected`) 403s on a direct browser/WebView request -- not a
+    // CORS block (every hop already answers with Access-Control-Allow-Origin: *), a Referer check
+    // browsers won't let JS spoof. functions/api/ardot-camera-stream.ts relays it server-side with
+    // the right Referer instead. Only usable on a build that actually has that Pages Function
+    // deployed alongside it (web/ops) -- on native there's no such backend, so this stays the plain
+    // snapshot image there, same as before.
+    // Deliberately not run through safeHttpUrl -- that helper requires an absolute http(s) URL,
+    // but this needs to stay relative so it resolves against whatever origin actually has this
+    // Pages Function deployed, not get rejected or hardcoded to one host.
+    streamUrl: useStreamRelay
+      ? `/api/ardot-camera-stream?url=${encodeURIComponent(`https://actis.idrivearkansas.com/index.php/api/cameras/feed/${recordId}.m3u8`)}`
+      : safeHttpUrl(props.hls_stream),
     thumbnailUrl: safeHttpUrl(props.thumbnail_url),
     previewUrl: imageUrl,
     availability,
@@ -461,10 +482,13 @@ export async function fetchArdotRoadConditions(context: LayerQueryContext, signa
 }
 
 export async function fetchArdotTrafficCameras(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout) {
-  const json = await fetchJson(`${IDRIVE_LAYER_BASE_URL}/cameras.geojson`, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher);
+  const [json, useStreamRelay] = await Promise.all([
+    fetchJson(`${IDRIVE_LAYER_BASE_URL}/cameras.geojson`, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher),
+    isNativePlatform().then((native) => !native),
+  ]);
   const features = Array.isArray(json?.features) ? json.features : [];
   const cameras: TrafficCamera[] = features
-    .map((feature: unknown) => normalizeCameraFeature(feature, "ardot-idrive"))
+    .map((feature: unknown) => normalizeCameraFeature(feature, "ardot-idrive", useStreamRelay))
     .filter((camera: TrafficCamera | null): camera is TrafficCamera => camera != null)
     .filter((camera: TrafficCamera) => pointInViewport(camera, context.viewport))
     .slice(0, MAX_CAMERA_RESULTS);
