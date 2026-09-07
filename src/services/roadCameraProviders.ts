@@ -114,8 +114,15 @@ const ROAD_CACHE_TTL_MS = 2 * 60_000;
 const CAMERA_CACHE_TTL_MS = 5 * 60_000;
 const STALE_CACHE_TTL_MS = 30 * 60_000;
 const DEFAULT_PROVIDER_TIMEOUT_MS = 4_500;
-const MAX_ROAD_RESULTS = 220;
-const MAX_CAMERA_RESULTS = 260;
+// ARDOT's own camera feed alone carries 552 cameras statewide -- the old 260 cap was silently
+// dropping over half of them before the viewport filter's result ever reached the map, and
+// because the cap was applied to the raw (unsorted-by-distance) feature order, whichever ones
+// survived clustered wherever the feed happened to list first rather than being spread across the
+// state. Raised well above any single provider's real current count; the render side already
+// clusters dense areas into count-bubbles at low zoom (clusterViewportPoints in viewport.ts), so a
+// higher cap here doesn't turn into visual clutter on the map.
+const MAX_ROAD_RESULTS = 5000;
+const MAX_CAMERA_RESULTS = 5000;
 
 const roadCache = new Map<string, CacheEntry<RoadConditionEvent>>();
 const cameraCache = new Map<string, CacheEntry<TrafficCamera>>();
