@@ -1162,8 +1162,10 @@ export function AtlasMap({
       {/* Reflectivity alone doesn't show rotation -- this row only exists when single-site radar is
           on, since REF/VEL/SRV/CC + tilt are meaningless for the wide-area mosaic. SRV needs a storm
           motion vector or the worker refuses it, so picking SRV without one opens the inline entry
-          instead of silently doing nothing. */}
-      {!compact && radarVisible && (
+          instead of silently doing nothing. Also hidden outright on a web build with no radar
+          worker configured -- a product/tilt picker for a layer that can never actually load a
+          frame is just clutter, not a control. */}
+      {!compact && radarVisible && !radarWorkerMissingOnWeb() && (
         <div className="atlas-radar-instrument" aria-label="Single-site radar product and tilt">
           <div className="atlas-radar-instrument__row">
             {(["REF", "VEL", "SRV", "CC"] as RadarProduct[]).map((product) => (
