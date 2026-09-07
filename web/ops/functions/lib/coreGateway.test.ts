@@ -19,9 +19,9 @@ function jsonResponse(status: number, body: unknown): Response {
 describe("route allowlist", () => {
   it("resolves every documented OPS route", () => {
     expect(resolveAllowlistRoute("health")).toEqual({ upstreamPath: "/health", allowedQueryParams: [] });
-    expect(resolveAllowlistRoute("fabric/health")).toEqual({ upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] });
-    expect(resolveAllowlistRoute("fabric/units")).toEqual({ upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] });
-    expect(resolveAllowlistRoute("storm-intel/point")).toEqual({
+    expect(resolveAllowlistRoute("api/fabric/v1/health")).toEqual({ upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] });
+    expect(resolveAllowlistRoute("api/fabric/v1/units")).toEqual({ upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] });
+    expect(resolveAllowlistRoute("api/storm-intel/v1/point")).toEqual({
       upstreamPath: "/api/storm-intel/v1/point",
       allowedQueryParams: ["latitude", "longitude"],
     });
@@ -37,7 +37,7 @@ describe("route allowlist", () => {
   });
 
   it("normalizes path segments from Cloudflare's [[path]] param shape", () => {
-    expect(normalizeRouteKey(["fabric", "health"])).toBe("fabric/health");
+    expect(normalizeRouteKey(["api", "fabric", "v1", "health"])).toBe("api/fabric/v1/health");
     expect(normalizeRouteKey("health")).toBe("health");
     expect(normalizeRouteKey(undefined)).toBe("");
   });

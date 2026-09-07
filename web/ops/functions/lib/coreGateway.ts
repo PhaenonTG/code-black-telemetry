@@ -32,12 +32,19 @@ export interface AllowlistRoute {
 // Hardcoded allowlist. This is the entire set of paths this gateway will ever forward --
 // there is no passthrough, no wildcard, no caller-controlled upstream host or path. Adding a
 // route here is a reviewed code change, not a runtime configuration option.
+//
+// Route keys are the exact suffix src/core/client.ts appends to config.coreBaseUrl (e.g.
+// `${coreBaseUrl}/api/fabric/v1/health`) -- deliberately matching Core's own real paths 1:1
+// rather than a shorter alias. client.ts is shared with the local dev SSH-tunnel path, where
+// coreBaseUrl points straight at Core with no gateway in front, so it always sends Core's actual
+// paths; keeping the gateway's keys identical means this same client code needs no
+// gateway-vs-direct branching and both paths were verified live against production.
 export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "health": { upstreamPath: "/health", allowedQueryParams: [] },
-  "fabric/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
-  "fabric/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
-  "storm-intel/health": { upstreamPath: "/api/storm-intel/v1/health", allowedQueryParams: [] },
-  "storm-intel/point": { upstreamPath: "/api/storm-intel/v1/point", allowedQueryParams: ["latitude", "longitude"] },
+  "api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
+  "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
+  "api/storm-intel/v1/health": { upstreamPath: "/api/storm-intel/v1/health", allowedQueryParams: [] },
+  "api/storm-intel/v1/point": { upstreamPath: "/api/storm-intel/v1/point", allowedQueryParams: ["latitude", "longitude"] },
 };
 
 export function normalizeRouteKey(path: string | string[] | undefined): string {
