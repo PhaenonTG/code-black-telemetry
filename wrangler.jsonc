@@ -1,0 +1,6 @@
+{
+  "name": "codeblack-ops",
+  "pages_build_output_dir": "web/ops/dist",
+  "compatibility_date": "2026-08-24",
+  "compatibility_flags": ["global_fetch_strictly_public"]
+}
