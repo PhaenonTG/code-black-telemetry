@@ -6,6 +6,10 @@ import { coreConfigured, type OpsCoreConfig } from "./config";
 import type { CoreHealthSnapshot, FabricSnapshotState, OpsConnectionState, StormIntelState } from "./types";
 
 const REQUEST_TIMEOUT_MS = 10_000;
+// The point-intel lookup does a real HRRR grid interpolation on Core's side (through the VPC
+// gateway hop too), not a cheap health check -- 10s was tight enough to time out on a normal, if
+// slow, response rather than a genuinely hung request.
+const POINT_REQUEST_TIMEOUT_MS = 25_000;
 
 export class OpsCoreClientError extends Error {
   constructor(message: string) {
@@ -50,9 +54,9 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, outerSignal?: AbortSignal): Promise<T> {
+async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, outerSignal?: AbortSignal, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<T> {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   const abort = () => controller.abort();
   outerSignal?.addEventListener("abort", abort, { once: true });
   try {
@@ -149,7 +153,7 @@ export async function fetchStormIntelHealth(config: OpsCoreConfig): Promise<Pick
 export async function fetchStormIntelPoint(config: OpsCoreConfig, point: { lat: number; lon: number }, signal?: AbortSignal): Promise<StormIntelSnapshot> {
   if (!coreConfigured(config)) throw new OpsCoreClientError(unavailableState(config, "Storm Intel point").detail);
   const params = new URLSearchParams({ latitude: String(point.lat), longitude: String(point.lon) });
-  const raw = await withTimeout((timeoutSignal) => fetchJson<unknown>(`${config.coreBaseUrl}/api/storm-intel/v1/point?${params}`, timeoutSignal), signal);
+  const raw = await withTimeout((timeoutSignal) => fetchJson<unknown>(`${config.coreBaseUrl}/api/storm-intel/v1/point?${params}`, timeoutSignal), signal, POINT_REQUEST_TIMEOUT_MS);
   return normalizeStormIntelSnapshot(raw);
 }
 
