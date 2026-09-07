@@ -9,7 +9,13 @@ export function TimelineRail() {
       </div>
       <div className="ops-timeline__ticks">
         {hours.map((hour, index) => (
-          <button key={hour} type="button" className={index === 0 ? "active" : ""}>
+          <button
+            key={hour}
+            type="button"
+            className={index === 0 ? "active" : ""}
+            disabled={index !== 0}
+            title={index === 0 ? undefined : "Future valid-time selection awaits Core contract support"}
+          >
             {hour}
           </button>
         ))}
