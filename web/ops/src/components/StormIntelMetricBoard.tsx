@@ -1,17 +1,18 @@
 import type { NormalizedMetric } from "../../../../web/overlay/src/stormIntel/types";
-import { formatMetric, metricProvenance, sourceSemantics } from "../stormIntel/format";
+import { formatMetric, metricProvenance, metricThreatLevel, sourceSemantics } from "../stormIntel/format";
 import { metricsForGroup, STORM_METRIC_GROUPS } from "../stormIntel/groups";
 import type { OpsCoreState } from "../core/types";
 
 function MetricRow({ metric }: { metric: NormalizedMetric }) {
   const semantic = sourceSemantics(metric);
+  const threat = metricThreatLevel(metric);
   return (
     <div className="storm-metric-row">
       <div>
         <strong>{metric.label}</strong>
         <small>{metric.availability === "available" ? metricProvenance(metric) : metric.unavailableReason ?? "Not supplied by Core"}</small>
       </div>
-      <b>{formatMetric(metric)}</b>
+      <b data-threat={threat}>{formatMetric(metric)}</b>
       <em data-kind={semantic}>{semantic}</em>
     </div>
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMetric, metricProvenance, sourceSemantics, stormIntelSummary } from "./format";
+import { formatMetric, metricProvenance, metricThreatLevel, sourceSemantics, stormIntelSummary } from "./format";
 import type { NormalizedMetric, StormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/types";
 
 function metric(overrides: Partial<NormalizedMetric> = {}): NormalizedMetric {
@@ -49,6 +49,34 @@ describe("Storm Intel formatting", () => {
     expect(sourceSemantics(metric({ derivation: "calculated from profile" }))).toBe("CALCULATED");
     expect(sourceSemantics(metric({ derivation: "MUCAPE proxy" }))).toBe("PROXY");
     expect(sourceSemantics(metric({ availability: "unavailable", value: null }))).toBe("UNAVAILABLE");
+  });
+
+  it("converts Celsius readings to Fahrenheit for display", () => {
+    expect(formatMetric(metric({ key: "surface_temperature", value: 0, unit: "degC" }))).toBe("32 degF");
+    expect(formatMetric(metric({ key: "surface_temperature", value: 100, unit: "degC" }))).toBe("212 degF");
+    expect(formatMetric(metric({ key: "surface_temperature", value: 38.8, unit: "degC" }))).toBe("101.8 degF");
+  });
+
+  it("leaves non-Celsius units untouched", () => {
+    expect(formatMetric(metric({ key: "mlcape", value: 1840, unit: "J/kg" }))).toBe("1840 J/kg");
+  });
+
+  it("bands tornado favorability low/moderate/high per metric", () => {
+    expect(metricThreatLevel(metric({ key: "mlcape", value: 500 }))).toBe("low");
+    expect(metricThreatLevel(metric({ key: "mlcape", value: 1500 }))).toBe("moderate");
+    expect(metricThreatLevel(metric({ key: "mlcape", value: 3000 }))).toBe("high");
+    // LCL height is inverted -- lower is more favorable.
+    expect(metricThreatLevel(metric({ key: "lcl_height", value: 2000 }))).toBe("low");
+    expect(metricThreatLevel(metric({ key: "lcl_height", value: 900 }))).toBe("high");
+    // Dewpoint thresholds are in Fahrenheit regardless of the metric's own unit.
+    expect(metricThreatLevel(metric({ key: "surface_dewpoint", value: 4, unit: "degC" }))).toBe("low");
+    expect(metricThreatLevel(metric({ key: "surface_dewpoint", value: 18, unit: "degC" }))).toBe("high");
+  });
+
+  it("leaves metrics with no established single-point threshold neutral", () => {
+    expect(metricThreatLevel(metric({ key: "surface_temperature", value: 25 }))).toBe("neutral");
+    expect(metricThreatLevel(metric({ key: "relative_humidity", value: 60 }))).toBe("neutral");
+    expect(metricThreatLevel(metric({ value: null, availability: "unavailable" }))).toBe("neutral");
   });
 
   it("summarizes unavailable snapshots honestly", () => {

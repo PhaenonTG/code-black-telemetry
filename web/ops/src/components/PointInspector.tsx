@@ -1,6 +1,6 @@
 import { OpsStatusPill } from "./OpsStatusPill";
 import type { OpsCoreState } from "../core/types";
-import { PRIMARY_STORM_METRICS, firstAvailableSource, formatMetric, metricByKey, metricProvenance, sourceSemantics, stormIntelSummary } from "../stormIntel/format";
+import { PRIMARY_STORM_METRICS, firstAvailableSource, formatMetric, metricByKey, metricProvenance, metricThreatLevel, sourceSemantics, stormIntelSummary } from "../stormIntel/format";
 
 function timeLabel(value: number | string | null | undefined) {
   if (!value) return "NO DATA";
@@ -75,7 +75,7 @@ export function PointInspector({
                 return (
                   <div className="ops-metric-line" key={key}>
                     <span>{metric?.label ?? key.replace(/_/g, " ").toUpperCase()}</span>
-                    <b>{formatMetric(metric)}</b>
+                    <b data-threat={metricThreatLevel(metric)}>{formatMetric(metric)}</b>
                     <em>{sourceSemantics(metric)}</em>
                     <small>{metricProvenance(metric)}</small>
                   </div>

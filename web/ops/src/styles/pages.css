@@ -52,6 +52,9 @@
 .ops-metric-line{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:9px 0;border-bottom:1px solid var(--cb-line)}
 .ops-metric-line span{font-size:10px;font-weight:900;letter-spacing:.08em;color:var(--cb-muted);text-transform:uppercase}
 .ops-metric-line b{font-size:15px;font-variant-numeric:tabular-nums;color:var(--cb-text)}
+.ops-metric-line b[data-threat="low"]{color:var(--cb-green)}
+.ops-metric-line b[data-threat="moderate"]{color:var(--cb-amber)}
+.ops-metric-line b[data-threat="high"]{color:var(--cb-red)}
 .ops-metric-line em{grid-column:1/-1;width:fit-content;border:1px solid var(--cb-line);padding:2px 5px;color:var(--cb-muted);font-size:8px;font-style:normal;font-weight:900;letter-spacing:.11em}
 .ops-metric-line small{grid-column:1/-1;color:var(--cb-dim);font-size:9px;line-height:1.35}
 .ops-provenance-grid{display:grid;grid-template-columns:96px 1fr;gap:5px 10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--cb-line)}
@@ -127,6 +130,12 @@
 .storm-metric-row strong{display:block;color:var(--cb-text);font-size:11px;font-weight:900;letter-spacing:.05em;text-transform:uppercase}
 .storm-metric-row small{display:block;margin-top:3px;color:var(--cb-dim);font-size:8px;line-height:1.35}
 .storm-metric-row b{color:var(--cb-text);font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;text-align:right;overflow-wrap:anywhere}
+/* Tornado-favorability banding (see metricThreatLevel in stormIntel/format.ts) -- "high" is most
+   favorable for tornadoes, not "most dangerous to read"; colored red anyway since that's this
+   app's established high-severity color everywhere else (alert polygons, LIVE pills). */
+.storm-metric-row b[data-threat="low"]{color:var(--cb-green)}
+.storm-metric-row b[data-threat="moderate"]{color:var(--cb-amber)}
+.storm-metric-row b[data-threat="high"]{color:var(--cb-red)}
 .storm-metric-row em{grid-column:1/-1;width:fit-content;border:1px solid var(--cb-line);padding:2px 5px;color:var(--cb-muted);font-size:8px;font-style:normal;font-weight:900;letter-spacing:.12em}
 .storm-metric-row em[data-kind="PROXY"]{border-color:rgba(255,204,0,.45);color:#ffdf61}
 .storm-metric-row em[data-kind="CALCULATED"]{border-color:rgba(141,148,155,.7);color:var(--cb-text)}
