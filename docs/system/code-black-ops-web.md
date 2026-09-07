@@ -1,11 +1,10 @@
 # Code Black OPS Website
 
-Status: Phase 3 production web deployment is live behind Supabase Auth. Phase 4 (secure Core
-gateway) added an authenticated, allowlisted Cloudflare Pages Function for future production Core
-access -- see `docs/system/code-black-core-gateway.md` for the full design. It is not live yet: the
-Core-side private transport it depends on was deliberately not built this pass (Safety Gate). The
-deployed site continues to correctly report Core/Fabric/Storm Intel as unavailable, exactly as
-before Phase 4.
+Status: Phase 3 production web deployment is live behind Supabase Auth. Stage 3 wired the
+production Core gateway end to end -- Cloudflare Tunnel + Access on the Core side, an
+authenticated, allowlisted gateway on the Pages side -- so `/api/core/*` on `ops.codeblackwx.com`
+now reaches real CodeBlack-Core data for signed-in OPS users. See "Production Core Gateway (Stage
+3, current)" below and `docs/system/code-black-core-gateway.md` for the full design.
 
 ## Architecture Decision
 
@@ -256,17 +255,29 @@ npm run build
 Browser QA should use `?phase1Preview=1` only on `127.0.0.1` in dev mode. Production builds remain
 behind Supabase authorization.
 
+## Production Core Gateway (Stage 3, current)
+
+`/api/core/*` on `ops.codeblackwx.com` is live: Cloudflare Tunnel `codeblack-core-gateway` ->
+Access-protected `core-gateway.codeblackwx.com` -> `cloudflared` on CodeBlack-Core ->
+`http://127.0.0.1:8000`. Core stays loopback-only; the tunnel is the only path in.
+
+The gateway is served via Cloudflare Pages **Advanced Mode** (`dist/_worker.js`, built by
+`scripts/build-worker.mjs` after `vite build`), not the `functions/api/core/[[path]].ts`
+folder-based route that file still documents in its own comments. That folder-based Function
+builds and deploys correctly, but this project runs on Cloudflare's newer unified Pages engine
+(Build System v3), where the SPA's not-found fallback wins over a folder-based Function by
+default -- confirmed in production: unauthenticated `/api/core/*` requests returned the SPA shell
+with 200 instead of 401, on both the custom domain and the raw `*.pages.dev` URL, even after
+adding an explicit `_routes.json`. `worker/entry.ts` reuses the same, still-tested
+`functions/lib/coreGateway.ts` logic (auth check, allowlist, forward) and is the one actually
+running in production; `env.ASSETS.fetch(request)` handles every other path exactly as before.
+
 ## Known Limitations
 
 - The local browser needs the SSH tunnel and Vite proxy for real Core data.
-- The production Cloudflare gateway (`/api/core/*`) is deployed and tested but not yet backed by a
-  live Core-side transport -- production Core/Fabric/Storm Intel remain `UNAVAILABLE` in production
-  until the remaining Cloudflare account setup (Tunnel + Access, dashboard-only steps) is completed.
-  `cloudflared` is now installed on CodeBlack-Core (Stage 2) but not yet activated as a running
-  tunnel. See `docs/system/code-black-core-gateway.md`, "Stage 2: Core-side tunnel."
-- `src/core/client.ts` now attaches a Supabase bearer token to every Core request (Stage 2) -- this
-  has no visible effect yet since the dev SSH-tunnel path doesn't check it and the production
-  gateway has no live upstream yet, but it is wired, tested, and ready for when the tunnel exists.
+- `src/core/client.ts` attaches a Supabase bearer token to every Core request (Stage 2) -- this
+  has no visible effect in local dev since the dev SSH-tunnel path doesn't check it, but it is
+  exactly what the production gateway now authenticates against (see Stage 3, above).
 - The gateway's live Fabric WebSocket route is designed but not implemented; production Fabric
   would launch REST-only (health + units, polled), which the existing `CoreOpsProvider` already
   supports with no code changes.
