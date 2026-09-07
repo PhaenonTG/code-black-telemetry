@@ -557,10 +557,14 @@ $coreHealthCheck = ssh $CoreSshAlias "curl -s -o /dev/null -w '%{http_code}' htt
 if ($coreHealthCheck -ne "200") { Stop-Bootstrap "Core API did not return HTTP 200 on 127.0.0.1:8000 before proceeding (got '$coreHealthCheck'). Not touching Core." }
 Write-Ok "Core API healthy (127.0.0.1:8000)"
 
-$existingCloudflaredState = ssh $CoreSshAlias "systemctl is-active cloudflared 2>/dev/null"
-if ($existingCloudflaredState -eq "active") {
-    Write-Warn2 "cloudflared service already active on Core -- reinstalling with the current tunnel token to ensure it matches this tunnel."
+$existingCloudflaredServiceFile = ssh $CoreSshAlias "test -f /etc/systemd/system/cloudflared.service && echo yes || echo no"
+if ($existingCloudflaredServiceFile.Trim() -eq "yes") {
+    # cloudflared's own installer refuses to run over an existing service file (it says so
+    # explicitly and suggests this exact remediation) -- stopping alone is not enough, the unit
+    # must be uninstalled first or the reinstall below fails.
+    Write-Warn2 "cloudflared service already installed on Core -- uninstalling and reinstalling with the current tunnel token to ensure it matches this tunnel."
     ssh $CoreSshAlias "sudo systemctl stop cloudflared" | Out-Null
+    ssh $CoreSshAlias "sudo cloudflared service uninstall" | Out-Null
 }
 
 # The token is piped directly into the remote install command over the existing SSH transport;
