@@ -5,44 +5,69 @@ RUN THIS YOURSELF, INTERACTIVELY, in your own PowerShell window. It prompts for 
 Read-Host and must have a real console attached -- do not run it from a non-interactive
 automation context.
 
-What this does, in order:
-  1. Prompts for a Cloudflare API token (SecureString, never echoed).
-  2. Verifies the token and discovers account ID / codeblackwx.com zone ID / codeblack-ops
-     Pages project -- read-only calls only.
-  3. Probes every permission this workflow needs (all read-only calls). If ANY probe fails,
-     it prints exactly which permission is missing and stops -- nothing is created or changed.
-  4. Only if every probe succeeds, it proceeds (idempotently -- reuses existing matching
-     resources instead of creating duplicates) to:
-       - create/reuse a Cloudflare Tunnel named "codeblack-core-gateway"
-       - configure its ingress to http://127.0.0.1:8000 only
-       - create/reuse the DNS record for the tunnel hostname
-       - create/reuse an Access application + policy protecting that hostname
-       - create (or, if one already exists and its secret is unrecoverable, rotate) an Access
-         Service Token
+TWO EXPLICIT PHASES:
+
+  1. INFRASTRUCTURE (default, no switch needed):
+       - verify credential, resolve account/zone/Pages project
+       - probe every permission this workflow needs (all read-only calls); if ANY probe fails,
+         print exactly which permission is missing and stop -- nothing is created or changed
+       - idempotently create/reuse: Cloudflare Tunnel, DNS record, Access application + policy,
+         Access Service Token
        - merge (never overwrite wholesale) the new server-side env vars into the codeblack-ops
          Pages project's production environment
        - install/verify cloudflared as a systemd service on CodeBlack-Core via SSH, using the
          tunnel token -- Core's own API binding is never touched
-       - push feature/ops-web-v1 to origin/master (fast-forward only) to trigger Cloudflare's
-         existing Pages Git-integration deploy
-       - poll the resulting Pages deployment until it succeeds
-       - run infrastructure-level validation (tunnel reachable via the Access service token,
-         unauthenticated gateway request correctly rejected)
-  5. Prints a final structured report, and writes a NON-secret state file (resource IDs/names
-     only -- gitignored) for idempotent re-runs.
+       - verify Core stayed loopback-only, and SSH / Tailscale / MQTT broker / MQTT bridge all
+         stayed healthy
+       - run infrastructure-level validation (tunnel reachable via the Access service token)
+       - save a NON-secret state file and STOP.
+
+     The default run never touches git and never triggers a production deployment.
+
+  2. DEPLOY (only with the -Deploy switch):
+       - run typecheck / lint / test / production build for web/ops; stop on any failure
+       - scan the built dist/ bundle for anything that must never ship to a browser (the Core
+         Tailscale IP, the tunnel hostname, 127.0.0.1:8000, known secret-env-var names, or the
+         current Access Service Token secret value itself); stop if anything is found
+       - push feature/ops-web-v1 to origin/master (fast-forward only; never force); unrelated
+         working-tree changes are left exactly as they are -- only committed history is pushed
+       - poll the resulting Cloudflare Pages deployment until it succeeds
+       - check that an unauthenticated request to the production gateway is correctly rejected
+       - print a final structured report
+
+Usage:
+  .\bootstrap-cloudflare-gateway.ps1                    # infrastructure only, stops before git/deploy
+  .\bootstrap-cloudflare-gateway.ps1 -Deploy            # infrastructure, then validate + push + deploy
+  .\bootstrap-cloudflare-gateway.ps1 -AccountId <id>    # skip account auto-resolution ambiguity
 
 What this does NOT do (by design, matches the approved plan):
-  - Does not touch SSH, Tailscale, MQTT, or Core's application code/binding.
+  - Does not touch SSH, Tailscale, MQTT, or Core's application code/binding (read-only health
+    checks against all four; Tailscale is verified, never configured).
   - Does not open any firewall port. Core's API stays on 127.0.0.1:8000 only.
   - Does not implement Fabric WebSocket, Sounding, or Consensus.
   - Does not perform the final "real authenticated browser session" check -- that requires a
     human logged-in Supabase session and is printed as the one remaining manual step at the end.
-  - Never writes the Cloudflare token, the Access Service Token secret, or any other secret to
-    disk, to git, or to any log file. The token lives only in this PowerShell process's memory
-    for the duration of this run.
+  - Never writes the Cloudflare API token, the Access Service Token secret, or any other secret
+    to disk, to git, or to any log file. The token lives only in this PowerShell process's
+    memory, and only until the Authorization header is built.
+  - Supports API-token authentication ONLY. There is no Global API Key fallback: a Global Key is
+    unscoped/account-wide and would make every permission probe below trivially pass regardless
+    of what is actually required, defeating the point of probing at all.
 #>
 
 #Requires -Version 5.1
+[CmdletBinding()]
+param(
+    # Perform the git push / Cloudflare Pages production deployment step. Without this switch,
+    # the script stops after infrastructure provisioning and touches git/production nothing.
+    [switch]$Deploy,
+
+    # Explicit Cloudflare account ID to use. Only needed if the token can access more than one
+    # account and this script cannot unambiguously resolve which one hosts codeblackwx.com /
+    # codeblack-ops on its own (it will print the candidate list and ask for this if so).
+    [string]$AccountId
+)
+
 $ErrorActionPreference = "Stop"
 
 # ---------------------------------------------------------------------------
@@ -59,6 +84,7 @@ $AccessAppName    = "Code Black Core Gateway"
 $ServiceTokenName = "codeblack-ops-gateway"
 $CoreSshAlias     = "codeblack-core"
 $CoreOrigin       = "http://127.0.0.1:8000"
+$CoreTailscaleIp  = "100.96.77.89"
 $StateFile        = Join-Path $OpsPath ".cloudflare-bootstrap-state.json"
 $ApiBase          = "https://api.cloudflare.com/client/v4"
 
@@ -70,39 +96,37 @@ function Write-Err2($msg)  { Write-Host "  [FAIL] $msg" -ForegroundColor Red }
 
 function Stop-Bootstrap($reason) {
     Write-Err2 $reason
-    Write-Host "`nSTOPPED. Nothing further was changed." -ForegroundColor Red
+    Write-Host "`nSTOPPED." -ForegroundColor Red
     exit 1
 }
 
 # ---------------------------------------------------------------------------
-# 1. Credential acquisition -- always interactive, never echoed, never written to disk.
+# 1. Credential acquisition -- API TOKEN ONLY.
 #
-# Two supported auth modes:
-#   - Scoped API Token (preferred): Authorization: Bearer <token> -- leave the email prompt
-#     blank to select this mode.
-#   - Global API Key (broader, account-wide): X-Auth-Email + X-Auth-Key headers.
+#    Preference order:
+#      1. $env:CLOUDFLARE_API_TOKEN, if already set in this session.
+#      2. Interactive Read-Host -AsSecureString prompt.
+#
+#    Never echoed, never written to disk, never included in any log or error message. Cleared
+#    from memory the moment the Authorization header string has been built.
 # ---------------------------------------------------------------------------
-Write-Phase "Cloudflare credentials"
+Write-Phase "Cloudflare credential (API token only)"
 Write-Host "Used only in this process's memory for this run. Never printed, logged, written to disk, or committed." -ForegroundColor Gray
 
-$AccountEmail = Read-Host -Prompt "Cloudflare account email (leave BLANK if you have a scoped API Token, not a Global API Key)"
-$AccountEmail = $AccountEmail.Trim()
-$UsingGlobalKey = -not [string]::IsNullOrWhiteSpace($AccountEmail)
-
-if ($UsingGlobalKey) {
-    $promptLabel = "Cloudflare Global API Key"
+if ($env:CLOUDFLARE_API_TOKEN) {
+    Write-Info "Using `$env:CLOUDFLARE_API_TOKEN already set in this session."
+    $Token = $env:CLOUDFLARE_API_TOKEN
 } else {
-    $promptLabel = "Cloudflare API Token"
+    $secureToken = Read-Host -Prompt "Cloudflare API Token (scoped token only)" -AsSecureString
+    if ($secureToken.Length -eq 0) { Stop-Bootstrap "Nothing entered." }
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+    try {
+        $Token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
+    Remove-Variable secureToken -ErrorAction SilentlyContinue
 }
-$secureToken = Read-Host -Prompt $promptLabel -AsSecureString
-if ($secureToken.Length -eq 0) { Stop-Bootstrap "Nothing entered." }
-$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
-try {
-    $Token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-} finally {
-    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-}
-Remove-Variable secureToken -ErrorAction SilentlyContinue
 
 # Trim defensively -- a stray trailing newline/space from copy-paste is a common cause of
 # ".NET rejects this as an invalid header value" failures that never even reach Cloudflare.
@@ -110,16 +134,12 @@ Remove-Variable secureToken -ErrorAction SilentlyContinue
 if ($Token) { $Token = $Token.Trim() }
 if ([string]::IsNullOrWhiteSpace($Token)) { Stop-Bootstrap "Empty credential." }
 
-if ($UsingGlobalKey) {
-    Write-Info "Using Global API Key mode for account: $AccountEmail"
-    $Headers = @{ "X-Auth-Email" = $AccountEmail; "X-Auth-Key" = $Token }
-} else {
-    $Headers = @{ Authorization = "Bearer $Token" }
-}
+$Headers = @{ Authorization = "Bearer $Token" }
+Remove-Variable Token -ErrorAction SilentlyContinue
 
 # ---------------------------------------------------------------------------
 # Cloudflare API helper -- PS 5.1-compatible error body extraction.
-# Never logs $Headers or $Token. Returns a normalized object: success/status/result/errors.
+# Never logs $Headers or any credential. Returns a normalized object: success/status/result/errors.
 #
 # Content-Type is deliberately NOT in $Headers: it is a "restricted header" under .NET's
 # classic HttpWebRequest (which Windows PowerShell 5.1's Invoke-WebRequest is built on) and
@@ -180,41 +200,64 @@ function Format-CFErrors($errors) {
 }
 
 # ---------------------------------------------------------------------------
-# 2. Verify credential
-#    /user/tokens/verify only applies to scoped API Tokens -- a Global API Key authenticates
-#    as the full user account and has no "token" object to verify, so GET /user is used instead.
+# 2. Verify credential (scoped API Token only)
 # ---------------------------------------------------------------------------
 Write-Phase "Verify credential"
-if ($UsingGlobalKey) {
-    $verify = Invoke-CF -Method GET -Path "/user"
-    if (-not $verify.Success) {
-        Stop-Bootstrap "Global API Key verification failed (HTTP $($verify.HttpStatus)): $(Format-CFErrors $verify.Errors)"
-    }
-    Write-Ok "Global API Key valid for account: $($verify.Result.email)"
-    Write-Warn2 "Global API Key grants full, unscoped account access -- broader than this workflow needs. Every permission probe below will trivially pass regardless of what's actually required."
-} else {
-    $verify = Invoke-CF -Method GET -Path "/user/tokens/verify"
-    if (-not $verify.Success) {
-        Stop-Bootstrap "Token verification failed (HTTP $($verify.HttpStatus)): $(Format-CFErrors $verify.Errors)"
-    }
-    Write-Ok "Token is valid (status: $($verify.Result.status))"
+$verify = Invoke-CF -Method GET -Path "/user/tokens/verify"
+if (-not $verify.Success) {
+    Stop-Bootstrap "Token verification failed (HTTP $($verify.HttpStatus)): $(Format-CFErrors $verify.Errors)"
 }
+Write-Ok "Token is valid (status: $($verify.Result.status))"
 
 # ---------------------------------------------------------------------------
-# 3. Discover account ID, zone ID, Pages project
+# 3. Discover account -- SAFE resolution. Never silently picks Result[0].
 # ---------------------------------------------------------------------------
-Write-Phase "Discover account / zone / Pages project"
+Write-Phase "Discover Cloudflare account"
 
 $accounts = Invoke-CF -Method GET -Path "/accounts"
 if (-not $accounts.Success -or -not $accounts.Result -or $accounts.Result.Count -eq 0) {
     Stop-Bootstrap "Could not list accounts -- missing 'Account Settings: Read'. Detail: $(Format-CFErrors $accounts.Errors)"
 }
-$AccountId = $accounts.Result[0].id
-Write-Ok "Account ID discovered: $AccountId ($($accounts.Result[0].name))"
 
-$zones = Invoke-CF -Method GET -Path "/zones?name=$ZoneName"
+if ($AccountId) {
+    $match = $accounts.Result | Where-Object { $_.id -eq $AccountId } | Select-Object -First 1
+    if (-not $match) {
+        Stop-Bootstrap "The -AccountId '$AccountId' you supplied is not among the accounts this token can access."
+    }
+    Write-Ok "Using explicitly supplied account: $AccountId ($($match.name))"
+} elseif ($accounts.Result.Count -eq 1) {
+    $AccountId = $accounts.Result[0].id
+    Write-Ok "Single accessible account -- using it: $AccountId ($($accounts.Result[0].name))"
+} else {
+    Write-Warn2 "Token can access $($accounts.Result.Count) accounts -- resolving which one hosts $ZoneName / $PagesProjectName..."
+    $candidates = @()
+    foreach ($acct in $accounts.Result) {
+        $zoneProbe  = Invoke-CF -Method GET -Path "/zones?name=$ZoneName&account.id=$($acct.id)"
+        $zoneHit    = [bool]($zoneProbe.Success -and $zoneProbe.Result -and $zoneProbe.Result.Count -gt 0)
+        $pagesProbe = Invoke-CF -Method GET -Path "/accounts/$($acct.id)/pages/projects"
+        $pagesHit   = [bool]($pagesProbe.Success -and ($pagesProbe.Result | Where-Object { $_.name -eq $PagesProjectName }))
+        Write-Info "Account $($acct.id) ($($acct.name)): zone match=$zoneHit, pages project match=$pagesHit"
+        if ($zoneHit -and $pagesHit) { $candidates += $acct }
+    }
+    if ($candidates.Count -eq 1) {
+        $AccountId = $candidates[0].id
+        Write-Ok "Resolved unambiguously: $AccountId ($($candidates[0].name)) hosts both the zone and the Pages project"
+    } else {
+        Write-Host ""
+        Write-Host "Could not unambiguously resolve which Cloudflare account to use. Accounts this token can access:" -ForegroundColor Yellow
+        foreach ($acct in $accounts.Result) { Write-Host "  - $($acct.id)  $($acct.name)" }
+        Stop-Bootstrap "Re-run with -AccountId <id> using one of the account IDs listed above. Nothing was created or changed."
+    }
+}
+
+# ---------------------------------------------------------------------------
+# 4. Discover zone / Pages project (scoped to the resolved account)
+# ---------------------------------------------------------------------------
+Write-Phase "Discover zone / Pages project"
+
+$zones = Invoke-CF -Method GET -Path "/zones?name=$ZoneName&account.id=$AccountId"
 if (-not $zones.Success -or -not $zones.Result -or $zones.Result.Count -eq 0) {
-    Stop-Bootstrap "Could not find zone '$ZoneName' -- missing 'Zone: Read' on that zone, or the token isn't scoped to it. Detail: $(Format-CFErrors $zones.Errors)"
+    Stop-Bootstrap "Could not find zone '$ZoneName' in account $AccountId -- missing 'Zone: Read' on that zone, or the token isn't scoped to it. Detail: $(Format-CFErrors $zones.Errors)"
 }
 $ZoneId = $zones.Result[0].id
 Write-Ok "Zone ID discovered: $ZoneId ($ZoneName)"
@@ -225,12 +268,12 @@ if (-not $pagesProjects.Success) {
 }
 $pagesProject = $pagesProjects.Result | Where-Object { $_.name -eq $PagesProjectName } | Select-Object -First 1
 if (-not $pagesProject) {
-    Stop-Bootstrap "Pages project '$PagesProjectName' not found in this account. Found: $(($pagesProjects.Result | ForEach-Object { $_.name }) -join ', ')"
+    Stop-Bootstrap "Pages project '$PagesProjectName' not found in account $AccountId. Found: $(($pagesProjects.Result | ForEach-Object { $_.name }) -join ', ')"
 }
 Write-Ok "Pages project discovered: $PagesProjectName"
 
 # ---------------------------------------------------------------------------
-# 4. Permission probes -- ALL must succeed before anything is created/changed
+# 5. Permission probes -- ALL must succeed before anything is created/changed
 # ---------------------------------------------------------------------------
 Write-Phase "Permission probes (read-only -- nothing is modified yet)"
 
@@ -263,16 +306,17 @@ Write-Ok "All required permissions confirmed."
 # Load/init local state (non-secret resource IDs only -- gitignored)
 # ---------------------------------------------------------------------------
 $State = [ordered]@{
-    accountId       = $AccountId
-    zoneId          = $ZoneId
-    tunnelId        = $null
-    tunnelHostname  = $TunnelHostname
-    dnsRecordId     = $null
-    accessAppId     = $null
-    accessPolicyId  = $null
-    serviceTokenId  = $null
-    serviceTokenClientId = $null
-    lastRunUtc      = $null
+    accountId             = $AccountId
+    zoneId                = $ZoneId
+    tunnelId              = $null
+    tunnelHostname        = $TunnelHostname
+    dnsRecordId           = $null
+    accessAppId           = $null
+    accessPolicyId        = $null
+    serviceTokenId        = $null
+    serviceTokenClientId  = $null
+    pendingRetireTokenIds = @()
+    lastRunUtc            = $null
 }
 if (Test-Path $StateFile) {
     try {
@@ -290,7 +334,7 @@ function Save-State {
 }
 
 # ---------------------------------------------------------------------------
-# 5. Tunnel -- create or reuse
+# 6. Tunnel -- create or reuse
 # ---------------------------------------------------------------------------
 Write-Phase "Cloudflare Tunnel"
 
@@ -334,7 +378,7 @@ $TunnelConnectorToken = $tokenResp.Result
 Save-State
 
 # ---------------------------------------------------------------------------
-# 6. DNS record -- create or reuse
+# 7. DNS record -- create or reuse
 # ---------------------------------------------------------------------------
 Write-Phase "DNS record"
 
@@ -362,7 +406,7 @@ if ($existingDns.Success -and $existingDns.Result -and $existingDns.Result.Count
 Save-State
 
 # ---------------------------------------------------------------------------
-# 7. Access application -- create or reuse
+# 8. Access application -- create or reuse
 # ---------------------------------------------------------------------------
 Write-Phase "Access application"
 
@@ -389,74 +433,88 @@ $State.accessAppId = $app.id
 Save-State
 
 # ---------------------------------------------------------------------------
-# 8. Access Service Token -- create, or rotate if one exists with an unrecoverable secret
+# 9. Access Service Token -- SAFE rotation.
+#
+#    Cloudflare never exposes a service token's secret after creation, so an existing token
+#    (from a prior run) cannot be "reused" -- a replacement must be minted. To avoid a window
+#    where the origin has zero valid tokens, this always creates the replacement FIRST, updates
+#    the Access policy to accept BOTH the old and new token, pushes the new secret to Pages, and
+#    validates the tunnel is reachable with it -- and only THEN deletes the superseded token(s)
+#    and tightens the policy back down to the new token alone (step 12, after infra validation).
+#
+#    Cloudflare does not enforce unique names on service tokens (the client_id is the unique,
+#    immutable identifier), so creating a second token with the canonical name is expected to
+#    succeed even while an old one with the same name still exists. If a future API change makes
+#    that a hard conflict, this falls back to a timestamp-suffixed name -- cosmetic only, since
+#    the Access policy binds by token id, not name.
 # ---------------------------------------------------------------------------
-Write-Phase "Access Service Token"
+Write-Phase "Access Service Token (create replacement first; old token retired later, after validation)"
 
 $existingTokens = Invoke-CF -Method GET -Path "/accounts/$AccountId/access/service_tokens"
-$existingSt = $null
+$oldTokens = @()
 if ($existingTokens.Success) {
-    $existingSt = $existingTokens.Result | Where-Object { $_.name -eq $ServiceTokenName } | Select-Object -First 1
+    $oldTokens = @($existingTokens.Result | Where-Object { $_.name -eq $ServiceTokenName -or $_.name -like "$ServiceTokenName-*" })
+}
+if ($oldTokens.Count -gt 0) {
+    Write-Info "Found $($oldTokens.Count) existing service token(s) named '$ServiceTokenName' (or a prior rotation name) -- left active until the replacement is validated."
 }
 
-$ClientId = $null
-$ClientSecret = $null
-
-if ($existingSt -and $State.serviceTokenClientId -eq $existingSt.client_id -and $State.serviceTokenId) {
-    Write-Warn2 "A service token named '$ServiceTokenName' already exists from a prior run of this script."
-    Write-Warn2 "Cloudflare never exposes a service token's secret after creation, so it cannot be reused --"
-    Write-Warn2 "rotating it now (delete + recreate) to obtain a usable secret. This only affects this"
-    Write-Warn2 "one gateway-specific token; nothing else references it."
-    $delete = Invoke-CF -Method DELETE -Path "/accounts/$AccountId/access/service_tokens/$($existingSt.id)"
-    if (-not $delete.Success) { Stop-Bootstrap "Failed to rotate (delete) existing service token: $(Format-CFErrors $delete.Errors)" }
-    $existingSt = $null
-} elseif ($existingSt) {
-    Write-Warn2 "A service token named '$ServiceTokenName' already exists but wasn't created by this script"
-    Write-Warn2 "(no matching local state), so its secret cannot be recovered. Rotating it now."
-    $delete = Invoke-CF -Method DELETE -Path "/accounts/$AccountId/access/service_tokens/$($existingSt.id)"
-    if (-not $delete.Success) { Stop-Bootstrap "Failed to rotate (delete) existing service token: $(Format-CFErrors $delete.Errors)" }
-    $existingSt = $null
+$tokenName = $ServiceTokenName
+$stCreate = Invoke-CF -Method POST -Path "/accounts/$AccountId/access/service_tokens" -Body @{ name = $tokenName }
+if (-not $stCreate.Success) {
+    $errText = Format-CFErrors $stCreate.Errors
+    if ($errText -match "(?i)duplicate|already exists|taken|unique") {
+        $tokenName = "$ServiceTokenName-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
+        Write-Warn2 "Cloudflare rejected the canonical token name as a duplicate -- creating '$tokenName' instead (cosmetic only; the Access policy binds by token id, not name)."
+        $stCreate = Invoke-CF -Method POST -Path "/accounts/$AccountId/access/service_tokens" -Body @{ name = $tokenName }
+    }
 }
+if (-not $stCreate.Success) { Stop-Bootstrap "Failed to create replacement Access Service Token: $(Format-CFErrors $stCreate.Errors)" }
 
-$stCreate = Invoke-CF -Method POST -Path "/accounts/$AccountId/access/service_tokens" -Body @{ name = $ServiceTokenName }
-if (-not $stCreate.Success) { Stop-Bootstrap "Failed to create Access Service Token: $(Format-CFErrors $stCreate.Errors)" }
-$ClientId = $stCreate.Result.client_id
+$ClientId     = $stCreate.Result.client_id
 $ClientSecret = $stCreate.Result.client_secret
-$State.serviceTokenId = $stCreate.Result.id
+$NewTokenId   = $stCreate.Result.id
+Write-Ok "Created replacement service token '$tokenName' (client id recorded; secret held only in memory this run)"
+
+$State.serviceTokenId = $NewTokenId
 $State.serviceTokenClientId = $ClientId
-Write-Ok "Service token created (client id recorded; secret held only in memory this run)"
+$State.pendingRetireTokenIds = @($oldTokens | ForEach-Object { $_.id })
 Save-State
 
 # ---------------------------------------------------------------------------
-# 9. Access policy -- require this service token on the application
+# 10. Access policy -- transitional: allow BOTH the new token and any not-yet-retired old ones,
+#     so the origin is never briefly unauthenticatable.
 # ---------------------------------------------------------------------------
-Write-Phase "Access policy"
+Write-Phase "Access policy (transitional -- allows old + new token during cutover)"
 
 $existingPolicies = Invoke-CF -Method GET -Path "/accounts/$AccountId/access/apps/$($app.id)/policies"
 $policy = $null
 if ($existingPolicies.Success) {
     $policy = $existingPolicies.Result | Where-Object { $_.name -eq "Allow gateway service token" } | Select-Object -First 1
 }
+
+$transitionalTokenIds = @($NewTokenId) + @($State.pendingRetireTokenIds)
 $policyBody = @{
     name     = "Allow gateway service token"
     decision = "allow"
-    include  = @(@{ service_token = @{ token_id = $State.serviceTokenId } })
+    include  = @($transitionalTokenIds | ForEach-Object { @{ service_token = @{ token_id = $_ } } })
 }
 if ($policy) {
     $policyUpdate = Invoke-CF -Method PUT -Path "/accounts/$AccountId/access/apps/$($app.id)/policies/$($policy.id)" -Body $policyBody
     if (-not $policyUpdate.Success) { Stop-Bootstrap "Failed to update Access policy: $(Format-CFErrors $policyUpdate.Errors)" }
-    Write-Ok "Updated existing Access policy to require the current service token"
+    Write-Ok "Updated existing Access policy to allow the new token (plus any not-yet-retired old ones)"
     $State.accessPolicyId = $policy.id
 } else {
     $policyCreate = Invoke-CF -Method POST -Path "/accounts/$AccountId/access/apps/$($app.id)/policies" -Body $policyBody
     if (-not $policyCreate.Success) { Stop-Bootstrap "Failed to create Access policy: $(Format-CFErrors $policyCreate.Errors)" }
-    Write-Ok "Created Access policy requiring the service token"
+    Write-Ok "Created Access policy allowing the new token"
     $State.accessPolicyId = $policyCreate.Result.id
 }
 Save-State
 
 # ---------------------------------------------------------------------------
-# 10. Pages environment variables -- MERGE, never wholesale-replace
+# 11. Pages environment variables -- MERGE, never wholesale-replace. Uses the NEW token's
+#     credentials -- this is the token going forward.
 # ---------------------------------------------------------------------------
 Write-Phase "Pages production environment variables"
 
@@ -489,13 +547,8 @@ $envPatch = Invoke-CF -Method PATCH -Path "/accounts/$AccountId/pages/projects/$
 if (-not $envPatch.Success) { Stop-Bootstrap "Failed to update Pages environment variables: $(Format-CFErrors $envPatch.Errors)" }
 Write-Ok "Pages production env vars updated (existing vars preserved, 5 new/updated: $($newVars.Keys -join ', '))"
 
-# $Token itself is no longer needed -- $Headers already holds the resolved "Bearer <token>"
-# string and continues to work for every remaining Cloudflare API call below. $ClientSecret is
-# still needed for the tunnel health check in the next phase, so it is NOT cleared here.
-Remove-Variable Token -ErrorAction SilentlyContinue
-
 # ---------------------------------------------------------------------------
-# 11. Core-side cloudflared -- install as a systemd service via SSH
+# 12. Core-side cloudflared -- install as a systemd service via SSH
 # ---------------------------------------------------------------------------
 Write-Phase "CodeBlack-Core: activate cloudflared"
 
@@ -512,7 +565,10 @@ if ($existingCloudflaredState -eq "active") {
 
 # The token is piped directly into the remote install command over the existing SSH transport;
 # it is never written to a local file, never appears in this script's own console output, and
-# ssh itself does not log command arguments to any file on either end.
+# ssh itself does not log command arguments to any file on either end. It is passed via stdin to
+# "bash -s" rather than as a literal argument in an interactive shell, so it is not recorded in
+# Core's own bash history either. (cloudflared's own installer does persist the token into its
+# systemd unit/config on Core -- that is expected and required for unattended boot operation.)
 $installCmd = "sudo cloudflared service install $TunnelConnectorToken"
 $sshResult = $installCmd | ssh $CoreSshAlias "bash -s" 2>&1
 Remove-Variable TunnelConnectorToken, installCmd -ErrorAction SilentlyContinue
@@ -524,33 +580,39 @@ if ($cfdState -ne "active") {
 }
 Write-Ok "cloudflared active on Core"
 
-# Re-verify nothing else moved.
-$postCoreHealth = ssh $CoreSshAlias "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/health"
-$sshHealth      = ssh $CoreSshAlias "systemctl is-active ssh"
-$mqttBroker     = ssh $CoreSshAlias "systemctl is-active codeblack-mqtt-broker.service"
-$mqttBridge     = ssh $CoreSshAlias "systemctl is-active codeblack-mqtt-bridge.service"
-$failedUnits    = ssh $CoreSshAlias "systemctl --failed --no-legend | wc -l"
-$listener8000   = ssh $CoreSshAlias "ss -tln 2>/dev/null | grep -c '0.0.0.0:8000'"
+# Re-verify nothing else moved, including Tailscale (read-only checks only -- never configures it).
+$postCoreHealth   = ssh $CoreSshAlias "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/health"
+$sshHealth        = ssh $CoreSshAlias "systemctl is-active ssh"
+$mqttBroker       = ssh $CoreSshAlias "systemctl is-active codeblack-mqtt-broker.service"
+$mqttBridge       = ssh $CoreSshAlias "systemctl is-active codeblack-mqtt-bridge.service"
+$failedUnits      = ssh $CoreSshAlias "systemctl --failed --no-legend | wc -l"
+$listener8000     = ssh $CoreSshAlias "ss -tln 2>/dev/null | grep -c '0.0.0.0:8000'"
+$tailscaledActive = ssh $CoreSshAlias "systemctl is-active tailscaled 2>/dev/null"
+$tailscaleBackend = ssh $CoreSshAlias "tailscale status --json 2>/dev/null | grep -o '\`"BackendState\`":\`"[A-Za-z]*\`"' | head -1"
 
 if ($postCoreHealth -ne "200") { Stop-Bootstrap "Core API stopped responding after cloudflared install (got '$postCoreHealth')." }
 if ($sshHealth -ne "active")   { Stop-Bootstrap "SSH is no longer active on Core after cloudflared install." }
 if ($mqttBroker -ne "active" -or $mqttBridge -ne "active") { Stop-Bootstrap "MQTT broker/bridge is no longer active on Core after cloudflared install." }
 if ([int]$listener8000 -gt 0)  { Stop-Bootstrap "Core API is now listening on 0.0.0.0:8000 -- this must never happen. Stopping immediately." }
-Write-Ok "Core API still 127.0.0.1:8000-only, SSH healthy, MQTT healthy, no public 8000 listener"
+if ($tailscaledActive -ne "active") { Stop-Bootstrap "tailscaled is not active on Core after cloudflared install. Tailscale was not modified by this script -- investigate manually." }
+if ($tailscaleBackend -notmatch '"BackendState":"Running"') { Stop-Bootstrap "Tailscale backend state is not 'Running' on Core (got: '$tailscaleBackend'). Tailscale was not modified by this script -- investigate manually." }
+Write-Ok "Core API still 127.0.0.1:8000-only, SSH healthy, MQTT healthy, Tailscale healthy, no public 8000 listener"
 if ([int]$failedUnits -gt 0) { Write-Warn2 "$failedUnits failed unit(s) reported on Core -- investigate manually (not necessarily caused by this run)." } else { Write-Ok "0 failed systemd units on Core" }
 
 # ---------------------------------------------------------------------------
-# 12. Infrastructure-level validation -- BEFORE pushing/deploying the frontend
+# 13. Infrastructure-level validation (tunnel + Access reachable with the NEW token)
 # ---------------------------------------------------------------------------
-Write-Phase "Infrastructure validation (tunnel + Access, before deploy)"
+Write-Phase "Infrastructure validation (tunnel + Access)"
 
 Start-Sleep -Seconds 5  # let the tunnel connector finish registering
+$tunnelValidated = $false
 try {
     $tunnelCheck = Invoke-WebRequest -Method GET -Uri "https://$TunnelHostname/health" -Headers @{
         "CF-Access-Client-Id" = $ClientId
         "CF-Access-Client-Secret" = $ClientSecret
     } -UseBasicParsing -TimeoutSec 15
     Write-Ok "Core reachable end-to-end through the tunnel + Access ($TunnelHostname/health -> $($tunnelCheck.StatusCode))"
+    $tunnelValidated = $true
 } catch {
     # Windows PowerShell 5.1's Invoke-WebRequest throws on any non-2xx, not just network errors --
     # distinguish "wrong HTTP status" (real misconfiguration, worth naming) from "no response at
@@ -560,24 +622,147 @@ try {
     if ($status -gt 0) {
         Write-Warn2 "Tunnel reachable but returned HTTP $status -- inspect manually before relying on it (e.g. an Access policy mismatch would show as 403)."
     } else {
-        Write-Warn2 "Could not reach https://$TunnelHostname/health yet ($($_.Exception.Message)). DNS/tunnel propagation can take a minute -- this does not block continuing, but verify manually before trusting production."
+        Write-Warn2 "Could not reach https://$TunnelHostname/health yet ($($_.Exception.Message)). DNS/tunnel propagation can take a minute."
     }
 }
 
-# $ClientSecret was only ever needed for the check above and the Pages env var payload already
-# sent to Cloudflare over HTTPS; nothing after this point needs it in memory.
+# ---------------------------------------------------------------------------
+# 14. Retire superseded service token(s) -- ONLY after the new one validated above.
+# ---------------------------------------------------------------------------
+Write-Phase "Retire superseded service token(s)"
+
+if ($State.pendingRetireTokenIds -and $State.pendingRetireTokenIds.Count -gt 0) {
+    if (-not $tunnelValidated) {
+        Write-Warn2 "Skipping retirement of $($State.pendingRetireTokenIds.Count) prior token(s) -- the new token could not be positively confirmed reachable through the tunnel this run. They remain active (the Access policy already allows both), and re-running this script later will retry retirement without re-creating anything unnecessary."
+    } else {
+        foreach ($oldId in $State.pendingRetireTokenIds) {
+            $del = Invoke-CF -Method DELETE -Path "/accounts/$AccountId/access/service_tokens/$oldId"
+            if ($del.Success) { Write-Ok "Retired superseded service token $oldId" }
+            else { Write-Warn2 "Could not retire superseded service token $oldId -- $(Format-CFErrors $del.Errors). Not fatal; it is unused but still present. Remove manually if desired." }
+        }
+        $finalPolicyBody = @{
+            name     = "Allow gateway service token"
+            decision = "allow"
+            include  = @(@{ service_token = @{ token_id = $NewTokenId } })
+        }
+        $finalPolicyUpdate = Invoke-CF -Method PUT -Path "/accounts/$AccountId/access/apps/$($app.id)/policies/$($State.accessPolicyId)" -Body $finalPolicyBody
+        if ($finalPolicyUpdate.Success) { Write-Ok "Access policy tightened to the current token only" }
+        else { Write-Warn2 "Could not tighten Access policy to the current token only -- $(Format-CFErrors $finalPolicyUpdate.Errors). Both old and new remain allowed; harmless (old token(s) are being retired/gone) but worth fixing on next run." }
+        $State.pendingRetireTokenIds = @()
+    }
+} else {
+    Write-Ok "No superseded tokens to retire"
+}
+
 Remove-Variable ClientSecret -ErrorAction SilentlyContinue
+Save-State
 
 # ---------------------------------------------------------------------------
-# 13. Push feature branch to production (fast-forward only)
+# INFRASTRUCTURE PHASE COMPLETE
+# ---------------------------------------------------------------------------
+Write-Phase "INFRASTRUCTURE BOOTSTRAP COMPLETE"
+Write-Host ""
+Write-Host "  - Tunnel '$TunnelName' ($($State.tunnelId)) -> $CoreOrigin only"
+Write-Host "  - DNS: $TunnelHostname -> tunnel (proxied)"
+Write-Host "  - Access application + policy requiring a service token protect that hostname"
+Write-Host "  - Access Service Token issued (client id: $ClientId) and configured server-side in Pages"
+Write-Host "  - cloudflared active on CodeBlack-Core; Core API still 127.0.0.1:8000-only; SSH/Tailscale/MQTT"
+Write-Host "    all confirmed healthy; no public port opened"
+Write-Host ""
+Write-Host "Resource IDs were recorded (no secrets) in:"
+Write-Host "    $StateFile"
+Write-Host "Re-running this script is safe -- it will reuse every resource above instead of duplicating it."
+Write-Host ""
+
+if (-not $Deploy) {
+    Write-Host "No git push and no production deployment were performed (default behavior)." -ForegroundColor Yellow
+    Write-Host "When ready for the production rollout checkpoint, re-run with:" -ForegroundColor Yellow
+    Write-Host "    .\bootstrap-cloudflare-gateway.ps1 -Deploy" -ForegroundColor Cyan
+    exit 0
+}
+
+# =============================================================================
+# DEPLOY PHASE -- only reached with -Deploy. Everything above this line never
+# touches git and never triggers a production deployment.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# 15. Pre-deploy validation -- nothing pushed yet.
+# ---------------------------------------------------------------------------
+Write-Phase "Pre-deploy validation (typecheck / lint / test / build) -- nothing pushed yet"
+
+Push-Location $OpsPath
+try {
+    Write-Info "npm run typecheck"
+    npm run typecheck
+    if ($LASTEXITCODE -ne 0) { Stop-Bootstrap "TypeScript check failed. Not pushing." }
+
+    Write-Info "npm run lint"
+    npm run lint
+    if ($LASTEXITCODE -ne 0) { Stop-Bootstrap "Lint failed. Not pushing." }
+
+    Write-Info "npm run test"
+    npm run test
+    if ($LASTEXITCODE -ne 0) { Stop-Bootstrap "Tests failed. Not pushing." }
+
+    Write-Info "npm run build"
+    npm run build
+    if ($LASTEXITCODE -ne 0) { Stop-Bootstrap "Production build failed. Not pushing." }
+
+    Write-Ok "typecheck / lint / test / build all passed"
+} finally {
+    Pop-Location
+}
+
+# ---------------------------------------------------------------------------
+# 16. Production bundle secret/leak scan -- nothing pushed yet.
+# ---------------------------------------------------------------------------
+Write-Phase "Production bundle secret/leak scan (dist/) -- nothing pushed yet"
+
+$distPath = Join-Path $OpsPath "dist"
+if (-not (Test-Path $distPath)) { Stop-Bootstrap "Build did not produce $distPath -- cannot scan before push." }
+
+# Patterns that must never appear in a browser-shipped bundle. Only file paths are ever printed
+# below, never the matched secret content itself.
+$forbiddenPatterns = @(
+    @{ Label = "Core Tailscale IP";              Pattern = [regex]::Escape($CoreTailscaleIp) }
+    @{ Label = "Cloudflare API token env name";  Pattern = "CLOUDFLARE_API_TOKEN" }
+    @{ Label = "Access client secret env name";  Pattern = "CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET" }
+    @{ Label = "Supabase service-role marker";   Pattern = "service_role" }
+    @{ Label = "Loopback Core origin literal";   Pattern = "127\.0\.0\.1:8000" }
+    @{ Label = "Direct tunnel hostname literal"; Pattern = [regex]::Escape($TunnelHostname) }
+)
+
+$distFiles = Get-ChildItem -Path $distPath -Recurse -File -Include *.js,*.css,*.html,*.map
+$leakFound = $false
+foreach ($pat in $forbiddenPatterns) {
+    $hits = $distFiles | Select-String -Pattern $pat.Pattern -List
+    if ($hits) {
+        $leakFound = $true
+        Write-Err2 "FOUND '$($pat.Label)' in: $(($hits | ForEach-Object { $_.Path }) -join ', ')"
+    }
+}
+# The current Access Service Token secret value itself, if still in memory -- matched directly
+# (never printed), since this is more precise than matching on env-var names alone.
+if ($ClientId) {
+    $clientIdHits = $distFiles | Select-String -Pattern ([regex]::Escape($ClientId)) -List
+    if ($clientIdHits) {
+        $leakFound = $true
+        Write-Err2 "FOUND the Access Service Token client id embedded in: $(($clientIdHits | ForEach-Object { $_.Path }) -join ', ')"
+    }
+}
+if ($leakFound) { Stop-Bootstrap "Production bundle contains forbidden content (see above). Not pushing or deploying." }
+Write-Ok "Production bundle clean -- no private IP, secrets, tunnel hostname, or private origin literals found"
+
+# ---------------------------------------------------------------------------
+# 17. Push feature branch to production (fast-forward only)
 # ---------------------------------------------------------------------------
 Write-Phase "Push to production (fast-forward feature/ops-web-v1 -> origin/master)"
 
 Push-Location $RepoPath
 try {
     $status = git status --porcelain
-    $unrelatedDirty = $status | Where-Object { $_ -notmatch "^\?\? web/ops/scripts/bootstrap-cloudflare-gateway\.ps1$" }
-    if ($unrelatedDirty) {
+    if ($status) {
         Write-Warn2 "Working tree has other changes -- they are left exactly as-is; only committed history is pushed."
     }
 
@@ -594,7 +779,7 @@ try {
 }
 
 # ---------------------------------------------------------------------------
-# 14. Wait for the Cloudflare Pages deployment to complete
+# 18. Wait for the Cloudflare Pages deployment to complete
 # ---------------------------------------------------------------------------
 Write-Phase "Waiting for Cloudflare Pages deployment"
 
@@ -617,7 +802,7 @@ if (-not $deployed) {
 }
 
 # ---------------------------------------------------------------------------
-# 15. Production gateway validation (unauthenticated path only -- see note below)
+# 19. Production gateway validation (unauthenticated path only -- see note below)
 # ---------------------------------------------------------------------------
 Write-Phase "Production gateway validation"
 
@@ -642,17 +827,7 @@ Save-State
 # ---------------------------------------------------------------------------
 # Final report
 # ---------------------------------------------------------------------------
-Write-Phase "STAGE 3 BOOTSTRAP COMPLETE -- ONE MANUAL STEP REMAINS"
-Write-Host ""
-Write-Host "Everything scriptable is done:" -ForegroundColor White
-Write-Host "  - Tunnel '$TunnelName' ($($State.tunnelId)) -> $CoreOrigin only"
-Write-Host "  - DNS: $TunnelHostname -> tunnel (proxied)"
-Write-Host "  - Access application + policy requiring a service token protect that hostname"
-Write-Host "  - Access Service Token issued (client id: $ClientId) and configured server-side in Pages"
-Write-Host "  - cloudflared active on CodeBlack-Core; Core API still 127.0.0.1:8000-only; SSH/Tailscale/MQTT"
-Write-Host "    all confirmed healthy; no public port opened"
-Write-Host "  - feature/ops-web-v1 pushed to origin/master; Cloudflare Pages deployment triggered"
-Write-Host "  - Infrastructure-level checks passed (tunnel reachable, unauthenticated gateway request rejected)"
+Write-Phase "STAGE 3 DEPLOY COMPLETE -- ONE MANUAL STEP REMAINS"
 Write-Host ""
 Write-Host "ONE thing this script cannot do, by design: prove Storm Intel actually renders correctly for a" -ForegroundColor White
 Write-Host "real signed-in OPS user (Pea Ridge, Norman, an arbitrary CONUS point) against the live gateway."
@@ -665,6 +840,3 @@ Write-Host "that a Storm Intel point query for Pea Ridge AR, Norman OK, and one 
 Write-Host "provenance (provider, run/valid time, forecast hour, data class) rather than a fake/simulated"
 Write-Host "value. Nothing in this pipeline can fabricate that check on your behalf."
 Write-Host ""
-Write-Host "Resource IDs were recorded (no secrets) in:"
-Write-Host "    $StateFile"
-Write-Host "Re-running this script is safe -- it will reuse every resource above instead of duplicating it."
