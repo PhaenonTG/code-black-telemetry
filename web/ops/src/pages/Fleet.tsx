@@ -3,11 +3,17 @@ import { OpsStatusPill } from "../components/OpsStatusPill"
 import { useCoreOps } from "../core/useCoreOps"
 import type { OpsConnectionState } from "../core/types"
 import type { FabricPresenceState } from "../../../../src/services/fabric/types"
+import { ageText } from "../../../../src/services/radar"
 
 // FabricPresenceState has one member OpsConnectionState doesn't (NOT_CONFIGURED) -- map it to
 // the closest existing pill tone rather than casting past the type system.
 function pillState(health: FabricPresenceState): OpsConnectionState {
   return health === "NOT_CONFIGURED" ? "UNAVAILABLE" : health
+}
+
+function lastSeenLabel(lastSeen: number | null): string {
+  if (lastSeen == null) return "Never reported"
+  return `Last seen ${ageText(Math.max(0, Math.round((Date.now() - lastSeen) / 1000)))} ago`
 }
 
 // Nothing named "Fleet" exists anywhere in the current app -- this is genuinely new. Modeled as a
@@ -37,7 +43,17 @@ export default function Fleet() {
                 <OpsStatusPill state={pillState(unit.overall_health)} label={unit.overall_health} />
               </header>
               <h2>{unit.operator_name || unit.display_name}</h2>
-              <span>{unit.devices.length} {unit.devices.length === 1 ? "device" : "devices"} registered</span>
+              <span className="ops-fleet-card__meta">{lastSeenLabel(unit.last_seen)}</span>
+              {unit.devices.length > 0 && (
+                <ul className="ops-fleet-card__devices">
+                  {unit.devices.map((device) => (
+                    <li key={device.device_id}>
+                      <i className={device.connected ? "is-connected" : ""} />
+                      {device.display_label}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           ))}
         </div>

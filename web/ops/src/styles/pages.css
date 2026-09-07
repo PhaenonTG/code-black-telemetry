@@ -1,7 +1,7 @@
 .page{padding:18px 20px 28px;max-width:1400px}
 .page-header{margin-bottom:18px}
 .page-header__kicker{font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--cb-red);margin:0 0 6px}
-.page-header h1{font-size:22px;margin:0;font-weight:800;letter-spacing:.01em}
+.page-header h1{font-size:22px;margin:0;font-weight:800;letter-spacing:.01em;text-transform:uppercase}
 .page-empty{color:var(--cb-muted);font-size:13px;padding:20px 0}
 
 /* ---- Map page: full-bleed, no page padding. Positioned against .shell__content (which is the
@@ -60,10 +60,15 @@
 .ops-system-grid span,.ops-fleet-card p{display:block;margin:0 0 6px;font-size:9px;font-weight:900;letter-spacing:.12em;color:var(--cb-muted);text-transform:uppercase}
 .ops-system-grid b,.ops-fleet-card b{display:block;font-size:18px;color:var(--cb-text)}
 .ops-system-grid p,.ops-fleet-card span{display:block;margin:6px 0 0;color:var(--cb-muted);font-size:11px;line-height:1.4}
-.ops-fleet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,320px));gap:14px}
+.ops-fleet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,320px));gap:14px;max-width:1000px}
 .ops-fleet-card{padding:18px}
 .ops-fleet-card header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px}
-.ops-fleet-card h2{margin:2px 0 10px;font-size:22px;text-transform:uppercase}
+.ops-fleet-card h2{margin:2px 0 6px;font-size:22px;text-transform:uppercase}
+.ops-fleet-card__meta{display:block;color:var(--cb-muted);font-size:11px}
+.ops-fleet-card__devices{list-style:none;margin:12px 0 0;padding:10px 0 0;border-top:1px solid var(--cb-line);display:flex;flex-direction:column;gap:6px}
+.ops-fleet-card__devices li{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--cb-muted)}
+.ops-fleet-card__devices i{width:6px;height:6px;border-radius:50%;background:var(--cb-dim);flex:0 0 auto}
+.ops-fleet-card__devices i.is-connected{background:var(--cb-green)}
 
 /* ---- Phase 3 Storm Intel workspace ---- */
 .storm-workspace{position:absolute;inset:0;background:var(--cb-black);overflow:auto;display:grid;grid-template-rows:auto minmax(520px,58vh) auto;gap:12px;padding:12px}
