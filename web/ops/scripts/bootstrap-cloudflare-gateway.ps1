@@ -75,22 +75,27 @@ function Stop-Bootstrap($reason) {
 }
 
 # ---------------------------------------------------------------------------
-# 1. Secure token prompt -- never echoed, never written to disk
+# 1. Token acquisition -- never echoed, never written to disk
 # ---------------------------------------------------------------------------
 Write-Phase "Cloudflare API Token"
 Write-Host "This token is used only in this process's memory for this run. It is never printed," -ForegroundColor Gray
 Write-Host "logged, written to disk, or committed." -ForegroundColor Gray
-$secureToken = Read-Host -Prompt "Paste your Cloudflare API token" -AsSecureString
-if ($secureToken.Length -eq 0) { Stop-Bootstrap "No token entered." }
 
-$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
-try {
-    $Token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-} finally {
-    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+if ($env:CLOUDFLARE_API_TOKEN) {
+    Write-Info "Using `$env:CLOUDFLARE_API_TOKEN already set in this session."
+    $Token = $env:CLOUDFLARE_API_TOKEN
+} else {
+    $secureToken = Read-Host -Prompt "Paste your Cloudflare API token" -AsSecureString
+    if ($secureToken.Length -eq 0) { Stop-Bootstrap "No token entered." }
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+    try {
+        $Token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
+    Remove-Variable secureToken -ErrorAction SilentlyContinue
 }
-Remove-Variable secureToken -ErrorAction SilentlyContinue
-if ([string]::IsNullOrWhiteSpace($Token)) { Stop-Bootstrap "Empty token entered." }
+if ([string]::IsNullOrWhiteSpace($Token)) { Stop-Bootstrap "Empty token." }
 
 $Headers = @{ Authorization = "Bearer $Token"; "Content-Type" = "application/json" }
 
