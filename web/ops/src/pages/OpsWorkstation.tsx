@@ -36,7 +36,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   const [gps, setGps] = useState<LocationState>({ status: "requesting" });
   const [camera, setCamera] = useState<TrafficCamera | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const { config, state: coreState, selectedPoint, selectPoint } = useCoreOps();
+  const { state: coreState, selectedPoint, selectPoint } = useCoreOps();
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +81,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
         <AtlasMap
           gps={atlasGps}
           rangeRings="off"
-          statusLines={[gpsStatusLine(gps), `MODE ${config.mode}`, focus]}
+          statusLines={[gpsStatusLine(gps)]}
           controlsVariant="full"
           spotters={spotters.spotters}
           poiPlaces={poi.places}
@@ -95,8 +95,6 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
             <span>FOCUS</span>
             <b>{focus}</b>
           </div>
-          <OpsStatusPill state={coreState.core.state} label={`CORE ${coreState.core.state}`} />
-          <OpsStatusPill state={coreState.fabric.wsState === "open" ? "LIVE" : coreState.fabric.state} label={`FABRIC ${coreState.fabric.wsState.toUpperCase()}`} />
           <OpsStatusPill state={coreState.stormIntel.state} label="STORM INTEL" />
         </div>
         <TimelineRail />
