@@ -110,16 +110,27 @@ if ($env:CLOUDFLARE_API_EMAIL) {
 }
 if ([string]::IsNullOrWhiteSpace($Token)) { Stop-Bootstrap "Empty credential." }
 
+# Trim defensively -- a stray trailing newline/space from copy-paste is a common cause of
+# ".NET rejects this as an invalid header value" failures that never even reach Cloudflare.
+# Trimming whitespace is not a secret-exposing operation.
+$Token = $Token.Trim()
+if ($UsingGlobalKey) { $AccountEmail = $AccountEmail.Trim() }
+
 if ($UsingGlobalKey) {
     if ([string]::IsNullOrWhiteSpace($AccountEmail)) { Stop-Bootstrap "Empty account email." }
-    $Headers = @{ "X-Auth-Email" = $AccountEmail; "X-Auth-Key" = $Token; "Content-Type" = "application/json" }
+    $Headers = @{ "X-Auth-Email" = $AccountEmail; "X-Auth-Key" = $Token }
 } else {
-    $Headers = @{ Authorization = "Bearer $Token"; "Content-Type" = "application/json" }
+    $Headers = @{ Authorization = "Bearer $Token" }
 }
 
 # ---------------------------------------------------------------------------
 # Cloudflare API helper -- PS 5.1-compatible error body extraction.
 # Never logs $Headers or $Token. Returns a normalized object: success/status/result/errors.
+#
+# Content-Type is deliberately NOT in $Headers: it is a "restricted header" under .NET's
+# classic HttpWebRequest (which Windows PowerShell 5.1's Invoke-WebRequest is built on) and
+# must be set via -ContentType instead of the generic -Headers collection, or the request can
+# be rejected client-side before it ever reaches Cloudflare.
 # ---------------------------------------------------------------------------
 function Invoke-CF {
     param(
@@ -133,7 +144,7 @@ function Invoke-CF {
 
     try {
         if ($null -ne $jsonBody) {
-            $raw = Invoke-WebRequest -Method $Method -Uri $uri -Headers $Headers -Body $jsonBody -UseBasicParsing -ErrorAction Stop
+            $raw = Invoke-WebRequest -Method $Method -Uri $uri -Headers $Headers -Body $jsonBody -ContentType "application/json" -UseBasicParsing -ErrorAction Stop
         } else {
             $raw = Invoke-WebRequest -Method $Method -Uri $uri -Headers $Headers -UseBasicParsing -ErrorAction Stop
         }
