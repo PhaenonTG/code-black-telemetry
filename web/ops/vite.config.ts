@@ -46,6 +46,18 @@ export default defineConfig(({ mode }) => {
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        // mapbox-gl alone accounts for well over half the previous single ~3MB chunk -- splitting
+        // it out means Settings/Fleet/System/etc (already route-split, see App.tsx) genuinely
+        // don't pull in the map stack at all, and the map vendor code itself can cache separately
+        // from the app's own code across deploys. This build uses rolldown-vite, which (unlike
+        // stock Rollup) only accepts the function form of manualChunks, not an object map.
+        manualChunks(id: string) {
+          if (id.includes('node_modules/mapbox-gl')) return 'mapbox-gl'
+        },
+      },
+    },
   },
   }
 })

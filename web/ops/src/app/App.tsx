@@ -1,16 +1,21 @@
+import { Suspense, lazy } from "react"
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { AuthProvider } from "../auth/AuthProvider"
 import { AuthGate } from "../components/AuthGate"
 import { CoreOpsProvider } from "../core/CoreOpsProvider"
 import { AppShell } from "../layouts/AppShell"
 import UpdatePassword from "../pages/UpdatePassword"
-import OpsWorkstation from "../pages/OpsWorkstation"
-import StormIntelWorkspace from "../pages/StormIntelWorkspace"
-import DevelopmentPage from "../pages/DevelopmentPage"
-import Fleet from "../pages/Fleet"
-import Operations from "../pages/Operations"
-import Settings from "../pages/Settings"
-import More from "../pages/More"
+
+// Route-level code splitting -- this bundle shipped as a single ~3MB JS chunk with everything
+// (including the map/mapbox-gl stack, only needed by two of these routes) loaded on first paint,
+// even for someone who only ever opens Settings. Each page now loads on first visit instead.
+const OpsWorkstation = lazy(() => import("../pages/OpsWorkstation"))
+const StormIntelWorkspace = lazy(() => import("../pages/StormIntelWorkspace"))
+const DevelopmentPage = lazy(() => import("../pages/DevelopmentPage"))
+const Fleet = lazy(() => import("../pages/Fleet"))
+const Operations = lazy(() => import("../pages/Operations"))
+const Settings = lazy(() => import("../pages/Settings"))
+const More = lazy(() => import("../pages/More"))
 
 // /update-password is reachable regardless of auth state -- it's the landing page for a
 // Supabase password-recovery email link, which itself establishes a temporary session (see
@@ -28,24 +33,22 @@ export default function App() {
               <AuthGate>
                 <CoreOpsProvider>
                   <AppShell>
-                    <Routes>
-                      <Route path="/" element={<OpsWorkstation focus="LIVE OPS" />} />
-                      <Route path="/radar" element={<OpsWorkstation focus="RADAR" />} />
-                      <Route path="/storm-intel" element={<StormIntelWorkspace />} />
-                      <Route path="/models" element={<DevelopmentPage title="MODELS" />} />
-                      <Route path="/soundings" element={<DevelopmentPage title="SOUNDINGS" detail="Vertical profile endpoint not yet available. Sounding Snapshot will enter here when Core exposes normalized profile data." />} />
-                      <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 2." />} />
-                      <Route path="/targets" element={<DevelopmentPage title="TARGETS" detail="Target corridors are reserved for the future Consensus workflow. Phase 2 does not create automated chase targets." />} />
-                      <Route path="/fleet" element={<Fleet />} />
-                      <Route path="/stream" element={<DevelopmentPage title="STREAM" detail="Stream control integration is reserved. No producer controls or public stream switching are exposed in Phase 2." />} />
-                      <Route path="/system" element={<Operations />} />
-                      <Route path="/map" element={<OpsWorkstation focus="RADAR" />} />
-                      <Route path="/weather" element={<OpsWorkstation focus="STORM INTEL" />} />
-                      <Route path="/alerts" element={<OpsWorkstation focus="LIVE OPS" />} />
-                      <Route path="/operations" element={<Operations />} />
-                      <Route path="/settings" element={<Settings />} />
-                      <Route path="/more" element={<More />} />
-                    </Routes>
+                    <Suspense fallback={<div className="page-empty">Loading…</div>}>
+                      <Routes>
+                        <Route path="/" element={<OpsWorkstation focus="LIVE OPS" />} />
+                        <Route path="/radar" element={<OpsWorkstation focus="RADAR" />} />
+                        <Route path="/storm-intel" element={<StormIntelWorkspace />} />
+                        <Route path="/models" element={<DevelopmentPage title="MODELS" />} />
+                        <Route path="/soundings" element={<DevelopmentPage title="SOUNDINGS" detail="Vertical profile endpoint not yet available. Sounding Snapshot will enter here when Core exposes normalized profile data." />} />
+                        <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 2." />} />
+                        <Route path="/targets" element={<DevelopmentPage title="TARGETS" detail="Target corridors are reserved for the future Consensus workflow. Phase 2 does not create automated chase targets." />} />
+                        <Route path="/fleet" element={<Fleet />} />
+                        <Route path="/stream" element={<DevelopmentPage title="STREAM" detail="Stream control integration is reserved. No producer controls or public stream switching are exposed in Phase 2." />} />
+                        <Route path="/system" element={<Operations />} />
+                        <Route path="/settings" element={<Settings />} />
+                        <Route path="/more" element={<More />} />
+                      </Routes>
+                    </Suspense>
                   </AppShell>
                 </CoreOpsProvider>
               </AuthGate>
