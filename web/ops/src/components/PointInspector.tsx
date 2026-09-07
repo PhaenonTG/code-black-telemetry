@@ -56,30 +56,36 @@ export function PointInspector({
         {coreState.stormIntel.pointLoading && <p className="ops-loading">Loading newest selected point...</p>}
         {coreState.stormIntel.pointError && <p className="ops-error-text">{coreState.stormIntel.pointError}</p>}
         <p>{stormIntelSummary(snapshot)}</p>
-        <div className="ops-provenance-grid">
-          <span>Requested</span><b>{selectedPoint ? `${selectedPoint.lat.toFixed(4)}, ${selectedPoint.lon.toFixed(4)}` : "NO POINT"}</b>
-          <span>Resolved grid</span><b>{source?.resolvedLatitude != null && source.resolvedLongitude != null ? `${source.resolvedLatitude.toFixed(4)}, ${source.resolvedLongitude.toFixed(4)}` : "UNAVAILABLE"}</b>
-          <span>Grid distance</span><b>{source?.gridDistanceKm != null ? `${source.gridDistanceKm.toFixed(2)} km` : "UNAVAILABLE"}</b>
-          <span>Provider</span><b>{source?.provider ?? snapshot?.providerName ?? "UNAVAILABLE"}</b>
-          <span>Product</span><b>{source?.product ?? "UNAVAILABLE"}</b>
-          <span>Run / valid</span><b>{source?.runTime && source.validTime ? `${new Date(source.runTime).toISOString().slice(11, 16)}Z / ${new Date(source.validTime).toISOString().slice(11, 16)}Z` : "UNAVAILABLE"}</b>
-          <span>Forecast hour</span><b>{source?.forecastHour ?? "UNAVAILABLE"}</b>
-          <span>Data class</span><b>{source?.dataClass ?? snapshot?.metrics.find((metric) => metric.dataClass)?.dataClass ?? "UNAVAILABLE"}</b>
-          <span>Location source</span><b>{location?.resolvedFrom ?? "UNAVAILABLE"}</b>
-        </div>
-        <div className="ops-metric-stack">
-          {PRIMARY_STORM_METRICS.map((key) => {
-            const metric = metricByKey(snapshot, key);
-            return (
-              <div className="ops-metric-line" key={key}>
-                <span>{metric?.label ?? key.replace(/_/g, " ").toUpperCase()}</span>
-                <b>{formatMetric(metric)}</b>
-                <em>{sourceSemantics(metric)}</em>
-                <small>{metricProvenance(metric)}</small>
-              </div>
-            );
-          })}
-        </div>
+        {selectedPoint ? (
+          <>
+            <div className="ops-provenance-grid">
+              <span>Requested</span><b>{`${selectedPoint.lat.toFixed(4)}, ${selectedPoint.lon.toFixed(4)}`}</b>
+              <span>Resolved grid</span><b>{source?.resolvedLatitude != null && source.resolvedLongitude != null ? `${source.resolvedLatitude.toFixed(4)}, ${source.resolvedLongitude.toFixed(4)}` : "UNAVAILABLE"}</b>
+              <span>Grid distance</span><b>{source?.gridDistanceKm != null ? `${source.gridDistanceKm.toFixed(2)} km` : "UNAVAILABLE"}</b>
+              <span>Provider</span><b>{source?.provider ?? snapshot?.providerName ?? "UNAVAILABLE"}</b>
+              <span>Product</span><b>{source?.product ?? "UNAVAILABLE"}</b>
+              <span>Run / valid</span><b>{source?.runTime && source.validTime ? `${new Date(source.runTime).toISOString().slice(11, 16)}Z / ${new Date(source.validTime).toISOString().slice(11, 16)}Z` : "UNAVAILABLE"}</b>
+              <span>Forecast hour</span><b>{source?.forecastHour ?? "UNAVAILABLE"}</b>
+              <span>Data class</span><b>{source?.dataClass ?? snapshot?.metrics.find((metric) => metric.dataClass)?.dataClass ?? "UNAVAILABLE"}</b>
+              <span>Location source</span><b>{location?.resolvedFrom ?? "UNAVAILABLE"}</b>
+            </div>
+            <div className="ops-metric-stack">
+              {PRIMARY_STORM_METRICS.map((key) => {
+                const metric = metricByKey(snapshot, key);
+                return (
+                  <div className="ops-metric-line" key={key}>
+                    <span>{metric?.label ?? key.replace(/_/g, " ").toUpperCase()}</span>
+                    <b>{formatMetric(metric)}</b>
+                    <em>{sourceSemantics(metric)}</em>
+                    <small>{metricProvenance(metric)}</small>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <p className="ops-inspector__prompt">Select a point on the map to request provenance and Storm Intel metrics for it.</p>
+        )}
       </section>
 
       <section className="ops-inspector__block">

@@ -23,7 +23,10 @@
 .ops-map-overlay>div{background:rgba(0,0,0,.86);border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);padding:9px 14px;min-width:180px}
 .ops-map-overlay span,.ops-timeline span,.ops-inspector__eyebrow{display:block;font-size:9px;font-weight:900;letter-spacing:.16em;color:var(--cb-red);text-transform:uppercase}
 .ops-map-overlay b{display:block;margin-top:2px;font-size:16px;font-weight:900;letter-spacing:.04em;color:var(--cb-text)}
-.ops-timeline{position:absolute;z-index:20;left:18px;right:18px;bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:18px;background:rgba(0,0,0,.9);border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);padding:10px 14px}
+/* right:100px, not right:18px -- AtlasMap's own control stack (North/Clear Trail/Zoom Lock/
+   Layers, .atlas-map-controls in src/index.css) is pinned bottom-right of the same map and is
+   about 74px wide. A full-width timeline bar sat directly underneath it. */
+.ops-timeline{position:absolute;z-index:20;left:18px;right:100px;bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:18px;background:rgba(0,0,0,.9);border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);padding:10px 14px}
 .ops-timeline b{display:block;margin-top:2px;font-size:12px;color:var(--cb-text);letter-spacing:.08em;text-transform:uppercase}
 .ops-timeline em{display:block;margin-top:3px;color:var(--cb-dim);font-size:9px;font-style:normal;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .ops-timeline__ticks{display:grid;grid-template-columns:repeat(6,minmax(54px,1fr));gap:6px;min-width:min(560px,65%)}
@@ -51,6 +54,7 @@
 .ops-provenance-grid b{min-width:0;color:var(--cb-text);font-size:10px;font-weight:900;letter-spacing:.03em;overflow-wrap:anywhere}
 .ops-loading{color:var(--cb-red)!important;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
 .ops-error-text{color:#ffb4a8!important;font-weight:800}
+.ops-inspector__prompt{margin-top:10px!important;padding:14px;border:1px dashed var(--cb-line);text-align:center;color:var(--cb-dim)!important}
 .ops-unit-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .ops-unit-row{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--cb-line);padding-top:8px;font-size:11px}
 .ops-unit-row span{font-weight:800;color:var(--cb-text)}
@@ -135,7 +139,9 @@
   .ops-map-overlay{left:10px;right:10px;top:10px;flex-wrap:wrap}
   .ops-map-overlay>div{min-width:145px}
   .ops-map-overlay .ops-pill{display:none}
-  .ops-timeline{left:10px;right:10px;bottom:10px;display:block}
+  /* Same clearance reasoning as the desktop rule above -- AtlasMap's own control stack is
+     bottom-right anchored here too. */
+  .ops-timeline{left:10px;right:70px;bottom:10px;display:block}
   .ops-timeline__ticks{min-width:0;width:100%;grid-template-columns:repeat(3,1fr);margin-top:8px}
   .ops-system-grid{grid-template-columns:1fr}
   .storm-workspace{position:relative;display:flex;flex-direction:column;height:100%;overflow:auto;padding:8px}
