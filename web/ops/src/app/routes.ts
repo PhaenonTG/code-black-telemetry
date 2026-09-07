@@ -6,7 +6,8 @@ export interface RouteDef {
   label: string
   icon: ComponentProps<typeof Icon>["name"]
   state: "LIVE" | "DEVELOPMENT"
-  // Shown in the phone bottom nav (exactly Home/Map/Weather/Alerts/More -- do not add a 6th).
+  // Shown in the phone bottom nav (exactly Live Ops/Radar/Storm Intel/Fleet/More -- do not add
+  // a 6th; see the fuller note in layouts/BottomNav.tsx).
   inPhoneNav: boolean
   // Shown in the desktop/tablet sidebar. "More" itself isn't a sidebar destination there --
   // desktop/tablet have room to show Fleet/Operations/Settings directly instead.

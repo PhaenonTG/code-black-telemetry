@@ -230,30 +230,6 @@
 .ops-more-grid__item{display:flex;align-items:center;gap:12px;border:1px solid var(--cb-line);background:var(--cb-panel);border-radius:var(--cb-radius);padding:14px 16px;color:var(--cb-text);font-size:14px;font-weight:700}
 .ops-more-grid__chevron{margin-left:auto;color:var(--cb-dim)}
 
-/* ---- Home ---- */
-.home-grid{display:grid;grid-template-columns:1fr;gap:12px}
-.ops-home-module{border:1px solid var(--cb-line);background:var(--cb-panel);border-radius:var(--cb-radius);padding:14px 16px;cursor:pointer;transition:background var(--cb-fast),border-color var(--cb-fast)}
-.ops-home-module:hover{background:var(--cb-panel-hi)}
-.ops-home-module:active{background:var(--cb-tile)}
-.ops-home-module:focus-visible{outline:2px solid var(--cb-red);outline-offset:2px}
-.ops-home-module__head{display:flex;align-items:center;justify-content:space-between;font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--cb-muted);text-transform:uppercase;margin-bottom:8px}
-.ops-home-module__head strong{color:var(--cb-text);font-size:11px}
-.ops-home-module__primary{font-size:19px;font-weight:800}
-.ops-home-module__grid{display:grid;grid-template-columns:repeat(2,1fr);gap:4px 12px;margin-top:10px;font-size:11px;color:var(--cb-muted)}
-.ops-home-module__grid b{color:var(--cb-text);display:block;font-size:13px}
-.ops-home-module--radar{padding:0;overflow:hidden;grid-column:1/-1}
-.ops-home-module--radar .ops-home-module__head{padding:12px 16px 0}
-.ops-home-module--radar .ops-home-module__map{height:260px;cursor:auto}
-
-@media (min-width:600px){
-  .home-grid{grid-template-columns:repeat(2,1fr)}
-}
-@media (min-width:1000px){
-  .home-grid{grid-template-columns:repeat(3,1fr)}
-  .ops-home-module--radar{grid-column:span 2}
-  .ops-home-module--radar .ops-home-module__map{height:340px}
-}
-
 /* ---- Map camera viewer: map-first camera workflow, no route change. ---- */
 .map-camera-viewer{
   position:absolute;z-index:30;top:16px;right:16px;width:min(420px,calc(100% - 32px));
