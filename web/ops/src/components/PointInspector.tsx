@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { OpsStatusPill } from "./OpsStatusPill";
 import type { OpsCoreState } from "../core/types";
-import { PRIMARY_STORM_METRICS, firstAvailableSource, formatMetric, metricByKey, metricProvenance, metricThreatLevel, sourceSemantics, stormIntelSummary } from "../stormIntel/format";
+import { PRIMARY_STORM_METRICS, firstAvailableSource, formatMetric, metricByKey, metricThreatLevel } from "../stormIntel/format";
 import { getReverseLocality, type LocalityResult } from "../../../../src/services/situational";
 
 function timeLabel(value: number | string | null | undefined) {
@@ -54,7 +54,6 @@ export function PointInspector({
         <p>{coreState.stormIntel.detail}</p>
         {coreState.stormIntel.pointLoading && <p className="ops-loading">Loading newest selected point...</p>}
         {coreState.stormIntel.pointError && <p className="ops-error-text">{coreState.stormIntel.pointError}</p>}
-        <p>{stormIntelSummary(snapshot)}</p>
         {selectedPoint ? (
           <>
             <div className="ops-metric-stack">
@@ -64,8 +63,6 @@ export function PointInspector({
                   <div className="ops-metric-line" key={key}>
                     <span>{metric?.label ?? key.replace(/_/g, " ").toUpperCase()}</span>
                     <b data-threat={metricThreatLevel(metric)}>{formatMetric(metric)}</b>
-                    <em>{sourceSemantics(metric)}</em>
-                    <small>{metricProvenance(metric)}</small>
                   </div>
                 );
               })}

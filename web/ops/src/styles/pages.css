@@ -59,8 +59,6 @@
 .ops-metric-line b[data-threat="low"]{color:var(--cb-green)}
 .ops-metric-line b[data-threat="moderate"]{color:var(--cb-amber)}
 .ops-metric-line b[data-threat="high"]{color:var(--cb-red)}
-.ops-metric-line em{grid-column:1/-1;width:fit-content;border:1px solid var(--cb-line);padding:2px 5px;color:var(--cb-muted);font-size:8px;font-style:normal;font-weight:900;letter-spacing:.11em}
-.ops-metric-line small{grid-column:1/-1;color:var(--cb-dim);font-size:9px;line-height:1.35}
 .ops-provenance-details{margin-top:10px;padding-top:10px;border-top:1px solid var(--cb-line)}
 .ops-provenance-details summary{cursor:pointer;color:var(--cb-dim);font-size:9px;font-weight:900;letter-spacing:.11em;text-transform:uppercase}
 .ops-provenance-grid{display:grid;grid-template-columns:96px 1fr;gap:5px 10px;margin-top:10px}
