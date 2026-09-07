@@ -1016,6 +1016,20 @@ export function AtlasMap({
   const cameraProviderStatusLabel = trafficCamerasVisible
     ? `CAMS ${providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount).toUpperCase()}`
     : null;
+  // Per-category counts of what's actually in view right now, not a running total or a per-point
+  // radius -- panning/zooming changes this live the same way it already does for CAMS above,
+  // since visiblePoiPlaces is itself viewport-filtered (see its useMemo).
+  const POI_CATEGORY_LABELS: Record<string, string> = { gas: "GAS", hospital: "ER", food: "FOOD", lodging: "LODGE" };
+  const poiStatusLabel = poiVisible
+    ? (() => {
+        const counts = new Map<string, number>();
+        for (const place of visiblePoiPlaces) counts.set(place.category, (counts.get(place.category) ?? 0) + 1);
+        const parts = Object.keys(POI_CATEGORY_LABELS)
+          .filter((category) => counts.get(category))
+          .map((category) => `${POI_CATEGORY_LABELS[category]} ${counts.get(category)}`);
+        return parts.length > 0 ? `POI ${parts.join(" · ")}` : "POI NONE IN VIEW";
+      })()
+    : null;
   // A radar frame is only ever as fresh as the last successful worker fetch -- in a chase, a stale
   // frame with no clear "this is old" signal is worse than no frame at all, since it can read as
   // current when the actual storm has moved. Always show the age, not just a LIVE/CACHED enum.
@@ -1052,6 +1066,7 @@ export function AtlasMap({
             {radarVisible && !radarFrame && <span>{radarStatusLabel}</span>}
             {roadStatusLabel && <span>{roadStatusLabel}</span>}
             {cameraProviderStatusLabel && <span>{cameraProviderStatusLabel}</span>}
+            {poiStatusLabel && <span>{poiStatusLabel}</span>}
           </div>
         )}
         {onOpenExpanded && (
