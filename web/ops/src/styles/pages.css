@@ -101,6 +101,7 @@
 .storm-map-command{position:absolute;z-index:20;left:14px;right:14px;top:64px;display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:1px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.12);pointer-events:none}
 .storm-map-command>div{background:rgba(0,0,0,.9);padding:9px 11px;min-width:0}
 .storm-map-command b{display:block;margin-top:3px;color:var(--cb-text);font-size:12px;font-weight:900;letter-spacing:.04em;overflow-wrap:anywhere}
+.storm-map-command small{display:block;margin-top:2px;color:var(--cb-muted);font-size:9px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;overflow-wrap:anywhere}
 .storm-workspace__context{display:flex;flex-direction:column;gap:10px;min-width:0;overflow:auto}
 .storm-provenance,.point-history,.storm-actions,.storm-metric-group{border:1px solid var(--cb-line);background:var(--cb-panel);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);padding:13px}
 .storm-provenance{border-top:2px solid var(--cb-red)}

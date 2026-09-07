@@ -14,6 +14,7 @@ import { StormIntelMetricBoard } from "../components/StormIntelMetricBoard";
 import { TimelineRail } from "../components/TimelineRail";
 import { useCoreOps } from "../core/useCoreOps";
 import { firstAvailableSource, stormIntelSummary } from "../stormIntel/format";
+import { getReverseLocality, type LocalityResult } from "../../../../src/services/situational";
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null;
@@ -33,6 +34,7 @@ function isoShort(value: string | null | undefined): string {
 
 export default function StormIntelWorkspace() {
   const [gps, setGps] = useState<LocationState>({ status: "requesting" });
+  const [locality, setLocality] = useState<LocalityResult | null>(null);
   const { config, state: coreState, selectedPoint, pointHistory, selectPoint, selectHistoryPoint } = useCoreOps();
   const snapshot = coreState.stormIntel.pointSnapshot;
   const source = firstAvailableSource(snapshot);
@@ -45,6 +47,25 @@ export default function StormIntelWorkspace() {
   }, []);
 
   const atlasGps = toAtlasGps(gps);
+
+  // First landing on Storm Intel with nothing picked yet (anywhere in the app -- selectedPoint is
+  // shared app-wide state) defaults to the viewer's own position instead of an empty "select a
+  // point" prompt. Only ever fires once, into a null slot -- never overrides a point the chaser
+  // (or Live Ops) already selected.
+  useEffect(() => {
+    if (selectedPoint || !atlasGps) return;
+    selectPoint({ lat: atlasGps.lat, lon: atlasGps.lon });
+  }, [atlasGps, selectedPoint, selectPoint]);
+
+  useEffect(() => {
+    if (!selectedPoint) { setLocality(null); return; }
+    let cancelled = false;
+    void getReverseLocality({ lat: selectedPoint.lat, lon: selectedPoint.lon }).then((result) => {
+      if (!cancelled) setLocality(result);
+    });
+    return () => { cancelled = true; };
+  }, [selectedPoint]);
+
   const contextPoint = useMemo(() => selectedPoint ?? (atlasGps ? { lat: atlasGps.lat, lon: atlasGps.lon } : null), [atlasGps, selectedPoint]);
   const spotters = useSpotters(contextPoint);
   const poi = useNearbyPoiList(contextPoint);
@@ -59,8 +80,8 @@ export default function StormIntelWorkspace() {
       <header className="storm-workspace__header">
         <div>
           <span>STORM INTEL WORKSPACE</span>
-          <h1>{selectedPoint ? coord(selectedPoint, 3) : "SELECT A MAP POINT"}</h1>
-          <p>{stormIntelSummary(snapshot)}</p>
+          <h1>{selectedPoint ? (locality?.displayName ?? "RESOLVING LOCATION…") : "SELECT A MAP POINT"}</h1>
+          <p>{selectedPoint ? `${coord(selectedPoint, 3)} · ${stormIntelSummary(snapshot)}` : stormIntelSummary(snapshot)}</p>
         </div>
         <div className="storm-workspace__status">
           <OpsStatusPill state={coreState.stormIntel.state} label={`INTEL ${coreState.stormIntel.state}`} />
@@ -85,6 +106,7 @@ export default function StormIntelWorkspace() {
             <div>
               <span>REQUESTED</span>
               <b>{coord(selectedPoint)}</b>
+              {selectedPoint && locality && <small>{locality.displayName}</small>}
             </div>
             <div>
               <span>RESOLVED GRID</span>
@@ -106,6 +128,7 @@ export default function StormIntelWorkspace() {
             </header>
             <dl>
               <div><dt>Requested</dt><dd>{coord(selectedPoint)}</dd></div>
+              <div><dt>Location</dt><dd>{selectedPoint ? (locality?.displayName ?? "RESOLVING…") : "UNAVAILABLE"}</dd></div>
               <div><dt>Resolved grid</dt><dd>{coord(resolved)}</dd></div>
               <div><dt>Grid distance</dt><dd>{source?.gridDistanceKm != null ? `${source.gridDistanceKm.toFixed(2)} km` : "UNAVAILABLE"}</dd></div>
               <div><dt>Provider</dt><dd>{source?.provider ?? snapshot?.providerName ?? "UNAVAILABLE"}</dd></div>
