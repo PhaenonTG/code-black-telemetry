@@ -35,7 +35,7 @@ import { filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewpor
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, type RoadConditionEvent, type TrafficCamera, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
-import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, setRadarStormMotion, type RadarFrame, type RadarProduct, type StormMotion } from "../services/radar";
+import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, radarWorkerMissingOnWeb, setRadarStormMotion, type RadarFrame, type RadarProduct, type StormMotion } from "../services/radar";
 import { useWind } from "../hooks/useTelemetry";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
 import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
@@ -1018,12 +1018,18 @@ export function AtlasMap({
   // A radar frame is only ever as fresh as the last successful worker fetch -- in a chase, a stale
   // frame with no clear "this is old" signal is worse than no frame at all, since it can read as
   // current when the actual storm has moved. Always show the age, not just a LIVE/CACHED enum.
+  // "LOADING" is only ever true while a fetch is actually in flight and expected to resolve --
+  // with no worker URL configured, no fetch ever starts, so it would otherwise read "LOADING"
+  // forever and look hung rather than telling a chaser (or whoever's checking System) what's
+  // actually missing.
   const radarStatusLabel = radarVisible
-    ? radarProduct === "SRV" && !stormMotion
-      ? "SRV NEEDS STORM MOTION"
-      : radarFrame
-        ? `${radarProduct} ${ageText(radarFrame.ageSeconds)} OLD${radarFrame.freshness === "STALE" ? " - STALE" : ""}`
-        : "SINGLE-SITE LOADING"
+    ? radarWorkerMissingOnWeb()
+      ? "SINGLE-SITE NOT CONFIGURED"
+      : radarProduct === "SRV" && !stormMotion
+        ? "SRV NEEDS STORM MOTION"
+        : radarFrame
+          ? `${radarProduct} ${ageText(radarFrame.ageSeconds)} OLD${radarFrame.freshness === "STALE" ? " - STALE" : ""}`
+          : "SINGLE-SITE LOADING"
     : null;
 
   return (

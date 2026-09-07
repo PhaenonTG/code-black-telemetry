@@ -135,7 +135,7 @@ export async function fetchStormIntelHealth(config: OpsCoreConfig): Promise<Pick
   if (!coreConfigured(config)) return { ...unavailable, checkedAt: now, health: null };
   try {
     const health = await withTimeout((signal) => fetchJson<unknown>(`${config.coreBaseUrl}/api/storm-intel/v1/health`, signal));
-    return { state: "LIVE", detail: "Storm Intel API ready; select a map point for quick intel", checkedAt: Date.now(), health };
+    return { state: "LIVE", detail: "Storm Intel API ready", checkedAt: Date.now(), health };
   } catch (error) {
     return {
       state: "UNAVAILABLE",

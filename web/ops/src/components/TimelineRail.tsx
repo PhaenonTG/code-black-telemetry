@@ -4,8 +4,7 @@ export function TimelineRail() {
     <div className="ops-timeline" aria-label="Forecast timeline">
       <div>
         <span>VALID TIME</span>
-        <b>Current only</b>
-        <em>Future valid-time selection awaits Core contract support</em>
+        <b>NOW</b>
       </div>
       <div className="ops-timeline__ticks">
         {hours.map((hour, index) => (
@@ -14,7 +13,7 @@ export function TimelineRail() {
             type="button"
             className={index === 0 ? "active" : ""}
             disabled={index !== 0}
-            title={index === 0 ? undefined : "Future valid-time selection awaits Core contract support"}
+            title={index === 0 ? undefined : "Not available yet"}
           >
             {hour}
           </button>

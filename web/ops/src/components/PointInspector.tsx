@@ -26,7 +26,7 @@ export function PointInspector({
       <section className="ops-inspector__block ops-inspector__block--command">
         <div className="ops-inspector__eyebrow">POINT INSPECTOR</div>
         <h2>{selectedPoint ? `${selectedPoint.lat.toFixed(3)}, ${selectedPoint.lon.toFixed(3)}` : "No point selected"}</h2>
-        <p>{selectedPoint ? "Map point selected. Quick Intel is requested from the Core Storm Intel point contract." : "Click or tap the map to stage a point-in-time weather intelligence request."}</p>
+        <p>{selectedPoint ? "Requesting Storm Intel for this point." : "Tap the map to request Storm Intel for a point."}</p>
       </section>
 
       <section className="ops-inspector__block">
@@ -84,7 +84,7 @@ export function PointInspector({
             </div>
           </>
         ) : (
-          <p className="ops-inspector__prompt">Select a point on the map to request provenance and Storm Intel metrics for it.</p>
+          <p className="ops-inspector__prompt">Tap the map to load provenance and metrics.</p>
         )}
       </section>
 

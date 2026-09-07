@@ -100,8 +100,16 @@ export function radarWorkerBase(): string {
   return ((import.meta.env.VITE_RADAR_WORKER_URL as string | undefined) ?? "").trim().replace(/\/+$/, "");
 }
 
-function webRadarEnabled() {
+export function webRadarEnabled() {
   return !Capacitor.isNativePlatform() && radarWorkerBase() !== "";
+}
+
+// True only for the specific "single-site radar will never load here" case: a web build with no
+// worker URL configured. Native always has a path to real data (its own on-device decoder) so
+// this is deliberately narrower than `!webRadarEnabled()`, which is also false on native for an
+// unrelated reason and would otherwise misreport native as unconfigured too.
+export function radarWorkerMissingOnWeb() {
+  return !Capacitor.isNativePlatform() && radarWorkerBase() === "";
 }
 
 async function ensureInitialized() {

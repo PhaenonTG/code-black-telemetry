@@ -108,7 +108,7 @@ export function metricProvenance(metric: NormalizedMetric | null): string {
 }
 
 export function stormIntelSummary(snapshot: StormIntelSnapshot | null): string {
-  if (!snapshot) return "Select a point or connect Core for Storm Intel.";
+  if (!snapshot) return "Connect Core for Storm Intel.";
   if (!snapshot.available) return snapshot.unavailableReason ?? "Storm Intel unavailable.";
   const score = snapshot.score.available && snapshot.score.value !== null ? `${Math.round(snapshot.score.value)}` : "NO SCORE";
   return `${snapshot.providerName} · ${score} · ${snapshot.context.contextType}`;
