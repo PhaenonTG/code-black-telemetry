@@ -14,7 +14,11 @@
 .ops-workstation{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) 380px;background:var(--cb-black);overflow:hidden}
 .ops-map-stage{position:relative;min-width:0;min-height:0;background:#000}
 .ops-map-stage>.atlas-map-shell{height:100%;width:100%}
-.ops-map-overlay{position:absolute;z-index:20;left:18px;right:18px;display:flex;align-items:center;gap:10px;pointer-events:none}
+/* Anchored top-right, not top-left: AtlasMap (shared with the native app, src/map/AtlasMap.tsx)
+   already renders its own GPS/mode/mosaic status strip pinned top-left (.radar-strip /
+   .atlas-radar-strip in src/index.css). Spanning this overlay left:18/right:18 used to sit
+   directly on top of that strip, causing visible text collision on every OPS map view. */
+.ops-map-overlay{position:absolute;z-index:20;right:18px;left:auto;display:flex;align-items:center;gap:10px;pointer-events:none;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 200px)}
 .ops-map-overlay--top{top:14px}
 .ops-map-overlay>div{background:rgba(0,0,0,.86);border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);padding:9px 14px;min-width:180px}
 .ops-map-overlay span,.ops-timeline span,.ops-inspector__eyebrow{display:block;font-size:9px;font-weight:900;letter-spacing:.16em;color:var(--cb-red);text-transform:uppercase}
@@ -56,8 +60,10 @@
 .ops-system-grid span,.ops-fleet-card p{display:block;margin:0 0 6px;font-size:9px;font-weight:900;letter-spacing:.12em;color:var(--cb-muted);text-transform:uppercase}
 .ops-system-grid b,.ops-fleet-card b{display:block;font-size:18px;color:var(--cb-text)}
 .ops-system-grid p,.ops-fleet-card span{display:block;margin:6px 0 0;color:var(--cb-muted);font-size:11px;line-height:1.4}
-.ops-fleet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.ops-fleet-card h2{margin:0 0 10px;font-size:20px;text-transform:uppercase}
+.ops-fleet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,320px));gap:14px}
+.ops-fleet-card{padding:18px}
+.ops-fleet-card header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px}
+.ops-fleet-card h2{margin:2px 0 10px;font-size:22px;text-transform:uppercase}
 
 /* ---- Phase 3 Storm Intel workspace ---- */
 .storm-workspace{position:absolute;inset:0;background:var(--cb-black);overflow:auto;display:grid;grid-template-rows:auto minmax(520px,58vh) auto;gap:12px;padding:12px}
@@ -165,16 +171,40 @@
 .empty-state{border:1px dashed var(--cb-line);border-radius:var(--cb-radius);padding:32px 24px;text-align:center;max-width:480px}
 .empty-state__title{font-size:13px;font-weight:800;letter-spacing:.08em;color:var(--cb-text);margin:0 0 10px}
 .empty-state__body{font-size:12px;line-height:1.7;color:var(--cb-muted);margin:0}
+/* A lone dashed box in an otherwise fully empty viewport (Fleet with zero units) reads as broken,
+   not "no data yet" -- centering it in the remaining page height gives the page deliberate
+   composition instead of stray content pinned to the top-left of a black void. */
+.empty-state--centered{margin:min(14vh,120px) auto 0;max-width:520px;padding:40px 32px;border-style:solid;border-top:2px solid var(--cb-red);background:var(--cb-panel);clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+.empty-state--centered .empty-state__title{font-size:14px;letter-spacing:.1em}
 
 /* ---- Settings ---- */
-.settings-group{margin-bottom:26px;max-width:560px}
-.settings-group h2{font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--cb-muted);text-transform:uppercase;margin:0 0 10px}
+.settings-group{margin-bottom:18px;max-width:640px;border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);background:var(--cb-panel);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);padding:18px 20px}
+.settings-group h2{font-size:11px;font-weight:900;letter-spacing:.1em;color:var(--cb-muted);text-transform:uppercase;margin:0 0 14px}
 .settings-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--cb-line);font-size:13px}
+.settings-row:last-child{border-bottom:0;padding-bottom:0}
 .settings-row--toggle{cursor:pointer}
 .segmented{display:flex;border:1px solid var(--cb-line);border-radius:var(--cb-radius);overflow:hidden}
 .segmented button{background:transparent;border:0;color:var(--cb-muted);padding:6px 12px;font-size:11px;font-weight:700;text-transform:capitalize;cursor:pointer}
-.segmented button.active{background:var(--cb-panel-hi);color:var(--cb-text)}
-.settings-group--deferred p{font-size:12px;line-height:1.7;color:var(--cb-dim)}
+.segmented button.active{background:var(--cb-red);color:#000}
+.settings-group--deferred{border-top-color:var(--cb-line)}
+.settings-group--deferred p{font-size:12px;line-height:1.7;color:var(--cb-dim);margin:0}
+
+.settings-toggle-list{display:flex;flex-direction:column}
+.settings-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--cb-line);cursor:pointer}
+.settings-toggle-row:last-child{border-bottom:0;padding-bottom:0}
+.settings-toggle-row__text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.settings-toggle-row__label{font-size:13px;font-weight:700;color:var(--cb-text)}
+.settings-toggle-row__description{font-size:11px;color:var(--cb-muted);line-height:1.4}
+
+/* Real switch control instead of a raw checkbox -- same interaction, reads as a settings toggle
+   at a glance instead of a form input. */
+.switch{position:relative;flex:0 0 auto;width:38px;height:22px;display:inline-block}
+.switch input{position:absolute;inset:0;margin:0;opacity:0;cursor:pointer}
+.switch i{position:absolute;inset:0;border-radius:999px;background:var(--cb-tile);border:1px solid var(--cb-line);transition:background var(--cb-fast),border-color var(--cb-fast)}
+.switch i::before{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--cb-muted);transition:transform var(--cb-fast),background var(--cb-fast)}
+.switch--on i{background:rgba(255,42,12,.22);border-color:var(--cb-red)}
+.switch--on i::before{transform:translateX(16px);background:var(--cb-red)}
+.switch input:focus-visible+i{outline:2px solid var(--cb-red);outline-offset:2px}
 
 /* ---- More (phone) ---- */
 .ops-more-grid{display:flex;flex-direction:column;gap:8px}

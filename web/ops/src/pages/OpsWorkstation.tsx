@@ -92,7 +92,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
         />
         <div className="ops-map-overlay ops-map-overlay--top">
           <div>
-            <span>CODE BLACK OPS</span>
+            <span>FOCUS</span>
             <b>{focus}</b>
           </div>
           <OpsStatusPill state={coreState.core.state} label={`CORE ${coreState.core.state}`} />

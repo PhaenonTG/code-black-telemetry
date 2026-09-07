@@ -7,6 +7,23 @@ import { useAuth } from "../auth/AuthProvider"
 
 const THEME_OPTIONS: AppThemeMode[] = ["dark", "night", "system", "light"]
 
+// MapLayerVisibility's keys are internal identifiers (src/services/settings.ts), not copy --
+// this is the one place they get a human-readable name and a one-line description of what
+// toggling them actually does, instead of surfacing the raw camelCase key to the user.
+const LAYER_LABELS: Record<string, { label: string; description: string }> = {
+  alerts: { label: "Weather alerts", description: "NWS warning and watch polygons on the map" },
+  team: { label: "Team positions", description: "Live location of other Code Black team members" },
+  chasers: { label: "Spotter network", description: "Nearby public storm spotter positions" },
+  poi: { label: "Points of interest", description: "Named landmarks and reference points" },
+  mosaic: { label: "Wide-area mosaic", description: "Regional composite radar reflectivity" },
+  radar: { label: "Single-site radar", description: "High-resolution radar from the nearest site" },
+  roadConditions: { label: "Road conditions", description: "DOT-reported closures and hazards" },
+  trafficCameras: { label: "Traffic cameras", description: "Public DOT traffic camera feeds" },
+  probes: { label: "Probe deployments", description: "Deployed instrument probe locations" },
+  chaserNet: { label: "Chaser Net reports", description: "Community-submitted ground truth reports" },
+  breadcrumbs: { label: "GPS trail", description: "Your own recent movement history on the map" },
+}
+
 // A working foundation, not the full settings surface -- reuses the real settings.ts load/save/
 // subscribe layer (same @capacitor/preferences-backed storage the native app uses, with the web
 // fallback confirmed safe in docs/ARCHITECTURE.md) for two representative settings groups. Map,
@@ -48,16 +65,27 @@ export default function Settings() {
       <section className="settings-group">
         <h2>Map layers</h2>
         {layers ? (
-          Object.entries(layers).map(([key, value]) => (
-            <label key={key} className="settings-row settings-row--toggle">
-              <span>{key}</span>
-              <input
-                type="checkbox"
-                checked={!!value}
-                onChange={(e) => void saveMapLayerVisibility({ ...layers, [key]: e.target.checked })}
-              />
-            </label>
-          ))
+          <div className="settings-toggle-list">
+            {Object.entries(layers).map(([key, value]) => {
+              const copy = LAYER_LABELS[key] ?? { label: key, description: "" }
+              return (
+                <label key={key} className="settings-toggle-row">
+                  <span className="settings-toggle-row__text">
+                    <span className="settings-toggle-row__label">{copy.label}</span>
+                    {copy.description && <span className="settings-toggle-row__description">{copy.description}</span>}
+                  </span>
+                  <span className={value ? "switch switch--on" : "switch"}>
+                    <input
+                      type="checkbox"
+                      checked={!!value}
+                      onChange={(e) => void saveMapLayerVisibility({ ...layers, [key]: e.target.checked })}
+                    />
+                    <i />
+                  </span>
+                </label>
+              )
+            })}
+          </div>
         ) : (
           <p className="page-empty">Loading…</p>
         )}
