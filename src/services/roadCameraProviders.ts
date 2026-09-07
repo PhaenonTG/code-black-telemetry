@@ -119,6 +119,62 @@ const MAX_CAMERA_RESULTS = 260;
 
 const roadCache = new Map<string, CacheEntry<RoadConditionEvent>>();
 const cameraCache = new Map<string, CacheEntry<TrafficCamera>>();
+
+// The in-memory caches above already serve stale data through a live network blip (the common
+// chase case: a valley kills signal for a minute, then it's back) -- but they're memory-only, so
+// an app restart or a killed/reopened tab while genuinely offline loses everything and falls
+// straight to "unavailable" with no data at all. This adds one more, coarser fallback layer
+// underneath: the single most recent successful aggregate result per layer, persisted to disk
+// (same Preferences store spcOutlook.ts already uses this way), consulted only when every
+// provider has failed AND there's no live in-memory cache to fall back to first.
+const ROAD_LAST_GOOD_KEY = "codeblack.roadConditions.lastGood";
+const CAMERA_LAST_GOOD_KEY = "codeblack.trafficCameras.lastGood";
+const LAST_GOOD_MAX_AGE_MS = 3 * 60 * 60_000;
+
+interface LastGoodSnapshot<T> {
+  data: T[];
+  fetchedAt: number;
+}
+
+// Dynamic, not static, import of @capacitor/preferences -- this module is loaded standalone (no
+// bundler resolution context) by scripts/pass1-domain-tests.mjs's transpile-and-eval harness, and
+// a static import of a bare npm specifier crashes that harness outright at link time. A dynamic
+// import's rejection can be caught like any other promise, so it degrades to "persistence
+// unavailable" instead of a hard failure anywhere this module gets loaded without Capacitor.
+async function loadPreferences() {
+  try {
+    return (await import("@capacitor/preferences")).Preferences;
+  } catch {
+    return null;
+  }
+}
+
+async function saveLastGood<T>(key: string, data: T[], fetchedAt: number) {
+  if (data.length === 0) return;
+  const preferences = await loadPreferences();
+  if (!preferences) return;
+  try {
+    await preferences.set({ key, value: JSON.stringify({ data, fetchedAt } satisfies LastGoodSnapshot<T>) });
+  } catch {
+    // Best-effort persistence -- a write failure here shouldn't affect the live result already
+    // being returned to the caller.
+  }
+}
+
+async function loadLastGood<T extends { id: string; stale?: boolean; freshness?: string }>(key: string): Promise<LastGoodSnapshot<T> | null> {
+  const preferences = await loadPreferences();
+  if (!preferences) return null;
+  try {
+    const saved = await preferences.get({ key });
+    if (!saved.value) return null;
+    const parsed = JSON.parse(saved.value) as LastGoodSnapshot<T>;
+    if (!Array.isArray(parsed.data) || typeof parsed.fetchedAt !== "number") return null;
+    if (nowMs() - parsed.fetchedAt > LAST_GOOD_MAX_AGE_MS) return null;
+    return { data: parsed.data.map((item) => ({ ...item, stale: true, freshness: "stale" })), fetchedAt: parsed.fetchedAt };
+  } catch {
+    return null;
+  }
+}
 const inFlight = new Map<string, Promise<unknown>>();
 
 function classifyProviderFetchError(error: unknown) {
@@ -1126,10 +1182,16 @@ export async function getRoadConditionsForViewport(context: LayerQueryContext, s
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);
   const anyStale = settled.some((result) => result.status === "fulfilled" && result.value.stale);
   if (data.length > 0) {
-    return { data: dedupeById(data), status: anyStale ? "stale" : "ready", message: anyStale ? "Road provider unavailable; showing cached stale data." : "Road conditions loaded.", simulated: false, fetchedAt, stale: anyStale, providerIds: providers.map((provider) => provider.id) };
+    const deduped = dedupeById(data);
+    if (!anyStale) void saveLastGood(ROAD_LAST_GOOD_KEY, deduped, fetchedAt);
+    return { data: deduped, status: anyStale ? "stale" : "ready", message: anyStale ? "Road provider unavailable; showing cached stale data." : "Road conditions loaded.", simulated: false, fetchedAt, stale: anyStale, providerIds: providers.map((provider) => provider.id) };
   }
   const failures = settled.filter((result) => result.status === "rejected");
   if (failures.length === providers.length) {
+    const lastGood = await loadLastGood<RoadConditionEvent>(ROAD_LAST_GOOD_KEY);
+    if (lastGood) {
+      return { data: lastGood.data, status: "stale", message: `Road provider unavailable; showing the last data loaded before this session (${Math.round((fetchedAt - lastGood.fetchedAt) / 60_000)} min ago).`, simulated: false, fetchedAt, stale: true, providerIds: providers.map((provider) => provider.id) };
+    }
     const first = failures[0] as PromiseRejectedResult | undefined;
     return { data: [], status: "unavailable", message: classifyProviderFetchError(first?.reason) || "Road-condition provider unavailable.", simulated: false, fetchedAt, providerIds: providers.map((provider) => provider.id) };
   }
@@ -1146,10 +1208,16 @@ export async function getTrafficCamerasForViewport(context: LayerQueryContext, s
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);
   const anyStale = settled.some((result) => result.status === "fulfilled" && result.value.stale);
   if (data.length > 0) {
-    return { data: dedupeById(data), status: anyStale ? "stale" : "ready", message: anyStale ? "Camera provider unavailable; showing cached stale data." : "Public traffic cameras loaded.", simulated: false, fetchedAt, stale: anyStale, providerIds: providers.map((provider) => provider.id) };
+    const deduped = dedupeById(data);
+    if (!anyStale) void saveLastGood(CAMERA_LAST_GOOD_KEY, deduped, fetchedAt);
+    return { data: deduped, status: anyStale ? "stale" : "ready", message: anyStale ? "Camera provider unavailable; showing cached stale data." : "Public traffic cameras loaded.", simulated: false, fetchedAt, stale: anyStale, providerIds: providers.map((provider) => provider.id) };
   }
   const failures = settled.filter((result) => result.status === "rejected");
   if (failures.length === providers.length) {
+    const lastGood = await loadLastGood<TrafficCamera>(CAMERA_LAST_GOOD_KEY);
+    if (lastGood) {
+      return { data: lastGood.data, status: "stale", message: `Camera provider unavailable; showing the last data loaded before this session (${Math.round((fetchedAt - lastGood.fetchedAt) / 60_000)} min ago).`, simulated: false, fetchedAt, stale: true, providerIds: providers.map((provider) => provider.id) };
+    }
     const first = failures[0] as PromiseRejectedResult | undefined;
     return { data: [], status: "unavailable", message: classifyProviderFetchError(first?.reason) || "Public traffic-camera provider unavailable.", simulated: false, fetchedAt, providerIds: providers.map((provider) => provider.id) };
   }

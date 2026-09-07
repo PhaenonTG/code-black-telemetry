@@ -7,6 +7,7 @@ import type { Spotter } from "../services/spotters";
 import type { NearbyCategory, NearbyPlace } from "../services/nearby";
 import { resolveTeamPositions } from "../services/teamPositions";
 import { clearBreadcrumbTrail } from "../services/breadcrumbTrail";
+import { downloadBreadcrumbExport } from "../services/breadcrumbExport";
 import { DEFAULT_CHASER_RADIUS_MILES, getMapLayerVisibility, loadChaserRadiusMiles, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
 import { getChaserNetMembersForViewport, getChaserNetReportsForViewport, type ChaserNetMapMember, type ChaserNetReport } from "../services/chaserNet";
 import { useBreadcrumbTrail } from "../hooks/useBreadcrumbTrail";
@@ -1233,6 +1234,7 @@ export function AtlasMap({
       {!compact && (
         <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
           <button type="button" aria-label="Toggle follow mode" title="Cycles between north-up follow, heading-up follow, and recenter from free pan" className={cameraMode === "FREE" ? "" : "active"} onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
+          <button type="button" aria-label="Export position trail as GPX" title="Downloads your recorded breadcrumb trail as a GPX file" disabled={trail.length === 0} onClick={() => downloadBreadcrumbExport(trail, "gpx")}>EXPORT TRAIL</button>
           <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
           <button type="button" aria-label="Toggle zoom lock" title="Stops the camera from re-zooming automatically as your speed changes" className={zoomLocked ? "active" : ""} onClick={() => setZoomLocked((value) => !value)}>ZOOM LOCK</button>
           <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
