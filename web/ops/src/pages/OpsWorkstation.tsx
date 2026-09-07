@@ -14,6 +14,7 @@ import { PointInspector } from "../components/PointInspector";
 import { TimelineRail } from "../components/TimelineRail";
 import { useCoreOps } from "../core/useCoreOps";
 import { OpsStatusPill } from "../components/OpsStatusPill";
+import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings";
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null;
@@ -44,6 +45,24 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
     const unwatch = browserLocationAdapter.watch((s) => { if (!cancelled) setGps(s); });
     return () => { cancelled = true; unwatch(); };
   }, []);
+
+  useEffect(() => {
+    // The Radar nav destination is otherwise pixel-identical to Live Ops (same workstation, same
+    // map) -- what actually earns it a separate slot is landing here with both radar layers on:
+    // the wide-area mosaic for storm-scale context plus the nearest site's single-site sweep for
+    // structure detail, mirroring how RadarScope/GRLevel3 users layer national + local products.
+    // Only nudges layers on, never off, so a chaser who deliberately kills one mid-visit keeps it
+    // off until they leave and come back.
+    if (focus !== "RADAR") return;
+    let cancelled = false;
+    void loadMapLayerVisibility().then((current) => {
+      if (cancelled) return;
+      if (!current.mosaic || !current.radar) {
+        void saveMapLayerVisibility({ ...current, mosaic: true, radar: true });
+      }
+    });
+    return () => { cancelled = true; };
+  }, [focus]);
 
   useEffect(() => {
     const cam = (e: Event) => {
