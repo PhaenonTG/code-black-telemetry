@@ -46,6 +46,15 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
     return () => { cancelled = true; unwatch(); };
   }, []);
 
+  // First landing anywhere in the app (selectedPoint is shared app-wide state) with nothing picked
+  // yet defaults to the viewer's own position instead of requiring a map tap before Point
+  // Inspector shows anything -- same one-shot-into-a-null-slot behavior as Storm Intel's.
+  const atlasGpsForAutoSelect = toAtlasGps(gps);
+  useEffect(() => {
+    if (selectedPoint || !atlasGpsForAutoSelect) return;
+    selectPoint({ lat: atlasGpsForAutoSelect.lat, lon: atlasGpsForAutoSelect.lon });
+  }, [atlasGpsForAutoSelect, selectedPoint, selectPoint]);
+
   useEffect(() => {
     // The Radar nav destination is otherwise pixel-identical to Live Ops (same workstation, same
     // map) -- what actually earns it a separate slot is landing here with both radar layers on:
