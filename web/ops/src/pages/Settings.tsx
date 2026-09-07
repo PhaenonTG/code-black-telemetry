@@ -93,7 +93,7 @@ export default function Settings() {
 
       <section className="settings-group settings-group--deferred">
         <h2>Coming to this shell</h2>
-        <p>Road Conditions, Cameras, Location behavior, Notifications, Data/providers, and Native/device integrations exist in the native app's Settings page and are documented for follow-up extraction in docs/ARCHITECTURE.md -- not rebuilt here yet.</p>
+        <p>Road Conditions, Cameras, Location behavior, Notifications, Data/providers, and Native/device integrations exist in the native app's Settings page but aren't rebuilt here yet.</p>
       </section>
 
       {auth.status === "authorized" && (
