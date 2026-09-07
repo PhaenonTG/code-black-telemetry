@@ -1,8 +1,88 @@
 # Code Black Core Gateway
 
-Status: Cloudflare-side gateway implemented, tested, and safe to deploy. The Core-side private
-transport it depends on does **not** exist yet -- this is a deliberate stop, not an oversight. See
-"Safety gate: what is NOT done" below before assuming this makes Core data live in production.
+Status (Stage 4, 2026-09-07): **Core data is live in production** via a private Workers VPC
+transport. See "Stage 4: VPC gateway (current architecture)" below for the live path. The
+Stage 2/3 public-tunnel-hostname path described further down remains installed and untouched,
+kept in place as a rollback path -- see "Legacy public gateway path (deprecated, rollback-only)".
+
+## Stage 4: VPC gateway (current architecture, live in production)
+
+As of 2026-09-07, the production path no longer routes through the public
+Access-protected tunnel hostname described in Stage 2/3 below. It routes through a private
+Cloudflare Workers VPC Service instead:
+
+```
+Browser (authenticated Supabase session)
+  -> https://ops.codeblackwx.com/api/core/<allowlisted-route>
+  -> OPS Pages gateway (web/ops/worker/entry.ts, web/ops/functions/lib/coreGateway.ts)
+       - Supabase auth + public.profiles/RLS check, same as always (unchanged)
+       - resolves the path against the same 5-route allowlist (unchanged)
+       - forwards via forwardToCoreViaServiceBinding() when CORE_GATEWAY_WORKER is bound
+  -> Cloudflare Service Binding "CORE_GATEWAY_WORKER"   (internal, never leaves Cloudflare's network)
+  -> standalone Worker "codeblack-core-gateway-worker"  (workers/core-gateway/)
+       - independent defense-in-depth allowlist + Storm Intel coordinate validation
+       - no Supabase logic duplicated here -- trusts the Service Binding caller
+  -> Workers VPC binding "CORE_VPC"
+  -> VPC Service "codeblack-core-api" (id 01a07ab2-e9b9-7072-8d86-bb514e27712c)
+       - type HTTP, target 127.0.0.1:8000, via Tunnel "codeblack-core-gateway"
+  -> existing Cloudflare Tunnel "codeblack-core-gateway" (id 35a17aa9-2532-4583-98ca-00f5b7a20c85)
+  -> CodeBlack-Core loopback API (127.0.0.1:8000)
+```
+
+**Why this exists**: the original Stage 2/3 path (Pages Worker `fetch()`-ing the public tunnel
+hostname directly) hit a persistent 502 that traced back to Cloudflare's edge blocking the
+subrequest before it ever reached the tunnel -- confirmed via zero entries in the tunnel's own
+live connector logs even while the Pages Worker's request was in flight. Neither the documented
+`global_fetch_strictly_public` compatibility flag nor moving the tunnel hostname to a different
+DNS zone resolved it. Workers VPC (`workers-vpc` product, in beta) routes the request through
+Cloudflare's internal network layer instead of a public `fetch()`, which is not subject to that
+restriction.
+
+**Security boundary, unchanged from Stage 2/3**: Supabase bearer-token auth, `/auth/v1/user`
+validation, and `public.profiles`/RLS authorization all still happen entirely in the OPS Pages
+gateway, before `forwardToCore()` is ever called. The standalone transport Worker
+(`workers/core-gateway/`) is not publicly reachable (`workers_dev: false`, no routes, no custom
+domain -- verified live: the account's `workers.dev` URL for it returns an edge-level
+"unrouted" response, not the Worker's own response), carries no credentials of any kind, and
+independently re-validates the same closed allowlist as defense in depth. It sends **no**
+`CF-Access-Client-Id` / `CF-Access-Client-Secret` headers -- the VPC Service authenticates at
+the Cloudflare network layer, not via a header Core or Access would otherwise have to check.
+Core's listener remains `127.0.0.1:8000` only; nothing about this change touches that.
+
+See `workers/core-gateway/README.md` for the transport Worker's own docs (trust boundary, what
+it will never contain, and the exact next-phase steps that were followed to wire it up).
+
+### Legacy public gateway path (deprecated, rollback-only)
+
+Left in place, untouched, not deleted:
+
+- Public tunnel hostnames `core-gateway.codeblackwx.com` and `core-gateway.jdoverofficial.com`
+  (both on the same `codeblack-core-gateway` tunnel, both -> `127.0.0.1:8000`)
+- The Cloudflare Access application/policy/service token protecting those hostnames
+- The `CORE_GATEWAY_UPSTREAM_BASE`, `CORE_GATEWAY_CF_ACCESS_CLIENT_ID`, and
+  `CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET` Pages environment variables
+
+`forwardToCore()` in `coreGateway.ts` still contains the original public-fetch code path,
+unconditionally, as a fallback -- it is simply skipped whenever `CORE_GATEWAY_WORKER` is bound
+(true in production now). If the VPC path ever needs to be rolled back, removing the
+`CORE_GATEWAY_WORKER` Service Binding from the Pages project's Bindings settings and
+redeploying restores the exact Stage 2/3 behavior with no code change required.
+
+These resources are cleanup candidates once the VPC path has been stable in production for a
+reasonable period and nothing else depends on them -- not removed automatically as part of this
+migration.
+
+### Known limitation carried over
+
+The Pages-side `forwardToCoreViaServiceBinding()` maps any non-2xx response from the transport
+Worker to a generic `502 CORE_UNAVAILABLE`, which currently swallows the transport Worker's more
+specific `400` responses for invalid Storm Intel coordinates (the request is still correctly
+denied -- no data is returned -- just with a less precise status code than the transport Worker
+itself produces). Not a security issue; worth a small follow-up to pass through 4xx statuses from
+the transport Worker distinctly from actual transport failures.
+
+Fabric WebSocket transport (see "WebSocket / live Fabric state" below) remains separately
+unverified through this VPC path and was explicitly out of scope for this migration.
 
 ## Problem
 
