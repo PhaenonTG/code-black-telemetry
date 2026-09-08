@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Code Black Storm Overlay</title>
+  <style>
+    :root {
+      --bg: rgba(0,0,0,0);
+      --border: rgba(255,255,255,0.12);
+      --text: #ffffff;
+      --muted: rgba(255,255,255,0.72);
+      --accent: #ff2a2a;
+      --accent-soft: rgba(255, 42, 42, 0.22);
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+      --font: Arial, Helvetica, sans-serif;
+      --panel-bg: linear-gradient(180deg, rgba(12,12,15,0.84), rgba(12,12,15,0.64));
+      --tor-warning: #FF0000;
+      --svr-warning: #FFA500;
+      --ffw-warning: #8B0000;
+      --tor-watch: #FFFF00;
+      --svr-watch: #DB7093;
+      --ffw-watch: #2E8B57;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      overflow: hidden;
+      font-family: var(--font);
+      color: var(--text);
+    }
+
+    .canvas {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: top left;
+    }
+
+    .top-brand {
+      position: absolute;
+      top: 28px;
+      left: 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(12,12,15,0.72), rgba(12,12,15,0.55));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      z-index: 5;
+    }
+
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 35% 35%, #ff6666, var(--accent));
+      box-shadow: 0 0 14px rgba(255,42,42,0.4);
+      flex: 0 0 auto;
+      animation: pulseDot 1.8s infinite ease-in-out;
+    }
+
+    .brand-title {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      line-height: 1;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.88); opacity: 0.7; }
+    }
+
+    .camera-frame {
+      position: absolute;
+      inset: 18px;
+      border-radius: 28px;
+      border: 1px solid rgba(255,255,255,0.08);
+      pointer-events: none;
+    }
+
+    .camera-corner {
+      position: absolute;
+      width: 42px;
+      height: 42px;
+      border-color: rgba(255,255,255,0.18);
+      border-style: solid;
+      pointer-events: none;
+    }
+
+    .camera-corner.tl { top: 18px; left: 18px; border-width: 2px 0 0 2px; border-top-left-radius: 22px; }
+    .camera-corner.tr { top: 18px; right: 18px; border-width: 2px 2px 0 0; border-top-right-radius: 22px; }
+    .camera-corner.bl { bottom: 18px; left: 18px; border-width: 0 0 2px 2px; border-bottom-left-radius: 22px; }
+    .camera-corner.br { bottom: 18px; right: 18px; border-width: 0 2px 2px 0; border-bottom-right-radius: 22px; }
+
+    /* RADAR FRAME ONLY */
+    .radar-panel {
+      position: absolute;
+      top: 28px;
+      right: 28px;
+      width: 420px;
+      height: 260px;
+      border-radius: 24px;
+      background: transparent;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .radar-head {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 57px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 18px 12px 18px;
+      background: linear-gradient(180deg, rgba(12,12,15,0.78), rgba(12,12,15,0.58));
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(10px);
+      z-index: 3;
+    }
+
+    .radar-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(255,42,42,0.55);
+      animation: pulse 1.4s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.82); }
+    }
+
+    /* transparent interior window */
+    .radar-window {
+      position: absolute;
+      top: 57px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: transparent;
+      z-index: 1;
+    }
+
+    /* subtle interior frame lines so it still looks intentional */
+    .radar-inner-frame {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      right: 18px;
+      bottom: 18px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+    }
+
+    .bottom-bar {
+      position: absolute;
+      left: 28px;
+      right: 28px;
+      bottom: 28px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 14px;
+      align-items: stretch;
+      width: auto;
+      transform: none;
+      z-index: 5;
+    }
+
+    .bubble {
+      height: 88px;
+      border-radius: 20px;
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bubble::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.85;
+    }
+
+    .location-bubble {
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      justify-self: start;
+    }
+
+    .location-inner {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 4px;
+      text-align: left;
+    }
+
+    .location-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0px;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .icon-chip {
+      width: 40px;
+      height: 40px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent-soft);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 19px;
+      flex: 0 0 auto;
+    }
+
+    .location-text {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.05;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .heading-text {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-left: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+      text-align: left;
+    }
+
+    .alert-bubble {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0 18px;
+      text-align: center;
+    }
+
+    .alert-bubble.show {
+      display: flex;
+      animation: alertGlow 1.8s infinite ease-in-out;
+    }
+
+    .alert-bubble.tor-warning { background: linear-gradient(180deg, var(--tor-warning), #b00000); }
+    .alert-bubble.svr-warning { background: linear-gradient(180deg, var(--svr-warning), #cc7000); }
+    .alert-bubble.ffw-warning { background: linear-gradient(180deg, var(--ffw-warning), #5a0000); }
+    .alert-bubble.tor-watch { background: linear-gradient(180deg, var(--tor-watch), #d4d400); color: #111111; }
+    .alert-bubble.svr-watch { background: linear-gradient(180deg, var(--svr-watch), #a35579); }
+    .alert-bubble.ffw-watch { background: linear-gradient(180deg, var(--ffw-watch), #215f46); }
+    .alert-bubble.generic { background: linear-gradient(180deg, #c0392b, #922b21); }
+
+    @keyframes alertGlow {
+      0%, 100% { box-shadow: var(--shadow), 0 0 0 rgba(255,42,42,0); }
+      50% { box-shadow: var(--shadow), 0 0 28px rgba(255,42,42,0.30); }
+    }
+
+    .alert-text {
+      width: 100%;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      line-height: 1.08;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .clock-bubble {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 16px;
+      justify-self: end;
+      width: fit-content;
+      min-width: 0;
+      margin-left: auto;
+      margin-right: 0;
+    }
+
+    .clock-inner {
+      width: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 3px;
+      text-align: right;
+    }
+
+    .clock-time {
+      font-size: 25px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0.02em;
+    }
+
+    .clock-date {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas" id="canvas">
+    <div class="camera-frame"></div>
+    <div class="camera-corner tl"></div>
+    <div class="camera-corner tr"></div>
+    <div class="camera-corner bl"></div>
+    <div class="camera-corner br"></div>
+
+    <div class="top-brand">
+      <div class="brand-mark"></div>
+      <div class="brand-title" id="brandTitle">Nick Mounce</div>
+    </div>
+
+    <div class="radar-panel">
+      <div class="radar-head">
+        <div class="radar-title">Radar</div>
+        <div class="live-pill"><span class="live-dot"></span><span>Live</span></div>
+      </div>
+      <div class="radar-window">
+        <div class="radar-inner-frame"></div>
+      </div>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="bubble location-bubble">
+        <div class="location-inner">
+          <div class="location-row">
+            <div class="location-text" id="locationText">Locating...</div>
+          </div>
+          <div class="heading-text" id="headingText">Heading: --</div>
+        </div>
+      </div>
+
+      <div class="bubble alert-bubble" id="alertBubble">
+        <div class="alert-text" id="alertText"></div>
+      </div>
+
+      <div class="bubble clock-bubble">
+        <div class="clock-inner">
+          <div class="clock-time" id="clockTime">12:00 PM</div>
+          <div class="clock-date" id="clockDate">Monday Mar 30</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Same shape as the original file-polling Nick Mounce overlay this is reworked from
+    // (C:\GPSStream\obsoverlay.html), except location/weather/alerts now come from public,
+    // CORS-open APIs directly instead of a local Python bridge writing text files -- no server
+    // component needed for this page at all. Live GPS from the chase phone isn't wired in yet
+    // (a separate in-progress piece); until then, ?latitude=&longitude= lets this be pointed at
+    // a fixed chase-target point manually.
+    const params = new URLSearchParams(window.location.search);
+
+    const settings = {
+      title: params.get('title') || params.get('publicIdentity') || 'Nick Mounce',
+      latitude: params.get('latitude') ? Number(params.get('latitude')) : null,
+      longitude: params.get('longitude') ? Number(params.get('longitude')) : null,
+      useClock: params.get('clock') !== 'off',
+      scaleToWindow: true,
+      pollSeconds: params.get('pollSeconds') ? Number(params.get('pollSeconds')) : 60,
+    };
+
+    const el = {
+      canvas: document.getElementById('canvas'),
+      brandTitle: document.getElementById('brandTitle'),
+      locationText: document.getElementById('locationText'),
+      headingText: document.getElementById('headingText'),
+      alertBubble: document.getElementById('alertBubble'),
+      alertText: document.getElementById('alertText'),
+      clockTime: document.getElementById('clockTime'),
+      clockDate: document.getElementById('clockDate'),
+    };
+
+    el.brandTitle.textContent = settings.title;
+
+    function updateClock() {
+      if (!settings.useClock) return;
+      const now = new Date();
+      const tz = new Intl.DateTimeFormat([], { timeZoneName: 'short' })
+        .formatToParts(now)
+        .find(part => part.type === 'timeZoneName')?.value || '';
+      const timeText = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      el.clockTime.textContent = `${timeText} ${tz}`.trim();
+      el.clockDate.textContent = now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+
+    // Nominatim reverse geocode -- public, CORS-open, no key. Rate-limited to ~1req/s by their
+    // usage policy; this only calls it once per settings.pollSeconds (default 60s), well under it.
+    async function updateLocation() {
+      if (settings.latitude === null || settings.longitude === null) {
+        el.locationText.textContent = 'Awaiting GPS feed...';
+        el.headingText.textContent = 'Heading: --';
+        return;
+      }
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${settings.latitude}&lon=${settings.longitude}&zoom=10`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('reverse geocode failed');
+        const data = await res.json();
+        const addr = data.address || {};
+        const city = addr.city || addr.town || addr.village || addr.hamlet || addr.county;
+        const state = addr.state;
+        el.locationText.textContent = city && state ? `${city}, ${state.slice(0, 2).toUpperCase()}` : (data.display_name || 'Location unavailable');
+      } catch (err) {
+        el.locationText.textContent = `${settings.latitude.toFixed(2)}, ${settings.longitude.toFixed(2)}`;
+      }
+    }
+
+    // Open-Meteo -- public, CORS-open, no key.
+    async function updateWeather() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${settings.latitude}&longitude=${settings.longitude}&current=temperature_2m,dew_point_2m&temperature_unit=fahrenheit`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('weather fetch failed');
+        const data = await res.json();
+        const temp = Math.round(data.current.temperature_2m);
+        const dew = Math.round(data.current.dew_point_2m);
+        el.headingText.textContent = `Temp: ${temp}\u00b0  |  Dew Point: ${dew}\u00b0`;
+      } catch (err) {
+        // leave last-known heading/weather text in place -- a single missed poll isn't an outage
+      }
+    }
+
+    function alertClassFor(text) {
+      const lower = text.toLowerCase();
+      if (lower.includes('tornado warning')) return 'tor-warning';
+      if (lower.includes('severe thunderstorm warning')) return 'svr-warning';
+      if (lower.includes('flash flood warning')) return 'ffw-warning';
+      if (lower.includes('tornado watch')) return 'tor-watch';
+      if (lower.includes('severe thunderstorm watch')) return 'svr-watch';
+      if (lower.includes('flash flood watch')) return 'ffw-watch';
+      return 'generic';
+    }
+
+    // api.weather.gov -- public, CORS-open, no key (requires a User-Agent per NWS policy, which
+    // fetch() from a browser cannot set; NWS accepts requests without it, just less politely).
+    async function updateAlert() {
+      if (settings.latitude === null || settings.longitude === null) {
+        el.alertBubble.className = 'bubble alert-bubble';
+        el.alertText.textContent = '';
+        return;
+      }
+      try {
+        const url = `https://api.weather.gov/alerts/active?point=${settings.latitude},${settings.longitude}`;
+        const res = await fetch(url, { headers: { Accept: 'application/geo+json' } });
+        if (!res.ok) throw new Error('alerts fetch failed');
+        const data = await res.json();
+        const first = (data.features || [])[0];
+        const text = first ? first.properties.event : '';
+        if (!text) {
+          el.alertBubble.className = 'bubble alert-bubble';
+          el.alertText.textContent = '';
+          return;
+        }
+        el.alertText.textContent = text;
+        el.alertBubble.className = 'bubble alert-bubble show ' + alertClassFor(text);
+      } catch (err) {
+        // leave last-known alert state in place -- a single missed poll isn't an outage
+      }
+    }
+
+    function scaleCanvas() {
+      if (!settings.scaleToWindow) return;
+      const scaleX = window.innerWidth / 1920;
+      const scaleY = window.innerHeight / 1080;
+      const scale = Math.min(scaleX, scaleY);
+      el.canvas.style.transform = 'scale(' + scale + ')';
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+    updateLocation();
+    updateWeather();
+    updateAlert();
+    setInterval(updateLocation, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateWeather, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateAlert, Math.max(30, settings.pollSeconds) * 1000);
+    scaleCanvas();
+    window.addEventListener('resize', scaleCanvas);
+  </script>
+</body>
+</html>
