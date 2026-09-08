@@ -1064,7 +1064,10 @@
     function centerRadarMapOnPosition() {
       if (!radarMap || settings.latitude === null || settings.longitude === null) return;
       const lngLat = [settings.longitude, settings.latitude];
-      radarMap.jumpTo({ center: lngLat, zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom });
+      // easeTo, not jumpTo -- a hard instant cut every time the CLOSE/MID/FAR range advances read
+      // as a jarring snap on stream. A deliberate ~2s eased transition (Mapbox's own smooth
+      // ease-out curve) makes each range change read as a purposeful zoom, not a glitch.
+      radarMap.easeTo({ center: lngLat, zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom, duration: 2000 });
       if (!radarPositionMarker) {
         const el = document.createElement('div');
         el.className = 'radar-position-marker';
