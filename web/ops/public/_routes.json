@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "include": ["/api/core/*"],
+  "include": ["/api/core/*", "/api/ardot-camera-stream"],
   "exclude": []
 }

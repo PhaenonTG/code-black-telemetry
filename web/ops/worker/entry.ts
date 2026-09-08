@@ -10,8 +10,15 @@
 // wrangler.jsonc with assets.run_worker_first reliably overrides that for this project (the
 // latter's build silently never started, likely a beta-feature validation gap). Advanced Mode
 // sidesteps the ambiguity entirely: a _worker.js in the build output has ALWAYS meant "this
-// script decides everything, including when to fall back to static assets" -- no routing
-// manifest, no wrangler config file, nothing for either engine to disagree about.
+// script decides everything, including when to fall back to static assets" for any request that
+// actually reaches it.
+//
+// That caveat is real, not rhetorical: public/_routes.json still gates which requests reach this
+// file at all (an include-list Pages applies regardless of Advanced Mode) -- a path added below
+// without also adding it there silently falls straight to static-asset/SPA-fallback serving, no
+// error, no log, just the app shell coming back instead of this handler ever running. Confirmed
+// the hard way once already (the ARDOT camera relay below sat unreachable in production until its
+// path was added to that include-list). Every route this file handles needs an entry there too.
 //
 // This is NOT an open proxy. The upstream host comes only from server-side configuration
 // (CORE_GATEWAY_UPSTREAM_BASE), never from the request, and only the hardcoded paths in
