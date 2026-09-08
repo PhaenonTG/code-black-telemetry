@@ -1,4 +1,8 @@
-// Cloudflare Pages Function: relay for ARDOT IDrive's Referer-gated camera HLS streams.
+// Relay for ARDOT IDrive's Referer-gated camera HLS streams. Plain importable module, not a
+// functions/api/*.ts folder-convention Function -- see the comment atop worker/entry.ts (Stage 3):
+// this project's Cloudflare Pages Advanced Mode build never actually routes to folder-convention
+// Functions, so this needs to be wired directly into worker/entry.ts's own fetch handler, same as
+// the Core gateway in coreGateway.ts.
 //
 // The stream isn't actually CORS-blocked -- confirmed live: every hop (the initial
 // actis.idrivearkansas.com redirect, and the Wowza CDN host it 302s to) returns
@@ -16,6 +20,8 @@
 const REFERER = "https://www.idrivearkansas.com/";
 const ALLOWED_HOSTS = [/(^|\.)idrivearkansas\.com$/i, /(^|\.)worldssl\.net$/i];
 const MAX_REDIRECTS = 4;
+
+export const ARDOT_RELAY_PREFIX = "/api/ardot-camera-stream";
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -39,7 +45,7 @@ function rewriteManifest(text: string, manifestUrl: URL, relayOrigin: string): s
       } catch {
         return line;
       }
-      return `${relayOrigin}/api/ardot-camera-stream?url=${encodeURIComponent(absolute.toString())}`;
+      return `${relayOrigin}${ARDOT_RELAY_PREFIX}?url=${encodeURIComponent(absolute.toString())}`;
     })
     .join("\n");
 }
@@ -80,12 +86,14 @@ async function relay(targetUrl: URL, relayOrigin: string, redirectsLeft: number)
   });
 }
 
-interface PagesContext {
-  request: Request;
-}
-
-export async function onRequestGet(context: PagesContext): Promise<Response> {
-  const incoming = new URL(context.request.url);
+export async function handleArdotCameraStream(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+  if (request.method !== "GET") {
+    return new Response("Method not allowed", { status: 405, headers: CORS_HEADERS });
+  }
+  const incoming = new URL(request.url);
   const target = incoming.searchParams.get("url");
   if (!target) return new Response("Missing url parameter", { status: 400, headers: CORS_HEADERS });
   let targetUrl: URL;
@@ -95,8 +103,4 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
     return new Response("Invalid url parameter", { status: 400, headers: CORS_HEADERS });
   }
   return relay(targetUrl, incoming.origin, MAX_REDIRECTS);
-}
-
-export async function onRequestOptions(): Promise<Response> {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
 }

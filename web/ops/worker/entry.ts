@@ -27,6 +27,7 @@ import {
   resolveAllowlistRoute,
   verifyOpsAuth,
 } from "../functions/lib/coreGateway";
+import { ARDOT_RELAY_PREFIX, handleArdotCameraStream } from "../functions/lib/ardotCameraRelay";
 
 interface Env extends GatewayEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -60,6 +61,9 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith(GATEWAY_PREFIX)) {
       return handleGatewayRequest(request, env);
+    }
+    if (url.pathname === ARDOT_RELAY_PREFIX) {
+      return handleArdotCameraStream(request);
     }
     // Every other path: identical behavior to before this file existed -- static assets, with
     // the project's usual SPA not-found fallback for client-side routes.
