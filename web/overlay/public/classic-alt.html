@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Code Black Storm Overlay (Alt Layout)</title>
+  <!-- Secondary overlay layout, saved 2026-09-08: radar panel docked bottom-right, clock moved
+       into a top-right pill matching .top-brand's exact style/height. Otherwise identical to
+       classic.html (same JS, same data sources) -- this file is a layout variant, not deployed
+       to any OBS Browser Source yet. Revisit/finish later; not on the current punch list. -->
+  <!-- Mapbox GL JS -- the Code Black standard map engine, same version RadarOBS/radar.html (the
+       original overlay's radar companion) already used. Not Leaflet: the owner specifically
+       wants Mapbox's vector street styling (roads, road names, county/state lines), which the
+       key-less raster basemaps used during earlier iteration of this panel don't provide. -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.css"
+    integrity="sha384-EP/H7vnAWQ5LW9GnEKFrWdLNFs5Ar50IJgtlPCBzA/mZRKZrR+/rMG5kXl5QNyCp" crossorigin="anonymous" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.js"
+    integrity="sha384-ZMqM0SdLsq7rI9P0wS7ycsmyMZABQED4jFTBlrzUG5+eRlOZnZFEwT5vDaWWr0pQ" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: rgba(0,0,0,0);
+      --border: rgba(255,255,255,0.12);
+      --text: #ffffff;
+      --muted: rgba(255,255,255,0.72);
+      --accent: #ff2a2a;
+      --accent-soft: rgba(255, 42, 42, 0.22);
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+      --font: Arial, Helvetica, sans-serif;
+      --panel-bg: linear-gradient(180deg, rgba(12,12,15,0.84), rgba(12,12,15,0.64));
+      --tor-warning: #FF0000;
+      --svr-warning: #FFA500;
+      --ffw-warning: #8B0000;
+      --tor-watch: #FFFF00;
+      --svr-watch: #DB7093;
+      --ffw-watch: #2E8B57;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      overflow: hidden;
+      font-family: var(--font);
+      color: var(--text);
+    }
+
+    .canvas {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: top left;
+    }
+
+    .top-brand {
+      position: absolute;
+      top: 28px;
+      left: 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(12,12,15,0.72), rgba(12,12,15,0.55));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      z-index: 5;
+    }
+
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 35% 35%, #ff6666, var(--accent));
+      box-shadow: 0 0 14px rgba(255,42,42,0.4);
+      flex: 0 0 auto;
+      animation: pulseDot 1.8s infinite ease-in-out;
+    }
+
+    .brand-title {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      line-height: 1;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.88); opacity: 0.7; }
+    }
+
+    .camera-frame {
+      position: absolute;
+      inset: 18px;
+      border-radius: 28px;
+      border: 1px solid rgba(255,255,255,0.08);
+      pointer-events: none;
+    }
+
+    .camera-corner {
+      position: absolute;
+      width: 42px;
+      height: 42px;
+      border-color: rgba(255,255,255,0.18);
+      border-style: solid;
+      pointer-events: none;
+    }
+
+    .camera-corner.tl { top: 18px; left: 18px; border-width: 2px 0 0 2px; border-top-left-radius: 22px; }
+    .camera-corner.tr { top: 18px; right: 18px; border-width: 2px 2px 0 0; border-top-right-radius: 22px; }
+    .camera-corner.bl { bottom: 18px; left: 18px; border-width: 0 0 2px 2px; border-bottom-left-radius: 22px; }
+    .camera-corner.br { bottom: 18px; right: 18px; border-width: 0 2px 2px 0; border-bottom-right-radius: 22px; }
+
+    .radar-panel {
+      position: absolute;
+      bottom: 28px;
+      right: 28px;
+      width: 460px;
+      height: 300px;
+      border-radius: 24px;
+      background: #0b0c10;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .radar-head {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 57px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 18px 12px 18px;
+      background: linear-gradient(180deg, rgba(12,12,15,0.78), rgba(12,12,15,0.58));
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(10px);
+      z-index: 3;
+    }
+
+    .radar-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .radar-product {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+    }
+
+    .radar-site {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(255,42,42,0.55);
+      animation: pulse 1.4s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.82); }
+    }
+
+    .radar-window {
+      position: absolute;
+      top: 57px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #0b0c10;
+      z-index: 1;
+    }
+
+    #radarMap {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Mapbox's attribution + logo controls -- kept (required by Mapbox's ToS) but styled down
+       small/quiet in a broadcast corner rather than their default size. Never hidden entirely. */
+    .mapboxgl-ctrl-attrib {
+      font-size: 8px !important;
+      background: rgba(0,0,0,0.35) !important;
+      color: rgba(255,255,255,0.35) !important;
+      padding: 0 4px !important;
+    }
+    .mapboxgl-ctrl-attrib a { color: rgba(255,255,255,0.45) !important; }
+    .mapboxgl-ctrl-logo { transform: scale(0.7); transform-origin: bottom left; opacity: 0.6; }
+    .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl { margin: 0 4px 2px 0 !important; }
+    .mapboxgl-ctrl-bottom-left .mapboxgl-ctrl { margin: 0 0 2px 4px !important; }
+
+    /* Nick's live GPS position on the radar -- same continuous-pulse language this design
+       already uses (.live-dot, .brand-mark), not a one-shot flash. */
+    .radar-position-marker {
+      position: relative;
+      width: 16px;
+      height: 16px;
+    }
+    .radar-position-marker__core {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 10px rgba(255,42,42,0.85), 0 0 0 2px rgba(255,255,255,0.9);
+    }
+    .radar-position-marker__ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      border: 2px solid var(--accent);
+      animation: radarPositionPulse 1.6s infinite ease-out;
+    }
+    @keyframes radarPositionPulse {
+      0% { transform: scale(0.4); opacity: 0.9; }
+      100% { transform: scale(1.9); opacity: 0; }
+    }
+
+    /* subtle interior frame lines so it still looks intentional, drawn over the map */
+    .radar-inner-frame {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      right: 18px;
+      bottom: 18px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .radar-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      z-index: 2;
+      background: #0b0c10;
+      transition: opacity 0.3s ease;
+    }
+    .radar-loading.hidden { opacity: 0; pointer-events: none; }
+
+    .bottom-bar {
+      position: absolute;
+      left: 28px;
+      right: 502px; /* clears the radar panel now docked bottom-right (460px + 14px gap + 28px inset) */
+      bottom: 28px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      align-items: stretch;
+      width: auto;
+      transform: none;
+      z-index: 5;
+    }
+
+    .bubble {
+      height: 88px;
+      border-radius: 20px;
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bubble::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.85;
+    }
+
+    .location-bubble {
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      justify-self: start;
+    }
+
+    .location-inner {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 4px;
+      text-align: left;
+    }
+
+    .location-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0px;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .icon-chip {
+      width: 40px;
+      height: 40px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent-soft);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 19px;
+      flex: 0 0 auto;
+    }
+
+    .location-text {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.05;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .heading-text {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-left: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+      text-align: left;
+    }
+
+    .alert-bubble {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0 18px;
+      text-align: center;
+    }
+
+    .alert-bubble.show {
+      display: flex;
+      animation: alertGlow 1.8s infinite ease-in-out;
+    }
+
+    .alert-bubble.tor-warning { background: linear-gradient(180deg, var(--tor-warning), #b00000); }
+    .alert-bubble.svr-warning { background: linear-gradient(180deg, var(--svr-warning), #cc7000); }
+    .alert-bubble.ffw-warning { background: linear-gradient(180deg, var(--ffw-warning), #5a0000); }
+    .alert-bubble.tor-watch { background: linear-gradient(180deg, var(--tor-watch), #d4d400); color: #111111; }
+    .alert-bubble.svr-watch { background: linear-gradient(180deg, var(--svr-watch), #a35579); }
+    .alert-bubble.ffw-watch { background: linear-gradient(180deg, var(--ffw-watch), #215f46); }
+    .alert-bubble.generic { background: linear-gradient(180deg, #c0392b, #922b21); }
+
+    @keyframes alertGlow {
+      0%, 100% { box-shadow: var(--shadow), 0 0 0 rgba(255,42,42,0); }
+      50% { box-shadow: var(--shadow), 0 0 28px rgba(255,42,42,0.30); }
+    }
+
+    .alert-text {
+      width: 100%;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      line-height: 1.08;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Severity-weighted alert detail scroller -- sits just above the main bottom bar, only when
+       at least one alert covers Nick's actual point (api.weather.gov's own ?point= geofilter
+       already restricts to that; this never shows a merely-nearby alert). Colored by whichever
+       active alert ranks highest (tornado warning outranks everything), same gradient language
+       as the alert bubble above rather than a new color system. */
+    .alert-ticker {
+      position: absolute;
+      left: 28px;
+      right: 502px; /* same right inset as .bottom-bar so both edges line up under the radar panel */
+      bottom: 124px;
+      height: 36px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      z-index: 5;
+      background: linear-gradient(180deg, #c0392b, #922b21);
+    }
+
+    .alert-ticker.hidden { display: none; }
+
+    .alert-ticker__track {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      gap: 56px;
+      white-space: nowrap;
+      width: max-content;
+    }
+
+    /* One pass only, not a loop -- full detail (warning number, every affected county) scrolls
+       through exactly once, then JS swaps in a static minimal label. --ticker-start/--ticker-end
+       are set from measured pixel widths (see renderAlertTicker) so it starts fully off the right
+       edge and ends fully off the left, regardless of how much text is actually in it. */
+    .alert-ticker__track--scroll-once {
+      animation: alertTickerScrollOnce var(--ticker-duration, 10s) linear 1 forwards;
+    }
+
+    @keyframes alertTickerScrollOnce {
+      from { transform: translateX(var(--ticker-start, 100%)); }
+      to { transform: translateX(var(--ticker-end, -100%)); }
+    }
+
+    /* Settled state: centered, static, no animation -- just the primary warning + county. */
+    .alert-ticker__track--settled {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .alert-ticker__item {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    .alert-ticker.tor-warning { background: linear-gradient(180deg, var(--tor-warning), #b00000); }
+    .alert-ticker.svr-warning { background: linear-gradient(180deg, var(--svr-warning), #cc7000); }
+    .alert-ticker.ffw-warning { background: linear-gradient(180deg, var(--ffw-warning), #5a0000); }
+    .alert-ticker.tor-watch { background: linear-gradient(180deg, var(--tor-watch), #d4d400); }
+    .alert-ticker.tor-watch .alert-ticker__item { color: #111111; }
+    .alert-ticker.svr-watch { background: linear-gradient(180deg, var(--svr-watch), #a35579); }
+    .alert-ticker.ffw-watch { background: linear-gradient(180deg, var(--ffw-watch), #215f46); }
+
+    /* TEST LAYOUT: clock relocated to a top-right pill (mirrors .top-brand's treatment exactly --
+       same corner inset, padding, radius, background, border, shadow, blur -- so the two top
+       corners read as one matched pair) now that the radar panel has taken over the bottom-right
+       bubble slot. */
+    .clock-pill {
+      position: absolute;
+      top: 28px;
+      right: 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(12,12,15,0.72), rgba(12,12,15,0.55));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      z-index: 5;
+    }
+
+    /* Single baseline row (time, then date) instead of a stacked block -- keeps the pill exactly
+       the same height as .top-brand's single text line, so both top corners align pixel-for-pixel. */
+    .clock-inner {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .clock-time {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0.02em;
+    }
+
+    .clock-date {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas" id="canvas">
+    <div class="camera-frame"></div>
+    <div class="camera-corner tl"></div>
+    <div class="camera-corner tr"></div>
+    <div class="camera-corner bl"></div>
+    <div class="camera-corner br"></div>
+
+    <div class="top-brand">
+      <div class="brand-mark"></div>
+      <div class="brand-title" id="brandTitle">Nick Mounce</div>
+    </div>
+
+    <div class="clock-pill">
+      <div class="clock-inner">
+        <div class="clock-time" id="clockTime">12:00 PM</div>
+        <div class="clock-date" id="clockDate">Monday Mar 30</div>
+      </div>
+    </div>
+
+    <div class="radar-panel">
+      <div class="radar-head">
+        <div class="radar-title">
+          Radar
+          <span class="radar-product" id="radarProduct">REF</span>
+          <span class="radar-site" id="radarSite">--</span>
+          <span class="radar-site" id="radarZoomLabel">CLOSE</span>
+        </div>
+        <div class="live-pill"><span class="live-dot"></span><span>Live</span></div>
+      </div>
+      <div class="radar-window">
+        <div id="radarMap"></div>
+        <div class="radar-inner-frame"></div>
+        <div class="radar-loading" id="radarLoading">Acquiring site...</div>
+      </div>
+    </div>
+
+    <div class="alert-ticker hidden" id="alertTicker">
+      <div class="alert-ticker__track" id="alertTickerTrack"></div>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="bubble location-bubble">
+        <div class="location-inner">
+          <div class="location-row">
+            <div class="location-text" id="locationText">Locating...</div>
+          </div>
+          <div class="heading-text" id="headingText">Heading: --</div>
+        </div>
+      </div>
+
+      <div class="bubble alert-bubble" id="alertBubble">
+        <div class="alert-text" id="alertText"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Same shape as the original file-polling Nick Mounce overlay this is reworked from
+    // (C:\GPSStream\obsoverlay.html), except location/weather/alerts now come from public,
+    // CORS-open APIs directly instead of a local Python bridge writing text files -- no server
+    // component needed for this page at all.
+    //
+    // Live position comes from the chase phone (wx.codeblack.chase) -> the codeblack-chase-
+    // gateway Worker -> Core, read back here through gateway's public GET
+    // /api/chase/location/public?unit_id=... . That route deliberately requires no caller auth
+    // (a headless OBS browser source can't hold the real CHASE_TOKEN without exposing it to
+    // anyone who views page source -- and that token also guards the POST/ingest path, so
+    // leaking it would let a page-source viewer post fake locations, not just read real ones).
+    // See cloudflare/chase-gateway/src/index.js's forwardPublicLatest for the server-side detail.
+    //
+    // ?latitude=&longitude= (if given) is a manual override for bench-testing without the phone
+    // live -- when present, live GPS polling is skipped entirely and that fixed point is used
+    // instead, same as before this was wired up.
+    const params = new URLSearchParams(window.location.search);
+
+    const manualLatitude = params.get('latitude') ? Number(params.get('latitude')) : null;
+    const manualLongitude = params.get('longitude') ? Number(params.get('longitude')) : null;
+
+    const settings = {
+      title: params.get('title') || params.get('publicIdentity') || 'Nick Mounce',
+      latitude: manualLatitude,
+      longitude: manualLongitude,
+      bearingDeg: null,
+      useClock: params.get('clock') !== 'off',
+      scaleToWindow: true,
+      pollSeconds: params.get('pollSeconds') ? Number(params.get('pollSeconds')) : 60,
+      useLiveGps: manualLatitude === null || manualLongitude === null,
+      chaseGatewayBase: params.get('chaseGatewayBase') || 'https://ops.codeblackwx.com',
+      unitId: params.get('unitId') || 'cbwx-unit-tessa',
+      gpsPollSeconds: params.get('gpsPollSeconds') ? Number(params.get('gpsPollSeconds')) : 5,
+    };
+    let lastAppliedLat = manualLatitude;
+    let lastAppliedLon = manualLongitude;
+
+    const el = {
+      canvas: document.getElementById('canvas'),
+      brandTitle: document.getElementById('brandTitle'),
+      locationText: document.getElementById('locationText'),
+      headingText: document.getElementById('headingText'),
+      alertBubble: document.getElementById('alertBubble'),
+      alertText: document.getElementById('alertText'),
+      clockTime: document.getElementById('clockTime'),
+      clockDate: document.getElementById('clockDate'),
+    };
+
+    el.brandTitle.textContent = settings.title;
+
+    function updateClock() {
+      if (!settings.useClock) return;
+      const now = new Date();
+      const tz = new Intl.DateTimeFormat([], { timeZoneName: 'short' })
+        .formatToParts(now)
+        .find(part => part.type === 'timeZoneName')?.value || '';
+      const timeText = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      el.clockTime.textContent = `${timeText} ${tz}`.trim();
+      el.clockDate.textContent = now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+
+    const COMPASS_POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    function compassFor(deg) {
+      const normalized = ((deg % 360) + 360) % 360;
+      return COMPASS_POINTS[Math.round(normalized / 22.5) % 16];
+    }
+
+    // The original design's "heading" line was really one combined secondary readout (temp,
+    // dew point, and GPS heading all in one string, written together by the old Python bridge)
+    // -- rebuilt here from whichever of weather/bearing last updated, since they now come from
+    // two independent sources (Open-Meteo vs. the chase GPS feed) instead of one script.
+    let lastTemp = null;
+    let lastDew = null;
+    function renderSecondaryLine() {
+      const parts = [];
+      if (lastTemp !== null) parts.push(`Temp: ${lastTemp}°`);
+      if (lastDew !== null) parts.push(`Dew Point: ${lastDew}°`);
+      parts.push(settings.bearingDeg !== null ? `Heading: ${compassFor(settings.bearingDeg)}` : 'Heading: --');
+      el.headingText.textContent = parts.join('  |  ');
+    }
+
+    // Nominatim reverse geocode -- public, CORS-open, no key. Rate-limited to ~1req/s by their
+    // usage policy; this only calls it once per settings.pollSeconds (default 60s) plus on a
+    // meaningful GPS position change, well under it.
+    async function updateLocation() {
+      if (settings.latitude === null || settings.longitude === null) {
+        el.locationText.textContent = 'Awaiting GPS feed...';
+        renderSecondaryLine();
+        return;
+      }
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${settings.latitude}&lon=${settings.longitude}&zoom=10`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('reverse geocode failed');
+        const data = await res.json();
+        const addr = data.address || {};
+        const city = addr.city || addr.town || addr.village || addr.hamlet || addr.county;
+        const state = addr.state;
+        el.locationText.textContent = city && state ? `${city}, ${state.slice(0, 2).toUpperCase()}` : (data.display_name || 'Location unavailable');
+      } catch (err) {
+        el.locationText.textContent = `${settings.latitude.toFixed(2)}, ${settings.longitude.toFixed(2)}`;
+      }
+    }
+
+    // Open-Meteo -- public, CORS-open, no key.
+    async function updateWeather() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${settings.latitude}&longitude=${settings.longitude}&current=temperature_2m,dew_point_2m&temperature_unit=fahrenheit`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('weather fetch failed');
+        const data = await res.json();
+        lastTemp = Math.round(data.current.temperature_2m);
+        lastDew = Math.round(data.current.dew_point_2m);
+        renderSecondaryLine();
+      } catch (err) {
+        // leave last-known weather text in place -- a single missed poll isn't an outage
+      }
+    }
+
+    // Live position: chase phone -> chase-gateway Worker -> Core -> this public read. See the
+    // top-of-file comment for why this route needs no caller auth. Polled independently of (and
+    // faster than) weather/alerts, since position should feel live on stream; weather/alerts
+    // only actually re-fetch when the position has moved meaningfully, to stay well under
+    // Nominatim's rate limit.
+    async function updateGps() {
+      if (!settings.useLiveGps) return;
+      try {
+        const url = `${settings.chaseGatewayBase}/api/chase/location/public?unit_id=${encodeURIComponent(settings.unitId)}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('gps fetch failed');
+        const data = await res.json();
+        const hasFix = typeof data.lat === 'number' && typeof data.lon === 'number';
+        if (!hasFix || data.stale || data.location_sharing === false) {
+          settings.latitude = null;
+          settings.longitude = null;
+          settings.bearingDeg = null;
+          lastAppliedLat = null;
+          lastAppliedLon = null;
+          el.locationText.textContent = data.location_sharing === false ? 'Location sharing stopped' : 'Awaiting GPS feed...';
+          renderSecondaryLine();
+          return;
+        }
+        settings.bearingDeg = typeof data.bearing_deg === 'number' ? data.bearing_deg : null;
+        settings.latitude = data.lat;
+        settings.longitude = data.lon;
+        renderSecondaryLine();
+        const moved = lastAppliedLat === null
+          || Math.abs(data.lat - lastAppliedLat) > 0.01
+          || Math.abs(data.lon - lastAppliedLon) > 0.01;
+        if (moved) {
+          lastAppliedLat = data.lat;
+          lastAppliedLon = data.lon;
+          updateLocation();
+          updateWeather();
+          updateAlert();
+          updateRadarSite();
+        }
+      } catch (err) {
+        // leave last-known position/state in place -- a single missed GPS poll isn't an outage
+      }
+    }
+
+    function alertClassFor(text) {
+      const lower = text.toLowerCase();
+      if (lower.includes('tornado warning')) return 'tor-warning';
+      if (lower.includes('severe thunderstorm warning')) return 'svr-warning';
+      if (lower.includes('flash flood warning')) return 'ffw-warning';
+      if (lower.includes('tornado watch')) return 'tor-watch';
+      if (lower.includes('severe thunderstorm watch')) return 'svr-watch';
+      if (lower.includes('flash flood watch')) return 'ffw-watch';
+      return 'generic';
+    }
+
+    // Tornado warning obviously outranks everything else; the rest follow NWS's own severity
+    // convention (warnings before watches, tornado before severe t-storm before flash flood).
+    const ALERT_SEVERITY_ORDER = ['tor-warning', 'svr-warning', 'ffw-warning', 'tor-watch', 'svr-watch', 'ffw-watch', 'generic'];
+    function severityRank(cls) {
+      const i = ALERT_SEVERITY_ORDER.indexOf(cls);
+      return i === -1 ? ALERT_SEVERITY_ORDER.length : i;
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // NWS's VTEC string (properties.parameters.VTEC[0]) carries the real, official sequential
+    // event number for that alert type/office this year -- e.g.
+    // "/O.NEW.KOUN.TO.W.0042.260908T0815Z-260908T0900Z/" -> 0042. This is the actual "warning
+    // number" a chaser would recognize, not something invented for this ticker.
+    function vtecEventNumber(feature) {
+      const vtec = feature?.properties?.parameters?.VTEC;
+      const first = Array.isArray(vtec) ? vtec[0] : null;
+      if (!first) return null;
+      const match = first.match(/\.\w{2}\.\w{4}\.\w{2}\.\w\.(\d{3,4})\./);
+      return match ? match[1] : null;
+    }
+
+    // Full detail for the one-time scroll-through: warning number + every affected county.
+    function alertTickerLabel(feature) {
+      const props = feature.properties || {};
+      const number = vtecEventNumber(feature);
+      const area = String(props.areaDesc || '').split(';').map((s) => s.trim()).filter(Boolean).join(' • ');
+      const head = `${String(props.event || '').toUpperCase()}${number ? ' #' + number : ''}`;
+      return area ? `${head} — ${area}` : head;
+    }
+
+    // Minimal, settled-state label: just the warning and its (first-listed) county -- what the
+    // ticker sits on after the one-time scroll-through, per the owner's own call.
+    function minimalAlertLabel(feature) {
+      const props = feature.properties || {};
+      const county = String(props.areaDesc || '').split(';')[0].trim();
+      const head = String(props.event || '').toUpperCase();
+      return county ? `${head} — ${county}` : head;
+    }
+
+    let alertTickerSignature = null;
+
+    // Swaps the track to the static, centered, minimal display and stops animating.
+    function settleAlertTicker(primaryFeature) {
+      const track = document.getElementById('alertTickerTrack');
+      track.className = 'alert-ticker__track alert-ticker__track--settled';
+      track.style.removeProperty('--ticker-duration');
+      track.style.removeProperty('--ticker-start');
+      track.style.removeProperty('--ticker-end');
+      track.innerHTML = `<span class="alert-ticker__item">${escapeHtml(minimalAlertLabel(primaryFeature))}</span>`;
+    }
+
+    // Runs the one-time scroll-through (full detail, every active alert) then settles into the
+    // minimal display once it finishes playing.
+    function scrollAlertTickerOnce(sortedFeatures) {
+      const ticker = document.getElementById('alertTicker');
+      const track = document.getElementById('alertTickerTrack');
+      const items = sortedFeatures.map(alertTickerLabel);
+      track.className = 'alert-ticker__track';
+      track.style.transform = '';
+      track.innerHTML = items.map((t) => `<span class="alert-ticker__item">${escapeHtml(t)}</span>`).join('');
+      // Measure actual pixel widths so the pass starts fully off the right edge and ends fully
+      // off the left regardless of content length, then size the duration to it (fast enough for
+      // a short single-alert label, slow enough to actually read a long multi-county one).
+      requestAnimationFrame(() => {
+        const containerWidth = ticker.clientWidth;
+        const trackWidth = track.scrollWidth;
+        track.style.setProperty('--ticker-start', `${containerWidth}px`);
+        track.style.setProperty('--ticker-end', `${-trackWidth}px`);
+        track.style.setProperty('--ticker-duration', `${Math.min(20, Math.max(6, (containerWidth + trackWidth) / 90))}s`);
+        track.classList.add('alert-ticker__track--scroll-once');
+      });
+      track.addEventListener('animationend', function onDone(event) {
+        if (event.animationName !== 'alertTickerScrollOnce') return;
+        track.removeEventListener('animationend', onDone);
+        settleAlertTicker(sortedFeatures[0]);
+      });
+    }
+
+    function renderAlertTicker(sortedFeatures) {
+      const ticker = document.getElementById('alertTicker');
+      const track = document.getElementById('alertTickerTrack');
+      if (!sortedFeatures.length) {
+        ticker.classList.add('hidden');
+        track.innerHTML = '';
+        alertTickerSignature = null;
+        return;
+      }
+      ticker.classList.remove('hidden');
+      ticker.className = 'alert-ticker ' + alertClassFor(sortedFeatures[0].properties.event || '');
+      const signature = sortedFeatures.map((f) => f.properties.id || alertTickerLabel(f)).join('|');
+      if (signature === alertTickerSignature) return; // same alert set as last poll -- leave as-is, don't re-scroll
+      alertTickerSignature = signature;
+      scrollAlertTickerOnce(sortedFeatures);
+    }
+
+    // api.weather.gov's own ?point= geofilter already restricts results to alerts whose actual
+    // geometry/zone contains that exact point -- this is never "an alert somewhere nearby", only
+    // ones Nick's own position is genuinely inside. No key needed (requires a User-Agent per NWS
+    // policy, which fetch() from a browser cannot set; NWS accepts requests without it, just less
+    // politely).
+    async function updateAlert() {
+      if (settings.latitude === null || settings.longitude === null) {
+        el.alertBubble.className = 'bubble alert-bubble';
+        el.alertText.textContent = '';
+        isTorWarning = false;
+        isWarningActive = false;
+        renderAlertTicker([]);
+        return;
+      }
+      try {
+        const url = `https://api.weather.gov/alerts/active?point=${settings.latitude},${settings.longitude}`;
+        const res = await fetch(url, { headers: { Accept: 'application/geo+json' } });
+        if (!res.ok) throw new Error('alerts fetch failed');
+        const data = await res.json();
+        const features = Array.isArray(data.features) ? data.features : [];
+        // Severity-weighted: the highest-ranked active alert drives the bubble/radar mode, but
+        // every active alert covering this point shows in the ticker below, worst first.
+        const sorted = [...features].sort((a, b) => severityRank(alertClassFor(a.properties.event || '')) - severityRank(alertClassFor(b.properties.event || '')));
+        const primary = sorted[0];
+        const text = primary ? primary.properties.event : '';
+        if (!text) {
+          el.alertBubble.className = 'bubble alert-bubble';
+          el.alertText.textContent = '';
+          isTorWarning = false;
+          isWarningActive = false;
+          renderAlertTicker([]);
+          return;
+        }
+        el.alertText.textContent = text;
+        const cls = alertClassFor(text);
+        el.alertBubble.className = 'bubble alert-bubble show ' + cls;
+        // Radar mode reacts to these -- see radarModeTick(). Any active WARNING (not a watch)
+        // outranks the normal close/mid/far zoom cycle and holds close range instead; a tornado
+        // warning specifically also bumps VEL/CC to top priority over the REF loop -- both per
+        // the owner's own explicit calls.
+        isWarningActive = cls === 'tor-warning' || cls === 'svr-warning' || cls === 'ffw-warning';
+        isTorWarning = cls === 'tor-warning';
+        renderAlertTicker(sorted);
+      } catch (err) {
+        // leave last-known alert state in place -- a single missed poll isn't an outage
+      }
+    }
+
+    // ---- Radar: single-site, auto-switching, looped REF normally; VEL/CC priority rotation
+    // during an active tornado warning. Backed by radar-worker (real NEXRAD Level II/III decode)
+    // via the public codeblack-radar-relay Worker -- see workers/radar-relay/ and
+    // radar-worker/worker.cjs in the main repo. No auth needed: this is public NOAA data.
+    // Deliberately not hardcoded here -- GitHub's push protection correctly rejected a commit
+    // that embedded the project's real Mapbox token directly (even a "public" pk. token sitting
+    // in git history on a scanned repo can be scraped and used against the account's billing
+    // quota by someone who never runs this page at all). Normally resolved automatically at
+    // startup from the gateway's /overlay-core/mapbox-token endpoint (see resolveMapboxToken
+    // below) -- no OBS URL param needed. &mapboxToken=... in the URL still works as an override
+    // for local testing against a different token/project.
+    let MAPBOX_TOKEN = params.get('mapboxToken') || '';
+    const MAPBOX_STYLE = params.get('mapboxStyle') || 'mapbox://styles/mapbox/navigation-night-v1';
+    const RADAR_SOURCE_ID = 'radar-source';
+    const RADAR_LAYER_ID = 'radar-layer';
+    const radarSettings = { gatewayBase: params.get('radarGatewayBase') || 'https://ops.codeblackwx.com' };
+    // Close/mid/far range cycle for the baseline (no-warning) loop -- Mapbox GL zoom levels,
+    // higher number = tighter/closer range. Overridable per-deployment via URL params. Holds
+    // each range for HOLD_TICKS ticks (radarModeTick runs every 700ms) before advancing.
+    const RADAR_ZOOM_LEVELS = [
+      { name: 'CLOSE', zoom: params.get('radarZoomClose') ? Number(params.get('radarZoomClose')) : 9 },
+      { name: 'MID', zoom: params.get('radarZoomMid') ? Number(params.get('radarZoomMid')) : 7 },
+      { name: 'FAR', zoom: params.get('radarZoomFar') ? Number(params.get('radarZoomFar')) : 5 },
+    ];
+    const ZOOM_HOLD_TICKS = 16; // 16 * 700ms ~= 11.2s per range
+    let radarZoomIndex = 0;
+    let radarZoomTickCount = 0;
+    let radarPositionMarker = null;
+    let radarSiteId = null;
+    let radarProduct = 'REF';
+    let radarFrames = [];
+    let radarLoopIndex = 0;
+    let radarFrameFetchInFlight = false;
+    let radarTickCount = 0;
+    let torRotationIndex = 0;
+    let isTorWarning = false;
+    let isWarningActive = false;
+    let radarMap = null;
+    let radarMapReady = false;
+    let pendingRadarFrame = null;
+    // Weighted, not equal-time: VEL is the highest priority during a tornado warning, REF next,
+    // CC included but least -- expressed as slot counts in one repeating sequence (VEL:3, REF:2,
+    // CC:1) rather than three separate timers, so the total time-on-screen ratio matches that
+    // priority order exactly regardless of hold duration.
+    const TOR_PRODUCT_ROTATION = ['VEL', 'REF', 'VEL', 'CC', 'VEL', 'REF'];
+    const TOR_HOLD_TICKS = 8; // 8 * radarTickIntervalMs (700ms) ~= 5.6s per product
+
+    // Fetches the Mapbox public token from the gateway when it wasn't passed as a URL param.
+    // The endpoint is public/unauthenticated (same trust level as the token itself -- see the
+    // comment above MAPBOX_TOKEN) so a plain GET with no credentials is all this needs.
+    async function resolveMapboxToken() {
+      if (MAPBOX_TOKEN) return MAPBOX_TOKEN;
+      try {
+        const res = await fetch(`${radarSettings.gatewayBase}/overlay-core/mapbox-token`);
+        if (!res.ok) return '';
+        const data = await res.json();
+        return data.token || '';
+      } catch (err) {
+        return '';
+      }
+    }
+
+    async function initRadarMap() {
+      if (radarMap || typeof mapboxgl === 'undefined') return;
+      MAPBOX_TOKEN = await resolveMapboxToken();
+      if (radarMap) return; // another call already initialized it while we awaited the token
+      if (!MAPBOX_TOKEN) {
+        document.getElementById('radarLoading').textContent = 'Mapbox token unavailable';
+        return;
+      }
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+      radarMap = new mapboxgl.Map({
+        container: 'radarMap',
+        style: MAPBOX_STYLE,
+        center: [-97.5, 35.5],
+        zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom,
+        interactive: false, // broadcast graphic -- never viewer-interactive
+        attributionControl: true,
+      });
+      radarMap.on('load', () => {
+        // Radar echoes as one raster source/layer, updated in place via setTiles() on every
+        // frame swap (see applyRadarFrame) rather than removing/re-adding a layer each time --
+        // Mapbox GL keeps the previous tiles visible while the new ones load, so this doesn't
+        // flash blank the way naively swapping layers did under the old Leaflet implementation.
+        radarMap.addSource(RADAR_SOURCE_ID, {
+          type: 'raster',
+          // 1x1 transparent PNG data URI -- a real (if empty) tile for every {z}/{x}/{y}, so
+          // there's nothing to actually fetch/fail on the network before the first real radar
+          // frame replaces it via setTiles() in applyRadarFrame.
+          tiles: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='],
+          tileSize: 256,
+        });
+        radarMap.addLayer({ id: RADAR_LAYER_ID, type: 'raster', source: RADAR_SOURCE_ID, paint: { 'raster-opacity': 0.82 } });
+        radarMapReady = true;
+        if (pendingRadarFrame) {
+          applyRadarFrame(pendingRadarFrame);
+          pendingRadarFrame = null;
+        }
+      });
+    }
+
+    // Re-centers the map on Nick's own position (not the radar site -- the site only decides
+    // which station's data to pull) and keeps the pulsing marker there in sync. Called whenever
+    // position changes and whenever the zoom range advances, so the marker/center never drift
+    // apart from each other.
+    function centerRadarMapOnPosition() {
+      if (!radarMap || settings.latitude === null || settings.longitude === null) return;
+      const lngLat = [settings.longitude, settings.latitude];
+      radarMap.jumpTo({ center: lngLat, zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom });
+      if (!radarPositionMarker) {
+        const el = document.createElement('div');
+        el.className = 'radar-position-marker';
+        el.innerHTML = '<div class="radar-position-marker__ring"></div><div class="radar-position-marker__core"></div>';
+        radarPositionMarker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(radarMap);
+      } else {
+        radarPositionMarker.setLngLat(lngLat);
+      }
+    }
+
+    // Auto-switches to whichever site is nearest the current live/manual position -- only
+    // re-fetches when the nearest site actually changes, not on every GPS tick. The map itself
+    // stays centered on Nick's own position (see centerRadarMapOnPosition), independent of which
+    // site's data happens to be feeding it.
+    async function updateRadarSite() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      centerRadarMapOnPosition();
+      try {
+        const url = `${radarSettings.gatewayBase}/api/v1/radar/sites/nearest?lat=${settings.latitude}&lon=${settings.longitude}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('sites fetch failed');
+        const sites = await res.json();
+        const nearest = Array.isArray(sites) ? sites[0] : null;
+        if (!nearest || nearest.id === radarSiteId) return;
+        radarSiteId = nearest.id;
+        document.getElementById('radarSite').textContent = radarSiteId;
+        radarFrames = [];
+        radarLoopIndex = 0;
+        await fetchRadarFrames();
+      } catch (err) {
+        // leave last-known site in place -- a single missed lookup isn't an outage
+      }
+    }
+
+    async function fetchRadarFrames() {
+      if (!radarSiteId || radarFrameFetchInFlight) return;
+      radarFrameFetchInFlight = true;
+      try {
+        const limit = radarProduct === 'REF' ? 6 : 1;
+        const url = `${radarSettings.gatewayBase}/api/v1/radar/frames?site=${encodeURIComponent(radarSiteId)}&product=${radarProduct}&limit=${limit}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('frames fetch failed');
+        const frames = await res.json();
+        if (Array.isArray(frames) && frames.length) {
+          radarFrames = frames;
+          radarLoopIndex = 0;
+          document.getElementById('radarLoading').classList.add('hidden');
+        }
+      } catch (err) {
+        // leave last-known frames in place -- a single missed poll isn't an outage
+      } finally {
+        radarFrameFetchInFlight = false;
+      }
+    }
+
+    function applyRadarFrame(frame) {
+      if (!frame) return;
+      if (!radarMapReady) { pendingRadarFrame = frame; return; }
+      const tileUrl = `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png`;
+      const source = radarMap.getSource(RADAR_SOURCE_ID);
+      if (source) source.setTiles([tileUrl]);
+    }
+
+    function setRadarProduct(product) {
+      if (radarProduct === product) return;
+      radarProduct = product;
+      document.getElementById('radarProduct').textContent = product;
+      radarFrames = [];
+      radarLoopIndex = 0;
+      fetchRadarFrames();
+    }
+
+    function setRadarZoom(index) {
+      if (radarZoomIndex === index) return;
+      radarZoomIndex = index;
+      document.getElementById('radarZoomLabel').textContent = RADAR_ZOOM_LEVELS[index].name;
+      centerRadarMapOnPosition();
+    }
+
+    // Indices into RADAR_ZOOM_LEVELS to cycle through. Baseline (no warning) is all three
+    // (CLOSE/MID/FAR); any active warning drops FAR -- far range isn't useful once something's
+    // actually happening close by -- and cycles CLOSE/MID only, per the owner's own call.
+    const BASELINE_ZOOM_ORDER = [0, 1, 2];
+    const WARNING_ZOOM_ORDER = [0, 1];
+    function advanceZoom(order) {
+      radarZoomTickCount += 1;
+      if (radarZoomTickCount < ZOOM_HOLD_TICKS) return;
+      radarZoomTickCount = 0;
+      const currentPos = order.indexOf(radarZoomIndex);
+      const nextPos = currentPos === -1 ? 0 : (currentPos + 1) % order.length;
+      setRadarZoom(order[nextPos]);
+    }
+
+    // One shared tick drives everything so there's a single, easy-to-reason-about clock rather
+    // than juggling separate timers per mode.
+    function radarModeTick() {
+      radarTickCount += 1;
+
+      if (isWarningActive) {
+        advanceZoom(WARNING_ZOOM_ORDER);
+        if (isTorWarning) {
+          // Tornado warning specifically also bumps VEL/CC to top priority over REF.
+          if (radarTickCount % TOR_HOLD_TICKS === 1) {
+            const product = TOR_PRODUCT_ROTATION[torRotationIndex % TOR_PRODUCT_ROTATION.length];
+            torRotationIndex += 1;
+            setRadarProduct(product);
+          }
+          if (radarFrames.length) applyRadarFrame(radarFrames[0]);
+          return;
+        }
+        // Severe t-storm / flash flood warning: cycle close/mid, but no product override was
+        // called for at that severity -- REF stays on and keeps looping.
+        if (radarProduct !== 'REF') { setRadarProduct('REF'); torRotationIndex = 0; }
+        if (!radarFrames.length) return;
+        applyRadarFrame(radarFrames[radarLoopIndex]);
+        radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
+        return;
+      }
+
+      if (radarProduct !== 'REF') {
+        setRadarProduct('REF');
+        torRotationIndex = 0;
+      }
+      advanceZoom(BASELINE_ZOOM_ORDER);
+      if (!radarFrames.length) return;
+      applyRadarFrame(radarFrames[radarLoopIndex]);
+      radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
+    }
+
+    function scaleCanvas() {
+      if (!settings.scaleToWindow) return;
+      const scaleX = window.innerWidth / 1920;
+      const scaleY = window.innerHeight / 1080;
+      const scale = Math.min(scaleX, scaleY);
+      el.canvas.style.transform = 'scale(' + scale + ')';
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+    initRadarMap();
+    if (settings.useLiveGps) {
+      el.locationText.textContent = 'Awaiting GPS feed...';
+      renderSecondaryLine();
+      updateGps();
+      setInterval(updateGps, Math.max(2, settings.gpsPollSeconds) * 1000);
+    } else {
+      updateLocation();
+      updateWeather();
+      updateRadarSite();
+    }
+    updateAlert();
+    setInterval(updateLocation, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateWeather, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateAlert, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(radarModeTick, 700);
+    setInterval(fetchRadarFrames, 120_000); // pick up new radar volume scans independent of site changes
+    scaleCanvas();
+    window.addEventListener('resize', scaleCanvas);
+  </script>
+</body>
+</html>
