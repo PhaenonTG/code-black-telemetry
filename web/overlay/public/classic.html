@@ -4,10 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Code Black Storm Overlay</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
-    integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
-    integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
+  <!-- Mapbox GL JS -- the Code Black standard map engine, same version RadarOBS/radar.html (the
+       original overlay's radar companion) already used. Not Leaflet: the owner specifically
+       wants Mapbox's vector street styling (roads, road names, county/state lines), which the
+       key-less raster basemaps used during earlier iteration of this panel don't provide. -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.css"
+    integrity="sha384-EP/H7vnAWQ5LW9GnEKFrWdLNFs5Ar50IJgtlPCBzA/mZRKZrR+/rMG5kXl5QNyCp" crossorigin="anonymous" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.js"
+    integrity="sha384-ZMqM0SdLsq7rI9P0wS7ycsmyMZABQED4jFTBlrzUG5+eRlOZnZFEwT5vDaWWr0pQ" crossorigin="anonymous"></script>
   <style>
     :root {
       --bg: rgba(0,0,0,0);
@@ -207,15 +211,18 @@
       inset: 0;
     }
 
-    /* Leaflet's own attribution control -- kept (required by CARTO's free-tile terms) but
-       styled down small/quiet in a broadcast corner rather than its default bulky bar. */
-    .leaflet-control-attribution {
+    /* Mapbox's attribution + logo controls -- kept (required by Mapbox's ToS) but styled down
+       small/quiet in a broadcast corner rather than their default size. Never hidden entirely. */
+    .mapboxgl-ctrl-attrib {
       font-size: 8px !important;
       background: rgba(0,0,0,0.35) !important;
       color: rgba(255,255,255,0.35) !important;
+      padding: 0 4px !important;
     }
-    .leaflet-control-attribution a { color: rgba(255,255,255,0.45) !important; }
-    .leaflet-control-zoom { display: none; } /* broadcast graphic -- never viewer-interactive */
+    .mapboxgl-ctrl-attrib a { color: rgba(255,255,255,0.45) !important; }
+    .mapboxgl-ctrl-logo { transform: scale(0.7); transform-origin: bottom left; opacity: 0.6; }
+    .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl { margin: 0 4px 2px 0 !important; }
+    .mapboxgl-ctrl-bottom-left .mapboxgl-ctrl { margin: 0 0 2px 4px !important; }
 
     /* Nick's live GPS position on the radar -- same continuous-pulse language this design
        already uses (.live-dot, .brand-mark), not a one-shot flash. */
@@ -410,6 +417,71 @@
       text-overflow: ellipsis;
     }
 
+    /* Severity-weighted alert detail scroller -- sits just above the main bottom bar, only when
+       at least one alert covers Nick's actual point (api.weather.gov's own ?point= geofilter
+       already restricts to that; this never shows a merely-nearby alert). Colored by whichever
+       active alert ranks highest (tornado warning outranks everything), same gradient language
+       as the alert bubble above rather than a new color system. */
+    .alert-ticker {
+      position: absolute;
+      left: 28px;
+      right: 28px;
+      bottom: 124px;
+      height: 36px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      z-index: 5;
+      background: linear-gradient(180deg, #c0392b, #922b21);
+    }
+
+    .alert-ticker.hidden { display: none; }
+
+    .alert-ticker__track {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      gap: 56px;
+      white-space: nowrap;
+      width: max-content;
+    }
+
+    /* One pass only, not a loop -- full detail (warning number, every affected county) scrolls
+       through exactly once, then JS swaps in a static minimal label. --ticker-start/--ticker-end
+       are set from measured pixel widths (see renderAlertTicker) so it starts fully off the right
+       edge and ends fully off the left, regardless of how much text is actually in it. */
+    .alert-ticker__track--scroll-once {
+      animation: alertTickerScrollOnce var(--ticker-duration, 10s) linear 1 forwards;
+    }
+
+    @keyframes alertTickerScrollOnce {
+      from { transform: translateX(var(--ticker-start, 100%)); }
+      to { transform: translateX(var(--ticker-end, -100%)); }
+    }
+
+    /* Settled state: centered, static, no animation -- just the primary warning + county. */
+    .alert-ticker__track--settled {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .alert-ticker__item {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    .alert-ticker.tor-warning { background: linear-gradient(180deg, var(--tor-warning), #b00000); }
+    .alert-ticker.svr-warning { background: linear-gradient(180deg, var(--svr-warning), #cc7000); }
+    .alert-ticker.ffw-warning { background: linear-gradient(180deg, var(--ffw-warning), #5a0000); }
+    .alert-ticker.tor-watch { background: linear-gradient(180deg, var(--tor-watch), #d4d400); }
+    .alert-ticker.tor-watch .alert-ticker__item { color: #111111; }
+    .alert-ticker.svr-watch { background: linear-gradient(180deg, var(--svr-watch), #a35579); }
+    .alert-ticker.ffw-watch { background: linear-gradient(180deg, var(--ffw-watch), #215f46); }
+
     .clock-bubble {
       display: flex;
       align-items: center;
@@ -476,6 +548,10 @@
         <div class="radar-inner-frame"></div>
         <div class="radar-loading" id="radarLoading">Acquiring site...</div>
       </div>
+    </div>
+
+    <div class="alert-ticker hidden" id="alertTicker">
+      <div class="alert-ticker__track" id="alertTickerTrack"></div>
     </div>
 
     <div class="bottom-bar">
@@ -676,14 +752,116 @@
       return 'generic';
     }
 
-    // api.weather.gov -- public, CORS-open, no key (requires a User-Agent per NWS policy, which
-    // fetch() from a browser cannot set; NWS accepts requests without it, just less politely).
+    // Tornado warning obviously outranks everything else; the rest follow NWS's own severity
+    // convention (warnings before watches, tornado before severe t-storm before flash flood).
+    const ALERT_SEVERITY_ORDER = ['tor-warning', 'svr-warning', 'ffw-warning', 'tor-watch', 'svr-watch', 'ffw-watch', 'generic'];
+    function severityRank(cls) {
+      const i = ALERT_SEVERITY_ORDER.indexOf(cls);
+      return i === -1 ? ALERT_SEVERITY_ORDER.length : i;
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // NWS's VTEC string (properties.parameters.VTEC[0]) carries the real, official sequential
+    // event number for that alert type/office this year -- e.g.
+    // "/O.NEW.KOUN.TO.W.0042.260908T0815Z-260908T0900Z/" -> 0042. This is the actual "warning
+    // number" a chaser would recognize, not something invented for this ticker.
+    function vtecEventNumber(feature) {
+      const vtec = feature?.properties?.parameters?.VTEC;
+      const first = Array.isArray(vtec) ? vtec[0] : null;
+      if (!first) return null;
+      const match = first.match(/\.\w{2}\.\w{4}\.\w{2}\.\w\.(\d{3,4})\./);
+      return match ? match[1] : null;
+    }
+
+    // Full detail for the one-time scroll-through: warning number + every affected county.
+    function alertTickerLabel(feature) {
+      const props = feature.properties || {};
+      const number = vtecEventNumber(feature);
+      const area = String(props.areaDesc || '').split(';').map((s) => s.trim()).filter(Boolean).join(' • ');
+      const head = `${String(props.event || '').toUpperCase()}${number ? ' #' + number : ''}`;
+      return area ? `${head} — ${area}` : head;
+    }
+
+    // Minimal, settled-state label: just the warning and its (first-listed) county -- what the
+    // ticker sits on after the one-time scroll-through, per the owner's own call.
+    function minimalAlertLabel(feature) {
+      const props = feature.properties || {};
+      const county = String(props.areaDesc || '').split(';')[0].trim();
+      const head = String(props.event || '').toUpperCase();
+      return county ? `${head} — ${county}` : head;
+    }
+
+    let alertTickerSignature = null;
+
+    // Swaps the track to the static, centered, minimal display and stops animating.
+    function settleAlertTicker(primaryFeature) {
+      const track = document.getElementById('alertTickerTrack');
+      track.className = 'alert-ticker__track alert-ticker__track--settled';
+      track.style.removeProperty('--ticker-duration');
+      track.style.removeProperty('--ticker-start');
+      track.style.removeProperty('--ticker-end');
+      track.innerHTML = `<span class="alert-ticker__item">${escapeHtml(minimalAlertLabel(primaryFeature))}</span>`;
+    }
+
+    // Runs the one-time scroll-through (full detail, every active alert) then settles into the
+    // minimal display once it finishes playing.
+    function scrollAlertTickerOnce(sortedFeatures) {
+      const ticker = document.getElementById('alertTicker');
+      const track = document.getElementById('alertTickerTrack');
+      const items = sortedFeatures.map(alertTickerLabel);
+      track.className = 'alert-ticker__track';
+      track.style.transform = '';
+      track.innerHTML = items.map((t) => `<span class="alert-ticker__item">${escapeHtml(t)}</span>`).join('');
+      // Measure actual pixel widths so the pass starts fully off the right edge and ends fully
+      // off the left regardless of content length, then size the duration to it (fast enough for
+      // a short single-alert label, slow enough to actually read a long multi-county one).
+      requestAnimationFrame(() => {
+        const containerWidth = ticker.clientWidth;
+        const trackWidth = track.scrollWidth;
+        track.style.setProperty('--ticker-start', `${containerWidth}px`);
+        track.style.setProperty('--ticker-end', `${-trackWidth}px`);
+        track.style.setProperty('--ticker-duration', `${Math.min(20, Math.max(6, (containerWidth + trackWidth) / 90))}s`);
+        track.classList.add('alert-ticker__track--scroll-once');
+      });
+      track.addEventListener('animationend', function onDone(event) {
+        if (event.animationName !== 'alertTickerScrollOnce') return;
+        track.removeEventListener('animationend', onDone);
+        settleAlertTicker(sortedFeatures[0]);
+      });
+    }
+
+    function renderAlertTicker(sortedFeatures) {
+      const ticker = document.getElementById('alertTicker');
+      const track = document.getElementById('alertTickerTrack');
+      if (!sortedFeatures.length) {
+        ticker.classList.add('hidden');
+        track.innerHTML = '';
+        alertTickerSignature = null;
+        return;
+      }
+      ticker.classList.remove('hidden');
+      ticker.className = 'alert-ticker ' + alertClassFor(sortedFeatures[0].properties.event || '');
+      const signature = sortedFeatures.map((f) => f.properties.id || alertTickerLabel(f)).join('|');
+      if (signature === alertTickerSignature) return; // same alert set as last poll -- leave as-is, don't re-scroll
+      alertTickerSignature = signature;
+      scrollAlertTickerOnce(sortedFeatures);
+    }
+
+    // api.weather.gov's own ?point= geofilter already restricts results to alerts whose actual
+    // geometry/zone contains that exact point -- this is never "an alert somewhere nearby", only
+    // ones Nick's own position is genuinely inside. No key needed (requires a User-Agent per NWS
+    // policy, which fetch() from a browser cannot set; NWS accepts requests without it, just less
+    // politely).
     async function updateAlert() {
       if (settings.latitude === null || settings.longitude === null) {
         el.alertBubble.className = 'bubble alert-bubble';
         el.alertText.textContent = '';
         isTorWarning = false;
         isWarningActive = false;
+        renderAlertTicker([]);
         return;
       }
       try {
@@ -691,13 +869,18 @@
         const res = await fetch(url, { headers: { Accept: 'application/geo+json' } });
         if (!res.ok) throw new Error('alerts fetch failed');
         const data = await res.json();
-        const first = (data.features || [])[0];
-        const text = first ? first.properties.event : '';
+        const features = Array.isArray(data.features) ? data.features : [];
+        // Severity-weighted: the highest-ranked active alert drives the bubble/radar mode, but
+        // every active alert covering this point shows in the ticker below, worst first.
+        const sorted = [...features].sort((a, b) => severityRank(alertClassFor(a.properties.event || '')) - severityRank(alertClassFor(b.properties.event || '')));
+        const primary = sorted[0];
+        const text = primary ? primary.properties.event : '';
         if (!text) {
           el.alertBubble.className = 'bubble alert-bubble';
           el.alertText.textContent = '';
           isTorWarning = false;
           isWarningActive = false;
+          renderAlertTicker([]);
           return;
         }
         el.alertText.textContent = text;
@@ -709,6 +892,7 @@
         // the owner's own explicit calls.
         isWarningActive = cls === 'tor-warning' || cls === 'svr-warning' || cls === 'ffw-warning';
         isTorWarning = cls === 'tor-warning';
+        renderAlertTicker(sorted);
       } catch (err) {
         // leave last-known alert state in place -- a single missed poll isn't an outage
       }
@@ -718,10 +902,20 @@
     // during an active tornado warning. Backed by radar-worker (real NEXRAD Level II/III decode)
     // via the public codeblack-radar-relay Worker -- see workers/radar-relay/ and
     // radar-worker/worker.cjs in the main repo. No auth needed: this is public NOAA data.
+    // Deliberately not hardcoded here -- GitHub's push protection correctly rejected a commit
+    // that embedded the project's real Mapbox token directly (even a "public" pk. token sitting
+    // in git history on a scanned repo can be scraped and used against the account's billing
+    // quota by someone who never runs this page at all). Pass it as a URL param when actually
+    // deploying an OBS Browser Source URL: &mapboxToken=<the same VITE_MAPBOX_ACCESS_TOKEN used
+    // everywhere else in this project, from .env.local / web/ops/.env>.
+    const MAPBOX_TOKEN = params.get('mapboxToken') || '';
+    const MAPBOX_STYLE = params.get('mapboxStyle') || 'mapbox://styles/mapbox/navigation-night-v1';
+    const RADAR_SOURCE_ID = 'radar-source';
+    const RADAR_LAYER_ID = 'radar-layer';
     const radarSettings = { gatewayBase: params.get('radarGatewayBase') || 'https://ops.codeblackwx.com' };
-    // Close/mid/far range cycle for the baseline (no-warning) loop -- Leaflet zoom levels, higher
-    // number = tighter/closer range. Overridable per-deployment via URL params. Holds each range
-    // for HOLD_TICKS ticks (radarModeTick runs every 700ms) before advancing to the next.
+    // Close/mid/far range cycle for the baseline (no-warning) loop -- Mapbox GL zoom levels,
+    // higher number = tighter/closer range. Overridable per-deployment via URL params. Holds
+    // each range for HOLD_TICKS ticks (radarModeTick runs every 700ms) before advancing.
     const RADAR_ZOOM_LEVELS = [
       { name: 'CLOSE', zoom: params.get('radarZoomClose') ? Number(params.get('radarZoomClose')) : 9 },
       { name: 'MID', zoom: params.get('radarZoomMid') ? Number(params.get('radarZoomMid')) : 7 },
@@ -741,7 +935,8 @@
     let isTorWarning = false;
     let isWarningActive = false;
     let radarMap = null;
-    let radarTileLayer = null;
+    let radarMapReady = false;
+    let pendingRadarFrame = null;
     // Weighted, not equal-time: VEL is the highest priority during a tornado warning, REF next,
     // CC included but least -- expressed as slot counts in one repeating sequence (VEL:3, REF:2,
     // CC:1) rather than three separate timers, so the total time-on-screen ratio matches that
@@ -750,25 +945,40 @@
     const TOR_HOLD_TICKS = 8; // 8 * radarTickIntervalMs (700ms) ~= 5.6s per product
 
     function initRadarMap() {
-      if (radarMap || typeof L === 'undefined') return;
-      radarMap = L.map('radarMap', {
-        zoomControl: false,
+      if (radarMap || typeof mapboxgl === 'undefined') return;
+      if (!MAPBOX_TOKEN) {
+        document.getElementById('radarLoading').textContent = 'Missing ?mapboxToken=';
+        return;
+      }
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+      radarMap = new mapboxgl.Map({
+        container: 'radarMap',
+        style: MAPBOX_STYLE,
+        center: [-97.5, 35.5],
+        zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom,
+        interactive: false, // broadcast graphic -- never viewer-interactive
         attributionControl: true,
-        dragging: false,
-        scrollWheelZoom: false,
-        doubleClickZoom: false,
-        boxZoom: false,
-        keyboard: false,
-        touchZoom: false,
-        tap: false,
-        fadeAnimation: false,
-      }).setView([35.5, -97.5], RADAR_ZOOM_LEVELS[radarZoomIndex].zoom);
-      // Esri's free, key-less dark canvas basemap -- CARTO's equivalent free anonymous tiles
-      // now require registration, so this is the base layer that actually loads without a key.
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Esri, HERE, Garmin, FAO, NOAA, USGS',
-        maxZoom: 12,
-      }).addTo(radarMap);
+      });
+      radarMap.on('load', () => {
+        // Radar echoes as one raster source/layer, updated in place via setTiles() on every
+        // frame swap (see applyRadarFrame) rather than removing/re-adding a layer each time --
+        // Mapbox GL keeps the previous tiles visible while the new ones load, so this doesn't
+        // flash blank the way naively swapping layers did under the old Leaflet implementation.
+        radarMap.addSource(RADAR_SOURCE_ID, {
+          type: 'raster',
+          // 1x1 transparent PNG data URI -- a real (if empty) tile for every {z}/{x}/{y}, so
+          // there's nothing to actually fetch/fail on the network before the first real radar
+          // frame replaces it via setTiles() in applyRadarFrame.
+          tiles: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='],
+          tileSize: 256,
+        });
+        radarMap.addLayer({ id: RADAR_LAYER_ID, type: 'raster', source: RADAR_SOURCE_ID, paint: { 'raster-opacity': 0.82 } });
+        radarMapReady = true;
+        if (pendingRadarFrame) {
+          applyRadarFrame(pendingRadarFrame);
+          pendingRadarFrame = null;
+        }
+      });
     }
 
     // Re-centers the map on Nick's own position (not the radar site -- the site only decides
@@ -777,18 +987,15 @@
     // apart from each other.
     function centerRadarMapOnPosition() {
       if (!radarMap || settings.latitude === null || settings.longitude === null) return;
-      const latlng = [settings.latitude, settings.longitude];
-      radarMap.setView(latlng, RADAR_ZOOM_LEVELS[radarZoomIndex].zoom);
+      const lngLat = [settings.longitude, settings.latitude];
+      radarMap.jumpTo({ center: lngLat, zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom });
       if (!radarPositionMarker) {
-        const icon = L.divIcon({
-          className: '',
-          html: '<div class="radar-position-marker"><div class="radar-position-marker__ring"></div><div class="radar-position-marker__core"></div></div>',
-          iconSize: [16, 16],
-          iconAnchor: [8, 8],
-        });
-        radarPositionMarker = L.marker(latlng, { icon, interactive: false, zIndexOffset: 1000 }).addTo(radarMap);
+        const el = document.createElement('div');
+        el.className = 'radar-position-marker';
+        el.innerHTML = '<div class="radar-position-marker__ring"></div><div class="radar-position-marker__core"></div>';
+        radarPositionMarker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(radarMap);
       } else {
-        radarPositionMarker.setLatLng(latlng);
+        radarPositionMarker.setLngLat(lngLat);
       }
     }
 
@@ -838,16 +1045,11 @@
     }
 
     function applyRadarFrame(frame) {
-      if (!radarMap || !frame) return;
+      if (!frame) return;
+      if (!radarMapReady) { pendingRadarFrame = frame; return; }
       const tileUrl = `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png`;
-      const next = L.tileLayer(tileUrl, { opacity: 0.82, maxZoom: 12, zIndex: 10 });
-      next.addTo(radarMap);
-      const previous = radarTileLayer;
-      radarTileLayer = next;
-      // Remove the OLD layer only after the NEW one has actually painted -- swapping instantly
-      // flashes a blank map for one frame while new tiles load, which reads as a glitch/dropout
-      // on stream rather than a smooth loop.
-      next.once('load', () => { if (previous) radarMap.removeLayer(previous); });
+      const source = radarMap.getSource(RADAR_SOURCE_ID);
+      if (source) source.setTiles([tileUrl]);
     }
 
     function setRadarProduct(product) {
