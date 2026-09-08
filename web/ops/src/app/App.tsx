@@ -16,6 +16,7 @@ const Fleet = lazy(() => import("../pages/Fleet"))
 const Operations = lazy(() => import("../pages/Operations"))
 const Settings = lazy(() => import("../pages/Settings"))
 const More = lazy(() => import("../pages/More"))
+const Stream = lazy(() => import("../pages/Stream"))
 
 // /update-password is reachable regardless of auth state -- it's the landing page for a
 // Supabase password-recovery email link, which itself establishes a temporary session (see
@@ -43,7 +44,7 @@ export default function App() {
                         <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 2." />} />
                         <Route path="/targets" element={<DevelopmentPage title="TARGETS" detail="Target corridors are reserved for the future Consensus workflow. Phase 2 does not create automated chase targets." />} />
                         <Route path="/fleet" element={<Fleet />} />
-                        <Route path="/stream" element={<DevelopmentPage title="STREAM" detail="Stream control integration is reserved. No producer controls or public stream switching are exposed in Phase 2." />} />
+                        <Route path="/stream" element={<Stream />} />
                         <Route path="/system" element={<Operations />} />
                         <Route path="/settings" element={<Settings />} />
                         <Route path="/more" element={<More />} />

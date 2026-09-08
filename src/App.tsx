@@ -9,6 +9,7 @@ import { SensorHealthCard } from "./components/cards/SensorHealthCard";
 import { SystemCard } from "./components/cards/SystemCard";
 import { TopBar } from "./components/layout/TopBar";
 import { HomeOverviewPage } from "./components/home/HomeOverviewPage";
+import { LivePage } from "./components/live/LivePage";
 import { MissionStreamingPanel } from "./components/operations/MissionStreamingPanel";
 import { PiEndpointPanel } from "./components/operations/PiEndpointPanel";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -51,7 +52,7 @@ import { createEgressContext, summarizeEgressReadiness } from "./services/egress
 import { locationTrackingService } from "./services/locationTracking";
 import { stateTone, summarizePiOperationalStatus } from "./services/operationalStatus";
 
-type PageKey = "home" | "map" | "weather" | "operations" | "alerts" | "report" | "settings" | "layers" | "more";
+type PageKey = "home" | "map" | "weather" | "operations" | "alerts" | "report" | "settings" | "layers" | "live" | "more";
 export type CockpitMode = "normal" | "chase";
 
 const pages: Array<{ key: PageKey; label: string; path: string }> = [
@@ -65,12 +66,13 @@ const pages: Array<{ key: PageKey; label: string; path: string }> = [
   // Layers is intentionally a normal dock page now. Future layer/provider controls should land
   // there instead of adding dead buttons to the operational map surface.
   { key: "layers", label: "Layers", path: "/layers" },
+  { key: "live", label: "Live", path: "/live" },
   { key: "more", label: "More", path: "/more" },
 ];
 const PAGE_PREF_KEY = "codeblack.activePage";
 const COCKPIT_MODE_KEY = "codeblack.cockpitMode";
 
-function DockIcon({ type }: { type: "home" | "weather" | "operations" | "map" | "alerts" | "report" | "settings" | "layers" | "more" }) {
+function DockIcon({ type }: { type: "home" | "weather" | "operations" | "map" | "alerts" | "report" | "settings" | "layers" | "live" | "more" }) {
   const common = { viewBox: "0 0 24 24", "aria-hidden": true, focusable: false } as const;
   if (type === "home") return <svg {...common}><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /><path d="M10 20v-5h4v5" /></svg>;
   if (type === "weather") return <svg {...common}><path d="M7.4 17.4h7.8a4.1 4.1 0 0 0 .7-8.1 5.7 5.7 0 0 0-11 1.6A3.4 3.4 0 0 0 7.4 17.4Z" /><path d="m13.3 12.2-2.1 4.1h3l-1.5 4.3 4.1-5.9h-3l1.6-2.5h-2.1Z" /></svg>;
@@ -79,6 +81,7 @@ function DockIcon({ type }: { type: "home" | "weather" | "operations" | "map" | 
   if (type === "alerts") return <svg {...common}><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 8v5M12 17h.01" /></svg>;
   if (type === "report") return <svg {...common}><path d="M6 3h9l3 3v15H6z" /><path d="M9 8h7M9 12h7M9 16h4" /></svg>;
   if (type === "layers") return <svg {...common}><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 16 9 5 9-5" /></svg>;
+  if (type === "live") return <svg {...common}><circle cx="12" cy="12" r="3" fill="currentColor" /><path d="M7.5 8.5a6 6 0 0 0 0 7M16.5 8.5a6 6 0 0 1 0 7M4.5 5.5a10 10 0 0 0 0 13M19.5 5.5a10 10 0 0 1 0 13" /></svg>;
   if (type === "more") return <svg {...common}><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>;
   return <svg {...common}><circle cx="12" cy="12" r="3.2" /><path d="M12 2.8v3M12 18.2v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.8 12h3M18.2 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>;
 }
@@ -631,6 +634,9 @@ export default function App() {
             <ChaserNetPanel />
           </div>
         </section>
+        <section className="page page--live" aria-label="Live" data-testid="route-live" data-active={page === "live"} aria-hidden={page !== "live"}>
+          <LivePage />
+        </section>
         <section className="page page--more" aria-label="More" data-testid="route-more" data-active={page === "more"} aria-hidden={page !== "more"}>
           <div className="page-grid page-grid--more">
             <section className="cb-panel more-panel">
@@ -640,6 +646,7 @@ export default function App() {
                 <button type="button" data-testid="more-report" onClick={() => goToPage("report")}><DockIcon type="report" /><span>Report</span><em>Local and Spotter Network report flow</em></button>
                 <button type="button" data-testid="more-layers" onClick={() => goToPage("layers")}><DockIcon type="layers" /><span>Layers</span><em>Map provider and layer controls</em></button>
                 <button type="button" data-testid="more-settings" onClick={() => goToPage("settings")}><DockIcon type="settings" /><span>Settings</span><em>Credentials, display, chase setup</em></button>
+                <button type="button" data-testid="more-live" onClick={() => goToPage("live")}><DockIcon type="live" /><span>Live</span><em>Watch the current broadcast</em></button>
               </div>
             </section>
           </div>
@@ -650,7 +657,7 @@ export default function App() {
         <button className={page === "map" ? "active" : ""} data-testid="dock-map" onClick={() => { goToPage("map"); window.dispatchEvent(new Event("codeblack:center-map")); }}><DockIcon type="map" /><span>Map</span></button>
         <button className={page === "weather" ? "active" : ""} data-testid="dock-weather" onClick={() => goToPage("weather")}><DockIcon type="weather" /><span>Weather</span></button>
         <button className={page === "alerts" ? "active" : ""} data-testid="dock-alerts" onClick={() => goToPage("alerts")}><DockIcon type="alerts" /><span>Alerts</span></button>
-        <button className={page === "more" || page === "operations" || page === "report" || page === "settings" || page === "layers" ? "active" : ""} data-testid="dock-more" onClick={() => goToPage("more")}><DockIcon type="more" /><span>More</span></button>
+        <button className={page === "more" || page === "operations" || page === "report" || page === "settings" || page === "layers" || page === "live" ? "active" : ""} data-testid="dock-more" onClick={() => goToPage("more")}><DockIcon type="more" /><span>More</span></button>
       </nav>
     </div>
   );
