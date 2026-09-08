@@ -131,9 +131,11 @@ const cameraCache = new Map<string, CacheEntry<TrafficCamera>>();
 // chase case: a valley kills signal for a minute, then it's back) -- but they're memory-only, so
 // an app restart or a killed/reopened tab while genuinely offline loses everything and falls
 // straight to "unavailable" with no data at all. This adds one more, coarser fallback layer
-// underneath: the single most recent successful aggregate result per layer, persisted to disk
-// (same Preferences store spcOutlook.ts already uses this way), consulted only when every
-// provider has failed AND there's no live in-memory cache to fall back to first.
+// underneath: the single most recent successful aggregate result per layer, persisted to
+// localStorage (see the module-graph-mismatch note on readStorage/writeStorage below for why this
+// isn't the @capacitor/preferences plugin spcOutlook.ts uses for the same kind of thing),
+// consulted only when every provider has failed AND there's no live in-memory cache to fall back
+// to first.
 const ROAD_LAST_GOOD_KEY = "codeblack.roadConditions.lastGood";
 const CAMERA_LAST_GOOD_KEY = "codeblack.trafficCameras.lastGood";
 const LAST_GOOD_MAX_AGE_MS = 3 * 60 * 60_000;
@@ -143,57 +145,59 @@ interface LastGoodSnapshot<T> {
   fetchedAt: number;
 }
 
-// Dynamic, not static, import of @capacitor/preferences -- this module is loaded standalone (no
-// bundler resolution context) by scripts/pass1-domain-tests.mjs's transpile-and-eval harness, and
-// a static import of a bare npm specifier crashes that harness outright at link time. A dynamic
-// import's rejection can be caught like any other promise, so it degrades to "persistence
-// unavailable" instead of a hard failure anywhere this module gets loaded without Capacitor.
-async function loadPreferences() {
+// Plain localStorage, not the @capacitor/preferences plugin -- this module is loaded standalone
+// (no bundler resolution context) by scripts/pass1-domain-tests.mjs's transpile-and-eval harness,
+// where a static import of a bare npm specifier crashes outright at link time. A dynamic import
+// was tried first to dodge that, but it turned out actively broken at runtime in the browser too:
+// importing @capacitor/preferences from a *different* module graph than the one Capacitor's web
+// runtime registered its plugins from produced a disconnected proxy whose methods all resolved to
+// the "not implemented on web" stub (visible live as `await Preferences` invoking `.then()` on
+// that proxy and throwing, repeatedly, from every fetch). localStorage needs no import at all, so
+// there's no module-graph mismatch to have -- safe in Node (throws, caught below), safe in every
+// real browser context including Capacitor's own WebView.
+function readStorage<T>(key: string): T | null {
   try {
-    return (await import("@capacitor/preferences")).Preferences;
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
+  }
+}
+
+function writeStorage(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Best-effort persistence -- private browsing, storage quota, Node, etc. shouldn't affect the
+    // live result already being returned to the caller.
   }
 }
 
 async function saveLastGood<T>(key: string, data: T[], fetchedAt: number) {
   if (data.length === 0) return;
-  const preferences = await loadPreferences();
-  if (!preferences) return;
-  try {
-    await preferences.set({ key, value: JSON.stringify({ data, fetchedAt } satisfies LastGoodSnapshot<T>) });
-  } catch {
-    // Best-effort persistence -- a write failure here shouldn't affect the live result already
-    // being returned to the caller.
-  }
+  writeStorage(key, { data, fetchedAt } satisfies LastGoodSnapshot<T>);
 }
 
-// Same dynamic-import-with-fallback reasoning as loadPreferences above: only web/ops has the
-// ardot-camera-stream Pages Function deployed alongside it, so the relay URL is only safe to hand
-// out on a non-native build. Defaults to "not native" (i.e. tries the relay) if Capacitor's own
-// module can't be resolved at all, which matches every context that actually lacks a real native
-// shell -- the domain-test harness included.
-async function isNativePlatform(): Promise<boolean> {
+// Only web/ops has the ardot-camera-stream Pages Function deployed alongside it, so the relay URL
+// is only safe to hand out on a non-native build. Reads the global Capacitor sets on `window` at
+// runtime rather than importing @capacitor/core -- same module-graph-mismatch risk as the
+// Preferences plugin above, and this needs no plugin API, just the one static property. Not
+// running under Capacitor at all (bare web, or the domain-test harness) reads as "not native",
+// which is correct -- try the relay.
+function isNativePlatform(): boolean {
   try {
-    return (await import("@capacitor/core")).Capacitor.isNativePlatform();
+    const capacitor = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    return capacitor?.isNativePlatform?.() ?? false;
   } catch {
     return false;
   }
 }
 
-async function loadLastGood<T extends { id: string; stale?: boolean; freshness?: string }>(key: string): Promise<LastGoodSnapshot<T> | null> {
-  const preferences = await loadPreferences();
-  if (!preferences) return null;
-  try {
-    const saved = await preferences.get({ key });
-    if (!saved.value) return null;
-    const parsed = JSON.parse(saved.value) as LastGoodSnapshot<T>;
-    if (!Array.isArray(parsed.data) || typeof parsed.fetchedAt !== "number") return null;
-    if (nowMs() - parsed.fetchedAt > LAST_GOOD_MAX_AGE_MS) return null;
-    return { data: parsed.data.map((item) => ({ ...item, stale: true, freshness: "stale" })), fetchedAt: parsed.fetchedAt };
-  } catch {
-    return null;
-  }
+function loadLastGood<T extends { id: string; stale?: boolean; freshness?: string }>(key: string): LastGoodSnapshot<T> | null {
+  const parsed = readStorage<LastGoodSnapshot<T>>(key);
+  if (!parsed || !Array.isArray(parsed.data) || typeof parsed.fetchedAt !== "number") return null;
+  if (nowMs() - parsed.fetchedAt > LAST_GOOD_MAX_AGE_MS) return null;
+  return { data: parsed.data.map((item) => ({ ...item, stale: true, freshness: "stale" })), fetchedAt: parsed.fetchedAt };
 }
 const inFlight = new Map<string, Promise<unknown>>();
 
@@ -482,10 +486,8 @@ export async function fetchArdotRoadConditions(context: LayerQueryContext, signa
 }
 
 export async function fetchArdotTrafficCameras(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout) {
-  const [json, useStreamRelay] = await Promise.all([
-    fetchJson(`${IDRIVE_LAYER_BASE_URL}/cameras.geojson`, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher),
-    isNativePlatform().then((native) => !native),
-  ]);
+  const json = await fetchJson(`${IDRIVE_LAYER_BASE_URL}/cameras.geojson`, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher);
+  const useStreamRelay = !isNativePlatform();
   const features = Array.isArray(json?.features) ? json.features : [];
   const cameras: TrafficCamera[] = features
     .map((feature: unknown) => normalizeCameraFeature(feature, "ardot-idrive", useStreamRelay))
