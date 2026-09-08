@@ -438,6 +438,7 @@
           Radar
           <span class="radar-product" id="radarProduct">REF</span>
           <span class="radar-site" id="radarSite">--</span>
+          <span class="radar-site" id="radarZoomLabel">CLOSE</span>
         </div>
         <div class="live-pill"><span class="live-dot"></span><span>Live</span></div>
       </div>
@@ -653,6 +654,7 @@
         el.alertBubble.className = 'bubble alert-bubble';
         el.alertText.textContent = '';
         isTorWarning = false;
+        isWarningActive = false;
         return;
       }
       try {
@@ -666,13 +668,17 @@
           el.alertBubble.className = 'bubble alert-bubble';
           el.alertText.textContent = '';
           isTorWarning = false;
+          isWarningActive = false;
           return;
         }
         el.alertText.textContent = text;
         const cls = alertClassFor(text);
         el.alertBubble.className = 'bubble alert-bubble show ' + cls;
-        // Radar mode reacts to this -- see radarModeTick(). A tornado warning bumps VEL/CC
-        // to top priority over the normal REF loop, per the owner's own call.
+        // Radar mode reacts to these -- see radarModeTick(). Any active WARNING (not a watch)
+        // outranks the normal close/mid/far zoom cycle and holds close range instead; a tornado
+        // warning specifically also bumps VEL/CC to top priority over the REF loop -- both per
+        // the owner's own explicit calls.
+        isWarningActive = cls === 'tor-warning' || cls === 'svr-warning' || cls === 'ffw-warning';
         isTorWarning = cls === 'tor-warning';
       } catch (err) {
         // leave last-known alert state in place -- a single missed poll isn't an outage
@@ -683,10 +689,19 @@
     // during an active tornado warning. Backed by radar-worker (real NEXRAD Level II/III decode)
     // via the public codeblack-radar-relay Worker -- see workers/radar-relay/ and
     // radar-worker/worker.cjs in the main repo. No auth needed: this is public NOAA data.
-    const radarSettings = {
-      gatewayBase: params.get('radarGatewayBase') || 'https://ops.codeblackwx.com',
-      zoom: params.get('radarZoom') ? Number(params.get('radarZoom')) : 8,
-    };
+    const radarSettings = { gatewayBase: params.get('radarGatewayBase') || 'https://ops.codeblackwx.com' };
+    // Close/mid/far range cycle for the baseline (no-warning) loop -- Leaflet zoom levels, higher
+    // number = tighter/closer range. Overridable per-deployment via URL params. Holds each range
+    // for HOLD_TICKS ticks (radarModeTick runs every 700ms) before advancing to the next.
+    const RADAR_ZOOM_LEVELS = [
+      { name: 'CLOSE', zoom: params.get('radarZoomClose') ? Number(params.get('radarZoomClose')) : 9 },
+      { name: 'MID', zoom: params.get('radarZoomMid') ? Number(params.get('radarZoomMid')) : 7 },
+      { name: 'FAR', zoom: params.get('radarZoomFar') ? Number(params.get('radarZoomFar')) : 5 },
+    ];
+    const ZOOM_HOLD_TICKS = 16; // 16 * 700ms ~= 11.2s per range
+    let radarZoomIndex = 0;
+    let radarZoomTickCount = 0;
+    let radarSiteCenter = null;
     let radarSiteId = null;
     let radarProduct = 'REF';
     let radarFrames = [];
@@ -695,6 +710,7 @@
     let radarTickCount = 0;
     let torRotationIndex = 0;
     let isTorWarning = false;
+    let isWarningActive = false;
     let radarMap = null;
     let radarTileLayer = null;
     const TOR_PRODUCT_ROTATION = ['VEL', 'CC'];
@@ -713,7 +729,7 @@
         touchZoom: false,
         tap: false,
         fadeAnimation: false,
-      }).setView([35.5, -97.5], radarSettings.zoom);
+      }).setView([35.5, -97.5], RADAR_ZOOM_LEVELS[radarZoomIndex].zoom);
       // Esri's free, key-less dark canvas basemap -- CARTO's equivalent free anonymous tiles
       // now require registration, so this is the base layer that actually loads without a key.
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
@@ -734,8 +750,9 @@
         const nearest = Array.isArray(sites) ? sites[0] : null;
         if (!nearest || nearest.id === radarSiteId) return;
         radarSiteId = nearest.id;
+        radarSiteCenter = [nearest.lat, nearest.lon];
         document.getElementById('radarSite').textContent = radarSiteId;
-        if (radarMap) radarMap.setView([nearest.lat, nearest.lon], radarSettings.zoom);
+        if (radarMap) radarMap.setView(radarSiteCenter, RADAR_ZOOM_LEVELS[radarZoomIndex].zoom);
         radarFrames = [];
         radarLoopIndex = 0;
         await fetchRadarFrames();
@@ -787,23 +804,58 @@
       fetchRadarFrames();
     }
 
-    // One shared tick drives both modes so there's a single, easy-to-reason-about clock rather
+    function setRadarZoom(index) {
+      if (radarZoomIndex === index) return;
+      radarZoomIndex = index;
+      document.getElementById('radarZoomLabel').textContent = RADAR_ZOOM_LEVELS[index].name;
+      if (radarMap && radarSiteCenter) radarMap.setView(radarSiteCenter, RADAR_ZOOM_LEVELS[index].zoom);
+    }
+
+    // Indices into RADAR_ZOOM_LEVELS to cycle through. Baseline (no warning) is all three
+    // (CLOSE/MID/FAR); any active warning drops FAR -- far range isn't useful once something's
+    // actually happening close by -- and cycles CLOSE/MID only, per the owner's own call.
+    const BASELINE_ZOOM_ORDER = [0, 1, 2];
+    const WARNING_ZOOM_ORDER = [0, 1];
+    function advanceZoom(order) {
+      radarZoomTickCount += 1;
+      if (radarZoomTickCount < ZOOM_HOLD_TICKS) return;
+      radarZoomTickCount = 0;
+      const currentPos = order.indexOf(radarZoomIndex);
+      const nextPos = currentPos === -1 ? 0 : (currentPos + 1) % order.length;
+      setRadarZoom(order[nextPos]);
+    }
+
+    // One shared tick drives everything so there's a single, easy-to-reason-about clock rather
     // than juggling separate timers per mode.
     function radarModeTick() {
       radarTickCount += 1;
-      if (isTorWarning) {
-        if (radarTickCount % TOR_HOLD_TICKS === 1) {
-          const product = TOR_PRODUCT_ROTATION[torRotationIndex % TOR_PRODUCT_ROTATION.length];
-          torRotationIndex += 1;
-          setRadarProduct(product);
+
+      if (isWarningActive) {
+        advanceZoom(WARNING_ZOOM_ORDER);
+        if (isTorWarning) {
+          // Tornado warning specifically also bumps VEL/CC to top priority over REF.
+          if (radarTickCount % TOR_HOLD_TICKS === 1) {
+            const product = TOR_PRODUCT_ROTATION[torRotationIndex % TOR_PRODUCT_ROTATION.length];
+            torRotationIndex += 1;
+            setRadarProduct(product);
+          }
+          if (radarFrames.length) applyRadarFrame(radarFrames[0]);
+          return;
         }
-        if (radarFrames.length) applyRadarFrame(radarFrames[0]);
+        // Severe t-storm / flash flood warning: cycle close/mid, but no product override was
+        // called for at that severity -- REF stays on and keeps looping.
+        if (radarProduct !== 'REF') { setRadarProduct('REF'); torRotationIndex = 0; }
+        if (!radarFrames.length) return;
+        applyRadarFrame(radarFrames[radarLoopIndex]);
+        radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
         return;
       }
+
       if (radarProduct !== 'REF') {
         setRadarProduct('REF');
         torRotationIndex = 0;
       }
+      advanceZoom(BASELINE_ZOOM_ORDER);
       if (!radarFrames.length) return;
       applyRadarFrame(radarFrames[radarLoopIndex]);
       radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;

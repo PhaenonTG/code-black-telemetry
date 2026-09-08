@@ -103,6 +103,12 @@ All changes logged newest-first.
   rendering on stream, the loop visibly advancing through fetched frames, and (forced manually,
   since no live warning was in effect to test against honestly) the VEL/CC rotation correctly
   taking over.
+- Follow-up same session: added close/mid/far zoom-range cycling to the baseline loop (~11s per
+  range, REF at all three), and reworked the warning override -- initially "hold close range and
+  stop cycling," changed per the owner's own follow-up to "drop far range, keep cycling close/mid"
+  instead, so a warning still shows a bit of surrounding context rather than a single fixed
+  framing. Verified both the baseline CLOSE->MID->FAR advance and (forced manually) that warning
+  mode correctly oscillates CLOSE<->MID only, never reaching FAR.
 
 ## Flagship Phone Visual Polish - 2026-08-23
 
