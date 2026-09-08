@@ -26,27 +26,35 @@
 
       /* Alert-bubble colors, one pair (gradient start/end) per tier -- every .alert-bubble.<tier>
          rule below just references these instead of hardcoding hex, so changing a tier's color
-         later is a one-line edit here rather than hunting through the CSS. */
+         later is a one-line edit here rather than hunting through the CSS.
+         Color policy (owner's explicit call): red is reserved for tornado warnings only -- nothing
+         else on this list uses it, including Flash Flood Warning despite that being NWS's own real
+         official color for it. PDS Tornado Warning is its own deep, almost-purple red, distinct
+         from plain tor-warning. Anything heat-related is orange, never red. */
       --alert-tor-emergency-1: #6a0000;
       --alert-tor-emergency-2: #000000;
-      --alert-tor-pds-1: #ff1a1a;
-      --alert-tor-pds-2: #7a0000;
+      --alert-tor-pds-1: #9b0057;
+      --alert-tor-pds-2: #33001f;
       --alert-tor-warning-1: #FF0000;
       --alert-tor-warning-2: #b00000;
-      --alert-svr-destructive-1: #ff3300;
-      --alert-svr-destructive-2: #990015;
+      --alert-svr-destructive-1: #ff5500;
+      --alert-svr-destructive-2: #a33900;
       --alert-svr-considerable-1: #ff8c00;
       --alert-svr-considerable-2: #a34700;
       --alert-svr-warning-1: #FFA500;
       --alert-svr-warning-2: #cc7000;
-      --alert-ffw-warning-1: #8B0000;
-      --alert-ffw-warning-2: #5a0000;
+      --alert-ffw-warning-1: #00C853;
+      --alert-ffw-warning-2: #009140;
+      --alert-heat-warning-1: #FF6600;
+      --alert-heat-warning-2: #993d00;
+      --alert-heat-advisory-1: #FF9800;
+      --alert-heat-advisory-2: #b36b00;
       --alert-tor-watch-1: #FFFF00;
       --alert-tor-watch-2: #d4d400;
       --alert-svr-watch-1: #DB7093;
       --alert-svr-watch-2: #a35579;
-      --alert-ffw-watch-1: #2E8B57;
-      --alert-ffw-watch-2: #215f46;
+      --alert-ffw-watch-1: #A5D6A7;
+      --alert-ffw-watch-2: #81C784;
       --alert-generic-1: #c0392b;
       --alert-generic-2: #922b21;
     }
@@ -411,9 +419,11 @@
     .alert-bubble.svr-considerable { background: linear-gradient(180deg, var(--alert-svr-considerable-1), var(--alert-svr-considerable-2)); }
     .alert-bubble.svr-warning { background: linear-gradient(180deg, var(--alert-svr-warning-1), var(--alert-svr-warning-2)); }
     .alert-bubble.ffw-warning { background: linear-gradient(180deg, var(--alert-ffw-warning-1), var(--alert-ffw-warning-2)); }
+    .alert-bubble.heat-warning { background: linear-gradient(180deg, var(--alert-heat-warning-1), var(--alert-heat-warning-2)); color: #111111; }
+    .alert-bubble.heat-advisory { background: linear-gradient(180deg, var(--alert-heat-advisory-1), var(--alert-heat-advisory-2)); color: #111111; }
     .alert-bubble.tor-watch { background: linear-gradient(180deg, var(--alert-tor-watch-1), var(--alert-tor-watch-2)); color: #111111; }
     .alert-bubble.svr-watch { background: linear-gradient(180deg, var(--alert-svr-watch-1), var(--alert-svr-watch-2)); }
-    .alert-bubble.ffw-watch { background: linear-gradient(180deg, var(--alert-ffw-watch-1), var(--alert-ffw-watch-2)); }
+    .alert-bubble.ffw-watch { background: linear-gradient(180deg, var(--alert-ffw-watch-1), var(--alert-ffw-watch-2)); color: #111111; }
     .alert-bubble.generic { background: linear-gradient(180deg, var(--alert-generic-1), var(--alert-generic-2)); }
 
     @keyframes alertGlow {
@@ -819,25 +829,30 @@
         return 'svr-warning';
       }
       if (text.includes('flash flood warning')) return 'ffw-warning';
+      // Excessive Heat Warning is the actual warning-tier heat product (there's no plain "Heat
+      // Warning"); Heat Advisory and Excessive Heat Watch both get the lighter advisory-weight
+      // color -- a heat watch isn't materially different from an advisory the way a tornado watch
+      // is from a warning.
+      if (text.includes('excessive heat warning')) return 'heat-warning';
+      if (text.includes('heat advisory') || text.includes('excessive heat watch')) return 'heat-advisory';
       if (text.includes('tornado watch')) return 'tor-watch';
       if (text.includes('severe thunderstorm watch')) return 'svr-watch';
       if (text.includes('flash flood watch')) return 'ffw-watch';
-      // Deliberately not handled at all for now (per the owner's own call) -- classified here only
-      // so updateAlert can filter it out below rather than let it fall through to 'generic' and
-      // render as a full red alert-bubble block, which is worse than showing nothing.
-      if (text.includes('heat advisory')) return 'heat-advisory';
       return 'generic';
     }
 
     // Warning-tier alerts a real polygon boundary/countdown/radar-mode reaction apply to --
-    // watches, heat-advisory, and generic are excluded (see the call sites below).
-    const WARNING_TIER_CLASSES = ['tor-emergency', 'tor-pds', 'tor-warning', 'svr-destructive', 'svr-considerable', 'svr-warning', 'ffw-warning'];
+    // watches and generic are excluded (see the call sites below). heat-warning is included even
+    // though NWS heat products never actually carry polygon geometry -- updateRadarWarningPolygon
+    // just draws nothing when geometry is null, so including it costs nothing and means it gets
+    // the same "extras" (detail line, radar-mode consideration) any other warning-tier alert does.
+    const WARNING_TIER_CLASSES = ['tor-emergency', 'tor-pds', 'tor-warning', 'svr-destructive', 'svr-considerable', 'svr-warning', 'ffw-warning', 'heat-warning'];
 
     // Tornado Emergency obviously outranks everything; the rest escalate within their own family
     // (PDS above plain tor-warning, destructive/considerable above plain severe) before falling to
     // NWS's own severity convention (warnings before watches, tornado before severe before flash
-    // flood).
-    const ALERT_SEVERITY_ORDER = ['tor-emergency', 'tor-pds', 'tor-warning', 'svr-destructive', 'svr-considerable', 'svr-warning', 'ffw-warning', 'tor-watch', 'svr-watch', 'ffw-watch', 'heat-advisory', 'generic'];
+    // flood before heat).
+    const ALERT_SEVERITY_ORDER = ['tor-emergency', 'tor-pds', 'tor-warning', 'svr-destructive', 'svr-considerable', 'svr-warning', 'ffw-warning', 'heat-warning', 'tor-watch', 'svr-watch', 'ffw-watch', 'heat-advisory', 'generic'];
     function severityRank(cls) {
       const i = ALERT_SEVERITY_ORDER.indexOf(cls);
       return i === -1 ? ALERT_SEVERITY_ORDER.length : i;
@@ -911,7 +926,8 @@
     }
 
     // Test-only: ?simulateAlert=tor-warning|tor-pds|tor-emergency|svr-warning|svr-considerable|
-    // svr-destructive|ffw-warning|tor-watch|svr-watch|ffw-watch|heat-advisory builds a fake NWS
+    // svr-destructive|ffw-warning|heat-warning|heat-advisory|tor-watch|svr-watch|ffw-watch
+    // builds a fake NWS
     // feature (including the real tornadoDamageThreat/thunderstormDamageThreat CAP parameters for
     // the escalated tiers, not a separate shortcut) and feeds it through the exact same path a
     // real fetch would -- bubble color/label, polygon, countdown, and radar-mode side effects all
@@ -926,10 +942,11 @@
         'svr-considerable': { event: 'Severe Thunderstorm Warning', parameters: { thunderstormDamageThreat: ['CONSIDERABLE'] } },
         'svr-destructive': { event: 'Severe Thunderstorm Warning', parameters: { thunderstormDamageThreat: ['DESTRUCTIVE'] } },
         'ffw-warning': { event: 'Flash Flood Warning' },
+        'heat-warning': { event: 'Excessive Heat Warning' },
+        'heat-advisory': { event: 'Heat Advisory' },
         'tor-watch': { event: 'Tornado Watch' },
         'svr-watch': { event: 'Severe Thunderstorm Watch' },
         'ffw-watch': { event: 'Flash Flood Watch' },
-        'heat-advisory': { event: 'Heat Advisory' },
       }[kind];
       if (!config) return null;
       const now = new Date();
@@ -998,12 +1015,9 @@
           const data = await res.json();
           features = Array.isArray(data.features) ? data.features : [];
         }
-        // Heat Advisory isn't handled at all for now -- filtered out before picking the bubble's
-        // "primary" so it can never end up shown anywhere (see alertClassFor's own comment).
-        const warningTierFeatures = features.filter((f) => alertClassFor(f) !== 'heat-advisory');
         // Severity-weighted: the highest-ranked active alert covering this point drives the
         // bubble/radar mode.
-        const sorted = [...warningTierFeatures].sort((a, b) => severityRank(alertClassFor(a)) - severityRank(alertClassFor(b)));
+        const sorted = [...features].sort((a, b) => severityRank(alertClassFor(a)) - severityRank(alertClassFor(b)));
         const primary = sorted[0];
         const text = primary ? primary.properties.event : '';
         if (!text) {
