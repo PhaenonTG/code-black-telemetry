@@ -114,8 +114,33 @@ All changes logged newest-first.
   than the selected radar site's location -- the site now only decides which station's data feeds
   the tiles, not where the map points. Also reworked the tornado-warning product rotation from an
   equal VEL/CC split to weighted slots (VEL:3, REF:2, CC:1 in one repeating cycle) per the owner's
-  refined priority call. Not using Mapbox for the map (asked directly this session) -- Leaflet
-  with Esri's key-less dark basemap, so the public overlay page needs no embedded API token.
+  refined priority call. At this point in the session the map engine was still Leaflet + Esri's
+  key-less dark basemap (see below for the later switch to Mapbox).
+- Follow-up: switched the map engine from Leaflet+Esri to **Mapbox GL JS** -- the Code Black
+  standard, per the owner's explicit ask, for real roads/road names/state-county lines that the
+  key-less raster basemap didn't have. Same version and style (navigation-night-v1) RadarOBS/
+  radar.html (the original overlay's own radar companion) already used, and the same public
+  token already configured for the rest of this project. Radar tiles are now one raster source
+  updated in place via setTiles() per frame swap (Mapbox GL keeps old tiles visible while new
+  ones load -- no more blank-flash on swap). Token is read from ?mapboxToken= only, never
+  hardcoded: GitHub's push protection correctly rejected an earlier commit that embedded it
+  directly (a "public" pk. token in git history on a scanned repo can still be scraped and used
+  against the account's billing quota) -- fixed via git reset --soft (the flagged commit had
+  never actually landed remotely) and a clean recommit, not a force-push or history rewrite of
+  anything already public.
+- Follow-up: added a severity-weighted alert detail ticker above the main bottom bar -- colored
+  by whichever active alert ranks highest (tornado warning outranks everything, NWS's own
+  severity convention), showing only alerts api.weather.gov's ?point= geofilter returns for
+  Nick's actual position (never a merely-nearby one). Scrolls the full detail (NWS's real VTEC
+  sequential event number, e.g. #0042, plus every affected county) through exactly once per
+  distinct alert -- not a continuous loop, per the owner's own call -- pixel-measured so the pass
+  starts fully off the right edge and ends fully off the left regardless of content length, then
+  settles into a static, centered, minimal "WARNING — COUNTY" label. A signature check skips
+  re-triggering the scroll on a routine re-poll of the same still-active alert.
+- Verified live end-to-end: real Mapbox streets/highways/city labels rendering, the GPS marker
+  correctly positioned and centered, and (against a real active Heat Advisory covering ~20
+  Oklahoma counties) the ticker scrolling the full county list once and settling to "HEAT
+  ADVISORY — WOODS", confirmed it did not re-scroll on a second poll of the same alert.
 
 ## Flagship Phone Visual Polish - 2026-08-23
 
