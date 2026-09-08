@@ -399,6 +399,27 @@
     .alert-bubble.svr-watch { background: linear-gradient(180deg, var(--svr-watch), #a35579); }
     .alert-bubble.ffw-watch { background: linear-gradient(180deg, var(--ffw-watch), #215f46); }
     .alert-bubble.generic { background: linear-gradient(180deg, #c0392b, #922b21); }
+    /* Heat Advisory isn't a warning-tier product -- doesn't get the full-bleed block treatment or
+       the pulsing glow real warnings get (too dramatic for something this minor), and uses NWS's
+       own official heat-advisory color rather than the generic red fallback. Renders as a small
+       compact badge instead, sized to its own text rather than filling the whole bottom-bar slot. */
+    .alert-bubble.heat-advisory {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      animation: none;
+      justify-content: flex-start;
+    }
+    .alert-bubble.heat-advisory::before { display: none; }
+    .alert-bubble.heat-advisory .alert-text {
+      display: inline-block;
+      width: auto;
+      background: linear-gradient(180deg, #FF7600, #cc5f00);
+      color: #111111;
+      padding: 10px 18px;
+      border-radius: 14px;
+      font-size: 14px;
+    }
 
     @keyframes alertGlow {
       0%, 100% { box-shadow: var(--shadow), 0 0 0 rgba(255,42,42,0); }
@@ -416,71 +437,6 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-
-    /* Severity-weighted alert detail scroller -- sits just above the main bottom bar, only when
-       at least one alert covers Nick's actual point (api.weather.gov's own ?point= geofilter
-       already restricts to that; this never shows a merely-nearby alert). Colored by whichever
-       active alert ranks highest (tornado warning outranks everything), same gradient language
-       as the alert bubble above rather than a new color system. */
-    .alert-ticker {
-      position: absolute;
-      left: 28px;
-      right: 28px;
-      bottom: 124px;
-      height: 36px;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-      z-index: 5;
-      background: linear-gradient(180deg, #c0392b, #922b21);
-    }
-
-    .alert-ticker.hidden { display: none; }
-
-    .alert-ticker__track {
-      display: flex;
-      align-items: center;
-      height: 100%;
-      gap: 56px;
-      white-space: nowrap;
-      width: max-content;
-    }
-
-    /* One pass only, not a loop -- full detail (warning number, every affected county) scrolls
-       through exactly once, then JS swaps in a static minimal label. --ticker-start/--ticker-end
-       are set from measured pixel widths (see renderAlertTicker) so it starts fully off the right
-       edge and ends fully off the left, regardless of how much text is actually in it. */
-    .alert-ticker__track--scroll-once {
-      animation: alertTickerScrollOnce var(--ticker-duration, 10s) linear 1 forwards;
-    }
-
-    @keyframes alertTickerScrollOnce {
-      from { transform: translateX(var(--ticker-start, 100%)); }
-      to { transform: translateX(var(--ticker-end, -100%)); }
-    }
-
-    /* Settled state: centered, static, no animation -- just the primary warning + county. */
-    .alert-ticker__track--settled {
-      width: 100%;
-      justify-content: center;
-    }
-
-    .alert-ticker__item {
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--text);
-    }
-
-    .alert-ticker.tor-warning { background: linear-gradient(180deg, var(--tor-warning), #b00000); }
-    .alert-ticker.svr-warning { background: linear-gradient(180deg, var(--svr-warning), #cc7000); }
-    .alert-ticker.ffw-warning { background: linear-gradient(180deg, var(--ffw-warning), #5a0000); }
-    .alert-ticker.tor-watch { background: linear-gradient(180deg, var(--tor-watch), #d4d400); }
-    .alert-ticker.tor-watch .alert-ticker__item { color: #111111; }
-    .alert-ticker.svr-watch { background: linear-gradient(180deg, var(--svr-watch), #a35579); }
-    .alert-ticker.ffw-watch { background: linear-gradient(180deg, var(--ffw-watch), #215f46); }
 
     .clock-bubble {
       display: flex;
@@ -548,10 +504,6 @@
         <div class="radar-inner-frame"></div>
         <div class="radar-loading" id="radarLoading">Acquiring site...</div>
       </div>
-    </div>
-
-    <div class="alert-ticker hidden" id="alertTicker">
-      <div class="alert-ticker__track" id="alertTickerTrack"></div>
     </div>
 
     <div class="bottom-bar">
@@ -807,12 +759,14 @@
       if (lower.includes('tornado watch')) return 'tor-watch';
       if (lower.includes('severe thunderstorm watch')) return 'svr-watch';
       if (lower.includes('flash flood watch')) return 'ffw-watch';
+      // Not a warning-tier product -- gets its own non-red color instead of falling into generic.
+      if (lower.includes('heat advisory')) return 'heat-advisory';
       return 'generic';
     }
 
     // Tornado warning obviously outranks everything else; the rest follow NWS's own severity
     // convention (warnings before watches, tornado before severe t-storm before flash flood).
-    const ALERT_SEVERITY_ORDER = ['tor-warning', 'svr-warning', 'ffw-warning', 'tor-watch', 'svr-watch', 'ffw-watch', 'generic'];
+    const ALERT_SEVERITY_ORDER = ['tor-warning', 'svr-warning', 'ffw-warning', 'tor-watch', 'svr-watch', 'ffw-watch', 'heat-advisory', 'generic'];
     function severityRank(cls) {
       const i = ALERT_SEVERITY_ORDER.indexOf(cls);
       return i === -1 ? ALERT_SEVERITY_ORDER.length : i;
@@ -834,17 +788,9 @@
       return match ? match[1] : null;
     }
 
-    // Full detail for the one-time scroll-through: warning number + every affected county.
-    function alertTickerLabel(feature) {
-      const props = feature.properties || {};
-      const number = vtecEventNumber(feature);
-      const area = String(props.areaDesc || '').split(';').map((s) => s.trim()).filter(Boolean).join(' • ');
-      const head = `${String(props.event || '').toUpperCase()}${number ? ' #' + number : ''}`;
-      return area ? `${head} — ${area}` : head;
-    }
-
-    // Minimal, settled-state label: just the warning and its (first-listed) county -- what the
-    // ticker sits on after the one-time scroll-through, per the owner's own call.
+    // Bottom-bar alert label: warning + its (first-listed) county in one line -- previously the
+    // ticker's settled state, now the only alert display at all (the separate ticker bar above
+    // the bottom bar was removed: showing the same warning twice at once was too much).
     function minimalAlertLabel(feature) {
       const props = feature.properties || {};
       const county = String(props.areaDesc || '').split(';')[0].trim();
@@ -852,60 +798,34 @@
       return county ? `${head} — ${county}` : head;
     }
 
-    let alertTickerSignature = null;
-
-    // Swaps the track to the static, centered, minimal display and stops animating.
-    function settleAlertTicker(primaryFeature) {
-      const track = document.getElementById('alertTickerTrack');
-      track.className = 'alert-ticker__track alert-ticker__track--settled';
-      track.style.removeProperty('--ticker-duration');
-      track.style.removeProperty('--ticker-start');
-      track.style.removeProperty('--ticker-end');
-      track.innerHTML = `<span class="alert-ticker__item">${escapeHtml(minimalAlertLabel(primaryFeature))}</span>`;
-    }
-
-    // Runs the one-time scroll-through (full detail, every active alert) then settles into the
-    // minimal display once it finishes playing.
-    function scrollAlertTickerOnce(sortedFeatures) {
-      const ticker = document.getElementById('alertTicker');
-      const track = document.getElementById('alertTickerTrack');
-      const items = sortedFeatures.map(alertTickerLabel);
-      track.className = 'alert-ticker__track';
-      track.style.transform = '';
-      track.innerHTML = items.map((t) => `<span class="alert-ticker__item">${escapeHtml(t)}</span>`).join('');
-      // Measure actual pixel widths so the pass starts fully off the right edge and ends fully
-      // off the left regardless of content length, then size the duration to it (fast enough for
-      // a short single-alert label, slow enough to actually read a long multi-county one).
-      requestAnimationFrame(() => {
-        const containerWidth = ticker.clientWidth;
-        const trackWidth = track.scrollWidth;
-        track.style.setProperty('--ticker-start', `${containerWidth}px`);
-        track.style.setProperty('--ticker-end', `${-trackWidth}px`);
-        track.style.setProperty('--ticker-duration', `${Math.min(20, Math.max(6, (containerWidth + trackWidth) / 90))}s`);
-        track.classList.add('alert-ticker__track--scroll-once');
-      });
-      track.addEventListener('animationend', function onDone(event) {
-        if (event.animationName !== 'alertTickerScrollOnce') return;
-        track.removeEventListener('animationend', onDone);
-        settleAlertTicker(sortedFeatures[0]);
-      });
-    }
-
-    function renderAlertTicker(sortedFeatures) {
-      const ticker = document.getElementById('alertTicker');
-      const track = document.getElementById('alertTickerTrack');
-      if (!sortedFeatures.length) {
-        ticker.classList.add('hidden');
-        track.innerHTML = '';
-        alertTickerSignature = null;
-        return;
-      }
-      ticker.classList.remove('hidden');
-      ticker.className = 'alert-ticker ' + alertClassFor(sortedFeatures[0].properties.event || '');
-      const signature = sortedFeatures.map((f) => f.properties.id || alertTickerLabel(f)).join('|');
-      if (signature === alertTickerSignature) return; // same alert set as last poll -- leave as-is, don't re-scroll
-      alertTickerSignature = signature;
-      scrollAlertTickerOnce(sortedFeatures);
+    // Test-only: ?simulateAlert=tor-warning|svr-warning|ffw-warning|tor-watch|svr-watch|ffw-watch|heat-advisory
+    // builds a fake NWS feature and feeds it through the exact same path a real fetch would --
+    // bubble color, county text, and the radar-mode side effects (isWarningActive/isTorWarning)
+    // all react identically, so this actually exercises the real code rather than a separate
+    // mock. Never touched unless the param is explicitly present.
+    function simulatedAlertFeature(kind) {
+      const eventNames = {
+        'tor-warning': 'Tornado Warning',
+        'svr-warning': 'Severe Thunderstorm Warning',
+        'ffw-warning': 'Flash Flood Warning',
+        'tor-watch': 'Tornado Watch',
+        'svr-watch': 'Severe Thunderstorm Watch',
+        'ffw-watch': 'Flash Flood Watch',
+        'heat-advisory': 'Heat Advisory',
+      };
+      const event = eventNames[kind];
+      if (!event) return null;
+      const now = new Date();
+      return {
+        properties: {
+          id: `urn:oid:simulated.${kind}`,
+          event,
+          areaDesc: 'Benton; Washington',
+          sent: now.toISOString(),
+          expires: new Date(now.getTime() + 30 * 60_000).toISOString(),
+          parameters: { VTEC: ['/O.NEW.KOUN.XX.W.0099.260908T1200Z-260908T1300Z/'] },
+        },
+      };
     }
 
     // api.weather.gov's own ?point= geofilter already restricts results to alerts whose actual
@@ -914,23 +834,29 @@
     // policy, which fetch() from a browser cannot set; NWS accepts requests without it, just less
     // politely).
     async function updateAlert() {
-      if (settings.latitude === null || settings.longitude === null) {
+      const simulateKind = params.get('simulateAlert');
+      if (!simulateKind && (settings.latitude === null || settings.longitude === null)) {
         el.alertBubble.className = 'bubble alert-bubble';
         el.alertText.textContent = '';
         isTorWarning = false;
         isWarningActive = false;
-        renderAlertTicker([]);
         return;
       }
       try {
-        const url = `https://api.weather.gov/alerts/active?point=${settings.latitude},${settings.longitude}`;
-        const res = await fetch(url, { headers: { Accept: 'application/geo+json' } });
-        if (!res.ok) throw new Error('alerts fetch failed');
-        const data = await res.json();
-        const features = Array.isArray(data.features) ? data.features : [];
-        // Severity-weighted: the highest-ranked active alert drives the bubble/radar mode, but
-        // every active alert covering this point shows in the ticker below, worst first.
-        const sorted = [...features].sort((a, b) => severityRank(alertClassFor(a.properties.event || '')) - severityRank(alertClassFor(b.properties.event || '')));
+        let sorted;
+        if (simulateKind) {
+          const feature = simulatedAlertFeature(simulateKind);
+          sorted = feature ? [feature] : [];
+        } else {
+          const url = `https://api.weather.gov/alerts/active?point=${settings.latitude},${settings.longitude}`;
+          const res = await fetch(url, { headers: { Accept: 'application/geo+json' } });
+          if (!res.ok) throw new Error('alerts fetch failed');
+          const data = await res.json();
+          const features = Array.isArray(data.features) ? data.features : [];
+          // Severity-weighted: the highest-ranked active alert covering this point drives the
+          // bubble/radar mode.
+          sorted = [...features].sort((a, b) => severityRank(alertClassFor(a.properties.event || '')) - severityRank(alertClassFor(b.properties.event || '')));
+        }
         const primary = sorted[0];
         const text = primary ? primary.properties.event : '';
         if (!text) {
@@ -938,10 +864,9 @@
           el.alertText.textContent = '';
           isTorWarning = false;
           isWarningActive = false;
-          renderAlertTicker([]);
           return;
         }
-        el.alertText.textContent = text;
+        el.alertText.textContent = minimalAlertLabel(primary);
         const cls = alertClassFor(text);
         el.alertBubble.className = 'bubble alert-bubble show ' + cls;
         // Radar mode reacts to these -- see radarModeTick(). Any active WARNING (not a watch)
@@ -950,7 +875,6 @@
         // the owner's own explicit calls.
         isWarningActive = cls === 'tor-warning' || cls === 'svr-warning' || cls === 'ffw-warning';
         isTorWarning = cls === 'tor-warning';
-        renderAlertTicker(sorted);
       } catch (err) {
         // leave last-known alert state in place -- a single missed poll isn't an outage
       }
