@@ -466,9 +466,17 @@ export function AtlasMap({
       map.on("idle", () => {
         idleCountRef.current += 1;
         setIdleCount(idleCountRef.current);
-        setViewport(viewportFromMap(map));
         samplePixels();
       });
+      // "idle" used to also call setViewport(viewportFromMap(map)) here. "idle" is a rendering
+      // signal, not a viewport-change signal -- it fires constantly on this always-live map (every
+      // radar-loop frame swap, every mosaic tick, every tile settle), and viewportFromMap() returns
+      // a brand-new object each call. That meant every viewport-keyed provider effect (traffic
+      // cameras, road conditions, chaser net) saw a "changed" dependency dozens of times a second,
+      // aborting its in-flight fetch before it could ever complete -- confirmed live as cameras
+      // stuck on "provider unavailable" until the user manually panned/zoomed once, which let a
+      // moveend/zoomend-triggered fetch finally run uninterrupted. moveend/zoomend already cover
+      // every real viewport change; idle firing the same update added nothing but the thrash.
       map.on("moveend", () => setViewport(viewportFromMap(map)));
       map.on("zoomend", () => setViewport(viewportFromMap(map)));
       map.on("click", (event) => {
