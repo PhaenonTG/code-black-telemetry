@@ -51,9 +51,52 @@
   color: var(--cb-white);
 }
 
+.rail-identity__heading {
+  font-size: 12px;
+  color: var(--cb-utility-gray);
+}
+
 .rail-identity__elev {
   font-size: 11px;
   color: var(--cb-utility-gray);
+}
+
+.rail-alert {
+  --cb-edge-color: var(--rail-alert-accent, var(--cb-signal-red));
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+  max-width: 360px;
+}
+
+.rail-alert__text {
+  font-family: var(--cb-font-display);
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--rail-alert-accent, var(--cb-signal-red));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail-alert--tor-warning,
+.rail-alert--observed {
+  --rail-alert-accent: var(--cb-warn-tornado);
+}
+
+.rail-alert--svr-warning {
+  --rail-alert-accent: var(--cb-warn-severe);
+}
+
+.rail-alert--tor-watch,
+.rail-alert--pds-watch {
+  --rail-alert-accent: var(--cb-warn-watch);
+}
+
+.rail-alert--meso {
+  --rail-alert-accent: var(--cb-warn-discussion);
 }
 
 .rail-score {

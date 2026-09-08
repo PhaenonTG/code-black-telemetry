@@ -3,7 +3,19 @@ import { classifyDataClass } from "../stormIntel/dataClass";
 import type { MetricSource } from "../stormIntel/types";
 
 function source(overrides: Partial<MetricSource>): MetricSource {
-  return { provider: "hrrr-nomads", product: "conus2d", runTime: null, validTime: null, formulation: null, ...overrides };
+  return {
+    provider: "hrrr-nomads",
+    product: "conus2d",
+    runTime: null,
+    validTime: null,
+    formulation: null,
+    forecastHour: null,
+    dataClass: null,
+    resolvedLatitude: null,
+    resolvedLongitude: null,
+    gridDistanceKm: null,
+    ...overrides,
+  };
 }
 
 describe("classifyDataClass", () => {

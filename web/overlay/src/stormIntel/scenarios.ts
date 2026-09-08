@@ -229,8 +229,8 @@ export function buildMetrics(
     formulation: null,
     forecastHour: 0,
     dataClass: "MODEL_ANALYSIS",
-    resolvedLatitude: location.latitude,
-    resolvedLongitude: location.longitude,
+    resolvedLatitude: null,
+    resolvedLongitude: null,
     gridDistanceKm: 0,
   };
 

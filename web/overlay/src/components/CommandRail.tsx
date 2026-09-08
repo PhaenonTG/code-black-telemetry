@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { presentFreshness } from "../utils/freshness";
-import { formatAge, formatScore } from "../utils/format";
+import { formatAge, formatHeading, formatScore } from "../utils/format";
+import { Clock } from "./Clock";
 import { FeaturedMetricBay } from "./FeaturedMetricBay";
 import { Hodograph } from "./Hodograph";
-import type { OverlayState } from "../stormIntel/types";
+import type { EventTakeoverKind, OverlayState } from "../stormIntel/types";
 import "./CommandRail.css";
+
+const ALERT_CHIP_CLASS: Record<EventTakeoverKind, string> = {
+  TOR_WARNING: "rail-alert--tor-warning",
+  SVR_WARNING: "rail-alert--svr-warning",
+  MESO_DISCUSSION: "rail-alert--meso",
+  TOR_WATCH: "rail-alert--tor-watch",
+  PDS_TOR_WATCH: "rail-alert--pds-watch",
+  OBSERVED_TORNADO: "rail-alert--observed",
+};
 
 function scoreTier(value: number | null): "low" | "mid" | "high" | "extreme" | "none" {
   if (value === null) return "none";
@@ -15,8 +25,9 @@ function scoreTier(value: number | null): "low" | "mid" | "high" | "extreme" | "
 }
 
 export function CommandRail({ state }: { state: OverlayState }) {
-  const { snapshot, publicLocation, hodograph } = state;
+  const { snapshot, publicLocation, hodograph, takeover } = state;
   const { score } = snapshot;
+  const heading = snapshot.context.location.headingDeg;
   const overallFreshness = presentFreshness(snapshot.metrics[0]?.freshness ?? "unknown");
   const worstAge = snapshot.metrics[0]?.ageSeconds ?? null;
 
@@ -44,12 +55,24 @@ export function CommandRail({ state }: { state: OverlayState }) {
           <span className="rail-identity__city">
             {publicLocation ? `${publicLocation.city}, ${publicLocation.state}` : "LOCATION UNAVAILABLE"}
           </span>
+          <span className="rail-identity__heading cb-mono">
+            {heading !== null ? `${formatHeading(heading)} ${Math.round(heading)}°` : "HEADING --"}
+          </span>
           {publicLocation?.elevationFt != null && (
             <span className="rail-identity__elev cb-mono">{publicLocation.elevationFt.toLocaleString()} ft</span>
           )}
         </section>
 
         <div className="rail-divider" />
+
+        {takeover && (
+          <>
+            <section className={`rail-block rail-alert ${ALERT_CHIP_CLASS[takeover.kind]}`}>
+              <span className="rail-alert__text">{takeover.headline}</span>
+            </section>
+            <div className="rail-divider" />
+          </>
+        )}
 
         <FeaturedMetricBay snapshot={snapshot} />
 
@@ -74,6 +97,10 @@ export function CommandRail({ state }: { state: OverlayState }) {
             <span className="rail-status__chasers">{publicLocation.nearbyChaserCount} nearby</span>
           )}
         </section>
+
+        <div className="rail-divider" />
+
+        <Clock />
       </div>
     </div>
   );

@@ -1,0 +1,19 @@
+.rail-clock {
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  min-width: 108px;
+  text-align: right;
+}
+
+.rail-clock__time {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cb-white);
+  letter-spacing: 0.01em;
+}
+
+.rail-clock__date {
+  font-size: 10px;
+}
