@@ -651,13 +651,14 @@
     // two independent sources (Open-Meteo vs. the chase GPS feed) instead of one script.
     let lastTemp = null;
     let lastDew = null;
-    let lastGroundObs = null; // { stationId, tempF, dewF } -- real METAR/ASOS reading, not Open-Meteo's model estimate
+    let lastGroundObs = null; // real station reading; preferred over the model estimate below when present
     function renderSecondaryLine() {
+      const temp = lastGroundObs ? lastGroundObs.tempF : lastTemp;
+      const dew = lastGroundObs ? lastGroundObs.dewF : lastDew;
       const parts = [];
-      if (lastTemp !== null) parts.push(`Temp: ${lastTemp}°`);
-      if (lastDew !== null) parts.push(`Dew Point: ${lastDew}°`);
+      if (temp !== null) parts.push(`Temp: ${temp}°`);
+      if (dew !== null) parts.push(`Dew Point: ${dew}°`);
       parts.push(settings.bearingDeg !== null ? `Heading: ${compassFor(settings.bearingDeg)}` : 'Heading: --');
-      if (lastGroundObs) parts.push(`Ground (${lastGroundObs.stationId}): ${lastGroundObs.tempF}°/${lastGroundObs.dewF}°`);
       el.headingText.textContent = parts.join('  |  ');
     }
 
