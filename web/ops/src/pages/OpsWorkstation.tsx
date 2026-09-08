@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AtlasMap, type AtlasSelectedPoint } from "../../../../src/map/AtlasMap";
-import { browserLocationAdapter, type LocationState } from "../adapters";
+import { browserLocationAdapter, ipLocationAdapter, type LocationState } from "../adapters";
 import type { AtlasGpsPoint } from "../../../../src/map/types";
 import { useAlertProducts } from "../../../../src/hooks/useAlertProducts";
 import { useNearbyPlaces } from "../../../../src/hooks/useNearbyPlaces";
@@ -54,6 +54,21 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
     if (selectedPoint || !atlasGpsForAutoSelect) return;
     selectPoint({ lat: atlasGpsForAutoSelect.lat, lon: atlasGpsForAutoSelect.lon });
   }, [atlasGpsForAutoSelect, selectedPoint, selectPoint]);
+
+  // Device GPS denied/unavailable leaves the effect above with nothing to auto-select -- fall back
+  // to a coarse, IP-based approximate location instead of leaving Point Inspector permanently empty
+  // until a manual map tap. Only kicks in once GPS has actually settled to denied/unavailable (not
+  // while still "requesting"), so real GPS always wins the race when it's available.
+  useEffect(() => {
+    if (selectedPoint || atlasGpsForAutoSelect) return;
+    if (gps.status !== "denied" && gps.status !== "unavailable") return;
+    let cancelled = false;
+    void ipLocationAdapter.getApprox().then((approx) => {
+      if (cancelled || !approx) return;
+      selectPoint({ lat: approx.lat, lon: approx.lon });
+    });
+    return () => { cancelled = true; };
+  }, [gps.status, selectedPoint, atlasGpsForAutoSelect, selectPoint]);
 
   useEffect(() => {
     // The Radar nav destination is otherwise pixel-identical to Live Ops (same workstation, same

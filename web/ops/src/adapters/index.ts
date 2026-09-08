@@ -4,6 +4,7 @@
 // ones that need actual hardware/OS access -- the adapter interface is what stays stable across
 // browser / Android / iOS / Windows, not the implementation behind it.
 export { browserLocationAdapter, type LocationAdapter, type LocationState } from "./LocationAdapter";
+export { ipLocationAdapter, type IpLocation } from "./IpLocationAdapter";
 
 export interface NotificationAdapter {
   supported: boolean;

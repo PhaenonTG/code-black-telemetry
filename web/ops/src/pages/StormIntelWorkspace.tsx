@@ -5,7 +5,7 @@ import { useAlertProducts } from "../../../../src/hooks/useAlertProducts";
 import { useNearbyPlaces } from "../../../../src/hooks/useNearbyPlaces";
 import { useNearbyPoiList } from "../../../../src/hooks/useNearbyPoiList";
 import { useSpotters } from "../../../../src/hooks/useSpotters";
-import { browserLocationAdapter, type LocationState } from "../adapters";
+import { browserLocationAdapter, ipLocationAdapter, type LocationState } from "../adapters";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { PointHistory } from "../components/PointHistory";
 import { PointInspector } from "../components/PointInspector";
@@ -56,6 +56,21 @@ export default function StormIntelWorkspace() {
     if (selectedPoint || !atlasGps) return;
     selectPoint({ lat: atlasGps.lat, lon: atlasGps.lon });
   }, [atlasGps, selectedPoint, selectPoint]);
+
+  // Device GPS denied/unavailable leaves the effect above with nothing to auto-select -- fall back
+  // to a coarse, IP-based approximate location instead of leaving this on "SELECT A MAP POINT"
+  // until a manual tap. Only kicks in once GPS has actually settled to denied/unavailable (not
+  // while still "requesting"), so real GPS always wins the race when it's available.
+  useEffect(() => {
+    if (selectedPoint || atlasGps) return;
+    if (gps.status !== "denied" && gps.status !== "unavailable") return;
+    let cancelled = false;
+    void ipLocationAdapter.getApprox().then((approx) => {
+      if (cancelled || !approx) return;
+      selectPoint({ lat: approx.lat, lon: approx.lon });
+    });
+    return () => { cancelled = true; };
+  }, [gps.status, selectedPoint, atlasGps, selectPoint]);
 
   useEffect(() => {
     if (!selectedPoint) { setLocality(null); return; }
