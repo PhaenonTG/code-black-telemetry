@@ -893,8 +893,17 @@
     // for local testing against a different token/project.
     let MAPBOX_TOKEN = params.get('mapboxToken') || '';
     const MAPBOX_STYLE = params.get('mapboxStyle') || 'mapbox://styles/mapbox/navigation-night-v1';
-    const RADAR_SOURCE_ID = 'radar-source';
-    const RADAR_LAYER_ID = 'radar-layer';
+    // Pool of persistent sources/layers, one per possible loop frame (6 -- the REF loop's max
+    // length; VEL/CC only ever use slot 0), rather than one shared source whose tiles get swapped
+    // via setTiles() on every 700ms tick. Swapping tiles mid-loop meant each frame change waited
+    // on a fresh network fetch that could easily take longer than 700ms, which is what made the
+    // loop choppy. Now every frame's tiles are requested once, up front, whenever the frame list
+    // itself refreshes (see preloadRadarFrames) -- radarModeTick's per-tick work becomes a pure
+    // opacity flip between layers that are already loaded, no network dependency at swap time.
+    const RADAR_FRAME_POOL_SIZE = 6;
+    const radarSourceIds = Array.from({ length: RADAR_FRAME_POOL_SIZE }, (_, i) => `radar-source-${i}`);
+    const radarLayerIds = Array.from({ length: RADAR_FRAME_POOL_SIZE }, (_, i) => `radar-layer-${i}`);
+    const BLANK_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
     const radarSettings = { gatewayBase: params.get('radarGatewayBase') || 'https://ops.codeblackwx.com' };
     // Close/mid/far range cycle for the baseline (no-warning) loop -- Mapbox GL zoom levels,
     // higher number = tighter/closer range. Overridable per-deployment via URL params. Holds
@@ -919,7 +928,7 @@
     let isWarningActive = false;
     let radarMap = null;
     let radarMapReady = false;
-    let pendingRadarFrame = null;
+    let pendingRadarFrames = null;
     // Weighted, not equal-time: VEL is the highest priority during a tornado warning, REF next,
     // CC included but least -- expressed as slot counts in one repeating sequence (VEL:3, REF:2,
     // CC:1) rather than three separate timers, so the total time-on-screen ratio matches that
@@ -960,23 +969,16 @@
         attributionControl: true,
       });
       radarMap.on('load', () => {
-        // Radar echoes as one raster source/layer, updated in place via setTiles() on every
-        // frame swap (see applyRadarFrame) rather than removing/re-adding a layer each time --
-        // Mapbox GL keeps the previous tiles visible while the new ones load, so this doesn't
-        // flash blank the way naively swapping layers did under the old Leaflet implementation.
-        radarMap.addSource(RADAR_SOURCE_ID, {
-          type: 'raster',
-          // 1x1 transparent PNG data URI -- a real (if empty) tile for every {z}/{x}/{y}, so
-          // there's nothing to actually fetch/fail on the network before the first real radar
-          // frame replaces it via setTiles() in applyRadarFrame.
-          tiles: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='],
-          tileSize: 256,
-        });
-        radarMap.addLayer({ id: RADAR_LAYER_ID, type: 'raster', source: RADAR_SOURCE_ID, paint: { 'raster-opacity': 0.82 } });
+        // One raster source/layer per pool slot, all starting blank/hidden -- see the
+        // RADAR_FRAME_POOL_SIZE comment above for why this replaced a single shared source.
+        for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
+          radarMap.addSource(radarSourceIds[i], { type: 'raster', tiles: [BLANK_TILE], tileSize: 256 });
+          radarMap.addLayer({ id: radarLayerIds[i], type: 'raster', source: radarSourceIds[i], paint: { 'raster-opacity': 0 } });
+        }
         radarMapReady = true;
-        if (pendingRadarFrame) {
-          applyRadarFrame(pendingRadarFrame);
-          pendingRadarFrame = null;
+        if (pendingRadarFrames) {
+          preloadRadarFrames(pendingRadarFrames);
+          pendingRadarFrames = null;
         }
       });
     }
@@ -1038,6 +1040,7 @@
         if (Array.isArray(frames) && frames.length) {
           radarFrames = frames;
           radarLoopIndex = 0;
+          preloadRadarFrames(frames);
           document.getElementById('radarLoading').classList.add('hidden');
         }
       } catch (err) {
@@ -1047,12 +1050,27 @@
       }
     }
 
-    function applyRadarFrame(frame) {
-      if (!frame) return;
-      if (!radarMapReady) { pendingRadarFrame = frame; return; }
-      const tileUrl = `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png`;
-      const source = radarMap.getSource(RADAR_SOURCE_ID);
-      if (source) source.setTiles([tileUrl]);
+    // Requests every frame's tiles once, immediately -- pool slot i always holds radarFrames[i]'s
+    // tiles until the next fetch. Unused slots (VEL/CC's single-frame case, or a REF fetch that
+    // came back short) reset to blank so a stale frame from a previous product/site never lingers
+    // hidden-but-loaded in a slot the loop might later flip to.
+    function preloadRadarFrames(frames) {
+      if (!radarMapReady) { pendingRadarFrames = frames; return; }
+      for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
+        const source = radarMap.getSource(radarSourceIds[i]);
+        if (!source) continue;
+        const frame = frames[i];
+        source.setTiles([frame ? `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png` : BLANK_TILE]);
+      }
+    }
+
+    // Flips to pool slot `index` -- a plain opacity change between already-loaded layers, no
+    // network fetch at swap time (see the RADAR_FRAME_POOL_SIZE comment above).
+    function applyRadarFrame(index) {
+      if (!radarMapReady) return;
+      radarLayerIds.forEach((id, i) => {
+        if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === index ? 0.82 : 0);
+      });
     }
 
     function setRadarProduct(product) {
@@ -1099,14 +1117,14 @@
             torRotationIndex += 1;
             setRadarProduct(product);
           }
-          if (radarFrames.length) applyRadarFrame(radarFrames[0]);
+          if (radarFrames.length) applyRadarFrame(0);
           return;
         }
         // Severe t-storm / flash flood warning: cycle close/mid, but no product override was
         // called for at that severity -- REF stays on and keeps looping.
         if (radarProduct !== 'REF') { setRadarProduct('REF'); torRotationIndex = 0; }
         if (!radarFrames.length) return;
-        applyRadarFrame(radarFrames[radarLoopIndex]);
+        applyRadarFrame(radarLoopIndex);
         radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
         return;
       }
@@ -1117,7 +1135,7 @@
       }
       advanceZoom(BASELINE_ZOOM_ORDER);
       if (!radarFrames.length) return;
-      applyRadarFrame(radarFrames[radarLoopIndex]);
+      applyRadarFrame(radarLoopIndex);
       radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
     }
 
