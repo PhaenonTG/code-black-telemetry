@@ -479,6 +479,12 @@ export function AtlasMap({
       // every real viewport change; idle firing the same update added nothing but the thrash.
       map.on("moveend", () => setViewport(viewportFromMap(map)));
       map.on("zoomend", () => setViewport(viewportFromMap(map)));
+      // Seed viewport once, here on load, rather than relying on idle for it -- without this, a
+      // session that never pans/zooms (GPS denied/unavailable, so none of the auto-follow jumpTo/
+      // easeTo calls that would otherwise fire moveend ever run) leaves viewport permanently null
+      // and every provider layer stuck on "not configured" forever, since only moveend/zoomend
+      // update it now.
+      setViewport(viewportFromMap(map));
       map.on("click", (event) => {
         onPointSelectRef.current?.({
           lat: Number(event.lngLat.lat.toFixed(5)),
