@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Code Black Storm Overlay</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+    integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
+    integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
   <style>
     :root {
       --bg: rgba(0,0,0,0);
@@ -102,15 +106,14 @@
     .camera-corner.bl { bottom: 18px; left: 18px; border-width: 0 0 2px 2px; border-bottom-left-radius: 22px; }
     .camera-corner.br { bottom: 18px; right: 18px; border-width: 0 2px 2px 0; border-bottom-right-radius: 22px; }
 
-    /* RADAR FRAME ONLY */
     .radar-panel {
       position: absolute;
       top: 28px;
       right: 28px;
-      width: 420px;
-      height: 260px;
+      width: 460px;
+      height: 300px;
       border-radius: 24px;
-      background: transparent;
+      background: #0b0c10;
       border: 1px solid var(--border);
       box-shadow: var(--shadow);
       overflow: hidden;
@@ -139,6 +142,26 @@
       font-weight: 800;
       letter-spacing: 0.12em;
       text-transform: uppercase;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .radar-product {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+    }
+
+    .radar-site {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.06em;
     }
 
     .live-pill {
@@ -169,18 +192,32 @@
       50% { opacity: 0.45; transform: scale(0.82); }
     }
 
-    /* transparent interior window */
     .radar-window {
       position: absolute;
       top: 57px;
       left: 0;
       right: 0;
       bottom: 0;
-      background: transparent;
+      background: #0b0c10;
       z-index: 1;
     }
 
-    /* subtle interior frame lines so it still looks intentional */
+    #radarMap {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Leaflet's own attribution control -- kept (required by CARTO's free-tile terms) but
+       styled down small/quiet in a broadcast corner rather than its default bulky bar. */
+    .leaflet-control-attribution {
+      font-size: 8px !important;
+      background: rgba(0,0,0,0.35) !important;
+      color: rgba(255,255,255,0.35) !important;
+    }
+    .leaflet-control-attribution a { color: rgba(255,255,255,0.45) !important; }
+    .leaflet-control-zoom { display: none; } /* broadcast graphic -- never viewer-interactive */
+
+    /* subtle interior frame lines so it still looks intentional, drawn over the map */
     .radar-inner-frame {
       position: absolute;
       top: 14px;
@@ -190,7 +227,26 @@
       border-radius: 16px;
       border: 1px solid rgba(255,255,255,0.10);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+      z-index: 2;
+      pointer-events: none;
     }
+
+    .radar-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      z-index: 2;
+      background: #0b0c10;
+      transition: opacity 0.3s ease;
+    }
+    .radar-loading.hidden { opacity: 0; pointer-events: none; }
 
     .bottom-bar {
       position: absolute;
@@ -378,11 +434,17 @@
 
     <div class="radar-panel">
       <div class="radar-head">
-        <div class="radar-title">Radar</div>
+        <div class="radar-title">
+          Radar
+          <span class="radar-product" id="radarProduct">REF</span>
+          <span class="radar-site" id="radarSite">--</span>
+        </div>
         <div class="live-pill"><span class="live-dot"></span><span>Live</span></div>
       </div>
       <div class="radar-window">
+        <div id="radarMap"></div>
         <div class="radar-inner-frame"></div>
+        <div class="radar-loading" id="radarLoading">Acquiring site...</div>
       </div>
     </div>
 
@@ -566,6 +628,7 @@
           updateLocation();
           updateWeather();
           updateAlert();
+          updateRadarSite();
         }
       } catch (err) {
         // leave last-known position/state in place -- a single missed GPS poll isn't an outage
@@ -589,6 +652,7 @@
       if (settings.latitude === null || settings.longitude === null) {
         el.alertBubble.className = 'bubble alert-bubble';
         el.alertText.textContent = '';
+        isTorWarning = false;
         return;
       }
       try {
@@ -601,13 +665,148 @@
         if (!text) {
           el.alertBubble.className = 'bubble alert-bubble';
           el.alertText.textContent = '';
+          isTorWarning = false;
           return;
         }
         el.alertText.textContent = text;
-        el.alertBubble.className = 'bubble alert-bubble show ' + alertClassFor(text);
+        const cls = alertClassFor(text);
+        el.alertBubble.className = 'bubble alert-bubble show ' + cls;
+        // Radar mode reacts to this -- see radarModeTick(). A tornado warning bumps VEL/CC
+        // to top priority over the normal REF loop, per the owner's own call.
+        isTorWarning = cls === 'tor-warning';
       } catch (err) {
         // leave last-known alert state in place -- a single missed poll isn't an outage
       }
+    }
+
+    // ---- Radar: single-site, auto-switching, looped REF normally; VEL/CC priority rotation
+    // during an active tornado warning. Backed by radar-worker (real NEXRAD Level II/III decode)
+    // via the public codeblack-radar-relay Worker -- see workers/radar-relay/ and
+    // radar-worker/worker.cjs in the main repo. No auth needed: this is public NOAA data.
+    const radarSettings = {
+      gatewayBase: params.get('radarGatewayBase') || 'https://ops.codeblackwx.com',
+      zoom: params.get('radarZoom') ? Number(params.get('radarZoom')) : 8,
+    };
+    let radarSiteId = null;
+    let radarProduct = 'REF';
+    let radarFrames = [];
+    let radarLoopIndex = 0;
+    let radarFrameFetchInFlight = false;
+    let radarTickCount = 0;
+    let torRotationIndex = 0;
+    let isTorWarning = false;
+    let radarMap = null;
+    let radarTileLayer = null;
+    const TOR_PRODUCT_ROTATION = ['VEL', 'CC'];
+    const TOR_HOLD_TICKS = 8; // 8 * radarTickIntervalMs (700ms) ~= 5.6s per product
+
+    function initRadarMap() {
+      if (radarMap || typeof L === 'undefined') return;
+      radarMap = L.map('radarMap', {
+        zoomControl: false,
+        attributionControl: true,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false,
+        touchZoom: false,
+        tap: false,
+        fadeAnimation: false,
+      }).setView([35.5, -97.5], radarSettings.zoom);
+      // Esri's free, key-less dark canvas basemap -- CARTO's equivalent free anonymous tiles
+      // now require registration, so this is the base layer that actually loads without a key.
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Esri, HERE, Garmin, FAO, NOAA, USGS',
+        maxZoom: 12,
+      }).addTo(radarMap);
+    }
+
+    // Auto-switches to whichever site is nearest the current live/manual position -- only
+    // re-centers and re-fetches when the nearest site actually changes, not on every GPS tick.
+    async function updateRadarSite() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const url = `${radarSettings.gatewayBase}/api/v1/radar/sites/nearest?lat=${settings.latitude}&lon=${settings.longitude}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('sites fetch failed');
+        const sites = await res.json();
+        const nearest = Array.isArray(sites) ? sites[0] : null;
+        if (!nearest || nearest.id === radarSiteId) return;
+        radarSiteId = nearest.id;
+        document.getElementById('radarSite').textContent = radarSiteId;
+        if (radarMap) radarMap.setView([nearest.lat, nearest.lon], radarSettings.zoom);
+        radarFrames = [];
+        radarLoopIndex = 0;
+        await fetchRadarFrames();
+      } catch (err) {
+        // leave last-known site in place -- a single missed lookup isn't an outage
+      }
+    }
+
+    async function fetchRadarFrames() {
+      if (!radarSiteId || radarFrameFetchInFlight) return;
+      radarFrameFetchInFlight = true;
+      try {
+        const limit = radarProduct === 'REF' ? 6 : 1;
+        const url = `${radarSettings.gatewayBase}/api/v1/radar/frames?site=${encodeURIComponent(radarSiteId)}&product=${radarProduct}&limit=${limit}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('frames fetch failed');
+        const frames = await res.json();
+        if (Array.isArray(frames) && frames.length) {
+          radarFrames = frames;
+          radarLoopIndex = 0;
+          document.getElementById('radarLoading').classList.add('hidden');
+        }
+      } catch (err) {
+        // leave last-known frames in place -- a single missed poll isn't an outage
+      } finally {
+        radarFrameFetchInFlight = false;
+      }
+    }
+
+    function applyRadarFrame(frame) {
+      if (!radarMap || !frame) return;
+      const tileUrl = `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png`;
+      const next = L.tileLayer(tileUrl, { opacity: 0.82, maxZoom: 12, zIndex: 10 });
+      next.addTo(radarMap);
+      const previous = radarTileLayer;
+      radarTileLayer = next;
+      // Remove the OLD layer only after the NEW one has actually painted -- swapping instantly
+      // flashes a blank map for one frame while new tiles load, which reads as a glitch/dropout
+      // on stream rather than a smooth loop.
+      next.once('load', () => { if (previous) radarMap.removeLayer(previous); });
+    }
+
+    function setRadarProduct(product) {
+      if (radarProduct === product) return;
+      radarProduct = product;
+      document.getElementById('radarProduct').textContent = product;
+      radarFrames = [];
+      radarLoopIndex = 0;
+      fetchRadarFrames();
+    }
+
+    // One shared tick drives both modes so there's a single, easy-to-reason-about clock rather
+    // than juggling separate timers per mode.
+    function radarModeTick() {
+      radarTickCount += 1;
+      if (isTorWarning) {
+        if (radarTickCount % TOR_HOLD_TICKS === 1) {
+          const product = TOR_PRODUCT_ROTATION[torRotationIndex % TOR_PRODUCT_ROTATION.length];
+          torRotationIndex += 1;
+          setRadarProduct(product);
+        }
+        if (radarFrames.length) applyRadarFrame(radarFrames[0]);
+        return;
+      }
+      if (radarProduct !== 'REF') {
+        setRadarProduct('REF');
+        torRotationIndex = 0;
+      }
+      if (!radarFrames.length) return;
+      applyRadarFrame(radarFrames[radarLoopIndex]);
+      radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
     }
 
     function scaleCanvas() {
@@ -620,6 +819,7 @@
 
     updateClock();
     setInterval(updateClock, 1000);
+    initRadarMap();
     if (settings.useLiveGps) {
       el.locationText.textContent = 'Awaiting GPS feed...';
       renderSecondaryLine();
@@ -628,11 +828,14 @@
     } else {
       updateLocation();
       updateWeather();
+      updateRadarSite();
     }
     updateAlert();
     setInterval(updateLocation, Math.max(30, settings.pollSeconds) * 1000);
     setInterval(updateWeather, Math.max(30, settings.pollSeconds) * 1000);
     setInterval(updateAlert, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(radarModeTick, 700);
+    setInterval(fetchRadarFrames, 120_000); // pick up new radar volume scans independent of site changes
     scaleCanvas();
     window.addEventListener('resize', scaleCanvas);
   </script>

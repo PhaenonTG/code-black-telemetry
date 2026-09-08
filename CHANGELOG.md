@@ -72,14 +72,37 @@ All changes logged newest-first.
   position change. Verified end-to-end with a real POST through the deployed gateway --
   "Oklahoma City, OK" / real temp-dewpoint / "Heading: W" (270° bearing) appeared with zero
   manual params.
+- App defaults (`AppConfig.kt`) were blank/wrong on the built APK -- `location_url`/`api_token`
+  empty, and `unit_id` defaulted to `cbwx-vehicle-tessa`, which doesn't match Core's actually-
+  registered unit (`cbwx-unit-tessa` -- confirmed live: only that id's `GET .../public` call
+  returns the real `display_name`/`owner_name`). Since this app is only ever installed on Nick's
+  one phone, hardcoded all three as real defaults rather than requiring SETUP entry, rebuilt, and
+  pushed the corrected values directly onto the already-installed app's stored preferences via
+  adb (a code-only rebuild wouldn't have overridden values already saved from earlier testing).
 
-### In progress
-- Live radar in the overlay's radar window (currently an intentionally transparent frame): loop,
-  zoom, product selection (REF/VEL/CC), tornado-warning-priority product switching, and
-  auto-switching single-site radar based on live chase position. The single-site backend
-  (`radar-worker/worker.cjs`, real NEXRAD Level II/III decoding from NOAA's public S3 buckets) has
-  never had a hosting decision made -- picking that up now that SSH access to a real always-on
-  host (the Core box) is confirmed working.
+### Added (live single-site radar in the overlay)
+- Deployed `radar-worker/worker.cjs` (real NEXRAD Level II/III decoding from NOAA's public S3
+  buckets -- reflectivity/velocity/storm-relative-velocity/correlation-coefficient, tile-served)
+  as a systemd service on the same host as Core -- this had never had a hosting decision made
+  since it was written. Initial memory limit (768M) was too tight for real decode (V8 OOM-
+  aborted on the first real frame); raised to 1.5G/2G after checking the server's actual
+  available RAM. New `workers/radar-relay/` (standalone Worker, VPC Service binding, public
+  routes -- radar-worker's own data is already public NOAA data, nothing to gate) exposes it at
+  `ops.codeblackwx.com/api/v1/radar/*`.
+- `classic.html`'s radar window (previously an intentionally transparent frame for a second OBS
+  layer) now renders a real, non-interactive Leaflet map: an animated loop of the last 6 REF
+  frames normally, auto-switching to whichever NEXRAD site is nearest the live/manual chase
+  position (only re-fetches on an actual nearest-site change, not every GPS tick), and --
+  the owner's explicit priority -- during an active Tornado Warning (detected from the same NWS
+  alert feed already driving the alert bubble) the loop is overridden by a VEL/CC hold-rotation
+  (~5.6s per product) instead of the normal REF animation.
+- CARTO's free anonymous basemap tiles turned out to now require registration (discovered live --
+  the panel rendered "API KEY REQUIRED" watermarks); swapped to Esri's key-less dark canvas
+  basemap, which actually loads without one.
+- Verified end-to-end, including the part that actually matters: real decoded KTLX reflectivity
+  rendering on stream, the loop visibly advancing through fetched frames, and (forced manually,
+  since no live warning was in effect to test against honestly) the VEL/CC rotation correctly
+  taking over.
 
 ## Flagship Phone Visual Polish - 2026-08-23
 
