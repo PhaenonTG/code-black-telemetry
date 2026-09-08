@@ -26,6 +26,7 @@ function config(overrides: Partial<LiveConfig> = {}): LiveConfig {
     latitude: null,
     longitude: null,
     publicIdentity: null,
+    vehicleTag: null,
     fixture: null,
     reconnectMinMs: 1000,
     reconnectMaxMs: 8000,

@@ -1,0 +1,53 @@
+.alert-ribbon {
+  --cb-edge-color: var(--ribbon-accent, var(--cb-signal-red));
+  position: absolute;
+  left: var(--safe-margin);
+  right: var(--safe-margin);
+  bottom: 194px;
+  z-index: 5;
+  background: linear-gradient(180deg, var(--cb-black) 0%, var(--cb-gunmetal) 100%);
+  clip-path: var(--cb-clip);
+  box-shadow: 0 14px 32px rgb(0 0 0 / 0.55);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: cb-wipe-in var(--cb-motion-slow) var(--cb-ease) both;
+}
+
+.alert-ribbon::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--cb-clip-size);
+  right: 0;
+  height: 2px;
+  background: var(--ribbon-accent, var(--cb-signal-red));
+}
+
+.alert-ribbon__headline {
+  font-family: var(--cb-font-display);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ribbon-accent, var(--cb-signal-red));
+}
+
+.alert-ribbon--tor-warning,
+.alert-ribbon--observed {
+  --ribbon-accent: var(--cb-warn-tornado);
+}
+
+.alert-ribbon--svr-warning {
+  --ribbon-accent: var(--cb-warn-severe);
+}
+
+.alert-ribbon--tor-watch,
+.alert-ribbon--pds-watch {
+  --ribbon-accent: var(--cb-warn-watch);
+}
+
+.alert-ribbon--meso {
+  --ribbon-accent: var(--cb-warn-discussion);
+}

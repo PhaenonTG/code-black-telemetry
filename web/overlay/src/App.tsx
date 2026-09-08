@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { BrandBug } from "./components/BrandBug";
+import { AlertRibbon } from "./components/AlertRibbon";
+import { CallsignCard } from "./components/CallsignCard";
 import { CommandRail } from "./components/CommandRail";
 import { DevControlPanel } from "./components/DevControlPanel";
 import { EventTakeover } from "./components/EventTakeover";
 import { RadarWindow } from "./components/RadarWindow";
+import { SceneFrame } from "./components/SceneFrame";
 import { readOverlayConfig } from "./config/overlayConfig";
 import type { OverlayConfig } from "./config/overlayConfig";
 import { getOverlayMode, getOverlayProvider, useOverlayState } from "./stormIntel/store";
@@ -58,8 +61,11 @@ export function App() {
       <div className="stage-frame" data-bg={config.background}>
         <div className="overlay-root">
           <div className="overlay-scale" data-position={config.position} style={overlayStyle}>
-            <BrandBug state={state} />
+            <SceneFrame />
+            <BrandBug />
             <RadarWindow />
+            <CallsignCard state={state} />
+            <AlertRibbon takeover={state.takeover} />
             <CommandRail state={state} />
           </div>
           <EventTakeover takeover={state.takeover} />

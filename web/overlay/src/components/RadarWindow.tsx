@@ -16,7 +16,12 @@ export function RadarWindow() {
             LIVE
           </span>
         </div>
-        <div className="radar-window__interior" />
+        <div className="radar-window__interior">
+          <span className="radar-window__tick radar-window__tick--tl" />
+          <span className="radar-window__tick radar-window__tick--tr" />
+          <span className="radar-window__tick radar-window__tick--bl" />
+          <span className="radar-window__tick radar-window__tick--br" />
+        </div>
       </div>
     </div>
   );

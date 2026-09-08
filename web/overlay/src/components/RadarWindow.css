@@ -48,7 +48,38 @@
 /* Interior is deliberately transparent -- see RadarWindow.tsx. Only the hairline border below
    marks where the second (radar) browser source should be sized/positioned to line up. */
 .radar-window__interior {
+  position: relative;
   flex: 1;
   border: 1px solid var(--cb-hairline);
   border-top: none;
+}
+
+.radar-window__tick {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-color: var(--cb-signal-red);
+  border-style: solid;
+  opacity: 0.7;
+}
+
+.radar-window__tick--tl {
+  top: 10px;
+  left: 10px;
+  border-width: 2px 0 0 2px;
+}
+.radar-window__tick--tr {
+  top: 10px;
+  right: 10px;
+  border-width: 2px 2px 0 0;
+}
+.radar-window__tick--bl {
+  bottom: 10px;
+  left: 10px;
+  border-width: 0 0 2px 2px;
+}
+.radar-window__tick--br {
+  bottom: 10px;
+  right: 10px;
+  border-width: 0 2px 2px 0;
 }

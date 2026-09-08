@@ -1,55 +1,15 @@
 .brand-bug {
-  --cb-edge-color: var(--cb-signal-red);
   position: absolute;
   top: var(--safe-margin);
   left: var(--safe-margin);
+  height: 44px;
   z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 56px;
-  padding: 0 18px 0 10px;
-  animation: cb-wipe-in var(--cb-motion-slow) var(--cb-ease) both;
+  opacity: 0.85;
 }
 
 .cb-brand-bug {
   display: block;
-  height: 34px;
+  height: 100%;
   width: auto;
   object-fit: contain;
-}
-
-.brand-bug__identity {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.brand-bug__name {
-  font-family: var(--cb-font-display);
-  font-weight: 700;
-  font-size: 18px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--cb-white);
-}
-
-.brand-bug__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--cb-utility-gray-dim);
-  flex: none;
-}
-
-.brand-bug__dot.freshness-current {
-  background: var(--cb-white);
-}
-
-.brand-bug__dot.freshness-aging {
-  background: var(--cb-warn-severe);
-}
-
-.brand-bug__dot.freshness-stale {
-  background: var(--cb-signal-red);
 }

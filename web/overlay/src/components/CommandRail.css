@@ -1,12 +1,11 @@
 .command-rail {
   position: absolute;
-  left: var(--safe-margin);
   right: var(--safe-margin);
   bottom: var(--safe-margin);
   display: flex;
   align-items: stretch;
   gap: 10px;
-  justify-content: center;
+  z-index: 5;
   animation: cb-wipe-in var(--cb-motion-slow) var(--cb-ease) both;
 }
 
@@ -15,8 +14,7 @@
   display: flex;
   align-items: stretch;
   gap: 0;
-  padding: 14px 26px 14px 18px;
-  max-width: 1320px;
+  padding: 14px 18px 14px 22px;
 }
 
 .rail-block {
@@ -33,84 +31,20 @@
   margin: 2px 0;
 }
 
-.rail-identity {
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 3px;
-  min-width: 150px;
-  padding-left: 4px;
-}
-
-.rail-identity__city {
-  font-family: var(--cb-font-display);
-  font-weight: 700;
-  text-transform: uppercase;
-  font-size: 18px;
-  letter-spacing: 0.01em;
-  color: var(--cb-white);
-}
-
-.rail-identity__heading {
-  font-size: 12px;
-  color: var(--cb-utility-gray);
-}
-
-.rail-identity__elev {
-  font-size: 11px;
-  color: var(--cb-utility-gray);
-}
-
-.rail-alert {
-  --cb-edge-color: var(--rail-alert-accent, var(--cb-signal-red));
-  flex-direction: row;
-  align-items: center;
-  min-width: 0;
-  max-width: 360px;
-}
-
-.rail-alert__text {
-  font-family: var(--cb-font-display);
-  font-size: 15px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--rail-alert-accent, var(--cb-signal-red));
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rail-alert--tor-warning,
-.rail-alert--observed {
-  --rail-alert-accent: var(--cb-warn-tornado);
-}
-
-.rail-alert--svr-warning {
-  --rail-alert-accent: var(--cb-warn-severe);
-}
-
-.rail-alert--tor-watch,
-.rail-alert--pds-watch {
-  --rail-alert-accent: var(--cb-warn-watch);
-}
-
-.rail-alert--meso {
-  --rail-alert-accent: var(--cb-warn-discussion);
-}
-
 .rail-score {
   flex-direction: column;
   gap: 3px;
   min-width: 96px;
+  padding-left: 0;
 }
 
 .rail-score__value {
   font-family: var(--cb-font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 28px;
+  font-size: 40px;
   font-weight: 700;
   color: var(--cb-white);
+  line-height: 1;
 }
 
 .rail-score__value[data-tier="mid"] {
@@ -127,7 +61,7 @@
 }
 
 .rail-score__max {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--cb-utility-gray);
   font-weight: 500;
 }
@@ -177,9 +111,4 @@
   padding: 2px 6px;
   color: var(--cb-warn-severe);
   border: 1px solid var(--cb-warn-severe);
-}
-
-.rail-status__chasers {
-  font-size: 11px;
-  color: var(--cb-utility-gray);
 }

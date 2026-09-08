@@ -14,6 +14,9 @@ export interface LiveConfig {
   /** Configured human display identity, e.g. "Spencer". Never the internal fleet unit ID
    * (`cbwx-unit-striker`/`cbwx-unit-tessa`) -- see `resolvePublicIdentity` in `publicIdentity.ts`. */
   publicIdentity: string | null;
+  /** Operator-facing vehicle callsign, e.g. "TESSA" -- purely cosmetic, shown alongside
+   * publicIdentity on the callsign card. Independent of the internal fleet unit_id. */
+  vehicleTag: string | null;
   /** Recorded fixture name when mode is FIXTURE. */
   fixture: string | null;
   reconnectMinMs: number;
@@ -33,6 +36,7 @@ const DEFAULTS: LiveConfig = {
   latitude: null,
   longitude: null,
   publicIdentity: null,
+  vehicleTag: null,
   fixture: null,
   reconnectMinMs: 2000,
   reconnectMaxMs: 30000,
@@ -74,6 +78,7 @@ export function readLiveConfig(search: string = window.location.search): LiveCon
     latitude: parseNumber(params.get("latitude")),
     longitude: parseNumber(params.get("longitude")),
     publicIdentity: params.get("publicIdentity") ?? DEFAULTS.publicIdentity,
+    vehicleTag: params.get("vehicleTag") ?? DEFAULTS.vehicleTag,
     fixture: params.get("fixture") ?? DEFAULTS.fixture,
     reconnectMinMs: parseNumber(params.get("reconnectMinMs")) ?? DEFAULTS.reconnectMinMs,
     reconnectMaxMs: parseNumber(params.get("reconnectMaxMs")) ?? DEFAULTS.reconnectMaxMs,
