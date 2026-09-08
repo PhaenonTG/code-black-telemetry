@@ -289,6 +289,22 @@ function viewportIntersectsCoverage(viewport: MapViewport, coverage: ProviderCov
   return viewport.south <= coverage.north && viewport.north >= coverage.south && viewport.west <= coverage.east && viewport.east >= coverage.west;
 }
 
+// isValidCoordinate only rejects garbage that isn't a coordinate at all (NaN, out of ±90/±180).
+// It happily passes a bad or placeholder coordinate a state DOT feed hands back for an offline/
+// unmapped record -- e.g. a stray 0,0 or a null-island-style fallback -- which then sails through
+// the (deliberately generous, nationwide-viewport) pointInViewport filter and renders wherever it
+// lands, hundreds of miles from the state that actually owns the feed. Bug seen live: an ARDOT
+// (Arkansas-only) camera record rendering in the Gulf of Mexico. Each provider's own coverage bbox
+// is the actual sanity check -- padded generously since real cameras/closures can legitimately sit
+// just over a state line, but not thousands of miles away.
+const COVERAGE_SANITY_PADDING_DEGREES = 2;
+function coordinateWithinCoverage(point: { lat: number; lon: number }, coverage: ProviderCoverage, padding = COVERAGE_SANITY_PADDING_DEGREES) {
+  return point.lat <= coverage.north + padding
+    && point.lat >= coverage.south - padding
+    && point.lon <= coverage.east + padding
+    && point.lon >= coverage.west - padding;
+}
+
 function pointInViewport(point: { lat: number; lon: number }, viewport: MapViewport, padding = 0.25) {
   return point.lat <= viewport.north + padding
     && point.lat >= viewport.south - padding
@@ -478,7 +494,7 @@ export async function fetchArdotRoadConditions(context: LayerQueryContext, signa
     const features = Array.isArray(json?.features) ? json.features : [];
     for (const feature of features) {
       const event = normalizeRoadFeature(feature, "ardot-idrive", kindHint);
-      if (event && pointInViewport(event, context.viewport)) results.push(event);
+      if (event && pointInViewport(event, context.viewport) && coordinateWithinCoverage(event, ARKANSAS_COVERAGE)) results.push(event);
       if (results.length >= MAX_ROAD_RESULTS) break;
     }
   }
@@ -492,7 +508,7 @@ export async function fetchArdotTrafficCameras(context: LayerQueryContext, signa
   const cameras: TrafficCamera[] = features
     .map((feature: unknown) => normalizeCameraFeature(feature, "ardot-idrive", useStreamRelay))
     .filter((camera: TrafficCamera | null): camera is TrafficCamera => camera != null)
-    .filter((camera: TrafficCamera) => pointInViewport(camera, context.viewport))
+    .filter((camera: TrafficCamera) => pointInViewport(camera, context.viewport) && coordinateWithinCoverage(camera, ARKANSAS_COVERAGE))
     .slice(0, MAX_CAMERA_RESULTS);
   return dedupeById(cameras);
 }
@@ -733,7 +749,7 @@ export async function fetchKandriveRoadConditions(context: LayerQueryContext, si
   const results = items
     .map((item) => normalizeKandriveEvent(item, "kandrive-kdot", kindHintForSlug(item)))
     .filter((event): event is RoadConditionEvent => event != null)
-    .filter((event) => pointInViewport(event, context.viewport))
+    .filter((event) => pointInViewport(event, context.viewport) && coordinateWithinCoverage(event, KANSAS_COVERAGE))
     .slice(0, MAX_ROAD_RESULTS);
   return dedupeById(results);
 }
@@ -743,7 +759,7 @@ export async function fetchKandriveTrafficCameras(context: LayerQueryContext, si
   const results = items
     .map((item) => normalizeKandriveCamera(item, "kandrive-kdot"))
     .filter((camera): camera is TrafficCamera => camera != null)
-    .filter((camera) => pointInViewport(camera, context.viewport))
+    .filter((camera) => pointInViewport(camera, context.viewport) && coordinateWithinCoverage(camera, KANSAS_COVERAGE))
     .slice(0, MAX_CAMERA_RESULTS);
   return dedupeById(results);
 }
@@ -939,7 +955,7 @@ export async function fetchModotRoadConditions(context: LayerQueryContext, signa
     const features = Array.isArray(json?.features) ? json.features : [];
     for (const feature of features) {
       const event = normalizeModotRoadFeature(feature, "modot-traveler", kindHint);
-      if (event) results.push(event);
+      if (event && coordinateWithinCoverage(event, MISSOURI_COVERAGE)) results.push(event);
       if (results.length >= MAX_ROAD_RESULTS) break;
     }
   }
@@ -953,6 +969,7 @@ export async function fetchModotTrafficCameras(context: LayerQueryContext, signa
   const cameras = features
     .map((feature: unknown) => normalizeModotCamera(feature, "modot-traveler"))
     .filter((camera: TrafficCamera | null): camera is TrafficCamera => camera != null)
+    .filter((camera: TrafficCamera) => coordinateWithinCoverage(camera, MISSOURI_COVERAGE))
     .slice(0, MAX_CAMERA_RESULTS);
   return dedupeById(cameras);
 }
@@ -1055,7 +1072,7 @@ export async function fetchOdotRoadConditions(context: LayerQueryContext, signal
     const features = Array.isArray(json?.features) ? json.features : [];
     for (const feature of features) {
       const event = normalizeWzdxFeature(feature, "odot-wzdx", kindHint);
-      if (event && pointInViewport(event, context.viewport)) results.push(event);
+      if (event && pointInViewport(event, context.viewport) && coordinateWithinCoverage(event, OKLAHOMA_COVERAGE)) results.push(event);
       if (results.length >= MAX_ROAD_RESULTS) break;
     }
   }
