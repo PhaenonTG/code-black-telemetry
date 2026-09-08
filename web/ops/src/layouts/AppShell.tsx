@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { useViewport } from "../hooks/useViewport"
 import { browserLocationAdapter, type LocationState } from "../adapters"
+import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings"
 import { Sidebar } from "./Sidebar"
 import { BottomNav } from "./BottomNav"
 import { StatusBar } from "./StatusBar"
 
 const SIDEBAR_COLLAPSED_KEY = "codeblack.ops.sidebarCollapsed"
+const POI_DEFAULT_SEEDED_KEY = "codeblack.ops.poiDefaultSeeded"
 
 function readSidebarCollapsed(): boolean {
   try {
@@ -34,6 +36,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     void browserLocationAdapter.getCurrent().then((s) => { if (!cancelled) setLocation(s) })
     const unwatch = browserLocationAdapter.watch((s) => { if (!cancelled) setLocation(s) })
     return () => { cancelled = true; unwatch() }
+  }, [])
+
+  // Nearby (gas/food/hotel/ER) defaults on for the native in-vehicle app, where it's core to the
+  // chase experience -- OPS web is a shared dashboard viewed by more than just the person driving,
+  // where a screen full of POI pins isn't the first thing wanted. This is a one-time seed the very
+  // first time this browser opens OPS web (own separate storage from native, so this can't step on
+  // anything there); it never re-applies after that, so a later explicit "turn Nearby back on"
+  // choice sticks.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(POI_DEFAULT_SEEDED_KEY)) return
+      localStorage.setItem(POI_DEFAULT_SEEDED_KEY, "1")
+    } catch {
+      return
+    }
+    void loadMapLayerVisibility().then((current) => {
+      void saveMapLayerVisibility({ ...current, poi: false })
+    })
   }, [])
 
   if (viewport === "phone") {

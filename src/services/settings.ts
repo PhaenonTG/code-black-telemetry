@@ -211,7 +211,7 @@ const CHASER_PIN_STYLE_KEY = "codeblack.chaserPinStyle";
 // (watches). Chasers default to a muted, informational white/grey. Both are just starting points;
 // full override lives in Settings.
 const DEFAULT_TEAM_PIN_STYLE: PinStyle = { color: "#3ddc70", shape: "diamond", sizeScale: 1 };
-const DEFAULT_CHASER_PIN_STYLE: PinStyle = { color: "#c7ccd6", shape: "circle", sizeScale: 1 };
+const DEFAULT_CHASER_PIN_STYLE: PinStyle = { color: "#ff2d35", shape: "circle", sizeScale: 1 };
 
 export interface TeamMember {
   id: string;
