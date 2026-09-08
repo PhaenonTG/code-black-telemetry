@@ -140,6 +140,19 @@ function LiveStatus() {
   )
 }
 
+const TWITCH_CHANNEL = 'codeblackwx'
+
+// Twitch's own embed honestly shows "codeblackwx is offline" until the channel actually goes
+// live -- no separate offline-detection needed here, the player itself carries that state. Same
+// pattern as the OPS site's /stream page (web/ops/src/pages/Stream.tsx): parent read from the
+// page's own hostname at render time rather than hardcoded, so this works on the production
+// domain, preview deployments, and local dev without an update here for each.
+function TwitchEmbed() {
+  const parent = typeof window !== 'undefined' ? window.location.hostname : 'codeblackwx.com'
+  const src = `https://player.twitch.tv/?channel=${TWITCH_CHANNEL}&parent=${parent}&muted=true`
+  return <iframe title="Code Black WX live stream" src={src} allowFullScreen style={{ width: '100%', height: '100%', border: 'none' }} />
+}
+
 function Streams() {
   const cards = [['PRIMARY CHASE UNIT','Code Black WX'],['PARTNER / FLEET','Fleet contribution'],['SPECIAL COVERAGE','Event stream']]
   return (
@@ -149,7 +162,11 @@ function Streams() {
         <div className="stream-grid">
           {cards.map(([label,title], i) => (
             <article className="stream-card" key={label}>
-              <div className={`stream-media stream-${i+1}`}><div className="stream-scan"/><div className="stream-play"><Icon name="play"/></div><span className="offline-tag">OFFLINE</span></div>
+              {i === 0 ? (
+                <div className="stream-media stream-1"><TwitchEmbed/></div>
+              ) : (
+                <div className={`stream-media stream-${i+1}`}><div className="stream-scan"/><div className="stream-play"><Icon name="play"/></div><span className="offline-tag">OFFLINE</span></div>
+              )}
               <div className="stream-copy"><span>{label}</span><strong>{title}</strong></div>
             </article>
           ))}
