@@ -413,19 +413,39 @@
     // Same shape as the original file-polling Nick Mounce overlay this is reworked from
     // (C:\GPSStream\obsoverlay.html), except location/weather/alerts now come from public,
     // CORS-open APIs directly instead of a local Python bridge writing text files -- no server
-    // component needed for this page at all. Live GPS from the chase phone isn't wired in yet
-    // (a separate in-progress piece); until then, ?latitude=&longitude= lets this be pointed at
-    // a fixed chase-target point manually.
+    // component needed for this page at all.
+    //
+    // Live position comes from the chase phone (wx.codeblack.chase) -> the codeblack-chase-
+    // gateway Worker -> Core, read back here through gateway's public GET
+    // /api/chase/location/public?unit_id=... . That route deliberately requires no caller auth
+    // (a headless OBS browser source can't hold the real CHASE_TOKEN without exposing it to
+    // anyone who views page source -- and that token also guards the POST/ingest path, so
+    // leaking it would let a page-source viewer post fake locations, not just read real ones).
+    // See cloudflare/chase-gateway/src/index.js's forwardPublicLatest for the server-side detail.
+    //
+    // ?latitude=&longitude= (if given) is a manual override for bench-testing without the phone
+    // live -- when present, live GPS polling is skipped entirely and that fixed point is used
+    // instead, same as before this was wired up.
     const params = new URLSearchParams(window.location.search);
+
+    const manualLatitude = params.get('latitude') ? Number(params.get('latitude')) : null;
+    const manualLongitude = params.get('longitude') ? Number(params.get('longitude')) : null;
 
     const settings = {
       title: params.get('title') || params.get('publicIdentity') || 'Nick Mounce',
-      latitude: params.get('latitude') ? Number(params.get('latitude')) : null,
-      longitude: params.get('longitude') ? Number(params.get('longitude')) : null,
+      latitude: manualLatitude,
+      longitude: manualLongitude,
+      bearingDeg: null,
       useClock: params.get('clock') !== 'off',
       scaleToWindow: true,
       pollSeconds: params.get('pollSeconds') ? Number(params.get('pollSeconds')) : 60,
+      useLiveGps: manualLatitude === null || manualLongitude === null,
+      chaseGatewayBase: params.get('chaseGatewayBase') || 'https://ops.codeblackwx.com',
+      unitId: params.get('unitId') || 'cbwx-unit-tessa',
+      gpsPollSeconds: params.get('gpsPollSeconds') ? Number(params.get('gpsPollSeconds')) : 5,
     };
+    let lastAppliedLat = manualLatitude;
+    let lastAppliedLon = manualLongitude;
 
     const el = {
       canvas: document.getElementById('canvas'),
@@ -451,12 +471,33 @@
       el.clockDate.textContent = now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
     }
 
+    const COMPASS_POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    function compassFor(deg) {
+      const normalized = ((deg % 360) + 360) % 360;
+      return COMPASS_POINTS[Math.round(normalized / 22.5) % 16];
+    }
+
+    // The original design's "heading" line was really one combined secondary readout (temp,
+    // dew point, and GPS heading all in one string, written together by the old Python bridge)
+    // -- rebuilt here from whichever of weather/bearing last updated, since they now come from
+    // two independent sources (Open-Meteo vs. the chase GPS feed) instead of one script.
+    let lastTemp = null;
+    let lastDew = null;
+    function renderSecondaryLine() {
+      const parts = [];
+      if (lastTemp !== null) parts.push(`Temp: ${lastTemp}°`);
+      if (lastDew !== null) parts.push(`Dew Point: ${lastDew}°`);
+      parts.push(settings.bearingDeg !== null ? `Heading: ${compassFor(settings.bearingDeg)}` : 'Heading: --');
+      el.headingText.textContent = parts.join('  |  ');
+    }
+
     // Nominatim reverse geocode -- public, CORS-open, no key. Rate-limited to ~1req/s by their
-    // usage policy; this only calls it once per settings.pollSeconds (default 60s), well under it.
+    // usage policy; this only calls it once per settings.pollSeconds (default 60s) plus on a
+    // meaningful GPS position change, well under it.
     async function updateLocation() {
       if (settings.latitude === null || settings.longitude === null) {
         el.locationText.textContent = 'Awaiting GPS feed...';
-        el.headingText.textContent = 'Heading: --';
+        renderSecondaryLine();
         return;
       }
       try {
@@ -481,11 +522,53 @@
         const res = await fetch(url);
         if (!res.ok) throw new Error('weather fetch failed');
         const data = await res.json();
-        const temp = Math.round(data.current.temperature_2m);
-        const dew = Math.round(data.current.dew_point_2m);
-        el.headingText.textContent = `Temp: ${temp}\u00b0  |  Dew Point: ${dew}\u00b0`;
+        lastTemp = Math.round(data.current.temperature_2m);
+        lastDew = Math.round(data.current.dew_point_2m);
+        renderSecondaryLine();
       } catch (err) {
-        // leave last-known heading/weather text in place -- a single missed poll isn't an outage
+        // leave last-known weather text in place -- a single missed poll isn't an outage
+      }
+    }
+
+    // Live position: chase phone -> chase-gateway Worker -> Core -> this public read. See the
+    // top-of-file comment for why this route needs no caller auth. Polled independently of (and
+    // faster than) weather/alerts, since position should feel live on stream; weather/alerts
+    // only actually re-fetch when the position has moved meaningfully, to stay well under
+    // Nominatim's rate limit.
+    async function updateGps() {
+      if (!settings.useLiveGps) return;
+      try {
+        const url = `${settings.chaseGatewayBase}/api/chase/location/public?unit_id=${encodeURIComponent(settings.unitId)}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('gps fetch failed');
+        const data = await res.json();
+        const hasFix = typeof data.lat === 'number' && typeof data.lon === 'number';
+        if (!hasFix || data.stale || data.location_sharing === false) {
+          settings.latitude = null;
+          settings.longitude = null;
+          settings.bearingDeg = null;
+          lastAppliedLat = null;
+          lastAppliedLon = null;
+          el.locationText.textContent = data.location_sharing === false ? 'Location sharing stopped' : 'Awaiting GPS feed...';
+          renderSecondaryLine();
+          return;
+        }
+        settings.bearingDeg = typeof data.bearing_deg === 'number' ? data.bearing_deg : null;
+        settings.latitude = data.lat;
+        settings.longitude = data.lon;
+        renderSecondaryLine();
+        const moved = lastAppliedLat === null
+          || Math.abs(data.lat - lastAppliedLat) > 0.01
+          || Math.abs(data.lon - lastAppliedLon) > 0.01;
+        if (moved) {
+          lastAppliedLat = data.lat;
+          lastAppliedLon = data.lon;
+          updateLocation();
+          updateWeather();
+          updateAlert();
+        }
+      } catch (err) {
+        // leave last-known position/state in place -- a single missed GPS poll isn't an outage
       }
     }
 
@@ -537,8 +620,15 @@
 
     updateClock();
     setInterval(updateClock, 1000);
-    updateLocation();
-    updateWeather();
+    if (settings.useLiveGps) {
+      el.locationText.textContent = 'Awaiting GPS feed...';
+      renderSecondaryLine();
+      updateGps();
+      setInterval(updateGps, Math.max(2, settings.gpsPollSeconds) * 1000);
+    } else {
+      updateLocation();
+      updateWeather();
+    }
     updateAlert();
     setInterval(updateLocation, Math.max(30, settings.pollSeconds) * 1000);
     setInterval(updateWeather, Math.max(30, settings.pollSeconds) * 1000);
