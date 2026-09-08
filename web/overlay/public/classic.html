@@ -147,10 +147,23 @@
       border-radius: 24px;
       background: #0b0c10;
       border: 1px solid var(--border);
-      box-shadow: var(--shadow);
+      /* Matches .bubble's shadow plus a faint inset top highlight -- the map inside stays fully
+         opaque (it has to, for clarity), so this is what carries the "liquid glass" family look
+         onto the frame itself, the same way .bubble::before's top line does. */
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
       overflow: hidden;
       z-index: 5;
       pointer-events: none;
+    }
+
+    .radar-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.85;
+      z-index: 4;
     }
 
     .radar-head {
@@ -1150,6 +1163,12 @@
     let radarProduct = 'REF';
     let radarFrames = [];
     let radarLoopIndex = 0;
+    // At CLOSE zoom the REF loop doesn't cycle through all 6 frames -- it plays only the most
+    // recent CLOSE_MINI_LOOP_FRAMES once, then holds on frame 0 (newest) for the rest of the
+    // CLOSE hold. Full motion is more useful at MID/FAR for tracking a cell's path; at CLOSE the
+    // user is already looking at the current position and a full 6-frame loop was distracting.
+    const CLOSE_MINI_LOOP_FRAMES = 3;
+    let radarCloseLoopTick = 0;
     let radarFrameFetchInFlight = false;
     let radarTickCount = 0;
     let torRotationIndex = 0;
@@ -1273,6 +1292,7 @@
         document.getElementById('radarSite').textContent = radarSiteId;
         radarFrames = [];
         radarLoopIndex = 0;
+        radarCloseLoopTick = 0;
         await fetchRadarFrames();
       } catch (err) {
         // leave last-known site in place -- a single missed lookup isn't an outage
@@ -1291,6 +1311,7 @@
         if (Array.isArray(frames) && frames.length) {
           radarFrames = frames;
           radarLoopIndex = 0;
+          radarCloseLoopTick = 0;
           preloadRadarFrames(frames);
           document.getElementById('radarLoading').classList.add('hidden');
         }
@@ -1329,7 +1350,7 @@
     function applyRadarFrame(index) {
       if (!radarMapReady) return;
       radarLayerIds.forEach((id, i) => {
-        if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === index ? 0.82 : 0);
+        if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === index ? 0.92 : 0);
       });
     }
 
@@ -1352,12 +1373,14 @@
       document.getElementById('radarProduct').textContent = product;
       radarFrames = [];
       radarLoopIndex = 0;
+      radarCloseLoopTick = 0;
       fetchRadarFrames();
     }
 
     function setRadarZoom(index) {
       if (radarZoomIndex === index) return;
       radarZoomIndex = index;
+      if (index === 0) radarCloseLoopTick = 0;
       document.getElementById('radarZoomLabel').textContent = RADAR_ZOOM_LEVELS[index].name;
       centerRadarMapOnPosition();
     }
@@ -1378,6 +1401,25 @@
 
     // One shared tick drives everything so there's a single, easy-to-reason-about clock rather
     // than juggling separate timers per mode.
+    // Advances the REF loop by one tick. At CLOSE zoom, plays only the most recent
+    // CLOSE_MINI_LOOP_FRAMES once (newest -> older) then holds on frame 0; otherwise cycles
+    // through the full pool as before.
+    function advanceRefLoop() {
+      if (!radarFrames.length) return;
+      if (radarZoomIndex === 0) {
+        if (radarCloseLoopTick < CLOSE_MINI_LOOP_FRAMES) {
+          const frameIndex = Math.min(CLOSE_MINI_LOOP_FRAMES, radarFrames.length) - 1 - radarCloseLoopTick;
+          applyRadarFrame(Math.max(0, frameIndex));
+          radarCloseLoopTick += 1;
+        } else {
+          applyRadarFrame(0);
+        }
+        return;
+      }
+      applyRadarFrame(radarLoopIndex);
+      radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
+    }
+
     function radarModeTick() {
       radarTickCount += 1;
 
@@ -1396,9 +1438,7 @@
         // Severe t-storm / flash flood warning: cycle close/mid, but no product override was
         // called for at that severity -- REF stays on and keeps looping.
         if (radarProduct !== 'REF') { setRadarProduct('REF'); torRotationIndex = 0; }
-        if (!radarFrames.length) return;
-        applyRadarFrame(radarLoopIndex);
-        radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
+        advanceRefLoop();
         return;
       }
 
@@ -1407,9 +1447,7 @@
         torRotationIndex = 0;
       }
       advanceZoom(BASELINE_ZOOM_ORDER);
-      if (!radarFrames.length) return;
-      applyRadarFrame(radarLoopIndex);
-      radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
+      advanceRefLoop();
     }
 
     function scaleCanvas() {
