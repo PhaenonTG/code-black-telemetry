@@ -217,6 +217,35 @@
     .leaflet-control-attribution a { color: rgba(255,255,255,0.45) !important; }
     .leaflet-control-zoom { display: none; } /* broadcast graphic -- never viewer-interactive */
 
+    /* Nick's live GPS position on the radar -- same continuous-pulse language this design
+       already uses (.live-dot, .brand-mark), not a one-shot flash. */
+    .radar-position-marker {
+      position: relative;
+      width: 16px;
+      height: 16px;
+    }
+    .radar-position-marker__core {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 10px rgba(255,42,42,0.85), 0 0 0 2px rgba(255,255,255,0.9);
+    }
+    .radar-position-marker__ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      border: 2px solid var(--accent);
+      animation: radarPositionPulse 1.6s infinite ease-out;
+    }
+    @keyframes radarPositionPulse {
+      0% { transform: scale(0.4); opacity: 0.9; }
+      100% { transform: scale(1.9); opacity: 0; }
+    }
+
     /* subtle interior frame lines so it still looks intentional, drawn over the map */
     .radar-inner-frame {
       position: absolute;
@@ -701,7 +730,7 @@
     const ZOOM_HOLD_TICKS = 16; // 16 * 700ms ~= 11.2s per range
     let radarZoomIndex = 0;
     let radarZoomTickCount = 0;
-    let radarSiteCenter = null;
+    let radarPositionMarker = null;
     let radarSiteId = null;
     let radarProduct = 'REF';
     let radarFrames = [];
@@ -713,7 +742,11 @@
     let isWarningActive = false;
     let radarMap = null;
     let radarTileLayer = null;
-    const TOR_PRODUCT_ROTATION = ['VEL', 'CC'];
+    // Weighted, not equal-time: VEL is the highest priority during a tornado warning, REF next,
+    // CC included but least -- expressed as slot counts in one repeating sequence (VEL:3, REF:2,
+    // CC:1) rather than three separate timers, so the total time-on-screen ratio matches that
+    // priority order exactly regardless of hold duration.
+    const TOR_PRODUCT_ROTATION = ['VEL', 'REF', 'VEL', 'CC', 'VEL', 'REF'];
     const TOR_HOLD_TICKS = 8; // 8 * radarTickIntervalMs (700ms) ~= 5.6s per product
 
     function initRadarMap() {
@@ -738,10 +771,34 @@
       }).addTo(radarMap);
     }
 
+    // Re-centers the map on Nick's own position (not the radar site -- the site only decides
+    // which station's data to pull) and keeps the pulsing marker there in sync. Called whenever
+    // position changes and whenever the zoom range advances, so the marker/center never drift
+    // apart from each other.
+    function centerRadarMapOnPosition() {
+      if (!radarMap || settings.latitude === null || settings.longitude === null) return;
+      const latlng = [settings.latitude, settings.longitude];
+      radarMap.setView(latlng, RADAR_ZOOM_LEVELS[radarZoomIndex].zoom);
+      if (!radarPositionMarker) {
+        const icon = L.divIcon({
+          className: '',
+          html: '<div class="radar-position-marker"><div class="radar-position-marker__ring"></div><div class="radar-position-marker__core"></div></div>',
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+        radarPositionMarker = L.marker(latlng, { icon, interactive: false, zIndexOffset: 1000 }).addTo(radarMap);
+      } else {
+        radarPositionMarker.setLatLng(latlng);
+      }
+    }
+
     // Auto-switches to whichever site is nearest the current live/manual position -- only
-    // re-centers and re-fetches when the nearest site actually changes, not on every GPS tick.
+    // re-fetches when the nearest site actually changes, not on every GPS tick. The map itself
+    // stays centered on Nick's own position (see centerRadarMapOnPosition), independent of which
+    // site's data happens to be feeding it.
     async function updateRadarSite() {
       if (settings.latitude === null || settings.longitude === null) return;
+      centerRadarMapOnPosition();
       try {
         const url = `${radarSettings.gatewayBase}/api/v1/radar/sites/nearest?lat=${settings.latitude}&lon=${settings.longitude}`;
         const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -750,9 +807,7 @@
         const nearest = Array.isArray(sites) ? sites[0] : null;
         if (!nearest || nearest.id === radarSiteId) return;
         radarSiteId = nearest.id;
-        radarSiteCenter = [nearest.lat, nearest.lon];
         document.getElementById('radarSite').textContent = radarSiteId;
-        if (radarMap) radarMap.setView(radarSiteCenter, RADAR_ZOOM_LEVELS[radarZoomIndex].zoom);
         radarFrames = [];
         radarLoopIndex = 0;
         await fetchRadarFrames();
@@ -808,7 +863,7 @@
       if (radarZoomIndex === index) return;
       radarZoomIndex = index;
       document.getElementById('radarZoomLabel').textContent = RADAR_ZOOM_LEVELS[index].name;
-      if (radarMap && radarSiteCenter) radarMap.setView(radarSiteCenter, RADAR_ZOOM_LEVELS[index].zoom);
+      centerRadarMapOnPosition();
     }
 
     // Indices into RADAR_ZOOM_LEVELS to cycle through. Baseline (no warning) is all three
