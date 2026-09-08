@@ -392,38 +392,41 @@
       animation: alertGlow 1.8s infinite ease-in-out;
     }
 
+    /* Escalation ladder, most severe first. tornadoDamageThreat/thunderstormDamageThreat (NWS's
+       own structured CAP fields -- see alertClassFor) drive PDS/Emergency/Considerable/Destructive;
+       everything below generic is unchanged from before. Heat Advisory no longer lives here at all
+       -- moved into the location bubble's own weather line, since it's a condition, not a warning. */
+    .alert-bubble.tor-emergency { background: linear-gradient(180deg, #6a0000, #000000); animation: alertGlowIntense 1.1s infinite ease-in-out; }
+    .alert-bubble.tor-pds { background: linear-gradient(180deg, #ff1a1a, #7a0000); }
     .alert-bubble.tor-warning { background: linear-gradient(180deg, var(--tor-warning), #b00000); }
+    .alert-bubble.svr-destructive { background: linear-gradient(180deg, #ff3300, #990015); }
+    .alert-bubble.svr-considerable { background: linear-gradient(180deg, #ff8c00, #a34700); }
     .alert-bubble.svr-warning { background: linear-gradient(180deg, var(--svr-warning), #cc7000); }
     .alert-bubble.ffw-warning { background: linear-gradient(180deg, var(--ffw-warning), #5a0000); }
     .alert-bubble.tor-watch { background: linear-gradient(180deg, var(--tor-watch), #d4d400); color: #111111; }
     .alert-bubble.svr-watch { background: linear-gradient(180deg, var(--svr-watch), #a35579); }
     .alert-bubble.ffw-watch { background: linear-gradient(180deg, var(--ffw-watch), #215f46); }
     .alert-bubble.generic { background: linear-gradient(180deg, #c0392b, #922b21); }
-    /* Heat Advisory isn't a warning-tier product -- doesn't get the full-bleed block treatment or
-       the pulsing glow real warnings get (too dramatic for something this minor), and uses NWS's
-       own official heat-advisory color rather than the generic red fallback. Renders as a small
-       compact badge instead, sized to its own text rather than filling the whole bottom-bar slot. */
-    .alert-bubble.heat-advisory {
-      background: transparent;
-      border: none;
-      box-shadow: none;
-      animation: none;
-      justify-content: flex-start;
-    }
-    .alert-bubble.heat-advisory::before { display: none; }
-    .alert-bubble.heat-advisory .alert-text {
-      display: inline-block;
-      width: auto;
-      background: linear-gradient(180deg, #FF7600, #cc5f00);
-      color: #111111;
-      padding: 10px 18px;
-      border-radius: 14px;
-      font-size: 14px;
-    }
 
     @keyframes alertGlow {
       0%, 100% { box-shadow: var(--shadow), 0 0 0 rgba(255,42,42,0); }
       50% { box-shadow: var(--shadow), 0 0 28px rgba(255,42,42,0.30); }
+    }
+
+    /* Tornado Emergency's own faster/brighter pulse -- the one tier that should visibly read as
+       "beyond a normal warning" at a glance, not just via text. */
+    @keyframes alertGlowIntense {
+      0%, 100% { box-shadow: var(--shadow), 0 0 0 rgba(255,42,42,0); }
+      50% { box-shadow: var(--shadow), 0 0 40px rgba(255,42,42,0.55); }
+    }
+
+    .alert-inner {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
     }
 
     .alert-text {
@@ -437,6 +440,22 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
+    /* Second line -- warning number + live countdown to expiration. Only ever populated for a
+       real storm-based warning with a VTEC number/expires time (see renderAlertDetail); empty and
+       collapsed for anything else, so this never adds blank space to a watch/generic alert. */
+    .alert-detail {
+      width: 100%;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.85;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .alert-detail:empty { display: none; }
 
     .clock-bubble {
       display: flex;
@@ -522,7 +541,10 @@
       </div>
 
       <div class="bubble alert-bubble" id="alertBubble">
-        <div class="alert-text" id="alertText"></div>
+        <div class="alert-inner">
+          <div class="alert-text" id="alertText"></div>
+          <div class="alert-detail" id="alertDetail"></div>
+        </div>
       </div>
 
       <div class="bubble clock-bubble">
@@ -579,6 +601,7 @@
       headingText: document.getElementById('headingText'),
       alertBubble: document.getElementById('alertBubble'),
       alertText: document.getElementById('alertText'),
+      alertDetail: document.getElementById('alertDetail'),
       clockTime: document.getElementById('clockTime'),
       clockDate: document.getElementById('clockDate'),
     };
@@ -586,6 +609,10 @@
     el.brandTitle.textContent = settings.title;
 
     function updateClock() {
+      // Reuses this same 1s tick for the alert bubble's live countdown-to-expiration -- no reason
+      // to run a second interval for the same cadence. Kept outside the useClock guard below so
+      // ?clock=off doesn't silently stop the countdown too -- the two are unrelated settings.
+      renderAlertDetail();
       if (!settings.useClock) return;
       const now = new Date();
       const tz = new Intl.DateTimeFormat([], { timeZoneName: 'short' })
@@ -609,6 +636,10 @@
     let lastTemp = null;
     let lastDew = null;
     let lastGroundObs = null; // real station reading; preferred over the model estimate below when present
+    // Heat Advisory isn't a warning-tier product -- it's a weather condition note, same idea as
+    // Temp/Dew Point on this same line, so it lives here instead of competing with real warnings
+    // for the alert-bubble slot below (see updateAlert). Set from the alert fetch, not weather.
+    let heatAdvisoryActive = false;
     function renderSecondaryLine() {
       const temp = lastGroundObs ? lastGroundObs.tempF : lastTemp;
       const dew = lastGroundObs ? lastGroundObs.dewF : lastDew;
@@ -616,6 +647,7 @@
       if (temp !== null) parts.push(`Temp: ${temp}°`);
       if (dew !== null) parts.push(`Dew Point: ${dew}°`);
       parts.push(settings.bearingDeg !== null ? `Heading: ${compassFor(settings.bearingDeg)}` : 'Heading: --');
+      if (heatAdvisoryActive) parts.push('Heat Advisory');
       el.headingText.textContent = parts.join('  |  ');
     }
 
@@ -756,22 +788,52 @@
       }
     }
 
-    function alertClassFor(text) {
-      const lower = text.toLowerCase();
-      if (lower.includes('tornado warning')) return 'tor-warning';
-      if (lower.includes('severe thunderstorm warning')) return 'svr-warning';
-      if (lower.includes('flash flood warning')) return 'ffw-warning';
-      if (lower.includes('tornado watch')) return 'tor-watch';
-      if (lower.includes('severe thunderstorm watch')) return 'svr-watch';
-      if (lower.includes('flash flood watch')) return 'ffw-watch';
-      // Not a warning-tier product -- gets its own non-red color instead of falling into generic.
-      if (lower.includes('heat advisory')) return 'heat-advisory';
+    // Takes the whole feature (not just the event name) because PDS/Tornado Emergency/
+    // Considerable/Destructive are never their own NWS `event` string -- Tornado Warning stays
+    // "Tornado Warning" even at Tornado Emergency severity. NWS conveys the escalation through
+    // structured CAP parameters instead: tornadoDamageThreat ("CONSIDERABLE" = PDS, "CATASTROPHIC"
+    // = Tornado Emergency) and thunderstormDamageThreat ("CONSIDERABLE"/"DESTRUCTIVE" for severe
+    // t-storm). Falls back to searching the free-text headline/description for "PARTICULARLY
+    // DANGEROUS SITUATION" / "TORNADO EMERGENCY" in case the structured field is ever missing but
+    // the text flag is present -- never fabricates an escalation neither signal actually shows.
+    function alertClassFor(feature) {
+      const props = feature?.properties || {};
+      const text = String(props.event || '').toLowerCase();
+      const params = props.parameters || {};
+      const firstOf = (value) => (Array.isArray(value) ? value[0] : value) || '';
+      const tornadoThreat = String(firstOf(params.tornadoDamageThreat)).toUpperCase();
+      const stormThreat = String(firstOf(params.thunderstormDamageThreat)).toUpperCase();
+      const freeText = `${props.headline || ''} ${props.description || ''}`.toUpperCase();
+
+      if (text.includes('tornado warning')) {
+        if (tornadoThreat === 'CATASTROPHIC' || freeText.includes('TORNADO EMERGENCY')) return 'tor-emergency';
+        if (tornadoThreat === 'CONSIDERABLE' || freeText.includes('PARTICULARLY DANGEROUS SITUATION')) return 'tor-pds';
+        return 'tor-warning';
+      }
+      if (text.includes('severe thunderstorm warning')) {
+        if (stormThreat === 'DESTRUCTIVE') return 'svr-destructive';
+        if (stormThreat === 'CONSIDERABLE') return 'svr-considerable';
+        return 'svr-warning';
+      }
+      if (text.includes('flash flood warning')) return 'ffw-warning';
+      if (text.includes('tornado watch')) return 'tor-watch';
+      if (text.includes('severe thunderstorm watch')) return 'svr-watch';
+      if (text.includes('flash flood watch')) return 'ffw-watch';
+      // Not a warning-tier product at all -- lives in the location bubble's weather line instead
+      // (see heatAdvisoryActive/renderSecondaryLine), never shown in the alert bubble.
+      if (text.includes('heat advisory')) return 'heat-advisory';
       return 'generic';
     }
 
-    // Tornado warning obviously outranks everything else; the rest follow NWS's own severity
-    // convention (warnings before watches, tornado before severe t-storm before flash flood).
-    const ALERT_SEVERITY_ORDER = ['tor-warning', 'svr-warning', 'ffw-warning', 'tor-watch', 'svr-watch', 'ffw-watch', 'heat-advisory', 'generic'];
+    // Warning-tier alerts a real polygon boundary/countdown/radar-mode reaction apply to --
+    // watches, heat-advisory, and generic are excluded (see the call sites below).
+    const WARNING_TIER_CLASSES = ['tor-emergency', 'tor-pds', 'tor-warning', 'svr-destructive', 'svr-considerable', 'svr-warning', 'ffw-warning'];
+
+    // Tornado Emergency obviously outranks everything; the rest escalate within their own family
+    // (PDS above plain tor-warning, destructive/considerable above plain severe) before falling to
+    // NWS's own severity convention (warnings before watches, tornado before severe before flash
+    // flood).
+    const ALERT_SEVERITY_ORDER = ['tor-emergency', 'tor-pds', 'tor-warning', 'svr-destructive', 'svr-considerable', 'svr-warning', 'ffw-warning', 'tor-watch', 'svr-watch', 'ffw-watch', 'heat-advisory', 'generic'];
     function severityRank(cls) {
       const i = ALERT_SEVERITY_ORDER.indexOf(cls);
       return i === -1 ? ALERT_SEVERITY_ORDER.length : i;
@@ -784,14 +846,28 @@
     // NWS's VTEC string (properties.parameters.VTEC[0]) carries the real, official sequential
     // event number for that alert type/office this year -- e.g.
     // "/O.NEW.KOUN.TO.W.0042.260908T0815Z-260908T0900Z/" -> 0042. This is the actual "warning
-    // number" a chaser would recognize, not something invented for this ticker.
+    // number" a chaser would recognize, not something invented for this ticker. The action field
+    // (NEW/CON/EXT/EXA/EXB/UPG/CAN/EXP/COR/ROU) is always exactly 3 letters -- this previously
+    // read \w{2} here, which never actually matched real VTEC strings at all (verified: null
+    // against the exact example in this comment) and silently produced no warning number all
+    // session without it ever being visually confirmed against a real number until now.
     function vtecEventNumber(feature) {
       const vtec = feature?.properties?.parameters?.VTEC;
       const first = Array.isArray(vtec) ? vtec[0] : null;
       if (!first) return null;
-      const match = first.match(/\.\w{2}\.\w{4}\.\w{2}\.\w\.(\d{3,4})\./);
+      const match = first.match(/\.\w{3}\.\w{4}\.\w{2}\.\w\.(\d{3,4})\./);
       return match ? match[1] : null;
     }
+
+    // NWS's own `event` field never changes for an escalated tier (Tornado Warning stays "Tornado
+    // Warning" whether or not it's PDS/Emergency) -- this is the actual label text for the tiers
+    // that need one; anything not listed here just uses its own event name.
+    const ALERT_TIER_LABELS = {
+      'tor-emergency': 'TORNADO EMERGENCY',
+      'tor-pds': 'PDS TORNADO WARNING',
+      'svr-destructive': 'DESTRUCTIVE T-STORM WARNING',
+      'svr-considerable': 'CONSIDERABLE T-STORM WARNING',
+    };
 
     // Bottom-bar alert label: warning + its (first-listed) county in one line -- previously the
     // ticker's settled state, now the only alert display at all (the separate ticker bar above
@@ -799,38 +875,90 @@
     function minimalAlertLabel(feature) {
       const props = feature.properties || {};
       const county = String(props.areaDesc || '').split(';')[0].trim();
-      const head = String(props.event || '').toUpperCase();
+      const head = ALERT_TIER_LABELS[alertClassFor(feature)] || String(props.event || '').toUpperCase();
       return county ? `${head} — ${county}` : head;
     }
 
-    // Test-only: ?simulateAlert=tor-warning|svr-warning|ffw-warning|tor-watch|svr-watch|ffw-watch|heat-advisory
-    // builds a fake NWS feature and feeds it through the exact same path a real fetch would --
-    // bubble color, county text, and the radar-mode side effects (isWarningActive/isTorWarning)
-    // all react identically, so this actually exercises the real code rather than a separate
-    // mock. Never touched unless the param is explicitly present.
+    // MM:SS normally, H:MM:SS once it's over an hour out (a fresh watch can run several hours).
+    function formatCountdown(ms) {
+      if (ms <= 0) return 'EXPIRED';
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      const mm = String(minutes).padStart(2, '0');
+      const ss = String(seconds).padStart(2, '0');
+      return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+    }
+
+    // The alert bubble's second line: warning number (real VTEC sequence, not invented) + a live
+    // countdown to expiration. Ticks every second off updateClock's own existing 1s interval
+    // rather than a second timer -- see the call site near setInterval(updateClock, ...).
+    let activeAlertFeature = null;
+    function renderAlertDetail() {
+      const feature = activeAlertFeature;
+      if (!feature) { el.alertDetail.textContent = ''; return; }
+      const number = vtecEventNumber(feature);
+      const expiresAt = feature.properties?.expires ? Date.parse(feature.properties.expires) : NaN;
+      const parts = [];
+      if (number) parts.push(`#${number}`);
+      if (Number.isFinite(expiresAt)) parts.push(`Expires ${formatCountdown(expiresAt - Date.now())}`);
+      el.alertDetail.textContent = parts.join(' · ');
+    }
+
+    // Test-only: ?simulateAlert=tor-warning|tor-pds|tor-emergency|svr-warning|svr-considerable|
+    // svr-destructive|ffw-warning|tor-watch|svr-watch|ffw-watch|heat-advisory builds a fake NWS
+    // feature (including the real tornadoDamageThreat/thunderstormDamageThreat CAP parameters for
+    // the escalated tiers, not a separate shortcut) and feeds it through the exact same path a
+    // real fetch would -- bubble color/label, polygon, countdown, and radar-mode side effects all
+    // react identically, so this actually exercises the real code rather than a separate mock.
+    // Never touched unless the param is explicitly present.
     function simulatedAlertFeature(kind) {
-      const eventNames = {
-        'tor-warning': 'Tornado Warning',
-        'svr-warning': 'Severe Thunderstorm Warning',
-        'ffw-warning': 'Flash Flood Warning',
-        'tor-watch': 'Tornado Watch',
-        'svr-watch': 'Severe Thunderstorm Watch',
-        'ffw-watch': 'Flash Flood Watch',
-        'heat-advisory': 'Heat Advisory',
-      };
-      const event = eventNames[kind];
-      if (!event) return null;
+      const config = {
+        'tor-warning': { event: 'Tornado Warning' },
+        'tor-pds': { event: 'Tornado Warning', parameters: { tornadoDamageThreat: ['CONSIDERABLE'] } },
+        'tor-emergency': { event: 'Tornado Warning', parameters: { tornadoDamageThreat: ['CATASTROPHIC'] } },
+        'svr-warning': { event: 'Severe Thunderstorm Warning' },
+        'svr-considerable': { event: 'Severe Thunderstorm Warning', parameters: { thunderstormDamageThreat: ['CONSIDERABLE'] } },
+        'svr-destructive': { event: 'Severe Thunderstorm Warning', parameters: { thunderstormDamageThreat: ['DESTRUCTIVE'] } },
+        'ffw-warning': { event: 'Flash Flood Warning' },
+        'tor-watch': { event: 'Tornado Watch' },
+        'svr-watch': { event: 'Severe Thunderstorm Watch' },
+        'ffw-watch': { event: 'Flash Flood Watch' },
+        'heat-advisory': { event: 'Heat Advisory' },
+      }[kind];
+      if (!config) return null;
       const now = new Date();
-      return {
+      const feature = {
         properties: {
           id: `urn:oid:simulated.${kind}`,
-          event,
+          event: config.event,
           areaDesc: 'Benton; Washington',
           sent: now.toISOString(),
           expires: new Date(now.getTime() + 30 * 60_000).toISOString(),
-          parameters: { VTEC: ['/O.NEW.KOUN.XX.W.0099.260908T1200Z-260908T1300Z/'] },
+          parameters: { VTEC: ['/O.NEW.KOUN.XX.W.0099.260908T1200Z-260908T1300Z/'], ...(config.parameters || {}) },
         },
       };
+      // Storm-based warnings (tornado/severe/flash flood, any tier) carry a real polygon in NWS's
+      // own feed -- simulate one too, an irregular shape (real warning polygons are never neat
+      // rectangles) deliberately NOT centered on the position so the dot sits inside it
+      // off-center, the way a real one would.
+      if (WARNING_TIER_CLASSES.includes(alertClassFor(feature))) {
+        const lon = settings.longitude ?? -97.5;
+        const lat = settings.latitude ?? 35.5;
+        feature.geometry = {
+          type: 'Polygon',
+          coordinates: [[
+            [lon - 0.28, lat - 0.10],
+            [lon - 0.05, lat - 0.22],
+            [lon + 0.20, lat - 0.06],
+            [lon + 0.16, lat + 0.18],
+            [lon - 0.10, lat + 0.20],
+            [lon - 0.28, lat - 0.10],
+          ]],
+        };
+      }
+      return feature;
     }
 
     // api.weather.gov's own ?point= geofilter already restricts results to alerts whose actual
@@ -838,48 +966,66 @@
     // ones Nick's own position is genuinely inside. No key needed (requires a User-Agent per NWS
     // policy, which fetch() from a browser cannot set; NWS accepts requests without it, just less
     // politely).
+    function clearAlertBubble() {
+      el.alertBubble.className = 'bubble alert-bubble';
+      el.alertText.textContent = '';
+      activeAlertFeature = null;
+      renderAlertDetail();
+      isTorWarning = false;
+      isWarningActive = false;
+      updateRadarWarningPolygon(null);
+    }
+
     async function updateAlert() {
       const simulateKind = params.get('simulateAlert');
       if (!simulateKind && (settings.latitude === null || settings.longitude === null)) {
-        el.alertBubble.className = 'bubble alert-bubble';
-        el.alertText.textContent = '';
-        isTorWarning = false;
-        isWarningActive = false;
+        clearAlertBubble();
+        heatAdvisoryActive = false;
+        renderSecondaryLine();
         return;
       }
       try {
-        let sorted;
+        let features;
         if (simulateKind) {
           const feature = simulatedAlertFeature(simulateKind);
-          sorted = feature ? [feature] : [];
+          features = feature ? [feature] : [];
         } else {
           const url = `https://api.weather.gov/alerts/active?point=${settings.latitude},${settings.longitude}`;
           const res = await fetch(url, { headers: { Accept: 'application/geo+json' } });
           if (!res.ok) throw new Error('alerts fetch failed');
           const data = await res.json();
-          const features = Array.isArray(data.features) ? data.features : [];
-          // Severity-weighted: the highest-ranked active alert covering this point drives the
-          // bubble/radar mode.
-          sorted = [...features].sort((a, b) => severityRank(alertClassFor(a.properties.event || '')) - severityRank(alertClassFor(b.properties.event || '')));
+          features = Array.isArray(data.features) ? data.features : [];
         }
+        // Heat Advisory shows in the location bubble's own weather line (see renderSecondaryLine),
+        // independent of whatever warning-tier alert is also active -- it never competes for the
+        // alert-bubble slot below, so it's filtered out before picking the bubble's "primary".
+        heatAdvisoryActive = features.some((f) => alertClassFor(f) === 'heat-advisory');
+        renderSecondaryLine();
+        const warningTierFeatures = features.filter((f) => alertClassFor(f) !== 'heat-advisory');
+        // Severity-weighted: the highest-ranked active alert covering this point drives the
+        // bubble/radar mode.
+        const sorted = [...warningTierFeatures].sort((a, b) => severityRank(alertClassFor(a)) - severityRank(alertClassFor(b)));
         const primary = sorted[0];
         const text = primary ? primary.properties.event : '';
         if (!text) {
-          el.alertBubble.className = 'bubble alert-bubble';
-          el.alertText.textContent = '';
-          isTorWarning = false;
-          isWarningActive = false;
+          clearAlertBubble();
           return;
         }
+        const cls = alertClassFor(primary);
         el.alertText.textContent = minimalAlertLabel(primary);
-        const cls = alertClassFor(text);
         el.alertBubble.className = 'bubble alert-bubble show ' + cls;
+        activeAlertFeature = primary;
+        renderAlertDetail();
+        // Only actual warning-tier products get a polygon drawn -- watches/advisories are always
+        // zone-based (NWS never gives them real geometry).
+        const isWarningTier = WARNING_TIER_CLASSES.includes(cls);
+        updateRadarWarningPolygon(isWarningTier ? primary : null);
         // Radar mode reacts to these -- see radarModeTick(). Any active WARNING (not a watch)
-        // outranks the normal close/mid/far zoom cycle and holds close range instead; a tornado
-        // warning specifically also bumps VEL/CC to top priority over the REF loop -- both per
-        // the owner's own explicit calls.
-        isWarningActive = cls === 'tor-warning' || cls === 'svr-warning' || cls === 'ffw-warning';
-        isTorWarning = cls === 'tor-warning';
+        // outranks the normal close/mid/far zoom cycle and holds close range instead; any tornado
+        // tier (plain/PDS/Emergency) specifically also bumps VEL/CC to top priority over the REF
+        // loop -- both per the owner's own explicit calls.
+        isWarningActive = isWarningTier;
+        isTorWarning = cls === 'tor-emergency' || cls === 'tor-pds' || cls === 'tor-warning';
       } catch (err) {
         // leave last-known alert state in place -- a single missed poll isn't an outage
       }
@@ -909,6 +1055,14 @@
     const radarSourceIds = Array.from({ length: RADAR_FRAME_POOL_SIZE }, (_, i) => `radar-source-${i}`);
     const radarLayerIds = Array.from({ length: RADAR_FRAME_POOL_SIZE }, (_, i) => `radar-layer-${i}`);
     const BLANK_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    // The actual warning polygon boundary drawn on the radar map -- any storm-based warning that
+    // carries real geometry (tornado, severe t-storm, flash flood; NOT zone-based products like
+    // watches/advisories, which NWS never gives a precise shape), not tornado-specific.
+    const WARNING_POLYGON_SOURCE_ID = 'warning-polygon-source';
+    const WARNING_POLYGON_FILL_LAYER_ID = 'warning-polygon-fill';
+    const WARNING_POLYGON_LINE_LAYER_ID = 'warning-polygon-line';
+    const EMPTY_FEATURE_COLLECTION = { type: 'FeatureCollection', features: [] };
+    let pendingWarningPolygonFeature = undefined;
     const radarSettings = { gatewayBase: params.get('radarGatewayBase') || 'https://ops.codeblackwx.com' };
     // Close/mid/far range cycle for the baseline (no-warning) loop -- Mapbox GL zoom levels,
     // higher number = tighter/closer range. Overridable per-deployment via URL params. Holds
@@ -980,10 +1134,32 @@
           radarMap.addSource(radarSourceIds[i], { type: 'raster', tiles: [BLANK_TILE], tileSize: 256 });
           radarMap.addLayer({ id: radarLayerIds[i], type: 'raster', source: radarSourceIds[i], paint: { 'raster-opacity': 0 } });
         }
+        // The actual NWS warning polygon boundary -- above the radar raster layers so the outline
+        // reads clearly against reflectivity; a plain GeoJSON source/pair of layers (fill so the
+        // covered area itself is visible, line for a crisp boundary), empty until a real
+        // storm-based warning (one that actually carries geometry -- see updateRadarWarningPolygon)
+        // is active.
+        radarMap.addSource(WARNING_POLYGON_SOURCE_ID, { type: 'geojson', data: EMPTY_FEATURE_COLLECTION });
+        radarMap.addLayer({
+          id: WARNING_POLYGON_FILL_LAYER_ID,
+          type: 'fill',
+          source: WARNING_POLYGON_SOURCE_ID,
+          paint: { 'fill-color': '#FF0000', 'fill-opacity': 0.12 },
+        });
+        radarMap.addLayer({
+          id: WARNING_POLYGON_LINE_LAYER_ID,
+          type: 'line',
+          source: WARNING_POLYGON_SOURCE_ID,
+          paint: { 'line-color': '#FF0000', 'line-width': 3, 'line-opacity': 0.95 },
+        });
         radarMapReady = true;
         if (pendingRadarFrames) {
           preloadRadarFrames(pendingRadarFrames);
           pendingRadarFrames = null;
+        }
+        if (pendingWarningPolygonFeature !== undefined) {
+          updateRadarWarningPolygon(pendingWarningPolygonFeature);
+          pendingWarningPolygonFeature = undefined;
         }
       });
     }
@@ -1076,6 +1252,19 @@
       radarLayerIds.forEach((id, i) => {
         if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === index ? 0.82 : 0);
       });
+    }
+
+    // Draws (or clears) the active warning's real polygon boundary on the radar map. `feature` is
+    // the primary NWS alert feature itself (its top-level `geometry`, not `properties` -- NWS's
+    // GeoJSON puts the actual shape there) or null/undefined to clear. Zone-based products
+    // (watches, advisories, most statements) never carry geometry -- this naturally shows nothing
+    // for those rather than needing a separate warning-vs-watch check.
+    function updateRadarWarningPolygon(feature) {
+      if (!radarMapReady) { pendingWarningPolygonFeature = feature; return; }
+      const source = radarMap.getSource(WARNING_POLYGON_SOURCE_ID);
+      if (!source) return;
+      const geometry = feature && feature.geometry;
+      source.setData(geometry ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry }] } : EMPTY_FEATURE_COLLECTION);
     }
 
     function setRadarProduct(product) {
