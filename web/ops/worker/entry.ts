@@ -35,6 +35,7 @@ import {
   verifyOpsAuth,
 } from "../functions/lib/coreGateway";
 import { ARDOT_RELAY_PREFIX, handleArdotCameraStream } from "../functions/lib/ardotCameraRelay";
+import { OVERLAY_CORE_PREFIX, handlePublicStormIntelRequest } from "../functions/lib/publicStormIntelRelay";
 
 interface Env extends GatewayEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -71,6 +72,9 @@ export default {
     }
     if (url.pathname === ARDOT_RELAY_PREFIX) {
       return handleArdotCameraStream(request);
+    }
+    if (url.pathname.startsWith(OVERLAY_CORE_PREFIX)) {
+      return handlePublicStormIntelRequest(request, env);
     }
     // Every other path: identical behavior to before this file existed -- static assets, with
     // the project's usual SPA not-found fallback for client-side routes.
