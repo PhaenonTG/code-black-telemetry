@@ -4,6 +4,7 @@ export type ObservationProviderKind =
   | "NOAA/NEXRAD"
   | "NOAA/GOES"
   | "HRRR"
+  | "NWS/SURFACE_OBS"
   | "OFFICIAL/STATE_TRANSPORTATION"
   | "CHASERNET/HUMAN"
   | "CHASERNET/MESONET"
@@ -99,6 +100,23 @@ export interface TrafficCamera {
   attribution: string;
 }
 
+// Nearby real METAR/ASOS station readings -- ground truth from outside the vehicle's own onboard
+// sensors, not a model estimate. Deliberately just three fields (temp, dewpoint, wind speed) per
+// the owner's own call: this is a quick-glance map pin, not a full station readout.
+export interface SurfaceStationObservation {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  temperatureF: number | null;
+  dewpointF: number | null;
+  windSpeedMph: number | null;
+  observedAt: number | null;
+  freshness: LayerFreshnessState;
+  stale: boolean;
+  provider: ObservationProvenance;
+}
+
 export interface ProbeObservation {
   id: string;
   name: string;
@@ -138,6 +156,7 @@ const notConfiguredProvider = (name: string): ObservationProvenance => ({
 });
 
 export { getRoadConditionsForViewport, getTrafficCamerasForViewport, fetchKandriveLiveCameraSource } from "./roadCameraProviders";
+export { getSurfaceStationsForViewport } from "./surfaceStationProvider";
 
 export async function getProbesForViewport(_context: LayerQueryContext): Promise<ViewportLayerResult<ProbeObservation>> {
   return { data: [], status: "not-configured", message: "Code Black probe provider not configured.", simulated: false, fetchedAt: Date.now() };

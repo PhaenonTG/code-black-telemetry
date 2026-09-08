@@ -28,6 +28,7 @@ const DEFAULT_VISIBILITY: MapLayerVisibility = {
   radar: false,
   roadConditions: false,
   trafficCameras: false,
+  surfaceStations: false,
   probes: false,
   chaserNet: false,
   breadcrumbs: true,
@@ -129,6 +130,14 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; source: stri
     status: "AR/KS/MO public",
     visual: "camera",
     description: "Legitimate public transportation cameras. Coverage: Arkansas DOT IDrive, Kansas DOT KanDrive, Missouri DOT Traveler Information; images load only when a marker detail is opened.",
+  },
+  {
+    key: "surfaceStations",
+    label: "Surface Stations",
+    source: "NWS/ASOS",
+    status: "Nationwide",
+    visual: "station",
+    description: "Nearby real METAR/ASOS station readings (temp, dewpoint, wind speed) -- ground truth from outside the vehicle's own onboard sensors, not a model estimate.",
   },
   {
     key: "probes",

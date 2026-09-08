@@ -14,6 +14,7 @@ export type OperationalMapLayerKey =
   | "human-reports"
   | "road-conditions"
   | "traffic-cameras"
+  | "surface-stations"
   | "probes"
   | "goes"
   | "glm"
@@ -48,6 +49,7 @@ export const DEFAULT_OPERATIONAL_LAYER_ORDER: OperationalMapLayerKey[] = [
   "nws-warnings",
   "road-conditions",
   "traffic-cameras",
+  "surface-stations",
   "breadcrumbs",
   "team-units",
   "spotter-network",

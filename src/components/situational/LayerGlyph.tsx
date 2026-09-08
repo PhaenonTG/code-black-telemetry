@@ -1,4 +1,4 @@
-export type LayerVisual = "radar" | "dish" | "alerts" | "warning" | "watch" | "mesoscaleDiscussion" | "specialStatement" | "team" | "spotter" | "poi" | "trail" | "road" | "camera" | "probe" | "network";
+export type LayerVisual = "radar" | "dish" | "alerts" | "warning" | "watch" | "mesoscaleDiscussion" | "specialStatement" | "team" | "spotter" | "poi" | "trail" | "road" | "camera" | "probe" | "network" | "station";
 
 // Shared between the dedicated Layers page and the on-map layers popover so both surfaces use the
 // same icon per layer instead of the popover staying icon-less while the page has a full glyph set.
@@ -26,5 +26,6 @@ export function LayerGlyph({ visual }: { visual: LayerVisual }) {
   if (visual === "road") return <svg {...common}><path d="M8 21 11 3M16 21 13 3M5 14h14M6 8h12" /></svg>;
   if (visual === "camera") return <svg {...common}><path d="M4 8h4l2-3h4l2 3h4v11H4z" /><circle cx="12" cy="13" r="3" /></svg>;
   if (visual === "probe") return <svg {...common}><path d="M12 3v11" /><circle cx="12" cy="17" r="4" /><path d="M8 21h8" /></svg>;
+  if (visual === "station") return <svg {...common}><rect x="10" y="3" width="4" height="12" rx="2" /><circle cx="12" cy="18" r="3" /><path d="M12 15v-4" /></svg>;
   return <svg {...common}><circle cx="12" cy="12" r="3" /><path d="M4 12h5M15 12h5M12 4v5M12 15v5" /></svg>;
 }

@@ -669,6 +669,7 @@ export interface MapLayerVisibility {
   radar: boolean;
   roadConditions: boolean;
   trafficCameras: boolean;
+  surfaceStations: boolean;
   probes: boolean;
   chaserNet: boolean;
   breadcrumbs: boolean;
@@ -771,6 +772,7 @@ const DEFAULT_MAP_LAYER_VISIBILITY: MapLayerVisibility = {
   radar: false,
   roadConditions: false,
   trafficCameras: false,
+  surfaceStations: false,
   probes: false,
   chaserNet: false,
   breadcrumbs: true,

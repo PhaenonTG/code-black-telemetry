@@ -21,7 +21,7 @@ export interface PinPoint {
   cameraData?: TrafficCamera | null;
   roadData?: RoadConditionEvent | null;
   clusterCount?: number;
-  family?: "team" | "chaser" | "report" | "probe" | "road" | "camera" | "mark";
+  family?: "team" | "chaser" | "report" | "probe" | "road" | "camera" | "mark" | "station";
   // Only meaningful when family is "road" -- picks a kind-specific glyph (flood/crash/construction/
   // etc.) instead of the generic road icon, so a glance tells you what's ahead, not just that
   // something is. See RoadConditionKind in mapLayerModels.ts for the full value set.
@@ -92,6 +92,7 @@ const FAMILY_ICON_PATHS: Partial<Record<NonNullable<PinPoint["family"]>, string>
   chaser: `<circle cx="8" cy="9" r="3" /><circle cx="16" cy="9" r="3" /><path d="M4 20c1-4 7-4 8 0M12 20c1-4 7-4 8 0" />`,
   report: `<circle cx="12" cy="12" r="3" /><path d="M4 12h5M15 12h5M12 4v5M12 15v5" />`,
   probe: `<path d="M12 3v11" /><circle cx="12" cy="17" r="4" /><path d="M8 21h8" />`,
+  station: `<rect x="10" y="3" width="4" height="12" rx="2" /><circle cx="12" cy="18" r="3" /><path d="M12 15v-4" />`,
 };
 
 // Road pins carry a lot of different real meanings under one family -- at a glance you want to know

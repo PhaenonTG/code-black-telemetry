@@ -29,12 +29,13 @@ import { updateAtlasSpotterLayer } from "./AtlasSpotterLayer";
 import { tuneAtlasStyle } from "./AtlasStyleManager";
 import { updateAtlasTeamLayer } from "./AtlasTeamLayer";
 import { updateAtlasTrafficCameraLayer } from "./AtlasTrafficCameraLayer";
+import { updateAtlasSurfaceStationLayer } from "./AtlasSurfaceStationLayer";
 import { updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import { updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRangeRingMode } from "./types";
 import { filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewport } from "./viewport";
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
-import { getRoadConditionsForViewport, getTrafficCamerasForViewport, type RoadConditionEvent, type TrafficCamera, type ViewportLayerResult } from "../services/mapLayerModels";
+import { getRoadConditionsForViewport, getTrafficCamerasForViewport, getSurfaceStationsForViewport, type RoadConditionEvent, type TrafficCamera, type SurfaceStationObservation, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
 import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, radarWorkerMissingOnWeb, setRadarStormMotion, type RadarFrame, type RadarProduct, type StormMotion } from "../services/radar";
 import { useWind } from "../hooks/useTelemetry";
@@ -244,7 +245,7 @@ export function AtlasMap({
   // shared get/save/subscribe store in services/settings.ts so the Weather page's compact map, the
   // Locate page's full map, and the new config screen all read/write the exact same state instead
   // of each map instance keeping its own independent (and previously non-persisted) copy.
-  const [layerVisibility, setLayerVisibility] = useState({ warnings: true, watches: true, mesoscaleDiscussions: true, specialStatements: true, team: true, chasers: true, poi: true, mosaic: true, radar: false, roadConditions: false, trafficCameras: false, probes: false, chaserNet: false, breadcrumbs: true });
+  const [layerVisibility, setLayerVisibility] = useState({ warnings: true, watches: true, mesoscaleDiscussions: true, specialStatements: true, team: true, chasers: true, poi: true, mosaic: true, radar: false, roadConditions: false, trafficCameras: false, surfaceStations: false, probes: false, chaserNet: false, breadcrumbs: true });
   useEffect(() => {
     const unsubscribe = subscribeMapLayerVisibility(setLayerVisibility);
     void loadMapLayerVisibility();
@@ -255,7 +256,7 @@ export function AtlasMap({
     window.addEventListener("codeblack:close-map-popovers", close);
     return () => window.removeEventListener("codeblack:close-map-popovers", close);
   }, []);
-  const { warnings: warningsVisible, watches: watchesVisible, mesoscaleDiscussions: mesoscaleDiscussionsVisible, specialStatements: specialStatementsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, radar: radarVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
+  const { warnings: warningsVisible, watches: watchesVisible, mesoscaleDiscussions: mesoscaleDiscussionsVisible, specialStatements: specialStatementsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, radar: radarVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, surfaceStations: surfaceStationsVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
     const current = getMapLayerVisibility();
     void saveMapLayerVisibility({ ...current, [key]: !current[key] });
@@ -267,8 +268,10 @@ export function AtlasMap({
   const [chaserNetReports, setChaserNetReports] = useState<ChaserNetReport[]>([]);
   const [roadConditions, setRoadConditions] = useState<RoadConditionEvent[]>([]);
   const [trafficCameras, setTrafficCameras] = useState<TrafficCamera[]>([]);
+  const [surfaceStations, setSurfaceStations] = useState<SurfaceStationObservation[]>([]);
   const [roadLayerStatus, setRoadLayerStatus] = useState<ViewportLayerResult<RoadConditionEvent>["status"]>("not-configured");
   const [cameraLayerStatus, setCameraLayerStatus] = useState<ViewportLayerResult<TrafficCamera>["status"]>("not-configured");
+  const [surfaceStationLayerStatus, setSurfaceStationLayerStatus] = useState<ViewportLayerResult<SurfaceStationObservation>["status"]>("not-configured");
   const [mosaicStatus, setMosaicStatus] = useState<MosaicStatus>("loading");
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
   const [viewport, setViewport] = useState<MapViewport | null>(null);
@@ -323,6 +326,7 @@ export function AtlasMap({
   // Cameras already never clustered (owner asked for that first, before extending it to everything
   // else here). Still viewport-filtered so off-screen cameras aren't rendered at all.
   const clusteredTrafficCameras = useMemo(() => (viewport ? filterViewportPoints(trafficCameras, viewport) : trafficCameras), [trafficCameras, viewport]);
+  const clusteredSurfaceStations = useMemo(() => (viewport ? filterViewportPoints(surfaceStations, viewport) : surfaceStations), [surfaceStations, viewport]);
 
   latestRef.current = { gps, rangeRings, expanded };
 
@@ -852,6 +856,27 @@ export function AtlasMap({
   }, [viewport, trafficCamerasVisible]);
 
   useEffect(() => {
+    if (!viewport || !surfaceStationsVisible) {
+      setSurfaceStations([]);
+      setSurfaceStationLayerStatus("not-configured");
+      return;
+    }
+    const controller = new AbortController();
+    const context = { viewport, detail: zoomDetailLevel(viewport.zoom), sessionId: null };
+    setSurfaceStationLayerStatus("ready");
+    void getSurfaceStationsForViewport(context, controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
+      setSurfaceStations(result.data);
+      setSurfaceStationLayerStatus(result.status);
+    }).catch(() => {
+      if (controller.signal.aborted) return;
+      setSurfaceStations([]);
+      setSurfaceStationLayerStatus("error");
+    });
+    return () => controller.abort();
+  }, [viewport, surfaceStationsVisible]);
+
+  useEffect(() => {
     if (!viewport || !chaserNetVisible) {
       setChaserNetMembers([]);
       setChaserNetReports([]);
@@ -902,9 +927,10 @@ export function AtlasMap({
     updateAtlasRoadConditionLayer(map, clusteredRoadConditions, roadConditionsVisible);
     updateAtlasRoadLineLayer(map, lineRoadConditions, roadConditionsVisible, styleInfoRef.current.firstSymbolLayerId);
     updateAtlasTrafficCameraLayer(map, clusteredTrafficCameras, trafficCamerasVisible);
+    updateAtlasSurfaceStationLayer(map, clusteredSurfaceStations, surfaceStationsVisible);
     updateAtlasChaserNetLayer(map, clusteredChaserNetMembers, chaserPinStyle, chaserNetVisible);
     updateAtlasChaserNetReportLayer(map, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible);
-  }, [clusteredRoadConditions, lineRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
+  }, [clusteredRoadConditions, lineRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredSurfaceStations, surfaceStationsVisible, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
 
 
   useEffect(() => {
@@ -1171,6 +1197,11 @@ export function AtlasMap({
               <input type="checkbox" checked={trafficCamerasVisible} onChange={() => toggleLayer("trafficCameras")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="camera" /></span>
               Public Cameras - {providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount)}
+            </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={surfaceStationsVisible} onChange={() => toggleLayer("surfaceStations")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="station" /></span>
+              Surface Stations - {providerStatusLabel(surfaceStationLayerStatus, surfaceStations.length, 1)}
             </label>
             <div className="atlas-layers-popover__section">FUTURE</div>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
