@@ -651,11 +651,13 @@
     // two independent sources (Open-Meteo vs. the chase GPS feed) instead of one script.
     let lastTemp = null;
     let lastDew = null;
+    let lastGroundObs = null; // { stationId, tempF, dewF } -- real METAR/ASOS reading, not Open-Meteo's model estimate
     function renderSecondaryLine() {
       const parts = [];
       if (lastTemp !== null) parts.push(`Temp: ${lastTemp}°`);
       if (lastDew !== null) parts.push(`Dew Point: ${lastDew}°`);
       parts.push(settings.bearingDeg !== null ? `Heading: ${compassFor(settings.bearingDeg)}` : 'Heading: --');
+      if (lastGroundObs) parts.push(`Ground (${lastGroundObs.stationId}): ${lastGroundObs.tempF}°/${lastGroundObs.dewF}°`);
       el.headingText.textContent = parts.join('  |  ');
     }
 
@@ -698,6 +700,60 @@
       }
     }
 
+    // Ground truth surface obs -- a real METAR/ASOS station reading (api.weather.gov, public, no
+    // key), deliberately separate from updateWeather() above (which is Open-Meteo's gridded MODEL
+    // estimate, not an actual station observation). Nearest-station lookup is two hops: /points
+    // resolves the position to its NWS gridpoint and station list URL, then that list is fetched
+    // and the nearest entry picked by straight-line distance (NWS doesn't guarantee the list is
+    // distance-sorted). Same "only re-fetch on a meaningful position change" cadence as weather/
+    // location/alerts -- a moving vehicle's nearest station doesn't change every few seconds.
+    function approxMilesBetween(lat1, lon1, lat2, lon2) {
+      const dLat = lat1 - lat2;
+      const dLon = (lon1 - lon2) * Math.cos((lat1 * Math.PI) / 180);
+      return Math.sqrt(dLat * dLat + dLon * dLon) * 69;
+    }
+    async function updateSurfaceObs() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const pointsRes = await fetch(`https://api.weather.gov/points/${settings.latitude.toFixed(4)},${settings.longitude.toFixed(4)}`, { headers: { Accept: 'application/geo+json' } });
+        if (!pointsRes.ok) throw new Error('points lookup failed');
+        const pointsData = await pointsRes.json();
+        const stationsUrl = pointsData.properties && pointsData.properties.observationStations;
+        if (!stationsUrl) throw new Error('no observationStations link');
+        const stationsRes = await fetch(stationsUrl, { headers: { Accept: 'application/geo+json' } });
+        if (!stationsRes.ok) throw new Error('stations list failed');
+        const stationsData = await stationsRes.json();
+        const features = stationsData.features || [];
+        if (!features.length) throw new Error('no nearby stations');
+        let nearest = null;
+        let nearestMiles = Infinity;
+        for (const f of features) {
+          const coords = f.geometry && f.geometry.coordinates; // [lon, lat]
+          if (!coords) continue;
+          const miles = approxMilesBetween(settings.latitude, settings.longitude, coords[1], coords[0]);
+          if (miles < nearestMiles) { nearestMiles = miles; nearest = f; }
+        }
+        if (!nearest) throw new Error('no usable station coordinates');
+        const stationId = nearest.properties.stationIdentifier;
+        const obsRes = await fetch(`https://api.weather.gov/stations/${stationId}/observations/latest`, { headers: { Accept: 'application/geo+json' } });
+        if (!obsRes.ok) throw new Error('latest observation failed');
+        const obsData = await obsRes.json();
+        const p = obsData.properties || {};
+        const tempC = p.temperature && p.temperature.value;
+        const dewC = p.dewpoint && p.dewpoint.value;
+        if (typeof tempC !== 'number' || typeof dewC !== 'number') throw new Error('observation missing temp/dewpoint');
+        lastGroundObs = {
+          stationId,
+          tempF: Math.round((tempC * 9) / 5 + 32),
+          dewF: Math.round((dewC * 9) / 5 + 32),
+        };
+        renderSecondaryLine();
+      } catch (err) {
+        // leave last-known ground obs in place -- a single missed poll isn't an outage, and this
+        // is always a supplement to updateWeather()'s model estimate, never the only reading shown
+      }
+    }
+
     // Live position: chase phone -> chase-gateway Worker -> Core -> this public read. See the
     // top-of-file comment for why this route needs no caller auth. Polled independently of (and
     // faster than) weather/alerts, since position should feel live on stream; weather/alerts
@@ -733,6 +789,7 @@
           lastAppliedLon = data.lon;
           updateLocation();
           updateWeather();
+          updateSurfaceObs();
           updateAlert();
           updateRadarSite();
         }
@@ -1155,11 +1212,13 @@
     } else {
       updateLocation();
       updateWeather();
+      updateSurfaceObs();
       updateRadarSite();
     }
     updateAlert();
     setInterval(updateLocation, Math.max(30, settings.pollSeconds) * 1000);
     setInterval(updateWeather, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateSurfaceObs, Math.max(30, settings.pollSeconds) * 1000);
     setInterval(updateAlert, Math.max(30, settings.pollSeconds) * 1000);
     setInterval(radarModeTick, 700);
     setInterval(fetchRadarFrames, 120_000); // pick up new radar volume scans independent of site changes
