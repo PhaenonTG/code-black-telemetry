@@ -23,12 +23,32 @@
       --shadow: 0 10px 30px rgba(0,0,0,0.35);
       --font: Arial, Helvetica, sans-serif;
       --panel-bg: linear-gradient(180deg, rgba(12,12,15,0.84), rgba(12,12,15,0.64));
-      --tor-warning: #FF0000;
-      --svr-warning: #FFA500;
-      --ffw-warning: #8B0000;
-      --tor-watch: #FFFF00;
-      --svr-watch: #DB7093;
-      --ffw-watch: #2E8B57;
+
+      /* Alert-bubble colors, one pair (gradient start/end) per tier -- every .alert-bubble.<tier>
+         rule below just references these instead of hardcoding hex, so changing a tier's color
+         later is a one-line edit here rather than hunting through the CSS. */
+      --alert-tor-emergency-1: #6a0000;
+      --alert-tor-emergency-2: #000000;
+      --alert-tor-pds-1: #ff1a1a;
+      --alert-tor-pds-2: #7a0000;
+      --alert-tor-warning-1: #FF0000;
+      --alert-tor-warning-2: #b00000;
+      --alert-svr-destructive-1: #ff3300;
+      --alert-svr-destructive-2: #990015;
+      --alert-svr-considerable-1: #ff8c00;
+      --alert-svr-considerable-2: #a34700;
+      --alert-svr-warning-1: #FFA500;
+      --alert-svr-warning-2: #cc7000;
+      --alert-ffw-warning-1: #8B0000;
+      --alert-ffw-warning-2: #5a0000;
+      --alert-tor-watch-1: #FFFF00;
+      --alert-tor-watch-2: #d4d400;
+      --alert-svr-watch-1: #DB7093;
+      --alert-svr-watch-2: #a35579;
+      --alert-ffw-watch-1: #2E8B57;
+      --alert-ffw-watch-2: #215f46;
+      --alert-generic-1: #c0392b;
+      --alert-generic-2: #922b21;
     }
 
     * { box-sizing: border-box; }
@@ -392,21 +412,22 @@
       animation: alertGlow 1.8s infinite ease-in-out;
     }
 
-    /* Escalation ladder, most severe first. tornadoDamageThreat/thunderstormDamageThreat (NWS's
-       own structured CAP fields -- see alertClassFor) drive PDS/Emergency/Considerable/Destructive;
-       everything below generic is unchanged from before. Heat Advisory no longer lives here at all
-       -- moved into the location bubble's own weather line, since it's a condition, not a warning. */
-    .alert-bubble.tor-emergency { background: linear-gradient(180deg, #6a0000, #000000); animation: alertGlowIntense 1.1s infinite ease-in-out; }
-    .alert-bubble.tor-pds { background: linear-gradient(180deg, #ff1a1a, #7a0000); }
-    .alert-bubble.tor-warning { background: linear-gradient(180deg, var(--tor-warning), #b00000); }
-    .alert-bubble.svr-destructive { background: linear-gradient(180deg, #ff3300, #990015); }
-    .alert-bubble.svr-considerable { background: linear-gradient(180deg, #ff8c00, #a34700); }
-    .alert-bubble.svr-warning { background: linear-gradient(180deg, var(--svr-warning), #cc7000); }
-    .alert-bubble.ffw-warning { background: linear-gradient(180deg, var(--ffw-warning), #5a0000); }
-    .alert-bubble.tor-watch { background: linear-gradient(180deg, var(--tor-watch), #d4d400); color: #111111; }
-    .alert-bubble.svr-watch { background: linear-gradient(180deg, var(--svr-watch), #a35579); }
-    .alert-bubble.ffw-watch { background: linear-gradient(180deg, var(--ffw-watch), #215f46); }
-    .alert-bubble.generic { background: linear-gradient(180deg, #c0392b, #922b21); }
+    /* Escalation ladder, most severe first -- every color here comes from the --alert-* variables
+       in :root, so re-coloring a tier later is a one-line edit up there, not a hunt through this
+       block. tornadoDamageThreat/thunderstormDamageThreat (NWS's own structured CAP fields -- see
+       alertClassFor) drive PDS/Emergency/Considerable/Destructive. Heat Advisory isn't handled at
+       all right now (deliberately -- see alertClassFor's own comment). */
+    .alert-bubble.tor-emergency { background: linear-gradient(180deg, var(--alert-tor-emergency-1), var(--alert-tor-emergency-2)); animation: alertGlowIntense 1.1s infinite ease-in-out; }
+    .alert-bubble.tor-pds { background: linear-gradient(180deg, var(--alert-tor-pds-1), var(--alert-tor-pds-2)); }
+    .alert-bubble.tor-warning { background: linear-gradient(180deg, var(--alert-tor-warning-1), var(--alert-tor-warning-2)); }
+    .alert-bubble.svr-destructive { background: linear-gradient(180deg, var(--alert-svr-destructive-1), var(--alert-svr-destructive-2)); }
+    .alert-bubble.svr-considerable { background: linear-gradient(180deg, var(--alert-svr-considerable-1), var(--alert-svr-considerable-2)); }
+    .alert-bubble.svr-warning { background: linear-gradient(180deg, var(--alert-svr-warning-1), var(--alert-svr-warning-2)); }
+    .alert-bubble.ffw-warning { background: linear-gradient(180deg, var(--alert-ffw-warning-1), var(--alert-ffw-warning-2)); }
+    .alert-bubble.tor-watch { background: linear-gradient(180deg, var(--alert-tor-watch-1), var(--alert-tor-watch-2)); color: #111111; }
+    .alert-bubble.svr-watch { background: linear-gradient(180deg, var(--alert-svr-watch-1), var(--alert-svr-watch-2)); }
+    .alert-bubble.ffw-watch { background: linear-gradient(180deg, var(--alert-ffw-watch-1), var(--alert-ffw-watch-2)); }
+    .alert-bubble.generic { background: linear-gradient(180deg, var(--alert-generic-1), var(--alert-generic-2)); }
 
     @keyframes alertGlow {
       0%, 100% { box-shadow: var(--shadow), 0 0 0 rgba(255,42,42,0); }
@@ -475,7 +496,7 @@
       flex-direction: column;
       justify-content: center;
       align-items: flex-end;
-      gap: 3px;
+      gap: 4px;
       text-align: right;
     }
 
@@ -484,19 +505,20 @@
        its type scale instead of running its own, smaller one. Growing this text also naturally
        grows the clock-bubble's fit-content width toward the location-bubble's, balancing the two
        corners without hardcoding either box to a fixed pixel width. */
+    /* Byte-for-byte the same typography as .location-text/.heading-text (size, weight, line-height,
+       letter-spacing, case) -- only text-align/justify-content differ, since this corner is
+       right-aligned instead of left. Anything typographic that differed between the two corners
+       read as visually mismatched even when the pixel sizes already matched. */
     .clock-time {
       font-size: 28px;
       font-weight: 800;
       line-height: 1.05;
-      letter-spacing: 0.02em;
     }
 
     .clock-date {
       font-size: 17px;
       color: var(--muted);
       font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
     }
   </style>
 </head>
@@ -636,10 +658,6 @@
     let lastTemp = null;
     let lastDew = null;
     let lastGroundObs = null; // real station reading; preferred over the model estimate below when present
-    // Heat Advisory isn't a warning-tier product -- it's a weather condition note, same idea as
-    // Temp/Dew Point on this same line, so it lives here instead of competing with real warnings
-    // for the alert-bubble slot below (see updateAlert). Set from the alert fetch, not weather.
-    let heatAdvisoryActive = false;
     function renderSecondaryLine() {
       const temp = lastGroundObs ? lastGroundObs.tempF : lastTemp;
       const dew = lastGroundObs ? lastGroundObs.dewF : lastDew;
@@ -647,7 +665,6 @@
       if (temp !== null) parts.push(`Temp: ${temp}°`);
       if (dew !== null) parts.push(`Dew Point: ${dew}°`);
       parts.push(settings.bearingDeg !== null ? `Heading: ${compassFor(settings.bearingDeg)}` : 'Heading: --');
-      if (heatAdvisoryActive) parts.push('Heat Advisory');
       el.headingText.textContent = parts.join('  |  ');
     }
 
@@ -819,8 +836,9 @@
       if (text.includes('tornado watch')) return 'tor-watch';
       if (text.includes('severe thunderstorm watch')) return 'svr-watch';
       if (text.includes('flash flood watch')) return 'ffw-watch';
-      // Not a warning-tier product at all -- lives in the location bubble's weather line instead
-      // (see heatAdvisoryActive/renderSecondaryLine), never shown in the alert bubble.
+      // Deliberately not handled at all for now (per the owner's own call) -- classified here only
+      // so updateAlert can filter it out below rather than let it fall through to 'generic' and
+      // render as a full red alert-bubble block, which is worse than showing nothing.
       if (text.includes('heat advisory')) return 'heat-advisory';
       return 'generic';
     }
@@ -980,8 +998,6 @@
       const simulateKind = params.get('simulateAlert');
       if (!simulateKind && (settings.latitude === null || settings.longitude === null)) {
         clearAlertBubble();
-        heatAdvisoryActive = false;
-        renderSecondaryLine();
         return;
       }
       try {
@@ -996,11 +1012,8 @@
           const data = await res.json();
           features = Array.isArray(data.features) ? data.features : [];
         }
-        // Heat Advisory shows in the location bubble's own weather line (see renderSecondaryLine),
-        // independent of whatever warning-tier alert is also active -- it never competes for the
-        // alert-bubble slot below, so it's filtered out before picking the bubble's "primary".
-        heatAdvisoryActive = features.some((f) => alertClassFor(f) === 'heat-advisory');
-        renderSecondaryLine();
+        // Heat Advisory isn't handled at all for now -- filtered out before picking the bubble's
+        // "primary" so it can never end up shown anywhere (see alertClassFor's own comment).
         const warningTierFeatures = features.filter((f) => alertClassFor(f) !== 'heat-advisory');
         // Severity-weighted: the highest-ranked active alert covering this point drives the
         // bubble/radar mode.
