@@ -460,17 +460,22 @@
       text-align: right;
     }
 
+    /* Matched to .location-text/.heading-text's own scale (28px/17px, same weights) -- the
+       bottom-left corner was the one the owner explicitly liked, so the right corner now mirrors
+       its type scale instead of running its own, smaller one. Growing this text also naturally
+       grows the clock-bubble's fit-content width toward the location-bubble's, balancing the two
+       corners without hardcoding either box to a fixed pixel width. */
     .clock-time {
-      font-size: 25px;
+      font-size: 28px;
       font-weight: 800;
-      line-height: 1;
+      line-height: 1.05;
       letter-spacing: 0.02em;
     }
 
     .clock-date {
-      font-size: 12px;
+      font-size: 17px;
       color: var(--muted);
-      font-weight: 600;
+      font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
