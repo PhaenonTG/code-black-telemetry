@@ -4,6 +4,24 @@ All changes logged newest-first.
 
 ---
 
+## Automated Mapbox Token Delivery for the Overlay - 2026-09-08
+
+### Fixed (stream overlay -- `web/overlay/`)
+- GitHub push protection rejected a commit that embedded the project's real Mapbox `pk.` token
+  directly in `classic.html`, which had been requiring `&mapboxToken=...` pasted into every OBS
+  Browser Source URL by hand. Replaced the manual URL param with an automated fetch: a new public,
+  unauthenticated endpoint (`/overlay-core/mapbox-token` on the `web/ops` worker --
+  `web/ops/functions/lib/publicMapboxToken.ts`, wired in `web/ops/worker/entry.ts`) hands back the
+  token from a Cloudflare Pages secret (`MAPBOX_PUBLIC_TOKEN`, same value as the project-wide
+  `VITE_MAPBOX_ACCESS_TOKEN`). `classic.html`'s `initRadarMap()` now awaits `resolveMapboxToken()`
+  at startup, which fetches from the gateway when no `?mapboxToken=` override is present in the
+  URL -- the OBS Browser Source URL no longer needs the token at all, only `?mapboxToken=...` when
+  deliberately testing against a different token/project.
+- Confirmed live: the endpoint returns the real token, and `classic.html` at
+  `https://codeblack-overlay.pages.dev/classic` initializes Mapbox with zero URL params.
+
+---
+
 ## OPS Web Map Fixes, Chase Fallback GPS, and Stream Overlay Revival - 2026-09-08
 
 ### Fixed (OPS web map)

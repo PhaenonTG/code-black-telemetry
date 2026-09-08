@@ -905,10 +905,11 @@
     // Deliberately not hardcoded here -- GitHub's push protection correctly rejected a commit
     // that embedded the project's real Mapbox token directly (even a "public" pk. token sitting
     // in git history on a scanned repo can be scraped and used against the account's billing
-    // quota by someone who never runs this page at all). Pass it as a URL param when actually
-    // deploying an OBS Browser Source URL: &mapboxToken=<the same VITE_MAPBOX_ACCESS_TOKEN used
-    // everywhere else in this project, from .env.local / web/ops/.env>.
-    const MAPBOX_TOKEN = params.get('mapboxToken') || '';
+    // quota by someone who never runs this page at all). Normally resolved automatically at
+    // startup from the gateway's /overlay-core/mapbox-token endpoint (see resolveMapboxToken
+    // below) -- no OBS URL param needed. &mapboxToken=... in the URL still works as an override
+    // for local testing against a different token/project.
+    let MAPBOX_TOKEN = params.get('mapboxToken') || '';
     const MAPBOX_STYLE = params.get('mapboxStyle') || 'mapbox://styles/mapbox/navigation-night-v1';
     const RADAR_SOURCE_ID = 'radar-source';
     const RADAR_LAYER_ID = 'radar-layer';
@@ -944,10 +945,27 @@
     const TOR_PRODUCT_ROTATION = ['VEL', 'REF', 'VEL', 'CC', 'VEL', 'REF'];
     const TOR_HOLD_TICKS = 8; // 8 * radarTickIntervalMs (700ms) ~= 5.6s per product
 
-    function initRadarMap() {
+    // Fetches the Mapbox public token from the gateway when it wasn't passed as a URL param.
+    // The endpoint is public/unauthenticated (same trust level as the token itself -- see the
+    // comment above MAPBOX_TOKEN) so a plain GET with no credentials is all this needs.
+    async function resolveMapboxToken() {
+      if (MAPBOX_TOKEN) return MAPBOX_TOKEN;
+      try {
+        const res = await fetch(`${radarSettings.gatewayBase}/overlay-core/mapbox-token`);
+        if (!res.ok) return '';
+        const data = await res.json();
+        return data.token || '';
+      } catch (err) {
+        return '';
+      }
+    }
+
+    async function initRadarMap() {
       if (radarMap || typeof mapboxgl === 'undefined') return;
+      MAPBOX_TOKEN = await resolveMapboxToken();
+      if (radarMap) return; // another call already initialized it while we awaited the token
       if (!MAPBOX_TOKEN) {
-        document.getElementById('radarLoading').textContent = 'Missing ?mapboxToken=';
+        document.getElementById('radarLoading').textContent = 'Mapbox token unavailable';
         return;
       }
       mapboxgl.accessToken = MAPBOX_TOKEN;

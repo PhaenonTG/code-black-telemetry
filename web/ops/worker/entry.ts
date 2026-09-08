@@ -36,8 +36,9 @@ import {
 } from "../functions/lib/coreGateway";
 import { ARDOT_RELAY_PREFIX, handleArdotCameraStream } from "../functions/lib/ardotCameraRelay";
 import { OVERLAY_CORE_PREFIX, handlePublicStormIntelRequest } from "../functions/lib/publicStormIntelRelay";
+import { MAPBOX_TOKEN_PATH, handleMapboxTokenRequest, type MapboxTokenEnv } from "../functions/lib/publicMapboxToken";
 
-interface Env extends GatewayEnv {
+interface Env extends GatewayEnv, MapboxTokenEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
 }
 
@@ -72,6 +73,9 @@ export default {
     }
     if (url.pathname === ARDOT_RELAY_PREFIX) {
       return handleArdotCameraStream(request);
+    }
+    if (url.pathname === MAPBOX_TOKEN_PATH) {
+      return handleMapboxTokenRequest(request, env);
     }
     if (url.pathname.startsWith(OVERLAY_CORE_PREFIX)) {
       return handlePublicStormIntelRequest(request, env);
