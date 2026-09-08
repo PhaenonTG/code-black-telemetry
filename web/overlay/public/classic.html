@@ -273,19 +273,6 @@
       100% { transform: scale(1.9); opacity: 0; }
     }
 
-    /* subtle interior frame lines so it still looks intentional, drawn over the map */
-    .radar-inner-frame {
-      position: absolute;
-      top: 14px;
-      left: 18px;
-      right: 18px;
-      bottom: 18px;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.10);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
-      z-index: 2;
-      pointer-events: none;
-    }
 
     .radar-loading {
       position: absolute;
@@ -547,7 +534,6 @@
       </div>
       <div class="radar-window">
         <div id="radarMap"></div>
-        <div class="radar-inner-frame"></div>
         <div class="radar-loading" id="radarLoading">Acquiring site...</div>
       </div>
     </div>
@@ -1248,13 +1234,22 @@
     // tiles until the next fetch. Unused slots (VEL/CC's single-frame case, or a REF fetch that
     // came back short) reset to blank so a stale frame from a previous product/site never lingers
     // hidden-but-loaded in a slot the loop might later flip to.
+    // Staggered, not all six at once -- calling setTiles() on every pool slot in one tight loop
+    // asked radar-worker to decode up to 6 different NEXRAD volume scans simultaneously (real,
+    // CPU-bound decode work per frame, not a cache lookup), which overloaded it enough to start
+    // timing out/502ing under the resulting burst -- visible on stream as missing/choppy frames,
+    // the opposite of what the pool was supposed to fix. Spacing each frame's request out gives
+    // radar-worker room to actually keep up; frame 0 (needed first) still loads immediately.
+    const RADAR_PRELOAD_STAGGER_MS = 650;
     function preloadRadarFrames(frames) {
       if (!radarMapReady) { pendingRadarFrames = frames; return; }
       for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
-        const source = radarMap.getSource(radarSourceIds[i]);
-        if (!source) continue;
         const frame = frames[i];
-        source.setTiles([frame ? `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png` : BLANK_TILE]);
+        const url = frame ? `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png` : BLANK_TILE;
+        window.setTimeout(() => {
+          const source = radarMap.getSource(radarSourceIds[i]);
+          if (source) source.setTiles([url]);
+        }, i * RADAR_PRELOAD_STAGGER_MS);
       }
     }
 
