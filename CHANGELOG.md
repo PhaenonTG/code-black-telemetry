@@ -109,6 +109,13 @@ All changes logged newest-first.
   instead, so a warning still shows a bit of surrounding context rather than a single fixed
   framing. Verified both the baseline CLOSE->MID->FAR advance and (forced manually) that warning
   mode correctly oscillates CLOSE<->MID only, never reaching FAR.
+- Follow-up: added a pulsing red marker (same continuous-pulse language as the existing .live-dot/
+  .brand-mark) at Nick's live GPS position, and changed the map to center on his position rather
+  than the selected radar site's location -- the site now only decides which station's data feeds
+  the tiles, not where the map points. Also reworked the tornado-warning product rotation from an
+  equal VEL/CC split to weighted slots (VEL:3, REF:2, CC:1 in one repeating cycle) per the owner's
+  refined priority call. Not using Mapbox for the map (asked directly this session) -- Leaflet
+  with Esri's key-less dark basemap, so the public overlay page needs no embedded API token.
 
 ## Flagship Phone Visual Polish - 2026-08-23
 
