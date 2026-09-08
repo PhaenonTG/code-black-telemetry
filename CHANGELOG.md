@@ -4,6 +4,83 @@ All changes logged newest-first.
 
 ---
 
+## OPS Web Map Fixes, Chase Fallback GPS, and Stream Overlay Revival - 2026-09-08
+
+### Fixed (OPS web map)
+- Traffic camera/road-condition providers rendered records with a valid-but-wrong coordinate
+  anywhere on Earth (e.g. an ARDOT camera plotted in the Gulf of Mexico) -- `isValidCoordinate()`
+  only checked a coordinate was valid *somewhere*, never that it was near the state its own
+  provider actually covers. Added a per-provider coverage-bbox sanity check (2° padding for
+  legitimate near-border records) across ARDOT/MoDOT/KanDrive/ODOT.
+- The map's `idle` event (fires constantly -- every radar frame, every mosaic tick) was also
+  updating viewport state with a brand-new object every time, so every idle tick looked like a
+  real viewport change and aborted whatever provider fetch (cameras/roads/chaser net) was
+  in flight. Cameras got stuck on "provider unavailable" forever. Removed idle's viewport update;
+  moveend/zoomend already cover every real change.
+- Follow-up regression from the above: removing idle's update also removed the only thing that
+  ever gave viewport its *first* value on a session that never pans/zooms (GPS denied, so no
+  auto-follow jump ever fires moveend either) -- every layer sat on "not configured" forever, even
+  after manually enabling it. Fixed by seeding viewport once in the map's own `load` handler.
+- Point Inspector only auto-selected a starting point when live device GPS resolved -- denied/
+  unavailable GPS left it permanently empty, requiring a manual map tap every session. Added an
+  IP-based approximate-location fallback (`ipapi.co`, cached 6h) that only kicks in once GPS has
+  actually settled to denied/unavailable, so real GPS still always wins when available.
+
+### Added (stream overlay -- `web/overlay/`)
+- Public, no-Supabase-auth Storm Intel relay (`/overlay-core/*` on the `web/ops` worker) so the
+  overlay -- a headless OBS browser source with no login flow -- can reach Core's real Storm Intel
+  REST endpoint. Reuses `forwardToCore()` from the existing authenticated gateway rather than a
+  second implementation, after confirming live that this account's production only actually works
+  through the `CORE_GATEWAY_WORKER` VPC Service Binding (the alternate public-tunnel-plus-
+  Access-headers path the code also supported does not work against the real deployed Access
+  policy).
+- `RestStormIntelProvider` now also polls REST on a `pollSeconds` interval instead of depending
+  on WS for ongoing updates, and only lets a WS status change blank the display if the socket had
+  actually opened at least once -- otherwise a WS with no working transport (the deployment's
+  actual state today; no WS relay exists yet) retried forever and re-blanked good REST data every
+  few seconds, worse than no live data at all.
+- First pass: restyled the React overlay chassis (brand pill, radar window, hero storm score,
+  bottom command rail) to live-Core data, then did a bigger creative pass (`SceneFrame` corner
+  brackets, bold `CallsignCard` identity block, `AlertRibbon`) -- **superseded same-session**: the
+  owner's actual reference was the original file-polling "Nick Mounce Storm Overlay"
+  (`C:\GPSStream\obsoverlay.html`, pre-dates this repo), and the redesign didn't match what was
+  wanted. Kept as `/`; not the one in active use.
+- `classic.html` (`web/overlay/public/`): the *original* Nick Mounce overlay reworked in place --
+  byte-for-byte the same layout/CSS (brand pill, transparent radar window for a second OBS layer,
+  location/heading bubble, color-coded NWS alert bubble, clock), with only the data source
+  changed from local file-polling to direct public CORS-open APIs (Nominatim reverse geocode,
+  Open-Meteo temp/dewpoint, api.weather.gov active alerts) plus live GPS (see below). This is the
+  one actually deployed for use: `https://codeblack-overlay.pages.dev/classic.html`.
+
+### Added (chase fallback app -- `wx.codeblack.chase`, outside this repo)
+- Deployed `codeblack-chase-gateway`, a small Cloudflare Worker at `ops.codeblackwx.com/api/chase/*`
+  routing the chase phone's GPS/video-status POSTs into Core over the same VPC Service Binding
+  pattern as the Storm Intel relay. Confirmed live that Core already had a real
+  `/api/chase/location` contract implemented (`services/core-api/.../chase_location.py`) -- the
+  gateway just needed deploying and pointing at it.
+- Root-caused a 401 on ingest: the gateway's own `CHASE_TOKEN` secret didn't match Core's
+  already-configured `CODE_BLACK_CHASE_LOCATION_TOKEN` (found via SSH to the Core host,
+  `codeblack@100.96.77.89` -- same key-based access the desktop's own SSH shortcut uses). Synced
+  the gateway secret to Core's real value; verified a full POST -> Core -> GET-back round trip.
+- Added `GET /api/chase/location/public` -- a second, deliberately unauthenticated read route on
+  the same gateway, for `classic.html` (a public page; anyone can view its source) to read live
+  position without ever holding the real bearer token, which also guards the POST/ingest path.
+  The gateway injects its own stored token server-side; the overlay page never sees it.
+- Wired `classic.html`'s location/heading into that route: polls every 5s (independent of the
+  slower weather/alert cadence), shows an honest "Awaiting GPS feed..." when the last fix is
+  stale (>15s) or sharing is off, and only re-runs reverse-geocode/weather/alerts on a meaningful
+  position change. Verified end-to-end with a real POST through the deployed gateway --
+  "Oklahoma City, OK" / real temp-dewpoint / "Heading: W" (270° bearing) appeared with zero
+  manual params.
+
+### In progress
+- Live radar in the overlay's radar window (currently an intentionally transparent frame): loop,
+  zoom, product selection (REF/VEL/CC), tornado-warning-priority product switching, and
+  auto-switching single-site radar based on live chase position. The single-site backend
+  (`radar-worker/worker.cjs`, real NEXRAD Level II/III decoding from NOAA's public S3 buckets) has
+  never had a hosting decision made -- picking that up now that SSH access to a real always-on
+  host (the Core box) is confirmed working.
+
 ## Flagship Phone Visual Polish - 2026-08-23
 
 First intentionally visible UI polish pass on top of the CSS foundation work. See
