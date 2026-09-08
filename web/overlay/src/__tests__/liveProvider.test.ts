@@ -98,6 +98,22 @@ describe("RestStormIntelProvider", () => {
     provider.disconnect();
   });
 
+  it("keeps a good REST snapshot visible when the WS never opens at all (no WS transport)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(wireSnapshotBody())));
+    const provider = new RestStormIntelProvider(config());
+    await vi.waitFor(() => expect(provider.getSnapshot().snapshot.providerName).toBe("hrrr-nomads"));
+
+    // The socket never opens -- simulate the immediate reject/close a 404-from-relay produces.
+    const ws = FakeWebSocket.instances[0];
+    ws.close();
+
+    // Real REST data must still be showing: a WS that was never actually connected has nothing
+    // to regress from, so its failure must not blank data a working REST poll already applied.
+    expect(provider.getSnapshot().snapshot.providerName).toBe("hrrr-nomads");
+    expect(provider.getSnapshot().snapshot.unavailableReason).toBeFalsy();
+    provider.disconnect();
+  });
+
   it("supports triggerTakeover/dismissTakeover identically to the simulator", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(wireSnapshotBody())));
     const provider = new RestStormIntelProvider(config());

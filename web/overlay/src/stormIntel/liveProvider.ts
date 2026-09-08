@@ -76,6 +76,8 @@ export class RestStormIntelProvider implements StormIntelProvider {
   private snapshot: OverlayState;
   private connectionStatus: StormIntelSocketStatus = "connecting";
   private disposed = false;
+  private restPollTimer: ReturnType<typeof setInterval> | null = null;
+  private wsEverOpened = false;
 
   constructor(private config: LiveConfig) {
     this.contextType = config.contextType;
@@ -102,20 +104,53 @@ export class RestStormIntelProvider implements StormIntelProvider {
         this.applyUnavailable(reason);
       });
     this.connectSocket();
+    this.startRestPolling();
+  }
+
+  // WS push is the fast path, but there is no guarantee it's actually reachable in every
+  // deployment (e.g. it may have no working transport at all in front of it yet) -- without
+  // this, a WS that never connects leaves the overlay stuck showing "connection lost" over what
+  // would otherwise be perfectly good data, forever. This polls the same REST endpoint the
+  // bootstrap uses on a `pollSeconds` cadence as an independent heartbeat: WS staleness still
+  // marks the snapshot unavailable immediately (never silently freezing old data, per the
+  // existing behavior below), but real data reliably reappears at the next successful poll
+  // rather than requiring WS to ever work at all. Reads `this.config` fresh on every tick, so a
+  // setContextType() mid-flight is picked up without needing to restart this timer.
+  private startRestPolling(): void {
+    if (this.restPollTimer) clearInterval(this.restPollTimer);
+    const intervalMs = Math.max(5, this.config.pollSeconds) * 1000;
+    this.restPollTimer = setInterval(() => {
+      if (this.disposed) return;
+      fetchStormIntelSnapshot(this.config)
+        .then((snapshot) => {
+          if (this.disposed) return;
+          this.applySnapshot(snapshot);
+        })
+        .catch(() => {
+          // A single missed poll isn't reported as unavailable on its own -- WS status (when a
+          // WS transport exists) or the next successful poll already covers a genuine outage.
+        });
+    }, intervalMs);
   }
 
   private connectSocket(): void {
     this.socket = new StormIntelSocket(this.config, {
       onEvent: (event) => {
         if (this.disposed) return;
+        this.wsEverOpened = true;
         this.applySnapshot(event.snapshot);
       },
       onStatusChange: (status) => {
         if (this.disposed) return;
         this.connectionStatus = status;
-        if (status === "stale" || status === "closed") {
-          // Never freeze the last-known snapshot's freshness indefinitely once the connection
-          // itself is known dead -- surface that explicitly instead of a silently aging badge.
+        if (status === "open") this.wsEverOpened = true;
+        // Only a regression -- a socket that DID work and then went stale/closed -- blanks the
+        // display; never freeze that kind of dead connection's last-known snapshot silently.
+        // A socket that has never once opened (no WS transport in front of Core at all, e.g.
+        // this deployment today) retries forever and would otherwise re-blank real data on every
+        // failed retry, faster than REST polling below can refresh it -- REST alone is the
+        // steady-state truth for a deployment that was never really WS-connected to begin with.
+        if ((status === "stale" || status === "closed") && this.wsEverOpened) {
           this.applyUnavailable("Live Core connection lost. Reconnecting...");
         }
       },
@@ -201,6 +236,7 @@ export class RestStormIntelProvider implements StormIntelProvider {
   disconnect(): void {
     this.disposed = true;
     this.socket?.stop();
+    if (this.restPollTimer) clearInterval(this.restPollTimer);
     this.takeoverController.disconnect();
     this.listeners.clear();
   }
