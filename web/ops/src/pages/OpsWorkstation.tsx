@@ -54,6 +54,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   const [lowBandwidth, setLowBandwidth] = useState(() => localStorage.getItem(CAMERA_BANDWIDTH_KEY) === "true");
   const [voiceAlerts, setVoiceAlerts] = useState(() => localStorage.getItem(VOICE_ALERTS_KEY) === "true");
   const spokenAlerts = useRef(new Set<string>());
+  const spokenRoads = useRef(new Set<string>());
   const [selection, setSelection] = useState<Selection | null>(null);
   const [operationalItems, setOperationalItems] = useState<{ roads: RoadConditionEvent[]; reports: StormReport[] }>({ roads: [], reports: [] });
   const [nearbyUnitId, setNearbyUnitId] = useState<string>("");
@@ -180,6 +181,15 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
       window.speechSynthesis.speak(speech);
     }
   }, [alertProducts.products, voiceAlerts]);
+  useEffect(() => {
+    if (!voiceAlerts || !("speechSynthesis" in window)) return;
+    for (const road of operationalItems.roads) {
+      if (road.closureState !== "closed" || spokenRoads.current.has(road.id)) continue;
+      spokenRoads.current.add(road.id);
+      const speech = new SpeechSynthesisUtterance(`Route alert. Road closed. ${road.title}. ${road.roadway ?? road.description}`);
+      speech.rate = 1.05; speech.pitch = 0.9; window.speechSynthesis.speak(speech);
+    }
+  }, [operationalItems.roads, voiceAlerts]);
 
   return (
     <div className="ops-workstation">
@@ -217,7 +227,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
       </div>
       <div className="ops-side-rail">
         <CameraWall cameras={pinnedCameras} onOpen={setCamera} onRemove={(id) => setPinnedCameras((current) => current.filter((item) => item.id !== id))} />
-        <IncidentTimeline alerts={alertProducts.products} roads={operationalItems.roads} reports={operationalItems.reports} onRoad={(road) => { setCamera(null); setSelection({ kind: "road", road }); }} />
+        <IncidentTimeline alerts={alertProducts.products} roads={operationalItems.roads} reports={operationalItems.reports} onRoad={(road) => { setCamera(null); setSelection({ kind: "road", road }); }} onAlert={(alert) => { setCamera(null); setSelection({ kind: "alert", alert }); }} onReport={(report) => selectPoint({ lat: report.lat, lon: report.lon })} />
         <PointInspector selectedPoint={selectedPoint} coreState={coreState} />
       </div>
     </div>

@@ -32,6 +32,7 @@ import { updateAtlasTrafficCameraLayer } from "./AtlasTrafficCameraLayer";
 import { updateAtlasSurfaceStationLayer } from "./AtlasSurfaceStationLayer";
 import { updateAtlasStormReportLayer } from "./AtlasStormReportLayer";
 import { updateAtlasRiverGaugeLayer } from "./AtlasRiverGaugeLayer";
+import { updateAtlasNavigationRouteLayer } from "./AtlasNavigationRouteLayer";
 import { updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import { ATLAS_WATCHES_FILL_LAYER, ATLAS_WATCHES_LINE_LAYER, updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRangeRingMode } from "./types";
@@ -46,6 +47,7 @@ import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../ser
 import { LayerGlyph } from "../components/situational/LayerGlyph";
 import { getNearbyStormReports, type StormReport } from "../services/stormReports";
 import { getRiverGaugesForViewport, type RiverGaugeObservation } from "../services/riverGaugeProvider";
+import { fetchNavigationRoute, type RoutePoint } from "../services/navigationRoute";
 
 const RADAR_REFRESH_MS = 90_000; // Poll the worker for a fresher scan well inside NEXRAD's ~4-6 min
 // volume-scan cadence, without hammering it every render.
@@ -83,6 +85,20 @@ function inRouteAheadCorridor(point: { lat: number; lon: number }, gps: AtlasGps
   if (distance > 20 || gps.headingDeg == null) return false;
   const delta = Math.abs(((bearingTo(gps, point) - gps.headingDeg + 540) % 360) - 180);
   return delta <= 55;
+}
+
+function distanceToRouteMiles(point: { lat: number; lon: number }, route: RoutePoint[]) {
+  let best = Number.POSITIVE_INFINITY;
+  const scale = Math.cos(point.lat * Math.PI / 180);
+  for (let index = 1; index < route.length; index += 1) {
+    const a = route[index - 1]; const b = route[index];
+    const ax = (a.lon - point.lon) * 69 * scale; const ay = (a.lat - point.lat) * 69;
+    const bx = (b.lon - point.lon) * 69 * scale; const by = (b.lat - point.lat) * 69;
+    const dx = bx - ax; const dy = by - ay; const length = dx * dx + dy * dy;
+    const t = length ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / length)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
 }
 
 type AtlasMapProps = {
@@ -319,6 +335,7 @@ export function AtlasMap({
   const [mosaicStatus, setMosaicStatus] = useState<MosaicStatus>("loading");
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
   const [routeAheadOnly, setRouteAheadOnly] = useState(false);
+  const [navigationRoute, setNavigationRoute] = useState<RoutePoint[]>([]);
   const [viewport, setViewport] = useState<MapViewport | null>(null);
   // Live vehicle mesonet wind, surfaced next to the radar instrument so a chaser can correlate
   // "what the truck is feeling right now" against "what SRV shows the storm doing" -- the actual
@@ -363,8 +380,8 @@ export function AtlasMap({
   // Road events with real line geometry (see roadCameraProviders.ts) are painted along the actual
   // road via AtlasRoadLineLayer.ts. Only the point-only remainder (ARDOT has no line source at all;
   // other providers' events without a usable line) goes through the point-pin path.
-  const operationalRoadConditions = useMemo(() => routeAheadOnly ? roadConditions.filter((event) => inRouteAheadCorridor(event, gps)) : roadConditions, [roadConditions, routeAheadOnly, gps]);
-  const operationalTrafficCameras = useMemo(() => routeAheadOnly ? trafficCameras.filter((camera) => inRouteAheadCorridor(camera, gps)) : trafficCameras, [trafficCameras, routeAheadOnly, gps]);
+  const operationalRoadConditions = useMemo(() => routeAheadOnly ? roadConditions.filter((event) => navigationRoute.length > 1 ? distanceToRouteMiles(event, navigationRoute) <= 10 : inRouteAheadCorridor(event, gps)) : roadConditions, [roadConditions, routeAheadOnly, navigationRoute, gps]);
+  const operationalTrafficCameras = useMemo(() => routeAheadOnly ? trafficCameras.filter((camera) => navigationRoute.length > 1 ? distanceToRouteMiles(camera, navigationRoute) <= 10 : inRouteAheadCorridor(camera, gps)) : trafficCameras, [trafficCameras, routeAheadOnly, navigationRoute, gps]);
   const lineRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type === "line"), [operationalRoadConditions]);
   const pointOnlyRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type !== "line"), [operationalRoadConditions]);
   const clusteredRoadConditions = useMemo(() => (viewport ? filterViewportPoints(pointOnlyRoadConditions, viewport) : pointOnlyRoadConditions), [pointOnlyRoadConditions, viewport]);
@@ -989,6 +1006,13 @@ export function AtlasMap({
     return () => controller.abort();
   }, [riverGaugesVisible, viewport]);
 
+  useEffect(() => {
+    if (!routeAheadOnly || !gps || !selectedPoint || !hasMapboxToken()) { setNavigationRoute([]); return; }
+    const controller = new AbortController();
+    void fetchNavigationRoute(gps, selectedPoint, mapboxAccessToken(), controller.signal).then(setNavigationRoute).catch(() => { if (!controller.signal.aborted) setNavigationRoute([]); });
+    return () => controller.abort();
+  }, [routeAheadOnly, gps?.lat, gps?.lon, selectedPoint?.lat, selectedPoint?.lon]);
+
   // QA/screenshot-automation hook only -- not called from any in-app UI. Camera marker positions
   // move with live provider coverage and viewport, which made landing on a real, un-clustered
   // camera pin by panning/tapping alone unreliable for scripted capture. This lets an external
@@ -1022,9 +1046,10 @@ export function AtlasMap({
     updateAtlasSurfaceStationLayer(map, clusteredSurfaceStations, surfaceStationsVisible);
     updateAtlasStormReportLayer(map, visibleStormReports, stormReportsVisible);
     updateAtlasRiverGaugeLayer(map, visibleRiverGauges, riverGaugesVisible);
+    updateAtlasNavigationRouteLayer(map, navigationRoute, routeAheadOnly, styleInfoRef.current.firstSymbolLayerId);
     updateAtlasChaserNetLayer(map, clusteredChaserNetMembers, chaserPinStyle, chaserNetVisible);
     updateAtlasChaserNetReportLayer(map, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible);
-  }, [clusteredRoadConditions, lineRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredSurfaceStations, surfaceStationsVisible, visibleStormReports, stormReportsVisible, visibleRiverGauges, riverGaugesVisible, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
+  }, [clusteredRoadConditions, lineRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredSurfaceStations, surfaceStationsVisible, visibleStormReports, stormReportsVisible, visibleRiverGauges, riverGaugesVisible, navigationRoute, routeAheadOnly, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
 
 
   useEffect(() => {
@@ -1409,7 +1434,7 @@ export function AtlasMap({
           <button type="button" aria-label="Export position trail as GPX" title="Downloads your recorded breadcrumb trail as a GPX file" disabled={trail.length === 0} onClick={() => downloadBreadcrumbExport(trail, "gpx")}>EXPORT TRAIL</button>
           <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
           <button type="button" aria-label="Toggle zoom lock" title="Stops the camera from re-zooming automatically as your speed changes" className={zoomLocked ? "active" : ""} onClick={() => setZoomLocked((value) => !value)}>ZOOM LOCK</button>
-          <button type="button" aria-label="Toggle route ahead hazards" title="Shows road hazards and cameras within 20 miles ahead of the vehicle heading" className={routeAheadOnly ? "active" : ""} onClick={() => setRouteAheadOnly((value) => !value)}>AHEAD</button>
+          <button type="button" aria-label="Toggle route ahead hazards" title="Uses the route to the selected map point; falls back to a 20-mile heading corridor" className={routeAheadOnly ? "active" : ""} onClick={() => setRouteAheadOnly((value) => !value)}>AHEAD{routeAheadOnly && navigationRoute.length > 1 ? " · ROUTE" : ""}</button>
           <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
           <button type="button" aria-label="Map layers" data-testid="atlas-map-layers-primary" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
         </div>

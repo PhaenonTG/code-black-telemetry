@@ -100,3 +100,13 @@ and a small query-parameter allowlist. It cannot be used as a general proxy.
 - `/api/camera-health` is not an open proxy: it accepts HTTPS image URLs only on reviewed DOT camera
   host suffixes, rejects non-image responses, caps media at 3 MB, and returns only a short SHA-256
   fingerprint plus response metadata.
+
+## Operations pass 3
+
+- AHEAD requests a Mapbox driving-traffic route from current GPS to the selected map point, paints
+  that route, and filters road events and cameras to a ten-mile route corridor. The existing
+  heading corridor remains the fallback when routing or a destination is unavailable.
+- VOICE also speaks newly encountered closed-road events from the active operational corridor.
+- Warning timeline entries open the warning panel, road entries open the road panel, and report
+  entries move Storm Intel selection to the report coordinate.
+- The camera wall promotes the first pinned camera across two columns as the primary view.
