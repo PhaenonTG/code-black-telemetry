@@ -23,7 +23,7 @@ export function updateAtlasRadarLayer(map: Map, frame: RadarFrame | null, opacit
       incrementAtlasCounter("sourceCreations");
     }
     if (!map.getLayer(layer)) {
-      map.addLayer({ id: layer, type: "raster", source, paint: { "raster-opacity": 0, "raster-opacity-transition": { duration: 420, delay: 0 }, "raster-fade-duration": 260, "raster-resampling": "nearest" } }, beforeLayerId);
+      map.addLayer({ id: layer, type: "raster", source, paint: { "raster-opacity": 0, "raster-opacity-transition": { duration: 650, delay: 0 }, "raster-fade-duration": 450, "raster-resampling": "nearest" } }, beforeLayerId);
       incrementAtlasCounter("layerCreations");
     }
     mounted.add(item.frameId);

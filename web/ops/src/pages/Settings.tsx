@@ -23,6 +23,8 @@ const LAYER_LABELS: Record<string, { label: string; description: string }> = {
   roadConditions: { label: "Road conditions", description: "DOT-reported closures and hazards" },
   trafficCameras: { label: "Traffic cameras", description: "Public DOT traffic camera feeds" },
   surfaceStations: { label: "Surface observations", description: "Nearby METAR and ASOS temperature, dewpoint, and wind reports" },
+  stormReports: { label: "Recent storm reports", description: "NWS and Spotter Network reports from the last two hours" },
+  riverGauges: { label: "River gauges", description: "USGS gauge height and recent rise or fall rate at zoom 5 and closer" },
   probes: { label: "Probe deployments", description: "Deployed instrument probe locations" },
   chaserNet: { label: "Chaser Net reports", description: "Community-submitted ground truth reports" },
   breadcrumbs: { label: "GPS trail", description: "Your own recent movement history on the map" },

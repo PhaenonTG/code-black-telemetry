@@ -19,6 +19,24 @@ Updated: 2026-09-09
   squares are retired.
 - Telemetry is not marked live merely because Core health responds. A live vehicle sample must be
   observed before a live telemetry state is appropriate.
+- Camera markers can be pinned into a nine-camera, snapshot-first wall in the right operations
+  rail. Pinned cameras persist in the browser; failed media is visibly marked and can be reopened
+  into the full stream viewer.
+- Snapshot Mode forces the full viewer to prefer provider stills over HLS/video and persists per
+  browser. The LOW DATA layer preset also disables single-site radar and camera markers.
+- AHEAD filters public cameras and road hazards to four miles around the vehicle plus a 20-mile,
+  110-degree forward corridor based on GPS heading.
+- Operational presets provide Intercept, Travel, Flood, Night, and Low Data baselines while all
+  individual layer controls remain available.
+- NWS and Spotter Network storm reports remain for two hours and visibly fade after 45 minutes.
+- USGS river gauges appear at zoom 5 and closer with current stage and approximately one-hour
+  rise/fall rate. They do not claim flood stage because that threshold is not part of the USGS
+  instantaneous-value response.
+- Iowa RWIS stations augment METAR/ASOS with air temperature, dewpoint, sustained/gust wind,
+  visibility, precipitation type, and road/mile-marker context.
+- Single-site radar holds twelve client frames, crossfades raster opacity over 650 ms, and keeps up
+  to 24 worker frames per site/product/tilt for 30 minutes. Worker site eviction retains the three
+  most recently used sites and removes orphaned tiles.
 
 ## Camera coverage
 
@@ -57,3 +75,10 @@ and a small query-parameter allowlist. It cannot be used as a general proxy.
   uses the same layout for everyone and preserves each browser's saved layer choices.
 - OPS single-site radar uses the deployed same-origin `/api/v1/radar` relay. Other web builds still
   require an explicit worker URL and must state when it is unavailable.
+- Flood-stage categorization awaits a reliable NOAA NWPS gauge-to-threshold contract. Current USGS
+  pins show observed height and trend only.
+- Camera freeze detection needs a same-origin media health relay capable of comparing image bytes or
+  validators; the browser currently reports image load failure, provider freshness, and age.
+- Mississippi and Louisiana camera adapters remain gated on stable provider contracts. Hazcams
+  requires redistribution permission, Texas requires an approved API key, and Flock remains out of
+  scope as restricted ALPR data.

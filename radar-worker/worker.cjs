@@ -25,10 +25,10 @@ const PRODUCT_TO_ACCESSOR = {
   CC: "getHighresCorrelationCoefficient",
 };
 const ET_CODES = ["EET", "NET"];
-const FRAME_LIMIT = 18;
+const FRAME_LIMIT = 24;
 const SITE_LIMIT = 3;
 const TILE_SIZE = 256;
-const CACHE_TTL_MS = 10 * 60_000;
+const CACHE_TTL_MS = 30 * 60_000;
 const STALE_MS = 18 * 60_000;
 const DELAYED_MS = 8 * 60_000;
 
@@ -459,9 +459,16 @@ function cacheFrame(frame) {
   frames.set(frame.id, frame);
   siteUse.set(frame.site.id, Date.now());
   const grouped = [...frames.values()].filter((item) => item.site.id === frame.site.id && item.product === frame.product && item.tilt === frame.tilt).sort((a, b) => b.processedAt - a.processedAt);
-  grouped.slice(FRAME_LIMIT).forEach((item) => frames.delete(item.id));
-  const oldSites = [...siteUse.entries()].sort((a, b) => b[1] - a[1]).slice(SITE_LIMIT).map(([site]) => site);
-  for (const item of [...frames.values()]) if (oldSites.includes(item.site.id)) frames.delete(item.id);
+  const evicted = grouped.slice(FRAME_LIMIT);
+  evicted.forEach((item) => frames.delete(item.id));
+  const keepSites = new Set([...siteUse.entries()].sort((a, b) => b[1] - a[1]).slice(0, SITE_LIMIT).map(([site]) => site));
+  for (const item of [...frames.values()]) {
+    if (!keepSites.has(item.site.id)) { frames.delete(item.id); evicted.push(item); }
+  }
+  for (const item of evicted) {
+    for (const key of tiles.keys()) if (key.startsWith(`${item.id}/`)) tiles.delete(key);
+  }
+  for (const site of [...siteUse.keys()]) if (!keepSites.has(site)) siteUse.delete(site);
 }
 
 function renderTile(frame, z, x, y) {

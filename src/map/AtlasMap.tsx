@@ -30,6 +30,8 @@ import { tuneAtlasStyle } from "./AtlasStyleManager";
 import { updateAtlasTeamLayer } from "./AtlasTeamLayer";
 import { updateAtlasTrafficCameraLayer } from "./AtlasTrafficCameraLayer";
 import { updateAtlasSurfaceStationLayer } from "./AtlasSurfaceStationLayer";
+import { updateAtlasStormReportLayer } from "./AtlasStormReportLayer";
+import { updateAtlasRiverGaugeLayer } from "./AtlasRiverGaugeLayer";
 import { updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import { ATLAS_WATCHES_FILL_LAYER, ATLAS_WATCHES_LINE_LAYER, updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRangeRingMode } from "./types";
@@ -42,10 +44,12 @@ import { useWind } from "../hooks/useTelemetry";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
 import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
 import { LayerGlyph } from "../components/situational/LayerGlyph";
+import { getNearbyStormReports, type StormReport } from "../services/stormReports";
+import { getRiverGaugesForViewport, type RiverGaugeObservation } from "../services/riverGaugeProvider";
 
 const RADAR_REFRESH_MS = 90_000; // Poll the worker for a fresher scan well inside NEXRAD's ~4-6 min
 // volume-scan cadence, without hammering it every render.
-const RADAR_LOOP_FRAME_COUNT = 8; // "Last so many frames" loop depth -- long enough to show real
+const RADAR_LOOP_FRAME_COUNT = 12; // "Last so many frames" loop depth -- long enough to show real
 // storm motion, short enough that a slow worker/connection doesn't stall the toggle for ages.
 
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
@@ -58,6 +62,28 @@ const WATCHES_REFRESH_MS = 5 * 60_000; // Watches are issued/canceled far less o
 // own -- long enough to actually look at something without fighting the vehicle's own movement,
 // short enough that walking away doesn't strand the map wherever it was left.
 const INTERACTION_PAUSE_MS = 2 * 60_000;
+
+function bearingTo(from: { lat: number; lon: number }, to: { lat: number; lon: number }) {
+  const lat1 = from.lat * Math.PI / 180;
+  const lat2 = to.lat * Math.PI / 180;
+  const deltaLon = (to.lon - from.lon) * Math.PI / 180;
+  return (Math.atan2(Math.sin(deltaLon) * Math.cos(lat2), Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon)) * 180 / Math.PI + 360) % 360;
+}
+
+function milesBetween(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
+  const latMiles = (b.lat - a.lat) * 69;
+  const lonMiles = (b.lon - a.lon) * 69 * Math.cos(a.lat * Math.PI / 180);
+  return Math.hypot(latMiles, lonMiles);
+}
+
+function inRouteAheadCorridor(point: { lat: number; lon: number }, gps: AtlasGpsPoint | null) {
+  if (!gps) return true;
+  const distance = milesBetween(gps, point);
+  if (distance <= 4) return true;
+  if (distance > 20 || gps.headingDeg == null) return false;
+  const delta = Math.abs(((bearingTo(gps, point) - gps.headingDeg + 540) % 360) - 180);
+  return delta <= 55;
+}
 
 type AtlasMapProps = {
   gps: AtlasGpsPoint | null;
@@ -247,7 +273,7 @@ export function AtlasMap({
   // shared get/save/subscribe store in services/settings.ts so the Weather page's compact map, the
   // Locate page's full map, and the new config screen all read/write the exact same state instead
   // of each map instance keeping its own independent (and previously non-persisted) copy.
-  const [layerVisibility, setLayerVisibility] = useState({ warnings: true, watches: true, mesoscaleDiscussions: true, specialStatements: true, team: true, chasers: true, poi: true, mosaic: true, radar: false, roadConditions: false, trafficCameras: false, surfaceStations: false, probes: false, chaserNet: false, breadcrumbs: true });
+  const [layerVisibility, setLayerVisibility] = useState({ warnings: true, watches: true, mesoscaleDiscussions: true, specialStatements: true, team: true, chasers: true, poi: true, mosaic: true, radar: false, roadConditions: false, trafficCameras: false, surfaceStations: false, stormReports: true, riverGauges: false, probes: false, chaserNet: false, breadcrumbs: true });
   useEffect(() => {
     const unsubscribe = subscribeMapLayerVisibility(setLayerVisibility);
     void loadMapLayerVisibility();
@@ -258,10 +284,24 @@ export function AtlasMap({
     window.addEventListener("codeblack:close-map-popovers", close);
     return () => window.removeEventListener("codeblack:close-map-popovers", close);
   }, []);
-  const { warnings: warningsVisible, watches: watchesVisible, mesoscaleDiscussions: mesoscaleDiscussionsVisible, specialStatements: specialStatementsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, radar: radarVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, surfaceStations: surfaceStationsVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
+  const { warnings: warningsVisible, watches: watchesVisible, mesoscaleDiscussions: mesoscaleDiscussionsVisible, specialStatements: specialStatementsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, radar: radarVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, surfaceStations: surfaceStationsVisible, stormReports: stormReportsVisible, riverGauges: riverGaugesVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
     const current = getMapLayerVisibility();
     void saveMapLayerVisibility({ ...current, [key]: !current[key] });
+  };
+  const applyLayerPreset = (preset: "intercept" | "travel" | "flood" | "night" | "low-bandwidth") => {
+    const current = getMapLayerVisibility();
+    const common = { ...current, warnings: true, watches: true, mosaic: true, poi: false };
+    const next = preset === "intercept"
+      ? { ...common, mesoscaleDiscussions: true, specialStatements: true, chasers: true, roadConditions: true, trafficCameras: true, surfaceStations: true, stormReports: true }
+      : preset === "travel"
+        ? { ...common, mesoscaleDiscussions: false, specialStatements: true, chasers: false, roadConditions: true, trafficCameras: true, surfaceStations: false }
+        : preset === "flood"
+          ? { ...common, mesoscaleDiscussions: false, specialStatements: true, chasers: false, roadConditions: true, trafficCameras: true, surfaceStations: true, stormReports: true, riverGauges: true }
+          : preset === "night"
+            ? { ...common, mesoscaleDiscussions: true, specialStatements: true, chasers: true, roadConditions: true, trafficCameras: true, surfaceStations: true }
+            : { ...common, mesoscaleDiscussions: false, specialStatements: false, chasers: true, roadConditions: true, trafficCameras: false, surfaceStations: false, radar: false };
+    void saveMapLayerVisibility(next);
   };
   const mosaicVisibleRef = useRef(mosaicVisible);
   mosaicVisibleRef.current = mosaicVisible;
@@ -271,11 +311,14 @@ export function AtlasMap({
   const [roadConditions, setRoadConditions] = useState<RoadConditionEvent[]>([]);
   const [trafficCameras, setTrafficCameras] = useState<TrafficCamera[]>([]);
   const [surfaceStations, setSurfaceStations] = useState<SurfaceStationObservation[]>([]);
+  const [stormReports, setStormReports] = useState<StormReport[]>([]);
+  const [riverGauges, setRiverGauges] = useState<RiverGaugeObservation[]>([]);
   const [roadLayerStatus, setRoadLayerStatus] = useState<ViewportLayerResult<RoadConditionEvent>["status"]>("not-configured");
   const [cameraLayerStatus, setCameraLayerStatus] = useState<ViewportLayerResult<TrafficCamera>["status"]>("not-configured");
   const [surfaceStationLayerStatus, setSurfaceStationLayerStatus] = useState<ViewportLayerResult<SurfaceStationObservation>["status"]>("not-configured");
   const [mosaicStatus, setMosaicStatus] = useState<MosaicStatus>("loading");
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
+  const [routeAheadOnly, setRouteAheadOnly] = useState(false);
   const [viewport, setViewport] = useState<MapViewport | null>(null);
   // Live vehicle mesonet wind, surfaced next to the radar instrument so a chaser can correlate
   // "what the truck is feeling right now" against "what SRV shows the storm doing" -- the actual
@@ -320,14 +363,18 @@ export function AtlasMap({
   // Road events with real line geometry (see roadCameraProviders.ts) are painted along the actual
   // road via AtlasRoadLineLayer.ts. Only the point-only remainder (ARDOT has no line source at all;
   // other providers' events without a usable line) goes through the point-pin path.
-  const lineRoadConditions = useMemo(() => roadConditions.filter((event) => event.geometry.type === "line"), [roadConditions]);
-  const pointOnlyRoadConditions = useMemo(() => roadConditions.filter((event) => event.geometry.type !== "line"), [roadConditions]);
+  const operationalRoadConditions = useMemo(() => routeAheadOnly ? roadConditions.filter((event) => inRouteAheadCorridor(event, gps)) : roadConditions, [roadConditions, routeAheadOnly, gps]);
+  const operationalTrafficCameras = useMemo(() => routeAheadOnly ? trafficCameras.filter((camera) => inRouteAheadCorridor(camera, gps)) : trafficCameras, [trafficCameras, routeAheadOnly, gps]);
+  const lineRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type === "line"), [operationalRoadConditions]);
+  const pointOnlyRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type !== "line"), [operationalRoadConditions]);
   const clusteredRoadConditions = useMemo(() => (viewport ? filterViewportPoints(pointOnlyRoadConditions, viewport) : pointOnlyRoadConditions), [pointOnlyRoadConditions, viewport]);
   // Roughly ten-county and closer views retain every camera. Wider views cluster dense corridors.
   const clusteredTrafficCameras = useMemo(() => viewport
-    ? clusterViewportPoints(filterViewportPoints(trafficCameras, viewport), viewport, { individualAtZoom: 6, mediumAtZoom: 4.5, mediumCellDegrees: 0.28, farCellDegrees: 1.1 })
-    : trafficCameras, [trafficCameras, viewport]);
+    ? clusterViewportPoints(filterViewportPoints(operationalTrafficCameras, viewport), viewport, { individualAtZoom: 6, mediumAtZoom: 4.5, mediumCellDegrees: 0.28, farCellDegrees: 1.1 })
+    : operationalTrafficCameras, [operationalTrafficCameras, viewport]);
   const clusteredSurfaceStations = useMemo(() => (viewport ? filterViewportPoints(surfaceStations, viewport) : surfaceStations), [surfaceStations, viewport]);
+  const visibleStormReports = useMemo(() => viewport ? filterViewportPoints(stormReports, viewport) : stormReports, [stormReports, viewport]);
+  const visibleRiverGauges = useMemo(() => viewport ? filterViewportPoints(riverGauges, viewport) : riverGauges, [riverGauges, viewport]);
 
   latestRef.current = { gps, rangeRings, expanded };
 
@@ -919,6 +966,25 @@ export function AtlasMap({
     };
   }, [viewport, chaserNetVisible]);
 
+  useEffect(() => {
+    if (!stormReportsVisible || !gps) { setStormReports([]); return; }
+    let cancelled = false;
+    void getNearbyStormReports(gps, 250, 2).then((result) => {
+      if (!cancelled) setStormReports(result.reports.filter((report) => Date.now() - report.validTime <= 2 * 60 * 60_000));
+    });
+    const timer = window.setInterval(() => {
+      void getNearbyStormReports(gps, 250, 2).then((result) => { if (!cancelled) setStormReports(result.reports); });
+    }, 5 * 60_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [stormReportsVisible, gps?.lat, gps?.lon]);
+
+  useEffect(() => {
+    if (!riverGaugesVisible || !viewport || viewport.zoom < 5) { setRiverGauges([]); return; }
+    const controller = new AbortController();
+    void getRiverGaugesForViewport(viewport, controller.signal).then((gauges) => setRiverGauges(gauges)).catch(() => { if (!controller.signal.aborted) setRiverGauges([]); });
+    return () => controller.abort();
+  }, [riverGaugesVisible, viewport]);
+
   // QA/screenshot-automation hook only -- not called from any in-app UI. Camera marker positions
   // move with live provider coverage and viewport, which made landing on a real, un-clustered
   // camera pin by panning/tapping alone unreliable for scripted capture. This lets an external
@@ -950,9 +1016,11 @@ export function AtlasMap({
     updateAtlasRoadLineLayer(map, lineRoadConditions, roadConditionsVisible, styleInfoRef.current.firstSymbolLayerId);
     updateAtlasTrafficCameraLayer(map, clusteredTrafficCameras, trafficCamerasVisible);
     updateAtlasSurfaceStationLayer(map, clusteredSurfaceStations, surfaceStationsVisible);
+    updateAtlasStormReportLayer(map, visibleStormReports, stormReportsVisible);
+    updateAtlasRiverGaugeLayer(map, visibleRiverGauges, riverGaugesVisible);
     updateAtlasChaserNetLayer(map, clusteredChaserNetMembers, chaserPinStyle, chaserNetVisible);
     updateAtlasChaserNetReportLayer(map, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible);
-  }, [clusteredRoadConditions, lineRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredSurfaceStations, surfaceStationsVisible, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
+  }, [clusteredRoadConditions, lineRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredSurfaceStations, surfaceStationsVisible, visibleStormReports, stormReportsVisible, visibleRiverGauges, riverGaugesVisible, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
 
 
   useEffect(() => {
@@ -1157,6 +1225,9 @@ export function AtlasMap({
               <div className="atlas-layers-popover__title">Layers</div>
               <button type="button" data-testid={compact ? "atlas-map-layers-close-compact" : "atlas-map-layers-close-primary"} aria-label="Close map layers" onClick={() => setLayersPopoverOpen(false)}>Close</button>
             </div>
+            <div className="atlas-layers-popover__presets" aria-label="Operational layer presets">
+              {(["intercept", "travel", "flood", "night", "low-bandwidth"] as const).map((preset) => <button key={preset} type="button" onClick={() => applyLayerPreset(preset)}>{preset === "low-bandwidth" ? "LOW DATA" : preset.toUpperCase()}</button>)}
+            </div>
             <div className="atlas-layers-popover__section">WEATHER</div>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={warningsVisible} onChange={() => toggleLayer("warnings")} />
@@ -1187,6 +1258,11 @@ export function AtlasMap({
               <input type="checkbox" checked={radarVisible} onChange={() => toggleLayer("radar")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="dish" /></span>
               Single-Site Radar
+            </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={stormReportsVisible} onChange={() => toggleLayer("stormReports")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="warning" /></span>
+              Recent Storm Reports - {stormReports.length}
             </label>
             <div className="atlas-layers-popover__section">PEOPLE + FIELD</div>
             <label className="atlas-layers-popover__row">
@@ -1224,6 +1300,11 @@ export function AtlasMap({
               <input type="checkbox" checked={surfaceStationsVisible} onChange={() => toggleLayer("surfaceStations")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="station" /></span>
               Surface Stations - {providerStatusLabel(surfaceStationLayerStatus, surfaceStations.length, 1)}
+            </label>
+            <label className="atlas-layers-popover__row">
+              <input type="checkbox" checked={riverGaugesVisible} onChange={() => toggleLayer("riverGauges")} />
+              <span className="atlas-layers-popover__icon"><LayerGlyph visual="station" /></span>
+              River Gauges - {viewport && viewport.zoom >= 5 ? riverGauges.length : "zoom in"}
             </label>
             <div className="atlas-layers-popover__section">FUTURE</div>
             <label className="atlas-layers-popover__row atlas-layers-popover__row--stub">
@@ -1324,6 +1405,7 @@ export function AtlasMap({
           <button type="button" aria-label="Export position trail as GPX" title="Downloads your recorded breadcrumb trail as a GPX file" disabled={trail.length === 0} onClick={() => downloadBreadcrumbExport(trail, "gpx")}>EXPORT TRAIL</button>
           <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
           <button type="button" aria-label="Toggle zoom lock" title="Stops the camera from re-zooming automatically as your speed changes" className={zoomLocked ? "active" : ""} onClick={() => setZoomLocked((value) => !value)}>ZOOM LOCK</button>
+          <button type="button" aria-label="Toggle route ahead hazards" title="Shows road hazards and cameras within 20 miles ahead of the vehicle heading" className={routeAheadOnly ? "active" : ""} onClick={() => setRouteAheadOnly((value) => !value)}>AHEAD</button>
           <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
           <button type="button" aria-label="Map layers" data-testid="atlas-map-layers-primary" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
         </div>

@@ -16,6 +16,8 @@
 .section-tabs a,.section-tabs span{padding:7px 11px;border:1px solid var(--cb-line);color:var(--cb-muted);font-size:10px;font-weight:900;letter-spacing:.1em;text-decoration:none}
 .section-tabs .active{border-color:var(--cb-red);color:var(--cb-text);background:rgba(255,42,12,.08)}
 .ops-map-stage{position:relative;min-width:0;min-height:0;background:#000}
+.ops-side-rail{min-width:0;min-height:0;overflow-y:auto;background:var(--cb-black);border-left:1px solid var(--cb-line)}
+.ops-side-rail>.point-inspector{border-left:0}
 .ops-map-stage>.atlas-map-shell{height:100%;width:100%}
 /* Anchored top-right, not top-left: AtlasMap (shared with the native app, src/map/AtlasMap.tsx)
    already renders its own GPS/mode/mosaic status strip pinned top-left (.radar-strip /
@@ -162,6 +164,7 @@
 }
 @media (max-width:767px){
   .ops-workstation{position:absolute;inset:0;display:flex;flex-direction:column;height:auto;overflow-y:auto;overscroll-behavior:contain}
+  .ops-side-rail{overflow:visible;border-left:0}
   .ops-map-stage{height:64vh;min-height:420px;flex:0 0 auto}
   .ops-inspector{border-left:0;border-top:1px solid var(--cb-line);overflow:visible}
   .ops-map-overlay{left:10px;right:10px;top:10px;flex-wrap:wrap}
@@ -267,6 +270,7 @@
 .map-camera-viewer__header p{margin:0 0 4px;color:var(--cb-red);font-size:9px;font-weight:800;letter-spacing:.14em}
 .map-camera-viewer__header h2{margin:0;font-size:15px;line-height:1.25}
 .map-camera-viewer__close{border:1px solid var(--cb-line);background:var(--cb-panel);color:var(--cb-text);width:34px;height:34px;border-radius:4px;font-size:22px;line-height:1;cursor:pointer}
+.map-camera-viewer__actions{display:flex;gap:6px}.map-camera-viewer__actions>button{border:1px solid var(--cb-line);background:var(--cb-panel);color:var(--cb-text);min-height:34px;padding:0 10px;border-radius:4px;font-size:9px;font-weight:900;letter-spacing:.1em;cursor:pointer}.map-camera-viewer__actions>.map-camera-viewer__close{padding:0;width:34px;font-size:22px}
 .map-camera-viewer__media{position:relative;background:#050505;min-height:220px;display:grid;place-items:center;overflow:hidden}
 .map-camera-viewer__media video,.map-camera-viewer__media img{display:block;width:100%;height:auto;max-height:360px;object-fit:contain;background:#050505}
 .map-camera-viewer__media-badge{position:absolute;left:10px;top:10px;background:rgba(13,13,13,.86);border:1px solid rgba(46,204,113,.5);color:var(--cb-safe,#2ecc71);font-size:9px;font-weight:900;letter-spacing:.12em;padding:5px 7px;border-radius:3px}
@@ -278,12 +282,16 @@
 .map-camera-viewer__meta span{display:block;color:var(--cb-muted);font-size:8px;font-weight:800;letter-spacing:.1em;margin-bottom:4px}
 .map-camera-viewer__meta b{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .map-camera-viewer__footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;color:var(--cb-dim);font-size:9px;line-height:1.4}
+.map-camera-viewer__bandwidth{display:flex;align-items:center;gap:6px;color:var(--cb-muted);font-weight:800;letter-spacing:.07em}.map-camera-viewer__bandwidth input{accent-color:var(--cb-red)}
 .map-camera-viewer__footer a{color:var(--cb-text);font-weight:800;letter-spacing:.08em;text-decoration:none;border:1px solid var(--cb-line);border-radius:3px;padding:5px 7px}
 @media(max-width:599px){
   .map-camera-viewer{top:auto;right:8px;left:8px;bottom:8px;width:auto;max-height:min(62vh,540px);border-radius:8px}
   .map-camera-viewer__media{min-height:180px}
   .map-camera-viewer__media video,.map-camera-viewer__media img{max-height:280px}
 }
+
+.camera-wall{border-top:1px solid var(--cb-line);background:#090909;padding:10px 12px}.camera-wall>header{display:flex;justify-content:space-between;margin-bottom:8px}.camera-wall>header div{display:flex;align-items:center;gap:10px}.camera-wall>header span{color:var(--cb-red);font-size:9px;font-weight:900;letter-spacing:.13em}.camera-wall>header b{font-size:9px;color:var(--cb-muted)}.camera-wall__grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-wall__tile{min-width:0;border:1px solid var(--cb-line);background:var(--cb-panel);border-radius:4px;overflow:hidden}.camera-wall__preview{display:grid;place-items:center;width:100%;aspect-ratio:16/9;padding:0;border:0;background:#030303;color:var(--cb-muted);font-size:9px;font-weight:900;cursor:pointer}.camera-wall__preview img{width:100%;height:100%;object-fit:cover}.camera-wall__tile--failed{border-color:rgba(255,193,7,.4)}.camera-wall__tile>div{display:flex;align-items:stretch}.camera-wall__tile>div button{border:0;background:transparent;color:var(--cb-text);padding:7px 8px;text-align:left;min-width:0;cursor:pointer}.camera-wall__tile>div button:first-child{flex:1}.camera-wall__tile>div button:last-child{font-size:16px;color:var(--cb-muted)}.camera-wall__tile b,.camera-wall__tile small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.camera-wall__tile b{font-size:10px}.camera-wall__tile small{margin-top:3px;color:var(--cb-muted);font-size:8px}
+@media(max-width:899px){.camera-wall__grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:599px){.camera-wall__grid{grid-template-columns:1fr}}
 
 /* ---- Map situation panel: road/alert details stay on-map, Map Update 2. ---- */
 .map-situation-panel{position:absolute;z-index:29;top:16px;right:16px;width:min(420px,calc(100% - 32px));max-height:calc(100% - 32px);overflow:auto;border:1px solid var(--cb-line);background:rgba(13,13,13,.96);backdrop-filter:blur(12px);border-radius:var(--cb-radius);box-shadow:0 18px 50px rgba(0,0,0,.45)}

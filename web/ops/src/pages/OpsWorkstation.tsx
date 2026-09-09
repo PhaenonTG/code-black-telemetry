@@ -9,6 +9,7 @@ import { useSpotters } from "../../../../src/hooks/useSpotters";
 import type { AlertProduct } from "../../../../src/services/situational";
 import type { RoadConditionEvent, TrafficCamera } from "../../../../src/services/mapLayerModels";
 import { MapCameraViewer } from "../components/MapCameraViewer";
+import { CameraWall } from "../components/CameraWall";
 import { MapSituationPanel } from "../components/MapSituationPanel";
 import { PointInspector } from "../components/PointInspector";
 import { useCoreOps } from "../core/useCoreOps";
@@ -31,6 +32,8 @@ function gpsStatusLine(s: LocationState) {
 }
 
 type Selection = { kind: "alert"; alert: AlertProduct } | { kind: "road"; road: RoadConditionEvent };
+const CAMERA_WALL_KEY = "codeblack.ops.cameraWall";
+const CAMERA_BANDWIDTH_KEY = "codeblack.ops.cameraSnapshotMode";
 
 function unitLocation(location: Record<string, unknown> | null | undefined): { lat: number; lon: number } | null {
   if (!location) return null;
@@ -42,9 +45,20 @@ function unitLocation(location: Record<string, unknown> | null | undefined): { l
 export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string }) {
   const [gps, setGps] = useState<LocationState>({ status: "requesting" });
   const [camera, setCamera] = useState<TrafficCamera | null>(null);
+  const [pinnedCameras, setPinnedCameras] = useState<TrafficCamera[]>(() => {
+    try { return (JSON.parse(localStorage.getItem(CAMERA_WALL_KEY) ?? "[]") as TrafficCamera[]).slice(0, 9); } catch { return []; }
+  });
+  const [lowBandwidth, setLowBandwidth] = useState(() => localStorage.getItem(CAMERA_BANDWIDTH_KEY) === "true");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [nearbyUnitId, setNearbyUnitId] = useState<string>("");
   const { state: coreState, selectedPoint, selectPoint } = useCoreOps();
+
+  useEffect(() => { localStorage.setItem(CAMERA_WALL_KEY, JSON.stringify(pinnedCameras)); }, [pinnedCameras]);
+  useEffect(() => { localStorage.setItem(CAMERA_BANDWIDTH_KEY, String(lowBandwidth)); }, [lowBandwidth]);
+
+  const togglePinnedCamera = (value: TrafficCamera) => setPinnedCameras((current) => current.some((item) => item.id === value.id)
+    ? current.filter((item) => item.id !== value.id)
+    : [...current, value].slice(-9));
 
   useEffect(() => {
     let cancelled = false;
@@ -174,10 +188,13 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
           </label>
           <OpsStatusPill state={coreState.stormIntel.state} label="STORM INTEL" />
         </div>
-        {camera && <MapCameraViewer camera={camera} onClose={() => setCamera(null)} />}
+        {camera && <MapCameraViewer camera={camera} onClose={() => setCamera(null)} pinned={pinnedCameras.some((item) => item.id === camera.id)} onTogglePin={() => togglePinnedCamera(camera)} lowBandwidth={lowBandwidth} onLowBandwidthChange={setLowBandwidth} />}
         {selection && <MapSituationPanel selection={selection} onClose={() => setSelection(null)} />}
       </div>
-      <PointInspector selectedPoint={selectedPoint} coreState={coreState} />
+      <div className="ops-side-rail">
+        <CameraWall cameras={pinnedCameras} onOpen={setCamera} onRemove={(id) => setPinnedCameras((current) => current.filter((item) => item.id !== id))} />
+        <PointInspector selectedPoint={selectedPoint} coreState={coreState} />
+      </div>
     </div>
   );
 }

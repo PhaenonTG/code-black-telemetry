@@ -32,9 +32,17 @@ function ageLabel(timestamp: number | null) {
 export function MapCameraViewer({
   camera,
   onClose,
+  pinned = false,
+  onTogglePin,
+  lowBandwidth = false,
+  onLowBandwidthChange,
 }: {
   camera: TrafficCamera
   onClose: () => void
+  pinned?: boolean
+  onTogglePin?: () => void
+  lowBandwidth?: boolean
+  onLowBandwidthChange?: (enabled: boolean) => void
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [mediaError, setMediaError] = useState("")
@@ -59,7 +67,12 @@ export function MapCameraViewer({
     () => (liveStreamUrl ? { ...camera, streamUrl: liveStreamUrl } : camera),
     [camera, liveStreamUrl],
   )
-  const media = useMemo(() => mediaFor(effectiveCamera), [effectiveCamera])
+  const media = useMemo(() => {
+    const selected = mediaFor(effectiveCamera)
+    if (!lowBandwidth) return selected
+    const image = camera.previewUrl?.trim() || camera.imageUrl?.trim() || camera.thumbnailUrl?.trim() || null
+    return image ? { kind: "image" as const, url: image } : selected
+  }, [effectiveCamera, camera, lowBandwidth])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -129,9 +142,10 @@ export function MapCameraViewer({
           <p>PUBLIC CAMERA</p>
           <h2>{camera.name}</h2>
         </div>
-        <button type="button" className="map-camera-viewer__close" onClick={onClose} aria-label="Close camera viewer">
-          ×
-        </button>
+        <div className="map-camera-viewer__actions">
+          {onTogglePin && <button type="button" onClick={onTogglePin}>{pinned ? "UNPIN" : "PIN"}</button>}
+          <button type="button" className="map-camera-viewer__close" onClick={onClose} aria-label="Close camera viewer">×</button>
+        </div>
       </header>
 
       <div className="map-camera-viewer__media">
@@ -195,6 +209,10 @@ export function MapCameraViewer({
       </div>
 
       <footer className="map-camera-viewer__footer">
+        <label className="map-camera-viewer__bandwidth">
+          <input type="checkbox" checked={lowBandwidth} onChange={(event) => onLowBandwidthChange?.(event.target.checked)} />
+          SNAPSHOT MODE
+        </label>
         <span>{camera.provider.displayLabel} · {camera.attribution}</span>
         {camera.sourceUrl && (
           <a href={camera.sourceUrl} target="_blank" rel="noopener noreferrer">

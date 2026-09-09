@@ -9,6 +9,8 @@ const NWS_PROVENANCE: ObservationProvenance = {
   experimental: false,
   displayLabel: "NWS Surface Obs",
 };
+const IOWA_RWIS_PROVENANCE: ObservationProvenance = { provider: "OFFICIAL/STATE_TRANSPORTATION", sourceId: "iadot-rwis", sourceName: "Iowa DOT RWIS", official: true, experimental: false, displayLabel: "Iowa DOT RWIS" };
+const IOWA_RWIS_URL = "https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/RWIS_Atmospheric_Data_View/FeatureServer/0/query";
 
 const CACHE_TTL_MS = 5 * 60_000;
 const DEFAULT_TIMEOUT_MS = 5_000;
@@ -108,19 +110,41 @@ async function fetchStationsForCenter(lat: number, lon: number, signal?: AbortSi
   return results.filter((r): r is SurfaceStationObservation => r !== null);
 }
 
+function validRwisNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) && Math.abs(number) < 999 ? number : null;
+}
+
+async function fetchIowaRwis(viewport: MapViewport, signal?: AbortSignal): Promise<SurfaceStationObservation[]> {
+  if (viewport.east < -96.64 || viewport.west > -90.14 || viewport.north < 40.36 || viewport.south > 43.51) return [];
+  const params = new URLSearchParams({ f: "geojson", where: "STATUS=1", outFields: "*", geometry: `${viewport.west},${viewport.south},${viewport.east},${viewport.north}`, geometryType: "esriGeometryEnvelope", inSR: "4326", outSR: "4326", spatialRel: "esriSpatialRelIntersects", returnGeometry: "true", resultRecordCount: "500" });
+  const body = await fetchTimeout(`${IOWA_RWIS_URL}?${params}`, signal);
+  return (body?.features ?? []).flatMap((feature: any) => {
+    const coordinates = feature?.geometry?.coordinates;
+    const p = feature?.properties ?? {};
+    const lat = Number(coordinates?.[1] ?? p.LATITUDE); const lon = Number(coordinates?.[0] ?? p.LONGITUDE);
+    const observedAt = Number(p.DATA_LAST_UPDATED);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(observedAt)) return [];
+    const freshness = freshnessFor(observedAt);
+    const visibility = validRwisNumber(p.VISIBILITY);
+    return [{ id: `IA-${p.SITE_NUMBER ?? p.OBJECTID}`, name: p.RPUID_NAME ?? "Iowa RWIS", lat, lon, temperatureF: validRwisNumber(p.AIR_TEMP), dewpointF: validRwisNumber(p.DEW_POINT), windSpeedMph: validRwisNumber(p.AVG_WINDSPEED_MPH), windGustMph: validRwisNumber(p.MAX_WINDSPEED_MPH), visibilityMiles: visibility, precipitationType: p.PRECIPITATION_TYPE && p.PRECIPITATION_TYPE !== "NA" ? String(p.PRECIPITATION_TYPE) : null, roadway: p.ROUTE_NAME ? `${p.ROUTE_NAME}${p.MILE_POST != null ? ` MM ${p.MILE_POST}` : ""}` : null, observedAt, freshness, stale: freshness === "stale" || freshness === "unavailable", provider: IOWA_RWIS_PROVENANCE }];
+  });
+}
+
 export async function getSurfaceStationsForViewport(context: LayerQueryContext, signal?: AbortSignal): Promise<ViewportLayerResult<SurfaceStationObservation>> {
   const { viewport } = context;
   const key = viewportCacheKey(viewport);
   const cached = cache.get(key);
   if (cached && cached.expires > Date.now()) {
-    return { data: cached.value, status: cached.value.length ? "ready" : "empty", message: "", simulated: false, fetchedAt: Date.now(), providerIds: ["nws-asos"] };
+    return { data: cached.value, status: cached.value.length ? "ready" : "empty", message: "", simulated: false, fetchedAt: Date.now(), providerIds: ["nws-asos", "iadot-rwis"] };
   }
   let pending = inFlight.get(key);
   if (!pending) {
     const centerLat = (viewport.north + viewport.south) / 2;
     const centerLon = (viewport.east + viewport.west) / 2;
-    pending = fetchStationsForCenter(centerLat, centerLon, signal)
-      .then((data) => {
+    pending = Promise.allSettled([fetchStationsForCenter(centerLat, centerLon, signal), fetchIowaRwis(viewport, signal)])
+      .then((results) => {
+        const data = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
         cache.set(key, { expires: Date.now() + CACHE_TTL_MS, value: data });
         return data;
       })
@@ -131,7 +155,7 @@ export async function getSurfaceStationsForViewport(context: LayerQueryContext, 
   }
   try {
     const data = await pending;
-    return { data, status: data.length ? "ready" : "empty", message: data.length ? "" : "No nearby stations reported.", simulated: false, fetchedAt: Date.now(), providerIds: ["nws-asos"] };
+    return { data, status: data.length ? "ready" : "empty", message: data.length ? "" : "No nearby stations reported.", simulated: false, fetchedAt: Date.now(), providerIds: ["nws-asos", "iadot-rwis"] };
   } catch {
     return { data: [], status: "error", message: "NWS surface obs request failed.", simulated: false, fetchedAt: Date.now(), providerIds: ["nws-asos"] };
   }

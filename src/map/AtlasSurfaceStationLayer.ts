@@ -30,6 +30,7 @@ function stationToPin(station: SurfaceStationObservation | MapCluster<SurfaceSta
   if (station.temperatureF !== null) parts.push(`${station.temperatureF}°`);
   if (station.dewpointF !== null) parts.push(`Dew ${station.dewpointF}°`);
   if (station.windSpeedMph !== null) parts.push(`${station.windSpeedMph} mph`);
+  if (station.visibilityMiles != null) parts.push(`Vis ${station.visibilityMiles} mi`);
   return {
     id: `station-${station.id}`,
     lat: station.lat,
@@ -40,6 +41,10 @@ function stationToPin(station: SurfaceStationObservation | MapCluster<SurfaceSta
       { label: "Temp", value: station.temperatureF !== null ? `${station.temperatureF}°` : "--" },
       { label: "Dewpoint", value: station.dewpointF !== null ? `${station.dewpointF}°` : "--" },
       { label: "Wind", value: station.windSpeedMph !== null ? `${station.windSpeedMph} mph` : "--" },
+      ...(station.windGustMph != null ? [{ label: "Gust", value: `${station.windGustMph} mph` }] : []),
+      ...(station.visibilityMiles != null ? [{ label: "Visibility", value: `${station.visibilityMiles} mi` }] : []),
+      ...(station.precipitationType ? [{ label: "Precip", value: station.precipitationType }] : []),
+      ...(station.roadway ? [{ label: "Road", value: station.roadway }] : []),
     ],
     family: "station",
     stale: station.stale,

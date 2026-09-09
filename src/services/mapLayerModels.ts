@@ -111,6 +111,10 @@ export interface SurfaceStationObservation {
   temperatureF: number | null;
   dewpointF: number | null;
   windSpeedMph: number | null;
+  windGustMph?: number | null;
+  visibilityMiles?: number | null;
+  precipitationType?: string | null;
+  roadway?: string | null;
   observedAt: number | null;
   freshness: LayerFreshnessState;
   stale: boolean;

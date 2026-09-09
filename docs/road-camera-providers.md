@@ -147,7 +147,9 @@ Deferred:
 - Iowa message signs and atmospheric RWIS observations await confirmed stable public contracts;
   camera-associated RWIS imagery is included now.
 - NOAA/USGS river gauges, recent storm reports, route-ahead filtering, camera health checks, camera
-  wall, and an explicit low-bandwidth mode are the next map work package.
+  wall, and an explicit low-bandwidth mode entered the September 9 OPS map pass. River gauges use
+  USGS observations without inventing flood thresholds; byte-level frozen-image detection still
+  needs a same-origin media health relay.
 - provider search/discovery UI
 - Core-side proxy/cache deployment
 - camera stream player integration inside OPS where a provider exposes a playable stream contract

@@ -10165,6 +10165,9 @@ body {
   gap: 6px;
   flex-wrap: wrap;
 }
+.atlas-layers-popover__presets{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:8px 10px;border-top:1px solid var(--line,#282828)}
+.atlas-layers-popover__presets button{min-height:27px;border:1px solid var(--line,#282828);background:rgba(255,255,255,.025);color:var(--muted,#8d98a5);font:800 8px/1 var(--font-ui,system-ui);letter-spacing:.08em;border-radius:3px;cursor:pointer}
+.atlas-layers-popover__presets button:hover,.atlas-layers-popover__presets button:focus-visible{border-color:#ff321e;color:#fff}
 
 .atlas-radar-instrument__heading {
   display: flex;
