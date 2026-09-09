@@ -27,7 +27,7 @@ export default function Fleet() {
 
   return (
     <div className="page page-fleet">
-      <PageHeader title="CHASE OPERATIONS" kicker="FLEET · STREAMS · ACTIVE UNITS" />
+      <PageHeader title="CHASE OPERATIONS" kicker="FLEET · STREAMS · ACTIVE UNITS" description="Track active chase units, onboard systems, and the live program feed." />
       <nav className="section-tabs" aria-label="Chase Operations sections">
         <Link className="active" to="/chase">FLEET</Link>
         <Link to="/stream">STREAMS</Link>
@@ -36,8 +36,9 @@ export default function Fleet() {
         <div className="empty-state empty-state--centered">
           <p className="empty-state__title">NO FABRIC UNIT SNAPSHOT</p>
           <p className="empty-state__body">
-            {state.fabric.detail}. Vehicle physical integration remains deferred; missing STRIKER or TESSA telemetry is not treated as failure in this shell.
+            {state.fabric.detail}. Units appear here as soon as they report through Fabric.
           </p>
+          <div className="empty-state__actions"><Link to="/">OPEN OPERATIONS MAP</Link><Link to="/system">VIEW SYSTEM HEALTH</Link></div>
         </div>
       ) : (
         <div className="ops-fleet-grid">

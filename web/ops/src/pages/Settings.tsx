@@ -4,6 +4,7 @@ import { loadMapLayerVisibility, saveMapLayerVisibility, subscribeMapLayerVisibi
 import { PageHeader } from "../components/PageHeader"
 import { Icon } from "../components/Icon"
 import { useAuth } from "../auth/AuthProvider"
+import { Link } from "react-router-dom"
 
 const THEME_OPTIONS: AppThemeMode[] = ["dark", "night", "system", "light"]
 
@@ -30,6 +31,12 @@ const LAYER_LABELS: Record<string, { label: string; description: string }> = {
   breadcrumbs: { label: "GPS trail", description: "Your own recent movement history on the map" },
 }
 
+const LAYER_GROUPS = [
+  { title: "WEATHER", keys: ["warnings", "watches", "mesoscaleDiscussions", "specialStatements", "mosaic", "radar", "surfaceStations", "stormReports", "riverGauges"] },
+  { title: "FIELD", keys: ["team", "chasers", "probes", "chaserNet", "breadcrumbs"] },
+  { title: "ROADS & PLACES", keys: ["roadConditions", "trafficCameras", "poi"] },
+] as const
+
 // A working foundation, not the full settings surface -- reuses the real settings.ts load/save/
 // subscribe layer (same @capacitor/preferences-backed storage the native app uses, with the web
 // fallback confirmed safe in docs/ARCHITECTURE.md) for two representative settings groups. Map,
@@ -52,7 +59,7 @@ export default function Settings() {
 
   return (
     <div className="page page-settings">
-      <PageHeader title="Settings" />
+      <PageHeader title="SETTINGS" kicker="DISPLAY · MAP · SESSION" description="Set this browser's operating defaults. Changes apply immediately and persist on this device." actions={<Link className="page-action-link" to="/system">SYSTEM HEALTH</Link>} />
 
       <section className="settings-group">
         <h2>Display</h2>
@@ -68,38 +75,31 @@ export default function Settings() {
         </div>
       </section>
 
-      <section className="settings-group">
-        <h2>Map layers</h2>
+      <section className="settings-group settings-group--layers">
+        <h2>Map layer defaults</h2>
         {layers ? (
-          <div className="settings-toggle-list">
-            {Object.entries(layers).map(([key, value]) => {
-              const copy = LAYER_LABELS[key] ?? { label: key, description: "" }
-              return (
-                <label key={key} className="settings-toggle-row">
-                  <span className="settings-toggle-row__text">
-                    <span className="settings-toggle-row__label">{copy.label}</span>
-                    {copy.description && <span className="settings-toggle-row__description">{copy.description}</span>}
-                  </span>
-                  <span className={value ? "switch switch--on" : "switch"}>
-                    <input
-                      type="checkbox"
-                      checked={!!value}
-                      onChange={(e) => void saveMapLayerVisibility({ ...layers, [key]: e.target.checked })}
-                    />
-                    <i />
-                  </span>
-                </label>
-              )
-            })}
+          <div className="settings-layer-grid">
+            {LAYER_GROUPS.map((group) => <div className="settings-toggle-list" key={group.title}>
+              <h3>{group.title}</h3>
+              {group.keys.map((key) => {
+                const value = layers[key]
+                const copy = LAYER_LABELS[key]
+                return <label key={key} className="settings-toggle-row">
+                    <span className="settings-toggle-row__text"><span className="settings-toggle-row__label">{copy.label}</span><span className="settings-toggle-row__description">{copy.description}</span></span>
+                    <span className={value ? "switch switch--on" : "switch"}><input type="checkbox" checked={!!value} onChange={(e) => void saveMapLayerVisibility({ ...layers, [key]: e.target.checked })} /><i /></span>
+                  </label>
+              })}
+            </div>)}
           </div>
         ) : (
           <p className="page-empty">Loading…</p>
         )}
       </section>
 
-      <section className="settings-group settings-group--deferred">
-        <h2>Coming to this shell</h2>
-        <p>Road Conditions, Cameras, Location behavior, Notifications, Data/providers, and Native/device integrations exist in the native app's Settings page but aren't rebuilt here yet.</p>
+      <section className="settings-group settings-group--data">
+        <h2>Data & diagnostics</h2>
+        <p>Provider health, radar availability, camera totals, and Core connectivity are tracked on the System page.</p>
+        <Link className="page-action-link" to="/system">VIEW PROVIDER STATUS</Link>
       </section>
 
       {auth.status === "authorized" && (

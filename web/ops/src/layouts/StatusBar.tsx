@@ -7,7 +7,7 @@ import type { OpsConnectionState } from "../core/types"
 // handful of things worth glancing at without navigating away from whatever workspace is open.
 // No brand mark here -- the sidebar already shows the Code Black OPS logo/wordmark on every one
 // of these viewports, so a second copy here was pure duplication, not a second piece of info.
-export function StatusBar({ locationLabel: _locationLabel }: { locationLabel: string }) {
+export function StatusBar({ locationLabel }: { locationLabel: string }) {
   const [now, setNow] = useState(() => new Date())
   const { state } = useCoreOps()
   useEffect(() => {
@@ -29,6 +29,7 @@ export function StatusBar({ locationLabel: _locationLabel }: { locationLabel: st
       <OpsStatusPill state={state.core.state} label={`CORE ${state.core.state}`} />
       <OpsStatusPill state={wsTone} label={`FABRIC ${state.fabric.wsState.toUpperCase()}`} />
       <div className="statusbar__spacer" />
+      <div className="statusbar__item statusbar__location">{locationLabel}</div>
       <div className="statusbar__item">UTC {now.toISOString().slice(11, 19)}</div>
       <div className="statusbar__item statusbar__clock">
         {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}

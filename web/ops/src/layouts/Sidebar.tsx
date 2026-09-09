@@ -9,6 +9,10 @@ import codeblackShield from "../../../../src/assets/codeblack-shield.png"
 // screen width for the map/panels without losing any destination -- tablet's rail is a viewport
 // constraint, not a user choice, so it has no toggle.
 export function Sidebar({ rail, collapsible, onToggleCollapse }: { rail: boolean; collapsible?: boolean; onToggleCollapse?: () => void }) {
+  const sections = (["ANALYSIS", "FIELD", "SYSTEM"] as const).map((name) => ({
+    name,
+    routes: ROUTES.filter((route) => route.inSidebar && route.section === name),
+  }))
   return (
     <nav className={rail ? "sidebar sidebar--rail" : "sidebar"} aria-label="Primary">
       <div className="sidebar__brand">
@@ -16,12 +20,16 @@ export function Sidebar({ rail, collapsible, onToggleCollapse }: { rail: boolean
         {!rail && <span className="sidebar__brand-text">CODE BLACK<b>OPS</b></span>}
       </div>
       <div className="sidebar__links">
-        {ROUTES.filter((r) => r.inSidebar).map((r) => (
-          <NavLink key={r.path} to={r.path} className={({ isActive }) => `sidebar__link${isActive ? " active" : ""}`} end={r.path === "/"}>
-            <Icon name={r.icon} />
-            {!rail && <span>{r.label}</span>}
-            {!rail && r.state === "DEVELOPMENT" && <small>DEV</small>}
-          </NavLink>
+        {sections.map((section) => (
+          <section className="sidebar__section" key={section.name} aria-label={section.name}>
+            {!rail && <p className="sidebar__section-label">{section.name}</p>}
+            {section.routes.map((r) => (
+              <NavLink key={r.path} to={r.path} title={rail ? r.label : undefined} aria-label={r.label} className={({ isActive }) => `sidebar__link${isActive ? " active" : ""}`} end={r.path === "/"}>
+                <Icon name={r.icon} />
+                {!rail && <span>{r.label}</span>}
+              </NavLink>
+            ))}
+          </section>
         ))}
       </div>
       {collapsible && (

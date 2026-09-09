@@ -51,6 +51,7 @@ export default function App() {
                         <Route path="/system" element={<Operations />} />
                         <Route path="/settings" element={<Settings />} />
                         <Route path="/more" element={<More />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
                       </Routes>
                     </Suspense>
                   </AppShell>

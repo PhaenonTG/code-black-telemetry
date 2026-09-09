@@ -13,7 +13,7 @@ describe("OPS workstation routes", () => {
       "TARGETS",
       "CHASE OPERATIONS",
       "FIELD INTELLIGENCE",
-      "STREAM",
+      "LIVE STREAM",
       "SYSTEM",
       "SETTINGS",
     ]);
@@ -33,6 +33,6 @@ describe("OPS workstation routes", () => {
       "CHASE OPERATIONS",
       "MORE",
     ]);
-    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["FIELD INTELLIGENCE", "STREAM", "SYSTEM", "SETTINGS"]);
+    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "SETTINGS"]);
   });
 });
