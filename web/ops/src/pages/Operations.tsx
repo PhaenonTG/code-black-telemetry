@@ -33,6 +33,7 @@ function initialHealth(): ExternalHealthSnapshot {
 // hard-coded READY state.
 export default function Operations() {
   const [health, setHealth] = useState<ExternalHealthSnapshot>(initialHealth)
+  const [refreshNonce, setRefreshNonce] = useState(0)
   const { state: coreState } = useCoreOps()
   const [providerDiagnostics, setProviderDiagnostics] = useState<MapProviderDiagnostic[]>(() => readMapProviderDiagnostics())
 
@@ -72,7 +73,7 @@ export default function Operations() {
       window.removeEventListener("online", handleNetworkChange)
       window.removeEventListener("offline", handleNetworkChange)
     }
-  }, [])
+  }, [refreshNonce])
 
   const rows = buildSystemStatus({
     coreReachable: coreState.core.state === "LIVE",
@@ -85,7 +86,7 @@ export default function Operations() {
 
   return (
     <div className="page page-operations">
-      <PageHeader title="SYSTEM" kicker="HEALTH · PROVIDERS · CONFIGURATION" />
+      <PageHeader title="SYSTEM" kicker="HEALTH · PROVIDERS · CONFIGURATION" description={`Independent checks for Core, Fabric, radar, weather, alerts, and map providers${health.checkedAt ? ` · last checked ${new Date(health.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}.`} actions={<button type="button" className="page-action-link" onClick={() => { setHealth(initialHealth()); setRefreshNonce((value) => value + 1) }}>REFRESH CHECKS</button>} />
       <nav className="section-tabs" aria-label="System sections"><span className="active">HEALTH</span><Link to="/settings">SETTINGS</Link></nav>
       <div className="ops-system-grid">
         <section>

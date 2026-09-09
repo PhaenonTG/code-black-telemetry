@@ -5,6 +5,7 @@
 .page-header__description{max-width:720px;margin:7px 0 0;color:var(--cb-muted);font-size:12px;line-height:1.5}
 .page-header__actions{flex:0 0 auto}
 .page-action-link{display:inline-flex;align-items:center;min-height:34px;padding:0 11px;border:1px solid var(--cb-line);color:var(--cb-text);font-size:9px;font-weight:900;letter-spacing:.1em;text-decoration:none}
+.page-action-link:is(button){background:transparent;cursor:pointer}
 .page-action-link:hover{border-color:var(--cb-red)}
 .page-empty{color:var(--cb-muted);font-size:13px;padding:20px 0}
 

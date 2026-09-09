@@ -40,7 +40,7 @@ import { clusterViewportPoints, filterViewportPoints, viewportFromMap, zoomDetai
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, getSurfaceStationsForViewport, type RoadConditionEvent, type TrafficCamera, type SurfaceStationObservation, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
-import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, radarWorkerMissingOnWeb, setRadarStormMotion, type RadarFrame, type RadarProduct, type StormMotion } from "../services/radar";
+import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, radarWorkerMissingOnWeb, setRadarStormMotion, type RadarFrame, type RadarProduct, type RadarSite, type StormMotion } from "../services/radar";
 import { useWind } from "../hooks/useTelemetry";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
 import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
@@ -54,6 +54,7 @@ const RADAR_REFRESH_MS = 90_000; // Poll the worker for a fresher scan well insi
 // volume-scan cadence, without hammering it every render.
 const RADAR_LOOP_FRAME_COUNT = 12; // "Last so many frames" loop depth -- long enough to show real
 // storm motion, short enough that a slow worker/connection doesn't stall the toggle for ages.
+const RADAR_SITE_OVERRIDE_KEY = "codeblack.radar.siteOverride";
 
 const INTRO_START_ZOOM = 4.5; // Wide establishing shot -- the initial flyTo (below) eases down to
 // the real operating zoom for a "swoop to position" open on cold launch, rather than snapping.
@@ -830,8 +831,23 @@ export function AtlasMap({
   const [radarPrimarySite, setRadarPrimarySite] = useState<string | null>(null);
   const [radarSelectedSite, setRadarSelectedSite] = useState<string | null>(null);
   const [radarSiteFailoverReason, setRadarSiteFailoverReason] = useState("");
+  const [radarNearbySites, setRadarNearbySites] = useState<RadarSite[]>([]);
+  const [radarSiteOverride, setRadarSiteOverride] = useState(() => {
+    try { return localStorage.getItem(RADAR_SITE_OVERRIDE_KEY) ?? ""; } catch { return ""; }
+  });
   const radarSelectedSiteRef = useRef<string | null>(null);
   const radarPrimaryRecoveryStreakRef = useRef(0);
+  const chooseRadarSite = (site: string) => {
+    setRadarSiteOverride(site);
+    setRadarFrames([]);
+    setRadarPlaybackIndex(0);
+    radarSelectedSiteRef.current = null;
+    radarPrimaryRecoveryStreakRef.current = 0;
+    try {
+      if (site) localStorage.setItem(RADAR_SITE_OVERRIDE_KEY, site);
+      else localStorage.removeItem(RADAR_SITE_OVERRIDE_KEY);
+    } catch { /* preference remains active for this session */ }
+  };
   const radarFrame = radarFrames[radarPlaybackIndex] ?? null;
   // Reflectivity alone doesn't show rotation -- a chaser needs VEL/SRV to spot a mesocyclone and CC
   // to catch a debris-ball tornado confirmation. SRV additionally requires a storm motion vector set
@@ -871,7 +887,9 @@ export function AtlasMap({
       const center = mapRef.current?.getCenter();
       const focus = radarFocusLat != null && radarFocusLon != null ? { lat: radarFocusLat, lon: radarFocusLon } : (center ? { lat: center.lat, lon: center.lng } : null);
       const nearbySites = focus ? await getNearestRadarSites(focus.lat, focus.lon) : await getNearestRadarSites(36.13, -94.16);
-      const candidates = nearbySites.slice(0, 3).map((site) => site.id);
+      setRadarNearbySites(nearbySites.slice(0, 3));
+      const nearestCandidates = nearbySites.slice(0, 3).map((site) => site.id);
+      const candidates = radarSiteOverride ? [radarSiteOverride, ...nearestCandidates.filter((site) => site !== radarSiteOverride)].slice(0, 3) : nearestCandidates;
       const primarySite = candidates[0] ?? "KSGF";
       setRadarPrimarySite(primarySite);
       const currentSite = radarSelectedSiteRef.current;
@@ -963,7 +981,7 @@ export function AtlasMap({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [radarVisible, radarProduct, radarTilt, stormMotion, radarFocusLat, radarFocusLon]);
+  }, [radarVisible, radarProduct, radarTilt, stormMotion, radarFocusLat, radarFocusLon, radarSiteOverride]);
 
   useEffect(() => {
     if (!radarVisible || radarFrames.length < 2) return;
@@ -1457,6 +1475,11 @@ export function AtlasMap({
         <div className="atlas-radar-instrument" aria-label="Single-site radar product and tilt">
           <div className="atlas-radar-instrument__heading"><strong>RADAR</strong><span>{radarFrame ? `${radarFrame.site.id}${radarSelectedSite && radarPrimarySite && radarSelectedSite !== radarPrimarySite ? ` · FAILOVER (${radarSiteFailoverReason})` : ""} · FRAME ${radarPlaybackIndex + 1}/${radarFrames.length} · ${new Date(radarFrame.time).toISOString().slice(11, 19)}Z` : "LOADING FRAMES"}</span></div>
           <div className="atlas-radar-instrument__row">
+            <select className="atlas-radar-site-select" value={radarSiteOverride} onChange={(event) => chooseRadarSite(event.target.value)} aria-label="Radar site selection" title="Automatic chooses the nearest healthy site and fails over when needed">
+              <option value="">AUTO SITE</option>
+              {radarNearbySites.map((site) => <option value={site.id} key={site.id}>{site.id} · {site.name}</option>)}
+              {radarSiteOverride && !radarNearbySites.some((site) => site.id === radarSiteOverride) && <option value={radarSiteOverride}>{radarSiteOverride} · MANUAL</option>}
+            </select>
             {(["REF", "VEL", "SRV", "CC"] as RadarProduct[]).map((product) => (
               <button
                 key={product}

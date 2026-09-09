@@ -39,7 +39,15 @@ export function PointInspector({
         <div className="ops-inspector__eyebrow">POINT INSPECTOR</div>
         <h2>{selectedPoint ? (locality?.displayName ?? "RESOLVING LOCATION…") : "No point selected"}</h2>
         {selectedPoint && <small className="ops-inspector__coords">{selectedPoint.lat.toFixed(3)}, {selectedPoint.lon.toFixed(3)}</small>}
-        <p>{selectedPoint ? "Requesting Storm Intel for this point." : "Tap the map to request Storm Intel for a point."}</p>
+        <p>{!selectedPoint
+          ? "Tap the map to request Storm Intel for a point."
+          : coreState.stormIntel.pointLoading
+            ? "Requesting the newest Storm Intel for this point."
+            : coreState.stormIntel.pointError
+              ? "The point request failed. Existing map layers remain available."
+              : snapshot
+                ? `Point data loaded${source?.validTime ? ` · valid ${timeLabel(source.validTime)}` : ""}.`
+                : "No point data is available."}</p>
       </section>
 
       <section className="ops-inspector__block">
