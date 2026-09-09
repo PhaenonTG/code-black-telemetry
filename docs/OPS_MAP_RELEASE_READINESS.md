@@ -77,8 +77,26 @@ and a small query-parameter allowlist. It cannot be used as a general proxy.
   require an explicit worker URL and must state when it is unavailable.
 - Flood-stage categorization awaits a reliable NOAA NWPS gauge-to-threshold contract. Current USGS
   pins show observed height and trend only.
-- Camera freeze detection needs a same-origin media health relay capable of comparing image bytes or
-  validators; the browser currently reports image load failure, provider freshness, and age.
+- Camera freeze detection uses a same-origin media health relay capable of comparing image bytes.
+  OPS provides an allowlisted DOT-host relay that fingerprints pinned snapshots
+  every minute and labels three unchanged checks as possibly frozen; unsupported providers retain
+  browser load/freshness reporting.
 - Mississippi and Louisiana camera adapters remain gated on stable provider contracts. Hazcams
   requires redistribution permission, Texas requires an approved API key, and Flock remains out of
   scope as restricted ALPR data.
+
+## Operations pass 2
+
+- The camera wall promotes its first pinned feed as the primary view, with supporting feeds in the
+  remaining grid.
+- VOICE is opt-in and persisted. It speaks newly observed Tornado Warnings, Flash Flood Warnings,
+  and PDS alert text once per browser session.
+- WHAT CHANGED NEARBY merges current warnings, road-provider updates, and recent storm reports in
+  reverse chronological order. Road entries open their existing map detail panel.
+- River gauge pins now merge NOAA/NWPS observed flood category and action/minor/moderate/major
+  thresholds with USGS one-hour trend observations by gauge location.
+- System Health records map-provider request latency, record count, cache use, last success, and
+  failure reason after Roads or Cameras has been opened.
+- `/api/camera-health` is not an open proxy: it accepts HTTPS image URLs only on reviewed DOT camera
+  host suffixes, rejects non-image responses, caps media at 3 MB, and returns only a short SHA-256
+  fingerprint plus response metadata.

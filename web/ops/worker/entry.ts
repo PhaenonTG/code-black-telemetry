@@ -40,6 +40,7 @@ import { MAPBOX_TOKEN_PATH, handleMapboxTokenRequest, type MapboxTokenEnv } from
 import { MODOT_PREFIX, handleModotRequest } from "../functions/lib/modotRelay";
 import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
 import { ODOT_PREFIX, handleOdotRequest, type OdotEnv } from "../functions/lib/odotRelay";
+import { CAMERA_HEALTH_PATH, handleCameraHealth } from "../functions/lib/cameraHealthRelay";
 
 interface Env extends GatewayEnv, MapboxTokenEnv, OdotEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -91,6 +92,9 @@ export default {
     }
     if (url.pathname.startsWith(OVERLAY_CORE_PREFIX)) {
       return handlePublicStormIntelRequest(request, env);
+    }
+    if (url.pathname === CAMERA_HEALTH_PATH) {
+      return handleCameraHealth(request);
     }
     // Every other path: identical behavior to before this file existed -- static assets, with
     // the project's usual SPA not-found fallback for client-side routes.

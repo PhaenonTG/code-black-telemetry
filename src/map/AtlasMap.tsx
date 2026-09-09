@@ -375,6 +375,10 @@ export function AtlasMap({
   const clusteredSurfaceStations = useMemo(() => (viewport ? filterViewportPoints(surfaceStations, viewport) : surfaceStations), [surfaceStations, viewport]);
   const visibleStormReports = useMemo(() => viewport ? filterViewportPoints(stormReports, viewport) : stormReports, [stormReports, viewport]);
   const visibleRiverGauges = useMemo(() => viewport ? filterViewportPoints(riverGauges, viewport) : riverGauges, [riverGauges, viewport]);
+  useEffect(() => {
+    if (compact) return;
+    window.dispatchEvent(new CustomEvent("codeblack:map-operational-update", { detail: { roads: operationalRoadConditions, reports: stormReports } }));
+  }, [compact, operationalRoadConditions, stormReports]);
 
   latestRef.current = { gps, rangeRings, expanded };
 

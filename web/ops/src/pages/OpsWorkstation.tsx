@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AtlasMap, type AtlasSelectedPoint } from "../../../../src/map/AtlasMap";
 import { browserLocationAdapter, ipLocationAdapter, type LocationState } from "../adapters";
 import type { AtlasGpsPoint } from "../../../../src/map/types";
@@ -10,6 +10,8 @@ import type { AlertProduct } from "../../../../src/services/situational";
 import type { RoadConditionEvent, TrafficCamera } from "../../../../src/services/mapLayerModels";
 import { MapCameraViewer } from "../components/MapCameraViewer";
 import { CameraWall } from "../components/CameraWall";
+import { IncidentTimeline } from "../components/IncidentTimeline";
+import type { StormReport } from "../../../../src/services/stormReports";
 import { MapSituationPanel } from "../components/MapSituationPanel";
 import { PointInspector } from "../components/PointInspector";
 import { useCoreOps } from "../core/useCoreOps";
@@ -34,6 +36,7 @@ function gpsStatusLine(s: LocationState) {
 type Selection = { kind: "alert"; alert: AlertProduct } | { kind: "road"; road: RoadConditionEvent };
 const CAMERA_WALL_KEY = "codeblack.ops.cameraWall";
 const CAMERA_BANDWIDTH_KEY = "codeblack.ops.cameraSnapshotMode";
+const VOICE_ALERTS_KEY = "codeblack.ops.voiceAlerts";
 
 function unitLocation(location: Record<string, unknown> | null | undefined): { lat: number; lon: number } | null {
   if (!location) return null;
@@ -49,12 +52,16 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
     try { return (JSON.parse(localStorage.getItem(CAMERA_WALL_KEY) ?? "[]") as TrafficCamera[]).slice(0, 9); } catch { return []; }
   });
   const [lowBandwidth, setLowBandwidth] = useState(() => localStorage.getItem(CAMERA_BANDWIDTH_KEY) === "true");
+  const [voiceAlerts, setVoiceAlerts] = useState(() => localStorage.getItem(VOICE_ALERTS_KEY) === "true");
+  const spokenAlerts = useRef(new Set<string>());
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [operationalItems, setOperationalItems] = useState<{ roads: RoadConditionEvent[]; reports: StormReport[] }>({ roads: [], reports: [] });
   const [nearbyUnitId, setNearbyUnitId] = useState<string>("");
   const { state: coreState, selectedPoint, selectPoint } = useCoreOps();
 
   useEffect(() => { localStorage.setItem(CAMERA_WALL_KEY, JSON.stringify(pinnedCameras)); }, [pinnedCameras]);
   useEffect(() => { localStorage.setItem(CAMERA_BANDWIDTH_KEY, String(lowBandwidth)); }, [lowBandwidth]);
+  useEffect(() => { localStorage.setItem(VOICE_ALERTS_KEY, String(voiceAlerts)); }, [voiceAlerts]);
 
   const togglePinnedCamera = (value: TrafficCamera) => setPinnedCameras((current) => current.some((item) => item.id === value.id)
     ? current.filter((item) => item.id !== value.id)
@@ -65,6 +72,11 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
     void browserLocationAdapter.getCurrent().then((s) => { if (!cancelled) setGps(s); });
     const unwatch = browserLocationAdapter.watch((s) => { if (!cancelled) setGps(s); });
     return () => { cancelled = true; unwatch(); };
+  }, []);
+  useEffect(() => {
+    const receive = (event: Event) => setOperationalItems((event as CustomEvent<{ roads: RoadConditionEvent[]; reports: StormReport[] }>).detail);
+    window.addEventListener("codeblack:map-operational-update", receive);
+    return () => window.removeEventListener("codeblack:map-operational-update", receive);
   }, []);
 
   // First landing anywhere in the app (selectedPoint is shared app-wide state) with nothing picked
@@ -158,6 +170,17 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   const nearby = useNearbyPlaces(gpsPoint);
   const alertProducts = useAlertProducts(gpsPoint);
 
+  useEffect(() => {
+    if (!voiceAlerts || !("speechSynthesis" in window)) return;
+    for (const alert of alertProducts.products) {
+      if (!/tornado warning|flash flood warning|particularly dangerous situation/i.test(`${alert.title} ${alert.headline}`) || spokenAlerts.current.has(alert.id)) continue;
+      spokenAlerts.current.add(alert.id);
+      const speech = new SpeechSynthesisUtterance(`${alert.title}. ${alert.area}. ${alert.insideText || alert.headline}`);
+      speech.rate = 1.05; speech.pitch = 0.9; speech.volume = 1;
+      window.speechSynthesis.speak(speech);
+    }
+  }, [alertProducts.products, voiceAlerts]);
+
   return (
     <div className="ops-workstation">
       <div className="ops-map-stage">
@@ -187,12 +210,14 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
             </select>
           </label>
           <OpsStatusPill state={coreState.stormIntel.state} label="STORM INTEL" />
+          <button type="button" className={voiceAlerts ? "ops-voice-toggle active" : "ops-voice-toggle"} onClick={() => setVoiceAlerts((value) => !value)} title="Speak new tornado and flash-flood warnings">VOICE {voiceAlerts ? "ON" : "OFF"}</button>
         </div>
         {camera && <MapCameraViewer camera={camera} onClose={() => setCamera(null)} pinned={pinnedCameras.some((item) => item.id === camera.id)} onTogglePin={() => togglePinnedCamera(camera)} lowBandwidth={lowBandwidth} onLowBandwidthChange={setLowBandwidth} />}
         {selection && <MapSituationPanel selection={selection} onClose={() => setSelection(null)} />}
       </div>
       <div className="ops-side-rail">
         <CameraWall cameras={pinnedCameras} onOpen={setCamera} onRemove={(id) => setPinnedCameras((current) => current.filter((item) => item.id !== id))} />
+        <IncidentTimeline alerts={alertProducts.products} roads={operationalItems.roads} reports={operationalItems.reports} onRoad={(road) => { setCamera(null); setSelection({ kind: "road", road }); }} />
         <PointInspector selectedPoint={selectedPoint} coreState={coreState} />
       </div>
     </div>

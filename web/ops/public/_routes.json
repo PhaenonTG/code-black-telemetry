@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "include": ["/api/core/*", "/api/ardot-camera-stream", "/api/modot/*", "/api/odot/*", "/api/tdot/*", "/overlay-core/*"],
+  "include": ["/api/core/*", "/api/ardot-camera-stream", "/api/camera-health", "/api/modot/*", "/api/odot/*", "/api/tdot/*", "/overlay-core/*"],
   "exclude": []
 }

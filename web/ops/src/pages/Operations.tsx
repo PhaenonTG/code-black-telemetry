@@ -9,6 +9,7 @@ import { StatusBadge } from "../components/StatusBadge"
 import { PageHeader } from "../components/PageHeader"
 import { useCoreOps } from "../core/useCoreOps"
 import { Link } from "react-router-dom"
+import { readMapProviderDiagnostics, type MapProviderDiagnostic } from "../../../../src/services/roadCameraProviders"
 
 const CHECKING: ObservableHealth = {
   state: "CHECKING",
@@ -33,6 +34,7 @@ function initialHealth(): ExternalHealthSnapshot {
 export default function Operations() {
   const [health, setHealth] = useState<ExternalHealthSnapshot>(initialHealth)
   const { state: coreState } = useCoreOps()
+  const [providerDiagnostics, setProviderDiagnostics] = useState<MapProviderDiagnostic[]>(() => readMapProviderDiagnostics())
 
   useEffect(() => {
     let cancelled = false
@@ -55,6 +57,7 @@ export default function Operations() {
     const mapTimer = window.setInterval(() => {
       if (!cancelled) {
         setHealth((current) => ({ ...current, map: readMapHealth() }))
+        setProviderDiagnostics(readMapProviderDiagnostics())
       }
     }, 5_000)
 
@@ -110,6 +113,14 @@ export default function Operations() {
           </div>
         ))}
       </div>
+      <section className="provider-diagnostics">
+        <h2>MAP PROVIDERS</h2>
+        {providerDiagnostics.length === 0 ? <p>Open the map with Roads or Cameras enabled to collect provider diagnostics.</p> : providerDiagnostics.sort((a, b) => a.name.localeCompare(b.name)).map((provider) => <div className="status-row" key={`${provider.layer}:${provider.id}`}>
+          <span className="status-row__label">{provider.name} · {provider.layer.toUpperCase()}</span>
+          <StatusBadge state={provider.state === "error" ? "UNAVAILABLE" : provider.state === "cached" ? "DEGRADED" : "LIVE"} />
+          <span className="status-row__detail">{provider.count} records · {provider.latencyMs ? `${provider.latencyMs} ms` : provider.detail}</span>
+        </div>)}
+      </section>
     </div>
   )
 }

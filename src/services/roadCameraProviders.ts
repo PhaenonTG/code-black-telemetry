@@ -1601,6 +1601,16 @@ export function trafficCameraProvidersForViewport(viewport: MapViewport, provide
 // of retrying immediately, without changing how a genuinely fresh viewport is treated.
 const FAILURE_COOLDOWN_MS = 20_000;
 const failureCache = new Map<string, number>();
+const PROVIDER_DIAGNOSTICS_KEY = "codeblack.map.providerDiagnostics";
+export interface MapProviderDiagnostic { id: string; name: string; layer: string; state: "ready" | "cached" | "error"; count: number; latencyMs: number; checkedAt: number; detail: string; }
+const providerDiagnostics = new Map<string, MapProviderDiagnostic>();
+function recordProviderDiagnostic(value: MapProviderDiagnostic) {
+  providerDiagnostics.set(`${value.layer}:${value.id}`, value);
+  try { localStorage.setItem(PROVIDER_DIAGNOSTICS_KEY, JSON.stringify([...providerDiagnostics.values()])); } catch { /* diagnostic persistence is best effort */ }
+}
+export function readMapProviderDiagnostics(): MapProviderDiagnostic[] {
+  try { return JSON.parse(localStorage.getItem(PROVIDER_DIAGNOSTICS_KEY) ?? "[]") as MapProviderDiagnostic[]; } catch { return []; }
+}
 
 async function fetchProviderWithCache<T extends { id: string; stale?: boolean; freshness?: string }>(
   keyPrefix: string,
@@ -1612,7 +1622,10 @@ async function fetchProviderWithCache<T extends { id: string; stale?: boolean; f
   const key = `${keyPrefix}:${cacheKey(provider.id, context.viewport)}`;
   const cached = cache.get(key);
   const now = nowMs();
-  if (cached && now - cached.fetchedAt <= provider.minRefreshMs) return { data: cached.data, stale: false };
+  if (cached && now - cached.fetchedAt <= provider.minRefreshMs) {
+    recordProviderDiagnostic({ id: provider.id, name: provider.name, layer: keyPrefix, state: "cached", count: cached.data.length, latencyMs: 0, checkedAt: now, detail: "Fresh viewport cache" });
+    return { data: cached.data, stale: false };
+  }
   const lastFailedAt = failureCache.get(key);
   if (lastFailedAt !== undefined && now - lastFailedAt < FAILURE_COOLDOWN_MS) {
     if (cached && now - cached.fetchedAt <= STALE_CACHE_TTL_MS) {
@@ -1627,12 +1640,15 @@ async function fetchProviderWithCache<T extends { id: string; stale?: boolean; f
     inFlight.set(requestKey, request);
   }
   try {
+    const startedAt = nowMs();
     const data = await request;
     cache.set(key, { data, fetchedAt: nowMs() });
     failureCache.delete(key);
+    recordProviderDiagnostic({ id: provider.id, name: provider.name, layer: keyPrefix, state: "ready", count: data.length, latencyMs: nowMs() - startedAt, checkedAt: nowMs(), detail: "Provider request succeeded" });
     return { data, stale: false };
   } catch (error) {
     failureCache.set(key, nowMs());
+    recordProviderDiagnostic({ id: provider.id, name: provider.name, layer: keyPrefix, state: "error", count: cached?.data.length ?? 0, latencyMs: 0, checkedAt: nowMs(), detail: classifyProviderFetchError(error) });
     if (cached && now - cached.fetchedAt <= STALE_CACHE_TTL_MS) {
       return { data: cached.data.map((item) => ({ ...item, stale: true, freshness: "stale" })), stale: true };
     }
