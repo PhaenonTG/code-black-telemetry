@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handleRequest } from "./index.js";
+import { cacheTtlSeconds, handleRequest } from "./index.js";
 
 function env(handler = async () => new Response("{}", { status: 200 })) {
   return { RADAR_VPC: { fetch: handler } };
@@ -68,4 +68,11 @@ test("passes through binary tile bodies unmodified", async () => {
   const body = new Uint8Array(await response.arrayBuffer());
   assert.deepEqual([...body], [...bytes]);
   assert.equal(response.headers.get("Content-Type"), "image/png");
+});
+
+test("assigns cache TTLs to exact list routes and immutable tiles", () => {
+  assert.equal(cacheTtlSeconds("/api/v1/radar/sites"), 20);
+  assert.equal(cacheTtlSeconds("/api/v1/radar/frames"), 20);
+  assert.equal(cacheTtlSeconds("/api/v1/radar/tiles/frame1/4/3/6.png"), 1800);
+  assert.equal(cacheTtlSeconds("/api/v1/radar/health"), 0);
 });

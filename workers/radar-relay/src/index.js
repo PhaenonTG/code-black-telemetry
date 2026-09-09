@@ -35,9 +35,9 @@ const CORS_HEADERS = {
 // moved chase position), so they keep a short-ish TTL -- 20s is still nowhere near fast enough
 // to delay "is there a new frame yet" in any way that matters against a 5+ minute real cadence,
 // but it's long enough to collapse a burst of simultaneous viewers into one origin request.
-function cacheTtlSeconds(pathname) {
+export function cacheTtlSeconds(pathname) {
   if (pathname.includes("/tiles/")) return 1800;
-  if (pathname.includes("/frames") || pathname.includes("/sites/")) return 20;
+  if (pathname.includes("/frames") || pathname === `${PREFIX}sites` || pathname.startsWith(`${PREFIX}sites/`)) return 20;
   return 0;
 }
 
