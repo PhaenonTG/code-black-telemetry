@@ -55,7 +55,15 @@ function pinSizeForZoom(zoom: number, sizeScale: number) {
   return (MIN_PIN_SIZE_PX + clamped * (MAX_PIN_SIZE_PX - MIN_PIN_SIZE_PX)) * sizeScale;
 }
 
-function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number) {
+function operationalPinOpacity(point: PinPoint, zoom: number) {
+  const isMapOverlay = point.family === "camera" || point.family === "road" || point.family === "mark";
+  if (!isMapOverlay) return point.stale ? 0.62 : 1;
+  const t = Math.min(1, Math.max(0, (zoom - 3) / 7));
+  const opacity = 0.24 + t * 0.46;
+  return point.stale ? opacity * 0.68 : opacity;
+}
+
+function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number, point: PinPoint) {
   const size = pinSizeForZoom(zoom, style.sizeScale ?? 1);
   const borderWidth = Math.max(1, size / 10);
   el.style.width = `${size}px`;
@@ -69,6 +77,7 @@ function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number) {
   el.style.borderRadius = style.shape === "circle" ? "50%" : style.shape === "square" ? "2px" : "0";
   el.style.clipPath = SHAPE_CLIP_PATH[style.shape] ?? "";
   el.style.cursor = "pointer";
+  el.style.opacity = String(operationalPinOpacity(point, zoom));
 }
 
 function applyMarkerClasses(el: HTMLDivElement, point: PinPoint) {
@@ -199,18 +208,15 @@ export function showPinPopup(map: MapboxMap, point: PinPoint) {
     ? `<div class="atlas-pin-popup__media" data-camera-media-state="loading"><span>LOADING CAMERA IMAGE</span><img class="atlas-pin-popup__image" src="${imageUrl}" alt="" loading="lazy" referrerpolicy="no-referrer" /></div>`
     : "";
   const actionUrl = safePopupUrl(point.actionUrl);
-  const cameraAction = point.family === "camera" && point.cameraData
-    ? `<button type="button" class="atlas-pin-popup__action atlas-pin-popup__camera-open">VIEW CAMERA</button>`
-    : "";
   const roadAction = point.family === "road" && point.roadData
     ? `<button type="button" class="atlas-pin-popup__action atlas-pin-popup__road-open">VIEW DETAILS</button>`
     : "";
   const action = actionUrl ? `<a class="atlas-pin-popup__action" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(point.actionLabel ?? "Open source")}</a>` : "";
-  const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${details}${image}${phoneLine}${emailLine}${cameraAction}${roadAction}${action}`;
+  const html = `<strong>${escapeHtml(point.name)}</strong>${groupLine}${pingLine}${details}${image}${phoneLine}${emailLine}${roadAction}${action}`;
   const placement = pinPopupPlacementFor(map, point.lon, point.lat);
   const popup = new mapboxgl.Popup({
     closeButton: true,
-    closeOnClick: false,
+    closeOnClick: true,
     offset: 16,
     className: "atlas-pin-popup",
     anchor: placement.anchor,
@@ -219,12 +225,6 @@ export function showPinPopup(map: MapboxMap, point: PinPoint) {
     .setLngLat([point.lon, point.lat])
     .setHTML(html)
     .addTo(map);
-  const cameraOpen = popup.getElement()?.querySelector<HTMLButtonElement>(".atlas-pin-popup__camera-open");
-  if (cameraOpen && point.cameraData) {
-    cameraOpen.addEventListener("click", () => {
-      window.dispatchEvent(new CustomEvent<TrafficCamera>("codeblack:map-camera-open", { detail: point.cameraData! }));
-    });
-  }
   const roadOpen = popup.getElement()?.querySelector<HTMLButtonElement>(".atlas-pin-popup__road-open");
   if (roadOpen && point.roadData) {
     roadOpen.addEventListener("click", () => {
@@ -313,6 +313,11 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
             map.easeTo({ center: [selected.lon, selected.lat], zoom: Math.min(14, map.getZoom() + 2), duration: 450 });
             return;
           }
+          if (selected.family === "camera" && selected.cameraData) {
+            activePopups.get(map)?.remove();
+            window.dispatchEvent(new CustomEvent<TrafficCamera>("codeblack:map-camera-open", { detail: selected.cameraData }));
+            return;
+          }
           showPinPopup(map, selected);
         });
         marker = new mapboxgl.Marker({ element: el }).setLngLat([point.lon, point.lat]).addTo(map);
@@ -322,7 +327,7 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
       }
       const element = marker.getElement() as HTMLDivElement;
       applyMarkerClasses(element, point);
-      applyPinStyle(element, style, zoom);
+      applyPinStyle(element, style, zoom, point);
       applyClusterLabel(element, point.clusterCount, point.family ?? "chaser", point.roadKind);
     }
   }
@@ -344,7 +349,7 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
         const element = markers[id].getElement() as HTMLDivElement;
         const point = latestPointsByMarkers.get(markers)?.[id];
         if (point) applyMarkerClasses(element, point);
-        applyPinStyle(element, currentStyle, currentZoom);
+        if (point) applyPinStyle(element, currentStyle, currentZoom, point);
         applyClusterLabel(element, point?.clusterCount, point?.family ?? "chaser", point?.roadKind);
       }
     });

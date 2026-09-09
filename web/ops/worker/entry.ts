@@ -38,8 +38,10 @@ import { ARDOT_RELAY_PREFIX, handleArdotCameraStream } from "../functions/lib/ar
 import { OVERLAY_CORE_PREFIX, handlePublicStormIntelRequest } from "../functions/lib/publicStormIntelRelay";
 import { MAPBOX_TOKEN_PATH, handleMapboxTokenRequest, type MapboxTokenEnv } from "../functions/lib/publicMapboxToken";
 import { MODOT_PREFIX, handleModotRequest } from "../functions/lib/modotRelay";
+import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
+import { ODOT_PREFIX, handleOdotRequest, type OdotEnv } from "../functions/lib/odotRelay";
 
-interface Env extends GatewayEnv, MapboxTokenEnv {
+interface Env extends GatewayEnv, MapboxTokenEnv, OdotEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
 }
 
@@ -77,6 +79,12 @@ export default {
     }
     if (url.pathname.startsWith(MODOT_PREFIX)) {
       return handleModotRequest(request);
+    }
+    if (url.pathname.startsWith(TDOT_PREFIX)) {
+      return handleTdotRequest(request);
+    }
+    if (url.pathname.startsWith(ODOT_PREFIX)) {
+      return handleOdotRequest(request, env);
     }
     if (url.pathname === MAPBOX_TOKEN_PATH) {
       return handleMapboxTokenRequest(request, env, ctx);

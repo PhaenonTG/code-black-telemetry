@@ -255,7 +255,9 @@
 .ops-more-grid__chevron{margin-left:auto;color:var(--cb-dim)}
 
 /* ---- Map camera viewer: map-first camera workflow, no route change. ---- */
+.map-camera-viewer__backdrop{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.16);display:flex;align-items:flex-start;justify-content:flex-end;padding:88px 18px 18px;pointer-events:auto}
 .map-camera-viewer{
+  position:relative!important;right:auto!important;top:auto!important;
   position:absolute;z-index:30;top:16px;right:16px;width:min(420px,calc(100% - 32px));
   max-height:calc(100% - 32px);overflow:auto;border:1px solid var(--cb-line);
   background:rgba(13,13,13,.96);backdrop-filter:blur(12px);border-radius:var(--cb-radius);

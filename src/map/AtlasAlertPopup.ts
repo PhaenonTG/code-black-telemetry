@@ -40,7 +40,7 @@ export function showAlertPopup(map: MapboxMap, lngLat: [number, number], alert: 
     window.dispatchEvent(new Event("codeblack:view-all-alerts"));
     activePopups.get(map)?.remove();
   });
-  const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, offset: 12, className: "atlas-alert-popup", maxWidth: "240px" })
+  const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: true, offset: 12, className: "atlas-alert-popup", maxWidth: "240px" })
     .setLngLat(lngLat)
     .setDOMContent(container)
     .addTo(map);

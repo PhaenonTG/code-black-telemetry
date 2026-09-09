@@ -16,12 +16,12 @@ import { useCustomPoiPins } from "../hooks/useCustomPoiPins";
 import { useChaserPinStyle, useTeamPinStyle, useVehicleMarkerStyle } from "../hooks/usePinStyle";
 import { applyAtlasCamera, zoomForSpeed } from "./AtlasCameraController";
 import { atlasLifecycleCounters, atlasMapInstanceCount, decrementAtlasMapInstances, incrementAtlasCounter, incrementAtlasMapInstances, writeAtlasDiagnostics } from "./AtlasDiagnostics";
-import { updateAtlasAlertsLayer } from "./AtlasAlertsLayer";
+import { ATLAS_ALERTS_FILL_LAYER, ATLAS_ALERTS_LINE_LAYER, updateAtlasAlertsLayer } from "./AtlasAlertsLayer";
 import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
 import { chaserNetReportToMapPoint, updateAtlasChaserNetLayer, updateAtlasChaserNetReportLayer } from "./AtlasChaserNetLayer";
 import { startAtlasMosaicLayer, type MosaicStatus } from "./AtlasMosaicLayer";
 import { updateAtlasPoiLayer } from "./AtlasPoiLayer";
-import { removeAtlasRadarLayer, updateAtlasRadarLayer } from "./AtlasRadarLayer";
+import { atlasRadarLayerId, removeAtlasRadarLayer, updateAtlasRadarLayer } from "./AtlasRadarLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
 import { updateAtlasRoadConditionLayer } from "./AtlasRoadLayer";
 import { updateAtlasRoadLineLayer } from "./AtlasRoadLineLayer";
@@ -31,7 +31,7 @@ import { updateAtlasTeamLayer } from "./AtlasTeamLayer";
 import { updateAtlasTrafficCameraLayer } from "./AtlasTrafficCameraLayer";
 import { updateAtlasSurfaceStationLayer } from "./AtlasSurfaceStationLayer";
 import { updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
-import { updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
+import { ATLAS_WATCHES_FILL_LAYER, ATLAS_WATCHES_LINE_LAYER, updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRangeRingMode } from "./types";
 import { clusterViewportPoints, filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewport } from "./viewport";
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
@@ -822,6 +822,17 @@ export function AtlasMap({
       return;
     }
     updateAtlasRadarLayer(map, radarFrame, 0.72, styleInfoRef.current.firstSymbolLayerId, radarFrames);
+    // Keep translucent threat areas beneath radar so reflectivity/velocity stay readable, while
+    // their strong warning boundaries remain above it for immediate chase-safety recognition.
+    const radarLayer = radarFrame ? atlasRadarLayerId(radarFrame.frameId) : null;
+    if (radarLayer && map.getLayer(radarLayer)) {
+      for (const fillLayer of [ATLAS_ALERTS_FILL_LAYER, ATLAS_WATCHES_FILL_LAYER]) {
+        if (map.getLayer(fillLayer)) map.moveLayer(fillLayer, radarLayer);
+      }
+      for (const lineLayer of [ATLAS_ALERTS_LINE_LAYER, ATLAS_WATCHES_LINE_LAYER]) {
+        if (map.getLayer(lineLayer)) map.moveLayer(lineLayer, styleInfoRef.current.firstSymbolLayerId);
+      }
+    }
   }, [radarFrame, radarFrames, radarVisible, loaded]);
 
   useEffect(() => {

@@ -113,7 +113,7 @@ feeds belong in this layer family.
 
 ## Future Provider Expansion
 
-The provider registry can add Oklahoma, Kansas, Missouri, and future CodeBlack-Core proxy adapters
+The provider registry supports Arkansas, Kansas, Missouri, Nebraska, Oklahoma road events, and Tennessee SmartWay, plus future CodeBlack-Core proxy adapters
 without changing the normalized map models. If a provider requires credentials, credentials must be
 kept in configuration or on Core, never committed to the client repository.
 

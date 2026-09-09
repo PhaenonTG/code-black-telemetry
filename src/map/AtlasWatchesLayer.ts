@@ -5,8 +5,8 @@ import { incrementAtlasCounter } from "./AtlasDiagnostics";
 import { showAlertPopup } from "./AtlasAlertPopup";
 
 const ATLAS_WATCHES_SOURCE = "atlas-watches";
-const ATLAS_WATCHES_FILL_LAYER = "atlas-watches-fill";
-const ATLAS_WATCHES_LINE_LAYER = "atlas-watches-line";
+export const ATLAS_WATCHES_FILL_LAYER = "atlas-watches-fill";
+export const ATLAS_WATCHES_LINE_LAYER = "atlas-watches-line";
 const AMBER = "#f4b623";
 
 function toFeatureCollection(watches: WatchPolygon[]) {
@@ -87,7 +87,7 @@ export function updateAtlasWatchesLayer(map: Map, watches: WatchPolygon[], alert
       source: ATLAS_WATCHES_SOURCE,
       // Matches the existing warnings fill's visual weight (AtlasAlertsLayer.ts) so watches read as
       // part of the same "Alerts" language rather than standing out or disappearing.
-      paint: { "fill-color": AMBER, "fill-opacity": 0.16 },
+      paint: { "fill-color": AMBER, "fill-opacity": 0.1 },
     }, beforeLayerId);
     incrementAtlasCounter("layerCreations");
   }

@@ -120,7 +120,10 @@ export function MapCameraViewer({
   const fallbackImage = camera.previewUrl ?? camera.imageUrl ?? camera.thumbnailUrl
 
   return (
-    <aside className="map-camera-viewer" role="dialog" aria-modal="false" aria-label={`${camera.name} camera`}>
+    <div className="map-camera-viewer__backdrop" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose()
+    }}>
+    <aside className="map-camera-viewer" role="dialog" aria-modal="true" aria-label={`${camera.name} camera`}>
       <header className="map-camera-viewer__header">
         <div>
           <p>PUBLIC CAMERA</p>
@@ -200,5 +203,6 @@ export function MapCameraViewer({
         )}
       </footer>
     </aside>
+    </div>
   )
 }

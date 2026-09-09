@@ -121,7 +121,7 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; source: stri
     source: "ARDOT, KDOT, MoDOT, ODOT",
     status: "AR/KS/MO/OK coverage",
     visual: "road",
-    description: "Public DOT closures, crashes, flooding, construction, lane restrictions, and route-impacting hazards. Coverage: Arkansas DOT IDrive, Kansas DOT KanDrive, Missouri DOT Traveler Information, Oklahoma DOT WZDx; other areas report outside coverage.",
+    description: "Public DOT closures, crashes, flooding, construction, lane restrictions, and route-impacting hazards. Coverage: Arkansas, Kansas, Missouri, Oklahoma WZDx, and Tennessee SmartWay; other areas report outside coverage.",
   },
   {
     key: "trafficCameras",
@@ -129,7 +129,7 @@ const LAYERS: Array<{ key: keyof MapLayerVisibility; label: string; source: stri
     source: "ARDOT, KDOT, MoDOT",
     status: "AR/KS/MO public",
     visual: "camera",
-    description: "Legitimate public transportation cameras. Coverage: Arkansas DOT IDrive, Kansas DOT KanDrive, Missouri DOT Traveler Information, and Nebraska DOT 511; images load only when a marker detail is opened.",
+    description: "Public transportation cameras for Arkansas, Kansas, Missouri, Nebraska, and Tennessee. Selecting an individual camera opens its live view immediately; wide views cluster dense areas.",
   },
   {
     key: "surfaceStations",

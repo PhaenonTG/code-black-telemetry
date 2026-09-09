@@ -35,7 +35,7 @@ const activePopups = new WeakMap<MapboxMap, Popup>();
 function showPoiPopup(map: MapboxMap, place: NearbyPlace) {
   activePopups.get(map)?.remove();
   const html = `<strong>${escapeHtml(place.name)}</strong><span>${place.distanceMiles.toFixed(1)} mi &middot; ${hoursLabel(place)}</span>`;
-  const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, offset: 14, className: "atlas-pin-popup" })
+  const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: true, offset: 14, className: "atlas-pin-popup" })
     .setLngLat([place.lon, place.lat])
     .setHTML(html)
     .addTo(map);
@@ -105,7 +105,13 @@ function applyIconPinStyle(el: HTMLDivElement, color: string, iconUrl: string) {
   el.style.cursor = "pointer";
 }
 
-function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: CustomPoiPin | null) {
+function poiOpacityForZoom(zoom: number) {
+  const t = Math.min(1, Math.max(0, (zoom - 3) / 7));
+  return 0.22 + t * 0.48;
+}
+
+function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: CustomPoiPin | null, zoom: number) {
+  el.style.opacity = String(poiOpacityForZoom(zoom));
   if (customPin?.imageDataUrl) {
     const size = 28;
     el.style.width = `${size}px`;
@@ -134,6 +140,7 @@ function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: Custom
 // Locate pages both render one).
 const poiMarkers = new WeakMap<MapboxMap, Record<string, Marker>>();
 const latestPlacesByMarkers = new WeakMap<Record<string, Marker>, Record<string, NearbyPlace>>();
+const zoomListenerAttached = new WeakSet<MapboxMap>();
 
 export function updateAtlasPoiLayer(
   map: MapboxMap,
@@ -151,6 +158,13 @@ export function updateAtlasPoiLayer(
   if (!latest) {
     latest = {};
     latestPlacesByMarkers.set(markers, latest);
+  }
+  if (!zoomListenerAttached.has(map)) {
+    zoomListenerAttached.add(map);
+    map.on("zoom", () => {
+      const opacity = String(poiOpacityForZoom(map.getZoom()));
+      for (const marker of Object.values(poiMarkers.get(map) ?? {})) marker.getElement().style.opacity = opacity;
+    });
   }
   const seen = new Set<string>();
   if (visible) {
@@ -185,7 +199,7 @@ export function updateAtlasPoiLayer(
       } else {
         marker.setLngLat([place.lon, place.lat]);
       }
-      applyPoiStyle(marker.getElement() as HTMLDivElement, place, customPin);
+      applyPoiStyle(marker.getElement() as HTMLDivElement, place, customPin, map.getZoom());
     }
   }
   for (const id of Object.keys(markers)) {

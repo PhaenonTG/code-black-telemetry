@@ -28,7 +28,8 @@ Updated: 2026-09-09
 | Kansas | KDOT KanDrive | Official public camera inventory and on-demand map detail | Implemented; 601 viewport-valid cameras observed 2026-09-09 |
 | Missouri | MoDOT Traveler Information | Strict same-origin relay to official ArcGIS services | Implemented and deployed |
 | Nebraska | Nebraska DOT 511 | Official public camera inventory | Implemented; 349 viewport-valid cameras observed 2026-09-09 |
-| Oklahoma | ODOT | WZDx road adapter staged; no deployed relay | Disabled; public camera feed unavailable to this integration |
+| Oklahoma | ODOT | WZDx work-zone and closure adapter plus strict same-origin relay | Implemented; relay prefers the Pages token and falls back to USDOT's public registry; public camera inventory remains unavailable |
+| Tennessee | TDOT SmartWay | Official open-data incidents, operations, weather, severe impacts, cameras, snapshots, and HLS | Implemented |
 
 The Missouri relay accepts only the two required services, numeric layer IDs, the `query` operation,
 and a small query-parameter allowlist. It cannot be used as a general proxy.
@@ -38,7 +39,7 @@ and a small query-parameter allowlist. It cannot be used as a general proxy.
 1. Deploy the OPS build through the normal release path.
 2. At national zoom, enable Spotter Network and Cameras. Confirm clusters appear and expand as the
    map zooms in.
-3. At zoom 6 or closer in Arkansas, Kansas, Missouri, and Nebraska, confirm individual camera coordinates sit
+3. At zoom 6 or closer in Arkansas, Kansas, Missouri, Nebraska, and Tennessee, confirm individual camera coordinates sit
    on the corresponding roadway and at least one camera detail opens per state.
 4. Confirm every Spotter Network popup reports eight minutes old or newer.
 5. Select each live chaser in `NEARBY FOR`, then confirm the nearest gas, lodging, food, and ER
@@ -48,8 +49,8 @@ and a small query-parameter allowlist. It cannot be used as a general proxy.
 
 ## Deferred work
 
-- Oklahoma road events need the documented WZDx credential and a strict Advanced Mode relay before
-  the staged adapter can be enabled. Oklahoma public cameras need an official consumable feed or written provider access. The public
+- Oklahoma road events use the strict Advanced Mode WZDx relay. It prefers the documented Pages token binding and can resolve the public feed token from USDOT's registry without tester setup.
+  Oklahoma public cameras still need an official consumable feed or written provider access. The public
   site's bot-managed application is not treated as an API.
 - Per-user defaults need a profile settings field in the authenticated backend. The current release
   uses the same layout for everyone and preserves each browser's saved layer choices.

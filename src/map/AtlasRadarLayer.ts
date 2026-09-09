@@ -7,6 +7,7 @@ export const ATLAS_RADAR_SOURCE = "atlas-radar-tiles";
 export const ATLAS_RADAR_LAYER = "atlas-radar-raster";
 const sourceId = (id: string) => `${ATLAS_RADAR_SOURCE}-${id}`;
 const layerId = (id: string) => `${ATLAS_RADAR_LAYER}-${id}`;
+export const atlasRadarLayerId = layerId;
 const radarFramesByMap = new WeakMap<Map, Set<string>>();
 
 export function updateAtlasRadarLayer(map: Map, frame: RadarFrame | null, opacity: number, beforeLayerId?: string, loopFrames: RadarFrame[] = frame ? [frame] : []) {

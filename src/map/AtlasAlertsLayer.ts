@@ -4,8 +4,8 @@ import { incrementAtlasCounter } from "./AtlasDiagnostics";
 import { showAlertPopup } from "./AtlasAlertPopup";
 
 const ATLAS_ALERTS_SOURCE = "atlas-alerts";
-const ATLAS_ALERTS_FILL_LAYER = "atlas-alerts-fill";
-const ATLAS_ALERTS_LINE_LAYER = "atlas-alerts-line";
+export const ATLAS_ALERTS_FILL_LAYER = "atlas-alerts-fill";
+export const ATLAS_ALERTS_LINE_LAYER = "atlas-alerts-line";
 const ATLAS_ALERTS_WATCH_LINE_LAYER = "atlas-alerts-watch-line";
 const ATLAS_ALERTS_STATEMENT_LINE_LAYER = "atlas-alerts-statement-line";
 const ATLAS_MD_LINE_LAYER = "atlas-md-line";
@@ -94,7 +94,7 @@ export function updateAtlasAlertsLayer(map: Map, alerts: AlertProduct[], visibil
       type: "fill",
       source: ATLAS_ALERTS_SOURCE,
       filter: ["in", ["get", "severity"], ["literal", WARNING_SEVERITIES]],
-      paint: { "fill-color": RED, "fill-opacity": 0.16 },
+      paint: { "fill-color": RED, "fill-opacity": 0.13 },
     }, beforeLayerId);
     incrementAtlasCounter("layerCreations");
   }
@@ -106,7 +106,7 @@ export function updateAtlasAlertsLayer(map: Map, alerts: AlertProduct[], visibil
       source: ATLAS_ALERTS_SOURCE,
       filter: ["in", ["get", "severity"], ["literal", WARNING_SEVERITIES]],
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": RED, "line-width": 2 },
+      paint: { "line-color": RED, "line-width": 3, "line-opacity": 0.96 },
     }, beforeLayerId);
     incrementAtlasCounter("layerCreations");
   }

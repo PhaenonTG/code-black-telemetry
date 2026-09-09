@@ -107,6 +107,14 @@ const MODOT_PROVENANCE: ObservationProvenance = {
   displayLabel: "MoDOT Traveler Info",
 };
 
+const TENNESSEE_COVERAGE: ProviderCoverage = {
+  north: 36.69,
+  south: 34.98,
+  east: -81.64,
+  west: -90.32,
+  label: "Tennessee",
+};
+
 const NDOT_PROVENANCE: ObservationProvenance = {
   provider: "OFFICIAL/STATE_TRANSPORTATION" as ObservationProvenance["provider"],
   sourceId: "ne511-ndot",
@@ -123,6 +131,15 @@ const ODOT_PROVENANCE: ObservationProvenance = {
   official: true,
   experimental: false,
   displayLabel: "ODOT WZDx",
+};
+
+const TDOT_PROVENANCE: ObservationProvenance = {
+  provider: "OFFICIAL/STATE_TRANSPORTATION",
+  sourceId: "tdot-smartway",
+  sourceName: "Tennessee DOT SmartWay",
+  official: true,
+  experimental: false,
+  displayLabel: "TDOT SmartWay",
 };
 
 const IDRIVE_LAYER_BASE_URL = "https://layers.idrivearkansas.com";
@@ -1065,6 +1082,117 @@ export async function fetchModotTrafficCameras(context: LayerQueryContext, signa
   return dedupeById(cameras);
 }
 
+// --- Tennessee DOT SmartWay -------------------------------------------------------------------
+const TDOT_BASE_URL = "/api/tdot";
+const TDOT_PUBLIC_MAP_URL = "https://smartway.tn.gov/traffic";
+const TDOT_ROAD_ENDPOINTS: Array<{ endpoint: string; kindHint: string }> = [
+  { endpoint: "RoadwayIncidents", kindHint: "crash" },
+  { endpoint: "RoadwayOperations", kindHint: "construction" },
+  { endpoint: "RoadwayWeather", kindHint: "weather-hazard" },
+  { endpoint: "RoadwaySevereImpact", kindHint: "closure" },
+];
+
+function normalizeTdotRoadEvent(value: unknown, kindHint: string): RoadConditionEvent | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  const locations = Array.isArray(item.locations) ? item.locations : [];
+  const location = (locations[0] ?? {}) as Record<string, unknown>;
+  const midpoint = (location.midPoint ?? {}) as Record<string, unknown>;
+  const lat = Number(midpoint.lat);
+  const lon = Number(midpoint.lng);
+  if (!isValidCoordinate(lat, lon)) return null;
+  const nestedLines = Array.isArray(location.routeLine) ? location.routeLine : [];
+  const rawLine = Array.isArray(nestedLines[0]) ? nestedLines[0] : [];
+  const lineCoordinates = rawLine
+    .map((point) => point && typeof point === "object" ? { lat: Number((point as Record<string, unknown>).lat), lon: Number((point as Record<string, unknown>).lng) } : null)
+    .filter((point): point is { lat: number; lon: number } => Boolean(point && isValidCoordinate(point.lat, point.lon)));
+  const description = sanitizeProviderText(item.description, 320);
+  const impact = sanitizeProviderText(item.impactDescription, 180);
+  const hasClosure = item.hasClosure === true;
+  const allClosed = /all lanes? (?:are )?(?:blocked|closed)/i.test(impact);
+  const closureState: RoadClosureState = allClosed ? "closed" : hasClosure ? "lane-restricted" : "open";
+  const kind = normalizeRoadKind(kindHint, { reason: sanitizeProviderText(item.eventSubTypeDescription, 100), description });
+  const severity: RoadEventSeverity = item.isSevere === true || closureState === "closed" ? "high" : normalizeRoadSeverity({ description, travel_impact: impact }, closureState, kind);
+  const updatedAt = parseProviderTime(item.revisedDate) ?? nowMs();
+  const recordId = sanitizeProviderText(item.id ?? `${lat},${lon}`, 80);
+  const title = sanitizeProviderText(item.eventSubTypeDescription ?? item.eventTypeName, 100) || "Road condition";
+  const roadwayMatch = description.match(/^(?:Interstate|State Route|US Route)\s+[^-]+/i)?.[0]?.trim() ?? null;
+  return {
+    id: `tdot-smartway:road:${recordId}`,
+    providerId: "tdot-smartway",
+    providerRecordId: recordId,
+    kind,
+    geometry: lineCoordinates.length > 1 ? { type: "line", coordinates: lineCoordinates } : { type: "point", lat, lon },
+    closureState,
+    severity,
+    title: roadwayMatch ? `${roadwayMatch} - ${title}` : title,
+    startsAt: parseProviderTime(item.beginningDate),
+    endsAt: parseProviderTime(item.endingDate),
+    direction: normalizeDirection(item.directionDescription),
+    roadway: roadwayMatch,
+    status: sanitizeProviderText(item.status, 80) || closureState,
+    description: [description, impact].filter(Boolean).join(" "),
+    lat,
+    lon,
+    provider: TDOT_PROVENANCE,
+    updatedAt,
+    freshness: freshnessForTimestamp(updatedAt),
+    stale: freshnessForTimestamp(updatedAt) === "stale" || freshnessForTimestamp(updatedAt) === "unavailable",
+    sourceUrl: TDOT_PUBLIC_MAP_URL,
+    rawSourceReference: recordId,
+  };
+}
+
+function normalizeTdotCamera(value: unknown): TrafficCamera | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  const lat = Number(item.lat);
+  const lon = Number(item.lng);
+  if (!isValidCoordinate(lat, lon)) return null;
+  const recordId = sanitizeProviderText(item.id ?? item.name ?? `${lat},${lon}`, 80);
+  const active = sanitizeProviderText(item.active, 12).toLowerCase() === "true";
+  const thumbnailUrl = safeHttpUrl(item.thumbnailUrl);
+  const streamUrl = safeHttpUrl(item.httpsVideoUrl) ?? safeHttpUrl(item.httpVideoUrl);
+  return {
+    id: `tdot-smartway:camera:${recordId}`,
+    providerId: "tdot-smartway",
+    providerRecordId: recordId,
+    name: sanitizeProviderText(item.title ?? item.description ?? item.name, 120) || `TDOT camera ${recordId}`,
+    lat,
+    lon,
+    roadway: sanitizeProviderText(item.route, 60) || null,
+    direction: null,
+    source: "public-transportation",
+    provider: TDOT_PROVENANCE,
+    lastUpdateAt: null,
+    imageUrl: thumbnailUrl,
+    streamUrl,
+    thumbnailUrl,
+    previewUrl: thumbnailUrl,
+    availability: active && (thumbnailUrl || streamUrl) ? "available" : "offline",
+    freshness: active ? "fresh" : "unavailable",
+    sourceUrl: `https://smartway.tn.gov/allcams/camera/${encodeURIComponent(recordId)}`,
+    attribution: "Tennessee DOT SmartWay",
+  };
+}
+
+export async function fetchTdotRoadConditions(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<RoadConditionEvent[]> {
+  const settled = await Promise.allSettled(TDOT_ROAD_ENDPOINTS.map(async ({ endpoint, kindHint }) => {
+    const json = await fetchJson(`${TDOT_BASE_URL}/${endpoint}`, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher);
+    return (Array.isArray(json) ? json : []).map((item) => normalizeTdotRoadEvent(item, kindHint)).filter((item): item is RoadConditionEvent => Boolean(item));
+  }));
+  return dedupeById(settled.flatMap((result) => result.status === "fulfilled" ? result.value : []))
+    .filter((event) => pointInViewport(event, context.viewport) && coordinateWithinCoverage(event, TENNESSEE_COVERAGE))
+    .slice(0, MAX_ROAD_RESULTS);
+}
+
+export async function fetchTdotTrafficCameras(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<TrafficCamera[]> {
+  const json = await fetchJson(`${TDOT_BASE_URL}/RoadwayCameras`, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher);
+  return dedupeById((Array.isArray(json) ? json : []).map(normalizeTdotCamera).filter((item): item is TrafficCamera => Boolean(item)))
+    .filter((camera) => pointInViewport(camera, context.viewport) && coordinateWithinCoverage(camera, TENNESSEE_COVERAGE))
+    .slice(0, MAX_CAMERA_RESULTS);
+}
+
 // --- Oklahoma DOT Work Zone Data Exchange -------------------------------------------------------
 //
 // ODOT publishes a public-domain (CC0) Work Zone Data Exchange (WZDx v4.0) feed at oktraffic.org,
@@ -1211,13 +1339,21 @@ export const ROAD_CONDITION_PROVIDERS: RoadConditionProvider[] = [
     fetchViewport: fetchModotRoadConditions,
   },
   {
+    id: "tdot-smartway",
+    name: "Tennessee DOT SmartWay",
+    coverage: TENNESSEE_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: ROAD_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Tennessee DOT SmartWay",
+    fetchViewport: fetchTdotRoadConditions,
+  },
+  {
     id: "odot-wzdx",
     name: "Oklahoma DOT Work Zone Data Exchange",
     coverage: OKLAHOMA_COVERAGE,
-    // Adapter is retained, but the required same-origin token-injecting route is not present in
-    // the Advanced Mode worker. Keep it out of provider counts and requests until that route and
-    // credential are deployed and accepted live.
-    enabled: false,
+    enabled: true,
     priority: 10,
     minRefreshMs: ROAD_CACHE_TTL_MS,
     timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
@@ -1270,6 +1406,17 @@ export const TRAFFIC_CAMERA_PROVIDERS: TrafficCameraProvider[] = [
     timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
     attribution: "Nebraska DOT 511",
     fetchViewport: fetchNe511TrafficCameras,
+  },
+  {
+    id: "tdot-smartway",
+    name: "Tennessee DOT SmartWay",
+    coverage: TENNESSEE_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: CAMERA_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Tennessee DOT SmartWay",
+    fetchViewport: fetchTdotTrafficCameras,
   },
 ];
 
@@ -1357,7 +1504,7 @@ export async function getTrafficCamerasForViewport(context: LayerQueryContext, s
   const providers = trafficCameraProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. Supports Arkansas, Kansas, Missouri, and Nebraska DOT coverage.", simulated: false, fetchedAt };
+    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. Supports Arkansas, Kansas, Missouri, Nebraska, and Tennessee DOT coverage.", simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("camera", cameraCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);
