@@ -1123,7 +1123,10 @@ export const ROAD_CONDITION_PROVIDERS: RoadConditionProvider[] = [
     id: "odot-wzdx",
     name: "Oklahoma DOT Work Zone Data Exchange",
     coverage: OKLAHOMA_COVERAGE,
-    enabled: true,
+    // Adapter is retained, but the required same-origin token-injecting route is not present in
+    // the Advanced Mode worker. Keep it out of provider counts and requests until that route and
+    // credential are deployed and accepted live.
+    enabled: false,
     priority: 10,
     minRefreshMs: ROAD_CACHE_TTL_MS,
     timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
@@ -1226,7 +1229,7 @@ export async function getRoadConditionsForViewport(context: LayerQueryContext, s
   const providers = roadProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "outside-coverage", message: "Outside current road-condition provider coverage. Supports Arkansas, Kansas, Missouri, and Oklahoma DOT coverage.", simulated: false, fetchedAt };
+    return { data: [], status: "outside-coverage", message: "Outside current road-condition provider coverage. Supports Arkansas, Kansas, and Missouri DOT coverage.", simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("road", roadCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);

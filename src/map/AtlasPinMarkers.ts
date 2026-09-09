@@ -73,12 +73,15 @@ function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number) {
 
 function applyMarkerClasses(el: HTMLDivElement, point: PinPoint) {
   const family = point.family ?? "chaser";
-  el.className = [
-    "atlas-pin-marker",
-    `atlas-pin-marker--${family}`,
-    point.clusterCount && point.clusterCount > 1 ? "atlas-pin-marker--cluster" : "",
-    point.stale ? "atlas-pin-marker--stale" : "",
-  ].filter(Boolean).join(" ");
+  // Mapbox adds its own `mapboxgl-marker` class after construction. Replacing className here
+  // removed that class and its absolute positioning, so valid coordinates rendered as a vertical
+  // stack of offset DOM nodes. Only manage the classes owned by this layer.
+  for (const className of [...el.classList]) {
+    if (className.startsWith("atlas-pin-marker--")) el.classList.remove(className);
+  }
+  el.classList.add("atlas-pin-marker", `atlas-pin-marker--${family}`);
+  el.classList.toggle("atlas-pin-marker--cluster", Boolean(point.clusterCount && point.clusterCount > 1));
+  el.classList.toggle("atlas-pin-marker--stale", Boolean(point.stale));
 }
 
 // Same glyph paths as LayerGlyph.tsx (the Layers popover's icon set) so a pin on the map and its

@@ -16,6 +16,7 @@ export function useNearbyPoiList(gps: GpsPoint | null) {
   const gpsRef = useRef(gps);
   gpsRef.current = gps;
   const hasGps = gps != null;
+  const locationCell = gps ? `${Math.floor(gps.lat * 10)}:${Math.floor(gps.lon * 10)}` : "none";
 
   useEffect(() => {
     if (!hasGps) return;
@@ -46,7 +47,7 @@ export function useNearbyPoiList(gps: GpsPoint | null) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [hasGps, resumeTick]);
+  }, [hasGps, locationCell, resumeTick]);
 
   return { places, error };
 }

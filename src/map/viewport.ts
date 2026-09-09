@@ -60,10 +60,18 @@ export interface MapCluster<T extends ClusterablePoint> {
   points: T[];
 }
 
-export function clusterViewportPoints<T extends ClusterablePoint>(points: T[], viewport: MapViewport): Array<T | MapCluster<T>> {
-  const detail = zoomDetailLevel(viewport.zoom);
-  if (detail === "close") return points;
-  const cellSize = detail === "medium" ? 0.18 : 0.85;
+export interface ClusterOptions {
+  individualAtZoom?: number;
+  mediumAtZoom?: number;
+  mediumCellDegrees?: number;
+  farCellDegrees?: number;
+}
+
+export function clusterViewportPoints<T extends ClusterablePoint>(points: T[], viewport: MapViewport, options: ClusterOptions = {}): Array<T | MapCluster<T>> {
+  const individualAtZoom = options.individualAtZoom ?? 9;
+  const mediumAtZoom = options.mediumAtZoom ?? 5.5;
+  if (viewport.zoom >= individualAtZoom) return points;
+  const cellSize = viewport.zoom >= mediumAtZoom ? (options.mediumCellDegrees ?? 0.18) : (options.farCellDegrees ?? 0.85);
   const cells = new Map<string, T[]>();
   for (const point of points) {
     const key = `${Math.floor(point.lat / cellSize)}:${Math.floor(point.lon / cellSize)}`;

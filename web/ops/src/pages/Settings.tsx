@@ -22,6 +22,7 @@ const LAYER_LABELS: Record<string, { label: string; description: string }> = {
   radar: { label: "Single-site radar", description: "High-resolution radar from the nearest site" },
   roadConditions: { label: "Road conditions", description: "DOT-reported closures and hazards" },
   trafficCameras: { label: "Traffic cameras", description: "Public DOT traffic camera feeds" },
+  surfaceStations: { label: "Surface observations", description: "Nearby METAR and ASOS temperature, dewpoint, and wind reports" },
   probes: { label: "Probe deployments", description: "Deployed instrument probe locations" },
   chaserNet: { label: "Chaser Net reports", description: "Community-submitted ground truth reports" },
   breadcrumbs: { label: "GPS trail", description: "Your own recent movement history on the map" },

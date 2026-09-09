@@ -3,7 +3,8 @@ import { MapRadarPanel } from "../situational/Panels";
 import type { AlertProduct, ExternalObservation } from "../../services/situational";
 import type { SpcDayOutlook } from "../../services/spcOutlook";
 import { useNearbyStormThreats } from "../../hooks/useNearbyStormThreats";
-import { computeThreatHero } from "../../hooks/useThreatHero";
+import { computeThreatHero, computeStormClosingInfo } from "../../hooks/useThreatHero";
+import { useStormMotion } from "../../hooks/useStormMotion";
 import type { CanonicalLocation } from "../../services/location";
 import type { PiOperationalSummary } from "../../services/operationalStatus";
 import { stateTone } from "../../services/operationalStatus";
@@ -125,6 +126,11 @@ export function HomeOverviewPage({
   const day1Outlook = outlooks.find((o) => o.day === 1)?.categorical ?? null;
   // Shared with the persistent tablet header strip (TopBar) so the two surfaces can never disagree.
   const hero = computeThreatHero(nearestThreat, day1Outlook);
+  // Home-only (TopBar has no room for a third line): is the tracked storm actually headed toward
+  // the chaser, and roughly how long do they have. See useThreatHero.ts for why this is kept
+  // separate from the shared hero above.
+  const stormMotion = useStormMotion();
+  const closingInfo = computeStormClosingInfo(nearestThreat, stormMotion);
 
   useEffect(() => {
     const unsubscribe = subscribeHomeModules(setModules);
@@ -262,6 +268,14 @@ export function HomeOverviewPage({
         <div className="home-hero__text">
           <strong>{hero.label}</strong>
           <span>{hero.detail}</span>
+          {closingInfo && (
+            <span className="home-hero__motion" data-closing={closingInfo.closing}>
+              MOVING {closingInfo.headingCardinal} AT {Math.round(closingInfo.speedMph)} MPH
+              {closingInfo.closing
+                ? ` • CLOSING — EST ${closingInfo.etaMinutes! < 1 ? "<1" : closingInfo.etaMinutes} MIN`
+                : " • NOT TRACKING TOWARD YOU"}
+            </span>
+          )}
         </div>
       </section>
       {customizing && (

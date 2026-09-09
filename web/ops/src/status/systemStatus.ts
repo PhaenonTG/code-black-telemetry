@@ -52,8 +52,8 @@ export function buildSystemStatus(params: {
     {
       key: "telemetry",
       label: "TELEMETRY",
-      state: params.coreReachable ? "LIVE" : "NOT_CONFIGURED",
-      detail: "Vehicle sensor telemetry",
+      state: "NO_DATA",
+      detail: params.coreReachable ? "Core reachable; no live vehicle sample confirmed" : "No live vehicle sample confirmed",
     },
     {
       key: "fleet",

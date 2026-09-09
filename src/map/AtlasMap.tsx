@@ -33,7 +33,7 @@ import { updateAtlasSurfaceStationLayer } from "./AtlasSurfaceStationLayer";
 import { updateAtlasVehicleLayer } from "./AtlasVehicleLayer";
 import { updateAtlasWatchesLayer } from "./AtlasWatchesLayer";
 import type { AtlasCameraMode, AtlasGpsPoint, AtlasMapState, AtlasRangeRingMode } from "./types";
-import { filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewport } from "./viewport";
+import { clusterViewportPoints, filterViewportPoints, viewportFromMap, zoomDetailLevel, type MapViewport } from "./viewport";
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, getSurfaceStationsForViewport, type RoadConditionEvent, type TrafficCamera, type SurfaceStationObservation, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
@@ -307,14 +307,12 @@ export function AtlasMap({
   const visibleChaserSpotters = useMemo(() => (viewport ? filterViewportPoints(chaserSpotters, viewport) : chaserSpotters), [chaserSpotters, viewport]);
   const visiblePoiPlaces = useMemo(() => (viewport ? filterViewportPoints(poiPlaces, viewport) : poiPlaces), [poiPlaces, viewport]);
   const chaserNetReportPoints = useMemo(() => chaserNetReports.map(chaserNetReportToMapPoint), [chaserNetReports]);
-  // Clustering is gone everywhere -- owner: "I want all these dots on the map," full stop, not
-  // folded into "N objects" bubbles at low zoom for any pin family. Every layer below is still
-  // viewport-filtered (off-screen points aren't rendered at all), just never bundled together.
-  // Variable names keep the "clustered*" prefix only because that's what every call site downstream
-  // (updateAtlasTeamLayer, etc.) already expects -- those functions accept a plain point array fine,
-  // since MapCluster<T> was always just one branch of a union they handle.
   const clusteredTeamPositions = visibleTeamPositions;
-  const clusteredChaserSpotters = visibleChaserSpotters;
+  // Active Spotter Network positions remain individually visible at regional/chase zoom, while a
+  // national view becomes readable population clusters. Isolated spotters still render alone.
+  const clusteredChaserSpotters = useMemo(() => viewport
+    ? clusterViewportPoints(visibleChaserSpotters, viewport, { individualAtZoom: 6, mediumAtZoom: 4.5, mediumCellDegrees: 0.35, farCellDegrees: 1.4 })
+    : visibleChaserSpotters, [visibleChaserSpotters, viewport]);
   const clusteredChaserNetMembers = useMemo(() => (viewport ? filterViewportPoints(chaserNetMembers, viewport) : chaserNetMembers), [chaserNetMembers, viewport]);
   const clusteredChaserNetReports = useMemo(() => (viewport ? filterViewportPoints(chaserNetReportPoints, viewport) : chaserNetReportPoints), [chaserNetReportPoints, viewport]);
   // Road events with real line geometry (see roadCameraProviders.ts) are painted along the actual
@@ -323,9 +321,10 @@ export function AtlasMap({
   const lineRoadConditions = useMemo(() => roadConditions.filter((event) => event.geometry.type === "line"), [roadConditions]);
   const pointOnlyRoadConditions = useMemo(() => roadConditions.filter((event) => event.geometry.type !== "line"), [roadConditions]);
   const clusteredRoadConditions = useMemo(() => (viewport ? filterViewportPoints(pointOnlyRoadConditions, viewport) : pointOnlyRoadConditions), [pointOnlyRoadConditions, viewport]);
-  // Cameras already never clustered (owner asked for that first, before extending it to everything
-  // else here). Still viewport-filtered so off-screen cameras aren't rendered at all.
-  const clusteredTrafficCameras = useMemo(() => (viewport ? filterViewportPoints(trafficCameras, viewport) : trafficCameras), [trafficCameras, viewport]);
+  // Roughly ten-county and closer views retain every camera. Wider views cluster dense corridors.
+  const clusteredTrafficCameras = useMemo(() => viewport
+    ? clusterViewportPoints(filterViewportPoints(trafficCameras, viewport), viewport, { individualAtZoom: 6, mediumAtZoom: 4.5, mediumCellDegrees: 0.28, farCellDegrees: 1.1 })
+    : trafficCameras, [trafficCameras, viewport]);
   const clusteredSurfaceStations = useMemo(() => (viewport ? filterViewportPoints(surfaceStations, viewport) : surfaceStations), [surfaceStations, viewport]);
 
   latestRef.current = { gps, rangeRings, expanded };

@@ -11,7 +11,6 @@ import type { RoadConditionEvent, TrafficCamera } from "../../../../src/services
 import { MapCameraViewer } from "../components/MapCameraViewer";
 import { MapSituationPanel } from "../components/MapSituationPanel";
 import { PointInspector } from "../components/PointInspector";
-import { TimelineRail } from "../components/TimelineRail";
 import { useCoreOps } from "../core/useCoreOps";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings";
@@ -33,10 +32,18 @@ function gpsStatusLine(s: LocationState) {
 
 type Selection = { kind: "alert"; alert: AlertProduct } | { kind: "road"; road: RoadConditionEvent };
 
+function unitLocation(location: Record<string, unknown> | null | undefined): { lat: number; lon: number } | null {
+  if (!location) return null;
+  const lat = Number(location.lat ?? location.latitude);
+  const lon = Number(location.lon ?? location.lng ?? location.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
+}
+
 export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string }) {
   const [gps, setGps] = useState<LocationState>({ status: "requesting" });
   const [camera, setCamera] = useState<TrafficCamera | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [nearbyUnitId, setNearbyUnitId] = useState<string>("");
   const { state: coreState, selectedPoint, selectPoint } = useCoreOps();
 
   useEffect(() => {
@@ -112,7 +119,17 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   }, []);
 
   const atlasGps = toAtlasGps(gps);
-  const gpsPoint = useMemo(() => (atlasGps ? { lat: atlasGps.lat, lon: atlasGps.lon } : selectedPoint), [atlasGps, selectedPoint]);
+  const chaserReferences = useMemo(() => (coreState.fabric.units?.units ?? [])
+    .map((unit) => ({ unit, location: unitLocation(unit.location) }))
+    .filter((entry): entry is typeof entry & { location: { lat: number; lon: number } } => entry.location != null && (entry.unit.unit_type === "chase-platform" || entry.unit.role.includes("chase"))), [coreState.fabric.units]);
+  useEffect(() => {
+    if (!nearbyUnitId && chaserReferences.length) setNearbyUnitId(chaserReferences[0].unit.unit_id);
+    else if (nearbyUnitId && !chaserReferences.some((entry) => entry.unit.unit_id === nearbyUnitId)) setNearbyUnitId(chaserReferences[0]?.unit.unit_id ?? "");
+  }, [chaserReferences, nearbyUnitId]);
+  const selectedChaser = chaserReferences.find((entry) => entry.unit.unit_id === nearbyUnitId) ?? null;
+  // Nearby is explicitly chaser-relative. A map click still drives Storm Intel, but never silently
+  // relocates gas/hotel/ER results. Fall back to this device only when no chaser position exists.
+  const gpsPoint = useMemo(() => selectedChaser?.location ?? (atlasGps ? { lat: atlasGps.lat, lon: atlasGps.lon } : null), [atlasGps, selectedChaser]);
   const spotters = useSpotters(gpsPoint);
   const poi = useNearbyPoiList(gpsPoint);
   const nearby = useNearbyPlaces(gpsPoint);
@@ -138,9 +155,15 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
             <span>FOCUS</span>
             <b>{focus}</b>
           </div>
+          <label className="ops-nearby-reference">
+            <span>NEARBY FOR</span>
+            <select value={nearbyUnitId} onChange={(event) => setNearbyUnitId(event.target.value)}>
+              {chaserReferences.length === 0 && <option value="">THIS DEVICE</option>}
+              {chaserReferences.map(({ unit }) => <option key={unit.unit_id} value={unit.unit_id}>{unit.operator_name || unit.display_name}</option>)}
+            </select>
+          </label>
           <OpsStatusPill state={coreState.stormIntel.state} label="STORM INTEL" />
         </div>
-        <TimelineRail />
         {camera && <MapCameraViewer camera={camera} onClose={() => setCamera(null)} />}
         {selection && <MapSituationPanel selection={selection} onClose={() => setSelection(null)} />}
       </div>

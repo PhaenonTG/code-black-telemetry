@@ -1,0 +1,33 @@
+{
+  // Standalone cron Worker: checks Cloudflare Workers request volume against the free-plan
+  // daily cap and posts a Discord alert into #infrastructure-alerts (same channel/webhook
+  // pattern as codeblack-stream-alert on Core) when usage is approaching it. Exists because
+  // radar-relay's request volume once crept up to 96% of the free daily cap with no warning
+  // until the dashboard was checked by hand -- see the edge-caching fix in ../radar-relay for
+  // the actual root-cause fix; this is the safety net for whatever creeps up next.
+  "name": "codeblack-usage-monitor",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-08",
+  // No custom domain needed -- this Worker is triggered by cron, not by public traffic. The
+  // *.workers.dev URL exists only so the GET handler can be poked by hand to test the
+  // cron/Discord plumbing without waiting for the next scheduled tick.
+  "workers_dev": true,
+  "triggers": {
+    // Every 30 minutes -- frequent enough to catch a fast-climbing day (e.g. a live chase with
+    // several viewers) well before the cap, infrequent enough not to be its own noise source.
+    "crons": ["*/30 * * * *"]
+  },
+  "vars": {
+    "CF_ACCOUNT_ID": "d9a20387567b68f364828ce6525d4ef4",
+    // Free plan: 100,000 Workers requests/day, account-wide across every Worker. Alert well
+    // before the hard cap so there's time to react (raise a TTL, close extra tabs, or upgrade)
+    // instead of finding out mid-stream when requests start failing.
+    "DAILY_REQUEST_LIMIT": "100000",
+    "WARN_THRESHOLD_PCT": "70",
+    "CRITICAL_THRESHOLD_PCT": "90"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

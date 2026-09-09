@@ -9311,6 +9311,18 @@ body {
 }
 .home-hero--critical .home-hero__text strong { color: #ff3044; }
 
+/* Closing storm motion is the single most actionable fact on this page during an active
+   intercept -- give it a touch more presence than the plain detail line below it, without
+   reaching for the alarm-fatigue treatments (pulse/glow) already reserved for the hero dot. */
+.home-hero__motion[data-closing="true"] {
+  color: #ff8a90;
+  font-weight: 800;
+}
+
+.home-hero__motion[data-closing="false"] {
+  opacity: 0.75;
+}
+
 .home-module-list {
   display: grid;
   gap: var(--phone-home-gap);

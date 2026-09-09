@@ -28,6 +28,9 @@
    regardless of its actual LIVE/DEGRADED/OFFLINE tone. */
 .ops-map-overlay>div>span,.ops-timeline>div>span,.ops-inspector__eyebrow{display:block;font-size:9px;font-weight:900;letter-spacing:.16em;color:var(--cb-red);text-transform:uppercase}
 .ops-map-overlay b{display:block;margin-top:2px;font-size:16px;font-weight:900;letter-spacing:.04em;color:var(--cb-text)}
+.ops-nearby-reference{pointer-events:auto;background:rgba(0,0,0,.86);border:1px solid var(--cb-line);padding:7px 10px;min-width:150px}
+.ops-nearby-reference span{display:block;color:var(--cb-red);font-size:8px;font-weight:900;letter-spacing:.14em}
+.ops-nearby-reference select{width:100%;margin-top:3px;border:0;background:#08090a;color:var(--cb-text);font-size:11px;font-weight:800;outline:0}
 /* right:100px, not right:18px -- AtlasMap's own control stack (North/Clear Trail/Zoom Lock/
    Layers, .atlas-map-controls in src/index.css) is pinned bottom-right of the same map and is
    about 74px wide. A full-width timeline bar sat directly underneath it. */
@@ -155,12 +158,13 @@
   .storm-workspace__metrics{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
 }
 @media (max-width:767px){
-  .ops-workstation{position:relative;display:flex;flex-direction:column;height:100%;overflow:auto}
-  .ops-map-stage{height:58vh;min-height:420px;flex:0 0 auto}
+  .ops-workstation{position:absolute;inset:0;display:flex;flex-direction:column;height:auto;overflow-y:auto;overscroll-behavior:contain}
+  .ops-map-stage{height:64vh;min-height:420px;flex:0 0 auto}
   .ops-inspector{border-left:0;border-top:1px solid var(--cb-line);overflow:visible}
   .ops-map-overlay{left:10px;right:10px;top:10px;flex-wrap:wrap}
   .ops-map-overlay>div{min-width:145px}
   .ops-map-overlay .ops-pill{display:none}
+  .ops-nearby-reference{min-width:132px}
   /* Same clearance reasoning as the desktop rule above -- AtlasMap's own control stack is
      bottom-right anchored here too. */
   .ops-timeline{left:10px;right:70px;bottom:10px;display:block}

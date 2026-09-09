@@ -12,8 +12,21 @@ export interface Spotter {
   lon: number;
   distanceMiles: number;
   updatedAtText: string;
+  updatedAtMs: number | null;
   status: string;
   contact: SpotterContactField[];
+}
+
+export const ACTIVE_SPOTTER_MAX_AGE_MS = 8 * 60_000;
+
+export function spotterTimestampMs(rawTimestamp: string): number | null {
+  if (!rawTimestamp) return null;
+  const parsed = new Date(rawTimestamp).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function isActiveSpotter(spotter: Pick<Spotter, "updatedAtMs">, now = Date.now()): boolean {
+  return spotter.updatedAtMs != null && spotter.updatedAtMs <= now + 60_000 && now - spotter.updatedAtMs <= ACTIVE_SPOTTER_MAX_AGE_MS;
 }
 
 type Position = { lat: number; lon: number };
@@ -88,6 +101,7 @@ function parseSpotterFeed(raw: string, origin: Position): Spotter[] {
         lon: position.lon,
         distanceMiles: distanceMiles(origin, position),
         updatedAtText: timestamp ?? "",
+        updatedAtMs: spotterTimestampMs(timestamp ?? ""),
         status: status ?? "",
         contact,
       });
@@ -104,7 +118,7 @@ export async function getNearbySpotters(origin: Position): Promise<{ spotters: S
     const response = await fetch(SPOTTER_FEED_URL, { cache: "no-store", signal: controller.signal });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const text = await response.text();
-    const spotters = parseSpotterFeed(text, origin).sort((a, b) => a.distanceMiles - b.distanceMiles);
+    const spotters = parseSpotterFeed(text, origin).filter((spotter) => isActiveSpotter(spotter)).sort((a, b) => a.distanceMiles - b.distanceMiles);
     return { spotters, error: "" };
   } catch (error) {
     return { spotters: [], error: error instanceof Error ? error.message : "Spotter feed fetch failed" };
@@ -165,11 +179,13 @@ export async function getAuthenticatedSpotterPositions(accountId: string, origin
           lon,
           distanceMiles: distanceMiles(origin, { lat, lon }),
           updatedAtText: p.report_at ?? "",
+          updatedAtMs: spotterTimestampMs(p.report_at ?? ""),
           status: "",
           contact,
         };
       })
       .filter((spotter): spotter is Spotter => spotter !== null)
+      .filter((spotter) => isActiveSpotter(spotter))
       .sort((a, b) => a.distanceMiles - b.distanceMiles);
     return { spotters, error: "" };
   } catch (error) {
@@ -178,4 +194,3 @@ export async function getAuthenticatedSpotterPositions(accountId: string, origin
     window.clearTimeout(timer);
   }
 }
-

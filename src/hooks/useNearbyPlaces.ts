@@ -17,6 +17,9 @@ export function useNearbyPlaces(gps: GpsPoint | null) {
   const gpsRef = useRef(gps);
   gpsRef.current = gps;
   const hasGps = gps != null;
+  // About a 5-7 mile cell in chase country. Crossing it refreshes immediately while ordinary GPS
+  // jitter keeps the gentle Overpass cadence. Selecting a distant chaser also changes it at once.
+  const locationCell = gps ? `${Math.floor(gps.lat * 10)}:${Math.floor(gps.lon * 10)}` : "none";
 
   useEffect(() => {
     if (!hasGps) return;
@@ -56,7 +59,7 @@ export function useNearbyPlaces(gps: GpsPoint | null) {
     // Re-fetching on every minor GPS jitter would hammer Overpass; only whether a fix exists at
     // all (not its exact value) is in the dependency array, so refreshes come from the schedule
     // above, not from every GPS coordinate update.
-  }, [hasGps, resumeTick]);
+  }, [hasGps, locationCell, resumeTick]);
 
   return { places, error };
 }

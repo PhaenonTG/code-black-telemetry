@@ -64,6 +64,13 @@ assert.equal(viewport.zoomDetailLevel(3), "far");
 assert.ok(viewport.clusterViewportPoints(points.slice(0, 2), testViewport).some((item) => "count" in item && item.count === 2));
 
 const now = Date.parse("2026-08-18T12:00:00Z");
+// Presence/report submission validates timestampUtc against the real wall clock (anti-replay --
+// see validateChaserNetTimestamp's 7-day window in chaserNet.ts), unlike every other check in this
+// file which takes an explicit injected `now`. Using the fixed historical `now` above for those
+// specific calls made this suite a silent time bomb: it passed for exactly 7 days after whatever
+// date `now` was last updated to, then started failing for a reason with nothing to do with the
+// code under test. liveNow anchors just those calls to actual current time instead.
+const liveNow = Date.now();
 const member = {
   privacy: { preciseLocationAllowed: true, locationVisibility: "team-only" },
 };
@@ -168,18 +175,18 @@ const presenceLocation = {
   provider: "gps",
   quality: "good",
 };
-backend.submitPresence(identityB, { memberId: "member-b", state: "active-chase", currentSessionId: "chase-1", timestampUtc: now, location: presenceLocation });
+backend.submitPresence(identityB, { memberId: "member-b", state: "active-chase", currentSessionId: "chase-1", timestampUtc: liveNow, location: presenceLocation });
 const permittedPresence = backend.getPresenceForViewport({ identity: identityA, viewport: testViewport, detail: "close", sessionId: null });
 assert.equal(permittedPresence.data.length, 1);
 const deniedPresence = backend.getPresenceForViewport({ identity: identityC, viewport: testViewport, detail: "close", sessionId: null });
 assert.equal(deniedPresence.data.length, 0);
-assert.throws(() => backend.submitPresence(null, { memberId: "member-a", state: "active-chase", currentSessionId: null, timestampUtc: now, location: presenceLocation }), /CHASER_NET_AUTH_REQUIRED/);
-assert.throws(() => backend.submitPresence(identityB, { memberId: "member-b", state: "active-chase", currentSessionId: "chase-1", timestampUtc: now + 1_000, location: presenceLocation }), /CHASER_NET_PRESENCE_RATE_LIMITED/);
+assert.throws(() => backend.submitPresence(null, { memberId: "member-a", state: "active-chase", currentSessionId: null, timestampUtc: liveNow, location: presenceLocation }), /CHASER_NET_AUTH_REQUIRED/);
+assert.throws(() => backend.submitPresence(identityB, { memberId: "member-b", state: "active-chase", currentSessionId: "chase-1", timestampUtc: liveNow + 1_000, location: presenceLocation }), /CHASER_NET_PRESENCE_RATE_LIMITED/);
 
 const report = backend.createReport(identityB, {
   reporterMemberId: "member-b",
   chaseSessionId: "chase-1",
-  timestampUtc: now,
+  timestampUtc: liveNow,
   lat: 36.43,
   lon: -94.21,
   horizontalAccuracyM: 15,
@@ -192,7 +199,7 @@ assert.equal(report.provenance.provider, "CHASERNET/HUMAN");
 assert.equal(report.verificationState, "unverified");
 assert.equal(backend.getReportsForViewport({ identity: identityA, viewport: testViewport, detail: "close", sessionId: null }).data.length, 1);
 assert.equal(backend.getReportsForViewport({ identity: identityC, viewport: testViewport, detail: "close", sessionId: null }).data.length, 0);
-assert.throws(() => backend.createReport(identityB, { reporterMemberId: "member-b", chaseSessionId: null, timestampUtc: now, lat: 136, lon: -94, horizontalAccuracyM: null, category: "hail", text: "bad coord", confidence: "low", visibility: "trusted-network" }), /CHASER_NET_INVALID_COORDINATE/);
+assert.throws(() => backend.createReport(identityB, { reporterMemberId: "member-b", chaseSessionId: null, timestampUtc: liveNow, lat: 136, lon: -94, horizontalAccuracyM: null, category: "hail", text: "bad coord", confidence: "low", visibility: "trusted-network" }), /CHASER_NET_INVALID_COORDINATE/);
 assert.throws(() => backend.updateReport(identityB, report.reportId, { verificationState: "moderator-reviewed" }), /CHASER_NET_PERMISSION_DENIED/);
 const retracted = backend.retractReport(identityB, report.reportId);
 assert.equal(retracted.updateState, "retracted");
@@ -217,12 +224,12 @@ assert.equal(roadCameraTest.freshnessForTimestamp(now - 30 * 60_000, now), "agin
 assert.equal(roadCameraTest.freshnessForTimestamp(now - 2 * 60 * 60_000, now), "stale");
 assert.equal(roadCameraProviders.roadProvidersForViewport(testViewport).some((provider) => provider.id === "ardot-idrive"), true);
 assert.equal(roadCameraProviders.trafficCameraProvidersForViewport(testViewport).some((provider) => provider.id === "ardot-idrive"), true);
-const outsideArkansasViewport = { north: 40, south: 39, east: -100, west: -101, zoom: 8 };
-assert.equal(roadCameraProviders.roadProvidersForViewport(outsideArkansasViewport).length, 0);
-const outsideRoadResult = await roadCameraProviders.getRoadConditionsForViewport({ viewport: outsideArkansasViewport, detail: "close" });
+const outsideCoverageViewport = { north: 38, south: 37, east: -121, west: -122, zoom: 8 };
+assert.equal(roadCameraProviders.roadProvidersForViewport(outsideCoverageViewport).length, 0);
+const outsideRoadResult = await roadCameraProviders.getRoadConditionsForViewport({ viewport: outsideCoverageViewport, detail: "close" });
 assert.equal(outsideRoadResult.status, "outside-coverage");
-assert.match(outsideRoadResult.message, /Arkansas DOT IDrive/);
-const outsideCameraResult = await roadCameraProviders.getTrafficCamerasForViewport({ viewport: outsideArkansasViewport, detail: "close" });
+assert.match(outsideRoadResult.message, /Arkansas, Kansas, and Missouri/);
+const outsideCameraResult = await roadCameraProviders.getTrafficCamerasForViewport({ viewport: outsideCoverageViewport, detail: "close" });
 assert.equal(outsideCameraResult.status, "outside-coverage");
 const normalizedRoad = roadCameraTest.normalizeRoadFeature({
   properties: {

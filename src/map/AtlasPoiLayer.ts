@@ -88,21 +88,20 @@ const BEST_PICK_COLOR: Partial<Record<NearbyCategory, string>> = {
 // border/glow -- at this marker size (22px) any icon detail finer than a bold silhouette won't
 // survive anyway, so the source SVGs (src/assets/poi-icons/) are deliberately simple/blocky.
 function applyIconPinStyle(el: HTMLDivElement, color: string, iconUrl: string) {
-  const size = 28;
+  const size = 24;
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
   el.style.backgroundColor = color;
-  el.style.backgroundImage = `url(${iconUrl})`;
-  el.style.backgroundRepeat = "no-repeat";
-  el.style.backgroundPosition = "center";
-  el.style.backgroundSize = "62%";
+  el.style.backgroundImage = "";
   el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
-  el.style.borderRadius = "6px";
-  el.style.boxShadow = `0 0 0 2px rgba(0, 0, 0, 0.4), 0 0 10px 2px ${color}`;
-  el.style.display = "block";
+  el.style.borderRadius = "50% 50% 50% 2px";
+  el.style.transform = "rotate(-45deg)";
+  el.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.65)";
+  el.style.display = "grid";
+  el.style.placeItems = "center";
   el.style.color = "";
   el.style.font = "";
-  el.textContent = "";
+  el.innerHTML = `<img src="${iconUrl}" alt="" style="width:60%;height:60%;transform:rotate(45deg)" />`;
   el.style.cursor = "pointer";
 }
 
@@ -175,7 +174,7 @@ export function updateAtlasPoiLayer(
       let marker = markers[place.id];
       if (!marker) {
         const el = document.createElement("div");
-        el.className = "atlas-poi-marker";
+        el.classList.add("atlas-poi-marker");
         el.addEventListener("click", (event) => {
           event.stopPropagation();
           const current = latest![place.id];

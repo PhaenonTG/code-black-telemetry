@@ -37,6 +37,7 @@ import {
 import { ARDOT_RELAY_PREFIX, handleArdotCameraStream } from "../functions/lib/ardotCameraRelay";
 import { OVERLAY_CORE_PREFIX, handlePublicStormIntelRequest } from "../functions/lib/publicStormIntelRelay";
 import { MAPBOX_TOKEN_PATH, handleMapboxTokenRequest, type MapboxTokenEnv } from "../functions/lib/publicMapboxToken";
+import { MODOT_PREFIX, handleModotRequest } from "../functions/lib/modotRelay";
 
 interface Env extends GatewayEnv, MapboxTokenEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -66,7 +67,7 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname.startsWith(GATEWAY_PREFIX)) {
       return handleGatewayRequest(request, env);
@@ -74,8 +75,11 @@ export default {
     if (url.pathname === ARDOT_RELAY_PREFIX) {
       return handleArdotCameraStream(request);
     }
+    if (url.pathname.startsWith(MODOT_PREFIX)) {
+      return handleModotRequest(request);
+    }
     if (url.pathname === MAPBOX_TOKEN_PATH) {
-      return handleMapboxTokenRequest(request, env);
+      return handleMapboxTokenRequest(request, env, ctx);
     }
     if (url.pathname.startsWith(OVERLAY_CORE_PREFIX)) {
       return handlePublicStormIntelRequest(request, env);

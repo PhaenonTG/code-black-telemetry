@@ -24,7 +24,11 @@ export interface MapboxTokenEnv extends GatewayEnv {
   MAPBOX_PUBLIC_TOKEN?: string;
 }
 
-export async function handleMapboxTokenRequest(request: Request, env: MapboxTokenEnv): Promise<Response> {
+export async function handleMapboxTokenRequest(
+  request: Request,
+  env: MapboxTokenEnv,
+  ctx?: { waitUntil(promise: Promise<unknown>): void },
+): Promise<Response> {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
@@ -40,10 +44,26 @@ export async function handleMapboxTokenRequest(request: Request, env: MapboxToke
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...CORS_HEADERS },
     });
   }
-  return new Response(JSON.stringify({ token: env.MAPBOX_PUBLIC_TOKEN }), {
+
+  // A bare Cache-Control header on a Worker-generated response only governs the requesting
+  // browser's own cache -- it does NOT get pulled into Cloudflare's edge cache by itself, so
+  // every page load was still invoking this Worker despite the header saying max-age=3600.
+  // Explicitly using the Cache API is what actually keeps this off the edge's request count;
+  // same fix as radar-relay's tile/frame caching. `caches` is a Workers-runtime global, absent
+  // under any Node-based test run, so this degrades to a plain no-op there instead of throwing.
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const cacheKey = cache ? new Request(new URL(request.url).toString(), request) : null;
+  if (cache) {
+    const cached = await cache.match(cacheKey!);
+    if (cached) return cached;
+  }
+
+  const response = new Response(JSON.stringify({ token: env.MAPBOX_PUBLIC_TOKEN }), {
     status: 200,
-    // Cached at the edge for a while -- this value only ever changes on a deliberate token
-    // rotation, not per-request, so there's no reason to hit the Worker for every page load.
+    // Token only ever changes on a deliberate rotation, not per-request -- a long TTL here is a
+    // pure win, not a freshness tradeoff.
     headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=3600", ...CORS_HEADERS },
   });
+  if (cache) ctx?.waitUntil(cache.put(cacheKey!, response.clone()));
+  return response;
 }

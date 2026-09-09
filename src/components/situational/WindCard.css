@@ -118,6 +118,19 @@
   text-transform: none;
 }
 
+/* Same restrained data-tone vocabulary the GPS/ops status readouts use elsewhere -- text color
+   only, on the number itself. No stripe, no glow, no animation: this card stays plain per the
+   note at the top of this file, but a gust that actually crosses a real NWS threshold (Wind
+   Advisory at 46mph, High Wind Warning / severe-thunderstorm criterion at 58mph) still deserves
+   to read as more than a plain white number. */
+.wind-hero__item strong[data-tone="warn"] {
+  color: var(--cb-amber);
+}
+
+.wind-hero__item strong[data-tone="critical"] {
+  color: var(--cb-red);
+}
+
 .wind-panel .wind-toolbar {
   min-height: 40px;
   margin-top: auto;
