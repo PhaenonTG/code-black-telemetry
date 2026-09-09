@@ -25,6 +25,7 @@ Updated: 2026-09-09
 | State | Provider | Data path | Status |
 | --- | --- | --- | --- |
 | Arkansas | ARDOT IDrive | Public GeoJSON; camera media relay | Implemented; 552 cameras observed 2026-09-09 |
+| Iowa | Iowa DOT 511 | Official public cameras, RWIS views, winter-route geometry, and CARS events | Implemented |
 | Kansas | KDOT KanDrive | Official public camera inventory and on-demand map detail | Implemented; 601 viewport-valid cameras observed 2026-09-09 |
 | Missouri | MoDOT Traveler Information | Strict same-origin relay to official ArcGIS services | Implemented and deployed |
 | Nebraska | Nebraska DOT 511 | Official public camera inventory | Implemented; 349 viewport-valid cameras observed 2026-09-09 |
@@ -39,7 +40,7 @@ and a small query-parameter allowlist. It cannot be used as a general proxy.
 1. Deploy the OPS build through the normal release path.
 2. At national zoom, enable Spotter Network and Cameras. Confirm clusters appear and expand as the
    map zooms in.
-3. At zoom 6 or closer in Arkansas, Kansas, Missouri, Nebraska, and Tennessee, confirm individual camera coordinates sit
+3. At zoom 6 or closer in Arkansas, Iowa, Kansas, Missouri, Nebraska, and Tennessee, confirm individual camera coordinates sit
    on the corresponding roadway and at least one camera detail opens per state.
 4. Confirm every Spotter Network popup reports eight minutes old or newer.
 5. Select each live chaser in `NEARBY FOR`, then confirm the nearest gas, lodging, food, and ER

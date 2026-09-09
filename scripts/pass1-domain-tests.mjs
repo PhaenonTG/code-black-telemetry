@@ -222,8 +222,12 @@ assert.equal(roadCameraTest.sanitizeProviderText("<b>Flooded</b> road\nnear brid
 assert.equal(roadCameraTest.freshnessForTimestamp(now - 2 * 60_000, now), "fresh");
 assert.equal(roadCameraTest.freshnessForTimestamp(now - 30 * 60_000, now), "aging");
 assert.equal(roadCameraTest.freshnessForTimestamp(now - 2 * 60 * 60_000, now), "stale");
+assert.equal(new Date(roadCameraTest.parseIowaCameraTime(20260909, 93000, -5)).toISOString(), "2026-09-09T14:30:00.000Z");
 assert.equal(roadCameraProviders.roadProvidersForViewport(testViewport).some((provider) => provider.id === "ardot-idrive"), true);
 assert.equal(roadCameraProviders.trafficCameraProvidersForViewport(testViewport).some((provider) => provider.id === "ardot-idrive"), true);
+const iowaViewport = { north: 43.3, south: 40.3, east: -90.1, west: -96.8, zoom: 7 };
+assert.equal(roadCameraProviders.roadProvidersForViewport(iowaViewport).some((provider) => provider.id === "iadot-511"), true);
+assert.equal(roadCameraProviders.trafficCameraProvidersForViewport(iowaViewport).some((provider) => provider.id === "iadot-511"), true);
 const outsideCoverageViewport = { north: 38, south: 37, east: -121, west: -122, zoom: 8 };
 assert.equal(roadCameraProviders.roadProvidersForViewport(outsideCoverageViewport).length, 0);
 const outsideRoadResult = await roadCameraProviders.getRoadConditionsForViewport({ viewport: outsideCoverageViewport, detail: "close" });

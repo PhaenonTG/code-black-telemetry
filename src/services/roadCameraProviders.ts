@@ -115,6 +115,14 @@ const TENNESSEE_COVERAGE: ProviderCoverage = {
   label: "Tennessee",
 };
 
+const IOWA_COVERAGE: ProviderCoverage = {
+  north: 43.51,
+  south: 40.36,
+  east: -90.14,
+  west: -96.64,
+  label: "Iowa",
+};
+
 const NDOT_PROVENANCE: ObservationProvenance = {
   provider: "OFFICIAL/STATE_TRANSPORTATION" as ObservationProvenance["provider"],
   sourceId: "ne511-ndot",
@@ -140,6 +148,15 @@ const TDOT_PROVENANCE: ObservationProvenance = {
   official: true,
   experimental: false,
   displayLabel: "TDOT SmartWay",
+};
+
+const IADOT_PROVENANCE: ObservationProvenance = {
+  provider: "OFFICIAL/STATE_TRANSPORTATION",
+  sourceId: "iadot-511",
+  sourceName: "Iowa DOT 511",
+  official: true,
+  experimental: false,
+  displayLabel: "Iowa DOT 511",
 };
 
 const IDRIVE_LAYER_BASE_URL = "https://layers.idrivearkansas.com";
@@ -902,6 +919,133 @@ export async function fetchNe511TrafficCameras(context: LayerQueryContext, signa
   });
 }
 
+// --- Iowa DOT 511 ------------------------------------------------------------------------------
+// Iowa explicitly publishes these credential-free ArcGIS services for third-party use. Camera
+// records include both urban CCTV and rural RWIS views; winter conditions arrive as the actual
+// affected road geometry, so the map paints the route rather than dropping a vague midpoint pin.
+const IADOT_CAMERAS_URL = "https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/Traffic_Cameras_View/FeatureServer/0";
+const IADOT_WINTER_URL = "https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/511_IA_Road_Conditions_View/FeatureServer/0";
+const IADOT_EVENTS_URL = "https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/CARS511_Iowa_View/FeatureServer/0";
+const IADOT_MAP_URL = "https://511ia.org/";
+
+function parseIowaCameraTime(dateValue: unknown, timeValue: unknown, offsetValue?: unknown) {
+  const date = String(dateValue ?? "").padStart(8, "0");
+  const time = String(timeValue ?? "").padStart(6, "0");
+  if (!/^\d{8}$/.test(date) || !/^\d{6}$/.test(time)) return null;
+  const offsetHours = Number(offsetValue);
+  const localAsUtc = Date.UTC(
+    Number(date.slice(0, 4)), Number(date.slice(4, 6)) - 1, Number(date.slice(6, 8)),
+    Number(time.slice(0, 2)), Number(time.slice(2, 4)), Number(time.slice(4, 6)),
+  );
+  const parsed = Number.isFinite(offsetHours) ? localAsUtc - offsetHours * 60 * 60 * 1000 : localAsUtc;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeIowaCamera(feature: unknown): TrafficCamera | null {
+  if (!feature || typeof feature !== "object") return null;
+  const candidate = feature as { properties?: Record<string, unknown>; geometry?: { coordinates?: unknown[] } };
+  const props = candidate.properties ?? {};
+  const coordinates = candidate.geometry?.coordinates;
+  const lon = Array.isArray(coordinates) ? Number(coordinates[0]) : Number(props.longitude);
+  const lat = Array.isArray(coordinates) ? Number(coordinates[1]) : Number(props.latitude);
+  if (!isValidCoordinate(lat, lon)) return null;
+  const recordId = sanitizeProviderText(props.device_id ?? props.COMMON_ID ?? props.FID ?? `${lat},${lon}`, 80);
+  const imageUrl = safeHttpUrl(props.ImageURL);
+  const streamUrl = safeHttpUrl(props.VideoURL);
+  const updatedAt = parseIowaCameraTime(props.UpdateDate, props.UpdateTime, props.UTCoffset);
+  const freshness = updatedAt ? freshnessForTimestamp(updatedAt) : imageUrl || streamUrl ? "aging" : "unavailable";
+  return {
+    id: `iadot-511:camera:${recordId}`,
+    providerId: "iadot-511",
+    providerRecordId: recordId,
+    name: sanitizeProviderText(props.Desc_ ?? props.ImageName, 120) || `Iowa DOT camera ${recordId}`,
+    lat,
+    lon,
+    roadway: sanitizeProviderText(props.Route, 60) || null,
+    direction: null,
+    source: sanitizeProviderText(props.Type, 40) || "Iowa DOT camera",
+    provider: IADOT_PROVENANCE,
+    lastUpdateAt: updatedAt,
+    imageUrl,
+    streamUrl,
+    thumbnailUrl: imageUrl,
+    previewUrl: imageUrl,
+    availability: imageUrl || streamUrl ? "available" : "offline",
+    freshness,
+    sourceUrl: IADOT_MAP_URL,
+    attribution: "Iowa DOT 511",
+  };
+}
+
+function normalizeIowaRoadFeature(feature: unknown, kindHint: string): RoadConditionEvent | null {
+  if (!feature || typeof feature !== "object") return null;
+  const candidate = feature as { properties?: Record<string, unknown>; geometry?: { type?: string; coordinates?: unknown } };
+  const props = candidate.properties ?? {};
+  const raw = candidate.geometry?.coordinates;
+  const lineCoordinates = candidate.geometry?.type === "LineString" && Array.isArray(raw)
+    ? raw.filter((pair): pair is [number, number] => Array.isArray(pair) && isValidCoordinate(pair[1], pair[0])).map((pair) => ({ lat: Number(pair[1]), lon: Number(pair[0]) }))
+    : [];
+  const midpoint = lineCoordinates[Math.floor(lineCoordinates.length / 2)];
+  const lon = midpoint?.lon ?? (Array.isArray(raw) ? Number(raw[0]) : NaN);
+  const lat = midpoint?.lat ?? (Array.isArray(raw) ? Number(raw[1]) : NaN);
+  if (!isValidCoordinate(lat, lon)) return null;
+  const condition = sanitizeProviderText(props.ROAD_CONDITION ?? props.HL_PAVEMENT_CONDITION ?? props.phrase ?? props.cause, 100);
+  if (kindHint === "winter-condition" && /^(normal|seasonal)$/i.test(condition)) return null;
+  const description = sanitizeProviderText(props.LONG_NAME ?? props.Desc0 ?? props.msg0 ?? props.headline, 320);
+  const restrictions = sanitizeProviderText(props.Restrict_ ?? props.Instruct, 180);
+  const recordId = sanitizeProviderText(props.SEGMENT_ID ?? props.ID ?? props.OBJECTID ?? `${lat},${lon}`, 80);
+  const updatedAt = parseProviderTime(props.CARS_MSG_UPDATE_DATE ?? props.EditDate ?? props.UpdateDate) ?? nowMs();
+  const closureState: RoadClosureState = /closed/i.test(`${condition} ${restrictions}`) ? "closed" : restrictions ? "lane-restricted" : "unknown";
+  const kind = normalizeRoadKind(kindHint, { description, reason: condition, restrictions });
+  const freshness = freshnessForTimestamp(updatedAt);
+  return {
+    id: `iadot-511:road:${recordId}`,
+    providerId: "iadot-511",
+    providerRecordId: recordId,
+    kind,
+    geometry: lineCoordinates.length > 1 ? { type: "line", coordinates: lineCoordinates } : { type: "point", lat, lon },
+    closureState,
+    severity: normalizeRoadSeverity({ description, travel_impact: restrictions, status: condition }, closureState, kind),
+    title: [sanitizeProviderText(props.ROUTE_NAME ?? props.Route, 50), condition || sanitizeProviderText(props.headline, 100)].filter(Boolean).join(" - ") || "Iowa road condition",
+    startsAt: parseProviderTime(props.CONDITION_NOT_NORMAL_START ?? props.IssueDate),
+    endsAt: parseProviderTime(props.CONDITION_NOT_NORMAL_END ?? props.ExpireDate),
+    direction: normalizeDirection(props.LOC_LINK_DIRECTION),
+    roadway: sanitizeProviderText(props.ROUTE_NAME ?? props.Route, 60) || null,
+    status: condition || "reported",
+    description: [description, restrictions].filter(Boolean).join(" "),
+    lat,
+    lon,
+    provider: IADOT_PROVENANCE,
+    updatedAt,
+    freshness,
+    stale: freshness === "stale" || freshness === "unavailable",
+    sourceUrl: IADOT_MAP_URL,
+    rawSourceReference: recordId,
+  };
+}
+
+export async function fetchIowaTrafficCameras(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<TrafficCamera[]> {
+  const url = arcgisEnvelopeQueryUrl(IADOT_CAMERAS_URL, context.viewport, { resultRecordCount: "5000" });
+  const json = await fetchJson(url, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher);
+  const cameras: TrafficCamera[] = (Array.isArray(json?.features) ? json.features : [])
+    .map((feature: unknown) => normalizeIowaCamera(feature))
+    .filter((item: TrafficCamera | null): item is TrafficCamera => Boolean(item));
+  return dedupeById(cameras).filter((camera) => coordinateWithinCoverage(camera, IOWA_COVERAGE));
+}
+
+export async function fetchIowaRoadConditions(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<RoadConditionEvent[]> {
+  const sources = [
+    { url: arcgisEnvelopeQueryUrl(IADOT_WINTER_URL, context.viewport, { resultRecordCount: "2500" }), kind: "winter-condition" },
+    { url: arcgisEnvelopeQueryUrl(IADOT_EVENTS_URL, context.viewport, { resultRecordCount: "2500" }), kind: "other" },
+  ];
+  const settled = await Promise.allSettled(sources.map(async (source) => {
+    const json = await fetchJson(source.url, DEFAULT_PROVIDER_TIMEOUT_MS, signal, fetcher);
+    return (Array.isArray(json?.features) ? json.features : []).map((feature: unknown) => normalizeIowaRoadFeature(feature, source.kind)).filter((item: RoadConditionEvent | null): item is RoadConditionEvent => Boolean(item));
+  }));
+  return dedupeById(settled.flatMap((result) => result.status === "fulfilled" ? result.value : []))
+    .filter((event) => coordinateWithinCoverage(event, IOWA_COVERAGE)).slice(0, MAX_ROAD_RESULTS);
+}
+
 // --- Missouri DOT Traveler Information --------------------------------------------------------
 //
 // MoDOT publishes its live road-event and camera data through its own ArcGIS Server REST services
@@ -1339,6 +1483,17 @@ export const ROAD_CONDITION_PROVIDERS: RoadConditionProvider[] = [
     fetchViewport: fetchModotRoadConditions,
   },
   {
+    id: "iadot-511",
+    name: "Iowa DOT 511",
+    coverage: IOWA_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: ROAD_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Iowa DOT 511",
+    fetchViewport: fetchIowaRoadConditions,
+  },
+  {
     id: "tdot-smartway",
     name: "Tennessee DOT SmartWay",
     coverage: TENNESSEE_COVERAGE,
@@ -1406,6 +1561,17 @@ export const TRAFFIC_CAMERA_PROVIDERS: TrafficCameraProvider[] = [
     timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
     attribution: "Nebraska DOT 511",
     fetchViewport: fetchNe511TrafficCameras,
+  },
+  {
+    id: "iadot-511",
+    name: "Iowa DOT 511",
+    coverage: IOWA_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: CAMERA_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Iowa DOT 511",
+    fetchViewport: fetchIowaTrafficCameras,
   },
   {
     id: "tdot-smartway",
@@ -1504,7 +1670,7 @@ export async function getTrafficCamerasForViewport(context: LayerQueryContext, s
   const providers = trafficCameraProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. Supports Arkansas, Kansas, Missouri, Nebraska, and Tennessee DOT coverage.", simulated: false, fetchedAt };
+    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. Supports Arkansas, Iowa, Kansas, Missouri, Nebraska, and Tennessee DOT coverage.", simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("camera", cameraCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);
@@ -1527,6 +1693,7 @@ export async function getTrafficCamerasForViewport(context: LayerQueryContext, s
 }
 
 export const __roadCameraProviderTest = {
+  parseIowaCameraTime,
   normalizeRoadFeature,
   normalizeCameraFeature,
   roadProvidersForViewport,

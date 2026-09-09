@@ -29,6 +29,22 @@ camera IDs. IDrive also exposes protected HLS feed URLs in metadata, but direct 
 requests can return provider denial; OPS does not advertise those protected URLs as playable
 streams in v0.1. The app does not preload thumbnails or streams for every marker.
 
+### Iowa DOT 511
+
+Provider ID: `iadot-511`
+
+Coverage: Iowa statewide public traveler information.
+
+- The camera service supplies urban CCTV and rural RWIS camera locations, snapshots, video links
+  when published, road association, and provider update time.
+- The winter-road service supplies affected route geometry. OPS suppresses normal and seasonal
+  records so the layer shows actionable pavement conditions instead of painting every highway.
+- The CARS event service adds closures, restrictions, crashes, flooding, and construction.
+- Camera times use the provider's UTC offset before freshness is calculated.
+
+These credential-free feeds are documented on Iowa DOT's public 511 data-feed page. Queries remain
+bounded to the visible map and use the same cache and stale fallback as other providers.
+
 ### Provider attribution / branding
 
 Layer rows and camera/road detail surfaces credit providers by name only (e.g. "Arkansas DOT
@@ -113,13 +129,25 @@ feeds belong in this layer family.
 
 ## Future Provider Expansion
 
-The provider registry supports Arkansas, Kansas, Missouri, Nebraska, Oklahoma road events, and Tennessee SmartWay, plus future CodeBlack-Core proxy adapters
+The provider registry supports Arkansas, Iowa, Kansas, Missouri, Nebraska, Oklahoma road events, and Tennessee SmartWay, plus future CodeBlack-Core proxy adapters
 without changing the normalized map models. If a provider requires credentials, credentials must be
 kept in configuration or on Core, never committed to the client repository.
 
 Deferred:
 
-- nationwide provider coverage
+- Mississippi camera sites need an on-demand server adapter because the public inventory groups
+  multiple views behind per-site pages instead of publishing stable media records.
+- Louisiana 511 advertises cameras, weather, incidents, closures, signs, ferries, and movable
+  bridges, but no stable documented public machine-readable contract was found.
+- Texas DriveTexas requires an approved API key and documents road conditions rather than a public
+  camera feed.
+- Hazcams requires a redistribution and license agreement before its imagery can appear in OPS.
+- Flock Safety is excluded because it is a restricted ALPR/law-enforcement system and its terms
+  prohibit scraping and unrelated use.
+- Iowa message signs and atmospheric RWIS observations await confirmed stable public contracts;
+  camera-associated RWIS imagery is included now.
+- NOAA/USGS river gauges, recent storm reports, route-ahead filtering, camera health checks, camera
+  wall, and an explicit low-bandwidth mode are the next map work package.
 - provider search/discovery UI
 - Core-side proxy/cache deployment
 - camera stream player integration inside OPS where a provider exposes a playable stream contract
