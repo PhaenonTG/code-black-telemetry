@@ -10166,6 +10166,34 @@ body {
   flex-wrap: wrap;
 }
 
+.atlas-radar-instrument__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  color: #fff;
+  font: 800 11px/1.2 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: .08em;
+}
+
+.atlas-radar-instrument__heading span {
+  color: #9ca3af;
+  font-size: 9px;
+  letter-spacing: .03em;
+}
+
+.atlas-map-controls__zoom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.atlas-map-controls__zoom button {
+  min-width: 0 !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+}
+
 .atlas-radar-chip {
   display: flex !important;
   align-items: center;

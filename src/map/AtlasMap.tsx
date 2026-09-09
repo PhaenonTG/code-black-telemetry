@@ -821,8 +821,8 @@ export function AtlasMap({
       removeAtlasRadarLayer(map);
       return;
     }
-    updateAtlasRadarLayer(map, radarFrame, 0.75, styleInfoRef.current.firstSymbolLayerId);
-  }, [radarFrame, radarVisible, loaded]);
+    updateAtlasRadarLayer(map, radarFrame, 0.72, styleInfoRef.current.firstSymbolLayerId, radarFrames);
+  }, [radarFrame, radarFrames, radarVisible, loaded]);
 
   useEffect(() => {
     if (!viewport || !roadConditionsVisible) {
@@ -1239,6 +1239,7 @@ export function AtlasMap({
           frame is just clutter, not a control. */}
       {!compact && radarVisible && !radarWorkerMissingOnWeb() && (
         <div className="atlas-radar-instrument" aria-label="Single-site radar product and tilt">
+          <div className="atlas-radar-instrument__heading"><strong>RADAR</strong><span>{radarFrame ? `${radarFrame.site.id} · FRAME ${radarPlaybackIndex + 1}/${radarFrames.length} · ${new Date(radarFrame.time).toISOString().slice(11, 19)}Z` : "LOADING FRAMES"}</span></div>
           <div className="atlas-radar-instrument__row">
             {(["REF", "VEL", "SRV", "CC"] as RadarProduct[]).map((product) => (
               <button
@@ -1304,6 +1305,10 @@ export function AtlasMap({
           corner button), not duplicated here. Pan/zoom still work via touch gestures. */}
       {!compact && (
         <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
+          <div className="atlas-map-controls__zoom" aria-label="Map zoom controls">
+            <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => mapRef.current?.zoomIn({ duration: 250 })}>+</button>
+            <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => mapRef.current?.zoomOut({ duration: 250 })}>−</button>
+          </div>
           <button type="button" aria-label="Toggle follow mode" title="Cycles between north-up follow, heading-up follow, and recenter from free pan" className={cameraMode === "FREE" ? "" : "active"} onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
           <button type="button" aria-label="Export position trail as GPX" title="Downloads your recorded breadcrumb trail as a GPX file" disabled={trail.length === 0} onClick={() => downloadBreadcrumbExport(trail, "gpx")}>EXPORT TRAIL</button>
           <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
