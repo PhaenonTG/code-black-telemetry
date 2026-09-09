@@ -84,13 +84,22 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
     // structure detail, mirroring how RadarScope/GRLevel3 users layer national + local products.
     // Only nudges layers on, never off, so a chaser who deliberately kills one mid-visit keeps it
     // off until they leave and come back.
-    if (focus !== "RADAR") return;
+    if (focus !== "RADAR LAB") return;
     let cancelled = false;
     void loadMapLayerVisibility().then((current) => {
       if (cancelled) return;
       if (!current.mosaic || !current.radar) {
         void saveMapLayerVisibility({ ...current, mosaic: true, radar: true });
       }
+    });
+    return () => { cancelled = true; };
+  }, [focus]);
+
+  useEffect(() => {
+    if (focus !== "FIELD INTELLIGENCE") return;
+    let cancelled = false;
+    void loadMapLayerVisibility().then((current) => {
+      if (!cancelled) void saveMapLayerVisibility({ ...current, roadConditions: true, trafficCameras: true, chasers: true, poi: false });
     });
     return () => { cancelled = true; };
   }, [focus]);

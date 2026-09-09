@@ -4,14 +4,15 @@ import { MORE_PAGE_LINKS, MORE_ROUTE, ROUTES } from "./routes";
 describe("OPS workstation routes", () => {
   it("exposes the approved major navigation families without marking future sections live", () => {
     expect(ROUTES.map((route) => route.label)).toEqual([
-      "LIVE OPS",
-      "RADAR",
-      "STORM INTEL",
+      "OPERATIONS MAP",
+      "WEATHER ANALYSIS",
+      "RADAR LAB",
       "MODELS",
       "SOUNDINGS",
       "CONSENSUS",
       "TARGETS",
-      "FLEET",
+      "CHASE OPERATIONS",
+      "FIELD INTELLIGENCE",
       "STREAM",
       "SYSTEM",
       "SETTINGS",
@@ -26,12 +27,12 @@ describe("OPS workstation routes", () => {
 
   it("keeps the phone nav bounded to five destinations", () => {
     expect([...ROUTES.filter((route) => route.inPhoneNav), MORE_ROUTE].map((route) => route.label)).toEqual([
-      "LIVE OPS",
-      "RADAR",
-      "STORM INTEL",
-      "FLEET",
+      "OPERATIONS MAP",
+      "WEATHER ANALYSIS",
+      "RADAR LAB",
+      "CHASE OPERATIONS",
       "MORE",
     ]);
-    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["STREAM", "SYSTEM", "SETTINGS"]);
+    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["FIELD INTELLIGENCE", "STREAM", "SYSTEM", "SETTINGS"]);
   });
 });

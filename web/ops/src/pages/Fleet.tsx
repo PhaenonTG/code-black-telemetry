@@ -4,6 +4,7 @@ import { useCoreOps } from "../core/useCoreOps"
 import type { OpsConnectionState } from "../core/types"
 import type { FabricPresenceState } from "../../../../src/services/fabric/types"
 import { ageText } from "../../../../src/services/radar"
+import { Link } from "react-router-dom"
 
 // FabricPresenceState has one member OpsConnectionState doesn't (NOT_CONFIGURED) -- map it to
 // the closest existing pill tone rather than casting past the type system.
@@ -26,7 +27,11 @@ export default function Fleet() {
 
   return (
     <div className="page page-fleet">
-      <PageHeader title="FLEET" kicker="FABRIC UNIT STATE" />
+      <PageHeader title="CHASE OPERATIONS" kicker="FLEET · STREAMS · ACTIVE UNITS" />
+      <nav className="section-tabs" aria-label="Chase Operations sections">
+        <Link className="active" to="/chase">FLEET</Link>
+        <Link to="/stream">STREAMS</Link>
+      </nav>
       {units.length === 0 ? (
         <div className="empty-state empty-state--centered">
           <p className="empty-state__title">NO FABRIC UNIT SNAPSHOT</p>

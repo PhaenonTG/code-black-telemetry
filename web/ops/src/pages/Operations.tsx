@@ -8,6 +8,7 @@ import {
 import { StatusBadge } from "../components/StatusBadge"
 import { PageHeader } from "../components/PageHeader"
 import { useCoreOps } from "../core/useCoreOps"
+import { Link } from "react-router-dom"
 
 const CHECKING: ObservableHealth = {
   state: "CHECKING",
@@ -81,7 +82,8 @@ export default function Operations() {
 
   return (
     <div className="page page-operations">
-      <PageHeader title="Operations" kicker="SYSTEM STATUS" />
+      <PageHeader title="SYSTEM" kicker="HEALTH · PROVIDERS · CONFIGURATION" />
+      <nav className="section-tabs" aria-label="System sections"><span className="active">HEALTH</span><Link to="/settings">SETTINGS</Link></nav>
       <div className="ops-system-grid">
         <section>
           <span>CORE HEALTH</span>

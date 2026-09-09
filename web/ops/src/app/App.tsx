@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react"
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom"
 import { AuthProvider } from "../auth/AuthProvider"
 import { AuthGate } from "../components/AuthGate"
 import { CoreOpsProvider } from "../core/CoreOpsProvider"
@@ -36,14 +36,17 @@ export default function App() {
                   <AppShell>
                     <Suspense fallback={<div className="page-empty">Loading…</div>}>
                       <Routes>
-                        <Route path="/" element={<OpsWorkstation focus="LIVE OPS" />} />
-                        <Route path="/radar" element={<OpsWorkstation focus="RADAR" />} />
-                        <Route path="/storm-intel" element={<StormIntelWorkspace />} />
+                        <Route path="/" element={<OpsWorkstation focus="OPERATIONS MAP" />} />
+                        <Route path="/radar" element={<OpsWorkstation focus="RADAR LAB" />} />
+                        <Route path="/weather" element={<StormIntelWorkspace />} />
+                        <Route path="/field" element={<OpsWorkstation focus="FIELD INTELLIGENCE" />} />
+                        <Route path="/storm-intel" element={<Navigate to="/weather" replace />} />
                         <Route path="/models" element={<DevelopmentPage title="MODELS" />} />
                         <Route path="/soundings" element={<DevelopmentPage title="SOUNDINGS" detail="Vertical profile endpoint not yet available. Sounding Snapshot will enter here when Core exposes normalized profile data." />} />
                         <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 2." />} />
                         <Route path="/targets" element={<DevelopmentPage title="TARGETS" detail="Target corridors are reserved for the future Consensus workflow. Phase 2 does not create automated chase targets." />} />
-                        <Route path="/fleet" element={<Fleet />} />
+                        <Route path="/chase" element={<Fleet />} />
+                        <Route path="/fleet" element={<Navigate to="/chase" replace />} />
                         <Route path="/stream" element={<Stream />} />
                         <Route path="/system" element={<Operations />} />
                         <Route path="/settings" element={<Settings />} />

@@ -15,17 +15,18 @@ export interface RouteDef {
 }
 
 export const ROUTES: RouteDef[] = [
-  { path: "/", label: "LIVE OPS", icon: "ops", state: "LIVE", inPhoneNav: true, inSidebar: true },
-  { path: "/radar", label: "RADAR", icon: "radar", state: "LIVE", inPhoneNav: true, inSidebar: true },
-  { path: "/storm-intel", label: "STORM INTEL", icon: "cloud", state: "LIVE", inPhoneNav: true, inSidebar: true },
+  { path: "/", label: "OPERATIONS MAP", icon: "map", state: "LIVE", inPhoneNav: true, inSidebar: true },
+  { path: "/weather", label: "WEATHER ANALYSIS", icon: "cloud", state: "LIVE", inPhoneNav: true, inSidebar: true },
+  { path: "/radar", label: "RADAR LAB", icon: "radar", state: "LIVE", inPhoneNav: true, inSidebar: true },
   { path: "/models", label: "MODELS", icon: "models", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false },
   { path: "/soundings", label: "SOUNDINGS", icon: "sounding", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false },
   { path: "/consensus", label: "CONSENSUS", icon: "consensus", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false },
   { path: "/targets", label: "TARGETS", icon: "target", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false },
-  { path: "/fleet", label: "FLEET", icon: "fleet", state: "LIVE", inPhoneNav: true, inSidebar: true },
-  { path: "/stream", label: "STREAM", icon: "stream", state: "LIVE", inPhoneNav: false, inSidebar: true },
+  { path: "/chase", label: "CHASE OPERATIONS", icon: "fleet", state: "LIVE", inPhoneNav: true, inSidebar: true },
+  { path: "/field", label: "FIELD INTELLIGENCE", icon: "radio", state: "LIVE", inPhoneNav: false, inSidebar: true },
+  { path: "/stream", label: "STREAM", icon: "stream", state: "LIVE", inPhoneNav: false, inSidebar: false },
   { path: "/system", label: "SYSTEM", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true },
-  { path: "/settings", label: "SETTINGS", icon: "settings", state: "LIVE", inPhoneNav: false, inSidebar: true },
+  { path: "/settings", label: "SETTINGS", icon: "settings", state: "LIVE", inPhoneNav: false, inSidebar: false },
 ]
 
 // "More" is a phone-only landing page listing Fleet/Operations/Settings (and anything else that

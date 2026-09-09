@@ -12,6 +12,9 @@
 
 /* ---- Phase 1 OPS workstation chassis ---- */
 .ops-workstation{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) 344px;background:var(--cb-black);overflow:hidden}
+.section-tabs{display:flex;gap:6px;margin:0 0 14px;padding:0 0 10px;border-bottom:1px solid var(--cb-line)}
+.section-tabs a,.section-tabs span{padding:7px 11px;border:1px solid var(--cb-line);color:var(--cb-muted);font-size:10px;font-weight:900;letter-spacing:.1em;text-decoration:none}
+.section-tabs .active{border-color:var(--cb-red);color:var(--cb-text);background:rgba(255,42,12,.08)}
 .ops-map-stage{position:relative;min-width:0;min-height:0;background:#000}
 .ops-map-stage>.atlas-map-shell{height:100%;width:100%}
 /* Anchored top-right, not top-left: AtlasMap (shared with the native app, src/map/AtlasMap.tsx)

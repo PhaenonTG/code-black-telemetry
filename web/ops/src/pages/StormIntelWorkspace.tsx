@@ -92,7 +92,7 @@ export default function StormIntelWorkspace() {
     <div className="storm-workspace">
       <header className="storm-workspace__header">
         <div>
-          <span>STORM INTEL WORKSPACE</span>
+          <span>WEATHER ANALYSIS</span>
           <h1>{selectedPoint ? (locality?.displayName ?? "RESOLVING LOCATION…") : "SELECT A MAP POINT"}</h1>
           <p>{selectedPoint ? `${coord(selectedPoint, 3)} · ${stormIntelSummary(snapshot)}` : stormIntelSummary(snapshot)}</p>
         </div>
