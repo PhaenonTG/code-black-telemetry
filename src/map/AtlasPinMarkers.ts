@@ -307,7 +307,13 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
         el.className = "atlas-pin-marker";
         el.addEventListener("click", (event) => {
           event.stopPropagation();
-          showPinPopup(map, latestPoints![point.id] ?? point);
+          const selected = latestPoints![point.id] ?? point;
+          if (selected.clusterCount && selected.clusterCount > 1) {
+            activePopups.get(map)?.remove();
+            map.easeTo({ center: [selected.lon, selected.lat], zoom: Math.min(14, map.getZoom() + 2), duration: 450 });
+            return;
+          }
+          showPinPopup(map, selected);
         });
         marker = new mapboxgl.Marker({ element: el }).setLngLat([point.lon, point.lat]).addTo(map);
         markers[point.id] = marker;

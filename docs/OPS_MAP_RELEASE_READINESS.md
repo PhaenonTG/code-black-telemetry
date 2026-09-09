@@ -25,8 +25,9 @@ Updated: 2026-09-09
 | State | Provider | Data path | Status |
 | --- | --- | --- | --- |
 | Arkansas | ARDOT IDrive | Public GeoJSON; camera media relay | Implemented; 552 cameras observed 2026-09-09 |
-| Kansas | KDOT KanDrive | Official public GraphQL map feed | Implemented |
-| Missouri | MoDOT Traveler Information | Strict same-origin relay to official ArcGIS services | Implemented in source; requires OPS deployment before live acceptance |
+| Kansas | KDOT KanDrive | Official public camera inventory and on-demand map detail | Implemented; 601 viewport-valid cameras observed 2026-09-09 |
+| Missouri | MoDOT Traveler Information | Strict same-origin relay to official ArcGIS services | Implemented and deployed |
+| Nebraska | Nebraska DOT 511 | Official public camera inventory | Implemented; 349 viewport-valid cameras observed 2026-09-09 |
 | Oklahoma | ODOT | WZDx road adapter staged; no deployed relay | Disabled; public camera feed unavailable to this integration |
 
 The Missouri relay accepts only the two required services, numeric layer IDs, the `query` operation,
@@ -37,7 +38,7 @@ and a small query-parameter allowlist. It cannot be used as a general proxy.
 1. Deploy the OPS build through the normal release path.
 2. At national zoom, enable Spotter Network and Cameras. Confirm clusters appear and expand as the
    map zooms in.
-3. At zoom 6 or closer in Arkansas, Kansas, and Missouri, confirm individual camera coordinates sit
+3. At zoom 6 or closer in Arkansas, Kansas, Missouri, and Nebraska, confirm individual camera coordinates sit
    on the corresponding roadway and at least one camera detail opens per state.
 4. Confirm every Spotter Network popup reports eight minutes old or newer.
 5. Select each live chaser in `NEARBY FOR`, then confirm the nearest gas, lodging, food, and ER
@@ -52,5 +53,5 @@ and a small query-parameter allowlist. It cannot be used as a general proxy.
   site's bot-managed application is not treated as an API.
 - Per-user defaults need a profile settings field in the authenticated backend. The current release
   uses the same layout for everyone and preserves each browser's saved layer choices.
-- Single-site radar remains unavailable when its worker URL is not configured; the interface must
-  keep stating that condition plainly.
+- OPS single-site radar uses the deployed same-origin `/api/v1/radar` relay. Other web builds still
+  require an explicit worker URL and must state when it is unavailable.

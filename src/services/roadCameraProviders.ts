@@ -73,6 +73,14 @@ const MISSOURI_COVERAGE: ProviderCoverage = {
   label: "Missouri",
 };
 
+const NEBRASKA_COVERAGE: ProviderCoverage = {
+  north: 43.01,
+  south: 39.99,
+  east: -95.3,
+  west: -104.06,
+  label: "Nebraska",
+};
+
 const OKLAHOMA_COVERAGE: ProviderCoverage = {
   north: 37.01,
   south: 33.61,
@@ -97,6 +105,15 @@ const MODOT_PROVENANCE: ObservationProvenance = {
   official: true,
   experimental: false,
   displayLabel: "MoDOT Traveler Info",
+};
+
+const NDOT_PROVENANCE: ObservationProvenance = {
+  provider: "OFFICIAL/STATE_TRANSPORTATION" as ObservationProvenance["provider"],
+  sourceId: "ne511-ndot",
+  sourceName: "Nebraska DOT 511",
+  official: true,
+  experimental: false,
+  displayLabel: "NDOT 511",
 };
 
 const ODOT_PROVENANCE: ObservationProvenance = {
@@ -530,6 +547,7 @@ export async function fetchArdotTrafficCameras(context: LayerQueryContext, signa
 // second, less certain endpoint.
 const KANDRIVE_GRAPHQL_URL = "https://www.kandrive.gov/api/graphql";
 const KANDRIVE_APP_URL = "https://www.kandrive.gov/";
+const KANDRIVE_CAMERAS_URL = "https://kstg.carsprogram.org/cameras_v1/api/cameras";
 const KANDRIVE_MAP_FEATURES_QUERY = "query MapFeatures($input: MapFeaturesArgs!, $plowType: String) {\n\t\tmapFeaturesQuery(input: $input) {\n\t\t\tmapFeatures {\n\t\t\t\tbbox\n\t\t\t\ttitle\n\t\t\t\ttooltip\n\t\t\t\turi\n\t\t\t\tfeatures {\n\t\t\t\t\tid\n\t\t\t\t\tgeometry\n\t\t\t\t\tproperties\n\t\t\t\t\ttype\n\t\t\t\t}\n\t\t\t\t... on Cluster {\n\t\t\t\t\tmaxZoom\n\t\t\t\t}\n\t\t\t\t... on Sign {\n\t\t\t\t\tsignDisplayType\n\t\t\t\t}\n\t\t\t\t... on Event {\n\t\t\t\t\tpriority\n\t\t\t\t}\n\t\t\t\t__typename\n\t\t\t\t... on Camera {\n\t\t\t\t\tactive\n\t\t\t\t\tviews(limit: 5) {\n\t\t\t\t\t\turi\n\t\t\t\t\t\t... on CameraView {\n\t\t\t\t\t\t\turl\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcategory\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t... on Plow {\n\t\t\t\t\tviews(limit: 5, plowType: $plowType) {\n\t\t\t\t\t\turi\n\t\t\t\t\t\t... on PlowCameraView {\n\t\t\t\t\t\t\turl\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcategory\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t\terror {\n\t\t\t\tmessage\n\t\t\t\ttype\n\t\t\t}\n\t\t}\n\t}";
 // Same query as above, with one addition: `sources { type src }` inside the Camera view fragment.
 // Confirmed via direct request that this modified selection set is still accepted (unlike a
@@ -755,13 +773,16 @@ export async function fetchKandriveRoadConditions(context: LayerQueryContext, si
 }
 
 export async function fetchKandriveTrafficCameras(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<TrafficCamera[]> {
-  const items = await fetchKandriveMapFeatures(context, [], signal, fetcher);
-  const results = items
-    .map((item) => normalizeKandriveCamera(item, "kandrive-kdot"))
-    .filter((camera): camera is TrafficCamera => camera != null)
-    .filter((camera) => pointInViewport(camera, context.viewport) && coordinateWithinCoverage(camera, KANSAS_COVERAGE))
-    .slice(0, MAX_CAMERA_RESULTS);
-  return dedupeById(results);
+  const response = await fetcher(KANDRIVE_CAMERAS_URL, DEFAULT_PROVIDER_TIMEOUT_MS, { signal });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const records = await response.json() as CarsCameraRecord[];
+  return normalizeCarsCameraRecords(records, context, {
+    providerId: "kandrive-kdot",
+    sourceName: "Kansas DOT KanDrive",
+    coverage: KANSAS_COVERAGE,
+    provenance: KANDRIVE_PROVENANCE,
+    sourceUrl: KANDRIVE_APP_URL,
+  });
 }
 
 // On-demand, single-camera live source lookup for a KanDrive camera whose viewport-list entry has
@@ -792,6 +813,76 @@ export async function fetchKandriveLiveCameraSource(camera: { lat: number; lon: 
     if (safeSrc) return safeSrc;
   }
   return null;
+}
+
+// --- Nebraska DOT 511 ------------------------------------------------------------------------
+// Nebraska 511 publishes its public camera inventory through the same first-party backend used by
+// its own map. The response supplies camera coordinates, owner, snapshot URL and image timestamp.
+const NE511_CAMERAS_URL = "https://netg.carsprogram.org/cameras_v1/api/cameras";
+const NE511_APP_URL = "https://www.511.nebraska.gov/";
+
+interface CarsCameraRecord {
+  id?: number | string;
+  public?: boolean;
+  name?: string;
+  lastUpdated?: number;
+  location?: { latitude?: number; longitude?: number; routeId?: string; cityReference?: string };
+  views?: Array<{ type?: string; url?: string; imageTimestamp?: number }>;
+}
+
+function normalizeCarsCameraRecords(records: CarsCameraRecord[], context: LayerQueryContext, provider: {
+  providerId: string;
+  sourceName: string;
+  coverage: ProviderCoverage;
+  provenance: ObservationProvenance;
+  sourceUrl: string;
+}) {
+  return dedupeById(records.flatMap((record): TrafficCamera[] => {
+    const lat = Number(record.location?.latitude);
+    const lon = Number(record.location?.longitude);
+    if (record.public !== true || !isValidCoordinate(lat, lon)) return [];
+    const point = { lat, lon };
+    if (!pointInViewport(point, context.viewport) || !coordinateWithinCoverage(point, provider.coverage)) return [];
+    const view = record.views?.find((candidate) => safeHttpUrl(candidate.url)) ?? record.views?.[0];
+    const imageUrl = safeHttpUrl(view?.url);
+    const updatedAt = Number.isFinite(view?.imageTimestamp) ? Number(view?.imageTimestamp) : Number.isFinite(record.lastUpdated) ? Number(record.lastUpdated) : null;
+    const recordId = sanitizeProviderText(String(record.id ?? `${lat},${lon}`), 80);
+    const availability: TrafficCameraAvailability = imageUrl ? "available" : "unknown";
+    return [{
+      id: `${provider.providerId}:camera:${recordId}`,
+      providerId: provider.providerId,
+      providerRecordId: recordId,
+      name: sanitizeProviderText(record.name ?? record.location?.cityReference ?? `Camera ${recordId}`, 120),
+      lat,
+      lon,
+      roadway: sanitizeProviderText(record.location?.routeId ?? "", 60) || null,
+      direction: null,
+      source: provider.sourceName,
+      provider: { ...provider.provenance, provider: "PUBLIC/TRAFFIC" },
+      lastUpdateAt: updatedAt,
+      imageUrl,
+      streamUrl: null,
+      thumbnailUrl: imageUrl,
+      previewUrl: imageUrl,
+      availability,
+      freshness: availability === "available" ? freshnessForTimestamp(updatedAt) : "unavailable",
+      sourceUrl: provider.sourceUrl,
+      attribution: provider.sourceName,
+    }];
+  }).slice(0, MAX_CAMERA_RESULTS));
+}
+
+export async function fetchNe511TrafficCameras(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<TrafficCamera[]> {
+  const response = await fetcher(NE511_CAMERAS_URL, DEFAULT_PROVIDER_TIMEOUT_MS, { signal });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const records = await response.json() as CarsCameraRecord[];
+  return normalizeCarsCameraRecords(records, context, {
+    providerId: "ne511-ndot",
+    sourceName: "Nebraska DOT 511",
+    coverage: NEBRASKA_COVERAGE,
+    provenance: NDOT_PROVENANCE,
+    sourceUrl: NE511_APP_URL,
+  });
 }
 
 // --- Missouri DOT Traveler Information --------------------------------------------------------
@@ -1169,6 +1260,17 @@ export const TRAFFIC_CAMERA_PROVIDERS: TrafficCameraProvider[] = [
     attribution: "Missouri DOT Traveler Information",
     fetchViewport: fetchModotTrafficCameras,
   },
+  {
+    id: "ne511-ndot",
+    name: "Nebraska DOT 511",
+    coverage: NEBRASKA_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: CAMERA_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Nebraska DOT 511",
+    fetchViewport: fetchNe511TrafficCameras,
+  },
 ];
 
 export function roadProvidersForViewport(viewport: MapViewport, providers = ROAD_CONDITION_PROVIDERS) {
@@ -1255,7 +1357,7 @@ export async function getTrafficCamerasForViewport(context: LayerQueryContext, s
   const providers = trafficCameraProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. Supports Arkansas, Kansas, and Missouri DOT coverage.", simulated: false, fetchedAt };
+    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. Supports Arkansas, Kansas, Missouri, and Nebraska DOT coverage.", simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("camera", cameraCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);

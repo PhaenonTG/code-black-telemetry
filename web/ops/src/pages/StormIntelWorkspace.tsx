@@ -109,6 +109,7 @@ export default function StormIntelWorkspace() {
             statusLines={[coreState.stormIntel.pointLoading ? "POINT REQUEST ACTIVE" : "CLICK MAP FOR POINT INTEL"]}
             controlsVariant="full"
             spotters={spotters.spotters}
+            showAllActiveSpotters
             poiPlaces={poi.places}
             nearbyBest={nearby.places}
             alerts={alertProducts.products}

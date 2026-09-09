@@ -144,6 +144,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
           statusLines={[gpsStatusLine(gps)]}
           controlsVariant="full"
           spotters={spotters.spotters}
+          showAllActiveSpotters
           poiPlaces={poi.places}
           nearbyBest={nearby.places}
           alerts={alertProducts.products}

@@ -163,7 +163,7 @@ Source audit counted 151 concrete interactive controls across the app shell, map
 | ESCAPE | Foundation only | Context/readiness path exists inside the Map surface; production routing is not active and must remain honestly labeled. |
 | Mosaic radar | Working / needs polish | Active radar experience. Static `LIVE` wording was removed where tile freshness is not directly known. Mapbox/token/network availability still affects runtime. |
 | Road Conditions | Regional live | ARDOT, KDOT, and MoDOT provider adapters use viewport filtering, provenance, validation, cache, stale fallback, and explicit outside-coverage state. The staged ODOT adapter remains disabled until its relay and credential are deployed. |
-| Public Cameras | Regional live / deployment verification required | ARDOT, KDOT, and MoDOT adapters are implemented. Wide views cluster cameras and zoom 6+ preserves individual points. Missouri's strict Advanced Mode relay requires post-deploy acceptance. Oklahoma cameras remain unavailable pending an official consumable feed. |
+| Public Cameras | Regional live | ARDOT, KDOT, MoDOT, and Nebraska DOT 511 adapters are implemented. Wide views cluster cameras and zoom 6+ preserves individual points. Oklahoma cameras remain unavailable pending an official consumable feed. |
 | Spotter Network layer | Partial / external dependency | Public/authenticated Spotter Network feeds are external and non-commercial-use constrained. Not Code Black Chaser Net. |
 | Reports layer/feed | Partial | NWS/Spotter reports are distinct from Chaser Net production reports. External submission requires caution. |
 | Probes | Foundation only | Layer model/visual language exists, production ingest absent. |

@@ -94,10 +94,15 @@ let lastStatus: RadarStatus | null = null;
 
 // Web builds (and native, once a device has network access) talk to the standalone
 // radar-worker/ Node process over plain HTTP instead of the on-device native decoder --
-// see radar-worker/worker.cjs. Set VITE_RADAR_WORKER_URL to point at it; leaving it unset
-// disables single-site radar on web entirely rather than guessing at a default host.
+// see radar-worker/worker.cjs. OPS exposes that worker through its same-origin /api/v1/radar
+// gateway, so production does not need a second public hostname or build-time setting.
 export function radarWorkerBase(): string {
-  return ((import.meta.env.VITE_RADAR_WORKER_URL as string | undefined) ?? "").trim().replace(/\/+$/, "");
+  const configured = ((import.meta.env.VITE_RADAR_WORKER_URL as string | undefined) ?? "").trim().replace(/\/+$/, "");
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname.toLowerCase();
+    if (hostname === "ops.codeblackwx.com" || hostname.endsWith(".codeblack-ops.pages.dev")) return window.location.origin;
+  }
+  return configured;
 }
 
 export function webRadarEnabled() {

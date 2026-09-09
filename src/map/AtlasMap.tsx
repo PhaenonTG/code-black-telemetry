@@ -76,6 +76,7 @@ type AtlasMapProps = {
   statusLines: string[];
   alerts?: AlertProduct[];
   spotters?: Spotter[];
+  showAllActiveSpotters?: boolean;
   poiPlaces?: NearbyPlace[];
   nearbyBest?: Partial<Record<NearbyCategory, NearbyPlace>>;
   // "compact" is the Weather-page card: owner asked for mosaic + layer visibility only, no zoom/
@@ -191,6 +192,7 @@ export function AtlasMap({
   statusLines,
   alerts = EMPTY_ALERTS,
   spotters = EMPTY_SPOTTERS,
+  showAllActiveSpotters = false,
   poiPlaces = EMPTY_POI,
   nearbyBest = EMPTY_NEARBY_BEST,
   controlsVariant = "full",
@@ -301,8 +303,8 @@ export function AtlasMap({
     // is the raw nationwide Spotter Network feed with no server-side radius filter, so without this
     // bound every active spotter in the country renders as a pin, burying everything else on the map
     // (including the watch/warning polygons underneath) once you zoom out even slightly.
-    return spotters.filter((spotter) => !teamIds.has(spotter.id) && spotter.distanceMiles <= chaserRadiusMiles);
-  }, [spotters, teamPositions, chaserRadiusMiles]);
+    return spotters.filter((spotter) => !teamIds.has(spotter.id) && (showAllActiveSpotters || spotter.distanceMiles <= chaserRadiusMiles));
+  }, [spotters, teamPositions, chaserRadiusMiles, showAllActiveSpotters]);
   const visibleTeamPositions = useMemo(() => (viewport ? filterViewportPoints(teamPositions, viewport) : teamPositions), [teamPositions, viewport]);
   const visibleChaserSpotters = useMemo(() => (viewport ? filterViewportPoints(chaserSpotters, viewport) : chaserSpotters), [chaserSpotters, viewport]);
   const visiblePoiPlaces = useMemo(() => (viewport ? filterViewportPoints(poiPlaces, viewport) : poiPlaces), [poiPlaces, viewport]);
@@ -765,6 +767,10 @@ export function AtlasMap({
   const [radarAvailableTilts, setRadarAvailableTilts] = useState<number[]>([1]);
   const [stormMotion, setStormMotionState] = useState<StormMotion | null>(null);
   const [stormMotionOpen, setStormMotionOpen] = useState(false);
+  // A Level II frame request can take several seconds. Key site selection to a roughly six-mile
+  // location cell so ordinary GPS jitter does not cancel and restart the request forever.
+  const radarFocusLat = gps ? Math.round(gps.lat * 10) / 10 : null;
+  const radarFocusLon = gps ? Math.round(gps.lon * 10) / 10 : null;
   const applyStormMotion = async (directionDegrees: number, speedKnots: number) => {
     const motion = await setRadarStormMotion({ directionDegrees, speedKnots, source: "MANUAL" });
     setStormMotionState(motion);
@@ -779,7 +785,9 @@ export function AtlasMap({
     if (radarProduct === "SRV" && !stormMotion) return;
     let cancelled = false;
     const load = async () => {
-      const site = gps ? (await getNearestRadarSites(gps.lat, gps.lon))[0]?.id ?? "AUTO" : "AUTO";
+      const center = mapRef.current?.getCenter();
+      const focus = radarFocusLat != null && radarFocusLon != null ? { lat: radarFocusLat, lon: radarFocusLon } : (center ? { lat: center.lat, lon: center.lng } : null);
+      const site = focus ? (await getNearestRadarSites(focus.lat, focus.lon))[0]?.id ?? "KSGF" : "KSGF";
       const frames = await getRadarFrames(site, radarProduct, radarTilt, RADAR_LOOP_FRAME_COUNT);
       if (cancelled) return;
       setRadarFrames(normalizeRadarFrames(frames, RADAR_LOOP_FRAME_COUNT));
@@ -792,7 +800,7 @@ export function AtlasMap({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [radarVisible, radarProduct, radarTilt, stormMotion, gps?.lat, gps?.lon]);
+  }, [radarVisible, radarProduct, radarTilt, stormMotion, radarFocusLat, radarFocusLon]);
 
   useEffect(() => {
     if (!radarVisible || radarFrames.length < 2) return;
