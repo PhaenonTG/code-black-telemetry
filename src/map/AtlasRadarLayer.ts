@@ -9,6 +9,17 @@ const sourceId = (id: string) => `${ATLAS_RADAR_SOURCE}-${id}`;
 const layerId = (id: string) => `${ATLAS_RADAR_LAYER}-${id}`;
 export const atlasRadarLayerId = layerId;
 const radarFramesByMap = new WeakMap<Map, Set<string>>();
+const activeRadarFrameByMap = new WeakMap<Map, string>();
+const pendingRadarFrameByMap = new WeakMap<Map, string>();
+
+function promoteFrame(map: Map, mounted: Set<string>, frameId: string, opacity: number) {
+  for (const id of mounted) {
+    const layer = layerId(id);
+    if (map.getLayer(layer)) map.setPaintProperty(layer, "raster-opacity", id === frameId ? opacity : 0);
+  }
+  activeRadarFrameByMap.set(map, frameId);
+  pendingRadarFrameByMap.delete(map);
+}
 
 export function updateAtlasRadarLayer(map: Map, frame: RadarFrame | null, opacity: number, beforeLayerId?: string, loopFrames: RadarFrame[] = frame ? [frame] : []) {
   const mounted = radarFramesByMap.get(map) ?? new Set<string>();
@@ -28,9 +39,30 @@ export function updateAtlasRadarLayer(map: Map, frame: RadarFrame | null, opacit
     }
     mounted.add(item.frameId);
   }
-  for (const id of mounted) {
-    const layer = layerId(id);
-    if (map.getLayer(layer)) map.setPaintProperty(layer, "raster-opacity", frame?.frameId === id ? opacity : 0);
+  if (frame?.tileTemplate) {
+    const targetSource = sourceId(frame.frameId);
+    if (map.isSourceLoaded(targetSource)) {
+      promoteFrame(map, mounted, frame.frameId, opacity);
+    } else {
+      const previous = activeRadarFrameByMap.get(map);
+      for (const id of mounted) {
+        const layer = layerId(id);
+        if (map.getLayer(layer)) map.setPaintProperty(layer, "raster-opacity", id === previous ? opacity : 0);
+      }
+      if (pendingRadarFrameByMap.get(map) !== frame.frameId) {
+        pendingRadarFrameByMap.set(map, frame.frameId);
+        const promoteWhenLoaded = (event: { sourceId?: string }) => {
+          if (pendingRadarFrameByMap.get(map) !== frame.frameId) {
+            map.off("sourcedata", promoteWhenLoaded);
+            return;
+          }
+          if (event.sourceId !== targetSource || !map.isSourceLoaded(targetSource)) return;
+          map.off("sourcedata", promoteWhenLoaded);
+          if (map.getLayer(layerId(frame.frameId))) promoteFrame(map, mounted, frame.frameId, opacity);
+        };
+        map.on("sourcedata", promoteWhenLoaded);
+      }
+    }
   }
   for (const id of [...mounted]) {
     if (wanted.has(id)) continue;
@@ -50,4 +82,6 @@ export function removeAtlasRadarLayer(map: Map) {
     if (map.getSource(sourceId(id))) map.removeSource(sourceId(id));
   }
   radarFramesByMap.delete(map);
+  activeRadarFrameByMap.delete(map);
+  pendingRadarFrameByMap.delete(map);
 }

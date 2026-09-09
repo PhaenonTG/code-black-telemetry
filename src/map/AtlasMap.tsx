@@ -825,6 +825,7 @@ export function AtlasMap({
   // below walks it back through history and wraps to 0, matching a normal radar-loop UX.
   const [radarFrames, setRadarFrames] = useState<RadarFrame[]>([]);
   const [radarPlaybackIndex, setRadarPlaybackIndex] = useState(0);
+  const [radarLoadError, setRadarLoadError] = useState(false);
   const radarFrame = radarFrames[radarPlaybackIndex] ?? null;
   // Reflectivity alone doesn't show rotation -- a chaser needs VEL/SRV to spot a mesocyclone and CC
   // to catch a debris-ball tornado confirmation. SRV additionally requires a storm motion vector set
@@ -862,8 +863,16 @@ export function AtlasMap({
       const site = focus ? (await getNearestRadarSites(focus.lat, focus.lon))[0]?.id ?? "KSGF" : "KSGF";
       const frames = await getRadarFrames(site, radarProduct, radarTilt, RADAR_LOOP_FRAME_COUNT);
       if (cancelled) return;
-      setRadarFrames(normalizeRadarFrames(frames, RADAR_LOOP_FRAME_COUNT));
-      setRadarPlaybackIndex(0);
+      const normalized = normalizeRadarFrames(frames, RADAR_LOOP_FRAME_COUNT);
+      // A transient worker/network failure must never blank the last usable radar scan. Keep the
+      // existing loop visible and let the next refresh recover it.
+      if (normalized.length > 0) {
+        setRadarLoadError(false);
+        setRadarFrames(normalized);
+        setRadarPlaybackIndex(0);
+      } else {
+        setRadarLoadError(true);
+      }
       if (frames[0]?.availableTilts?.length) setRadarAvailableTilts(frames[0].availableTilts);
     };
     void load();
@@ -1201,6 +1210,10 @@ export function AtlasMap({
       ? "SINGLE-SITE NOT CONFIGURED"
       : radarProduct === "SRV" && !stormMotion
         ? "SRV NEEDS STORM MOTION"
+        : radarLoadError && radarFrame
+          ? `${radarProduct} ${ageText(radarFrame.ageSeconds)} OLD · UPDATE FAILED`
+          : radarLoadError
+            ? "SINGLE-SITE UNAVAILABLE · RETRYING"
         : radarFrame
           ? `${radarProduct} ${ageText(radarFrame.ageSeconds)} OLD${radarFrame.freshness === "STALE" ? " - STALE" : ""}`
           : "SINGLE-SITE LOADING"
@@ -1222,7 +1235,7 @@ export function AtlasMap({
             {statusLines.map((line, index) => <span key={index}>{line}</span>)}
             <span>{cameraStatusLabel}</span>
             {mosaicStatusLabel && <span>{mosaicStatusLabel}</span>}
-            {radarVisible && !radarFrame && <span>{radarStatusLabel}</span>}
+            {radarVisible && (!radarFrame || radarLoadError) && <span>{radarStatusLabel}</span>}
             {roadStatusLabel && <span>{roadStatusLabel}</span>}
             {cameraProviderStatusLabel && <span>{cameraProviderStatusLabel}</span>}
             {poiStatusLabel && <span>{poiStatusLabel}</span>}

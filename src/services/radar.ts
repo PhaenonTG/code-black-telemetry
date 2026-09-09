@@ -130,7 +130,14 @@ async function ensureInitialized() {
 }
 
 async function workerFetch<T>(path: string): Promise<T> {
-  const response = await fetch(`${radarWorkerBase()}${path}`);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20_000);
+  let response: Response;
+  try {
+    response = await fetch(`${radarWorkerBase()}${path}`, { signal: controller.signal, cache: "no-store" });
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (!response.ok) throw new Error(`radar worker ${response.status}`);
   return response.json() as Promise<T>;
 }

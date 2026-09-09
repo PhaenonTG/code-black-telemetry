@@ -40,6 +40,12 @@ let stormMotion = null;
 const frames = new Map();
 const tiles = new Map();
 const siteUse = new Map();
+// Multiple browsers commonly request the same new scan at once. Share one download/decode per
+// frame instead of multiplying the heaviest operation in this process.
+const frameLoads = new Map();
+const backfillJobs = new Set();
+const backfillQueue = [];
+let backfillRunning = false;
 
 function send(res, status, body, type = "application/json") {
   const data = Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body));
@@ -314,42 +320,67 @@ async function ensureLevel2Frame(siteId, product, tilt = 1, explicitKey = null) 
   const existing = frames.get(id);
   if (existing && Date.now() - existing.processedAt < CACHE_TTL_MS) return existing;
 
-  const started = Date.now();
-  const raw = await fetchBuffer(`${LEVEL2_BUCKET}/${key}`);
-  const checksum = crypto.createHash("sha1").update(raw).digest("hex").slice(0, 12);
-  const radar = new Level2Radar(raw, { logger: false });
-  const elevations = radar.listElevations();
-  const chosenTilt = elevations.includes(Number(tilt)) ? Number(tilt) : elevations[0];
-  radar.setElevation(chosenTilt);
-  const data = getMoment(radar, product);
-  const azimuths = radar.getAzimuth();
-  const headers = radar.getHeader();
-  const firstHeader = Array.isArray(headers) ? headers[0] : headers;
-  const volumeTime = volumeTimeFromHeader(radar);
-  const frame = {
-    id,
-    site,
-    product,
-    sourceLevel: "LEVEL II",
-    sourceBucket: "unidata-nexrad-level2",
-    sourceChunkBucket: "unidata-nexrad-level2-chunks",
-    sourceNotification: "arn:aws:sns:us-east-1:684042711724:NewNEXRADLevel2ObjectFilterable",
-    key,
-    checksum,
-    tilt: chosenTilt,
-    elevationAngle: firstHeader?.elevation_angle ?? null,
-    availableTilts: elevations,
-    time: volumeTime,
-    processedAt: Date.now(),
-    processingDurationMs: Date.now() - started,
-    vcp: radar.vcp?.record?.pattern_number ?? firstHeader?.volume?.volume_coverage_pattern ?? null,
-    nyquistVelocity: firstHeader?.radial?.nyquist_velocity ?? null,
-    quality: radar.isTruncated ? "INCOMPLETE" : radar.hasGaps ? "GAPS" : "OK",
-    data,
-    azimuths,
-  };
-  cacheFrame(frame);
-  return frame;
+  const inFlight = frameLoads.get(id);
+  if (inFlight) return inFlight;
+
+  const load = (async () => {
+    const started = Date.now();
+    const raw = await fetchBuffer(`${LEVEL2_BUCKET}/${key}`);
+    const checksum = crypto.createHash("sha1").update(raw).digest("hex").slice(0, 12);
+    const radar = new Level2Radar(raw, { logger: false });
+    const elevations = radar.listElevations();
+    const chosenTilt = elevations.includes(Number(tilt)) ? Number(tilt) : elevations[0];
+    radar.setElevation(chosenTilt);
+    const data = getMoment(radar, product);
+    const azimuths = radar.getAzimuth();
+    const headers = radar.getHeader();
+    const firstHeader = Array.isArray(headers) ? headers[0] : headers;
+    const volumeTime = volumeTimeFromHeader(radar);
+    const frame = {
+      id, site, product, sourceLevel: "LEVEL II", sourceBucket: "unidata-nexrad-level2",
+      sourceChunkBucket: "unidata-nexrad-level2-chunks",
+      sourceNotification: "arn:aws:sns:us-east-1:684042711724:NewNEXRADLevel2ObjectFilterable",
+      key, checksum, tilt: chosenTilt, elevationAngle: firstHeader?.elevation_angle ?? null,
+      availableTilts: elevations, time: volumeTime, processedAt: Date.now(),
+      processingDurationMs: Date.now() - started,
+      vcp: radar.vcp?.record?.pattern_number ?? firstHeader?.volume?.volume_coverage_pattern ?? null,
+      nyquistVelocity: firstHeader?.radial?.nyquist_velocity ?? null,
+      quality: radar.isTruncated ? "INCOMPLETE" : radar.hasGaps ? "GAPS" : "OK", data, azimuths,
+    };
+    cacheFrame(frame);
+    return frame;
+  })();
+  frameLoads.set(id, load);
+  try { return await load; } finally { frameLoads.delete(id); }
+}
+
+async function drainHistoryBackfill() {
+  if (backfillRunning) return;
+  backfillRunning = true;
+  while (backfillQueue.length) {
+    const { jobKey, site, product, tilt, limit } = backfillQueue.shift();
+    try {
+    const keys = await recentLevel2Keys(site, limit);
+    // Keep this deliberately sequential. It runs after the live frame has been returned and avoids
+    // a burst of large Level II downloads/decodes exhausting the worker host.
+    for (const key of keys.reverse()) {
+      const count = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === tilt).length;
+      if (count >= limit) break;
+      try { await ensureLevel2Frame(site, product, tilt, key); } catch { /* skip corrupt archive objects */ }
+    }
+    } finally {
+      backfillJobs.delete(jobKey);
+    }
+  }
+  backfillRunning = false;
+}
+
+function startHistoryBackfill(site, product, tilt, limit) {
+  const jobKey = `${site}:${product}:${tilt}`;
+  if (backfillJobs.has(jobKey)) return;
+  backfillJobs.add(jobKey);
+  backfillQueue.push({ jobKey, site, product, tilt, limit });
+  void drainHistoryBackfill();
 }
 
 async function ensureEtFrame(siteId) {
@@ -609,19 +640,7 @@ const server = http.createServer(async (req, res) => {
       // First request for a site/product this process has seen: backfill a real short history
       // instead of returning a single frame -- otherwise the client's "last N frames" loop has
       // nothing to animate until enough real time has passed for new volumes to arrive on their own.
-      if (product !== "ET" && list.length < limit) {
-        const keys = await recentLevel2Keys(site, limit);
-        for (const key of keys) {
-          if (list.length >= limit) break;
-          try {
-            const backfilled = await ensureLevel2Frame(site, product, tilt, key);
-            if (!list.find((item) => item.id === backfilled.id)) list.push(backfilled);
-          } catch {
-            // A single corrupt/partial archive object shouldn't fail the whole backfill.
-          }
-        }
-        list = list.sort((a, b) => b.time - a.time).slice(0, limit);
-      }
+      if (product !== "ET" && list.length < limit) startHistoryBackfill(site, product, resolvedTilt, limit);
       return send(res, 200, list.map(metadata));
     }
     const metaMatch = url.pathname.match(/^\/api\/v1\/radar\/frame\/([^/]+)\/metadata$/);
