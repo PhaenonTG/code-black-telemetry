@@ -2,7 +2,6 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { NormalizedMetric, StormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/types";
 import type { OpsCoreState } from "../core/types";
-import { StormIntelActions } from "./StormIntelActions";
 import { StormIntelMetricBoard } from "./StormIntelMetricBoard";
 
 function metric(overrides: Partial<NormalizedMetric> = {}): NormalizedMetric {
@@ -112,17 +111,9 @@ describe("StormIntelMetricBoard", () => {
     ])} />);
     expect(html).toContain("INSTABILITY");
     expect(html).toContain("LOW-LEVEL / TORNADO ENVIRONMENT");
-    expect(html).toContain("MODEL_ANALYSIS");
+    expect(html).not.toContain("MODEL_ANALYSIS");
     expect(html).toContain("CALCULATED");
     expect(html).toContain("PROXY");
     expect(html).toContain("UNAVAILABLE");
-  });
-
-  it("renders Sounding and Consensus actions as disabled development placeholders", () => {
-    const html = renderToString(<StormIntelActions coreState={state([metric()])} />);
-    expect(html).toContain("SOUNDING SNAPSHOT");
-    expect(html).toContain("Vertical profile endpoint not yet available");
-    expect(html).toContain("VIEW IN CONSENSUS");
-    expect(html).toContain("Consensus remains development-only");
   });
 });

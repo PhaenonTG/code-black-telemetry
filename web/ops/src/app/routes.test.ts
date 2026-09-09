@@ -21,7 +21,6 @@ describe("OPS workstation routes", () => {
       "SOUNDINGS",
       "CONSENSUS",
       "TARGETS",
-      "STREAM",
     ]);
   });
 
@@ -33,6 +32,6 @@ describe("OPS workstation routes", () => {
       "FLEET",
       "MORE",
     ]);
-    expect(MORE_PAGE_LINKS.some((route) => route.label === "CONSENSUS")).toBe(true);
+    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["STREAM", "SYSTEM", "SETTINGS"]);
   });
 });

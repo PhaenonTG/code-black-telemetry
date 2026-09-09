@@ -11,7 +11,7 @@
 .page-map,.page-map>div{height:100%;width:100%}
 
 /* ---- Phase 1 OPS workstation chassis ---- */
-.ops-workstation{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) 380px;background:var(--cb-black);overflow:hidden}
+.ops-workstation{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) 344px;background:var(--cb-black);overflow:hidden}
 .ops-map-stage{position:relative;min-width:0;min-height:0;background:#000}
 .ops-map-stage>.atlas-map-shell{height:100%;width:100%}
 /* Anchored top-right, not top-left: AtlasMap (shared with the native app, src/map/AtlasMap.tsx)
@@ -59,7 +59,7 @@
 .ops-metric-line{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:9px 0;border-bottom:1px solid var(--cb-line)}
 .ops-metric-line span{font-size:10px;font-weight:900;letter-spacing:.08em;color:var(--cb-muted);text-transform:uppercase}
 .ops-metric-line b{font-size:15px;font-variant-numeric:tabular-nums;color:var(--cb-text)}
-.ops-metric-line b[data-threat="low"]{color:var(--cb-green)}
+.ops-metric-line b[data-threat="low"]{color:var(--cb-text)}
 .ops-metric-line b[data-threat="moderate"]{color:var(--cb-amber)}
 .ops-metric-line b[data-threat="high"]{color:var(--cb-red)}
 .ops-provenance-details{margin-top:10px;padding-top:10px;border-top:1px solid var(--cb-line)}
@@ -141,7 +141,7 @@
 /* Tornado-favorability banding (see metricThreatLevel in stormIntel/format.ts) -- "high" is most
    favorable for tornadoes, not "most dangerous to read"; colored red anyway since that's this
    app's established high-severity color everywhere else (alert polygons, LIVE pills). */
-.storm-metric-row b[data-threat="low"]{color:var(--cb-green)}
+.storm-metric-row b[data-threat="low"]{color:var(--cb-text)}
 .storm-metric-row b[data-threat="moderate"]{color:var(--cb-amber)}
 .storm-metric-row b[data-threat="high"]{color:var(--cb-red)}
 .storm-metric-row em{grid-column:1/-1;width:fit-content;border:1px solid var(--cb-line);padding:2px 5px;color:var(--cb-muted);font-size:8px;font-style:normal;font-weight:900;letter-spacing:.12em}
@@ -151,7 +151,7 @@
 .storm-workspace>.ops-inspector{display:none}
 
 @media (max-width:1199px){
-  .ops-workstation{grid-template-columns:minmax(0,1fr) 320px}
+  .ops-workstation{grid-template-columns:minmax(0,1fr) 308px}
   .ops-timeline__ticks{min-width:min(460px,68%)}
   .storm-workspace{grid-template-rows:auto minmax(480px,60vh) auto}
   .storm-workspace__body{grid-template-columns:minmax(0,1fr) 320px}

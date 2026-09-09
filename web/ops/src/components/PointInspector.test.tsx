@@ -35,11 +35,11 @@ function state(): OpsCoreState {
 }
 
 describe("PointInspector", () => {
-  it("renders selected point and future sounding/consensus boundaries without fake data", () => {
+  it("renders selected point and omits unfinished feature placeholders", () => {
     const html = renderToString(<PointInspector selectedPoint={{ lat: 36.45, lon: -94.12 }} coreState={state()} />);
     expect(html).toContain("36.450");
-    expect(html).toContain("Vertical profile endpoint not yet available");
-    expect(html).toContain("Consensus chassis reserved");
+    expect(html).not.toContain("SOUNDING SNAPSHOT");
+    expect(html).not.toContain("CONSENSUS");
     expect(html).toContain("UNAVAILABLE");
   });
 });

@@ -16,7 +16,7 @@ export function Sidebar({ rail, collapsible, onToggleCollapse }: { rail: boolean
         {!rail && <span className="sidebar__brand-text">CODE BLACK<b>OPS</b></span>}
       </div>
       <div className="sidebar__links">
-        {ROUTES.map((r) => (
+        {ROUTES.filter((r) => r.inSidebar).map((r) => (
           <NavLink key={r.path} to={r.path} className={({ isActive }) => `sidebar__link${isActive ? " active" : ""}`} end={r.path === "/"}>
             <Icon name={r.icon} />
             {!rail && <span>{r.label}</span>}

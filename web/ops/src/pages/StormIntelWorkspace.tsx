@@ -9,9 +9,7 @@ import { browserLocationAdapter, ipLocationAdapter, type LocationState } from ".
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { PointHistory } from "../components/PointHistory";
 import { PointInspector } from "../components/PointInspector";
-import { StormIntelActions } from "../components/StormIntelActions";
 import { StormIntelMetricBoard } from "../components/StormIntelMetricBoard";
-import { TimelineRail } from "../components/TimelineRail";
 import { useCoreOps } from "../core/useCoreOps";
 import { firstAvailableSource, stormIntelSummary } from "../stormIntel/format";
 import { getReverseLocality, type LocalityResult } from "../../../../src/services/situational";
@@ -132,7 +130,6 @@ export default function StormIntelWorkspace() {
               <b>{isoShort(source?.validTime)}</b>
             </div>
           </div>
-          <TimelineRail />
         </section>
 
         <aside className="storm-workspace__context">
@@ -159,7 +156,6 @@ export default function StormIntelWorkspace() {
             {config.mode === "SIMULATION" && <p className="ops-error-text">EXPLICIT SIMULATION MODE — NOT LIVE CORE</p>}
           </section>
           <PointHistory history={pointHistory} onSelect={selectHistoryPoint} />
-          <StormIntelActions coreState={coreState} />
         </aside>
       </main>
 

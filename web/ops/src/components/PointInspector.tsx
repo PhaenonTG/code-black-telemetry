@@ -42,10 +42,6 @@ export function PointInspector({
         <p>{selectedPoint ? "Requesting Storm Intel for this point." : "Tap the map to request Storm Intel for a point."}</p>
       </section>
 
-      {/* Weather content leads this panel -- Storm Intel, then the still-in-progress weather
-          sections (Sounding, Consensus). System/fleet health is real information but it's not
-          what a chaser opens this panel to read, so it moves to the bottom instead of pushing the
-          actual weather data below the fold. */}
       <section className="ops-inspector__block">
         <div className="ops-inspector__row">
           <span>Storm Intel</span>
@@ -85,16 +81,6 @@ export function PointInspector({
         ) : (
           <p className="ops-inspector__prompt">Tap the map to load provenance and metrics.</p>
         )}
-      </section>
-
-      <section className="ops-inspector__block">
-        <div className="ops-inspector__eyebrow">SOUNDING SNAPSHOT</div>
-        <p>Vertical profile endpoint not yet available. Selected point context is ready, but no Skew-T or browser-side GRIB data is fabricated in Phase 2.</p>
-      </section>
-
-      <section className="ops-inspector__block">
-        <div className="ops-inspector__eyebrow">CONSENSUS</div>
-        <p>Consensus chassis reserved. No averaging, target corridor, percentage score, or tornado probability is generated in Phase 2.</p>
       </section>
 
       <section className="ops-inspector__block ops-inspector__block--system">
