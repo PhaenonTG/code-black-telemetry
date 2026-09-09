@@ -25,7 +25,10 @@ const PRODUCT_TO_ACCESSOR = {
   CC: "getHighresCorrelationCoefficient",
 };
 const ET_CODES = ["EET", "NET"];
-const FRAME_LIMIT = 24;
+// A decoded Level II volume is large even after compacting gate values. Eight scans covers roughly
+// 35-45 minutes at normal cadence while leaving safe headroom under the service's 2 GB hard limit.
+const FRAME_LIMIT = 8;
+const GLOBAL_FRAME_LIMIT = 8;
 const SITE_LIMIT = 3;
 const TILE_SIZE = 256;
 const CACHE_TTL_MS = 30 * 60_000;
@@ -111,7 +114,7 @@ function stormCentroid(frame) {
     const northPerKm = Math.cos(azRad);
     for (let g = 0; g < radial.moment_data.length; g += 1) {
       const value = radial.moment_data[g];
-      if (value == null || value < STORM_CENTROID_DBZ_THRESHOLD) continue;
+      if (!Number.isFinite(value) || value < STORM_CENTROID_DBZ_THRESHOLD) continue;
       const rangeKm = radial.first_gate + g * radial.gate_size;
       if (rangeKm > STORM_CENTROID_MAX_RANGE_KM) continue;
       const weight = value - STORM_CENTROID_DBZ_THRESHOLD + 1;
@@ -129,6 +132,16 @@ function stormCentroid(frame) {
     weight: sumWeight,
     time: frame.time,
   };
+}
+
+function compactMomentData(radials) {
+  return radials.map((radial) => radial ? {
+    ...radial,
+    // The decoder exposes sparse gate values as ordinary JS number arrays. Twelve Level II scans
+    // then consume well over a gigabyte. Float32 preserves more precision than the radar products
+    // contain while representing missing gates as NaN, cutting the dominant retained allocation.
+    moment_data: Float32Array.from(radial.moment_data, (value) => value == null ? Number.NaN : value),
+  } : radial);
 }
 
 function estimateStormMotion(site) {
@@ -331,7 +344,7 @@ async function ensureLevel2Frame(siteId, product, tilt = 1, explicitKey = null) 
     const elevations = radar.listElevations();
     const chosenTilt = elevations.includes(Number(tilt)) ? Number(tilt) : elevations[0];
     radar.setElevation(chosenTilt);
-    const data = getMoment(radar, product);
+    const data = compactMomentData(getMoment(radar, product));
     const azimuths = radar.getAzimuth();
     const headers = radar.getHeader();
     const firstHeader = Array.isArray(headers) ? headers[0] : headers;
@@ -496,6 +509,8 @@ function cacheFrame(frame) {
   for (const item of [...frames.values()]) {
     if (!keepSites.has(item.site.id)) { frames.delete(item.id); evicted.push(item); }
   }
+  const overflow = [...frames.values()].sort((a, b) => b.processedAt - a.processedAt).slice(GLOBAL_FRAME_LIMIT);
+  for (const item of overflow) { frames.delete(item.id); evicted.push(item); }
   for (const item of evicted) {
     for (const key of tiles.keys()) if (key.startsWith(`${item.id}/`)) tiles.delete(key);
   }
@@ -628,7 +643,7 @@ const server = http.createServer(async (req, res) => {
       const site = currentSiteForUrl(url);
       const product = url.searchParams.get("product") || selectedProduct;
       const tilt = Number(url.searchParams.get("tilt") || selectedTilt);
-      const limit = Number(url.searchParams.get("limit") || 6);
+      const limit = Math.max(1, Math.min(FRAME_LIMIT, Number(url.searchParams.get("limit") || 6)));
       const frame = await ensureFrame(site, product, tilt);
       // Must also filter by tilt (chosenTilt, since that's what's actually cached under -- the raw
       // request tilt can differ if the volume didn't have that exact cut) -- otherwise switching

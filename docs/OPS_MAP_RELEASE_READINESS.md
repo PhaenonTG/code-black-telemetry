@@ -34,8 +34,8 @@ Updated: 2026-09-09
   instantaneous-value response.
 - Iowa RWIS stations augment METAR/ASOS with air temperature, dewpoint, sustained/gust wind,
   visibility, precipitation type, and road/mile-marker context.
-- Single-site radar holds twelve client frames, crossfades raster opacity over 650 ms, and keeps up
-  to 24 worker frames per site/product/tilt for 30 minutes. Worker site eviction retains the three
+- Single-site radar accepts up to twelve client frames, crossfades raster opacity over 650 ms, and keeps up
+  to eight decoded worker frames globally for 30 minutes. Worker site eviction retains the three
   most recently used sites and removes orphaned tiles.
 
 ## Camera coverage
