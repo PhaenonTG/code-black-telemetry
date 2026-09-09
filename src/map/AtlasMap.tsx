@@ -44,6 +44,7 @@ import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, 
 import { useWind } from "../hooks/useTelemetry";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
 import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
+import { radarFailoverReason, radarFramesAreOperational } from "../services/radarFailover";
 import { LayerGlyph } from "../components/situational/LayerGlyph";
 import { getNearbyStormReports, type StormReport } from "../services/stormReports";
 import { getRiverGaugesForViewport, type RiverGaugeObservation } from "../services/riverGaugeProvider";
@@ -826,6 +827,11 @@ export function AtlasMap({
   const [radarFrames, setRadarFrames] = useState<RadarFrame[]>([]);
   const [radarPlaybackIndex, setRadarPlaybackIndex] = useState(0);
   const [radarLoadError, setRadarLoadError] = useState(false);
+  const [radarPrimarySite, setRadarPrimarySite] = useState<string | null>(null);
+  const [radarSelectedSite, setRadarSelectedSite] = useState<string | null>(null);
+  const [radarSiteFailoverReason, setRadarSiteFailoverReason] = useState("");
+  const radarSelectedSiteRef = useRef<string | null>(null);
+  const radarPrimaryRecoveryStreakRef = useRef(0);
   const radarFrame = radarFrames[radarPlaybackIndex] ?? null;
   // Reflectivity alone doesn't show rotation -- a chaser needs VEL/SRV to spot a mesocyclone and CC
   // to catch a debris-ball tornado confirmation. SRV additionally requires a storm motion vector set
@@ -853,6 +859,10 @@ export function AtlasMap({
     if (!radarVisible) {
       setRadarFrames([]);
       setRadarPlaybackIndex(0);
+      setRadarPrimarySite(null);
+      setRadarSelectedSite(null);
+      radarSelectedSiteRef.current = null;
+      radarPrimaryRecoveryStreakRef.current = 0;
       return;
     }
     if (radarProduct === "SRV" && !stormMotion) return;
@@ -860,8 +870,77 @@ export function AtlasMap({
     const load = async () => {
       const center = mapRef.current?.getCenter();
       const focus = radarFocusLat != null && radarFocusLon != null ? { lat: radarFocusLat, lon: radarFocusLon } : (center ? { lat: center.lat, lon: center.lng } : null);
-      const site = focus ? (await getNearestRadarSites(focus.lat, focus.lon))[0]?.id ?? "KSGF" : "KSGF";
-      const frames = await getRadarFrames(site, radarProduct, radarTilt, RADAR_LOOP_FRAME_COUNT);
+      const nearbySites = focus ? await getNearestRadarSites(focus.lat, focus.lon) : await getNearestRadarSites(36.13, -94.16);
+      const candidates = nearbySites.slice(0, 3).map((site) => site.id);
+      const primarySite = candidates[0] ?? "KSGF";
+      setRadarPrimarySite(primarySite);
+      const currentSite = radarSelectedSiteRef.current;
+      const loaded = new Map<string, RadarFrame[]>();
+      const loadSite = async (site: string) => {
+        if (!loaded.has(site)) loaded.set(site, normalizeRadarFrames(await getRadarFrames(site, radarProduct, radarTilt, RADAR_LOOP_FRAME_COUNT), RADAR_LOOP_FRAME_COUNT));
+        return loaded.get(site) ?? [];
+      };
+
+      let selectedSite = primarySite;
+      let frames: RadarFrame[] = [];
+      let reason = "";
+      if (currentSite && currentSite !== primarySite && candidates.includes(currentSite)) {
+        const currentFrames = await loadSite(currentSite);
+        const primaryFrames = await loadSite(primarySite);
+        if (radarFramesAreOperational(primaryFrames)) {
+          radarPrimaryRecoveryStreakRef.current += 1;
+          if (radarPrimaryRecoveryStreakRef.current >= 2 || !radarFramesAreOperational(currentFrames)) {
+            frames = primaryFrames;
+            radarPrimaryRecoveryStreakRef.current = 0;
+          } else {
+            selectedSite = currentSite;
+            frames = currentFrames;
+            reason = "PRIMARY RECOVERY CONFIRMING";
+          }
+        } else {
+          radarPrimaryRecoveryStreakRef.current = 0;
+          selectedSite = currentSite;
+          frames = currentFrames;
+          reason = radarFailoverReason(primaryFrames);
+        }
+      } else {
+        const primaryFrames = await loadSite(primarySite);
+        frames = primaryFrames;
+        reason = radarFailoverReason(primaryFrames);
+        if (!radarFramesAreOperational(primaryFrames)) {
+          for (const alternate of candidates.slice(1)) {
+            const alternateFrames = await loadSite(alternate);
+            if (radarFramesAreOperational(alternateFrames)) {
+              selectedSite = alternate;
+              frames = alternateFrames;
+              break;
+            }
+            if ((!frames[0] || (alternateFrames[0]?.ageSeconds ?? Infinity) < frames[0].ageSeconds) && alternateFrames.length) {
+              selectedSite = alternate;
+              frames = alternateFrames;
+            }
+          }
+        } else {
+          reason = "";
+        }
+      }
+      // If both the held failover and recovered primary are bad, continue through the remaining
+      // nearby sites. This also retains the freshest stale result when no current site exists.
+      if (!radarFramesAreOperational(frames)) {
+        for (const alternate of candidates) {
+          if (alternate === selectedSite) continue;
+          const alternateFrames = await loadSite(alternate);
+          if (radarFramesAreOperational(alternateFrames)) {
+            selectedSite = alternate;
+            frames = alternateFrames;
+            break;
+          }
+          if ((!frames[0] || (alternateFrames[0]?.ageSeconds ?? Infinity) < frames[0].ageSeconds) && alternateFrames.length) {
+            selectedSite = alternate;
+            frames = alternateFrames;
+          }
+        }
+      }
       if (cancelled) return;
       const normalized = normalizeRadarFrames(frames, RADAR_LOOP_FRAME_COUNT);
       // A transient worker/network failure must never blank the last usable radar scan. Keep the
@@ -870,6 +949,9 @@ export function AtlasMap({
         setRadarLoadError(false);
         setRadarFrames(normalized);
         setRadarPlaybackIndex(0);
+        radarSelectedSiteRef.current = selectedSite;
+        setRadarSelectedSite(selectedSite);
+        setRadarSiteFailoverReason(selectedSite === primarySite ? "" : reason);
       } else {
         setRadarLoadError(true);
       }
@@ -1373,7 +1455,7 @@ export function AtlasMap({
           frame is just clutter, not a control. */}
       {!compact && radarVisible && !radarWorkerMissingOnWeb() && (
         <div className="atlas-radar-instrument" aria-label="Single-site radar product and tilt">
-          <div className="atlas-radar-instrument__heading"><strong>RADAR</strong><span>{radarFrame ? `${radarFrame.site.id} · FRAME ${radarPlaybackIndex + 1}/${radarFrames.length} · ${new Date(radarFrame.time).toISOString().slice(11, 19)}Z` : "LOADING FRAMES"}</span></div>
+          <div className="atlas-radar-instrument__heading"><strong>RADAR</strong><span>{radarFrame ? `${radarFrame.site.id}${radarSelectedSite && radarPrimarySite && radarSelectedSite !== radarPrimarySite ? ` · FAILOVER (${radarSiteFailoverReason})` : ""} · FRAME ${radarPlaybackIndex + 1}/${radarFrames.length} · ${new Date(radarFrame.time).toISOString().slice(11, 19)}Z` : "LOADING FRAMES"}</span></div>
           <div className="atlas-radar-instrument__row">
             {(["REF", "VEL", "SRV", "CC"] as RadarProduct[]).map((product) => (
               <button
