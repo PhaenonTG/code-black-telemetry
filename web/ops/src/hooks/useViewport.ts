@@ -16,8 +16,15 @@ export function useViewport(): ViewportClass {
   )
   useEffect(() => {
     const onResize = () => setCls(classify(window.innerWidth))
+    // Reconcile once after mount. Browser device emulation can be cleared between the initial
+    // render and this effect without emitting a normal window resize event.
+    onResize()
     window.addEventListener("resize", onResize)
-    return () => window.removeEventListener("resize", onResize)
+    window.visualViewport?.addEventListener("resize", onResize)
+    return () => {
+      window.removeEventListener("resize", onResize)
+      window.visualViewport?.removeEventListener("resize", onResize)
+    }
   }, [])
   return cls
 }

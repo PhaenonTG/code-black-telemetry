@@ -501,6 +501,10 @@ export function AtlasMap({
         setMapError("WEBGL_CONTEXT_LOST");
       });
       map.on("error", (event) => {
+        // A missing provider tile is recoverable. Mapbox emits it through the same global error
+        // channel as a failed base-style initialization; treating every tile 404 as STYLE_ERROR
+        // covered the working map with a fatal-session overlay.
+        if (map.isStyleLoaded()) return;
         setMapState("STYLE_ERROR");
         setMapError(event.error?.message ?? "MAPBOX_GL_ERROR");
       });
