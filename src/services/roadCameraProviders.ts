@@ -579,7 +579,7 @@ export async function fetchArdotTrafficCameras(context: LayerQueryContext, signa
 // confirmed working via direct request outside the browser. So camera data is deliberately sourced
 // from this same MapFeatures query (which already includes Camera-typed features) rather than a
 // second, less certain endpoint.
-const KANDRIVE_GRAPHQL_URL = "https://www.kandrive.gov/api/graphql";
+const KANDRIVE_GRAPHQL_URL = isNativePlatform() ? "https://www.kandrive.gov/api/graphql" : "/api/kandrive/graphql";
 const KANDRIVE_APP_URL = "https://www.kandrive.gov/";
 const KANDRIVE_CAMERAS_URL = "https://kstg.carsprogram.org/cameras_v1/api/cameras";
 const KANDRIVE_MAP_FEATURES_QUERY = "query MapFeatures($input: MapFeaturesArgs!, $plowType: String) {\n\t\tmapFeaturesQuery(input: $input) {\n\t\t\tmapFeatures {\n\t\t\t\tbbox\n\t\t\t\ttitle\n\t\t\t\ttooltip\n\t\t\t\turi\n\t\t\t\tfeatures {\n\t\t\t\t\tid\n\t\t\t\t\tgeometry\n\t\t\t\t\tproperties\n\t\t\t\t\ttype\n\t\t\t\t}\n\t\t\t\t... on Cluster {\n\t\t\t\t\tmaxZoom\n\t\t\t\t}\n\t\t\t\t... on Sign {\n\t\t\t\t\tsignDisplayType\n\t\t\t\t}\n\t\t\t\t... on Event {\n\t\t\t\t\tpriority\n\t\t\t\t}\n\t\t\t\t__typename\n\t\t\t\t... on Camera {\n\t\t\t\t\tactive\n\t\t\t\t\tviews(limit: 5) {\n\t\t\t\t\t\turi\n\t\t\t\t\t\t... on CameraView {\n\t\t\t\t\t\t\turl\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcategory\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t... on Plow {\n\t\t\t\t\tviews(limit: 5, plowType: $plowType) {\n\t\t\t\t\t\turi\n\t\t\t\t\t\t... on PlowCameraView {\n\t\t\t\t\t\t\turl\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcategory\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t\terror {\n\t\t\t\tmessage\n\t\t\t\ttype\n\t\t\t}\n\t\t}\n\t}";

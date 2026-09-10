@@ -42,6 +42,12 @@ export default defineConfig(({ mode }) => {
         ws: true,
         rewrite: (requestPath) => requestPath.replace(/^\/core-ws/, ""),
       },
+      "/api/kandrive/graphql": {
+        target: "https://www.kandrive.gov",
+        changeOrigin: true,
+        secure: true,
+        rewrite: () => "/api/graphql",
+      },
     },
   },
   build: {

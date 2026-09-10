@@ -13,6 +13,8 @@ import { StormIntelMetricBoard } from "../components/StormIntelMetricBoard";
 import { useCoreOps } from "../core/useCoreOps";
 import { firstAvailableSource, stormIntelSummary } from "../stormIntel/format";
 import { getReverseLocality, type LocalityResult } from "../../../../src/services/situational";
+import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings";
+import { mapWorkspaceVisibility } from "../mapWorkspace";
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null;
@@ -36,6 +38,14 @@ export default function StormIntelWorkspace() {
   const { config, state: coreState, selectedPoint, pointHistory, selectPoint, selectHistoryPoint } = useCoreOps();
   const snapshot = coreState.stormIntel.pointSnapshot;
   const source = firstAvailableSource(snapshot);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadMapLayerVisibility().then((current) => {
+      if (!cancelled) void saveMapLayerVisibility(mapWorkspaceVisibility(current, "weather"));
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

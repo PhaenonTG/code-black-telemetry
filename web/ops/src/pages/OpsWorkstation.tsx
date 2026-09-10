@@ -17,6 +17,7 @@ import { PointInspector } from "../components/PointInspector";
 import { useCoreOps } from "../core/useCoreOps";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings";
+import { mapWorkspaceVisibility, type MapWorkspace } from "../mapWorkspace";
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null;
@@ -105,28 +106,10 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   }, [gps.status, selectedPoint, atlasGpsForAutoSelect, selectPoint]);
 
   useEffect(() => {
-    // The Radar nav destination is otherwise pixel-identical to Live Ops (same workstation, same
-    // map) -- what actually earns it a separate slot is landing here with both radar layers on:
-    // the wide-area mosaic for storm-scale context plus the nearest site's single-site sweep for
-    // structure detail, mirroring how RadarScope/GRLevel3 users layer national + local products.
-    // Only nudges layers on, never off, so a chaser who deliberately kills one mid-visit keeps it
-    // off until they leave and come back.
-    if (focus !== "RADAR LAB") return;
+    const workspace: MapWorkspace = focus === "RADAR LAB" ? "radar" : focus === "FIELD INTELLIGENCE" ? "field" : "operations";
     let cancelled = false;
     void loadMapLayerVisibility().then((current) => {
-      if (cancelled) return;
-      if (!current.mosaic || !current.radar) {
-        void saveMapLayerVisibility({ ...current, mosaic: true, radar: true });
-      }
-    });
-    return () => { cancelled = true; };
-  }, [focus]);
-
-  useEffect(() => {
-    if (focus !== "FIELD INTELLIGENCE") return;
-    let cancelled = false;
-    void loadMapLayerVisibility().then((current) => {
-      if (!cancelled) void saveMapLayerVisibility({ ...current, roadConditions: true, trafficCameras: true, chasers: true, poi: false });
+      if (!cancelled) void saveMapLayerVisibility(mapWorkspaceVisibility(current, workspace));
     });
     return () => { cancelled = true; };
   }, [focus]);
@@ -210,7 +193,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
         <div className="ops-map-overlay ops-map-overlay--top">
           <div>
             <span>FOCUS</span>
-            <b>{focus}</b>
+            <h1>{focus}</h1>
           </div>
           <label className="ops-nearby-reference">
             <span>NEARBY FOR</span>
