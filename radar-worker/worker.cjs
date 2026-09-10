@@ -361,6 +361,11 @@ async function ensureLevel2Frame(siteId, product, tilt = 1, explicitKey = null) 
       quality: radar.isTruncated ? "INCOMPLETE" : radar.hasGaps ? "GAPS" : "OK", data, azimuths,
     };
     cacheFrame(frame);
+    // Pre-warm the matching CC scan in the background as soon as this REF/VEL/SRV frame is
+    // ready -- by the time a client actually requests a tile for it (after fetching the frame
+    // list, then Mapbox's own staggered tile loading), the CC decode this frame's filtering
+    // needs has usually already finished.
+    ensureMatchingCcFrame(frame);
     return frame;
   })();
   frameLoads.set(id, load);
@@ -517,7 +522,121 @@ function cacheFrame(frame) {
   for (const site of [...siteUse.keys()]) if (!keepSites.has(site)) siteUse.delete(site);
 }
 
-function renderTile(frame, z, x, y) {
+// Polar bilinear resampling -- interpolates the raw moment value across both the angular
+// (radial-to-radial) and range (gate-to-gate) axes before colorizing, instead of the old
+// nearest-single-gate lookup. That old approach is why the rendered image looked blocky and
+// gap-riddled: it either hit one gate dead-on or rendered nothing, with no continuity between
+// neighboring beams. This is the same general technique real radar viewers (GR2Analyst,
+// RadarScope) use to turn a native polar scan into a smooth raster -- built once per frame
+// (memoized on the frame object) rather than per pixel, so this is also considerably cheaper
+// per tile than the old per-pixel O(radial count) brute-force scan it replaces.
+function azimuthIndexFor(frame) {
+  if (frame._azIndex) return frame._azIndex;
+  const idx = frame.azimuths
+    .map((az, i) => ({ az, i }))
+    .filter((entry) => Number.isFinite(entry.az))
+    .sort((a, b) => a.az - b.az);
+  frame._azIndex = idx;
+  return idx;
+}
+
+// Binary-searches the sorted azimuth index for the two real radials bracketing `bearing`
+// (wrapping at 0/360, since compass bearings are circular), returning the fractional position
+// between them. `gapDeg` is the real angular distance between those two radials -- callers use
+// it to refuse to interpolate across an actual scan gap (a missing sector) as if it were just
+// two adjacent, closely-spaced beams.
+function bracketAzimuth(azIndex, bearing) {
+  const n = azIndex.length;
+  if (n === 0) return null;
+  let lo = 0;
+  let hi = n;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (azIndex[mid].az < bearing) lo = mid + 1; else hi = mid;
+  }
+  const hiEntry = azIndex[lo % n];
+  const loEntry = azIndex[(lo - 1 + n) % n];
+  let gapDeg = hiEntry.az - loEntry.az;
+  if (gapDeg < 0) gapDeg += 360;
+  let fromLo = bearing - loEntry.az;
+  if (fromLo < 0) fromLo += 360;
+  return { i0: loEntry.i, i1: hiEntry.i, t: gapDeg > 0 ? fromLo / gapDeg : 0, gapDeg };
+}
+
+// Linear interpolation between a radial's two gates bracketing `rangeKm`. Never interpolates
+// a real value against a missing (NaN) neighbor as if the gap were zero -- that would smear a
+// genuine echo edge into a fake soft fade into empty air. When only one side of a gate pair has
+// data, that single reading is used as-is instead.
+function interpGate(radial, rangeKm) {
+  if (!radial || !radial.moment_data) return NaN;
+  const data = radial.moment_data;
+  const gf = (rangeKm - radial.first_gate) / radial.gate_size;
+  const g0 = Math.floor(gf);
+  const g1 = g0 + 1;
+  if (g0 < 0 || g0 >= data.length) return NaN;
+  if (g1 >= data.length) return data[g0];
+  const v0 = data[g0];
+  const v1 = data[g1];
+  if (Number.isNaN(v0) && Number.isNaN(v1)) return NaN;
+  if (Number.isNaN(v0)) return v1;
+  if (Number.isNaN(v1)) return v0;
+  return v0 + (v1 - v0) * (gf - g0);
+}
+
+// Real NEXRAD super-res scans run close to 0.5 deg between radials; a bracketing gap much wider
+// than that is a genuine hole in the scan (edge of sector, dropped radial), not a normal beam
+// spacing -- refusing to bridge it keeps a real gap looking like a gap instead of inventing a
+// smooth fill across it.
+const MAX_AZIMUTH_GAP_DEG = 3;
+function sampleFrameValue(frame, rangeKm, bearing) {
+  const bracket = bracketAzimuth(azimuthIndexFor(frame), bearing);
+  if (!bracket || bracket.gapDeg > MAX_AZIMUTH_GAP_DEG) return NaN;
+  const v0 = interpGate(frame.data[bracket.i0], rangeKm);
+  const v1 = interpGate(frame.data[bracket.i1], rangeKm);
+  if (Number.isNaN(v0) && Number.isNaN(v1)) return NaN;
+  if (Number.isNaN(v0)) return v1;
+  if (Number.isNaN(v1)) return v0;
+  return v0 + (v1 - v0) * bracket.t;
+}
+
+// Ground clutter and biological scatterers (birds, insects, AP) commonly show up as
+// normal-looking reflectivity/velocity returns even though they aren't precipitation -- but
+// they have low dual-pol correlation coefficient (rho-hv), which is the same signal NWS's own
+// operational QC uses to tell real weather from clutter. Cross-referencing REF/VEL/SRV against
+// the CC scan from the exact same volume (same site/tilt/key, so it's genuinely time- and
+// geometry-matched, not an approximation) and suppressing low-CC gates is what actually removes
+// the near-site speckle/noise -- CC's own display is deliberately left unfiltered, since the
+// "noise" there simply IS the raw correlation data, not an artifact to hide.
+// A single fixed threshold is a simplified stand-in for NWS's real (multi-field) dual-pol QC,
+// not the official algorithm -- tune CODEBLACK_RADAR_CC_FILTER_THRESHOLD (a restart, not a
+// redeploy) if it's cutting real light precipitation or letting too much clutter through.
+// Ground clutter/AP is typically <0.8 rho-hv, biological scatter often <0.7, real precip
+// typically >0.90 (melting-layer/hail can dip lower). 0.85 (the original default) still left
+// visible near-site clutter streaking on real production data; verified locally against a real
+// KSGF scan that 0.90 cut it substantially and 0.95 nearly eliminated it. Defaulting to 0.95,
+// biased toward a clean broadcast picture over maximum recall of marginal/stratiform returns --
+// lower it if real light precipitation starts disappearing.
+const CC_FILTER_PRODUCTS = new Set(["REF", "VEL", "SRV"]);
+const CC_FILTER_THRESHOLD = Number(process.env.CODEBLACK_RADAR_CC_FILTER_THRESHOLD ?? 0.95);
+
+// Deliberately NEVER awaits a fresh CC decode (~8-10s for a full Level II volume) from inside a
+// live tile request -- the first version of this did, and blocking every tile of a just-arrived
+// frame on that decode is exactly what made the animation loop stall/jump right when a new scan
+// came in. Instead: return the CC frame only if it's already cached, and if not, kick off the
+// decode in the background (deduped against ensureLevel2Frame's own in-flight cache, so this
+// never causes a duplicate download+decode) and render this one request unfiltered. In practice
+// this rarely matters -- see the pre-warm call in ensureLevel2Frame below, which starts the CC
+// decode as soon as a REF/VEL/SRV frame is ready, well before the client has even requested a
+// tile for it.
+function ensureMatchingCcFrame(frame) {
+  if (!CC_FILTER_PRODUCTS.has(frame.product)) return null;
+  const cached = frames.get(frameId(frame.site.id, "CC", frame.tilt, frame.key));
+  if (cached) return cached;
+  ensureLevel2Frame(frame.site.id, "CC", frame.tilt, frame.key).catch(() => {});
+  return null;
+}
+
+async function renderTile(frame, z, x, y) {
   const tileKey = `${frame.id}/${z}/${x}/${y}`;
   if (tiles.has(tileKey)) return tiles.get(tileKey);
   const png = new PNG({ width: TILE_SIZE, height: TILE_SIZE });
@@ -526,26 +645,28 @@ function renderTile(frame, z, x, y) {
     tiles.set(tileKey, buf);
     return buf;
   }
-  const azimuths = frame.azimuths;
-  const radials = frame.data;
+  const ccFrame = ensureMatchingCcFrame(frame);
   for (let py = 0; py < TILE_SIZE; py += 1) {
     for (let px = 0; px < TILE_SIZE; px += 1) {
       const pos = tileToLonLat(z, x, y, px, py);
       const distMi = distanceMiles(frame.site, pos);
       if (distMi > 160) continue;
+      // Bearing is numerically unstable within a few hundred meters of the site itself (a tiny
+      // pixel-to-pixel position change swings the computed angle wildly near that pole), which
+      // is what produced the sparkly "starburst" right at the site center -- not a data problem,
+      // a geometry one. Real radar coverage this close in is a rendering non-issue anyway (this
+      // is well inside any real gate's first_gate distance), so this is skipped outright rather
+      // than rendering essentially-random azimuth noise.
+      if (distMi < 0.3) continue;
       const bearing = bearingDeg(frame.site, pos);
-      let best = 0;
-      let bestDiff = 999;
-      for (let i = 0; i < azimuths.length; i += 1) {
-        const diff = Math.abs((((azimuths[i] - bearing + 540) % 360) - 180));
-        if (diff < bestDiff) { bestDiff = diff; best = i; }
-      }
-      if (bestDiff > 1.4) continue;
-      const radial = radials[best];
-      if (!radial) continue;
       const rangeKm = distMi * 1.60934;
-      const gate = Math.round((rangeKm - radial.first_gate) / radial.gate_size);
-      const value = radial.moment_data?.[gate];
+      let value = sampleFrameValue(frame, rangeKm, bearing);
+      if (ccFrame) {
+        const cc = sampleFrameValue(ccFrame, rangeKm, bearing);
+        // Only suppress when we actually have a CC reading to judge by -- a missing CC sample
+        // (NaN) means "unknown," not "clutter," so it must never blank out a real REF/VEL value.
+        if (Number.isFinite(cc) && cc < CC_FILTER_THRESHOLD) value = NaN;
+      }
       const color = palette(frame.product, value);
       const idx = (py * TILE_SIZE + px) * 4;
       png.data[idx] = color[0];
@@ -555,8 +676,16 @@ function renderTile(frame, z, x, y) {
     }
   }
   const buf = PNG.sync.write(png);
-  tiles.set(tileKey, buf);
-  if (tiles.size > 500) tiles.delete(tiles.keys().next().value);
+  // Don't permanently cache a tile that was rendered unfiltered only because the matching CC
+  // scan hadn't finished pre-warming yet (see ensureMatchingCcFrame) -- caching it here would
+  // freeze that one tile as unfiltered/noisy for this frame's entire lifetime, even after CC
+  // becomes available moments later. A request too early just re-renders (and re-checks CC)
+  // next time instead.
+  const stillNeedsCc = CC_FILTER_PRODUCTS.has(frame.product) && !ccFrame;
+  if (!stillNeedsCc) {
+    tiles.set(tileKey, buf);
+    if (tiles.size > 500) tiles.delete(tiles.keys().next().value);
+  }
   return buf;
 }
 
@@ -667,7 +796,7 @@ const server = http.createServer(async (req, res) => {
     if (tileMatch) {
       const frame = frames.get(tileMatch[1]);
       if (!frame) return send(res, 404, { error: "frame not found" });
-      return send(res, 200, renderTile(frame, Number(tileMatch[2]), Number(tileMatch[3]), Number(tileMatch[4])), "image/png");
+      return send(res, 200, await renderTile(frame, Number(tileMatch[2]), Number(tileMatch[3]), Number(tileMatch[4])), "image/png");
     }
     if (url.pathname === "/api/v1/radar/selection" && req.method === "POST") {
       const body = await jsonBody(req);

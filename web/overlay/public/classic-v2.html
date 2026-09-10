@@ -1,0 +1,2636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Code Black Storm Overlay — v2</title>
+  <!-- Mapbox GL JS -- same version classic.html already uses (workers/radar-relay's real
+       NEXRAD tiles rendered as a raster layer). -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.css"
+    integrity="sha384-EP/H7vnAWQ5LW9GnEKFrWdLNFs5Ar50IJgtlPCBzA/mZRKZrR+/rMG5kXl5QNyCp" crossorigin="anonymous" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.js"
+    integrity="sha384-ZMqM0SdLsq7rI9P0wS7ycsmyMZABQED4jFTBlrzUG5+eRlOZnZFEwT5vDaWWr0pQ" crossorigin="anonymous"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --border: rgba(255,255,255,0.12);
+      --text: #ffffff;
+      --muted: rgba(255,255,255,0.72);
+      --accent: #ff2a2a;
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+      --panel-bg: linear-gradient(180deg, rgba(12,12,15,0.84), rgba(12,12,15,0.64));
+      --font-overlay: "Oswald", Arial, Helvetica, sans-serif;
+    }
+    * { box-sizing: border-box; }
+
+    /* ---- Bubble family: shared by the mid-bar ---- */
+    .bubble {
+      height: 88px;
+      border-radius: 20px;
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    .bubble::before {
+      content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.85;
+    }
+    .alert-bubble .a-main { font-size: 22px; font-weight: 800; letter-spacing: 0.04em; white-space: nowrap; }
+    .alert-bubble .a-sub { font-size: 13px; opacity: 0.85; margin-top: 4px; white-space: nowrap; }
+
+    /* ---- F layout: clock top-right, radar bottom-right, conditions bottom-left, mid-bar
+       spans the gap between the two bottom panels. ---- */
+    .panel {
+      position: absolute;
+      border-radius: 24px;
+      background: #0b0c10;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    .panel::before {
+      content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; z-index: 2;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.85;
+    }
+    .panel-head {
+      position: absolute; top: 0; left: 0; right: 0; height: 57px; z-index: 1;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 18px 12px 18px;
+      background: linear-gradient(180deg, rgba(12,12,15,0.78), rgba(12,12,15,0.58));
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .panel-title { font-size: 22px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+    .radar-panel-f .radar-title { font-size: 22px; letter-spacing: 0.07em; }
+    .live-dot {
+      display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: var(--accent);
+      box-shadow: 0 0 8px rgba(255,42,42,0.6);
+      animation: brandDotPulse 1.4s infinite ease-in-out;
+      margin-right: 6px; vertical-align: middle;
+    }
+    @keyframes brandDotPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.82); } }
+    .panel-sub { font-size: 21px; font-weight: 700; letter-spacing: 0.03em; color: var(--muted); white-space: nowrap; }
+
+    .brand-clock-w { width: max-content; max-width: 440px; }
+    .top-brand-f {
+      top: 28px; left: 28px; height: 88px;
+      display: flex; align-items: center; justify-content: center; padding: 0 22px;
+    }
+    .top-brand-f .brand-text { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
+    .brand-dot {
+      width: 14px; height: 14px; border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(255,42,42,0.55);
+      flex: 0 0 auto;
+      animation: brandDotPulse 1.4s infinite ease-in-out;
+    }
+    .top-brand-f .brand-title-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .top-brand-f .brand-title { font-size: 24px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .top-brand-f .brand-sub { font-size: 21px; color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .brand-sub.count-flash { animation: countFlash 0.6s ease-out; }
+    @keyframes countFlash { 0% { color: var(--text); } 100% { color: var(--muted); } }
+
+    .clock-pill {
+      top: 28px; right: 28px;
+      height: 88px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 0 22px;
+    }
+    .clock-pill .clock-time { font-size: 24px; font-weight: 800; letter-spacing: 0.08em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .clock-pill .clock-date { font-size: 21px; color: var(--muted); margin-top: 4px; white-space: nowrap; }
+    .clock-colon { transition: opacity 0.15s ease; }
+
+    .wind-panel { top: auto; bottom: 28px; left: 28px; width: 460px; height: 300px; }
+    .cond-grid {
+      position: absolute; inset: 57px 0 0 0;
+      display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+    }
+    .cond-tile {
+      display: flex; flex-direction: row; align-items: center; justify-content: center;
+      gap: 12px;
+      border-right: 1px solid rgba(255,255,255,0.08);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .cond-tile:nth-child(2n) { border-right: none; }
+    .cond-tile:nth-child(n+3) { border-bottom: none; }
+    .cond-tile .c-icon { width: 28px; height: 28px; color: var(--muted); flex: 0 0 auto; }
+    .cond-tile .c-icon.accent { color: var(--accent); }
+    .c-icon-temp.idle-pulse { animation: tempBreathe 1.3s ease-in-out; transform-origin: 50% 90%; }
+    @keyframes tempBreathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.08); } }
+    .c-icon-dew.idle-pulse { animation: iconFloodBob 1.3s ease-in-out; }
+    .c-icon-wind.idle-pulse { animation: windLinesSway 1.1s ease-in-out; }
+    @keyframes windLinesSway { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(2.5px); } }
+    .f-drop-icon { display: inline-block; animation: iconFloodBob 2.6s ease-in-out infinite; }
+    .wind-twitch { animation: windTwitch 4.4s ease-in-out infinite; transform-origin: 50% 55%; }
+    @keyframes windTwitch {
+      0%   { transform: rotate(calc(var(--heading) + 0deg)); }
+      9%   { transform: rotate(calc(var(--heading) - 3deg)); }
+      17%  { transform: rotate(calc(var(--heading) + 2deg)); }
+      26%  { transform: rotate(calc(var(--heading) - 1deg)); }
+      35%  { transform: rotate(calc(var(--heading) + 4deg)); }
+      47%  { transform: rotate(calc(var(--heading) - 2deg)); }
+      60%  { transform: rotate(calc(var(--heading) + 1deg)); }
+      73%  { transform: rotate(calc(var(--heading) - 4deg)); }
+      86%  { transform: rotate(calc(var(--heading) + 2deg)); }
+      100% { transform: rotate(calc(var(--heading) + 0deg)); }
+    }
+    .cond-tile .c-text { text-align: center; width: 112px; }
+    .cond-tile .c-row { display: flex; align-items: baseline; gap: 8px; justify-content: center; }
+    .cond-tile .c-val { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; }
+    .cond-tile .c-val.cold { color: #7fb8ff; }
+    .cond-tile .c-val.cool { color: #a8d4ff; }
+    .cond-tile .c-val.warm { color: #ffb454; }
+    .cond-tile .c-val.hot { color: #ff3b30; }
+    .cond-tile .c-val.dry { color: #35d488; }
+    .cond-tile .c-val.humid { color: #e8c93a; }
+    .cond-tile .c-val.muggy { color: #ff8a4d; }
+    .cond-tile .c-val.oppressive { color: #ff3b30; }
+    .cond-tile .c-val.windy { color: #e8c93a; }
+    .cond-tile .c-val.strong-wind { color: #ff8a4d; }
+    .cond-tile .c-val.dangerous-wind { color: #ff3b30; }
+    .cond-tile .c-val .c-unit { font-size: 16px; font-weight: 700; color: var(--muted); margin-left: 2px; }
+    .cond-tile .c-lab { font-size: 21px; color: var(--muted); letter-spacing: 0.02em; text-transform: uppercase; }
+    .cond-tile .c-extra { font-size: 21px; color: var(--muted); }
+    #condTempTile.heat-shimmer .c-val { animation: heatShimmerPulse 2.4s ease-in-out infinite; }
+    @keyframes heatShimmerPulse { 0%, 100% { text-shadow: 0 0 0 rgba(255,102,0,0); } 50% { text-shadow: 0 0 16px rgba(255,102,0,0.6); } }
+
+    .radar-panel-f { top: auto; bottom: 28px; right: 28px; width: 460px; height: 300px; }
+    .radar-head {
+      position: absolute; top: 0; left: 0; right: 0; height: 57px; z-index: 1;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 18px 12px 18px;
+      background: linear-gradient(180deg, rgba(12,12,15,0.78), rgba(12,12,15,0.58));
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .radar-title-row { display: flex; align-items: baseline; gap: 10px; }
+    .radar-title { font-size: 15px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
+    .radar-live { font-size: 21px; letter-spacing: 0.03em; font-weight: 700; color: var(--muted); white-space: nowrap; }
+    .radar-body {
+      position: absolute; inset: 57px 0 0 0;
+      background: linear-gradient(155deg, #1c2b1f 0%, #14181c 55%, #0e1114 100%);
+      transition: background 0.3s ease;
+    }
+    .radar-body.vel {
+      background:
+        radial-gradient(26% 34% at 58% 38%, rgba(30,220,90,0.85) 0%, rgba(30,220,90,0.35) 55%, transparent 75%),
+        radial-gradient(26% 34% at 70% 42%, rgba(255,40,40,0.85) 0%, rgba(255,40,40,0.35) 55%, transparent 75%),
+        radial-gradient(45% 40% at 64% 40%, rgba(255,204,0,0.12) 0%, transparent 70%),
+        linear-gradient(155deg, #14181c 0%, #101316 55%, #0b0d10 100%);
+    }
+    /* Real Mapbox GL radar map, layered over .radar-body's gradient (visible only until the map
+       loads, or if it never does). Ported from classic.html. */
+    #radarMap { position: absolute; inset: 0; }
+    .mapboxgl-ctrl-attrib {
+      font-size: 8px !important;
+      background: rgba(0,0,0,0.35) !important;
+      color: rgba(255,255,255,0.35) !important;
+      padding: 0 4px !important;
+    }
+    .mapboxgl-ctrl-attrib a { color: rgba(255,255,255,0.45) !important; }
+    .mapboxgl-ctrl-logo { transform: scale(0.7); transform-origin: bottom left; opacity: 0.6; }
+    .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl { margin: 0 4px 2px 0 !important; }
+    .mapboxgl-ctrl-bottom-left .mapboxgl-ctrl { margin: 0 0 2px 4px !important; }
+    .radar-position-marker { position: relative; width: 16px; height: 16px; }
+    .radar-position-marker__core {
+      position: absolute; top: 4px; left: 4px; width: 8px; height: 8px; border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 10px rgba(255,42,42,0.85), 0 0 0 2px rgba(255,255,255,0.9);
+    }
+    .radar-position-marker__ring {
+      position: absolute; inset: 0; border-radius: 999px; border: 2px solid var(--accent);
+      animation: radarPositionPulse 1.6s infinite ease-out;
+    }
+    @keyframes radarPositionPulse { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.9); opacity: 0; } }
+    .radar-loading {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--muted); background: #0b0c10; transition: opacity 0.3s ease; z-index: 2;
+    }
+    .radar-loading.hidden { opacity: 0; pointer-events: none; }
+
+    .mid-bar {
+      position: absolute; bottom: 28px; left: 502px; right: 502px;
+      height: 150px; border-radius: 24px;
+      display: flex; align-items: stretch; justify-content: center;
+      padding: 0 6px;
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    .mid-bar.is-alert { border-color: rgba(255,255,255,0.18); text-align: center; }
+    .mid-bar.is-alert:not(.is-glass)::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 10px, transparent 10px 20px),
+        radial-gradient(120% 100% at 50% 35%, transparent 55%, rgba(0,0,0,0.28) 100%);
+    }
+    .mid-bar.is-alert.is-glass { border-color: var(--glass-accent-55, rgba(255,255,255,0.18)); }
+    .mid-bar.is-alert.is-glass .alert-icon-badge {
+      background: var(--glass-accent-14, rgba(255,255,255,0.1));
+      border-color: var(--glass-accent-40, rgba(255,255,255,0.3));
+    }
+    .mid-bar.is-alert.is-glass .alert-icon-badge svg { color: var(--glass-accent, #fff); }
+    .mid-bar.is-alert.is-glass .a-main { text-shadow: none; }
+    @keyframes alertBoxGlow {
+      0%, 100% { box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06), 0 0 var(--abg-r-soft, 8px) var(--abg-color, transparent); }
+      50% { box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06), 0 0 var(--abg-r-strong, 22px) var(--abg-color, transparent); }
+    }
+    .mid-bar.is-alert.alert-box-glow { animation: alertBoxGlow 2.4s ease-in-out infinite; }
+    .mid-bar .alert-inner { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100%; gap: 16px; padding: 0 10px; position: relative; z-index: 1; }
+    .alert-icon-badge {
+      flex: 0 0 auto; width: 64px; height: 64px; border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.28);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+    }
+    .alert-icon-badge svg { width: 34px; height: 34px; color: #fff; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)); }
+    .alert-icon-badge svg.icon-funnel { animation: iconFunnelSway 3.2s ease-in-out infinite; transform-origin: 50% 25%; }
+    @keyframes iconFunnelSway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+    .alert-icon-badge svg.icon-storm { animation: iconStormDrift 3.8s ease-in-out infinite; }
+    @keyframes iconStormDrift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+    .alert-icon-badge svg.icon-flood { animation: iconFloodBob 3s ease-in-out infinite; }
+    @keyframes iconFloodBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.5px); } }
+    .alert-icon-badge svg.icon-sun { animation: iconSunShimmer 9s linear infinite; transform-origin: 50% 50%; }
+    @keyframes iconSunShimmer { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .alert-icon-badge svg.icon-bell { animation: iconBellSway 3.4s ease-in-out infinite; transform-origin: 50% 15%; }
+    @keyframes iconBellSway { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
+    @keyframes lightningFlash {
+      0%   { box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 rgba(255,255,255,0); }
+      8%   { box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 0 40px 10px rgba(255,255,255,0.9); }
+      16%  { box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 0 6px rgba(255,255,255,0.2); }
+      24%  { box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 0 30px 6px rgba(255,255,255,0.7); }
+      100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 rgba(255,255,255,0); }
+    }
+    .alert-icon-badge.lightning-flash { animation: lightningFlash 0.5s ease-out; }
+    @keyframes justUpdatedFlash {
+      0% { box-shadow: var(--shadow), 0 0 0 rgba(255,255,255,0); }
+      30% { box-shadow: var(--shadow), 0 0 22px rgba(255,255,255,0.4); }
+      100% { box-shadow: var(--shadow), 0 0 0 rgba(255,255,255,0); }
+    }
+    .just-updated { animation: justUpdatedFlash 0.6s ease-out; }
+    @media (prefers-reduced-motion: reduce) {
+      .wind-twitch, .alert-icon-badge svg.icon-funnel, .alert-icon-badge svg.icon-storm,
+      .alert-icon-badge svg.icon-flood, .alert-icon-badge svg.icon-sun, .alert-icon-badge svg.icon-bell,
+      .f-icon-sun, .f-icon-partly, .f-icon-rain, .f-icon-cloudy, .f-icon-storm, .f-icon-snow,
+      .f-icon-fog, .f-icon-windy, .f-icon-moon, .f-icon-partly-night,
+      .alert-icon-badge.lightning-flash, .glyph-halo, .glyph-sweep::before, .g-blip, .g-you,
+      #condTempTile.heat-shimmer .c-val, .just-updated, .brand-sub.count-flash,
+      .c-icon-temp.idle-pulse, .c-icon-dew.idle-pulse, .c-icon-wind.idle-pulse,
+      .spc-icon-tor, .spc-icon-wind, .spc-icon-hail, .params-verdict .pv-icon,
+      .sm-icon-sunrise, .sm-icon-sunset, .sm-icon-daylight,
+      .sm-icon-moon, .f-drop-icon { animation: none; }
+    }
+    .alert-text-col { display: flex; flex-direction: column; justify-content: center; gap: 3px; text-align: left; min-width: 0; max-width: 700px; }
+    .a-main-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .mid-bar .a-sig-tag { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.4); }
+    .mid-bar .a-main { font-size: 25px; font-weight: 800; letter-spacing: 0.01em; white-space: nowrap; text-shadow: 0 1px 4px rgba(0,0,0,0.55); }
+    .mid-bar .a-tags { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; justify-content: flex-start; }
+    .mid-bar .a-tag {
+      font-size: 19px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase;
+      background: rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.32); border-radius: 6px;
+      padding: 3px 11px; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    }
+    .mid-bar .a-expires {
+      font-size: 19px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase;
+      background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.38); border-radius: 6px;
+      padding: 3px 11px; white-space: nowrap; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+      display: inline-block; min-width: 118px; text-align: center;
+    }
+    .mid-bar .a-towns { font-size: 19px; font-weight: 600; opacity: 1; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.45); }
+    .mid-bar .a-towns b { font-weight: 800; }
+    .mid-bar .a-tags-plain { font-size: 19px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text); }
+    .mid-bar .a-tags-plain .a-expires { background: none; border: none; padding: 0; text-shadow: none; display: inline-block; min-width: 96px; text-align: left; }
+
+    .fx-panel.tier-glow { border-color: var(--tier-color, var(--border)); transition: border-color 0.4s ease, box-shadow 0.4s ease; }
+    .fx-panel.tier-glow { box-shadow: var(--shadow), 0 0 26px var(--tier-glow-soft, transparent), inset 0 1px 0 rgba(255,255,255,0.06); }
+    .fx-panel.tier-glow::before { background: linear-gradient(90deg, transparent, var(--tier-color, var(--accent)), transparent); opacity: 1; transition: background 0.4s ease; }
+    .fx-panel.tier-pulse { animation: tierPulse 2.4s ease-in-out infinite; }
+    @keyframes tierPulse {
+      0%, 100% { box-shadow: var(--shadow), 0 0 var(--pulse-min, 14px) var(--pulse-color, rgba(255,0,0,0.25)), inset 0 1px 0 rgba(255,255,255,0.06); }
+      50% { box-shadow: var(--shadow), 0 0 var(--pulse-max, 34px) var(--pulse-color, rgba(255,0,0,0.55)), inset 0 1px 0 rgba(255,255,255,0.06); }
+    }
+
+    /* ---- Params / Chasers / SPC / Forecast / Sun&Moon: still demo data, wired in a later
+       phase -- markup/CSS kept identical to the mockup so those cards render correctly once
+       their turn in the rotation comes up. ---- */
+    .params-wrap { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .params-verdict {
+      flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px;
+      height: 32px; margin: 8px 10px 0; border-radius: 8px; color: #14140f;
+      font-size: 16px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+    }
+    .params-verdict .pv-icon { width: 17px; height: 17px; flex: 0 0 auto; animation: pvIconPulse 2.4s ease-in-out infinite; }
+    @keyframes pvIconPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
+    .mid-bar .params-row { display: flex; align-items: stretch; width: 100%; flex: 1; min-height: 0; }
+    .mid-bar .param { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 0 4px; min-width: 0; }
+    .mid-bar .param + .param { border-left: 1px solid rgba(255,255,255,0.08); }
+    .mid-bar .param .p-val { font-size: 29px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; }
+    .mid-bar .param .p-unit { font-size: 13px; font-weight: 700; color: var(--muted); margin-left: 2px; }
+    .mid-bar .param .p-lab { font-size: 17px; font-weight: 800; color: var(--text); letter-spacing: 0.02em; text-transform: uppercase; white-space: nowrap; }
+    .mid-bar .param .p-bar { display: flex; gap: 3px; margin-top: 2px; }
+    .mid-bar .param .p-bar span { width: 10px; height: 5px; border-radius: 2px; background: rgba(255,255,255,0.14); }
+    .params-footer { height: 10px; flex: 0 0 auto; }
+
+    .chasers-row { display: flex; align-items: stretch; width: 100%; height: 100%; }
+    .chasers-half { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 16px; min-width: 0; }
+    .chasers-half + .chasers-half { border-left: 1px solid rgba(255,255,255,0.08); }
+    .chasers-glyph-row { position: relative; display: flex; align-items: center; justify-content: center; gap: 28px; width: 100%; height: 100%; }
+    .chasers-glyph-row::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(60% 100% at 50% 50%, rgba(53,212,136,0.1) 0%, transparent 70%);
+    }
+    .chasers-glyph-row .chasers-hero-line { text-align: left; position: relative; z-index: 1; }
+    .chasers-glyph { position: relative; z-index: 1; flex: 0 0 auto; width: 136px; height: 136px; }
+    .chasers-glyph .glyph-halo {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: radial-gradient(circle, rgba(53,212,136,0.24) 0%, rgba(53,212,136,0.07) 55%, transparent 76%);
+      animation: glyphHalo 2.6s ease-in-out infinite;
+    }
+    @keyframes glyphHalo { 0%, 100% { opacity: 0.6; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1); } }
+    .chasers-glyph .glyph-sweep { position: absolute; inset: 8px; border-radius: 50%; overflow: hidden; }
+    .chasers-glyph .glyph-sweep::before {
+      content: ""; position: absolute; inset: -60%;
+      background: conic-gradient(from 0deg, rgba(53,212,136,0) 0deg, rgba(53,212,136,0) 250deg, rgba(53,212,136,0.6) 344deg, rgba(53,212,136,0) 360deg);
+      animation: glyphSweep 3.2s linear infinite;
+    }
+    @keyframes glyphSweep { to { transform: rotate(360deg); } }
+    .glyph-svg { position: relative; z-index: 1; width: 100%; height: 100%; }
+    .g-ring { fill: none; stroke: rgba(255,255,255,0.26); stroke-width: 1; }
+    .g-you { fill: var(--accent); animation: brandDotPulse 1.4s infinite ease-in-out; }
+    .g-blip { fill: #35d488; filter: drop-shadow(0 0 3px rgba(53,212,136,0.85)); animation: glyphPing 2.6s ease-in-out infinite; }
+    .g-blip.b2 { animation-delay: 0.85s; }
+    .g-blip.b3 { animation-delay: 1.7s; }
+    @keyframes glyphPing { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    .chasers-hero-line { display: flex; align-items: center; gap: 12px; font-size: 37px; font-weight: 800; letter-spacing: 0.01em; text-transform: uppercase; color: var(--text); white-space: nowrap; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+    .chasers-hero-line .ch-hero-num { font-size: 50px; line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+    .chasers-glyph.sm { width: 76px; height: 76px; }
+    .chasers-hero-line.sm { font-size: 23px; }
+    .chasers-hero-line.sm .ch-hero-num { font-size: 40px; margin-right: 8px; color: var(--accent); }
+    .report-detail { flex: 1; min-width: 0; text-align: left; }
+    .report-detail .r-line1 { font-size: 21px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .report-detail .r-line1 b { font-weight: 800; }
+    .report-detail .r-line1 .loc { color: var(--muted); }
+    .report-detail .r-note { font-size: 21px; color: var(--muted); line-height: 1.3; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .report-detail .r-when { font-size: 21px; color: var(--muted); opacity: 0.85; margin-top: 6px; }
+    .report-detail .r-when .r-time { color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; display: inline-block; min-width: 52px; }
+
+    .spc-split { display: flex; align-items: stretch; width: 100%; height: 100%; }
+    .spc-half { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 10px; }
+    .spc-half + .spc-half { border-left: 1px solid rgba(255,255,255,0.08); }
+    .clear-badge {
+      flex: 0 0 auto; width: 64px; height: 64px; border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.25); border: 1px solid rgba(92,184,92,0.4);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+    }
+    .clear-badge svg { width: 34px; height: 34px; color: #5cb85c; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)); }
+    .clear-textcol { display: flex; flex-direction: column; gap: 3px; text-align: left; min-width: 0; }
+    .clear-main { font-size: 23px; font-weight: 800; letter-spacing: 0.01em; color: var(--text); white-space: nowrap; }
+    .clear-sub { font-size: 17px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+    .spc-risk-col { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .spc-pct { font-size: 50px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+    .spc-pct.enh, .spc-sig.enh { color: #f0972f; }
+    .spc-pct.slgt, .spc-sig.slgt { color: #e8c93a; }
+    .spc-pct.mrgl, .spc-sig.mrgl { color: #5cb85c; }
+    .spc-pct .pct-sign { font-size: 26px; font-weight: 700; }
+    .spc-risk-col .spc-sig { margin-top: 4px; }
+    .spc-textcol { text-align: left; min-width: 0; }
+    .spc-textcol .spc-namerow { display: flex; align-items: center; gap: 7px; }
+    .spc-textcol .spc-risk-name { font-size: 20px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; white-space: nowrap; }
+    .spc-daytag {
+      font-size: 18px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase;
+      color: var(--text); background: rgba(255,255,255,0.12); border-radius: 6px; padding: 1px 6px; white-space: nowrap;
+    }
+    .spc-namerow-dot { color: var(--muted); font-weight: 700; }
+    .spc-textcol .spc-desc { font-size: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0px; }
+    .spc-textcol .spc-meta { font-size: 18px; color: var(--muted); opacity: 0.85; margin-top: 1px; white-space: nowrap; }
+    .spc-textcol .spc-forecaster { font-size: 18px; color: var(--muted); opacity: 0.75; margin-top: 1px; white-space: nowrap; }
+    .spc-sig { display: inline-block; font-size: 18px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; margin-top: 2px; }
+    .spc-stats { display: flex; gap: 20px; }
+    .spc-stat { display: flex; align-items: center; gap: 8px; }
+    .spc-stat .spc-icon { width: 20px; height: 20px; color: var(--muted); flex: 0 0 auto; }
+    .spc-icon-tor { animation: iconFunnelSway 3.2s ease-in-out infinite; transform-origin: 50% 15%; }
+    .spc-icon-wind { animation: windLinesSway 3.6s ease-in-out infinite; }
+    .spc-icon-hail { animation: iconFloodBob 2.4s ease-in-out infinite; }
+    .spc-stat .spc-text { text-align: left; }
+    .spc-stat .v { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+    .spc-stat .l { font-size: 21px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
+
+    .forecast-wrap { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .forecast-title { font-size: 21px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; text-align: center; padding-top: 14px; }
+    .forecast-row { display: flex; width: 100%; flex: 1; min-height: 0; align-items: stretch; }
+    .forecast-day { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 14px; min-width: 0; }
+    .forecast-day + .forecast-day { border-left: 1px solid rgba(255,255,255,0.08); }
+    .forecast-day .f-icon { width: 34px; height: 34px; color: var(--muted); flex: 0 0 auto; }
+    .f-icon-sun { animation: iconSunShimmer 9s linear infinite; transform-origin: 50% 50%; }
+    .f-icon-partly, .f-icon-cloudy, .f-icon-partly-night { animation: fCloudDrift 4s ease-in-out infinite; }
+    .f-icon-rain { animation: fRainDrop 2.2s ease-in-out infinite; }
+    .f-icon-snow { animation: fRainDrop 3.4s ease-in-out infinite; }
+    .f-icon-storm { animation: iconStormDrift 3.8s ease-in-out infinite; }
+    .f-icon-fog { animation: fFogDrift 5s ease-in-out infinite; }
+    .f-icon-windy { animation: windLinesSway 3.6s ease-in-out infinite; }
+    .f-icon-moon { animation: smMoonGlow 3.6s ease-in-out infinite; }
+    @keyframes fCloudDrift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+    @keyframes fRainDrop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.5px); } }
+    @keyframes fFogDrift { 0%, 100% { transform: translateX(0); opacity: 0.85; } 50% { transform: translateX(3px); opacity: 1; } }
+    .forecast-day .f-text { min-width: 0; text-align: left; }
+    .forecast-day .f-toprow { display: flex; align-items: baseline; gap: 8px; }
+    .forecast-day .f-lab { font-size: 21px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; }
+    .forecast-day .f-hilo { font-size: 26px; font-weight: 800; white-space: nowrap; }
+    .forecast-day .f-hilo .lo { color: var(--muted); font-weight: 700; margin-left: 4px; }
+    .forecast-day .f-cond { font-size: 21px; color: var(--muted); white-space: normal; line-height: 1.25; margin-top: 3px; }
+    .forecast-day .f-cond .drop { color: #7fb8ff; font-weight: 700; }
+
+    .sunmoon-row { display: flex; align-items: center; justify-content: center; width: 100%; }
+    .sm-stat { display: flex; align-items: center; gap: 10px; padding: 0 22px; }
+    .sm-stat + .sm-stat { border-left: 1px solid rgba(255,255,255,0.08); }
+    .sm-stat .sm-icon { width: 24px; height: 24px; color: var(--muted); flex: 0 0 auto; }
+    .sm-stat .sm-icon.accent { color: var(--accent); }
+    .sm-icon-sunrise { animation: smSunriseBob 3.2s ease-in-out infinite; }
+    @keyframes smSunriseBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+    .sm-icon-sunset { animation: smSunsetGlow 3.2s ease-in-out infinite; }
+    @keyframes smSunsetGlow { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+    .sm-icon-daylight { animation: iconSunShimmer 10s linear infinite; transform-origin: 50% 50%; }
+    .sm-icon-moon { animation: smMoonGlow 3.6s ease-in-out infinite; }
+    @keyframes smMoonGlow { 0%, 100% { filter: drop-shadow(0 0 0 rgba(220,220,255,0)); } 50% { filter: drop-shadow(0 0 5px rgba(220,220,255,0.85)); } }
+    .sm-stat .sm-text { display: flex; flex-direction: column; gap: 1px; }
+    .sm-stat .sm-val { font-size: 23px; font-weight: 800; white-space: nowrap; }
+    .sm-stat .sm-lab { font-size: 21px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
+
+    /* ---- Real OBS-canvas reset, matching classic.html exactly (not the mockup gallery's
+       padded/boxed page chrome) -- transparent full-bleed 1920x1080 canvas scaled to fit
+       whatever window size OBS gives it. ---- */
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background: rgba(0,0,0,0);
+      overflow: hidden;
+      font-family: var(--font-overlay);
+      color: var(--text);
+    }
+    .canvas {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: top left;
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="canvas" id="canvas">
+    <div class="panel top-brand-f brand-clock-w fx-panel">
+      <div class="brand-text">
+        <div class="brand-title-row"><div class="brand-dot"></div><div class="brand-title" id="brandTitle">Nick Mounce</div></div>
+        <div class="brand-sub" id="viewerCount"></div>
+      </div>
+    </div>
+
+    <div class="panel clock-pill brand-clock-w fx-panel">
+      <div class="clock-time"><span class="clock-h">--</span><span class="clock-colon">:</span><span class="clock-m">--</span> <span class="clock-ampm"></span></div>
+      <div class="clock-date"></div>
+    </div>
+
+    <div class="panel wind-panel fx-panel">
+      <div class="panel-head">
+        <div class="panel-title"><span id="condTitleText">Current · Awaiting GPS feed...</span></div>
+        <div class="panel-sub"><span class="live-dot"></span>Live</div>
+      </div>
+      <div class="cond-grid" id="condGrid">
+        <div class="cond-tile" id="condTempTile">
+          <svg class="c-icon c-icon-temp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 14.5V5a2 2 0 1 0-4 0v9.5a4 4 0 1 0 4 0z"/><path d="M10 8h1M10 11h1"/></svg>
+          <div class="c-text">
+            <div class="c-row"><div class="c-val">--<span class="c-unit">°F</span></div></div>
+            <div class="c-lab">Temp</div>
+            <div class="c-extra">&nbsp;</div>
+          </div>
+        </div>
+        <div class="cond-tile">
+          <svg class="c-icon c-icon-dew" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 7 6 11.5a6 6 0 0 1-12 0C6 10 12 3 12 3z"/></svg>
+          <div class="c-text">
+            <div class="c-row"><div class="c-val">--<span class="c-unit">°F</span></div></div>
+            <div class="c-lab">Dew Point</div>
+            <div class="c-extra">&nbsp;</div>
+          </div>
+        </div>
+        <div class="cond-tile">
+          <svg class="c-icon c-icon-wind" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 8h11a2.5 2.5 0 1 0-2.2-3.6"/><path d="M3 16h14a2.5 2.5 0 1 1-2.2 3.6"/><path d="M3 12h8a2 2 0 1 0-1.8-2.8"/></svg>
+          <div class="c-text">
+            <div class="c-row"><div class="c-val">--<span class="c-unit">mph</span></div></div>
+            <div class="c-lab">Wind</div>
+            <div class="c-extra">&nbsp;</div>
+          </div>
+        </div>
+        <div class="cond-tile">
+          <svg class="c-icon accent wind-twitch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="--heading:0deg;"><path d="M12 3l6 15-6-3-6 3z"/></svg>
+          <div class="c-text">
+            <div class="c-row"><div class="c-val">--</div></div>
+            <div class="c-lab">Heading</div>
+            <div class="c-extra">&nbsp;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel radar-panel-f fx-panel">
+      <div class="radar-head">
+        <div class="radar-title-row"><div class="radar-title">Radar · <span id="radarModeText">REF</span></div></div>
+        <div class="radar-live"><span class="live-dot"></span>Live</div>
+      </div>
+      <div class="radar-body" id="radarBody">
+        <div id="radarMap"></div>
+        <div class="radar-loading" id="radarLoading">Acquiring site...</div>
+      </div>
+    </div>
+
+    <div class="bubble mid-bar" id="midBar"></div>
+  </div>
+
+  <script src="alert-feed.js"></script>
+  <script>
+    // ---- Settings: same URL-param convention classic.html already uses when embedded as an
+    // OBS Browser Source (?latitude=/?longitude= manual override, ?pollSeconds=, ?unitId=,
+    // etc.) -- see classic.html for the original. Conditions/Location-text rendering off this
+    // position data is Phase 2 work; only the position acquisition itself is needed here since
+    // Alerts (Phase 1) cannot query api.weather.gov without a point.
+    const params = new URLSearchParams(window.location.search);
+    const manualLatitude = params.get('latitude') ? Number(params.get('latitude')) : null;
+    const manualLongitude = params.get('longitude') ? Number(params.get('longitude')) : null;
+    const settings = {
+      title: params.get('title') || params.get('publicIdentity') || 'Nick Mounce',
+      latitude: manualLatitude,
+      longitude: manualLongitude,
+      bearingDeg: null,
+      scaleToWindow: true,
+      pollSeconds: params.get('pollSeconds') ? Number(params.get('pollSeconds')) : 60,
+      useLiveGps: manualLatitude === null || manualLongitude === null,
+      chaseGatewayBase: params.get('chaseGatewayBase') || 'https://ops.codeblackwx.com',
+      unitId: params.get('unitId') || 'cbwx-unit-tessa',
+      gpsPollSeconds: params.get('gpsPollSeconds') ? Number(params.get('gpsPollSeconds')) : 5,
+      // "Nearby chasers" radius -- 25mi default per the locked decision, but configurable
+      // without a code change (matches classic.html's existing settings-via-URL-param pattern).
+      chaserRadiusMiles: params.get('chaserRadiusMiles') ? Number(params.get('chaserRadiusMiles')) : 25,
+      // How far back a storm report still counts as "current" -- not specified by the ported
+      // stormReports.ts service (it takes this as a caller-supplied argument); 3 hours is a new
+      // default choice for this caller, also configurable.
+      chaserReportRetentionHours: params.get('chaserReportRetentionHours') ? Number(params.get('chaserReportRetentionHours')) : 3,
+    };
+    let lastAppliedLat = manualLatitude;
+    let lastAppliedLon = manualLongitude;
+    let lastLocationName = null;
+    document.getElementById('brandTitle').textContent = settings.title;
+
+    // Live viewer count -- Facebook Live. This overlay never talks to Facebook's Graph API
+    // directly (that needs a Page Access Token, a real secret that can't sit in client-side
+    // code any more than the Mapbox token could -- see resolveMapboxToken above for the exact
+    // same reasoning and the real incident that established it). It reads from a gateway
+    // endpoint that does not exist yet: `${chaseGatewayBase}/overlay-core/facebook-viewers`,
+    // expected to return `{ "count": <number> }` once a Worker route is deployed there holding
+    // the real Page Access Token server-side. Until that route exists this fails silently and
+    // the line stays blank -- no fabricated number, matching how every other feed in this file
+    // behaves when its source isn't reachable.
+    let lastViewerCount = null;
+    async function updateViewerCount() {
+      const el = document.getElementById('viewerCount');
+      try {
+        const url = `${settings.chaseGatewayBase}/overlay-core/facebook-viewers`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('viewer count fetch failed');
+        const data = await res.json();
+        const count = Number(data.count);
+        if (!Number.isFinite(count)) throw new Error('viewer count missing');
+        if (count !== lastViewerCount) {
+          lastViewerCount = count;
+          el.textContent = `${count.toLocaleString()} watching`;
+          el.classList.remove('count-flash'); void el.offsetWidth; el.classList.add('count-flash');
+        }
+      } catch (err) {
+        // leave last-known count in place (or blank, if none has ever loaded) -- never show a
+        // fabricated number
+      }
+    }
+
+    // Live position: chase phone -> chase-gateway Worker -> Core -> this public read. Ported
+    // from classic.html's updateGps() -- see there for the full route/auth rationale.
+    async function updateGps() {
+      if (!settings.useLiveGps) return;
+      try {
+        const url = `${settings.chaseGatewayBase}/api/chase/location/public?unit_id=${encodeURIComponent(settings.unitId)}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('gps fetch failed');
+        const data = await res.json();
+        const hasFix = typeof data.lat === 'number' && typeof data.lon === 'number';
+        if (!hasFix || data.stale || data.location_sharing === false) {
+          settings.latitude = null;
+          settings.longitude = null;
+          settings.bearingDeg = null;
+          lastAppliedLat = null;
+          lastAppliedLon = null;
+          document.getElementById('condTitleText').textContent = data.location_sharing === false ? 'Location sharing stopped' : 'Awaiting GPS feed...';
+          renderConditions();
+          return;
+        }
+        settings.bearingDeg = typeof data.bearing_deg === 'number' ? data.bearing_deg : null;
+        settings.latitude = data.lat;
+        settings.longitude = data.lon;
+        renderConditions();
+        const moved = lastAppliedLat === null
+          || Math.abs(data.lat - lastAppliedLat) > 0.01
+          || Math.abs(data.lon - lastAppliedLon) > 0.01;
+        if (moved) {
+          lastAppliedLat = data.lat;
+          lastAppliedLon = data.lon;
+          updateLocation();
+          updateWeather();
+          updateSurfaceObs();
+          updateAlertReal();
+          updateRadarSite();
+          updateSpcOutlook();
+          updateChaserData();
+          updateForecast();
+          updateStormIntel();
+          updateNearbySevereWarnings();
+        }
+      } catch (err) {
+        // leave last-known position in place -- a single missed GPS poll isn't an outage
+      }
+    }
+
+    // Nominatim reverse geocode -- public, CORS-open, no key. Rate-limited to ~1req/s by their
+    // usage policy; only called once per settings.pollSeconds (default 60s) plus on a
+    // meaningful GPS position change, well under it. Ported from classic.html's updateLocation().
+    async function updateLocation() {
+      const titleEl = document.getElementById('condTitleText');
+      if (settings.latitude === null || settings.longitude === null) {
+        titleEl.textContent = 'Awaiting GPS feed...';
+        return;
+      }
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${settings.latitude}&lon=${settings.longitude}&zoom=10`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('reverse geocode failed');
+        const data = await res.json();
+        const addr = data.address || {};
+        const city = addr.city || addr.town || addr.village || addr.hamlet || addr.county;
+        const state = addr.state;
+        lastLocationName = city && state ? `${city}, ${state.slice(0, 2).toUpperCase()}` : (data.display_name || 'Location unavailable');
+      } catch (err) {
+        lastLocationName = `${settings.latitude.toFixed(2)}, ${settings.longitude.toFixed(2)}`;
+      }
+      titleEl.textContent = `Current · ${lastLocationName}`;
+    }
+
+    // Open-Meteo -- public, CORS-open, no key. Fields beyond temp/dew point (wind speed/
+    // direction/gusts, relative humidity, apparent temperature) are all on this same call --
+    // one more field each, no new API -- matching the decision to add wind_speed_10m here
+    // rather than integrate a separate wind data source.
+    let lastTemp = null, lastFeels = null, lastDew = null, lastHumidity = null;
+    let lastWindSpeed = null, lastWindDir = null, lastGust = null;
+    async function updateWeather() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${settings.latitude}&longitude=${settings.longitude}&current=temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m&temperature_unit=fahrenheit&wind_speed_unit=mph`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('weather fetch failed');
+        const data = await res.json();
+        const c = data.current;
+        lastTemp = Math.round(c.temperature_2m);
+        lastFeels = Math.round(c.apparent_temperature);
+        lastDew = Math.round(c.dew_point_2m);
+        lastHumidity = Math.round(c.relative_humidity_2m);
+        lastWindSpeed = Math.round(c.wind_speed_10m);
+        lastWindDir = c.wind_direction_10m;
+        lastGust = Math.round(c.wind_gusts_10m);
+        renderConditions();
+      } catch (err) {
+        // leave last-known weather in place -- a single missed poll isn't an outage
+      }
+    }
+
+    // Ground truth surface obs -- a real METAR/ASOS station reading (api.weather.gov, public,
+    // no key), preferred over Open-Meteo's gridded model estimate when present. Ported from
+    // classic.html's updateSurfaceObs(); same nearest-station lookup (points -> station list
+    // -> nearest by straight-line distance -> latest observation).
+    let lastGroundObs = null;
+    function approxMilesBetween(lat1, lon1, lat2, lon2) {
+      const dLat = lat1 - lat2;
+      const dLon = (lon1 - lon2) * Math.cos((lat1 * Math.PI) / 180);
+      return Math.sqrt(dLat * dLat + dLon * dLon) * 69;
+    }
+    async function updateSurfaceObs() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const pointsRes = await fetch(`https://api.weather.gov/points/${settings.latitude.toFixed(4)},${settings.longitude.toFixed(4)}`, { headers: { Accept: 'application/geo+json' } });
+        if (!pointsRes.ok) throw new Error('points lookup failed');
+        const pointsData = await pointsRes.json();
+        const stationsUrl = pointsData.properties && pointsData.properties.observationStations;
+        if (!stationsUrl) throw new Error('no observationStations link');
+        const stationsRes = await fetch(stationsUrl, { headers: { Accept: 'application/geo+json' } });
+        if (!stationsRes.ok) throw new Error('stations list failed');
+        const stationsData = await stationsRes.json();
+        const features = stationsData.features || [];
+        if (!features.length) throw new Error('no nearby stations');
+        let nearest = null;
+        let nearestMiles = Infinity;
+        for (const f of features) {
+          const coords = f.geometry && f.geometry.coordinates; // [lon, lat]
+          if (!coords) continue;
+          const miles = approxMilesBetween(settings.latitude, settings.longitude, coords[1], coords[0]);
+          if (miles < nearestMiles) { nearestMiles = miles; nearest = f; }
+        }
+        if (!nearest) throw new Error('no usable station coordinates');
+        const stationId = nearest.properties.stationIdentifier;
+        const obsRes = await fetch(`https://api.weather.gov/stations/${stationId}/observations/latest`, { headers: { Accept: 'application/geo+json' } });
+        if (!obsRes.ok) throw new Error('latest observation failed');
+        const obsData = await obsRes.json();
+        const p = obsData.properties || {};
+        const tempC = p.temperature && p.temperature.value;
+        const dewC = p.dewpoint && p.dewpoint.value;
+        if (typeof tempC !== 'number' || typeof dewC !== 'number') throw new Error('observation missing temp/dewpoint');
+        lastGroundObs = {
+          stationId,
+          tempF: Math.round((tempC * 9) / 5 + 32),
+          dewF: Math.round((dewC * 9) / 5 + 32),
+        };
+        renderConditions();
+      } catch (err) {
+        // leave last-known ground obs in place -- always a supplement to updateWeather()'s
+        // model estimate, never the only reading shown
+      }
+    }
+
+    // SPC Day 1/2/3 Convective Outlook -- ported from the mobile app's src/services/
+    // spcOutlook.ts (public, unauthenticated GeoJSON layers, no key). Point-in-polygon against
+    // the caller's own position picks the single highest-applicable risk tier per layer; risk
+    // polygons are nested (SLGT is its own shape, not "MRGL minus SLGT"), so the highest DN
+    // among all matches is the real answer. Categorical color is SPC's own published fill hex
+    // (props.fill), not a locally-invented mapping.
+    const SPC_OUTLOOK_URLS = {
+      '1-cat': 'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.lyr.geojson',
+      '1-torn': 'https://www.spc.noaa.gov/products/outlook/day1otlk_torn.lyr.geojson',
+      '2-cat': 'https://www.spc.noaa.gov/products/outlook/day2otlk_cat.lyr.geojson',
+      '2-torn': 'https://www.spc.noaa.gov/products/outlook/day2otlk_torn.lyr.geojson',
+      '3-cat': 'https://www.spc.noaa.gov/products/outlook/day3otlk_cat.lyr.geojson',
+    };
+    const SPC_CACHE_MS = 10 * 60_000; // SPC reissues day1 a handful of times/day, day2/3 once or twice
+    const spcCache = new Map();
+    async function fetchSpcOutlook(url) {
+      const cached = spcCache.get(url);
+      if (cached && cached.expires > Date.now()) return cached.value;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      try {
+        const res = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/geo+json, application/json' } });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        const features = data.features || [];
+        spcCache.set(url, { expires: Date.now() + SPC_CACHE_MS, value: features });
+        return features;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    function spcPointInRing(point, ring) {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1];
+        const xj = ring[j][0], yj = ring[j][1];
+        const intersect = (yi > point.lat) !== (yj > point.lat) && point.lon < ((xj - xi) * (point.lat - yi)) / (yj - yi || 1e-9) + xi;
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+    function spcPointInGeometry(point, geometry) {
+      if (!geometry) return false;
+      if (geometry.type === 'Polygon') return spcPointInRing(point, geometry.coordinates[0]);
+      if (geometry.type === 'MultiPolygon') return geometry.coordinates.some(poly => spcPointInRing(point, poly[0]));
+      return false;
+    }
+    function spcHighestRisk(features, pos) {
+      let best = null;
+      for (const feature of features) {
+        const props = feature.properties || {};
+        const dn = Number(props.DN ?? 0);
+        if (dn <= 0) continue;
+        if (!spcPointInGeometry(pos, feature.geometry)) continue;
+        if (best && dn <= best.dn) continue;
+        best = {
+          dn,
+          level: {
+            label: String(props.LABEL ?? ''),
+            labelLong: String(props.LABEL2 ?? props.LABEL ?? ''),
+            color: String(props.fill ?? props.stroke ?? ''),
+            issued: String(props.ISSUE_ISO ?? props.ISSUE ?? ''),
+            expires: String(props.EXPIRE_ISO ?? props.EXPIRE ?? ''),
+          },
+        };
+      }
+      return best ? best.level : null;
+    }
+    const SPC_RISK_RANK = ['TSTM', 'MRGL', 'SLGT', 'ENH', 'MDT', 'HIGH'];
+    function spcRiskRank(label) {
+      const i = SPC_RISK_RANK.indexOf(label);
+      return i === -1 ? -1 : i;
+    }
+    let spcOutlooks = null; // [{day:1,categorical,tornado}, {day:2,...}, {day:3,...}] once loaded
+    async function updateSpcOutlook() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      const pos = { lat: settings.latitude, lon: settings.longitude };
+      try {
+        const [cat1, torn1, cat2, torn2, cat3] = await Promise.all([
+          fetchSpcOutlook(SPC_OUTLOOK_URLS['1-cat']),
+          fetchSpcOutlook(SPC_OUTLOOK_URLS['1-torn']),
+          fetchSpcOutlook(SPC_OUTLOOK_URLS['2-cat']),
+          fetchSpcOutlook(SPC_OUTLOOK_URLS['2-torn']),
+          fetchSpcOutlook(SPC_OUTLOOK_URLS['3-cat']),
+        ]);
+        spcOutlooks = [
+          { day: 1, categorical: spcHighestRisk(cat1, pos), tornado: spcHighestRisk(torn1, pos) },
+          { day: 2, categorical: spcHighestRisk(cat2, pos), tornado: spcHighestRisk(torn2, pos) },
+          { day: 3, categorical: spcHighestRisk(cat3, pos), tornado: null },
+        ];
+        const day2Rank = spcOutlooks[1].categorical ? spcRiskRank(spcOutlooks[1].categorical.label) : -1;
+        const day3Rank = spcOutlooks[2].categorical ? spcRiskRank(spcOutlooks[2].categorical.label) : -1;
+        day23HasSomethingToShow = Math.max(day2Rank, day3Rank) >= spcRiskRank('SLGT');
+      } catch (err) {
+        // leave last-known outlook in place -- a single missed poll isn't an outage
+      }
+    }
+
+    // Nearby (but not local) Severe Thunderstorm Warnings -- feeds the baseline radar's
+    // "mix in a little VEL at MID/CLOSE zoom when a real severe storm is within
+    // NEARBY_SEVERE_RADIUS_MILES" rule (see radarModeTick). Deliberately a real distance to the
+    // warning's actual polygon EDGE, not its centroid -- "20 miles from the edge" is what was
+    // asked for, and a big warning polygon's centroid can be tens of miles from its own boundary.
+    // This is a genuinely different query than the alerts-at-point fetch everywhere else in this
+    // file uses (that one only ever returns alerts that already cover this exact point) --
+    // national active-severe-warnings is a small enough list to fetch in full and measure
+    // distance against every one of them.
+    const NEARBY_SEVERE_RADIUS_MILES = 20;
+    let nearbySevereWarningMiles = null;
+    // Local equirectangular projection around the query point -- accurate enough at the scale
+    // of a single warning polygon (tens of miles across at most), much cheaper than proper
+    // geodesic point-to-segment math for a value that only needs to be right to about a mile.
+    function pointToSegmentMiles(lat, lon, lat1, lon1, lat2, lon2) {
+      const milesPerDegLat = 69.0;
+      const milesPerDegLon = 69.0 * Math.cos(lat * Math.PI / 180);
+      const px = (lon - lon1) * milesPerDegLon, py = (lat - lat1) * milesPerDegLat;
+      const dx = (lon2 - lon1) * milesPerDegLon, dy = (lat2 - lat1) * milesPerDegLat;
+      const lenSq = dx * dx + dy * dy;
+      let t = lenSq > 0 ? (px * dx + py * dy) / lenSq : 0;
+      t = Math.max(0, Math.min(1, t));
+      const cx = dx * t, cy = dy * t;
+      return Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+    }
+    function minDistanceToPolygonMiles(lat, lon, geometry) {
+      if (!geometry) return null;
+      const rings = geometry.type === 'Polygon' ? [geometry.coordinates[0]]
+        : geometry.type === 'MultiPolygon' ? geometry.coordinates.map(p => p[0])
+        : null;
+      if (!rings) return null;
+      let min = Infinity;
+      for (const ring of rings) {
+        for (let i = 0; i < ring.length - 1; i++) {
+          const [lon1, lat1] = ring[i];
+          const [lon2, lat2] = ring[i + 1];
+          const d = pointToSegmentMiles(lat, lon, lat1, lon1, lat2, lon2);
+          if (d < min) min = d;
+        }
+      }
+      return Number.isFinite(min) ? min : null;
+    }
+    async function updateNearbySevereWarnings() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const url = 'https://api.weather.gov/alerts/active?event=Severe%20Thunderstorm%20Warning';
+        const res = await fetch(url, { headers: { Accept: 'application/geo+json' } });
+        if (!res.ok) throw new Error('nearby severe warnings fetch failed');
+        const data = await res.json();
+        const features = Array.isArray(data.features) ? data.features : [];
+        let min = null;
+        for (const feature of features) {
+          const d = minDistanceToPolygonMiles(settings.latitude, settings.longitude, feature.geometry);
+          if (d !== null && (min === null || d < min)) min = d;
+        }
+        nearbySevereWarningMiles = min;
+      } catch (err) {
+        // leave last-known distance in place -- a single missed poll isn't an outage
+      }
+    }
+
+    // Nearby Chaser Reports -- ported from the mobile app's src/services/stormReports.ts (NWS
+    // Local Storm Reports via ArcGIS + Spotter Network's public report feed) and spotters.ts
+    // (Spotter Network's anonymous GRLevelX position feed, the same one GR2Analyst/RadarScope
+    // read from). Both are public/no-auth. "Nearby count" is computed fresh here (neither repo
+    // had this metric before): active spotters within settings.chaserRadiusMiles of Nick's own
+    // GPS position.
+    function distanceMiles(a, b) {
+      const r = 3958.8;
+      const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+      const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+      const lat1 = (a.lat * Math.PI) / 180;
+      const lat2 = (b.lat * Math.PI) / 180;
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      return 2 * r * Math.asin(Math.sqrt(h));
+    }
+    const LSR_QUERY_URL = 'https://mapservices.weather.noaa.gov/vector/rest/services/obs/nws_local_storm_reports/MapServer/0/query';
+    const SPOTTER_NETWORK_REPORTS_URL = 'https://www.spotternetwork.org/feeds/reports.txt';
+    const SPOTTER_FEED_URL = 'https://www.spotternetwork.org/feeds/gr.txt';
+    const ACTIVE_SPOTTER_MAX_AGE_MS = 8 * 60_000;
+    function readStr(value) { return typeof value === 'string' ? value.trim() : ''; }
+    function readNum(value) {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value === 'string') { const n = Number(value); if (Number.isFinite(n)) return n; }
+      return null;
+    }
+    function spcBoundingBox(origin, radiusMiles) {
+      const latDelta = radiusMiles / 69;
+      const lonDelta = radiusMiles / Math.max(1, Math.cos((origin.lat * Math.PI) / 180) * 69);
+      return {
+        xmin: origin.lon - lonDelta, ymin: origin.lat - latDelta,
+        xmax: origin.lon + lonDelta, ymax: origin.lat + latDelta,
+        spatialReference: { wkid: 4326 },
+      };
+    }
+    function parseValidTime(rawDate, rawText) {
+      const dateMs = readNum(rawDate);
+      if (dateMs != null) return dateMs;
+      const text = readStr(rawText);
+      const parsed = text ? Date.parse(text) : NaN;
+      return Number.isFinite(parsed) ? parsed : Date.now();
+    }
+    function decodeSpotterText(value) { return value.replace(/\\n/g, '\n').replace(/\\"/g, '"').trim(); }
+    function parseSpotterReportBody(body) {
+      const lines = decodeSpotterText(body).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const reporter = (lines.find(l => l.toLowerCase().startsWith('reported by:')) || '').replace(/^reported by:\s*/i, '').trim();
+      const time = (lines.find(l => l.toLowerCase().startsWith('time:')) || '').replace(/^time:\s*/i, '').trim();
+      const notes = (lines.find(l => l.toLowerCase().startsWith('notes:')) || '').replace(/^notes:\s*/i, '').trim();
+      const detailLines = lines.filter(l => !/^reported by:|^time:|^notes:/i.test(l));
+      const type = detailLines[0] || 'Spotter Report';
+      const size = (lines.find(l => l.toLowerCase().startsWith('size:')) || '').replace(/^size:\s*/i, '').trim();
+      const magnitude = size || (detailLines.slice(1).find(l => /\b(mph|kts?|in|cm|measured|estimated)\b/i.test(l)) || '');
+      return { reporter, time, notes, type, magnitude };
+    }
+    async function getSpotterNetworkReports(origin, radiusMiles, retentionHours, signal) {
+      const res = await fetch(SPOTTER_NETWORK_REPORTS_URL, { signal, cache: 'no-store' });
+      if (!res.ok) throw new Error(`Spotter Network ${res.status}`);
+      const text = await res.text();
+      const cutoff = Date.now() - retentionHours * 60 * 60 * 1000;
+      const reports = [];
+      for (const line of text.split(/\r?\n/)) {
+        const match = line.match(/^Icon:\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?),[^"]*"([\s\S]*)"$/);
+        if (!match) continue;
+        const lat = Number(match[1]), lon = Number(match[2]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        const parsed = parseSpotterReportBody(match[3]);
+        const validTime = Date.parse(parsed.time.replace(' UTC', 'Z'));
+        if (!Number.isFinite(validTime) || validTime < cutoff) continue;
+        const reportDistance = distanceMiles(origin, { lat, lon });
+        if (reportDistance > radiusMiles) continue;
+        reports.push({
+          source: 'Spotter Network', type: parsed.type,
+          location: parsed.reporter ? `Reported by ${parsed.reporter}` : 'Spotter Network report',
+          remarks: parsed.notes, validTime, lat, lon, distanceMiles: reportDistance,
+        });
+      }
+      return reports;
+    }
+    async function getNwsLocalStormReports(origin, radiusMiles, retentionHours, signal) {
+      const qs = new URLSearchParams({
+        f: 'geojson', where: '1=1',
+        outFields: 'objectid,wfo_id,wfo,lsr_validtime,descript,loc_desc,state,magnitude,units,remarks,valid_time',
+        geometry: JSON.stringify(spcBoundingBox(origin, radiusMiles)),
+        geometryType: 'esriGeometryEnvelope', inSR: '4326', outSR: '4326',
+        spatialRel: 'esriSpatialRelIntersects', orderByFields: 'lsr_validtime desc',
+        resultRecordCount: '2000', returnGeometry: 'true',
+      });
+      const res = await fetch(`${LSR_QUERY_URL}?${qs}`, { signal });
+      if (!res.ok) throw new Error(`NWS ${res.status}`);
+      const body = await res.json();
+      const cutoff = Date.now() - retentionHours * 60 * 60 * 1000;
+      return (body.features || []).map(feature => {
+        const coords = feature.geometry && feature.geometry.coordinates;
+        if (!Array.isArray(coords) || coords.length < 2) return null;
+        const lon = readNum(coords[0]), lat = readNum(coords[1]);
+        if (lat == null || lon == null) return null;
+        const props = feature.properties || {};
+        const validTime = parseValidTime(props.lsr_validtime, props.valid_time);
+        if (validTime < cutoff) return null;
+        const reportDistance = distanceMiles(origin, { lat, lon });
+        if (reportDistance > radiusMiles) return null;
+        return {
+          source: 'NWS', type: readStr(props.descript) || 'Report',
+          location: readStr(props.loc_desc) || 'Unknown location', state: readStr(props.state),
+          magnitude: readStr(props.magnitude), units: readStr(props.units), remarks: readStr(props.remarks),
+          validTime, lat, lon, distanceMiles: reportDistance,
+        };
+      }).filter(Boolean);
+    }
+    async function getNearbyStormReports(origin, radiusMiles, retentionHours) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15_000);
+      try {
+        const results = await Promise.allSettled([
+          getNwsLocalStormReports(origin, radiusMiles, retentionHours, controller.signal),
+          getSpotterNetworkReports(origin, radiusMiles, retentionHours, controller.signal),
+        ]);
+        return results.flatMap(r => (r.status === 'fulfilled' ? r.value : []))
+          .sort((a, b) => b.validTime - a.validTime || a.distanceMiles - b.distanceMiles);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    function spotterTimestampMs(rawTimestamp) {
+      if (!rawTimestamp) return null;
+      const parsed = new Date(rawTimestamp).getTime();
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    function isActiveSpotter(spotter, now) {
+      now = now ?? Date.now();
+      return spotter.updatedAtMs != null && spotter.updatedAtMs <= now + 60_000 && now - spotter.updatedAtMs <= ACTIVE_SPOTTER_MAX_AGE_MS;
+    }
+    function parseSpotterFeed(raw, origin) {
+      const lines = raw.split('\n');
+      const spotters = [];
+      let pending = null;
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (line.startsWith('Object:')) {
+          const [latStr, lonStr] = line.slice('Object:'.length).trim().split(',');
+          const lat = Number(latStr), lon = Number(lonStr);
+          pending = Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+          continue;
+        }
+        if (line.startsWith('Icon:') && pending) {
+          const match = line.match(/"([^"]*)"/);
+          const position = pending;
+          pending = null;
+          if (!match) continue;
+          const parts = match[1].split('\\n').map(p => p.trim()).filter(Boolean);
+          const [name, timestamp] = parts;
+          if (!name) continue;
+          spotters.push({
+            name, lat: position.lat, lon: position.lon,
+            distanceMiles: distanceMiles(origin, position),
+            updatedAtMs: spotterTimestampMs(timestamp || ''),
+          });
+        }
+      }
+      return spotters;
+    }
+    async function getNearbySpotters(origin, radiusMiles) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15_000);
+      try {
+        const res = await fetch(SPOTTER_FEED_URL, { cache: 'no-store', signal: controller.signal });
+        if (!res.ok) throw new Error(String(res.status));
+        const text = await res.text();
+        return parseSpotterFeed(text, origin)
+          .filter(s => isActiveSpotter(s) && s.distanceMiles <= radiusMiles)
+          .sort((a, b) => a.distanceMiles - b.distanceMiles);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    let CHASER_COUNT = 0;
+    let chasersHasReports = false;
+    let latestChaserReport = null;
+    // Full lists (not just the count/latest) kept around so the radar mini-map can plot them as
+    // pins via renderRadarReportPins() -- same fetch, no duplicate network calls.
+    let nearbyReports = [];
+    let nearbySpotters = [];
+    async function updateChaserData() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      const origin = { lat: settings.latitude, lon: settings.longitude };
+      try {
+        const spotters = await getNearbySpotters(origin, settings.chaserRadiusMiles);
+        CHASER_COUNT = spotters.length;
+        nearbySpotters = spotters;
+      } catch (err) {
+        // leave last-known count in place -- a single missed poll isn't an outage
+      }
+      try {
+        const reports = await getNearbyStormReports(origin, settings.chaserRadiusMiles, settings.chaserReportRetentionHours);
+        latestChaserReport = reports[0] || null;
+        chasersHasReports = latestChaserReport !== null;
+        nearbyReports = reports;
+      } catch (err) {
+        // leave last-known report in place -- a single missed poll isn't an outage
+      }
+      renderRadarReportPins();
+    }
+
+    // Tornado Params (CAPE/CIN/Shear/SRH/LCL/STP) -- real, already deployed: Code Black's own
+    // Core API runs a full HRRR-model-derived "Storm Intel" service
+    // (services/core-api/src/code_black_core_api/storm_intel/ in the Code Black repo) with
+    // exactly this metric set, and `web/ops/functions/lib/publicStormIntelRelay.ts` already
+    // exposes a public, no-auth, CORS-open point route for a broadcast overlay through the same
+    // /overlay-core/* prefix classic-v2.html already uses for the Mapbox token -- built for
+    // this exact purpose, just never wired up client-side until now. Verified live during this
+    // change: real HRRR analysis values, `simulation:false`.
+    let stormIntelMetrics = null; // Map<MetricKey, {value, unit, availability}> once loaded
+    let stormIntelAvailable = false;
+    async function updateStormIntel() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const url = `${settings.chaseGatewayBase}/overlay-core/api/storm-intel/v1/point?latitude=${settings.latitude}&longitude=${settings.longitude}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('storm-intel fetch failed');
+        const data = await res.json();
+        if (!data.available) { stormIntelAvailable = false; return; }
+        const byKey = new Map();
+        for (const m of data.metrics || []) byKey.set(m.key, m);
+        stormIntelMetrics = byKey;
+        stormIntelAvailable = true;
+      } catch (err) {
+        // leave last-known snapshot in place -- a single missed poll isn't an outage
+      }
+    }
+
+    // Sun & Moon -- entirely new, nothing in either repo calculated this before. Client-side
+    // astronomical math (standard low-precision solar/lunar position formulas, the same public
+    // equations SunCalc-style libraries implement -- not copied from any library's source, no
+    // API/key needed, matching the rest of this file's "no new dependency" constraint).
+    const ASTRO_RAD = Math.PI / 180;
+    const ASTRO_DAY_MS = 1000 * 60 * 60 * 24;
+    const ASTRO_J1970 = 2440588;
+    const ASTRO_J2000 = 2451545;
+    const ASTRO_OBLIQUITY = ASTRO_RAD * 23.4397;
+    function astroToJulian(date) { return date.valueOf() / ASTRO_DAY_MS - 0.5 + ASTRO_J1970; }
+    function astroFromJulian(j) { return new Date((j + 0.5 - ASTRO_J1970) * ASTRO_DAY_MS); }
+    function astroToDays(date) { return astroToJulian(date) - ASTRO_J2000; }
+    function astroRightAscension(l, b) {
+      return Math.atan2(Math.sin(l) * Math.cos(ASTRO_OBLIQUITY) - Math.tan(b) * Math.sin(ASTRO_OBLIQUITY), Math.cos(l));
+    }
+    function astroDeclination(l, b) {
+      return Math.asin(Math.sin(b) * Math.cos(ASTRO_OBLIQUITY) + Math.cos(b) * Math.sin(ASTRO_OBLIQUITY) * Math.sin(l));
+    }
+    function astroSolarMeanAnomaly(d) { return ASTRO_RAD * (357.5291 + 0.98560028 * d); }
+    function astroEclipticLongitude(m) {
+      const c = ASTRO_RAD * (1.9148 * Math.sin(m) + 0.02 * Math.sin(2 * m) + 0.0003 * Math.sin(3 * m));
+      const p = ASTRO_RAD * 102.9372;
+      return m + c + p + Math.PI;
+    }
+    function astroSunCoords(d) {
+      const m = astroSolarMeanAnomaly(d);
+      const l = astroEclipticLongitude(m);
+      return { dec: astroDeclination(l, 0), ra: astroRightAscension(l, 0) };
+    }
+    function astroJulianCycle(d, lw) { return Math.round(d - 0.0009 - lw / (2 * Math.PI)); }
+    function astroApproxTransit(ht, lw, n) { return 0.0009 + (ht + lw) / (2 * Math.PI) + n; }
+    function astroSolarTransitJ(ds, m, l) { return ASTRO_J2000 + ds + 0.0053 * Math.sin(m) - 0.0069 * Math.sin(2 * l); }
+    function astroHourAngle(h, phi, dec) {
+      return Math.acos((Math.sin(h) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
+    }
+    function astroSetJ(h, lw, phi, dec, n, m, l) {
+      const w = astroHourAngle(h, phi, dec);
+      const a = astroApproxTransit(w, lw, n);
+      return astroSolarTransitJ(a, m, l);
+    }
+    // Standard -0.833deg sunrise/sunset angle (accounts for atmospheric refraction + the sun's
+    // apparent radius) -- the conventional definition every published sunrise/sunset table uses.
+    function getSunTimes(date, lat, lon) {
+      const lw = ASTRO_RAD * -lon;
+      const phi = ASTRO_RAD * lat;
+      const d = astroToDays(date);
+      const n = astroJulianCycle(d, lw);
+      const ds = astroApproxTransit(0, lw, n);
+      const m = astroSolarMeanAnomaly(ds);
+      const l = astroEclipticLongitude(m);
+      const dec = astroDeclination(l, 0);
+      const jNoon = astroSolarTransitJ(ds, m, l);
+      const jSet = astroSetJ(-0.833 * ASTRO_RAD, lw, phi, dec, n, m, l);
+      const jRise = jNoon - (jSet - jNoon);
+      return { sunrise: astroFromJulian(jRise), sunset: astroFromJulian(jSet) };
+    }
+    function astroMoonCoords(d) {
+      const l = ASTRO_RAD * (218.316 + 13.176396 * d);
+      const m = ASTRO_RAD * (134.963 + 13.064993 * d);
+      const f = ASTRO_RAD * (93.272 + 13.229350 * d);
+      const lon = l + ASTRO_RAD * 6.289 * Math.sin(m);
+      const lat = ASTRO_RAD * 5.128 * Math.sin(f);
+      const dist = 385001 - 20905 * Math.cos(m);
+      return { ra: astroRightAscension(lon, lat), dec: astroDeclination(lon, lat), dist };
+    }
+    // Phase 0=new, 0.25=first quarter, 0.5=full, 0.75=last quarter -- the standard convention.
+    function getMoonPhase(date) {
+      const d = astroToDays(date);
+      const s = astroSunCoords(d);
+      const moon = astroMoonCoords(d);
+      const sunDistKm = 149598000;
+      const phi = Math.acos(Math.sin(s.dec) * Math.sin(moon.dec) + Math.cos(s.dec) * Math.cos(moon.dec) * Math.cos(s.ra - moon.ra));
+      const inc = Math.atan2(sunDistKm * Math.sin(phi), moon.dist - sunDistKm * Math.cos(phi));
+      const angle = Math.atan2(
+        Math.cos(s.dec) * Math.sin(s.ra - moon.ra),
+        Math.sin(s.dec) * Math.cos(moon.dec) - Math.cos(s.dec) * Math.sin(moon.dec) * Math.cos(s.ra - moon.ra),
+      );
+      return 0.5 + (0.5 * inc * (angle < 0 ? -1 : 1)) / Math.PI;
+    }
+    function moonPhaseName(phase) {
+      if (phase < 0.03 || phase > 0.97) return 'New Moon';
+      if (phase < 0.22) return 'Waxing Crescent';
+      if (phase < 0.28) return 'First Quarter';
+      if (phase < 0.47) return 'Waxing Gibbous';
+      if (phase < 0.53) return 'Full Moon';
+      if (phase < 0.72) return 'Waning Gibbous';
+      if (phase < 0.78) return 'Last Quarter';
+      return 'Waning Crescent';
+    }
+    function formatClockTime(date) {
+      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+    function formatHoursMinutes(ms) {
+      const h = Math.floor(ms / 3_600_000);
+      const m = Math.round((ms % 3_600_000) / 60_000);
+      return `${h}h ${m}m`;
+    }
+    // One tile does double duty: "Daylight Left" during the day, "Darkness Left" (a countdown
+    // to the next sunrise) at night -- a static "0h 0m" all night was a real gap, not a
+    // deliberate day-only stat. `todaySunTimes` only ever gives today's sunrise/sunset, so the
+    // overnight case (already past today's sunset) needs tomorrow's sunrise specifically, not
+    // just "add 24 hours" -- day length isn't constant.
+    function daylightOrDarknessRemaining(todaySunTimes, now, lat, lon) {
+      if (now >= todaySunTimes.sunrise && now <= todaySunTimes.sunset) {
+        return { label: 'Daylight Left', text: formatHoursMinutes(todaySunTimes.sunset - now) };
+      }
+      const nextSunrise = now < todaySunTimes.sunrise
+        ? todaySunTimes.sunrise
+        : getSunTimes(new Date(now.getTime() + 24 * 3_600_000), lat, lon).sunrise;
+      return { label: 'Darkness Left', text: formatHoursMinutes(nextSunrise - now) };
+    }
+
+    // Real, generic idle icon for the new `generic` tier -- a plain bell, distinct from the
+    // per-hazard icons (funnel/storm/flood/sun) since a "generic" alert isn't any one of those
+    // hazards specifically.
+    const ALERT_ICONS = {
+      sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+      storm: '<path d="M7 15.5a4 4 0 0 1-.6-7.95A5 5 0 0 1 16 8.5a3.5 3.5 0 0 1-.8 6.9"/><path d="M13 13l-2.5 4.5h3L11 22"/>',
+      funnel: '<path d="M3.5 5c3 1.3 17 1.3 20 0"/><path d="M6 9.2c2.6 1.1 11.4 1.1 14 0"/><path d="M8.5 13.2c1.9.9 6.6.9 8.5 0"/><path d="M10.7 17c1.1.6 2.8.6 3.9 0"/><path d="M12 19.5l.6 2.2"/>',
+      clear: '<path d="M12 3l7 3.2v5.3c0 4.6-3 7.9-7 9.3-4-1.4-7-4.7-7-9.3V6.2z"/><path d="M9 12.2l2 2 4.2-4.4"/>',
+      flood: '<path d="M12 3v9M12 12l-3-3M12 12l3-3"/><path d="M3 16.5c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0"/><path d="M3 20.5c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0"/>',
+      bell: '<path d="M12 3a5 5 0 0 0-5 5c0 5-2 6-2 6h14s-2-1-2-6a5 5 0 0 0-5-5z"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/>',
+    };
+    // Colors/tags/expiresMinutes below are per-tier defaults -- real alerts overwrite main/
+    // towns/expiresMinutes per-instance in applyRealAlertTier before every render (see below).
+    // tags stay static-per-tier for now (live per-alert motion/speed/hail-size tags from NWS
+    // CAP fields is explicitly deferred past Phase 1).
+    const ALERT_TIERS = {
+      heat: { color1: '#FF9800', color2: '#b36b00', pulse: null, expiresMinutes: 210, icon: 'sun',
+        glass: true, glassAccent: '#FF9800',
+        main: 'HEAT ADVISORY', tags: ['HEAT INDEX ELEVATED'], towns: [] },
+      svrd: { color1: '#ff5500', color2: '#a33900', pulse: { min: 14, max: 30 }, expiresMinutes: 45, icon: 'storm',
+        glass: true, glassAccent: '#ff5500',
+        main: 'SEVERE T-STORM WARNING', tags: ['DESTRUCTIVE'], towns: [] },
+      tor: { color1: '#FF0000', color2: '#b00000', pulse: { min: 20, max: 42 }, expiresMinutes: 32, icon: 'funnel',
+        glass: true, glassAccent: '#FF0000',
+        main: 'TORNADO WARNING', tags: ['RADAR INDICATED'], towns: [] },
+      pds: { color1: '#9b0057', color2: '#33001f', pulse: { min: 24, max: 48 }, expiresMinutes: 28, icon: 'funnel',
+        main: 'PDS TORNADO WARNING', tags: [], sigTag: 'PARTICULARLY DANGEROUS SITUATION', towns: [] },
+      torE: { color1: '#6a0000', color2: '#000000', pulse: { min: 28, max: 56 }, expiresMinutes: 20, icon: 'funnel',
+        main: 'TORNADO EMERGENCY', tags: [], sigTag: 'PARTICULARLY DANGEROUS SITUATION', towns: [] },
+      svrw: { color1: '#FFA500', color2: '#cc7000', pulse: { min: 10, max: 20 }, expiresMinutes: 45, icon: 'storm',
+        glass: true, glassAccent: '#FFA500',
+        main: 'SEVERE T-STORM WARNING', tags: [], towns: [] },
+      svrc: { color1: '#ff8c00', color2: '#a34700', pulse: { min: 12, max: 24 }, expiresMinutes: 45, icon: 'storm',
+        glass: true, glassAccent: '#ff8c00',
+        main: 'SEVERE T-STORM WARNING', tags: ['CONSIDERABLE'], towns: [] },
+      svrwtch: { color1: '#FFCC80', color2: '#FFB74D', pulse: null, expiresMinutes: 360, icon: 'storm',
+        glass: true, glassAccent: '#FFCC80', boxGlow: false,
+        main: 'SEVERE T-STORM WATCH', tags: ['DAMAGING WIND & HAIL POSSIBLE'], towns: [] },
+      ffw: { color1: '#00C853', color2: '#009140', pulse: { min: 12, max: 24 }, expiresMinutes: 180, icon: 'flood',
+        glass: true, glassAccent: '#00C853',
+        main: 'FLASH FLOOD WARNING', tags: ["TURN AROUND DON'T DROWN"], towns: [] },
+      ffwwtch: { color1: '#A5D6A7', color2: '#81C784', pulse: null, expiresMinutes: 360, icon: 'flood',
+        glass: true, glassAccent: '#A5D6A7', boxGlow: false,
+        main: 'FLASH FLOOD WATCH', tags: ['HEAVY RAIN POSSIBLE'], towns: [] },
+      heatw: { color1: '#FF6600', color2: '#993d00', pulse: { min: 8, max: 16 }, expiresMinutes: 300, icon: 'sun',
+        glass: true, glassAccent: '#FF6600',
+        main: 'EXCESSIVE HEAT WARNING', tags: ['HEAT INDEX ELEVATED'], towns: [] },
+      torwtch: { color1: '#FFFF00', color2: '#d4d400', pulse: null, expiresMinutes: 360, icon: 'funnel',
+        glass: true, glassAccent: '#FFFF00', boxGlow: false,
+        main: 'TORNADO WATCH', tags: ['ISOLATED TORNADOES POSSIBLE'], towns: [] },
+      // New 13th tier: catches every active NWS alert type outside the 12 hazards above
+      // (Winter Storm Warning, Wind Advisory, Flood Warning, Special Weather Statement, etc.)
+      // -- deliberately calm/non-preempting (see WARNING_TIERS below) and non-pulsing, same
+      // treatment as the three Watch tiers. Color reused from classic.html's own existing
+      // --alert-generic-1/2 tokens rather than inventing a new one.
+      generic: { color1: '#c0392b', color2: '#922b21', pulse: null, expiresMinutes: 60, icon: 'bell',
+        glass: true, glassAccent: '#c0392b', boxGlow: false,
+        main: 'ACTIVE WEATHER ALERT', tags: [], towns: [] },
+    };
+    let currentTier = 'clear';
+    function hexToRgba(hex, alpha) {
+      const n = parseInt(hex.slice(1), 16);
+      return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+    }
+    const PULSE_EPOCH = performance.now();
+    const PULSE_CYCLE_MS = 2400;
+    function syncPulsePhase(el) {
+      const elapsed = (performance.now() - PULSE_EPOCH) % PULSE_CYCLE_MS;
+      el.getAnimations().forEach(a => {
+        if (a.animationName === 'tierPulse' || a.animationName === 'alertBoxGlow') a.currentTime = elapsed;
+      });
+    }
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const LIGHTNING_TIERS = ['svrw', 'svrc', 'svrd', 'tor', 'pds', 'torE'];
+    let lightningTimer = null;
+    function scheduleLightning() {
+      clearTimeout(lightningTimer);
+      if (prefersReducedMotion || !LIGHTNING_TIERS.includes(currentTier)) return;
+      const delay = 8000 + Math.random() * 9000;
+      lightningTimer = setTimeout(() => {
+        const badge = midBar.querySelector('.alert-icon-badge');
+        if (badge) { badge.classList.remove('lightning-flash'); void badge.offsetWidth; badge.classList.add('lightning-flash'); }
+        scheduleLightning();
+      }, delay);
+    }
+    function flashUpdated(el) {
+      if (prefersReducedMotion) return;
+      const target = el.closest('.panel, .bubble') || el;
+      target.classList.remove('just-updated'); void target.offsetWidth; target.classList.add('just-updated');
+    }
+    function renderAlertTier(key) {
+      const t = ALERT_TIERS[key];
+      midBar.classList.toggle('is-glass', !!t.glass);
+      const glowOn = t.boxGlow !== false;
+      midBar.classList.toggle('alert-box-glow', glowOn);
+      if (glowOn) {
+        if (t.pulse) {
+          midBar.style.setProperty('--abg-color', t.color1 + 'aa');
+          midBar.style.setProperty('--abg-r-soft', t.pulse.min + 'px');
+          midBar.style.setProperty('--abg-r-strong', t.pulse.max + 'px');
+        } else {
+          const glowSrc = t.glass ? t.glassAccent : t.color1;
+          midBar.style.setProperty('--abg-color', hexToRgba(glowSrc, 0.4));
+          midBar.style.setProperty('--abg-r-soft', '8px');
+          midBar.style.setProperty('--abg-r-strong', '22px');
+        }
+        syncPulsePhase(midBar);
+      } else {
+        midBar.style.removeProperty('--abg-color');
+        midBar.style.removeProperty('--abg-r-soft');
+        midBar.style.removeProperty('--abg-r-strong');
+      }
+      if (t.glass) {
+        midBar.style.background = 'var(--panel-bg)';
+        midBar.style.setProperty('--glass-accent', t.glassAccent);
+        midBar.style.setProperty('--glass-accent-14', hexToRgba(t.glassAccent, 0.14));
+        midBar.style.setProperty('--glass-accent-30', hexToRgba(t.glassAccent, 0.3));
+        midBar.style.setProperty('--glass-accent-40', hexToRgba(t.glassAccent, 0.4));
+        midBar.style.setProperty('--glass-accent-55', hexToRgba(t.glassAccent, 0.55));
+      } else {
+        midBar.style.removeProperty('--glass-accent');
+        midBar.style.removeProperty('--glass-accent-14');
+        midBar.style.removeProperty('--glass-accent-30');
+        midBar.style.removeProperty('--glass-accent-40');
+        midBar.style.removeProperty('--glass-accent-55');
+        midBar.style.background = `linear-gradient(135deg, ${t.color1}, ${t.color2})`;
+      }
+      const expiresAt = Date.now() + t.expiresMinutes * 60000;
+      const townsRow = t.towns.length
+        ? `<div class="a-towns"><b>Locations Impacted:</b> ${t.towns.slice(0, 3).join(' · ')}</div>`
+        : '';
+      const expiresSpan = `<span class="a-expires" data-expires="${expiresAt}">Expires --:--</span>`;
+      let mainRow, tagsRow;
+      if (t.sigTag) {
+        mainRow = `<div class="a-main-row"><div class="a-main">${t.main}</div>${expiresSpan}</div>`;
+        tagsRow = `<div class="a-tags">${t.tags.map(tag => `<span class="a-tag">${tag}</span>`).join('')}<span class="a-tag a-sig-tag">${t.sigTag}</span></div>`;
+      } else if (t.glass) {
+        mainRow = `<div class="a-main">${t.main}</div>`;
+        tagsRow = t.tags.length
+          ? `<div class="a-tags-plain">${t.tags.join(' · ')} · ${expiresSpan}</div>`
+          : `<div class="a-tags-plain">${expiresSpan}</div>`;
+      } else {
+        mainRow = `<div class="a-main">${t.main}</div>`;
+        tagsRow = `<div class="a-tags">${t.tags.map(tag => `<span class="a-tag">${tag}</span>`).join('')}${expiresSpan}</div>`;
+      }
+      midBar.innerHTML = `<div class="alert-inner">
+        <div class="alert-icon-badge"><svg class="icon-${t.icon}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ALERT_ICONS[t.icon]}</svg></div>
+        <div class="alert-text-col">
+          ${mainRow}
+          ${tagsRow}
+          ${townsRow}
+        </div>
+      </div>`;
+      tickReportTimers();
+      scheduleLightning();
+    }
+    function renderAlertClear() {
+      const shieldIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ALERT_ICONS.clear + '</svg>';
+      midBar.innerHTML = `<div class="spc-split">
+        <div class="spc-half">
+          <div class="chasers-glyph sm"><div class="glyph-halo"></div><div class="glyph-sweep"></div>${CHASER_GLYPH_SVG}</div>
+          <div class="chasers-hero-line sm"><span class="ch-hero-num">${CHASER_COUNT}</span>Chasers Nearby</div>
+        </div>
+        <div class="spc-half">
+          <div class="clear-badge">${shieldIcon}</div>
+          <div class="clear-textcol">
+            <div class="clear-main">No Current Reports</div>
+            <div class="clear-sub">Monitoring</div>
+          </div>
+        </div>
+      </div>`;
+    }
+    function setAlertBoxesTier(key) {
+      const t = ALERT_TIERS[key];
+      document.querySelectorAll('.fx-panel').forEach(el => {
+        el.classList.remove('tier-pulse');
+        if (!t.pulse) {
+          el.classList.remove('tier-glow');
+          el.style.removeProperty('--tier-color');
+          el.style.removeProperty('--tier-glow-soft');
+          return;
+        }
+        el.style.setProperty('--tier-color', t.color1);
+        el.style.setProperty('--tier-glow-soft', t.color1 + '55');
+        el.style.setProperty('--pulse-min', t.pulse.min + 'px');
+        el.style.setProperty('--pulse-max', t.pulse.max + 'px');
+        el.style.setProperty('--pulse-color', t.color1 + 'aa');
+        el.classList.add('tier-glow', 'tier-pulse');
+        syncPulsePhase(el);
+      });
+    }
+    // WARNING_TIERS/rotation state (autoRotateOn etc.) are declared further down in the
+    // auto-rotation block -- referenced here, not defined here, since simulateAlert needs
+    // midContent/midButtons which aren't defined yet at this point in the file. Safe: nothing
+    // calls simulateAlert before boot, by which point everything below has already run.
+    function simulateAlert(key) {
+      currentTier = key;
+      updateHeatShimmer();
+      const warningNow = WARNING_TIERS.includes(key);
+      if (autoRotateOn) {
+        if (warningNow && !rotationPausedForWarning) {
+          rotationPausedForWarning = true;
+          pendingResumeKey = document.querySelector('[data-mid].active')?.dataset.mid || 'alert';
+          clearTimeout(rotationTimer);
+        } else if (!warningNow && rotationPausedForWarning) {
+          rotationPausedForWarning = false;
+          const resumeKey = cardEligible(pendingResumeKey) ? pendingResumeKey : nextEligibleKey(pendingResumeKey || 'alert');
+          pendingResumeKey = null;
+          showRotationCard(resumeKey);
+          scheduleAdvance(resumeKey);
+        }
+      }
+      const forceDisplay = warningNow || !autoRotateOn;
+      if (key === 'clear') {
+        document.querySelectorAll('.fx-panel').forEach(el => {
+          el.classList.remove('tier-glow', 'tier-pulse');
+          el.style.removeProperty('--tier-color');
+          el.style.removeProperty('--tier-glow-soft');
+        });
+        if (forceDisplay) {
+          animateSwap(midBar, () => {
+            midBar.classList.remove('is-alert', 'is-glass', 'alert-box-glow');
+            midBar.style.removeProperty('background');
+            midBar.style.removeProperty('--abg-color');
+            midBar.style.removeProperty('--abg-r-soft');
+            midBar.style.removeProperty('--abg-r-strong');
+            renderAlertClear();
+          });
+        }
+        return;
+      }
+      setAlertBoxesTier(key);
+      if (forceDisplay) {
+        animateSwap(midBar, () => {
+          midBar.classList.add('is-alert');
+          renderAlertTier(key);
+        });
+      }
+    }
+
+    // classic.html's alertClassFor() output -> this file's ALERT_TIERS key.
+    const TIER_KEY_MAP = {
+      'tor-emergency': 'torE',
+      'tor-pds': 'pds',
+      'tor-warning': 'tor',
+      'svr-destructive': 'svrd',
+      'svr-considerable': 'svrc',
+      'svr-warning': 'svrw',
+      'ffw-warning': 'ffw',
+      'heat-warning': 'heatw',
+      'heat-advisory': 'heat',
+      'tor-watch': 'torwtch',
+      'svr-watch': 'svrwtch',
+      'ffw-watch': 'ffwwtch',
+      'generic': 'generic',
+    };
+    // Bridges a real (or simulated) NWS feature into the tier engine: resolves the mapped key,
+    // overwrites that tier's main headline/towns/expiresMinutes with this feature's real data
+    // (tags stay the tier's static default -- deferred, see the ALERT_TIERS comment above), then
+    // calls simulateAlert(key), reusing 100% of the existing preempt/pause/resume rotation logic
+    // untouched. `towns` here is really NWS's county/zone list (areaDesc), not municipalities --
+    // there's no NWS field for actual towns inside the polygon.
+    // Radar reacts to the same real alert data: any actual WARNING (not a watch) holds the
+    // radar at close range instead of the normal close/mid/far cycle, and any tornado tier
+    // (plain/PDS/Emergency) specifically bumps VEL/CC to top priority over the REF loop -- see
+    // radarModeTick. Only storm-based warnings carry real polygon geometry (watches/advisories
+    // never do), so updateRadarWarningPolygon naturally draws nothing for those.
+    function clearRadarWarningState() {
+      isWarningActive = false;
+      isTorWarning = false;
+      isSevereWarning = false;
+      setWarningPolygonFeatures([]);
+    }
+    // allFeatures is every alert covering Nick's own position from the last fetch (not just the
+    // primary/highest-severity one) -- used to draw every active warning's real polygon on the
+    // radar map, not only the one driving the mid-bar's alert tier.
+    function applyRealAlertTier(feature, cls, allFeatures) {
+      const key = TIER_KEY_MAP[cls] || 'generic';
+      const t = ALERT_TIERS[key];
+      const props = feature.properties || {};
+      const areas = String(props.areaDesc || '').split(';').map(s => s.trim()).filter(Boolean);
+      const headline = ALERT_TIER_LABELS[cls] || String(props.event || '').toUpperCase();
+      t.main = areas.length ? `${headline} — ${areas[0]}` : headline;
+      t.towns = areas.slice(0, 3);
+      const expiresAt = props.expires ? Date.parse(props.expires) : NaN;
+      if (Number.isFinite(expiresAt)) t.expiresMinutes = Math.max(0, (expiresAt - Date.now()) / 60000);
+      const isWarningTier = WARNING_TIER_CLASSES.includes(cls);
+      const warningFeatures = (allFeatures || [feature]).filter(f => WARNING_TIER_CLASSES.includes(alertClassFor(f)));
+      setWarningPolygonFeatures(warningFeatures);
+      isWarningActive = isWarningTier;
+      isTorWarning = cls === 'tor-emergency' || cls === 'tor-pds' || cls === 'tor-warning';
+      // Severe Thunderstorm Warning tiers only -- not Flash Flood Warning, which isn't a
+      // wind/rotation threat velocity data speaks to the same way.
+      isSevereWarning = cls === 'svr-warning' || cls === 'svr-considerable' || cls === 'svr-destructive';
+      simulateAlert(key);
+    }
+
+    // Real production alert polling -- api.weather.gov's ?point= geofilter already restricts
+    // results to alerts whose actual geometry/zone contains that exact point. No key needed.
+    // ?simulateAlert=<kind> (classic.html's own kind vocabulary -- tor-warning, heat-warning,
+    // etc, see alert-feed.js's simulatedAlertFeature) bypasses the fetch and feeds a fabricated
+    // feature through this exact same classify/map/render path instead, so every tier (including
+    // the new `generic` one) can still be tested deterministically without waiting on live
+    // weather. ?simulateAlert=clear forces the calm state.
+    async function updateAlertReal() {
+      const simulateKind = params.get('simulateAlert');
+      if (simulateKind === 'clear') { clearRadarWarningState(); simulateAlert('clear'); return; }
+      if (simulateKind) {
+        const feature = simulatedAlertFeature(simulateKind);
+        if (!feature) return;
+        applyRealAlertTier(feature, alertClassFor(feature));
+        return;
+      }
+      if (settings.latitude === null || settings.longitude === null) {
+        clearRadarWarningState();
+        simulateAlert('clear');
+        return;
+      }
+      try {
+        const url = `https://api.weather.gov/alerts/active?point=${settings.latitude},${settings.longitude}`;
+        const res = await fetch(url, { headers: { Accept: 'application/geo+json' } });
+        if (!res.ok) throw new Error('alerts fetch failed');
+        const data = await res.json();
+        const features = Array.isArray(data.features) ? data.features : [];
+        if (!features.length) { clearRadarWarningState(); simulateAlert('clear'); return; }
+        const sorted = [...features].sort((a, b) => severityRank(alertClassFor(a)) - severityRank(alertClassFor(b)));
+        const primary = sorted[0];
+        applyRealAlertTier(primary, alertClassFor(primary), features);
+      } catch (err) {
+        // leave last-known alert state in place -- a single missed poll isn't an outage
+      }
+    }
+
+    // ---- Location data: Params/Forecast/Chasers/SPC cards still demo -- their own phases.
+    const midBar = document.getElementById('midBar');
+    const midButtons = document.querySelectorAll('[data-mid]');
+    function tickReportTimers() {
+      document.querySelectorAll('.r-time[data-since]').forEach(el => {
+        const elapsed = Math.max(0, Date.now() - Number(el.dataset.since));
+        const m = Math.floor(elapsed / 60000);
+        const s = Math.floor((elapsed % 60000) / 1000);
+        el.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+      });
+      document.querySelectorAll('.a-expires[data-expires]').forEach(el => {
+        const remaining = Math.max(0, Number(el.dataset.expires) - Date.now());
+        const m = Math.floor(remaining / 60000);
+        const s = Math.floor((remaining % 60000) / 1000);
+        el.textContent = 'Expires ' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+      });
+    }
+    setInterval(tickReportTimers, 1000);
+
+    function startLiveClock() {
+      const hEl = document.querySelector('.clock-pill .clock-h');
+      const mEl = document.querySelector('.clock-pill .clock-m');
+      const ampmEl = document.querySelector('.clock-pill .clock-ampm');
+      const colonEl = document.querySelector('.clock-pill .clock-colon');
+      const dateEl = document.querySelector('.clock-pill .clock-date');
+      if (!hEl || !mEl || !ampmEl || !colonEl || !dateEl) return;
+      let colonOn = true;
+      function tick() {
+        const now = new Date();
+        let h = now.getHours() % 12; if (h === 0) h = 12;
+        hEl.textContent = h;
+        mEl.textContent = String(now.getMinutes()).padStart(2, '0');
+        const tz = new Intl.DateTimeFormat([], { timeZoneName: 'short' }).formatToParts(now).find(p => p.type === 'timeZoneName')?.value || '';
+        ampmEl.textContent = `${now.getHours() >= 12 ? 'PM' : 'AM'} ${tz}`.trim();
+        dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { colonEl.style.opacity = '1'; return; }
+        colonOn = !colonOn;
+        colonEl.style.opacity = colonOn ? '1' : '0.25';
+      }
+      tick();
+      const msToNextSecond = 1000 - (Date.now() % 1000);
+      setTimeout(() => { tick(); setInterval(tick, 1000); }, msToNextSecond);
+    }
+    startLiveClock();
+
+    function scheduleIdlePulse(selector, minDelay, maxDelay, duration) {
+      function fire() {
+        const el = document.querySelector(selector);
+        if (el && !prefersReducedMotion) {
+          el.classList.remove('idle-pulse'); void el.offsetWidth; el.classList.add('idle-pulse');
+          setTimeout(() => el.classList.remove('idle-pulse'), duration);
+        }
+        setTimeout(fire, minDelay + Math.random() * (maxDelay - minDelay));
+      }
+      setTimeout(fire, minDelay + Math.random() * (maxDelay - minDelay));
+    }
+    scheduleIdlePulse('.c-icon-temp', 6000, 14000, 1300);
+    scheduleIdlePulse('.c-icon-dew', 6000, 14000, 1300);
+    scheduleIdlePulse('.c-icon-wind', 6000, 14000, 1100);
+
+    const OUT_MS = 320;
+    const IN_MS = 480;
+    function animateSwap(el, updateFn) {
+      let started = false;
+      function startIn() {
+        if (started) return;
+        started = true;
+        updateFn();
+        void el.offsetWidth;
+        el.style.transition = `opacity ${IN_MS}ms cubic-bezier(0.4,0,0.2,1)`;
+        el.style.opacity = '1';
+      }
+      el.style.transition = `opacity ${OUT_MS}ms cubic-bezier(0.4,0,0.2,1)`;
+      el.style.opacity = '0';
+      el.addEventListener('transitionend', function onOut(e) {
+        if (e.target !== el || e.propertyName !== 'opacity') return;
+        el.removeEventListener('transitionend', onOut);
+        startIn();
+      });
+      setTimeout(startIn, OUT_MS + 60);
+    }
+
+    // 3-Day Forecast -- real Open-Meteo daily data (same provider already used for Conditions,
+    // no new integration). WMO weather codes mapped to this file's existing forecast icon/label
+    // vocabulary. Verified live against the real endpoint during this change.
+    let forecastDays = null; // [{lab, cond, icon, hi, lo, precip}, ...] once loaded
+    const WMO_ICON = {
+      0: 'sun', 1: 'partly', 2: 'partly', 3: 'cloudy',
+      45: 'fog', 48: 'fog',
+      51: 'rain', 53: 'rain', 55: 'rain', 56: 'rain', 57: 'rain',
+      61: 'rain', 63: 'rain', 65: 'rain', 66: 'rain', 67: 'rain',
+      71: 'snow', 73: 'snow', 75: 'snow', 77: 'snow',
+      80: 'rain', 81: 'rain', 82: 'rain',
+      85: 'snow', 86: 'snow',
+      95: 'storm', 96: 'storm', 99: 'storm',
+    };
+    const WMO_LABEL = {
+      0: 'Sunny', 1: 'Mostly Sunny', 2: 'Partly Cloudy', 3: 'Cloudy',
+      45: 'Fog', 48: 'Fog',
+      51: 'Light Drizzle', 53: 'Drizzle', 55: 'Heavy Drizzle', 56: 'Freezing Drizzle', 57: 'Freezing Drizzle',
+      61: 'Light Rain', 63: 'Rain', 65: 'Heavy Rain', 66: 'Freezing Rain', 67: 'Freezing Rain',
+      71: 'Light Snow', 73: 'Snow', 75: 'Heavy Snow', 77: 'Snow Grains',
+      80: 'Rain Showers', 81: 'Rain Showers', 82: 'Heavy Rain Showers',
+      85: 'Snow Showers', 86: 'Snow Showers',
+      95: 'Thunderstorms', 96: 'Severe T-Storms', 99: 'Severe T-Storms',
+    };
+    async function updateForecast() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${settings.latitude}&longitude=${settings.longitude}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&timezone=auto&forecast_days=3`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('forecast fetch failed');
+        const data = await res.json();
+        const d = data.daily;
+        const dayLabels = ['Today', 'Tomorrow'];
+        forecastDays = d.time.map((dateStr, i) => {
+          const code = d.weathercode[i];
+          const lab = i < dayLabels.length ? dayLabels[i] : new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
+          return {
+            lab,
+            cond: WMO_LABEL[code] || 'N/A',
+            icon: WMO_ICON[code] || 'cloudy',
+            hi: Math.round(d.temperature_2m_max[i]),
+            lo: Math.round(d.temperature_2m_min[i]),
+            precip: Math.round(d.precipitation_probability_max[i]),
+          };
+        });
+      } catch (err) {
+        // leave last-known forecast in place -- a single missed poll isn't an outage
+      }
+    }
+    const F_ICONS = {
+      sun: '<svg class="f-icon f-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>',
+      partly: '<svg class="f-icon f-icon-partly" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.4"/><path d="M9 3.5v1.4M13.9 5.4l-1 1M4.1 5.4l1 1"/><path d="M8 18h9a3.5 3.5 0 0 0 .4-6.98A5 5 0 0 0 8 12.2"/></svg>',
+      cloudy: '<svg class="f-icon f-icon-cloudy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17h11a3.5 3.5 0 0 0 .4-6.98A5.5 5.5 0 0 0 6.8 8.5 4 4 0 0 0 6 17z"/></svg>',
+      rain: '<svg class="f-icon f-icon-rain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 15h11a3.5 3.5 0 0 0 .4-6.98A5.5 5.5 0 0 0 7 9.5 3.5 3.5 0 0 0 6 15z"/><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2"/></svg>',
+      storm: '<svg class="f-icon f-icon-storm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15.5a4 4 0 0 1-.6-7.95A5 5 0 0 1 16 8.5a3.5 3.5 0 0 1-.8 6.9"/><path d="M13 13l-2.5 4.5h3L11 22"/></svg>',
+      snow: '<svg class="f-icon f-icon-snow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 15h11a3.5 3.5 0 0 0 .4-6.98A5.5 5.5 0 0 0 7 9.5 3.5 3.5 0 0 0 6 15z"/><path d="M8 19v3M6.6 19.7l2.8 1.6M11.4 19.7l-2.8 1.6M14 19v3M12.6 19.7l2.8 1.6M17.4 19.7l-2.8 1.6"/></svg>',
+      fog: '<svg class="f-icon f-icon-fog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 8h13M3 12h16M4 16h13M6 20h9"/></svg>',
+      wind: '<svg class="f-icon f-icon-windy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 8h11a2.5 2.5 0 1 0-2.2-3.6"/><path d="M3 16h14a2.5 2.5 0 1 1-2.2 3.6"/><path d="M3 12h8a2 2 0 1 0-1.8-2.8"/></svg>',
+      moon: '<svg class="f-icon f-icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 3a9 9 0 1 0 8 13 7 7 0 0 1-8-13z"/></svg>',
+      partlyNight: '<svg class="f-icon f-icon-partly-night" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.7 3.8a5 5 0 1 0 4.6 6.8 4 4 0 0 1-4.6-6.8z"/><path d="M8 18h9a3.5 3.5 0 0 0 .4-6.98A5 5 0 0 0 8 12.2"/></svg>',
+    };
+    const F_DROP = '<svg class="f-drop-icon" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px;"><path d="M12 3s6 7 6 11.5a6 6 0 0 1-12 0C6 10 12 3 12 3z"/></svg>';
+    function degToCompass(deg) {
+      const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+      return dirs[Math.round(deg / 22.5) % 16];
+    }
+    // Continuous hot/cold gradient instead of discrete buckets -- the old version had a whole
+    // "comfortable" range (60-85F) that rendered as plain white with no color at all, which
+    // read as "no scale," not "neutral." This always shows some shade reflecting exactly where
+    // the real temperature sits on the scale, interpolated between named stops rather than
+    // jumping between five fixed colors. Stop colors match the original discrete palette's
+    // cold/cool/warm/hot hex values, just blended between them now instead of switched at a
+    // hard edge.
+    const TEMP_COLOR_STOPS = [
+      [-20, [90, 140, 255]], [32, [127, 184, 255]], [60, [168, 212, 255]],
+      [75, [225, 228, 232]], [90, [255, 180, 84]], [100, [255, 138, 77]], [115, [255, 59, 48]],
+    ];
+    function tempColor(f) {
+      const stops = TEMP_COLOR_STOPS;
+      if (f <= stops[0][0]) return `rgb(${stops[0][1].join(',')})`;
+      for (let i = 1; i < stops.length; i++) {
+        if (f <= stops[i][0]) {
+          const [v0, c0] = stops[i - 1];
+          const [v1, c1] = stops[i];
+          const t = (f - v0) / (v1 - v0);
+          const rgb = c0.map((c, idx) => Math.round(c + (c1[idx] - c) * t));
+          return `rgb(${rgb.join(',')})`;
+        }
+      }
+      return `rgb(${stops.at(-1)[1].join(',')})`;
+    }
+    function dewClass(f) { if (f < 50) return 'dry'; if (f < 60) return ''; if (f < 70) return 'humid'; if (f < 76) return 'muggy'; return 'oppressive'; }
+    function windClass(mph) { if (mph < 20) return ''; if (mph < 30) return 'windy'; if (mph < 40) return 'strong-wind'; return 'dangerous-wind'; }
+    // Real Conditions tiles -- ground-truth station obs (lastGroundObs) preferred over
+    // Open-Meteo's gridded model estimate for temp/dew when both exist, matching classic.html's
+    // renderSecondaryLine precedence. Heading is the chase vehicle's own GPS bearing
+    // (settings.bearingDeg), distinct from the Wind tile's meteorological wind direction
+    // (lastWindDir) -- two different readings that happen to sit in tiles next to each other.
+    function renderConditions() {
+      const temp = lastGroundObs ? lastGroundObs.tempF : lastTemp;
+      const dew = lastGroundObs ? lastGroundObs.dewF : lastDew;
+      const tempVal = temp === null ? '--' : temp;
+      const dewVal = dew === null ? '--' : dew;
+      const windVal = lastWindSpeed === null ? '--' : lastWindSpeed;
+      const windDirLabel = lastWindDir === null || lastWindDir === undefined ? '' : ` · ${degToCompass(lastWindDir)}`;
+      const feelsExtra = lastFeels === null ? ' ' : `Feels ${lastFeels}°`;
+      const humidityExtra = lastHumidity === null ? ' ' : `${lastHumidity}% humidity`;
+      const gustExtra = lastGust === null ? ' ' : `Gusts ${lastGust} mph`;
+      const heading = settings.bearingDeg;
+      const headingVal = heading === null ? '--' : degToCompass(heading);
+      const headingExtra = heading === null ? ' ' : `${Math.round(heading)}°`;
+      document.getElementById('condGrid').innerHTML = `
+        <div class="cond-tile" id="condTempTile">
+          <svg class="c-icon c-icon-temp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 14.5V5a2 2 0 1 0-4 0v9.5a4 4 0 1 0 4 0z"/><path d="M10 8h1M10 11h1"/></svg>
+          <div class="c-text">
+            <div class="c-row"><div class="c-val" style="${temp === null ? '' : `color:${tempColor(temp)};`}">${tempVal}<span class="c-unit">°F</span></div></div>
+            <div class="c-lab">Temp</div>
+            <div class="c-extra">${feelsExtra}</div>
+          </div>
+        </div>
+        <div class="cond-tile">
+          <svg class="c-icon c-icon-dew" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 7 6 11.5a6 6 0 0 1-12 0C6 10 12 3 12 3z"/></svg>
+          <div class="c-text">
+            <div class="c-row"><div class="c-val ${dew === null ? '' : dewClass(dew)}">${dewVal}<span class="c-unit">°F</span></div></div>
+            <div class="c-lab">Dew Point</div>
+            <div class="c-extra">${humidityExtra}</div>
+          </div>
+        </div>
+        <div class="cond-tile">
+          <svg class="c-icon c-icon-wind" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 8h11a2.5 2.5 0 1 0-2.2-3.6"/><path d="M3 16h14a2.5 2.5 0 1 1-2.2 3.6"/><path d="M3 12h8a2 2 0 1 0-1.8-2.8"/></svg>
+          <div class="c-text">
+            <div class="c-row"><div class="c-val ${lastWindSpeed === null ? '' : windClass(lastWindSpeed)}">${windVal}<span class="c-unit">mph</span></div></div>
+            <div class="c-lab">Wind${windDirLabel}</div>
+            <div class="c-extra">${gustExtra}</div>
+          </div>
+        </div>
+        <div class="cond-tile">
+          <svg class="c-icon accent wind-twitch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="--heading:${heading ?? 0}deg;"><path d="M12 3l6 15-6-3-6 3z"/></svg>
+          <div class="c-text">
+            <div class="c-row"><div class="c-val">${headingVal}</div></div>
+            <div class="c-lab">Heading</div>
+            <div class="c-extra">${headingExtra}</div>
+          </div>
+        </div>`;
+      updateHeatShimmer();
+    }
+    function updateHeatShimmer() {
+      document.getElementById('condTempTile')?.classList.toggle('heat-shimmer', currentTier === 'heat' || currentTier === 'heatw');
+    }
+
+    const CHASER_GLYPH_SVG = `<svg viewBox="0 0 100 100" class="glyph-svg">
+      <circle class="g-ring" cx="50" cy="50" r="44"/>
+      <circle class="g-ring" cx="50" cy="50" r="29"/>
+      <circle class="g-ring" cx="50" cy="50" r="14"/>
+      <circle class="g-blip" cx="73" cy="30" r="3.4"/>
+      <circle class="g-blip b2" cx="25" cy="60" r="3.4"/>
+      <circle class="g-blip b3" cx="76" cy="72" r="3.4"/>
+      <circle class="g-you" cx="50" cy="50" r="4.4"/>
+    </svg>`;
+    // Real count/report data comes from updateChaserData() (see above -- CHASER_COUNT,
+    // chasersHasReports, latestChaserReport). r-note is omitted for NWS-sourced reports:
+    // stormReports.ts's `remarks` field on NWS LSRs is frequently empty (NWS doesn't always
+    // attach free text to a report the way a Spotter Network submission does), so an empty
+    // note line is left out rather than rendered blank.
+    function renderChasers(hasReports) {
+      const clock = ms => new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      if (!hasReports || !latestChaserReport) {
+        midBar.innerHTML = `<div class="chasers-glyph-row">
+          <div class="chasers-glyph"><div class="glyph-halo"></div><div class="glyph-sweep"></div>${CHASER_GLYPH_SVG}</div>
+          <div class="chasers-hero-line"><span class="ch-hero-num">${CHASER_COUNT}</span>Storm Chasers Nearby</div>
+        </div>`;
+        return;
+      }
+      const countCol = `<div class="chasers-half">
+        <div class="chasers-glyph sm"><div class="glyph-halo"></div><div class="glyph-sweep"></div>${CHASER_GLYPH_SVG}</div>
+        <div class="chasers-hero-line sm"><span class="ch-hero-num">${CHASER_COUNT}</span>Chasers Nearby</div>
+      </div>`;
+      const r = latestChaserReport;
+      const locText = r.location + (r.state ? `, ${r.state}` : '');
+      const noteRow = r.remarks ? `<div class="r-note">${escapeChaserHtml(r.remarks)}</div>` : '';
+      midBar.innerHTML = `<div class="chasers-row">
+        ${countCol}
+        <div class="chasers-half">
+          <div class="report-detail">
+            <div class="r-line1"><span class="loc">${escapeChaserHtml(locText)}</span> — <b>${escapeChaserHtml(r.type)}</b></div>
+            ${noteRow}
+            <div class="r-when">${clock(r.validTime)} · <span class="r-time" data-since="${r.validTime}">0:00</span> ago · via ${r.source}</div>
+          </div>
+        </div>
+      </div>`;
+      tickReportTimers();
+    }
+    // NWS remarks/type and Spotter Network notes are free text from a public feed, not
+    // developer-authored -- escape before interpolating into innerHTML.
+    function escapeChaserHtml(text) {
+      return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    // Real HRRR-derived severe-weather parameters from Storm Intel (see updateStormIntel above).
+    // Illustrative green->red bucket scale, NOT an official standard -- same caveat the original
+    // design carried: worth a meteorologist's sanity check on the exact thresholds before this
+    // ships for real. A metric Storm Intel itself marks unavailable (e.g. SCP needs an
+    // effective-layer shear calculation not always resolvable) renders N/A, same honest-gap
+    // treatment as everywhere else in this file -- never a fabricated number.
+    const PARAM_RATING_COLORS = ['#35d488', '#a8d488', '#e8c93a', '#ff8a4d', '#ff3b30'];
+    function paramBucket(value, breaks) { for (let i = 0; i < breaks.length; i++) if (value < breaks[i]) return i; return breaks.length; }
+    const PARAM_SCALES = {
+      cape: v => paramBucket(v, [500, 1000, 2000, 3000]),
+      cin: v => 4 - paramBucket(Math.abs(v), [15, 40, 75, 150]),
+      shear: v => paramBucket(v, [20, 30, 40, 50]),
+      srh: v => paramBucket(v, [100, 150, 250, 350]),
+      lcl: v => 4 - paramBucket(v, [600, 900, 1200, 1500]),
+      stp: v => paramBucket(v, [0.5, 1, 3, 5]),
+    };
+    function paramOverallRating(stp) {
+      if (stp < 0.5) return { label: 'Marginal', color: PARAM_RATING_COLORS[0] };
+      if (stp < 1) return { label: 'Elevated', color: PARAM_RATING_COLORS[1] };
+      if (stp < 3) return { label: 'Moderate', color: PARAM_RATING_COLORS[2] };
+      if (stp < 5) return { label: 'High', color: PARAM_RATING_COLORS[3] };
+      return { label: 'Extreme', color: PARAM_RATING_COLORS[4] };
+    }
+    const MS_TO_KT = 1.943844;
+    const M_TO_FT = 3.28084;
+    function renderParams() {
+      if (!stormIntelAvailable || !stormIntelMetrics) {
+        const labels = ['CAPE', 'CIN', 'Shear', 'SRH', 'LCL', 'STP'];
+        const rowHtml = labels.map(lab => `
+          <div class="param">
+            <div class="p-val" style="color:var(--muted);">N/A</div>
+            <div class="p-lab">${lab}</div>
+            <div class="p-bar">${Array.from({ length: 5 }, () => '<span></span>').join('')}</div>
+          </div>`).join('');
+        midBar.innerHTML = `<div class="params-wrap">
+          <div class="params-verdict" style="background:rgba(255,255,255,0.12); color:var(--text);">
+            <svg class="pv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 5h15M6.5 9h11M8.5 13h7M10.5 17h3"/></svg>
+            Tornado Potential — Not Yet Available
+          </div>
+          <div class="params-row">${rowHtml}</div>
+          <div class="params-footer"></div>
+        </div>`;
+        return;
+      }
+      const m = key => stormIntelMetrics.get(key);
+      const withColor = (scaleKey, metricKey, unit, lab, transform) => {
+        const metric = m(metricKey);
+        if (!metric || metric.availability !== 'available' || metric.value == null) {
+          return { val: 'N/A', unit: '', lab, idx: -1, color: 'var(--muted)' };
+        }
+        const raw = transform ? transform(metric.value) : metric.value;
+        const idx = PARAM_SCALES[scaleKey](raw);
+        return { val: Math.round(raw).toLocaleString(), unit, lab, idx, color: PARAM_RATING_COLORS[idx] };
+      };
+      const stpMetric = m('significant_tornado_parameter');
+      const stpVal = stpMetric && stpMetric.availability === 'available' && stpMetric.value != null ? stpMetric.value : null;
+      const ALL = [
+        withColor('cape', 'mlcape', 'J/kg', 'CAPE'),
+        withColor('cin', 'mlcin', 'J/kg', 'CIN'),
+        withColor('shear', 'bulk_shear_0_6km', 'kt', 'Shear', v => v * MS_TO_KT),
+        withColor('srh', 'srh_0_1km', 'm²/s²', 'SRH'),
+        withColor('lcl', 'lcl_height', 'ft', 'LCL', v => v * M_TO_FT),
+        stpVal !== null
+          ? { val: stpVal.toFixed(1), unit: '', lab: 'STP', idx: PARAM_SCALES.stp(stpVal), color: PARAM_RATING_COLORS[PARAM_SCALES.stp(stpVal)] }
+          : { val: 'N/A', unit: '', lab: 'STP', idx: -1, color: 'var(--muted)' },
+      ];
+      const rating = stpVal !== null ? paramOverallRating(stpVal) : null;
+      const bar = idx => Array.from({ length: 5 }, (_, i) =>
+        `<span${idx >= 0 && i <= idx ? ` style="background:${PARAM_RATING_COLORS[idx]};"` : ''}></span>`).join('');
+      const rowHtml = ALL.map(item => `
+        <div class="param">
+          <div class="p-val" style="color:${item.color};">${item.val}${item.unit ? `<span class="p-unit">${item.unit}</span>` : ''}</div>
+          <div class="p-lab">${item.lab}</div>
+          <div class="p-bar">${bar(item.idx)}</div>
+        </div>`).join('');
+      midBar.innerHTML = `<div class="params-wrap">
+        <div class="params-verdict" style="background:${rating ? rating.color : 'rgba(255,255,255,0.12)'}; ${rating ? '' : 'color:var(--text);'}">
+          <svg class="pv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 5h15M6.5 9h11M8.5 13h7M10.5 17h3"/></svg>
+          Tornado Potential — ${rating ? rating.label : 'N/A'}
+        </div>
+        <div class="params-row">${rowHtml}</div>
+        <div class="params-footer"></div>
+      </div>`;
+    }
+    function renderForecast() {
+      const title = lastLocationName || 'Awaiting GPS feed...';
+      if (!forecastDays) {
+        midBar.innerHTML = `<div class="forecast-wrap">
+          <div class="forecast-title">${title}</div>
+          <div class="forecast-row"><div class="forecast-day"><div class="f-text"><div class="f-toprow"><span class="f-lab">Awaiting forecast data...</span></div></div></div></div>
+        </div>`;
+        return;
+      }
+      midBar.innerHTML = `<div class="forecast-wrap">
+        <div class="forecast-title">${title}</div>
+        <div class="forecast-row">${forecastDays.map(d => `
+          <div class="forecast-day">
+            ${F_ICONS[d.icon]}
+            <div class="f-text">
+              <div class="f-toprow"><span class="f-lab">${d.lab}</span><span class="f-hilo">${d.hi}°<span class="lo">${d.lo}°</span></span></div>
+              <div class="f-cond">${d.cond} · ${F_DROP}<span class="drop">${d.precip}%</span></div>
+            </div>
+          </div>`).join('')}</div>
+      </div>`;
+    }
+    const radarBody = document.getElementById('radarBody');
+    const radarModeText = document.getElementById('radarModeText');
+
+    // ---- Radar: single-site, auto-switching, looped REF normally; VEL/CC priority rotation
+    // during an active tornado warning. Backed by radar-worker via the public codeblack-
+    // radar-relay Worker -- see workers/radar-relay/. No auth needed: public NOAA data. Ported
+    // from classic.html -- see there for the full rationale on each piece below.
+    let MAPBOX_TOKEN = params.get('mapboxToken') || '';
+    const MAPBOX_STYLE = params.get('mapboxStyle') || 'mapbox://styles/mapbox/navigation-night-v1';
+    const RADAR_FRAME_POOL_SIZE = 6;
+    const radarSourceIds = Array.from({ length: RADAR_FRAME_POOL_SIZE }, (_, i) => `radar-source-${i}`);
+    const radarLayerIds = Array.from({ length: RADAR_FRAME_POOL_SIZE }, (_, i) => `radar-layer-${i}`);
+    const BLANK_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    const WARNING_POLYGON_SOURCE_ID = 'warning-polygon-source';
+    const WARNING_POLYGON_FILL_LAYER_ID = 'warning-polygon-fill';
+    const WARNING_POLYGON_LINE_LAYER_ID = 'warning-polygon-line';
+    const EMPTY_FEATURE_COLLECTION = { type: 'FeatureCollection', features: [] };
+    let pendingWarningPolygonFeatures = undefined;
+    // Real US Census cartographic county boundaries (2010, 1:20,000,000 -- the lightest public
+    // simplification level), verified reachable during this change.
+    const COUNTY_LINES_URL = 'https://raw.githubusercontent.com/kjhealy/us-county/master/data/geojson/gz_2010_us_050_00_20m.json';
+    const COUNTY_LINES_SOURCE_ID = 'county-lines-source';
+    const COUNTY_LINES_LAYER_ID = 'county-lines-layer';
+    const REPORT_PINS_SOURCE_ID = 'report-pins-source';
+    const REPORT_PINS_LAYER_ID = 'report-pins-layer';
+    const SPOTTER_PINS_SOURCE_ID = 'spotter-pins-source';
+    const SPOTTER_PINS_LAYER_ID = 'spotter-pins-layer';
+    const radarSettings = { gatewayBase: params.get('radarGatewayBase') || 'https://ops.codeblackwx.com' };
+    const RADAR_ZOOM_LEVELS = [
+      { name: 'CLOSE', zoom: params.get('radarZoomClose') ? Number(params.get('radarZoomClose')) : 9 },
+      { name: 'MID', zoom: params.get('radarZoomMid') ? Number(params.get('radarZoomMid')) : 7 },
+      { name: 'FAR', zoom: params.get('radarZoomFar') ? Number(params.get('radarZoomFar')) : 5 },
+    ];
+    function atFarZoom() { return radarZoomIndex === 2; }
+    // Baseline (no local alert) hold times are asymmetric by design -- FAR gets the longest look
+    // (the big-picture view), CLOSE the shortest (a quick current check before moving on).
+    // Warning-tier zoom cycling (CLOSE/MID only) keeps its own uniform legacy timing --
+    // untouched, wasn't part of this change.
+    const ZOOM_HOLD_MS = { FAR: 20000, MID: 15000, CLOSE: 9000 };
+    const WARNING_ZOOM_HOLD_MS = 11200;
+    let radarZoomIndex = 0;
+    let radarZoomChangedAt = Date.now();
+    let radarPositionMarker = null;
+    let radarSiteId = null;
+    let radarProduct = 'REF';
+    let radarFrames = [];
+    let radarLoopIndex = 0;
+    const CLOSE_MINI_LOOP_FRAMES = 3;
+    let radarCloseLoopTick = 0;
+    let radarFrameFetchInFlight = false;
+    let radarTickCount = 0;
+    let torRotationIndex = 0;
+    let severeRotationIndex = 0;
+    let baselineNearbyRotationIndex = 0;
+    // isTorWarning/isWarningActive are set from the real alert pipeline (see applyRealAlertTier
+    // below) instead of classic.html's own updateAlert() -- same flags, same meaning, just fed
+    // by this file's own alert wiring.
+    let isTorWarning = false;
+    let isSevereWarning = false;
+    let isWarningActive = false;
+    let radarMap = null;
+    let radarMapReady = false;
+    let pendingRadarFrames = null;
+    const TOR_PRODUCT_ROTATION = ['VEL', 'REF', 'VEL', 'CC', 'VEL', 'REF'];
+    // Severe Thunderstorm Warning gets VEL mixed in too, but at a real minority share (1 of 4
+    // slots, 25%) versus tornado's 3 of 6 (50%) -- velocity still matters for a severe/rotating
+    // storm, just not the top priority a tornado threat is.
+    const SEVERE_PRODUCT_ROTATION = ['REF', 'REF', 'REF', 'VEL'];
+    const WARNING_PRODUCT_HOLD_TICKS = 8;
+
+    // REF/VEL now render from IEM's RIDGE WMS (mesonet.agron.iastate.edu) instead of our own
+    // radar-relay/radar-worker pipeline -- real NWS-quality pre-rendered/smoothed single-site
+    // imagery, free, no key. Verified live during this change: real scan timestamps, real PNG
+    // tiles for both products. CC has no IEM RIDGE equivalent (dual-pol correlation coefficient
+    // isn't part of the legacy RIDGE product set) and stays on our own radar-relay/radar-worker
+    // decode, which is untouched and still fully live -- a real upgrade to that decoder (proper
+    // gate/radial interpolation instead of nearest-neighbor) is future work, not scrapped.
+    const IEM_RIDGE_BASE = 'https://mesonet.agron.iastate.edu';
+    const IEM_PRODUCT_CODE = { REF: 'N0B', VEL: 'N0S' };
+    function iemSectorFor(siteId) {
+      // IEM's `sector` param is the 3-letter site code with no leading K (CONUS sites only --
+      // Alaska/Hawaii/PR/Guam sites use different prefixes and aren't handled here).
+      return String(siteId || '').replace(/^K/i, '').toUpperCase();
+    }
+
+    async function resolveMapboxToken() {
+      if (MAPBOX_TOKEN) return MAPBOX_TOKEN;
+      try {
+        const res = await fetch(`${radarSettings.gatewayBase}/overlay-core/mapbox-token`);
+        if (!res.ok) return '';
+        const data = await res.json();
+        return data.token || '';
+      } catch (err) {
+        return '';
+      }
+    }
+
+    async function initRadarMap() {
+      if (radarMap || typeof mapboxgl === 'undefined') return;
+      MAPBOX_TOKEN = await resolveMapboxToken();
+      if (radarMap) return;
+      if (!MAPBOX_TOKEN) {
+        document.getElementById('radarLoading').textContent = 'Mapbox token unavailable';
+        return;
+      }
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+      radarMap = new mapboxgl.Map({
+        container: 'radarMap',
+        style: MAPBOX_STYLE,
+        center: [-97.5, 35.5],
+        zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom,
+        interactive: false,
+        attributionControl: true,
+      });
+      radarMap.on('load', () => {
+        // County lines -- below the radar raster, above the basemap. Real US Census cartographic
+        // county boundaries (2010, 1:20,000,000 simplification -- light enough for a background
+        // layer), fetched once; Mapbox GL handles the request itself when `data` is a URL.
+        radarMap.addSource(COUNTY_LINES_SOURCE_ID, { type: 'geojson', data: COUNTY_LINES_URL });
+        radarMap.addLayer({
+          id: COUNTY_LINES_LAYER_ID, type: 'line', source: COUNTY_LINES_SOURCE_ID,
+          paint: { 'line-color': 'rgba(255,255,255,0.22)', 'line-width': 0.6 },
+        });
+        for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
+          radarMap.addSource(radarSourceIds[i], { type: 'raster', tiles: [BLANK_TILE], tileSize: 256 });
+          radarMap.addLayer({ id: radarLayerIds[i], type: 'raster', source: radarSourceIds[i], paint: { 'raster-opacity': 0 } });
+        }
+        // fill/line color is data-driven (per-feature 'color' property, set in
+        // setWarningPolygonFeatures below) instead of a fixed red -- each polygon now draws in
+        // its own tier's real color, the exact same ALERT_TIERS[key].color1 driving that tier's
+        // fx-panel glow (see setAlertBoxesTier), so a Tornado Watch's polygon reads yellow, a
+        // Considerable severe reads amber, etc, not every warning painted identically red.
+        radarMap.addSource(WARNING_POLYGON_SOURCE_ID, { type: 'geojson', data: EMPTY_FEATURE_COLLECTION });
+        radarMap.addLayer({
+          id: WARNING_POLYGON_FILL_LAYER_ID, type: 'fill', source: WARNING_POLYGON_SOURCE_ID,
+          paint: { 'fill-color': ['coalesce', ['get', 'color'], '#FF0000'], 'fill-opacity': 0.12 },
+        });
+        radarMap.addLayer({
+          id: WARNING_POLYGON_LINE_LAYER_ID, type: 'line', source: WARNING_POLYGON_SOURCE_ID,
+          paint: { 'line-color': ['coalesce', ['get', 'color'], '#FF0000'], 'line-width': 3, 'line-opacity': 0.95 },
+        });
+        // Storm/spotter report pins -- topmost, above radar and warning polygons. Two separate
+        // sources/layers (different color language: reports = accent red like the rest of the
+        // overlay's alert/urgency color, spotters = the same green already used for the Nearby
+        // Chasers card) so the two feeds stay visually distinct on the map.
+        radarMap.addSource(REPORT_PINS_SOURCE_ID, { type: 'geojson', data: EMPTY_FEATURE_COLLECTION });
+        radarMap.addLayer({
+          id: REPORT_PINS_LAYER_ID, type: 'circle', source: REPORT_PINS_SOURCE_ID,
+          paint: {
+            'circle-radius': 5, 'circle-color': '#ff2a2a',
+            'circle-stroke-width': 1.5, 'circle-stroke-color': 'rgba(255,255,255,0.9)',
+          },
+        });
+        radarMap.addSource(SPOTTER_PINS_SOURCE_ID, { type: 'geojson', data: EMPTY_FEATURE_COLLECTION });
+        radarMap.addLayer({
+          id: SPOTTER_PINS_LAYER_ID, type: 'circle', source: SPOTTER_PINS_SOURCE_ID,
+          paint: {
+            'circle-radius': 4, 'circle-color': '#35d488',
+            'circle-stroke-width': 1.5, 'circle-stroke-color': 'rgba(255,255,255,0.9)',
+          },
+        });
+        radarMapReady = true;
+        if (pendingRadarFrames) { preloadRadarFrames(pendingRadarFrames); pendingRadarFrames = null; }
+        if (pendingWarningPolygonFeatures !== undefined) {
+          setWarningPolygonFeatures(pendingWarningPolygonFeatures);
+          pendingWarningPolygonFeatures = undefined;
+        }
+        renderRadarReportPins();
+      });
+    }
+
+    function centerRadarMapOnPosition() {
+      if (!radarMap || settings.latitude === null || settings.longitude === null) return;
+      const lngLat = [settings.longitude, settings.latitude];
+      radarMap.easeTo({ center: lngLat, zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom, duration: 2000 });
+      if (!radarPositionMarker) {
+        const el = document.createElement('div');
+        el.className = 'radar-position-marker';
+        el.innerHTML = '<div class="radar-position-marker__ring"></div><div class="radar-position-marker__core"></div>';
+        radarPositionMarker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(radarMap);
+      } else {
+        radarPositionMarker.setLngLat(lngLat);
+      }
+    }
+
+    async function updateRadarSite() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      centerRadarMapOnPosition();
+      try {
+        const url = `${radarSettings.gatewayBase}/api/v1/radar/sites/nearest?lat=${settings.latitude}&lon=${settings.longitude}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('sites fetch failed');
+        const sites = await res.json();
+        const nearest = Array.isArray(sites) ? sites[0] : null;
+        if (!nearest || nearest.id === radarSiteId) return;
+        radarSiteId = nearest.id;
+        radarFrames = [];
+        radarLoopIndex = 0;
+        radarCloseLoopTick = 0;
+        await fetchRadarFrames();
+      } catch (err) {
+        // leave last-known site in place -- a single missed lookup isn't an outage
+      }
+    }
+
+    async function fetchRadarFrames() {
+      if (!radarSiteId || radarFrameFetchInFlight) return;
+      radarFrameFetchInFlight = true;
+      try {
+        if (radarProduct === 'CC') {
+          // No IEM equivalent -- unchanged path through our own radar-relay/radar-worker.
+          const url = `${radarSettings.gatewayBase}/api/v1/radar/frames?site=${encodeURIComponent(radarSiteId)}&product=CC&limit=1`;
+          const res = await fetch(url, { headers: { Accept: 'application/json' } });
+          if (!res.ok) throw new Error('frames fetch failed');
+          const frames = await res.json();
+          if (Array.isArray(frames) && frames.length) {
+            radarFrames = frames.map(f => ({ kind: 'own', frameId: f.frameId }));
+            radarLoopIndex = 0;
+            radarCloseLoopTick = 0;
+            preloadRadarFrames(radarFrames);
+            document.getElementById('radarLoading').classList.add('hidden');
+          }
+          return;
+        }
+        const iemProduct = IEM_PRODUCT_CODE[radarProduct];
+        const sector = iemSectorFor(radarSiteId);
+        const limit = radarProduct === 'REF' ? RADAR_FRAME_POOL_SIZE : 1;
+        const url = `${IEM_RIDGE_BASE}/json/radar.py?operation=list&radar=${encodeURIComponent(sector)}&product=${iemProduct}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('IEM scan list fetch failed');
+        const data = await res.json();
+        const scans = Array.isArray(data.scans) ? data.scans : [];
+        const sorted = scans.map(s => s.ts).filter(Boolean).sort().reverse().slice(0, limit);
+        if (sorted.length) {
+          radarFrames = sorted.map(ts => ({ kind: 'iem', ts }));
+          radarLoopIndex = 0;
+          radarCloseLoopTick = 0;
+          preloadRadarFrames(radarFrames);
+          document.getElementById('radarLoading').classList.add('hidden');
+        }
+      } catch (err) {
+        // leave last-known frames in place -- a single missed poll isn't an outage
+      } finally {
+        radarFrameFetchInFlight = false;
+      }
+    }
+
+    // IEM single-archive WMS wants explicit UTC year/month/day/time(HHMM) query params, parsed
+    // from the scan's ISO timestamp (e.g. "2026-09-10T02:51Z") -- confirmed live against the real
+    // service during this change.
+    function iemArchiveTileUrl(sector, product, ts) {
+      const d = new Date(ts);
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      const time = String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0');
+      const qs = new URLSearchParams({
+        SERVICE: 'WMS', VERSION: '1.1.1', REQUEST: 'GetMap', LAYERS: 'single-archive',
+        SRS: 'EPSG:3857', WIDTH: '256', HEIGHT: '256', FORMAT: 'image/png', TRANSPARENT: 'TRUE',
+        sector, prod: product, year: String(year), month, day, time,
+      });
+      return `${IEM_RIDGE_BASE}/cgi-bin/wms/nexrad/ridge.cgi?${qs}&BBOX={bbox-epsg-3857}`;
+    }
+
+    const RADAR_PRELOAD_STAGGER_MS = 650;
+    function preloadRadarFrames(frames) {
+      if (!radarMapReady) { pendingRadarFrames = frames; return; }
+      const sector = iemSectorFor(radarSiteId);
+      const iemProduct = IEM_PRODUCT_CODE[radarProduct];
+      for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
+        const frame = frames[i];
+        let url = BLANK_TILE;
+        if (frame && frame.kind === 'iem') {
+          url = iemArchiveTileUrl(sector, iemProduct, frame.ts);
+        } else if (frame && frame.kind === 'own') {
+          url = `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png`;
+        }
+        window.setTimeout(() => {
+          const source = radarMap.getSource(radarSourceIds[i]);
+          if (source) source.setTiles([url]);
+        }, i * RADAR_PRELOAD_STAGGER_MS);
+      }
+    }
+
+    function applyRadarFrame(index) {
+      if (!radarMapReady) return;
+      radarLayerIds.forEach((id, i) => {
+        if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === index ? 0.92 : 0);
+      });
+    }
+
+    // Draws every currently-active alert's real polygon, not just the single highest-severity
+    // one -- classic.html's original only ever drew the primary alert's shape. `features` is
+    // whatever the last alerts/active?point= fetch returned (all alerts covering Nick's own
+    // position); zone-based products (watches/advisories) are naturally excluded since NWS never
+    // gives those real geometry.
+    function setWarningPolygonFeatures(features) {
+      if (!radarMapReady) { pendingWarningPolygonFeatures = features; return; }
+      const source = radarMap.getSource(WARNING_POLYGON_SOURCE_ID);
+      if (!source) return;
+      const list = Array.isArray(features) ? features : (features ? [features] : []);
+      const shapes = list.filter(f => f && f.geometry).map(f => {
+        const key = TIER_KEY_MAP[alertClassFor(f)] || 'generic';
+        const color = (ALERT_TIERS[key] && ALERT_TIERS[key].color1) || '#FF0000';
+        return { type: 'Feature', properties: { color }, geometry: f.geometry };
+      });
+      source.setData(shapes.length ? { type: 'FeatureCollection', features: shapes } : EMPTY_FEATURE_COLLECTION);
+    }
+
+    // Storm/spotter report pins on the radar map -- reuses the same nearbyReports/nearbySpotters
+    // fetched for the Chasers card (see updateChaserData) rather than a separate fetch.
+    function renderRadarReportPins() {
+      if (!radarMapReady) return;
+      const reportSource = radarMap.getSource(REPORT_PINS_SOURCE_ID);
+      if (reportSource) {
+        reportSource.setData({
+          type: 'FeatureCollection',
+          features: nearbyReports.map(r => ({
+            type: 'Feature',
+            properties: { type: r.type, location: r.location, source: r.source },
+            geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
+          })),
+        });
+      }
+      const spotterSource = radarMap.getSource(SPOTTER_PINS_SOURCE_ID);
+      if (spotterSource) {
+        spotterSource.setData({
+          type: 'FeatureCollection',
+          features: nearbySpotters.map(s => ({
+            type: 'Feature',
+            properties: { name: s.name },
+            geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+          })),
+        });
+      }
+    }
+
+    function setRadarProduct(product) {
+      if (radarProduct === product) return;
+      radarProduct = product;
+      radarModeText.textContent = product;
+      radarFrames = [];
+      radarLoopIndex = 0;
+      radarCloseLoopTick = 0;
+      // Blank the map immediately instead of leaving the outgoing product's tile on screen at
+      // full opacity -- fetchRadarFrames()/preloadRadarFrames() below is async (a real network
+      // round trip, staggered up to RADAR_PRELOAD_STAGGER_MS per pool slot), and until it
+      // finishes and calls applyRadarFrame() again, nothing else was resetting the layers that
+      // were still showing the PREVIOUS product's last frame -- e.g. a stale REF tile staying
+      // on screen, visibly tinted wrong, for up to a few seconds after switching to VEL.
+      if (radarMapReady) {
+        radarLayerIds.forEach(id => { if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', 0); });
+      }
+      fetchRadarFrames();
+    }
+
+    function setRadarZoom(index) {
+      if (radarZoomIndex === index) return;
+      radarZoomIndex = index;
+      radarZoomChangedAt = Date.now();
+      if (index === 0) radarCloseLoopTick = 0;
+      centerRadarMapOnPosition();
+    }
+
+    // Baseline (no local alert) now runs FAR -> MID -> CLOSE -- the big-picture view first,
+    // narrowing in, rather than the old CLOSE-first order. Warning-tier order (CLOSE/MID only,
+    // FAR dropped -- far range isn't useful once something's actually happening close by) is
+    // unchanged.
+    const BASELINE_ZOOM_ORDER = [2, 1, 0];
+    const WARNING_ZOOM_ORDER = [0, 1];
+    function advanceZoom(order, holdMs) {
+      if (Date.now() - radarZoomChangedAt < holdMs) return;
+      const currentPos = order.indexOf(radarZoomIndex);
+      const nextPos = currentPos === -1 ? 0 : (currentPos + 1) % order.length;
+      setRadarZoom(order[nextPos]);
+    }
+
+    // Holds on the newest frame (no cycling) for at least the first half of however long this
+    // zoom level is being held for -- a fresh view of a new range shouldn't immediately start
+    // flipping through older frames before the viewer has even seen the current one. Cycles
+    // normally for the remainder of the hold.
+    function currentZoomHoldMs() {
+      if (isWarningActive) return WARNING_ZOOM_HOLD_MS;
+      return ZOOM_HOLD_MS[RADAR_ZOOM_LEVELS[radarZoomIndex].name] || WARNING_ZOOM_HOLD_MS;
+    }
+    function advanceRefLoop() {
+      if (!radarFrames.length) return;
+      if (Date.now() - radarZoomChangedAt < currentZoomHoldMs() / 2) {
+        applyRadarFrame(0);
+        return;
+      }
+      if (radarZoomIndex === 0) {
+        if (radarCloseLoopTick < CLOSE_MINI_LOOP_FRAMES) {
+          const frameIndex = Math.min(CLOSE_MINI_LOOP_FRAMES, radarFrames.length) - 1 - radarCloseLoopTick;
+          applyRadarFrame(Math.max(0, frameIndex));
+          radarCloseLoopTick += 1;
+        } else {
+          applyRadarFrame(0);
+        }
+        return;
+      }
+      applyRadarFrame(radarLoopIndex);
+      radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
+    }
+
+    function radarModeTick() {
+      radarTickCount += 1;
+      if (isWarningActive) {
+        advanceZoom(WARNING_ZOOM_ORDER, WARNING_ZOOM_HOLD_MS);
+        if (isTorWarning) {
+          if (radarTickCount % WARNING_PRODUCT_HOLD_TICKS === 1) {
+            const product = TOR_PRODUCT_ROTATION[torRotationIndex % TOR_PRODUCT_ROTATION.length];
+            torRotationIndex += 1;
+            setRadarProduct(product);
+          }
+          if (radarFrames.length) applyRadarFrame(0);
+          return;
+        }
+        if (isSevereWarning) {
+          if (radarTickCount % WARNING_PRODUCT_HOLD_TICKS === 1) {
+            const product = SEVERE_PRODUCT_ROTATION[severeRotationIndex % SEVERE_PRODUCT_ROTATION.length];
+            severeRotationIndex += 1;
+            setRadarProduct(product);
+          }
+          if (radarFrames.length) applyRadarFrame(0);
+          return;
+        }
+        // Flash Flood Warning (and any other warning-tier alert without its own rule above)
+        // stays REF-only, looping normally.
+        if (radarProduct !== 'REF') { setRadarProduct('REF'); torRotationIndex = 0; severeRotationIndex = 0; }
+        advanceRefLoop();
+        return;
+      }
+      // No local alert -- REF only, EXCEPT when a real Severe Thunderstorm Warning is active
+      // somewhere nearby (within NEARBY_SEVERE_RADIUS_MILES of this position, even though it
+      // doesn't cover this exact point) and we're at MID or CLOSE range: a light VEL mix gives
+      // an early look at a threat that isn't here yet, without disrupting the calm FAR view.
+      const nearSevere = !atFarZoom() && nearbySevereWarningMiles !== null && nearbySevereWarningMiles <= NEARBY_SEVERE_RADIUS_MILES;
+      if (nearSevere) {
+        if (radarTickCount % WARNING_PRODUCT_HOLD_TICKS === 1) {
+          const product = SEVERE_PRODUCT_ROTATION[baselineNearbyRotationIndex % SEVERE_PRODUCT_ROTATION.length];
+          baselineNearbyRotationIndex += 1;
+          setRadarProduct(product);
+        }
+      } else if (radarProduct !== 'REF') {
+        setRadarProduct('REF');
+        torRotationIndex = 0; severeRotationIndex = 0; baselineNearbyRotationIndex = 0;
+      }
+      advanceZoom(BASELINE_ZOOM_ORDER, ZOOM_HOLD_MS[RADAR_ZOOM_LEVELS[radarZoomIndex].name] || WARNING_ZOOM_HOLD_MS);
+      advanceRefLoop();
+    }
+
+    const midContent = {
+      alert: () => {
+        if (currentTier === 'clear') {
+          midBar.classList.remove('is-alert', 'is-glass', 'alert-box-glow');
+          midBar.style.removeProperty('background');
+          midBar.style.removeProperty('--abg-color');
+          midBar.style.removeProperty('--abg-r-soft');
+          midBar.style.removeProperty('--abg-r-strong');
+          renderAlertClear();
+          return;
+        }
+        midBar.classList.add('is-alert');
+        renderAlertTier(currentTier);
+      },
+      params: () => {
+        midBar.classList.remove('is-alert');
+        renderParams();
+      },
+      chasers: () => {
+        midBar.classList.remove('is-alert');
+        renderChasers(chasersHasReports);
+      },
+      // Real SPC data (see updateSpcOutlook below). Wind/Hail read "N/A" rather than a fabricated
+      // number -- the ported spcOutlook.ts service (and this port of it) only ever fetches the
+      // categorical + tornado layers, matching what's proven/tested; SPC's separate wind/hail
+      // probability layers were never part of that service's scope.
+      day1: () => {
+        midBar.classList.remove('is-alert');
+        const tIcon = '<svg class="spc-icon spc-icon-tor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16l-6 7v6l-4 3v-9z"/></svg>';
+        const wIcon = '<svg class="spc-icon spc-icon-wind" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 8h11a2.5 2.5 0 1 0-2.2-3.6"/><path d="M3 16h14a2.5 2.5 0 1 1-2.2 3.6"/></svg>';
+        const hIcon = '<svg class="spc-icon spc-icon-hail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="9" r="3"/><circle cx="16" cy="14" r="3.6"/></svg>';
+        const cat = spcOutlooks && spcOutlooks[0].categorical;
+        const torn = spcOutlooks && spcOutlooks[0].tornado;
+        const catLabel = cat ? cat.label : '--';
+        const catColor = cat ? (cat.color || '#e8c93a') : 'var(--muted)';
+        const catName = cat ? cat.labelLong : 'Awaiting outlook data...';
+        const tornVal = torn ? torn.label : 'N/A';
+        const tornColor = torn ? (torn.color || 'var(--text)') : 'var(--muted)';
+        midBar.innerHTML = `<div class="spc-split">
+          <div class="spc-half">
+            <div class="spc-risk-col">
+              <div class="spc-pct" style="color:${catLabel === '--' ? 'var(--muted)' : catColor};">${catLabel}</div>
+            </div>
+            <div class="spc-textcol">
+              <div class="spc-namerow"><span class="spc-risk-name">${cat ? catName : 'SPC Outlook'}</span><span class="spc-daytag">Day 1</span></div>
+              ${cat ? '' : `<div class="spc-desc">${catName}</div>`}
+            </div>
+          </div>
+          <div class="spc-half">
+            <div class="spc-stats">
+              <div class="spc-stat">${tIcon}<div class="spc-text"><div class="v" style="color:${tornColor};">${tornVal}</div><div class="l">Tornado</div></div></div>
+              <div class="spc-stat">${wIcon}<div class="spc-text"><div class="v">N/A</div><div class="l">Wind</div></div></div>
+              <div class="spc-stat">${hIcon}<div class="spc-text"><div class="v">N/A</div><div class="l">Hail</div></div></div>
+            </div>
+          </div>
+        </div>`;
+      },
+      day2: () => {
+        midBar.classList.remove('is-alert');
+        const half = (dayNum, outlook) => {
+          const cat = outlook && outlook.categorical;
+          if (!cat) return `<div class="spc-half">
+            <div class="spc-risk-col"><div class="spc-pct" style="color:var(--muted);">--</div></div>
+            <div class="spc-textcol"><div class="spc-namerow"><span class="spc-daytag">Day ${dayNum}</span><span class="spc-namerow-dot">•</span><span class="spc-risk-name">Awaiting data</span></div></div>
+          </div>`;
+          return `<div class="spc-half">
+            <div class="spc-risk-col"><div class="spc-pct" style="color:${cat.color || '#5cb85c'};">${cat.label}</div></div>
+            <div class="spc-textcol"><div class="spc-namerow"><span class="spc-daytag">Day ${dayNum}</span><span class="spc-namerow-dot">•</span><span class="spc-risk-name">${cat.labelLong}</span></div></div>
+          </div>`;
+        };
+        midBar.innerHTML = `<div class="spc-split">${half(2, spcOutlooks && spcOutlooks[1])}${half(3, spcOutlooks && spcOutlooks[2])}</div>`;
+      },
+      forecast: () => {
+        midBar.classList.remove('is-alert');
+        renderForecast();
+      },
+      sunmoon: () => {
+        midBar.classList.remove('is-alert');
+        const now = new Date();
+        const hasPos = settings.latitude !== null && settings.longitude !== null;
+        const sunTimes = hasPos ? getSunTimes(now, settings.latitude, settings.longitude) : null;
+        const sunriseText = sunTimes ? formatClockTime(sunTimes.sunrise) : '--:--';
+        const sunsetText = sunTimes ? formatClockTime(sunTimes.sunset) : '--:--';
+        const remaining = sunTimes ? daylightOrDarknessRemaining(sunTimes, now, settings.latitude, settings.longitude) : null;
+        const remainingLabel = remaining ? remaining.label : 'Daylight Left';
+        const remainingText = remaining ? remaining.text : '--';
+        const isNight = remaining && remaining.label === 'Darkness Left';
+        const moonPhaseText = moonPhaseName(getMoonPhase(now));
+        midBar.innerHTML = `<div class="sunmoon-row">
+          <div class="sm-stat">
+            <svg class="sm-icon sm-icon-sunrise" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 18h18"/><path d="M6 18a6 6 0 0 1 12 0"/><path d="M12 4v4M6.5 8l1.8 1.8M17.5 8l-1.8 1.8"/><path d="M9 21l-1 -1M16 21l1-1"/></svg>
+            <div class="sm-text"><div class="sm-val">${sunriseText}</div><div class="sm-lab">Sunrise</div></div>
+          </div>
+          <div class="sm-stat">
+            <svg class="sm-icon sm-icon-sunset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 18h18"/><path d="M18 18a6 6 0 0 0-12 0"/><path d="M12 4v4M6.5 8l1.8 1.8M17.5 8l-1.8 1.8"/><path d="M4 21l1-1M21 21l-1-1"/></svg>
+            <div class="sm-text"><div class="sm-val">${sunsetText}</div><div class="sm-lab">Sunset</div></div>
+          </div>
+          <div class="sm-stat">
+            ${isNight
+              ? '<svg class="sm-icon accent sm-icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 3a9 9 0 1 0 8 13 7 7 0 0 1-8-13z"/></svg>'
+              : '<svg class="sm-icon accent sm-icon-daylight" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>'}
+            <div class="sm-text"><div class="sm-val">${remainingText}</div><div class="sm-lab">${remainingLabel}</div></div>
+          </div>
+          <div class="sm-stat">
+            <svg class="sm-icon sm-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 3a9 9 0 1 0 8 13 7 7 0 0 1-8-13z"/></svg>
+            <div class="sm-text"><div class="sm-val">${moonPhaseText}</div><div class="sm-lab">Moon Phase</div></div>
+          </div>
+        </div>`;
+      },
+    };
+
+    // ---- Auto-rotation engine -- unchanged from the mockup. Alert is excluded from the
+    // rotation entirely when currentTier === 'clear', takes a normal turn for a Watch/Heat/
+    // Excessive Heat/generic alert, and fully pre-empts the rotation the instant a real
+    // WARNING_TIERS tier goes active.
+    const WARNING_TIERS = ['svrw', 'svrc', 'svrd', 'tor', 'pds', 'torE', 'ffw'];
+    const ROTATION_ORDER = ['alert', 'params', 'chasers', 'day1', 'day2', 'forecast', 'sunmoon'];
+    const DWELL_MS = { alert: 10000, params: 10000, chasers: 8000, day1: 10000, day2: 8000, forecast: 8000, sunmoon: 6000 };
+    // Real threshold, set by updateSpcOutlook() once real risk levels are flowing (true whenever
+    // either day is Slight or higher). Starts true so the card still takes its turn showing the
+    // "awaiting data" placeholder before the first fetch resolves, rather than vanishing.
+    let day23HasSomethingToShow = true;
+    function cardEligible(key) {
+      if (key === 'alert') return currentTier !== 'clear';
+      if (key === 'day2') return day23HasSomethingToShow;
+      return true;
+    }
+    function nextEligibleKey(afterKey) {
+      const startIdx = Math.max(0, ROTATION_ORDER.indexOf(afterKey));
+      for (let i = 1; i <= ROTATION_ORDER.length; i++) {
+        const key = ROTATION_ORDER[(startIdx + i) % ROTATION_ORDER.length];
+        if (cardEligible(key)) return key;
+      }
+      return afterKey;
+    }
+    function showRotationCard(key) {
+      midButtons.forEach(b => b.classList.toggle('active', b.dataset.mid === key));
+      animateSwap(midBar, () => {
+        if (key !== 'alert') midBar.style.background = '';
+        midContent[key]();
+      });
+    }
+    let autoRotateOn = true;
+    let rotationTimer = null;
+    let rotationPausedForWarning = false;
+    let pendingResumeKey = null;
+    function scheduleAdvance(key, delayOverride) {
+      clearTimeout(rotationTimer);
+      const delay = delayOverride != null ? delayOverride : (DWELL_MS[key] || 8000);
+      rotationTimer = setTimeout(() => advanceRotation(key), delay);
+    }
+    function advanceRotation(currentKey) {
+      if (!autoRotateOn || rotationPausedForWarning) return;
+      const next = nextEligibleKey(currentKey);
+      showRotationCard(next);
+      scheduleAdvance(next);
+    }
+
+    function scaleCanvas() {
+      if (!settings.scaleToWindow) return;
+      const scaleX = window.innerWidth / 1920;
+      const scaleY = window.innerHeight / 1080;
+      const scale = Math.min(scaleX, scaleY);
+      document.getElementById('canvas').style.transform = 'scale(' + scale + ')';
+    }
+
+    // ---- Boot ----
+    renderConditions();
+    initRadarMap();
+    if (settings.useLiveGps) {
+      document.getElementById('condTitleText').textContent = 'Awaiting GPS feed...';
+      updateGps();
+      setInterval(updateGps, Math.max(2, settings.gpsPollSeconds) * 1000);
+    } else {
+      updateLocation();
+      updateWeather();
+      updateSurfaceObs();
+      updateRadarSite();
+      updateSpcOutlook();
+      updateChaserData();
+      updateForecast();
+      updateStormIntel();
+      updateNearbySevereWarnings();
+    }
+    updateAlertReal();
+    updateViewerCount();
+    setInterval(updateViewerCount, 15_000); // a live count is worth checking often; the fetch itself is cheap
+    setInterval(updateLocation, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateWeather, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateSurfaceObs, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateAlertReal, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateSpcOutlook, Math.max(300, settings.pollSeconds) * 1000); // SPC reissues rarely -- no need to poll as often as weather/alerts
+    setInterval(updateChaserData, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateForecast, Math.max(600, settings.pollSeconds) * 1000); // forecast changes slowly -- no need to poll often
+    setInterval(updateStormIntel, Math.max(300, settings.pollSeconds) * 1000); // HRRR updates hourly at best -- no need to poll as often as weather/alerts
+    setInterval(updateNearbySevereWarnings, Math.max(90, settings.pollSeconds) * 1000);
+    setInterval(radarModeTick, 700);
+    setInterval(fetchRadarFrames, 120_000); // pick up new radar volume scans independent of site changes
+    showRotationCard('alert');
+    scheduleAdvance('alert');
+    scaleCanvas();
+    window.addEventListener('resize', scaleCanvas);
+  </script>
+</body>
+</html>
