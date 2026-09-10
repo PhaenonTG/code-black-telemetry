@@ -41,6 +41,7 @@ import { MODOT_PREFIX, handleModotRequest } from "../functions/lib/modotRelay";
 import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
 import { ODOT_PREFIX, handleOdotRequest, type OdotEnv } from "../functions/lib/odotRelay";
 import { CAMERA_HEALTH_PATH, handleCameraHealth } from "../functions/lib/cameraHealthRelay";
+import { KANDRIVE_PATH, handleKandriveRequest } from "../functions/lib/kandriveRelay";
 
 interface Env extends GatewayEnv, MapboxTokenEnv, OdotEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -80,6 +81,9 @@ export default {
     }
     if (url.pathname.startsWith(MODOT_PREFIX)) {
       return handleModotRequest(request);
+    }
+    if (url.pathname === KANDRIVE_PATH) {
+      return handleKandriveRequest(request);
     }
     if (url.pathname.startsWith(TDOT_PREFIX)) {
       return handleTdotRequest(request);

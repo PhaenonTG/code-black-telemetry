@@ -1,4 +1,4 @@
-const KANDRIVE_PATH = "/api/kandrive/graphql";
+export const KANDRIVE_PATH = "/api/kandrive/graphql";
 const KANDRIVE_UPSTREAM = "https://www.kandrive.gov/api/graphql";
 const MAX_BODY_BYTES = 24_000;
 
