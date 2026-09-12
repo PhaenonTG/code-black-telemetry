@@ -18,6 +18,9 @@ export interface PinPoint {
   imageUrl?: string | null;
   actionUrl?: string | null;
   actionLabel?: string;
+  // Short text drawn directly on the pin instead of its family glyph -- e.g. a surface station's
+  // current dewpoint reading. Only used when the pin isn't a cluster (cluster count always wins).
+  markerLabel?: string;
   cameraData?: TrafficCamera | null;
   roadData?: RoadConditionEvent | null;
   clusterCount?: number;
@@ -122,15 +125,17 @@ const ROAD_KIND_ICON_PATHS: Record<string, string> = {
   "weather-hazard": `<path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z" />`,
 };
 
-function applyClusterLabel(el: HTMLDivElement, count: number | undefined, family: string, roadKind?: string) {
+function applyClusterLabel(el: HTMLDivElement, count: number | undefined, family: string, roadKind?: string, markerLabel?: string) {
   if (count && count > 1) {
     el.textContent = String(count);
+  } else if (markerLabel) {
+    el.textContent = markerLabel;
   } else {
     const iconPath = (family === "road" && roadKind ? ROAD_KIND_ICON_PATHS[roadKind] : undefined) ?? FAMILY_ICON_PATHS[family as NonNullable<PinPoint["family"]>];
     el.textContent = "";
     el.innerHTML = iconPath ? `<svg viewBox="0 0 24 24" aria-hidden="true">${iconPath}</svg>` : "";
   }
-  el.setAttribute("aria-label", count && count > 1 ? `${count} ${family} map objects` : `${family} map object`);
+  el.setAttribute("aria-label", count && count > 1 ? `${count} ${family} map objects` : markerLabel ? `${family}: ${markerLabel}` : `${family} map object`);
 }
 
 function escapeHtml(value: string) {
@@ -328,7 +333,7 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
       const element = marker.getElement() as HTMLDivElement;
       applyMarkerClasses(element, point);
       applyPinStyle(element, style, zoom, point);
-      applyClusterLabel(element, point.clusterCount, point.family ?? "chaser", point.roadKind);
+      applyClusterLabel(element, point.clusterCount, point.family ?? "chaser", point.roadKind, point.markerLabel);
     }
   }
   for (const id of Object.keys(markers)) {
@@ -350,7 +355,7 @@ export function syncAtlasPinMarkers(map: MapboxMap, markers: Record<string, Mark
         const point = latestPointsByMarkers.get(markers)?.[id];
         if (point) applyMarkerClasses(element, point);
         if (point) applyPinStyle(element, currentStyle, currentZoom, point);
-        applyClusterLabel(element, point?.clusterCount, point?.family ?? "chaser", point?.roadKind);
+        applyClusterLabel(element, point?.clusterCount, point?.family ?? "chaser", point?.roadKind, point?.markerLabel);
       }
     });
   }

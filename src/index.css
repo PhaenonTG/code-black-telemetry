@@ -8761,12 +8761,33 @@ body {
   outline-color: rgba(56, 189, 248, 0.52);
 }
 
+.atlas-pin-marker--station {
+  outline-color: rgba(250, 204, 21, 0.55);
+}
+
 .atlas-pin-marker--cluster {
   min-width: 20px;
   min-height: 20px;
   border-radius: 999px !important;
   clip-path: none !important;
   background-image: none !important;
+}
+
+/* Surface station pins read their own dewpoint number (e.g. "58°") instead of a generic glyph --
+   the fixed square/diamond sizing that works for an icon is too tight for 2-3 digits of text, so
+   this widens to a pill that grows with its content, same override pattern as the cluster badge
+   above. Only applies when NOT also a cluster (the cluster count badge above takes precedence via
+   its own class combination and matching specificity). */
+.atlas-pin-marker--station:not(.atlas-pin-marker--cluster) {
+  width: auto !important;
+  height: auto !important;
+  min-width: 22px;
+  min-height: 18px;
+  padding: 0 5px;
+  border-radius: 999px !important;
+  clip-path: none !important;
+  font-size: 9.5px;
+  letter-spacing: -0.2px;
 }
 
 .atlas-pin-marker svg {

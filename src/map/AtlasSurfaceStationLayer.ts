@@ -8,7 +8,10 @@ const stationMarkersByMap = new WeakMap<MapboxMap, Record<string, Marker>>();
 
 const STATION_PIN_STYLE: PinStyle = {
   color: "#facc15",
-  shape: "diamond",
+  // Diamond made sense for a plain glyph pin; now that this pin reads its own dewpoint number
+  // (see markerLabel below), the CSS pill override (.atlas-pin-marker--station) is what actually
+  // controls the rendered shape -- circle is just the closest honest base for a text badge.
+  shape: "circle",
   sizeScale: 0.84,
 };
 
@@ -36,6 +39,10 @@ function stationToPin(station: SurfaceStationObservation | MapCluster<SurfaceSta
     lat: station.lat,
     lon: station.lon,
     name: station.id,
+    // Owner asked for the pin itself to read as the current dewpoint, not a generic station glyph --
+    // clicking it still opens the full detailRows breakdown below (temp/wind/gust/visibility/etc.),
+    // this just changes what's legible at a glance without tapping in.
+    markerLabel: station.dewpointF !== null ? `${Math.round(station.dewpointF)}°` : undefined,
     statusLine: parts.join(" · ") || "No current reading",
     detailRows: [
       { label: "Temp", value: station.temperatureF !== null ? `${station.temperatureF}°` : "--" },

@@ -498,7 +498,11 @@ export function AtlasMap({
         interactionResumeTimerRef.current = window.setTimeout(() => {
           interactionResumeAtRef.current = 0;
           interactionResumeTimerRef.current = null;
-          recenterRef.current(autoModeRef.current);
+          // Owner reversed the original "auto-resume follow after 2min idle" ask: once they take
+          // manual control of the full map, it stays FREE until they explicitly re-engage FOLLOW via
+          // the toolbar toggle -- no more snapping back on its own. The compact Weather-card widget
+          // has no follow-mode toggle to re-engage with, so it keeps the original auto-resume.
+          if (compact) recenterRef.current(autoModeRef.current);
         }, INTERACTION_PAUSE_MS);
       };
       map.on("dragstart", markUserInteraction);
@@ -653,7 +657,10 @@ export function AtlasMap({
     });
     setBearing(0);
     setPitch(0);
-    setCameraMode("FOLLOW_NORTH");
+    // Owner asked for the initial GPS-lock zoom to stay a one-shot: settle into FREE (manual
+    // control) right after it plays instead of continuing to auto-follow every GPS tick. The
+    // compact Weather-card widget has no follow-mode toggle of its own, so it keeps following.
+    setCameraMode(compact ? "FOLLOW_NORTH" : "FREE");
   }, [loaded, gps, expanded, compact]);
 
   useEffect(() => {
@@ -673,7 +680,11 @@ export function AtlasMap({
       if (mapRef.current !== map) return;
       map.resize();
       const currentGps = latestRef.current.gps;
-      if (currentGps) {
+      // Only re-snap to GPS on this page-becoming-active catch-up if we're still in a follow mode --
+      // once the owner has taken manual control (FREE), switching pages/tabs and back must not yank
+      // the view back to the vehicle out from under them.
+      const stillFollowing = cameraMode === "FOLLOW_NORTH" || cameraMode === "FOLLOW_HEADING" || cameraMode === "RECENTERING";
+      if (currentGps && stillFollowing) {
         map.jumpTo({
           center: [currentGps.lon, currentGps.lat],
           zoom: zoomLockedRef.current ? map.getZoom() : zoomForSpeed(currentGps.speedMph, latestRef.current.expanded, compact),
@@ -683,7 +694,7 @@ export function AtlasMap({
       }
     }, delay));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [active, bearing, compact, loaded, pitch]);
+  }, [active, bearing, cameraMode, compact, loaded, pitch]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1431,17 +1442,23 @@ export function AtlasMap({
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={roadConditionsVisible} onChange={() => toggleLayer("roadConditions")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="road" /></span>
-              Road Conditions - {providerStatusLabel(roadLayerStatus, roadConditions.length, roadProviderCount)}
+              {/* setRoadLayerStatus("not-configured") is this layer's OWN idle placeholder for
+                  "haven't fetched yet because the toggle is off" -- it reused the same status value
+                  a genuinely unconfigured backend returns, which read as "this is broken" for a
+                  layer that's simply switched off. Show a plain "off" here instead; once the
+                  checkbox is on, the real fetched status (including a real not-configured backend,
+                  if that ever happens) renders exactly as before. */}
+              Road Conditions - {roadConditionsVisible ? providerStatusLabel(roadLayerStatus, roadConditions.length, roadProviderCount) : "off"}
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={trafficCamerasVisible} onChange={() => toggleLayer("trafficCameras")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="camera" /></span>
-              Public Cameras - {providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount)}
+              Public Cameras - {trafficCamerasVisible ? providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount) : "off"}
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={surfaceStationsVisible} onChange={() => toggleLayer("surfaceStations")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="station" /></span>
-              Surface Stations - {providerStatusLabel(surfaceStationLayerStatus, surfaceStations.length, 1)}
+              Surface Stations - {surfaceStationsVisible ? providerStatusLabel(surfaceStationLayerStatus, surfaceStations.length, 1) : "off"}
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={riverGaugesVisible} onChange={() => toggleLayer("riverGauges")} />
