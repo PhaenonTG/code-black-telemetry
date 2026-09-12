@@ -877,7 +877,12 @@ function normalizeCarsCameraRecords(records: CarsCameraRecord[], context: LayerQ
     if (record.public !== true || !isValidCoordinate(lat, lon)) return [];
     const point = { lat, lon };
     if (!pointInViewport(point, context.viewport) || !coordinateWithinCoverage(point, provider.coverage)) return [];
-    const view = record.views?.find((candidate) => safeHttpUrl(candidate.url)) ?? record.views?.[0];
+    // Some cameras only publish a live video view (type "WMP") -- its `url` is a short-lived signed
+    // .m3u8 HLS playlist, not an image, and silently fails to render in an <img> tag (loads with
+    // naturalWidth 0, no visible error). Confirmed live: ~1/3 of KDOT KanDrive's own camera records
+    // are this type. Only a STILL_IMAGE view is usable as a preview here; anything else falls back to
+    // no image (renders as "MEDIA UNAVAILABLE" in the UI) rather than a broken image.
+    const view = record.views?.find((candidate) => candidate.type === "STILL_IMAGE" && safeHttpUrl(candidate.url));
     const imageUrl = safeHttpUrl(view?.url);
     const updatedAt = Number.isFinite(view?.imageTimestamp) ? Number(view?.imageTimestamp) : Number.isFinite(record.lastUpdated) ? Number(record.lastUpdated) : null;
     const recordId = sanitizeProviderText(String(record.id ?? `${lat},${lon}`), 80);
