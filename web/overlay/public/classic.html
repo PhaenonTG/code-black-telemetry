@@ -647,6 +647,7 @@
     // live -- when present, live GPS polling is skipped entirely and that fixed point is used
     // instead, same as before this was wired up.
     const params = new URLSearchParams(window.location.search);
+    const MIN_GPS_POLL_SECONDS = 15;
 
     const manualLatitude = params.get('latitude') ? Number(params.get('latitude')) : null;
     const manualLongitude = params.get('longitude') ? Number(params.get('longitude')) : null;
@@ -662,7 +663,7 @@
       useLiveGps: manualLatitude === null || manualLongitude === null,
       chaseGatewayBase: params.get('chaseGatewayBase') || 'https://ops.codeblackwx.com',
       unitId: params.get('unitId') || 'cbwx-unit-tessa',
-      gpsPollSeconds: params.get('gpsPollSeconds') ? Number(params.get('gpsPollSeconds')) : 5,
+      gpsPollSeconds: params.get('gpsPollSeconds') ? Number(params.get('gpsPollSeconds')) : MIN_GPS_POLL_SECONDS,
     };
     let lastAppliedLat = manualLatitude;
     let lastAppliedLon = manualLongitude;
@@ -818,7 +819,7 @@
     // only actually re-fetch when the position has moved meaningfully, to stay well under
     // Nominatim's rate limit.
     async function updateGps() {
-      if (!settings.useLiveGps) return;
+      if (!settings.useLiveGps || document.hidden) return;
       try {
         const url = `${settings.chaseGatewayBase}/api/chase/location/public?unit_id=${encodeURIComponent(settings.unitId)}`;
         const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -1465,7 +1466,11 @@
       el.locationText.textContent = 'Awaiting GPS feed...';
       renderSecondaryLine();
       updateGps();
-      setInterval(updateGps, Math.max(2, settings.gpsPollSeconds) * 1000);
+      const gpsPollIntervalMs = Math.max(MIN_GPS_POLL_SECONDS, settings.gpsPollSeconds) * 1000;
+      setInterval(() => void updateGps(), gpsPollIntervalMs);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) void updateGps();
+      });
     } else {
       updateLocation();
       updateWeather();
