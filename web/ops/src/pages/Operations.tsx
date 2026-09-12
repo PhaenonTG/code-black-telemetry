@@ -116,7 +116,7 @@ export default function Operations() {
       </div>
       <section className="provider-diagnostics">
         <h2>MAP PROVIDERS</h2>
-        {providerDiagnostics.length === 0 ? <p>Open the map with Roads or Cameras enabled to collect provider diagnostics.</p> : providerDiagnostics.sort((a, b) => a.name.localeCompare(b.name)).map((provider) => <div className="status-row" key={`${provider.layer}:${provider.id}`}>
+        {providerDiagnostics.length === 0 ? <p>Open the map with Roads or Cameras enabled to collect provider diagnostics.</p> : [...providerDiagnostics].sort((a, b) => a.name.localeCompare(b.name)).map((provider) => <div className="status-row" key={`${provider.layer}:${provider.id}`}>
           <span className="status-row__label">{provider.name} · {provider.layer.toUpperCase()}</span>
           <StatusBadge state={provider.state === "error" ? "UNAVAILABLE" : provider.state === "cached" ? "DEGRADED" : "LIVE"} />
           <span className="status-row__detail">{provider.count} records · {provider.latencyMs ? `${provider.latencyMs} ms` : provider.detail}</span>

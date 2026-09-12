@@ -286,6 +286,12 @@ function nowMs() {
   return Date.now();
 }
 
+function joinWithAnd(items: string[]) {
+  if (items.length <= 1) return items.join("");
+  if (items.length === 2) return items.join(" and ");
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
 export function isValidCoordinate(lat: unknown, lon: unknown) {
   const latNum = typeof lat === "number" ? lat : Number(lat);
   const lonNum = typeof lon === "number" ? lon : Number(lon);
@@ -1673,7 +1679,11 @@ export async function getRoadConditionsForViewport(context: LayerQueryContext, s
   const providers = roadProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "outside-coverage", message: "Outside current road-condition provider coverage. Supports Arkansas, Kansas, and Missouri DOT coverage.", simulated: false, fetchedAt };
+    // Was a hardcoded "Arkansas, Kansas, and Missouri" list that went stale the moment Iowa/
+    // Tennessee/Oklahoma were added to ROAD_CONDITION_PROVIDERS below -- derive it from the
+    // providers' own coverage labels so it can't drift out of sync with reality again.
+    const states = [...new Set(ROAD_CONDITION_PROVIDERS.map((provider) => provider.coverage.label))];
+    return { data: [], status: "outside-coverage", message: `Outside current road-condition provider coverage. Supports ${joinWithAnd(states)} DOT coverage.`, simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("road", roadCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);
@@ -1699,7 +1709,8 @@ export async function getTrafficCamerasForViewport(context: LayerQueryContext, s
   const providers = trafficCameraProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. Supports Arkansas, Iowa, Kansas, Missouri, Nebraska, and Tennessee DOT coverage.", simulated: false, fetchedAt };
+    const states = [...new Set(TRAFFIC_CAMERA_PROVIDERS.map((provider) => provider.coverage.label))];
+    return { data: [], status: "outside-coverage", message: `Outside current public-camera provider coverage. Supports ${joinWithAnd(states)} DOT coverage.`, simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("camera", cameraCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);

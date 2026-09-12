@@ -2478,6 +2478,39 @@ button {
   padding: var(--cb-gap) 0 0;
 }
 
+.live-page {
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+
+.live-page--unavailable {
+  align-items: center;
+  justify-content: center;
+}
+
+.live-page__message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 24px;
+}
+
+.live-page__message strong {
+  font: 900 13px/1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.06em;
+  color: rgba(255, 190, 60, 0.85);
+}
+
+.live-page__message span {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  max-width: 32ch;
+}
+
 .cb-panel,
 .rounded-sm.bg-cb-panel {
   border-radius: 0;

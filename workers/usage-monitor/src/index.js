@@ -101,7 +101,23 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(runCheck(env));
   },
+  // The GET path exists so this can be checked/tested on demand without waiting for the cron
+  // tick -- but `workers_dev: true` makes that GET publicly reachable at *.workers.dev with no
+  // auth, and every hit both burns a real Cloudflare GraphQL Analytics API call (this account's
+  // own quota) and, once CF_API_TOKEN is set and usage is already over threshold, fires a fresh
+  // Discord alert with zero de-duplication -- an anonymous script hammering the URL could flood
+  // #infrastructure-alerts and needlessly consume the analytics quota. Requires a shared key
+  // (set via `wrangler secret put MONITOR_CHECK_KEY`) for the manual GET; the cron path above is
+  // unaffected since it isn't caller-invoked. Until that secret is set, GET stays open (matches
+  // this worker's existing "not configured yet" posture elsewhere) -- set it before relying on
+  // this being safe to leave publicly reachable.
   async fetch(request, env) {
+    if (env.MONITOR_CHECK_KEY) {
+      const providedKey = request.headers.get("x-monitor-check-key") ?? new URL(request.url).searchParams.get("key");
+      if (providedKey !== env.MONITOR_CHECK_KEY) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
+      }
+    }
     const result = await runCheck(env);
     return new Response(JSON.stringify(result, null, 2), {
       headers: { "Content-Type": "application/json" },

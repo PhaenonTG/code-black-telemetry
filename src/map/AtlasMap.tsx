@@ -1110,11 +1110,16 @@ export function AtlasMap({
   useEffect(() => {
     if (!stormReportsVisible || !gps) { setStormReports([]); return; }
     let cancelled = false;
+    // Was only applied on the initial fetch -- the 5-minute refresh below set `result.reports`
+    // straight through with no cutoff, so a report that aged past 2 hours (or one the feed
+    // returned stale) could silently reappear on the map after any refresh even though the
+    // initial load explicitly excludes it. Same filter, both call sites now.
+    const applyStalenessCutoff = (reports: typeof stormReports) => reports.filter((report) => Date.now() - report.validTime <= 2 * 60 * 60_000);
     void getNearbyStormReports(gps, 250, 2).then((result) => {
-      if (!cancelled) setStormReports(result.reports.filter((report) => Date.now() - report.validTime <= 2 * 60 * 60_000));
+      if (!cancelled) setStormReports(applyStalenessCutoff(result.reports));
     });
     const timer = window.setInterval(() => {
-      void getNearbyStormReports(gps, 250, 2).then((result) => { if (!cancelled) setStormReports(result.reports); });
+      void getNearbyStormReports(gps, 250, 2).then((result) => { if (!cancelled) setStormReports(applyStalenessCutoff(result.reports)); });
     }, 5 * 60_000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [stormReportsVisible, gps?.lat, gps?.lon]);
