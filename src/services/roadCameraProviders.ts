@@ -880,13 +880,21 @@ function normalizeCarsCameraRecords(records: CarsCameraRecord[], context: LayerQ
     // Some cameras only publish a live video view (type "WMP") -- its `url` is a short-lived signed
     // .m3u8 HLS playlist, not an image, and silently fails to render in an <img> tag (loads with
     // naturalWidth 0, no visible error). Confirmed live: ~1/3 of KDOT KanDrive's own camera records
-    // are this type. Only a STILL_IMAGE view is usable as a preview here; anything else falls back to
-    // no image (renders as "MEDIA UNAVAILABLE" in the UI) rather than a broken image.
-    const view = record.views?.find((candidate) => candidate.type === "STILL_IMAGE" && safeHttpUrl(candidate.url));
-    const imageUrl = safeHttpUrl(view?.url);
-    const updatedAt = Number.isFinite(view?.imageTimestamp) ? Number(view?.imageTimestamp) : Number.isFinite(record.lastUpdated) ? Number(record.lastUpdated) : null;
+    // are this type, and the two never overlap on one record (a camera is one or the other, never
+    // both). A STILL_IMAGE view is the preview image; a WMP view instead becomes streamUrl, which
+    // the map camera viewer already knows how to play via hls.js. The WMP token is signed with a
+    // ~5min expiry (confirmed from its JWT `exp`) and this list is cached for CAMERA_CACHE_TTL_MS
+    // (also 5min) -- so a stream opened late in that cache window can hand back an already-expired
+    // token. That's an accepted, honest degradation: the viewer's HLS error handler surfaces "Live
+    // stream unavailable" rather than failing silently, and the next viewport refresh fixes it.
+    const stillView = record.views?.find((candidate) => candidate.type === "STILL_IMAGE" && safeHttpUrl(candidate.url));
+    const streamView = record.views?.find((candidate) => candidate.type !== "STILL_IMAGE" && safeHttpUrl(candidate.url));
+    const imageUrl = safeHttpUrl(stillView?.url);
+    const streamUrl = safeHttpUrl(streamView?.url);
+    const activeView = stillView ?? streamView;
+    const updatedAt = Number.isFinite(activeView?.imageTimestamp) ? Number(activeView?.imageTimestamp) : Number.isFinite(record.lastUpdated) ? Number(record.lastUpdated) : null;
     const recordId = sanitizeProviderText(String(record.id ?? `${lat},${lon}`), 80);
-    const availability: TrafficCameraAvailability = imageUrl ? "available" : "unknown";
+    const availability: TrafficCameraAvailability = imageUrl || streamUrl ? "available" : "unknown";
     return [{
       id: `${provider.providerId}:camera:${recordId}`,
       providerId: provider.providerId,
@@ -900,7 +908,7 @@ function normalizeCarsCameraRecords(records: CarsCameraRecord[], context: LayerQ
       provider: { ...provider.provenance, provider: "PUBLIC/TRAFFIC" },
       lastUpdateAt: updatedAt,
       imageUrl,
-      streamUrl: null,
+      streamUrl,
       thumbnailUrl: imageUrl,
       previewUrl: imageUrl,
       availability,
