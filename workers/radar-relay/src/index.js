@@ -19,11 +19,26 @@
 // TTL gets served straight from Cloudflare's edge with zero additional Worker invocations.
 const RADAR_ORIGIN = "http://127.0.0.1:8787";
 const PREFIX = "/api/v1/radar/";
+// radar-worker holds this state as plain process-wide globals (see worker.cjs) with no per-
+// session scoping and no auth of its own -- it isn't independently reachable from the public
+// internet (only via this relay's VPC binding), so this relay is the actual trust boundary.
+// Confirmed live: before this gate, any anonymous POST here could overwrite the site/product/
+// tilt every viewer's radar defaults to, or inject a fake storm-motion vector into the shared
+// SRV calculation everyone sees (including the public OBS overlay). The app's own real caller
+// (setRadarStormMotion in src/services/radar.ts) sends this same key as a plain constant --
+// not a cryptographic secret (it ships in the public client bundle either way, so there's no
+// real gain from routing it through a build-time env var instead), but it raises the bar from
+// "any bare curl against a public URL works" to "you have to go pull it out of the app bundle
+// first", which is the actual realistic threat this is closing off for a small-team tool with no
+// full user-auth system. A real per-user auth model is the correct fix if this needs to resist a
+// determined, targeted attacker later.
+const MUTATING_RADAR_ROUTES = new Set([`${PREFIX}selection`, `${PREFIX}storm-motion`]);
+const MUTATION_KEY_HEADER = "x-radar-mutation-key";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, X-Radar-Mutation-Key",
 };
 
 // Tiles are content-addressed by frameId -- a given tile's bytes never change once radar-worker
@@ -51,6 +66,15 @@ export async function handleRequest(request, env, ctx) {
   }
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+  if (request.method === "POST" && MUTATING_RADAR_ROUTES.has(url.pathname)) {
+    const providedKey = request.headers.get(MUTATION_KEY_HEADER);
+    if (!env.RADAR_MUTATION_KEY || !providedKey || providedKey !== env.RADAR_MUTATION_KEY) {
+      return new Response(JSON.stringify({ error: "UNAUTHORIZED" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
+    }
   }
   if (!env.RADAR_VPC) {
     return new Response(JSON.stringify({ error: "RADAR_UNAVAILABLE" }), {

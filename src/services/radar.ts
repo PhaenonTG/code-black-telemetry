@@ -335,12 +335,21 @@ export async function getNearestRadarSites(lat: number, lon: number) {
     .sort((a, b) => (a.distanceMi ?? 0) - (b.distanceMi ?? 0));
 }
 
+// radar-relay gates POST /api/v1/radar/storm-motion (and /selection) with this same value -- see
+// the comment in workers/radar-relay/src/index.js for the full reasoning. It's deliberately a
+// plain constant rather than pulled from a build-time env var: it ends up embedded in the public
+// client bundle either way once built, so routing it through Cloudflare Pages' separate build-env
+// pipeline would add real deploy-coordination complexity for zero actual security gain. This is
+// not a cryptographic secret -- it exists to stop the endpoint being bare-curlable by anyone who
+// finds the URL, not to withstand a determined attacker willing to read the bundle.
+const RADAR_MUTATION_KEY = "d481a23868768b337acd43108cb782b7e6efcc79d3fa9e91";
+
 export async function setRadarStormMotion(motion: { directionDegrees: number; speedKnots: number; source?: string }) {
   await ensureInitialized();
   if (webRadarEnabled()) {
     const response = await fetch(`${radarWorkerBase()}/api/v1/radar/storm-motion`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-radar-mutation-key": RADAR_MUTATION_KEY },
       body: JSON.stringify(motion),
     });
     if (!response.ok) throw new Error(`radar worker ${response.status}`);
