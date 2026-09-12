@@ -161,7 +161,6 @@ export default function App() {
   const piState = opsStatus.transport.label;
   const telemetryState = opsStatus.telemetry.label;
   const serviceState = opsStatus.services.label;
-  const coreState = opsStatus.transport.label;
   const showOperationalActions = appPageSupportsOperationalActions(page);
   const mapGps = useMemo(
     () => (gpsPoint ? { ...gpsPoint, headingDeg, speedMph, accuracyM } : null),
@@ -586,7 +585,7 @@ export default function App() {
                 <span>UI Mode</span><strong>{cockpitMode.toUpperCase()}</strong>
                 <span>Canonical GPS</span><strong>{canonicalLocation.validity} · {sourceLabel(canonicalLocation.source, deviceLabels.gps)}</strong>
                 <span>Resolved Place</span><strong>{canonicalLocation.resolvedCity ? `${canonicalLocation.resolvedCity}, ${canonicalLocation.resolvedState ?? ""}` : canonicalLocation.fallbackReason}</strong>
-                <span>Core / Pi</span><strong>{coreState}</strong>
+                <span>Core / Pi</span><strong>{piState}</strong>
                 <span>Sensor Services</span><strong>{serviceState}</strong>
                 <span>Logs</span><strong>RECENT EVENTS</strong>
               </div>
