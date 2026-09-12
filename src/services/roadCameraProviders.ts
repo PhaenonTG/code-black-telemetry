@@ -159,6 +159,44 @@ const IADOT_PROVENANCE: ObservationProvenance = {
   displayLabel: "Iowa DOT 511",
 };
 
+const COLORADO_COVERAGE: ProviderCoverage = {
+  north: 41.01,
+  south: 36.99,
+  east: -102.04,
+  west: -109.06,
+  label: "Colorado",
+};
+
+const MINNESOTA_COVERAGE: ProviderCoverage = {
+  north: 49.39,
+  south: 43.49,
+  east: -89.48,
+  west: -97.24,
+  label: "Minnesota",
+};
+
+// Same CARS Program (carsprogram.org) backend already integrated for Kansas (KanDrive) and
+// Nebraska (NE511) -- confirmed live via the identical cameras_v1/api/cameras contract, same
+// record shape (normalizeCarsCameraRecords handles all three identically). Found by probing the
+// same subdomain-naming pattern the existing two use (<state>tg.carsprogram.org).
+const COTG_PROVENANCE: ObservationProvenance = {
+  provider: "OFFICIAL/STATE_TRANSPORTATION" as ObservationProvenance["provider"],
+  sourceId: "cotg-cdot",
+  sourceName: "Colorado DOT COtrip",
+  official: true,
+  experimental: false,
+  displayLabel: "CDOT COtrip",
+};
+
+const MNTG_PROVENANCE: ObservationProvenance = {
+  provider: "OFFICIAL/STATE_TRANSPORTATION" as ObservationProvenance["provider"],
+  sourceId: "mntg-mndot",
+  sourceName: "Minnesota DOT 511",
+  official: true,
+  experimental: false,
+  displayLabel: "MnDOT 511",
+};
+
 const IDRIVE_LAYER_BASE_URL = "https://layers.idrivearkansas.com";
 const IDRIVE_APP_URL = "https://www.idrivearkansas.com/";
 const ROAD_CACHE_TTL_MS = 2 * 60_000;
@@ -938,6 +976,44 @@ export async function fetchNe511TrafficCameras(context: LayerQueryContext, signa
   });
 }
 
+// --- Colorado DOT COtrip ----------------------------------------------------------------------
+// Same CARS Program backend as KanDrive/NE511 above -- confirmed live (1,013 real camera records
+// at probe time), identical cameras_v1/api/cameras contract.
+const COTG_CAMERAS_URL = "https://cotg.carsprogram.org/cameras_v1/api/cameras";
+const COTG_APP_URL = "https://www.cotrip.org/";
+
+export async function fetchCotgTrafficCameras(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<TrafficCamera[]> {
+  const response = await fetcher(COTG_CAMERAS_URL, DEFAULT_PROVIDER_TIMEOUT_MS, { signal });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const records = await response.json() as CarsCameraRecord[];
+  return normalizeCarsCameraRecords(records, context, {
+    providerId: "cotg-cdot",
+    sourceName: "Colorado DOT COtrip",
+    coverage: COLORADO_COVERAGE,
+    provenance: COTG_PROVENANCE,
+    sourceUrl: COTG_APP_URL,
+  });
+}
+
+// --- Minnesota DOT 511 -------------------------------------------------------------------------
+// Same CARS Program backend as KanDrive/NE511/COtrip above -- confirmed live (1,527 real camera
+// records at probe time), identical cameras_v1/api/cameras contract.
+const MNTG_CAMERAS_URL = "https://mntg.carsprogram.org/cameras_v1/api/cameras";
+const MNTG_APP_URL = "https://511mn.org/";
+
+export async function fetchMntgTrafficCameras(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<TrafficCamera[]> {
+  const response = await fetcher(MNTG_CAMERAS_URL, DEFAULT_PROVIDER_TIMEOUT_MS, { signal });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const records = await response.json() as CarsCameraRecord[];
+  return normalizeCarsCameraRecords(records, context, {
+    providerId: "mntg-mndot",
+    sourceName: "Minnesota DOT 511",
+    coverage: MINNESOTA_COVERAGE,
+    provenance: MNTG_PROVENANCE,
+    sourceUrl: MNTG_APP_URL,
+  });
+}
+
 // --- Iowa DOT 511 ------------------------------------------------------------------------------
 // Iowa explicitly publishes these credential-free ArcGIS services for third-party use. Camera
 // records include both urban CCTV and rural RWIS views; winter conditions arrive as the actual
@@ -1602,6 +1678,28 @@ export const TRAFFIC_CAMERA_PROVIDERS: TrafficCameraProvider[] = [
     timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
     attribution: "Tennessee DOT SmartWay",
     fetchViewport: fetchTdotTrafficCameras,
+  },
+  {
+    id: "cotg-cdot",
+    name: "Colorado DOT COtrip",
+    coverage: COLORADO_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: CAMERA_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Colorado DOT COtrip",
+    fetchViewport: fetchCotgTrafficCameras,
+  },
+  {
+    id: "mntg-mndot",
+    name: "Minnesota DOT 511",
+    coverage: MINNESOTA_COVERAGE,
+    enabled: true,
+    priority: 10,
+    minRefreshMs: CAMERA_CACHE_TTL_MS,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "Minnesota DOT 511",
+    fetchViewport: fetchMntgTrafficCameras,
   },
 ];
 
