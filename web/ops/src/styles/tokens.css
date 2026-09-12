@@ -22,7 +22,12 @@
   --cb-gray: #8D949B;
   --cb-text: #f4f6fa;
   --cb-muted: #8b929f;
-  --cb-dim: #59606b;
+  /* Was #59606b -- 3.04:1 against --cb-panel, below the 4.5:1 body-text floor, and this token is
+     used as real text color (not just a decorative dot) down to 8px in several places: provenance
+     labels, coordinate readouts, deferred-settings copy. Raised to the nearest value on the same
+     dim-to-muted hue ramp that clears 4.5:1 (4.58:1) while staying visibly dimmer than --cb-muted
+     (6.17:1), preserving the dim < muted < text hierarchy. */
+  --cb-dim: #757c85;
   --cb-radius: 6px;
   --cb-fast: 160ms;
   --cb-medium: 360ms;
