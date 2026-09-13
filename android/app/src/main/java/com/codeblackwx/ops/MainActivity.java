@@ -5,6 +5,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.view.WindowManager;
 import com.codeblackwx.ops.chase.ChaseTrackingNativePlugin;
 import com.codeblackwx.ops.location.TabletLocationNativePlugin;
 import com.codeblackwx.ops.security.CodeBlackSecureCredentialsPlugin;
@@ -17,6 +18,11 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ChaseTrackingNativePlugin.class);
         registerPlugin(CodeBlackSecureCredentialsPlugin.class);
         super.onCreate(savedInstanceState);
+        // This device runs unattended for hours as a dedicated chase-streaming source -- an
+        // auto-locked screen suspends the app and kills the live stream. Keep it on for the
+        // app's entire foreground lifetime, not just during an active stream, since the screen
+        // locking is what breaks things, not idle time itself.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         enableImmersiveMode();
     }
 
