@@ -673,6 +673,14 @@
     // Nominatim reverse geocode -- public, CORS-open, no key. Rate-limited to ~1req/s by their
     // usage policy; this only calls it once per settings.pollSeconds (default 60s) plus on a
     // meaningful GPS position change, well under it.
+    const US_STATE_ABBREVIATIONS = Object.freeze({
+      ALABAMA: 'AL', ALASKA: 'AK', ARIZONA: 'AZ', ARKANSAS: 'AR', CALIFORNIA: 'CA', COLORADO: 'CO', CONNECTICUT: 'CT', DELAWARE: 'DE', FLORIDA: 'FL', GEORGIA: 'GA', HAWAII: 'HI', IDAHO: 'ID', ILLINOIS: 'IL', INDIANA: 'IN', IOWA: 'IA', KANSAS: 'KS', KENTUCKY: 'KY', LOUISIANA: 'LA', MAINE: 'ME', MARYLAND: 'MD', MASSACHUSETTS: 'MA', MICHIGAN: 'MI', MINNESOTA: 'MN', MISSISSIPPI: 'MS', MISSOURI: 'MO', MONTANA: 'MT', NEBRASKA: 'NE', NEVADA: 'NV', 'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ', 'NEW MEXICO': 'NM', 'NEW YORK': 'NY', 'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', OHIO: 'OH', OKLAHOMA: 'OK', OREGON: 'OR', PENNSYLVANIA: 'PA', 'RHODE ISLAND': 'RI', 'SOUTH CAROLINA': 'SC', 'SOUTH DAKOTA': 'SD', TENNESSEE: 'TN', TEXAS: 'TX', UTAH: 'UT', VERMONT: 'VT', VIRGINIA: 'VA', WASHINGTON: 'WA', 'WEST VIRGINIA': 'WV', WISCONSIN: 'WI', WYOMING: 'WY', 'DISTRICT OF COLUMBIA': 'DC'
+    });
+
+    function stateAbbreviation(value) {
+      const normalized = String(value || '').trim().toUpperCase();
+      return US_STATE_ABBREVIATIONS[normalized] || (/^[A-Z]{2}$/.test(normalized) ? normalized : normalized);
+    }
     async function updateLocation() {
       if (settings.latitude === null || settings.longitude === null) {
         el.locationText.textContent = 'Awaiting GPS feed...';
@@ -687,7 +695,7 @@
         const addr = data.address || {};
         const city = addr.city || addr.town || addr.village || addr.hamlet || addr.county;
         const state = addr.state;
-        el.locationText.textContent = city && state ? `${city}, ${state.slice(0, 2).toUpperCase()}` : (data.display_name || 'Location unavailable');
+        el.locationText.textContent = city && state ? `${city}, ${stateAbbreviation(state)}` : (data.display_name || 'Location unavailable');
       } catch (err) {
         el.locationText.textContent = `${settings.latitude.toFixed(2)}, ${settings.longitude.toFixed(2)}`;
       }
