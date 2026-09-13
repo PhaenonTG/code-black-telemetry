@@ -388,8 +388,13 @@ export function AtlasMap({
   const pointOnlyRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type !== "line"), [operationalRoadConditions]);
   const clusteredRoadConditions = useMemo(() => (viewport ? filterViewportPoints(pointOnlyRoadConditions, viewport) : pointOnlyRoadConditions), [pointOnlyRoadConditions, viewport]);
   // Roughly ten-county and closer views retain every camera. Wider views cluster dense corridors.
+  // Cell sizes were tighter than the (much sparser) chaser-spotter clustering below despite
+  // cameras being the far denser dataset -- backwards, and confirmed live: even clustered, a
+  // nationwide view still rendered 667 dots (358 of them clusters) across 5,441 real cameras,
+  // reading as a solid mesh rather than a glanceable regional overview. Widened proportionally
+  // to the dataset size (now 8 states, ~5,400+ cameras after adding Colorado/Minnesota).
   const clusteredTrafficCameras = useMemo(() => viewport
-    ? clusterViewportPoints(filterViewportPoints(operationalTrafficCameras, viewport), viewport, { individualAtZoom: 6, mediumAtZoom: 4.5, mediumCellDegrees: 0.28, farCellDegrees: 1.1 })
+    ? clusterViewportPoints(filterViewportPoints(operationalTrafficCameras, viewport), viewport, { individualAtZoom: 6, mediumAtZoom: 4.5, mediumCellDegrees: 0.6, farCellDegrees: 3.2 })
     : operationalTrafficCameras, [operationalTrafficCameras, viewport]);
   const clusteredSurfaceStations = useMemo(() => (viewport ? filterViewportPoints(surfaceStations, viewport) : surfaceStations), [surfaceStations, viewport]);
   const visibleStormReports = useMemo(() => viewport ? filterViewportPoints(stormReports, viewport) : stormReports, [stormReports, viewport]);
