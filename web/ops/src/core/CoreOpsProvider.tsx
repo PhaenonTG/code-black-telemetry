@@ -8,6 +8,12 @@ import { LatestRequestGate } from "./requestGate";
 import { addPointHistoryEntry, historyEntryFromSnapshot } from "../stormIntel/pointHistory";
 import type { OpsCoreState } from "./types";
 
+// How recently the Fabric WebSocket must have delivered something for the 30s REST refresh to
+// treat it as "healthy" and skip the redundant Fabric/Storm-Intel REST calls -- generous enough
+// to absorb a normal gap between events, tight enough that a WS silently gone dead (socket
+// object still exists but stopped receiving) falls back to REST well within one poll cycle.
+const FABRIC_WS_FRESH_MS = 90_000;
+
 function initialState(): OpsCoreState {
   const now = Date.now();
   return {
@@ -53,8 +59,34 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     async function refresh() {
-      const [core, fabric, stormIntelHealth] = await Promise.all([
-        fetchCoreHealth(config),
+      const core = await fetchCoreHealth(config);
+      if (cancelled) return;
+
+      // Fabric REST (health + units) exists only to seed/refresh the same state the Fabric
+      // WebSocket below already delivers live -- the merge logic further down already discards
+      // REST's `units` once the WS has supplied a real snapshot (`current.fabric.units ?? ...`).
+      // While the WS is genuinely live (open, and it actually delivered something recently --
+      // not just "the socket claims open"), firing this REST pair every 30s just produces a
+      // response that gets thrown away, and it's the same story for Storm Intel's health ping:
+      // that service is co-located in the same Core process Fabric's WS is already proving is
+      // reachable, so a live Fabric WS is a reliable live-presence signal for it too. Neither is
+      // bulky model/radar data -- this is exactly the "small live presence/state" the WS is
+      // for -- so both get skipped while the WS is healthy, and resume as the bounded fallback
+      // on the very next 30s tick the moment it isn't (closed/error/stale all flip `wsState`
+      // away from "open" immediately in the WS handlers below, so recovery/failure is reflected
+      // within one interval tick, not a separate timer to manage).
+      const fabricNow = fabricRef.current;
+      const wsHealthy =
+        fabricNow.wsState === "open" &&
+        fabricNow.lastWsEventAt !== null &&
+        Date.now() - fabricNow.lastWsEventAt < FABRIC_WS_FRESH_MS;
+
+      if (wsHealthy) {
+        setState((current) => ({ ...current, core, refreshedAt: Date.now() }));
+        return;
+      }
+
+      const [fabric, stormIntelHealth] = await Promise.all([
         fetchFabricRest(config, fabricRef.current),
         fetchStormIntelHealth(config),
       ]);
