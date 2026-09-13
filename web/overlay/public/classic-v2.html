@@ -528,8 +528,8 @@
 
     <div class="panel radar-panel-f fx-panel">
       <div class="radar-head">
-        <div class="radar-title-row"><div class="radar-title">Radar · <span id="radarModeText">REF</span></div></div>
-        <div class="radar-live"><span class="live-dot"></span>Live</div>
+        <div class="radar-title-row"><div class="radar-title">Radar · <span id="radarSiteText">----</span> · <span id="radarModeText">REF</span></div></div>
+        <div class="radar-live"><span class="live-dot"></span><span id="radarScanAgeText">Live</span></div>
       </div>
       <div class="radar-body" id="radarBody">
         <div id="radarMap"></div>
@@ -548,6 +548,7 @@
     // position data is Phase 2 work; only the position acquisition itself is needed here since
     // Alerts (Phase 1) cannot query api.weather.gov without a point.
     const params = new URLSearchParams(window.location.search);
+    const MIN_GPS_POLL_SECONDS = 15;
     const manualLatitude = params.get('latitude') ? Number(params.get('latitude')) : null;
     const manualLongitude = params.get('longitude') ? Number(params.get('longitude')) : null;
     const settings = {
@@ -560,7 +561,22 @@
       useLiveGps: manualLatitude === null || manualLongitude === null,
       chaseGatewayBase: params.get('chaseGatewayBase') || 'https://ops.codeblackwx.com',
       unitId: params.get('unitId') || 'cbwx-unit-tessa',
-      gpsPollSeconds: params.get('gpsPollSeconds') ? Number(params.get('gpsPollSeconds')) : 5,
+      // Live Data Fabric V1: GPS primary transport. Direct Cloudflare Tunnel route to Core's
+      // Fabric WebSocket -- bypasses codeblack-chase-gateway entirely for the steady-state case
+      // (that Worker still serves the HTTP polling fallback below). fabricDeviceId matches the
+      // device cbwx-unit-tessa's chase heartbeats are mirrored onto Core-side (see
+      // services/core-api's chase_location -> fabric adapter); only this one device's
+      // measurements.chase_public is consumed here.
+      fabricWsUrl: params.get('fabricWsUrl') || 'wss://live.codeblackwx.com/api/fabric/v1/ws',
+      fabricDeviceId: params.get('fabricDeviceId') || 'cbwx-tessa-nav',
+      // Root cause of a real Cloudflare Workers free-tier usage scare (found 2026-09-13): this
+      // defaulted to 5s (floor of 2s below) with no visibility gating, so ONE open instance of
+      // this overlay burns ~17,280 chase-gateway requests/day on GPS polling alone -- the single
+      // largest contributor by far next to every other poller in this file combined. A sibling
+      // fix already landed in classic.html/classic-alt.html but missed this file, which is the
+      // one actually embedded live in OBS. 15s matches that sibling fix and is still far more
+      // than frequent enough for a vehicle's position to visibly update on a broadcast overlay.
+      gpsPollSeconds: params.get('gpsPollSeconds') ? Number(params.get('gpsPollSeconds')) : MIN_GPS_POLL_SECONDS,
       // "Nearby chasers" radius -- 25mi default per the locked decision, but configurable
       // without a code change (matches classic.html's existing settings-via-URL-param pattern).
       chaserRadiusMiles: params.get('chaserRadiusMiles') ? Number(params.get('chaserRadiusMiles')) : 25,
@@ -598,12 +614,12 @@
     // Live viewer count -- Facebook Live. This overlay never talks to Facebook's Graph API
     // directly (that needs a Page Access Token, a real secret that can't sit in client-side
     // code any more than the Mapbox token could -- see resolveMapboxToken above for the exact
-    // same reasoning and the real incident that established it). It reads from a gateway
-    // endpoint that does not exist yet: `${chaseGatewayBase}/overlay-core/facebook-viewers`,
-    // expected to return `{ "count": <number> }` once a Worker route is deployed there holding
-    // the real Page Access Token server-side. Until that route exists this fails silently and
-    // the line stays blank -- no fabricated number, matching how every other feed in this file
-    // behaves when its source isn't reachable.
+    // same reasoning and the real incident that established it). It reads from
+    // `${chaseGatewayBase}/overlay-core/facebook-viewers` (workers/social-gateway, deployed
+    // 2026-09-11), which returns `{ "count": <number> }` and holds the real Page Access Token
+    // server-side. Until FACEBOOK_PAGE_ID/FACEBOOK_PAGE_ACCESS_TOKEN are set as Worker secrets
+    // it 503s and this fails silently, leaving the line blank -- no fabricated number, matching
+    // how every other feed in this file behaves when its source isn't reachable.
     let lastViewerCount = null;
     async function updateViewerCount() {
       const el = document.getElementById('viewerCount');
@@ -632,61 +648,222 @@
     // fans out into nine unawaited updates, whichever response lands last -- not whichever
     // request was newest -- would end up on screen.
     let gpsInFlight = false;
+    // Timestamp of the last fix we actually trusted (hasFix, not stale). Drives the "how long
+    // has this been the real position" redundancy check below -- a script that watches for
+    // updates to actually stop, rather than reacting to one gateway-flagged stale response.
+    let lastGpsFixAt = null;
+    function gpsAgeLabel() {
+      if (lastGpsFixAt === null) return '';
+      const mins = Math.floor((Date.now() - lastGpsFixAt) / 60000);
+      if (mins < 1) return ' · Last fix <1m ago';
+      return ` · Last fix ${mins}m ago`;
+    }
+    // Shared by both GPS transports (Fabric WebSocket primary, HTTP polling fallback) so they
+    // can never diverge in rendering/staleness/movement-threshold behavior -- each transport's
+    // job is only to produce a `data` object in the existing public shape
+    // ({unit_id, location_sharing, stale, lat, lon[, bearing_deg]}) and hand it here.
+    function applyGpsData(data) {
+      const hasFix = typeof data.lat === 'number' && typeof data.lon === 'number';
+      if (data.location_sharing === false) {
+        // The operator explicitly turned sharing off -- that's a deliberate stop, not an
+        // outage. Unlike a stale/missing fix below, this one genuinely clears position: we
+        // have no standing to keep broadcasting alerts/radar for a place they chose to stop
+        // sharing.
+        settings.latitude = null;
+        settings.longitude = null;
+        settings.bearingDeg = null;
+        lastAppliedLat = null;
+        lastAppliedLon = null;
+        lastGpsFixAt = null;
+        document.getElementById('condTitleText').textContent = 'Location sharing stopped';
+        lastTemp = null; lastFeels = null; lastDew = null; lastHumidity = null;
+        lastWindSpeed = null; lastWindDir = null; lastGust = null;
+        lastGroundObs = null;
+        spcOutlooks = null;
+        stormIntelMetrics = null; stormIntelAvailable = false;
+        forecastDays = null;
+        renderConditions();
+        return;
+      }
+      if (!hasFix || data.stale) {
+        // GPS feed has stopped updating (phone locked, dead zone, app killed, whatever) --
+        // redundancy: keep broadcasting off the last known position instead of going blank.
+        // A tornado warning for where the vehicle *was* 10 minutes ago is still far more
+        // useful on air than no alert at all. Every other panel (alerts, radar site, SPC,
+        // conditions) keeps polling this same last-known point on its own normal cadence --
+        // nothing here needs to force-refresh them, and nothing here nulls their caches.
+        if (settings.latitude !== null) {
+          document.getElementById('condTitleText').textContent = `${lastLocationName || 'Current'}${gpsAgeLabel()}`;
+        } else {
+          document.getElementById('condTitleText').textContent = 'Awaiting GPS feed...';
+        }
+        return;
+      }
+      lastGpsFixAt = Date.now();
+      settings.bearingDeg = typeof data.bearing_deg === 'number' ? data.bearing_deg : null;
+      settings.latitude = data.lat;
+      settings.longitude = data.lon;
+      renderConditions();
+      const moved = lastAppliedLat === null
+        || Math.abs(data.lat - lastAppliedLat) > 0.01
+        || Math.abs(data.lon - lastAppliedLon) > 0.01;
+      if (moved) {
+        lastAppliedLat = data.lat;
+        lastAppliedLon = data.lon;
+        updateLocation();
+        updateWeather();
+        updateSurfaceObs();
+        updateAlertReal();
+        updateRadarSite();
+        updateSpcOutlook();
+        updateChaserData();
+        updateForecast();
+        updateStormIntel();
+        updateNearbySevereWarnings();
+      }
+    }
+
     async function updateGps() {
-      if (!settings.useLiveGps || gpsInFlight) return;
+      if (!settings.useLiveGps || gpsInFlight || document.hidden) return;
       gpsInFlight = true;
       try {
         const url = `${settings.chaseGatewayBase}/api/chase/location/public?unit_id=${encodeURIComponent(settings.unitId)}`;
         const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error('gps fetch failed');
         const data = await res.json();
-        const hasFix = typeof data.lat === 'number' && typeof data.lon === 'number';
-        if (!hasFix || data.stale || data.location_sharing === false) {
-          settings.latitude = null;
-          settings.longitude = null;
-          settings.bearingDeg = null;
-          lastAppliedLat = null;
-          lastAppliedLon = null;
-          document.getElementById('condTitleText').textContent = data.location_sharing === false ? 'Location sharing stopped' : 'Awaiting GPS feed...';
-          // GPS confirmed lost (not just a single missed poll) -- clear every
-          // position-dependent cache back to its "awaiting data" placeholder rather than
-          // leaving numbers for a position that may no longer be anywhere close to current
-          // frozen on screen for the rest of the broadcast.
-          lastTemp = null; lastFeels = null; lastDew = null; lastHumidity = null;
-          lastWindSpeed = null; lastWindDir = null; lastGust = null;
-          lastGroundObs = null;
-          spcOutlooks = null;
-          stormIntelMetrics = null; stormIntelAvailable = false;
-          forecastDays = null;
-          renderConditions();
-          return;
-        }
-        settings.bearingDeg = typeof data.bearing_deg === 'number' ? data.bearing_deg : null;
-        settings.latitude = data.lat;
-        settings.longitude = data.lon;
-        renderConditions();
-        const moved = lastAppliedLat === null
-          || Math.abs(data.lat - lastAppliedLat) > 0.01
-          || Math.abs(data.lon - lastAppliedLon) > 0.01;
-        if (moved) {
-          lastAppliedLat = data.lat;
-          lastAppliedLon = data.lon;
-          updateLocation();
-          updateWeather();
-          updateSurfaceObs();
-          updateAlertReal();
-          updateRadarSite();
-          updateSpcOutlook();
-          updateChaserData();
-          updateForecast();
-          updateStormIntel();
-          updateNearbySevereWarnings();
-        }
+        applyGpsData(data);
       } catch (err) {
         // leave last-known position in place -- a single missed GPS poll isn't an outage
       } finally {
         gpsInFlight = false;
       }
+    }
+
+    // ---- Live Data Fabric V1: WebSocket primary GPS transport ---------------------------------
+    // PUSH LIVE STATE, PULL BULK DATA, POLL ONLY AS FALLBACK. Connects directly to Core's
+    // existing Fabric WebSocket over the Cloudflare Tunnel (bypasses codeblack-chase-gateway
+    // entirely while healthy -- that Worker still serves updateGps()'s HTTP fallback above).
+    // Diagnostics are intentionally not rendered anywhere in the visible overlay UI.
+    let gpsTransport = 'polling'; // 'websocket' | 'polling' -- diagnostics only
+    let fabricWsReconnectCount = 0;
+    let lastLiveGpsAt = null;
+    let fabricWs = null;
+    let fabricWsReconnectTimer = null;
+    let fabricWsFallbackTimer = null;
+    const FABRIC_WS_FALLBACK_MS = 20000; // bounded: no usable GPS via WS within this window -> poll
+    const FABRIC_WS_RECONNECT_MS = 5000;
+
+    function gpsPollingActive() {
+      return gpsPollingTimer !== null;
+    }
+
+    // Quiet diagnostics only -- never rendered in the overlay UI. Inspect via the browser
+    // console (window.__gpsDiag) when debugging transport behavior; not read by anything else
+    // in this file.
+    window.__gpsDiag = {
+      get transport() { return gpsTransport; },
+      get wsReconnectCount() { return fabricWsReconnectCount; },
+      get lastLiveGpsAt() { return lastLiveGpsAt; },
+      get wsReadyState() { return fabricWs ? fabricWs.readyState : null; },
+      get pollingActive() { return gpsPollingActive(); },
+    };
+
+    let gpsPollingTimer = null;
+    function startGpsPolling() {
+      if (gpsPollingTimer || !settings.useLiveGps) return;
+      updateGps();
+      gpsPollingTimer = setInterval(updateGps, Math.max(MIN_GPS_POLL_SECONDS, settings.gpsPollSeconds) * 1000);
+    }
+    function stopGpsPolling() {
+      if (gpsPollingTimer) {
+        clearInterval(gpsPollingTimer);
+        gpsPollingTimer = null;
+      }
+    }
+
+    function scheduleFabricWsFallback() {
+      if (fabricWsFallbackTimer || !settings.useLiveGps) return;
+      fabricWsFallbackTimer = setTimeout(() => {
+        fabricWsFallbackTimer = null;
+        // Sustained failure/no usable GPS via WS -- fall back to the existing HTTP poller.
+        // document.hidden/gpsInFlight gating inside updateGps() itself is untouched.
+        gpsTransport = 'polling';
+        startGpsPolling();
+      }, FABRIC_WS_FALLBACK_MS);
+    }
+    function cancelFabricWsFallback() {
+      if (fabricWsFallbackTimer) {
+        clearTimeout(fabricWsFallbackTimer);
+        fabricWsFallbackTimer = null;
+      }
+    }
+
+    // Pulls the same public-shape object (unit_id/location_sharing/stale/lat/lon) out of a
+    // Fabric WS frame, whichever of the two event shapes it is: the initial full
+    // `fabric.snapshot` (nested units[].devices[]) or an incremental `device.updated` (payload
+    // IS the one device's state directly). Every other event type/device/unit is ignored here.
+    function extractChasePublicFromFabricEvent(evt) {
+      if (!evt || typeof evt !== 'object') return null;
+      if (evt.event_type === 'fabric.snapshot') {
+        const units = evt.payload && evt.payload.units;
+        const unit = Array.isArray(units) ? units.find((u) => u.unit_id === settings.unitId) : null;
+        const device = unit && Array.isArray(unit.devices)
+          ? unit.devices.find((d) => d.device_id === settings.fabricDeviceId)
+          : null;
+        return (device && device.latest && device.latest.chase_public) || null;
+      }
+      if (evt.event_type === 'device.updated' && evt.device_id === settings.fabricDeviceId) {
+        return (evt.payload && evt.payload.latest && evt.payload.latest.chase_public) || null;
+      }
+      return null;
+    }
+
+    function connectFabricWs() {
+      if (!settings.useLiveGps || fabricWs) return;
+      scheduleFabricWsFallback();
+      let ws;
+      try {
+        ws = new WebSocket(settings.fabricWsUrl);
+      } catch (err) {
+        scheduleFabricWsReconnect();
+        return;
+      }
+      fabricWs = ws;
+      ws.onmessage = (e) => {
+        let evt;
+        try {
+          evt = JSON.parse(e.data);
+        } catch (err) {
+          return;
+        }
+        const chasePublic = extractChasePublicFromFabricEvent(evt);
+        if (!chasePublic) return;
+        cancelFabricWsFallback();
+        if (gpsTransport !== 'websocket') {
+          gpsTransport = 'websocket';
+          stopGpsPolling();
+        }
+        lastLiveGpsAt = Date.now();
+        applyGpsData(chasePublic);
+      };
+      ws.onclose = () => {
+        if (fabricWs === ws) fabricWs = null;
+        fabricWsReconnectCount += 1;
+        if (gpsTransport === 'websocket') gpsTransport = 'polling';
+        scheduleFabricWsFallback();
+        scheduleFabricWsReconnect();
+      };
+      ws.onerror = () => {
+        // onclose always follows onerror for a WebSocket -- fallback/reconnect scheduled there.
+      };
+    }
+
+    function scheduleFabricWsReconnect() {
+      if (fabricWsReconnectTimer || !settings.useLiveGps) return;
+      fabricWsReconnectTimer = setTimeout(() => {
+        fabricWsReconnectTimer = null;
+        connectFabricWs();
+      }, FABRIC_WS_RECONNECT_MS);
     }
 
     // Nominatim reverse geocode -- public, CORS-open, no key. Rate-limited to ~1req/s by their
@@ -1626,7 +1803,10 @@
       }
       try {
         const url = `https://api.weather.gov/alerts/active?point=${settings.latitude},${settings.longitude}`;
-        const res = await fetchWithTimeout(url, { headers: { Accept: 'application/geo+json' } });
+        // The most safety-critical fetch in this file -- force a real network hit every poll
+        // rather than risk a browser cache serving anything but this instant's actual alert
+        // state (see the radar-frames fetch above for the real bug this same pattern caused).
+        const res = await fetchWithTimeout(url, { headers: { Accept: 'application/geo+json' }, cache: 'no-store' });
         if (!res.ok) throw new Error('alerts fetch failed');
         const data = await res.json();
         const features = Array.isArray(data.features) ? data.features : [];
@@ -2051,6 +2231,8 @@
     }
     const radarBody = document.getElementById('radarBody');
     const radarModeText = document.getElementById('radarModeText');
+    const radarSiteText = document.getElementById('radarSiteText');
+    const radarScanAgeText = document.getElementById('radarScanAgeText');
 
     // ---- Radar: single-site, auto-switching, looped REF normally; VEL/CC priority rotation
     // during an active tornado warning. Backed by radar-worker via the public codeblack-
@@ -2192,7 +2374,10 @@
         });
         for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
           radarMap.addSource(radarSourceIds[i], { type: 'raster', tiles: [BLANK_TILE], tileSize: 256 });
-          radarMap.addLayer({ id: radarLayerIds[i], type: 'raster', source: radarSourceIds[i], paint: { 'raster-opacity': 0 } });
+          radarMap.addLayer({
+            id: radarLayerIds[i], type: 'raster', source: radarSourceIds[i],
+            paint: { 'raster-opacity': 0, 'raster-opacity-transition': { duration: 260, delay: 0 } },
+          });
         }
         // fill/line color is data-driven (per-feature 'color' property, set in
         // setWarningPolygonFeatures below) instead of a fixed red -- each polygon now draws in
@@ -2263,6 +2448,7 @@
         const nearest = Array.isArray(sites) ? sites[0] : null;
         if (!nearest || nearest.id === radarSiteId) return;
         radarSiteId = nearest.id;
+        radarSiteText.textContent = radarSiteId;
         radarFrames = [];
         radarLoopIndex = 0;
         radarCloseLoopTick = 0;
@@ -2272,18 +2458,33 @@
       }
     }
 
+    // REF/VEL/SRV/CC all come from our own radar-worker's real NEXRAD Level II decode (the same
+    // pipeline the CC dual-pol clutter-filtering was tuned against earlier) -- it has both more
+    // real frame history available and, critically, tiles our worker actually renders/styles
+    // itself, instead of whatever raw styling a third party's tile service applies. REF used to
+    // fall through to IEM's RIDGE service below (a leftover from before this worker existed),
+    // which is why it visibly looked and animated worse than VEL/CC on the same site: sparser
+    // frame history and completely unstyled tiles we have no control over. Only a product our own
+    // worker genuinely doesn't decode should ever reach the IEM fallback beneath this.
+    const OWN_WORKER_PRODUCTS = new Set(['REF', 'VEL', 'SRV', 'CC']);
     async function fetchRadarFrames() {
       if (!radarSiteId || radarFrameFetchInFlight) return;
       radarFrameFetchInFlight = true;
       try {
-        if (radarProduct === 'CC') {
-          // No IEM equivalent -- unchanged path through our own radar-relay/radar-worker.
-          const url = `${radarSettings.gatewayBase}/api/v1/radar/frames?site=${encodeURIComponent(radarSiteId)}&product=CC&limit=1`;
-          const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
+        if (OWN_WORKER_PRODUCTS.has(radarProduct)) {
+          const limit = radarProduct === 'REF' ? RADAR_FRAME_POOL_SIZE : 1;
+          const url = `${radarSettings.gatewayBase}/api/v1/radar/frames?site=${encodeURIComponent(radarSiteId)}&product=${radarProduct}&limit=${limit}`;
+          // This endpoint answers `Cache-Control: public, max-age=20` -- real, but a real-world
+          // gap between two volume scans (~4-5min apart) is far longer than 20s, so a browser
+          // sitting on this tab for a while can end up serving a response from well outside that
+          // window instead of revalidating: caught live showing an 8-minute-fresher scan sitting
+          // one fetch away while the displayed frame was still the one from before. no-store
+          // forces every poll to actually hit the network.
+          const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
           if (!res.ok) throw new Error('frames fetch failed');
           const frames = await res.json();
           if (Array.isArray(frames) && frames.length) {
-            radarFrames = frames.map(f => ({ kind: 'own', frameId: f.frameId }));
+            radarFrames = frames.map(f => ({ kind: 'own', frameId: f.frameId, time: f.time }));
             radarLoopIndex = 0;
             radarCloseLoopTick = 0;
             preloadRadarFrames(radarFrames);
@@ -2301,7 +2502,7 @@
         const scans = Array.isArray(data.scans) ? data.scans : [];
         const sorted = scans.map(s => s.ts).filter(Boolean).sort().reverse().slice(0, limit);
         if (sorted.length) {
-          radarFrames = sorted.map(ts => ({ kind: 'iem', ts }));
+          radarFrames = sorted.map(ts => ({ kind: 'iem', ts, time: ts }));
           radarLoopIndex = 0;
           radarCloseLoopTick = 0;
           preloadRadarFrames(radarFrames);
@@ -2452,9 +2653,16 @@
       if (isWarningActive) return WARNING_ZOOM_HOLD_MS;
       return ZOOM_HOLD_MS[RADAR_ZOOM_LEVELS[radarZoomIndex].name] || WARNING_ZOOM_HOLD_MS;
     }
+    // Real NEXRAD volume scans land minutes apart, not seconds -- looping through them at this
+    // file's ~1 tick/sec cadence only reads as smooth "storm motion" once there's enough real
+    // history to loop through. With too few frames (the upstream feed can legitimately only have
+    // 1-2 recent scans available), cycling just flips back and forth between two mostly-different
+    // pictures every tick -- a flicker, not motion. Below this threshold, hold on the newest
+    // frame instead; a calm still beats a jittery "loop" that was never really animating anything.
+    const MIN_FRAMES_TO_LOOP = 3;
     function advanceRefLoop() {
       if (!radarFrames.length) return;
-      if (Date.now() - radarZoomChangedAt < currentZoomHoldMs() / 2) {
+      if (radarFrames.length < MIN_FRAMES_TO_LOOP || Date.now() - radarZoomChangedAt < currentZoomHoldMs() / 2) {
         applyRadarFrame(0);
         return;
       }
@@ -2472,8 +2680,21 @@
       radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
     }
 
+    // How old the newest available scan actually is -- real NEXRAD volume scans land minutes
+    // apart, so "Live" alone doesn't tell a viewer whether they're looking at a scan from 30
+    // seconds ago or 8 minutes ago. Always reflects radarFrames[0] (the newest frame), which is
+    // what applyRadarFrame(0) is showing during every hold/pin state in this file.
+    function updateRadarScanAge() {
+      const newest = radarFrames[0];
+      if (!newest || !newest.time) { radarScanAgeText.textContent = 'Live'; return; }
+      const ageMs = Date.now() - new Date(newest.time).getTime();
+      if (!Number.isFinite(ageMs) || ageMs < 0) { radarScanAgeText.textContent = 'Live'; return; }
+      const mins = Math.floor(ageMs / 60000);
+      radarScanAgeText.textContent = mins < 1 ? 'Live' : `${mins}m ago`;
+    }
     function radarModeTick() {
       radarTickCount += 1;
+      updateRadarScanAge();
       if (isWarningActive) {
         advanceZoom(WARNING_ZOOM_ORDER, WARNING_ZOOM_HOLD_MS);
         if (isTorWarning) {
@@ -2691,8 +2912,16 @@
     initRadarMap();
     if (settings.useLiveGps) {
       document.getElementById('condTitleText').textContent = 'Awaiting GPS feed...';
-      updateGps();
-      setInterval(updateGps, Math.max(2, settings.gpsPollSeconds) * 1000);
+      // Primary: Fabric WebSocket (direct Tunnel route, no chase-gateway Worker in the hot
+      // path). Falls back to the existing HTTP poller automatically if the WS doesn't produce
+      // usable GPS within FABRIC_WS_FALLBACK_MS, and switches straight back the moment the WS
+      // supplies live data again -- see connectFabricWs()/scheduleFabricWsFallback() above.
+      connectFabricWs();
+      document.addEventListener('visibilitychange', () => {
+        // Visibility catch-up only matters for the polling fallback -- updateGps() itself is
+        // still gated on document.hidden/gpsInFlight, and a healthy WS needs no catch-up poll.
+        if (!document.hidden && gpsTransport !== 'websocket') updateGps();
+      });
     } else {
       updateLocation();
       updateWeather();
@@ -2706,7 +2935,10 @@
     }
     updateAlertReal();
     updateViewerCount();
-    setInterval(updateViewerCount, 15_000); // a live count is worth checking often; the fetch itself is cheap
+    // Was 15s -- second-largest contributor to the 2026-09-13 Workers-quota scare (~5,760
+    // requests/day per open instance). A viewer count nobody is watching frame-perfectly doesn't
+    // need this cadence; 30s is still frequent enough to feel live on a broadcast overlay.
+    setInterval(updateViewerCount, 30_000);
     setInterval(updateLocation, Math.max(30, settings.pollSeconds) * 1000);
     setInterval(updateWeather, Math.max(30, settings.pollSeconds) * 1000);
     setInterval(updateSurfaceObs, Math.max(30, settings.pollSeconds) * 1000);
