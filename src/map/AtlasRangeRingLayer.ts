@@ -2,20 +2,10 @@ import type { GeoJSONSource, Map } from "mapbox-gl";
 import type { AtlasGpsPoint } from "./types";
 import type { AtlasRangeRingMode } from "./types";
 import { incrementAtlasCounter } from "./AtlasDiagnostics";
+import { destinationPoint as destination } from "./viewport";
 
 const SOURCE = "atlas-range-rings";
 const LAYER = "atlas-range-rings";
-
-function destination(lat: number, lon: number, bearingDeg: number, miles: number) {
-  const radiusMiles = 3958.7613;
-  const distance = miles / radiusMiles;
-  const bearing = (bearingDeg * Math.PI) / 180;
-  const lat1 = (lat * Math.PI) / 180;
-  const lon1 = (lon * Math.PI) / 180;
-  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distance) + Math.cos(lat1) * Math.sin(distance) * Math.cos(bearing));
-  const lon2 = lon1 + Math.atan2(Math.sin(bearing) * Math.sin(distance) * Math.cos(lat1), Math.cos(distance) - Math.sin(lat1) * Math.sin(lat2));
-  return [((((lon2 * 180) / Math.PI) + 540) % 360) - 180, (lat2 * 180) / Math.PI];
-}
 
 function ringFeature(center: Pick<AtlasGpsPoint, "lat" | "lon">, miles: number) {
   const coordinates = [];

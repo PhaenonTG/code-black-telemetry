@@ -386,7 +386,14 @@ export function AtlasMap({
   const operationalTrafficCameras = useMemo(() => routeAheadOnly ? trafficCameras.filter((camera) => navigationRoute.length > 1 ? distanceToRouteMiles(camera, navigationRoute) <= 10 : inRouteAheadCorridor(camera, gps)) : trafficCameras, [trafficCameras, routeAheadOnly, navigationRoute, gps]);
   const lineRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type === "line"), [operationalRoadConditions]);
   const pointOnlyRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type !== "line"), [operationalRoadConditions]);
-  const clusteredRoadConditions = useMemo(() => (viewport ? filterViewportPoints(pointOnlyRoadConditions, viewport) : pointOnlyRoadConditions), [pointOnlyRoadConditions, viewport]);
+  // Was filterViewportPoints only -- no clustering at all, unlike every other dense point layer
+  // (cameras, chasers) on this map. Same risk class as the camera mesh bug: a state reporting a
+  // lot of closures/construction at once would render every one individually at nationwide zoom.
+  // Same cell sizes as the just-fixed camera clustering; road-condition volume per state is
+  // generally lower, so this is a conservative starting point, not a re-tuned value.
+  const clusteredRoadConditions = useMemo(() => viewport
+    ? clusterViewportPoints(filterViewportPoints(pointOnlyRoadConditions, viewport), viewport, { individualAtZoom: 6, mediumAtZoom: 4.5, mediumCellDegrees: 0.6, farCellDegrees: 3.2 })
+    : pointOnlyRoadConditions, [pointOnlyRoadConditions, viewport]);
   // Roughly ten-county and closer views retain every camera. Wider views cluster dense corridors.
   // Cell sizes were tighter than the (much sparser) chaser-spotter clustering below despite
   // cameras being the far denser dataset -- backwards, and confirmed live: even clustered, a

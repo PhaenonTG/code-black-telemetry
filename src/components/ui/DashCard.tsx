@@ -2,12 +2,11 @@ interface DashCardProps {
   title: string;
   children: React.ReactNode;
   className?: string;
-  accent?: boolean;
 }
 
-export function DashCard({ title, children, className = "", accent = false }: DashCardProps) {
+export function DashCard({ title, children, className = "" }: DashCardProps) {
   return (
-    <div className={`cb-panel ${accent ? "cb-panel--spc" : ""} ${className}`}>
+    <div className={`cb-panel ${className}`}>
       <div className="cb-panel__title">
         <span className="panel-glyph" aria-hidden="true" />{title}
       </div>

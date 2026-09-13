@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { getRadarStatus, type StormMotion } from "../services/radar";
 
-// Same 30s poll interval as RadarEndpointPanel's own getRadarStatus call (services/radar.ts) --
-// independent polling rather than a shared store, matching this codebase's existing per-page-hook
-// convention (useNearbyStormThreats, useSpcOutlook, etc. each own their fetch/interval).
+// 30s poll interval on getRadarStatus (services/radar.ts) -- independent polling rather than a
+// shared store, matching this codebase's existing per-page-hook convention (useNearbyStormThreats,
+// useSpcOutlook, etc. each own their fetch/interval).
 const POLL_MS = 30_000;
 
 export function useStormMotion(): StormMotion | null {

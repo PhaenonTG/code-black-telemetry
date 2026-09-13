@@ -3,6 +3,7 @@ import type { GeoJSONSource, Map, Marker } from "mapbox-gl";
 import type { AtlasGpsPoint } from "./types";
 import type { VehicleMarkerShape, VehicleMarkerStyle } from "../services/settings";
 import { incrementAtlasCounter } from "./AtlasDiagnostics";
+import { destinationPoint } from "./viewport";
 
 const VEHICLE_SOURCE = "atlas-vehicle";
 const VEHICLE_HEADING_SOURCE = "atlas-vehicle-heading";
@@ -48,17 +49,6 @@ function applyVehicleMarkerStyle(el: HTMLDivElement, style: VehicleMarkerStyle) 
 }
 
 const vehicleMarkers = new WeakMap<Map, Marker>();
-
-function destinationPoint(lat: number, lon: number, bearingDeg: number, miles: number) {
-  const radiusMiles = 3958.7613;
-  const distance = miles / radiusMiles;
-  const bearing = (bearingDeg * Math.PI) / 180;
-  const lat1 = (lat * Math.PI) / 180;
-  const lon1 = (lon * Math.PI) / 180;
-  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distance) + Math.cos(lat1) * Math.sin(distance) * Math.cos(bearing));
-  const lon2 = lon1 + Math.atan2(Math.sin(bearing) * Math.sin(distance) * Math.cos(lat1), Math.cos(distance) - Math.sin(lat1) * Math.sin(lat2));
-  return [((((lon2 * 180) / Math.PI) + 540) % 360) - 180, (lat2 * 180) / Math.PI] as [number, number];
-}
 
 export function updateAtlasVehicleLayer(map: Map, gps: AtlasGpsPoint | null, style: VehicleMarkerStyle = { color: DEFAULT_VEHICLE_COLOR, shape: "circle", sizeScale: 1 }) {
   if (!gps) return;
