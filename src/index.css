@@ -5091,6 +5091,15 @@ body {
   border-radius: 0 !important;
   background: none !important;
   box-shadow: none !important;
+  z-index: 16 !important;
+}
+
+.atlas-map-controls button:focus-visible,
+.atlas-layers-popover:focus-visible,
+.atlas-layers-popover__header button:focus-visible,
+.atlas-layers-popover__row input:focus-visible {
+  outline: 2px solid #ff321e !important;
+  outline-offset: 2px !important;
 }
 
 .loc-panel .cockpit-primary--motion .metric-tile:first-child {

@@ -40,6 +40,7 @@ import { clusterViewportPoints, filterViewportPoints, viewportFromMap, zoomDetai
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, getSurfaceStationsForViewport, type RoadConditionEvent, type TrafficCamera, type SurfaceStationObservation, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
+
 import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, radarWorkerMissingOnWeb, setRadarStormMotion, type RadarFrame, type RadarProduct, type RadarSite, type StormMotion } from "../services/radar";
 import { useWind } from "../hooks/useTelemetry";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
@@ -49,6 +50,20 @@ import { LayerGlyph } from "../components/situational/LayerGlyph";
 import { getNearbyStormReports, type StormReport } from "../services/stormReports";
 import { getRiverGaugesForViewport, type RiverGaugeObservation } from "../services/riverGaugeProvider";
 import { fetchNavigationRoute, type RoutePoint } from "../services/navigationRoute";
+
+// Cameras are useful when navigating local roads, but a regional view can contain thousands of
+// them. Keep their exact positions and only ask providers for the area an operator can use.
+export const CAMERA_MIN_ZOOM = 11;
+export const CAMERA_VIEWPORT_DEBOUNCE_MS = 250;
+
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [value, delayMs]);
+  return debouncedValue;
+}
 
 const RADAR_REFRESH_MS = 90_000; // Poll the worker for a fresher scan well inside NEXRAD's ~4-6 min
 // volume-scan cadence, without hammering it every render.
@@ -336,9 +351,11 @@ export function AtlasMap({
   const [surfaceStationLayerStatus, setSurfaceStationLayerStatus] = useState<ViewportLayerResult<SurfaceStationObservation>["status"]>("not-configured");
   const [mosaicStatus, setMosaicStatus] = useState<MosaicStatus>("loading");
   const [layersPopoverOpen, setLayersPopoverOpen] = useState(false);
+  const layersTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [routeAheadOnly, setRouteAheadOnly] = useState(false);
   const [navigationRoute, setNavigationRoute] = useState<RoutePoint[]>([]);
   const [viewport, setViewport] = useState<MapViewport | null>(null);
+  const debouncedCameraViewport = useDebouncedValue(viewport, CAMERA_VIEWPORT_DEBOUNCE_MS);
   // Live vehicle mesonet wind, surfaced next to the radar instrument so a chaser can correlate
   // "what the truck is feeling right now" against "what SRV shows the storm doing" -- the actual
   // differentiator over a generic radar app, not something any of RadarScope/GR2Analyst can show.
@@ -387,10 +404,11 @@ export function AtlasMap({
   const lineRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type === "line"), [operationalRoadConditions]);
   const pointOnlyRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type !== "line"), [operationalRoadConditions]);
   const clusteredRoadConditions = useMemo(() => (viewport ? filterViewportPoints(pointOnlyRoadConditions, viewport) : pointOnlyRoadConditions), [pointOnlyRoadConditions, viewport]);
-  // Roughly ten-county and closer views retain every camera. Wider views cluster dense corridors.
-  const clusteredTrafficCameras = useMemo(() => viewport
-    ? clusterViewportPoints(filterViewportPoints(operationalTrafficCameras, viewport), viewport, { individualAtZoom: 6, mediumAtZoom: 4.5, mediumCellDegrees: 0.28, farCellDegrees: 1.1 })
-    : operationalTrafficCameras, [operationalTrafficCameras, viewport]);
+  // Camera locations remain exact. At regional zoom they are deliberately absent rather than
+  // clustered into synthetic pins; at local-road zoom only the visible bounds are rendered.
+  const visibleTrafficCameras = useMemo(() => viewport && viewport.zoom >= CAMERA_MIN_ZOOM
+    ? filterViewportPoints(operationalTrafficCameras, viewport, 0)
+    : [], [operationalTrafficCameras, viewport]);
   const clusteredSurfaceStations = useMemo(() => (viewport ? filterViewportPoints(surfaceStations, viewport) : surfaceStations), [surfaceStations, viewport]);
   const visibleStormReports = useMemo(() => viewport ? filterViewportPoints(stormReports, viewport) : stormReports, [stormReports, viewport]);
   const visibleRiverGauges = useMemo(() => viewport ? filterViewportPoints(riverGauges, viewport) : riverGauges, [riverGauges, viewport]);
@@ -1045,13 +1063,13 @@ export function AtlasMap({
   }, [viewport, roadConditionsVisible]);
 
   useEffect(() => {
-    if (!viewport || !trafficCamerasVisible) {
+    if (!debouncedCameraViewport || debouncedCameraViewport.zoom < CAMERA_MIN_ZOOM || !trafficCamerasVisible) {
       setTrafficCameras([]);
-      setCameraLayerStatus("not-configured");
+      setCameraLayerStatus("empty");
       return;
     }
     const controller = new AbortController();
-    const context = { viewport, detail: zoomDetailLevel(viewport.zoom), sessionId: null };
+    const context = { viewport: debouncedCameraViewport, detail: zoomDetailLevel(debouncedCameraViewport.zoom), sessionId: null };
     setCameraLayerStatus("ready");
     void getTrafficCamerasForViewport(context, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
@@ -1063,7 +1081,7 @@ export function AtlasMap({
       setCameraLayerStatus("error");
     });
     return () => controller.abort();
-  }, [viewport, trafficCamerasVisible]);
+  }, [debouncedCameraViewport, trafficCamerasVisible]);
 
   useEffect(() => {
     if (!viewport || !surfaceStationsVisible) {
@@ -1167,14 +1185,14 @@ export function AtlasMap({
     if (!map || !loaded) return;
     updateAtlasRoadConditionLayer(map, clusteredRoadConditions, roadConditionsVisible);
     updateAtlasRoadLineLayer(map, lineRoadConditions, roadConditionsVisible, styleInfoRef.current.firstSymbolLayerId);
-    updateAtlasTrafficCameraLayer(map, clusteredTrafficCameras, trafficCamerasVisible);
+    updateAtlasTrafficCameraLayer(map, visibleTrafficCameras, trafficCamerasVisible);
     updateAtlasSurfaceStationLayer(map, clusteredSurfaceStations, surfaceStationsVisible);
     updateAtlasStormReportLayer(map, visibleStormReports, stormReportsVisible);
     updateAtlasRiverGaugeLayer(map, visibleRiverGauges, riverGaugesVisible);
     updateAtlasNavigationRouteLayer(map, navigationRoute, routeAheadOnly, styleInfoRef.current.firstSymbolLayerId);
     updateAtlasChaserNetLayer(map, clusteredChaserNetMembers, chaserPinStyle, chaserNetVisible);
     updateAtlasChaserNetReportLayer(map, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible);
-  }, [clusteredRoadConditions, lineRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredSurfaceStations, surfaceStationsVisible, visibleStormReports, stormReportsVisible, visibleRiverGauges, riverGaugesVisible, navigationRoute, routeAheadOnly, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
+  }, [clusteredRoadConditions, lineRoadConditions, visibleTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredSurfaceStations, surfaceStationsVisible, visibleStormReports, stormReportsVisible, visibleRiverGauges, riverGaugesVisible, navigationRoute, routeAheadOnly, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
 
 
   useEffect(() => {
@@ -1278,7 +1296,8 @@ export function AtlasMap({
         ? "PANNING"
         : "FREE";
   const roadProviderCount = viewport ? roadProvidersForViewport(viewport).length : 0;
-  const trafficCameraProviderCount = viewport ? trafficCameraProvidersForViewport(viewport).length : 0;
+  const camerasNeedZoom = Boolean(trafficCamerasVisible && (!viewport || viewport.zoom < CAMERA_MIN_ZOOM));
+  const trafficCameraProviderCount = viewport && viewport.zoom >= CAMERA_MIN_ZOOM ? trafficCameraProvidersForViewport(viewport).length : 0;
   const providerStatusLabel = (status: ViewportLayerResult<unknown>["status"], count: number, providerCount: number) => {
     if (status === "ready") return count > 0 ? `${count}` : "available";
     if (status === "stale") return `${count} stale`;
@@ -1298,7 +1317,9 @@ export function AtlasMap({
     ? `ROADS ${providerStatusLabel(roadLayerStatus, roadConditions.length, roadProviderCount).toUpperCase()}`
     : null;
   const cameraProviderStatusLabel = trafficCamerasVisible
-    ? `CAMS ${providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount).toUpperCase()}`
+    ? camerasNeedZoom
+      ? `CAMS ZOOM IN TO Z${CAMERA_MIN_ZOOM}`
+      : `CAMS ${providerStatusLabel(cameraLayerStatus, visibleTrafficCameras.length, trafficCameraProviderCount).toUpperCase()}`
     : null;
   // Per-category counts of what's actually in view right now, not a running total or a per-point
   // radius -- panning/zooming changes this live the same way it already does for CAMS above,
@@ -1368,9 +1389,12 @@ export function AtlasMap({
             or off while looking at the dashboard, same popover the full map's LAYERS button opens. */}
         {compact && (
           <button
+            ref={layersTriggerRef}
             type="button"
             className={layersPopoverOpen ? "atlas-layers-button active" : "atlas-layers-button"}
             aria-label="Map layers"
+            aria-expanded={layersPopoverOpen}
+            aria-controls="atlas-map-layers-primary-popover"
             data-testid="atlas-map-layers-compact"
             onClick={(event) => { event.stopPropagation(); setLayersPopoverOpen((value) => !value); }}
           >
@@ -1378,10 +1402,16 @@ export function AtlasMap({
           </button>
         )}
         {layersPopoverOpen && (
-          <div className="atlas-layers-popover" role="dialog" aria-label="Map layers" data-testid={compact ? "atlas-map-layers-popover-compact" : "atlas-map-layers-popover-primary"}>
+          <div id="atlas-map-layers-primary-popover" className="atlas-layers-popover" role="dialog" aria-label="Map layers" aria-modal="false" tabIndex={-1} onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setLayersPopoverOpen(false);
+              layersTriggerRef.current?.focus();
+            }
+          }} data-testid={compact ? "atlas-map-layers-popover-compact" : "atlas-map-layers-popover-primary"}>
             <div className="atlas-layers-popover__header">
               <div className="atlas-layers-popover__title">Layers</div>
-              <button type="button" data-testid={compact ? "atlas-map-layers-close-compact" : "atlas-map-layers-close-primary"} aria-label="Close map layers" onClick={() => setLayersPopoverOpen(false)}>Close</button>
+              <button type="button" data-testid={compact ? "atlas-map-layers-close-compact" : "atlas-map-layers-close-primary"} aria-label="Close map layers" onClick={() => { setLayersPopoverOpen(false); layersTriggerRef.current?.focus(); }}>Close</button>
             </div>
             <div className="atlas-layers-popover__presets" aria-label="Operational layer presets">
               {(["intercept", "travel", "flood", "night", "low-bandwidth"] as const).map((preset) => <button key={preset} type="button" onClick={() => applyLayerPreset(preset)}>{preset === "low-bandwidth" ? "LOW DATA" : preset.toUpperCase()}</button>)}
@@ -1458,7 +1488,7 @@ export function AtlasMap({
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={trafficCamerasVisible} onChange={() => toggleLayer("trafficCameras")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="camera" /></span>
-              Public Cameras - {trafficCamerasVisible ? providerStatusLabel(cameraLayerStatus, trafficCameras.length, trafficCameraProviderCount) : "off"}
+              Public Cameras - {trafficCamerasVisible ? camerasNeedZoom ? `zoom in to Z${CAMERA_MIN_ZOOM}` : providerStatusLabel(cameraLayerStatus, visibleTrafficCameras.length, trafficCameraProviderCount) : "off"}
             </label>
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={surfaceStationsVisible} onChange={() => toggleLayer("surfaceStations")} />
@@ -1576,7 +1606,7 @@ export function AtlasMap({
           <button type="button" aria-label="Toggle zoom lock" title="Stops the camera from re-zooming automatically as your speed changes" className={zoomLocked ? "active" : ""} onClick={() => setZoomLocked((value) => !value)}>ZOOM LOCK</button>
           <button type="button" aria-label="Toggle route ahead hazards" title="Uses the route to the selected map point; falls back to a 20-mile heading corridor" className={routeAheadOnly ? "active" : ""} onClick={() => setRouteAheadOnly((value) => !value)}>AHEAD{routeAheadOnly && navigationRoute.length > 1 ? " · ROUTE" : ""}</button>
           <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
-          <button type="button" aria-label="Map layers" data-testid="atlas-map-layers-primary" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
+          <button ref={layersTriggerRef} type="button" aria-label="Map layers" aria-expanded={layersPopoverOpen} aria-controls="atlas-map-layers-primary-popover" data-testid="atlas-map-layers-primary" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
         </div>
       )}
     </div>
