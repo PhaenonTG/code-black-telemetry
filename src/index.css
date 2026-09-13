@@ -8810,16 +8810,16 @@ body {
    the fixed square/diamond sizing that works for an icon is too tight for 2-3 digits of text, so
    this widens to a pill that grows with its content, same override pattern as the cluster badge
    above. Only applies when NOT also a cluster (the cluster count badge above takes precedence via
-   its own class combination and matching specificity). */
+   its own class combination and matching specificity). Sizing itself (min-width/min-height/
+   padding/font-size) is NOT set here -- AtlasPinMarkers.ts's applyPinStyle() sets those inline
+   with !important, scaled by the same map-zoom factor every other pin shrinks by. A fixed CSS
+   size here previously ignored zoom entirely, so this badge stayed full-size at nationwide zoom
+   while every dot pin around it shrank -- genuinely oversized, not just visually busy. */
 .atlas-pin-marker--station:not(.atlas-pin-marker--cluster) {
   width: auto !important;
   height: auto !important;
-  min-width: 22px;
-  min-height: 18px;
-  padding: 0 5px;
   border-radius: 999px !important;
   clip-path: none !important;
-  font-size: 9.5px;
   letter-spacing: -0.2px;
 }
 

@@ -69,8 +69,25 @@ function operationalPinOpacity(point: PinPoint, zoom: number) {
 function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number, point: PinPoint) {
   const size = pinSizeForZoom(zoom, style.sizeScale ?? 1);
   const borderWidth = Math.max(1, size / 10);
-  el.style.width = `${size}px`;
-  el.style.height = `${size}px`;
+  if (point.markerLabel) {
+    // Label pins (e.g. a station's dewpoint reading) need room for text, not just a dot, so
+    // AtlasMap.tsx's .atlas-pin-marker--station CSS gives them a fixed pill size via !important --
+    // but a *fixed* size ignores the zoom-based shrink every other pin gets, so at nationwide zoom
+    // this badge stayed full-size while dots around it shrank to a fraction of it: genuinely
+    // oversized, not just visually busy. Scale font-size/padding/min-dimensions by the same zoom
+    // factor as the dot pins (using !important to actually win over that CSS rule) so a "58°"
+    // badge at zoom 3 is a small tag, not a full chase-zoom badge.
+    const scale = size / MAX_PIN_SIZE_PX;
+    el.style.setProperty("width", "auto", "important");
+    el.style.setProperty("height", "auto", "important");
+    el.style.setProperty("min-width", `${Math.max(14, 22 * scale)}px`, "important");
+    el.style.setProperty("min-height", `${Math.max(11, 18 * scale)}px`, "important");
+    el.style.setProperty("padding", `0 ${Math.max(2, 5 * scale)}px`, "important");
+    el.style.setProperty("font-size", `${Math.max(7, 9.5 * scale)}px`, "important");
+  } else {
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+  }
   el.style.backgroundColor = style.color;
   el.style.border = `${borderWidth}px solid rgba(0, 0, 0, 0.65)`;
   // Flat dot, no colored glow halo -- the earlier `0 0 <blur> <color>` shadow was the "glowing
