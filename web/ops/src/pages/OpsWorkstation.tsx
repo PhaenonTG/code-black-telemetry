@@ -192,7 +192,12 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
         />
         <div className="ops-map-overlay ops-map-overlay--top">
           <div>
-            <span>FOCUS</span>
+            {/* Was a "FOCUS" kicker sitting directly above this h1 -- an eyebrow labeling a
+                heading that already says the same thing (the h1's own value, e.g. "OPERATIONS
+                MAP", already tells you what's in focus) is a banned pattern per this project's
+                design floor, and it also visually competed with sidebar card titles (POINT
+                INSPECTOR, STORM INTEL) for the same small red-caps treatment, flattening the
+                page/card hierarchy the critique flagged. The heading speaks for itself. */}
             <h1>{focus}</h1>
           </div>
           <label className="ops-nearby-reference">

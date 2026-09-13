@@ -20,6 +20,12 @@
 .section-tabs{display:flex;gap:6px;margin:0 0 14px;padding:0 0 10px;border-bottom:1px solid var(--cb-line)}
 .section-tabs a,.section-tabs span{padding:7px 11px;border:1px solid var(--cb-line);color:var(--cb-muted);font-size:10px;font-weight:900;letter-spacing:.1em;text-decoration:none}
 .section-tabs .active{border-color:var(--cb-red);color:var(--cb-text);background:rgba(255,42,12,.08)}
+/* Confirmed via critique: this pattern styles every entry identically (a tab-pill pair), but at
+   least one pair (System's HEALTH/SETTINGS) mixes a real in-page state toggle (span, no
+   navigation) with a link to an entirely different page -- same look, different behavior. A small
+   arrow on every non-active link marks "this leaves the current page," whether or not its sibling
+   happens to be a same-page toggle, without needing to special-case each tab-bar instance. */
+.section-tabs a:not(.active)::after{content:" \2197";opacity:.6}
 .ops-map-stage{position:relative;min-width:0;min-height:0;background:#000}
 .ops-side-rail{min-width:0;min-height:0;overflow-y:auto;background:var(--cb-black);border-left:1px solid var(--cb-line)}
 .ops-side-rail>.point-inspector{border-left:0}
