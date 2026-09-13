@@ -1,0 +1,31 @@
+{
+  // codeblack-chase-gateway -- RECONSTRUCTED config, not the original. The live Worker's real
+  // deploy config (route bindings, actual VPC service id, actual secret values) was not
+  // recovered -- see src/index.ts's header comment and CHASE_GATEWAY_RECOVERY.md. This file
+  // documents the config *shape* inferred from the live Worker's observed behavior and from
+  // workers/core-gateway's sibling VPC-transport Worker, for local dev/typecheck/test only.
+  //
+  // DO NOT `wrangler deploy` this over the live "codeblack-chase-gateway" Worker without first
+  // confirming the real route binding and VPC service id in the Cloudflare dashboard -- deploying
+  // blind here could detach the real production route.
+  "name": "codeblack-chase-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-07",
+
+  // Live behavior confirms this Worker owns `ops.codeblackwx.com/api/chase/*` ahead of the
+  // codeblack-ops Pages project on that path prefix -- the actual Cloudflare route resource
+  // itself (zone, pattern, script binding) was not found as a config file anywhere searched.
+  // "routes": [{ "pattern": "ops.codeblackwx.com/api/chase/*", "zone_name": "codeblackwx.com" }],
+
+  // Workers VPC Service binding to Core, same pattern as workers/core-gateway/wrangler.jsonc.
+  // service_id below is a placeholder -- the real one was not recovered.
+  "vpc_services": [
+    {
+      "binding": "CORE_VPC",
+      "service_id": "UNRECOVERED-see-CHASE_GATEWAY_RECOVERY.md",
+      "remote": true
+    }
+  ]
+
+  // CHASE_TOKEN is a Worker secret (`wrangler secret put CHASE_TOKEN`), never committed here.
+}
