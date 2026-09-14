@@ -663,6 +663,8 @@
       useLiveGps: manualLatitude === null || manualLongitude === null,
       chaseGatewayBase: params.get('chaseGatewayBase') || 'https://ops.codeblackwx.com',
       unitId: params.get('unitId') || 'cbwx-unit-tessa',
+      fabricWsUrl: params.get('fabricWsUrl') || 'wss://live.codeblackwx.com/api/fabric/v1/ws',
+      fabricDeviceId: params.get('fabricDeviceId') || 'cbwx-tessa-nav',
       gpsPollSeconds: params.get('gpsPollSeconds') ? Number(params.get('gpsPollSeconds')) : MIN_GPS_POLL_SECONDS,
     };
     let lastAppliedLat = manualLatitude;
@@ -826,43 +828,142 @@
     // faster than) weather/alerts, since position should feel live on stream; weather/alerts
     // only actually re-fetch when the position has moved meaningfully, to stay well under
     // Nominatim's rate limit.
+    let gpsInFlight = false;
+    function applyGpsData(data) {
+      const hasFix = typeof data.lat === 'number' && typeof data.lon === 'number';
+      if (!hasFix || data.stale || data.location_sharing === false) {
+        settings.latitude = null;
+        settings.longitude = null;
+        settings.bearingDeg = null;
+        lastAppliedLat = null;
+        lastAppliedLon = null;
+        el.locationText.textContent = data.location_sharing === false ? 'Location sharing stopped' : 'Awaiting GPS feed...';
+        renderSecondaryLine();
+        return;
+      }
+      settings.bearingDeg = typeof data.bearing_deg === 'number' ? data.bearing_deg : null;
+      settings.latitude = data.lat;
+      settings.longitude = data.lon;
+      renderSecondaryLine();
+      const moved = lastAppliedLat === null
+        || Math.abs(data.lat - lastAppliedLat) > 0.01
+        || Math.abs(data.lon - lastAppliedLon) > 0.01;
+      if (moved) {
+        lastAppliedLat = data.lat;
+        lastAppliedLon = data.lon;
+        updateLocation();
+        updateWeather();
+        updateSurfaceObs();
+        updateAlert();
+        updateRadarSite();
+      }
+    }
+
     async function updateGps() {
-      if (!settings.useLiveGps || document.hidden) return;
+      if (!settings.useLiveGps || gpsInFlight || document.hidden) return;
+      gpsInFlight = true;
       try {
         const url = `${settings.chaseGatewayBase}/api/chase/location/public?unit_id=${encodeURIComponent(settings.unitId)}`;
         const res = await fetch(url, { headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error('gps fetch failed');
-        const data = await res.json();
-        const hasFix = typeof data.lat === 'number' && typeof data.lon === 'number';
-        if (!hasFix || data.stale || data.location_sharing === false) {
-          settings.latitude = null;
-          settings.longitude = null;
-          settings.bearingDeg = null;
-          lastAppliedLat = null;
-          lastAppliedLon = null;
-          el.locationText.textContent = data.location_sharing === false ? 'Location sharing stopped' : 'Awaiting GPS feed...';
-          renderSecondaryLine();
-          return;
-        }
-        settings.bearingDeg = typeof data.bearing_deg === 'number' ? data.bearing_deg : null;
-        settings.latitude = data.lat;
-        settings.longitude = data.lon;
-        renderSecondaryLine();
-        const moved = lastAppliedLat === null
-          || Math.abs(data.lat - lastAppliedLat) > 0.01
-          || Math.abs(data.lon - lastAppliedLon) > 0.01;
-        if (moved) {
-          lastAppliedLat = data.lat;
-          lastAppliedLon = data.lon;
-          updateLocation();
-          updateWeather();
-          updateSurfaceObs();
-          updateAlert();
-          updateRadarSite();
-        }
+        applyGpsData(await res.json());
       } catch (err) {
-        // leave last-known position/state in place -- a single missed GPS poll isn't an outage
+        // Leave the last known position/state in place on a single fallback failure.
+      } finally {
+        gpsInFlight = false;
       }
+    }
+
+
+    // Live Data Fabric V1: Fabric WebSocket is primary; chase-gateway polling is only a bounded fallback.
+    let gpsTransport = 'polling';
+    let fabricWsReconnectCount = 0;
+    let lastLiveGpsAt = null;
+    let fabricWs = null;
+    let fabricWsReconnectTimer = null;
+    let fabricWsFallbackTimer = null;
+    const FABRIC_WS_FALLBACK_MS = 20000;
+    const FABRIC_WS_RECONNECT_MS = 5000;
+    let gpsPollingTimer = null;
+
+    window.__gpsDiag = {
+      get transport() { return gpsTransport; },
+      get wsReconnectCount() { return fabricWsReconnectCount; },
+      get lastLiveGpsAt() { return lastLiveGpsAt; },
+      get wsReadyState() { return fabricWs ? fabricWs.readyState : null; },
+      get pollingActive() { return gpsPollingTimer !== null; },
+    };
+
+    function startGpsPolling() {
+      if (gpsPollingTimer || !settings.useLiveGps) return;
+      void updateGps();
+      gpsPollingTimer = setInterval(() => void updateGps(), Math.max(MIN_GPS_POLL_SECONDS, settings.gpsPollSeconds) * 1000);
+    }
+    function stopGpsPolling() {
+      if (!gpsPollingTimer) return;
+      clearInterval(gpsPollingTimer);
+      gpsPollingTimer = null;
+    }
+    function scheduleFabricWsFallback() {
+      if (fabricWsFallbackTimer || !settings.useLiveGps) return;
+      fabricWsFallbackTimer = setTimeout(() => {
+        fabricWsFallbackTimer = null;
+        gpsTransport = 'polling';
+        startGpsPolling();
+      }, FABRIC_WS_FALLBACK_MS);
+    }
+    function cancelFabricWsFallback() {
+      if (!fabricWsFallbackTimer) return;
+      clearTimeout(fabricWsFallbackTimer);
+      fabricWsFallbackTimer = null;
+    }
+    function extractChasePublicFromFabricEvent(evt) {
+      if (!evt || typeof evt !== 'object') return null;
+      if (evt.event_type === 'fabric.snapshot') {
+        const units = evt.payload && evt.payload.units;
+        const unit = Array.isArray(units) ? units.find((u) => u.unit_id === settings.unitId) : null;
+        const device = unit && Array.isArray(unit.devices)
+          ? unit.devices.find((d) => d.device_id === settings.fabricDeviceId)
+          : null;
+        return (device && device.latest && device.latest.chase_public) || null;
+      }
+      if (evt.event_type === 'device.updated' && evt.device_id === settings.fabricDeviceId) {
+        return (evt.payload && evt.payload.latest && evt.payload.latest.chase_public) || null;
+      }
+      return null;
+    }
+    function scheduleFabricWsReconnect() {
+      if (fabricWsReconnectTimer || !settings.useLiveGps) return;
+      fabricWsReconnectTimer = setTimeout(() => {
+        fabricWsReconnectTimer = null;
+        connectFabricWs();
+      }, FABRIC_WS_RECONNECT_MS);
+    }
+    function connectFabricWs() {
+      if (!settings.useLiveGps || fabricWs) return;
+      scheduleFabricWsFallback();
+      let ws;
+      try { ws = new WebSocket(settings.fabricWsUrl); }
+      catch (err) { scheduleFabricWsReconnect(); return; }
+      fabricWs = ws;
+      ws.onmessage = (event) => {
+        let parsed;
+        try { parsed = JSON.parse(event.data); } catch (err) { return; }
+        const chasePublic = extractChasePublicFromFabricEvent(parsed);
+        if (!chasePublic) return;
+        cancelFabricWsFallback();
+        if (gpsTransport !== 'websocket') { gpsTransport = 'websocket'; stopGpsPolling(); }
+        lastLiveGpsAt = Date.now();
+        applyGpsData(chasePublic);
+      };
+      ws.onclose = () => {
+        if (fabricWs === ws) fabricWs = null;
+        fabricWsReconnectCount += 1;
+        if (gpsTransport === 'websocket') gpsTransport = 'polling';
+        scheduleFabricWsFallback();
+        scheduleFabricWsReconnect();
+      };
+      ws.onerror = () => {};
     }
 
     // Takes the whole feature (not just the event name) because PDS/Tornado Emergency/
@@ -1473,11 +1574,9 @@
     if (settings.useLiveGps) {
       el.locationText.textContent = 'Awaiting GPS feed...';
       renderSecondaryLine();
-      updateGps();
-      const gpsPollIntervalMs = Math.max(MIN_GPS_POLL_SECONDS, settings.gpsPollSeconds) * 1000;
-      setInterval(() => void updateGps(), gpsPollIntervalMs);
+      connectFabricWs();
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) void updateGps();
+        if (!document.hidden && gpsTransport !== 'websocket') void updateGps();
       });
     } else {
       updateLocation();
