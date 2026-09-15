@@ -11,6 +11,7 @@ import UpdatePassword from "../pages/UpdatePassword"
 // even for someone who only ever opens Settings. Each page now loads on first visit instead.
 const OpsWorkstation = lazy(() => import("../pages/OpsWorkstation"))
 const StormIntelWorkspace = lazy(() => import("../pages/StormIntelWorkspace"))
+const SoundingsWorkspace = lazy(() => import("../pages/SoundingsWorkspace"))
 const DevelopmentPage = lazy(() => import("../pages/DevelopmentPage"))
 const Fleet = lazy(() => import("../pages/Fleet"))
 const Operations = lazy(() => import("../pages/Operations"))
@@ -42,7 +43,7 @@ export default function App() {
                         <Route path="/field" element={<OpsWorkstation focus="FIELD INTELLIGENCE" />} />
                         <Route path="/storm-intel" element={<Navigate to="/weather" replace />} />
                         <Route path="/models" element={<DevelopmentPage title="MODELS" />} />
-                        <Route path="/soundings" element={<DevelopmentPage title="SOUNDINGS" detail="Vertical profile endpoint not yet available. Sounding Snapshot will enter here when Core exposes normalized profile data." />} />
+                        <Route path="/soundings" element={<SoundingsWorkspace />} />
                         <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 2." />} />
                         <Route path="/targets" element={<DevelopmentPage title="TARGETS" detail="Target corridors are reserved for the future Consensus workflow. Phase 2 does not create automated chase targets." />} />
                         <Route path="/chase" element={<Fleet />} />

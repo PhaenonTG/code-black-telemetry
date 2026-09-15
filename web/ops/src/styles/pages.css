@@ -20,6 +20,12 @@
 .section-tabs{display:flex;gap:6px;margin:0 0 14px;padding:0 0 10px;border-bottom:1px solid var(--cb-line)}
 .section-tabs a,.section-tabs span{padding:7px 11px;border:1px solid var(--cb-line);color:var(--cb-muted);font-size:10px;font-weight:900;letter-spacing:.1em;text-decoration:none}
 .section-tabs .active{border-color:var(--cb-red);color:var(--cb-text);background:rgba(255,42,12,.08)}
+/* Confirmed via critique: this pattern styles every entry identically (a tab-pill pair), but at
+   least one pair (System's HEALTH/SETTINGS) mixes a real in-page state toggle (span, no
+   navigation) with a link to an entirely different page -- same look, different behavior. A small
+   arrow on every non-active link marks "this leaves the current page," whether or not its sibling
+   happens to be a same-page toggle, without needing to special-case each tab-bar instance. */
+.section-tabs a:not(.active)::after{content:" \2197";opacity:.6}
 .ops-map-stage{position:relative;min-width:0;min-height:0;background:#000}
 .ops-side-rail{min-width:0;min-height:0;overflow-y:auto;background:var(--cb-black);border-left:1px solid var(--cb-line)}
 .ops-side-rail>.point-inspector{border-left:0}
@@ -329,3 +335,86 @@
 .map-situation-panel section{border-top:1px solid var(--cb-line);padding-top:12px;margin-top:12px}.map-situation-panel section h3{margin:0 0 6px;font-size:9px;color:var(--cb-muted)}.map-situation-panel section p{margin:0;font-size:11px;line-height:1.55;white-space:pre-wrap}.map-situation-panel footer{display:flex;justify-content:flex-end;padding:10px 12px;border-top:1px solid var(--cb-line)}.map-situation-panel footer a{color:var(--cb-text);font-size:9px;font-weight:800;text-decoration:none;border:1px solid var(--cb-line);padding:5px 7px}
 .atlas-layers-popover__section{padding:9px 10px 5px;color:var(--cb-dim);font-size:8px;font-weight:900;letter-spacing:.13em;border-top:1px solid var(--cb-line)}
 @media(max-width:599px){.map-situation-panel{top:auto;right:8px;left:8px;bottom:8px;width:auto;max-height:min(62vh,540px)}}
+
+/* ---- Soundings workspace ---- */
+.soundings-workspace{position:absolute;inset:0;display:grid;grid-template-columns:300px minmax(0,1fr);background:var(--cb-black);overflow:hidden}
+.soundings-sidebar{min-width:0;overflow-y:auto;background:var(--cb-shell);border-right:1px solid var(--cb-line);padding:14px;display:flex;flex-direction:column;gap:12px}
+.soundings-main{min-width:0;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+.soundings-panel{background:var(--cb-panel);border:1px solid var(--cb-line);border-top:2px solid var(--cb-line-strong);padding:14px}
+.soundings-panel__header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.soundings-panel__header h2{margin:0;font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--cb-text)}
+.soundings-panel__badge{font-size:9px;color:var(--cb-dim);font-weight:800;letter-spacing:.08em}
+.soundings-panel__eyebrow{display:block;font-size:9px;font-weight:900;letter-spacing:.14em;color:var(--cb-red);text-transform:uppercase;margin-bottom:6px}
+.soundings-panel__note{margin:10px 0 0;font-size:10px;color:var(--cb-dim);line-height:1.5}
+.soundings-panel__error{margin:8px 0 0;font-size:10px;color:var(--cb-warning);line-height:1.5}
+.soundings-panel__empty{margin:0;font-size:11px;color:var(--cb-muted);line-height:1.6}
+
+.soundings-location-form{display:grid;grid-template-columns:1fr 52px 64px;gap:6px}
+.soundings-location-form input{background:var(--cb-panel-low);border:1px solid var(--cb-line);color:var(--cb-text);font-size:11px;padding:7px 8px;border-radius:3px}
+.soundings-location-form button{background:var(--cb-red);border:0;color:#000;font-weight:900;font-size:10px;letter-spacing:.06em;border-radius:3px;cursor:pointer}
+.soundings-location-form button:disabled{opacity:.5;cursor:not-allowed}
+
+.soundings-quick-locations{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.soundings-quick-locations button,.soundings-recent button{display:block;width:100%;text-align:left;background:var(--cb-panel-low);border:1px solid var(--cb-line);color:var(--cb-text);font-size:10px;font-weight:700;letter-spacing:.04em;padding:8px 10px;border-radius:3px;cursor:pointer}
+.soundings-quick-locations button:disabled{opacity:.4;cursor:not-allowed;color:var(--cb-dim)}
+.soundings-recent{margin-top:12px;display:flex;flex-direction:column;gap:5px}
+
+.soundings-status-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:0}
+.soundings-status-grid dt{font-size:9px;font-weight:800;letter-spacing:.08em;color:var(--cb-muted);text-transform:uppercase}
+.soundings-status-grid dd{margin:0;font-size:11px;color:var(--cb-text);font-variant-numeric:tabular-nums;text-align:right}
+
+.soundings-status-bar{display:flex;align-items:center;gap:12px}
+.soundings-status-bar__point{font-size:11px;color:var(--cb-muted);font-weight:700;letter-spacing:.03em}
+.soundings-empty{padding:40px 20px;text-align:center;color:var(--cb-muted);font-size:12px;border:1px dashed var(--cb-line);border-radius:6px}
+.soundings-empty--error{color:var(--cb-warning);border-color:var(--cb-warning)}
+
+.soundings-charts{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+.soundings-chart-block{background:var(--cb-panel);border:1px solid var(--cb-line);padding:12px}
+.soundings-chart-block h3{margin:0 0 8px;font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--cb-muted)}
+
+.skewt{width:100%;height:auto;background:var(--cb-panel-low)}
+.skewt__frame{fill:none;stroke:var(--cb-line)}
+.skewt__isobar{stroke:rgba(255,255,255,.14);stroke-width:1}
+.skewt__isotherm{stroke:rgba(18,168,255,.16);stroke-width:1}
+.skewt__isotherm--freezing{stroke:rgba(18,168,255,.4)}
+.skewt__axis-label{fill:var(--cb-dim);font-size:9px;font-weight:700}
+.skewt__axis-label--p{font-variant-numeric:tabular-nums}
+.skewt__temperature{stroke:var(--cb-red);stroke-width:2}
+.skewt__dewpoint{stroke:var(--cb-green);stroke-width:2}
+.skewt__parcel{stroke:var(--cb-amber);stroke-width:1.5;stroke-dasharray:4 3}
+.skewt__legend-label{fill:var(--cb-muted);font-size:9px;font-weight:700}
+
+.hodograph{width:100%;height:auto;background:var(--cb-panel-low)}
+.hodograph__ring{fill:none;stroke:rgba(255,255,255,.1)}
+.hodograph__ring-label{fill:var(--cb-dim);font-size:8px}
+.hodograph__axis{stroke:rgba(255,255,255,.14)}
+.hodograph__trace{stroke:var(--cb-red);stroke-width:2}
+.hodograph__marker{fill:var(--cb-amber)}
+.hodograph__marker-label{fill:var(--cb-amber);font-size:9px;font-weight:700}
+.hodograph--empty{padding:60px 0;text-align:center;color:var(--cb-muted);font-size:11px}
+
+.soundings-params-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.soundings-param-card{background:var(--cb-panel-low);border:1px solid var(--cb-line);border-left:2px solid var(--cb-line-strong);padding:8px 10px}
+.soundings-param-card[data-provenance="calculated"]{border-left-color:var(--cb-blue)}
+.soundings-param-card__label{display:block;font-size:9px;font-weight:800;letter-spacing:.05em;color:var(--cb-muted);text-transform:uppercase}
+.soundings-param-card__value{display:block;margin-top:3px;font-size:15px;font-weight:800;color:var(--cb-text);font-variant-numeric:tabular-nums}
+
+.soundings-profile-table-wrap{overflow-x:auto}
+.soundings-profile-table{width:100%;border-collapse:collapse;font-size:11px}
+.soundings-profile-table th{text-align:left;font-size:9px;color:var(--cb-muted);font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--cb-line)}
+.soundings-profile-table td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.05);color:var(--cb-text);font-variant-numeric:tabular-nums}
+
+.analog-matches__list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.analog-matches__row{display:flex;align-items:center;gap:10px;background:var(--cb-panel-low);border:1px solid var(--cb-line);padding:8px 10px;font-size:11px}
+.analog-matches__score{color:var(--cb-red);font-weight:900;min-width:40px}
+
+@media(max-width:899px){
+  .soundings-workspace{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .soundings-sidebar{border-right:0;border-bottom:1px solid var(--cb-line);flex-direction:row;flex-wrap:wrap;overflow-x:auto}
+  .soundings-sidebar>.soundings-panel{flex:1 1 260px}
+  .soundings-charts{grid-template-columns:1fr}
+}
+@media(max-width:599px){
+  .soundings-location-form{grid-template-columns:1fr 44px 56px}
+  .soundings-params-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+}

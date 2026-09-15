@@ -23,6 +23,15 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
     upstreamPath: "/api/storm-intel/v1/point",
     allowedQueryParams: ["latitude", "longitude"],
   },
+  "/api/soundings/v1/health": { upstreamPath: "/api/soundings/v1/health", allowedQueryParams: [] },
+  "/api/soundings/v1/point": {
+    upstreamPath: "/api/soundings/v1/point",
+    allowedQueryParams: ["latitude", "longitude", "model", "location_name"],
+  },
+  "/api/soundings/v1/search-location": {
+    upstreamPath: "/api/soundings/v1/search-location",
+    allowedQueryParams: ["city", "state"],
+  },
 };
 
 export function resolveRoute(pathname: string): AllowlistRoute | null {
