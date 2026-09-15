@@ -52,6 +52,15 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
   "api/storm-intel/v1/health": { upstreamPath: "/api/storm-intel/v1/health", allowedQueryParams: [] },
   "api/storm-intel/v1/point": { upstreamPath: "/api/storm-intel/v1/point", allowedQueryParams: ["latitude", "longitude"] },
+  "api/soundings/v1/health": { upstreamPath: "/api/soundings/v1/health", allowedQueryParams: [] },
+  "api/soundings/v1/point": {
+    upstreamPath: "/api/soundings/v1/point",
+    allowedQueryParams: ["latitude", "longitude", "model", "location_name"],
+  },
+  "api/soundings/v1/search-location": {
+    upstreamPath: "/api/soundings/v1/search-location",
+    allowedQueryParams: ["city", "state"],
+  },
 };
 
 export function normalizeRouteKey(path: string | string[] | undefined): string {

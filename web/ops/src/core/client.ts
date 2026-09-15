@@ -3,7 +3,14 @@ import type { StormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/
 import type { FabricNormalizedState } from "../../../../src/services/fabric";
 import { supabase } from "../lib/supabase";
 import { coreConfigured, type OpsCoreConfig } from "./config";
-import type { CoreHealthSnapshot, FabricSnapshotState, OpsConnectionState, StormIntelState } from "./types";
+import type {
+  CoreHealthSnapshot,
+  FabricSnapshotState,
+  OpsConnectionState,
+  SoundingLocationSearchResult,
+  SoundingPointResult,
+  StormIntelState,
+} from "./types";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 // The point-intel lookup does a real HRRR grid interpolation on Core's side (through the VPC
@@ -56,7 +63,7 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 
 async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, outerSignal?: AbortSignal, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<T> {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const abort = () => controller.abort();
   outerSignal?.addEventListener("abort", abort, { once: true });
   try {
@@ -68,7 +75,7 @@ async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, outerSi
     throw error;
   } finally {
     outerSignal?.removeEventListener("abort", abort);
-    window.clearTimeout(timer);
+    clearTimeout(timer);
   }
 }
 
@@ -177,4 +184,40 @@ export function normalizeFabricWsEvent(raw: string): FabricWsEvent {
 
 export function fabricWsUrl(config: OpsCoreConfig): string {
   return `${config.coreWsUrl}/api/fabric/v1/ws`;
+}
+
+// A real HRRR fetch + full derived-parameter calculation on Core, same cost class as the
+// storm-intel point lookup -- reuses that same generous timeout rather than inventing a
+// shorter one that would time out normal (not hung) responses.
+const SOUNDING_REQUEST_TIMEOUT_MS = POINT_REQUEST_TIMEOUT_MS;
+
+export async function fetchSoundingPoint(
+  config: OpsCoreConfig,
+  point: { lat: number; lon: number },
+  options?: { model?: string; locationName?: string | null },
+  signal?: AbortSignal,
+): Promise<SoundingPointResult> {
+  if (!coreConfigured(config)) throw new OpsCoreClientError(unavailableState(config, "Soundings").detail);
+  const params = new URLSearchParams({ latitude: String(point.lat), longitude: String(point.lon) });
+  if (options?.model) params.set("model", options.model);
+  if (options?.locationName) params.set("location_name", options.locationName);
+  return withTimeout(
+    (timeoutSignal) => fetchJson<SoundingPointResult>(`${config.coreBaseUrl}/api/soundings/v1/point?${params}`, timeoutSignal),
+    signal,
+    SOUNDING_REQUEST_TIMEOUT_MS,
+  );
+}
+
+export async function searchSoundingLocation(
+  config: OpsCoreConfig,
+  city: string,
+  state: string,
+  signal?: AbortSignal,
+): Promise<SoundingLocationSearchResult> {
+  if (!coreConfigured(config)) throw new OpsCoreClientError(unavailableState(config, "Location search").detail);
+  const params = new URLSearchParams({ city, state });
+  return withTimeout(
+    (timeoutSignal) => fetchJson<SoundingLocationSearchResult>(`${config.coreBaseUrl}/api/soundings/v1/search-location?${params}`, timeoutSignal),
+    signal,
+  );
 }
