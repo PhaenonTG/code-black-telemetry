@@ -1,6 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+    // Real production bug (found live at https://codeblack-core.tail1d0673.ts.net/overlay):
+    // every relative asset this file loads (alert-feed.js, location-format.js,
+    // alert-priority-engine.js, codeblack-shield.png) resolves against the CURRENT PAGE URL.
+    // Tailscale Serve happily serves this same content at both "/overlay" (no trailing slash)
+    // and "/overlay/" (with one), but per ordinary URL-resolution rules a path with no
+    // trailing slash treats its last segment as a FILENAME, not a directory -- so
+    // "alert-feed.js" resolved from ".../overlay" silently means ".../alert-feed.js" (repo
+    // root), which 404s, while the exact same reference from ".../overlay/" correctly means
+    // ".../overlay/alert-feed.js". Confirmed live: all four assets 404 at the no-slash URL and
+    // 200 at the slash URL. Fixing this client-side (rather than touching Tailscale Serve
+    // config, out of scope this pass) makes the page self-correcting regardless of which exact
+    // URL an operator/OBS Browser Source happens to be given. Runs before any other tag so it
+    // redirects before a single relative request is issued.
+    // Only fires for a directory-style alias (last segment has no dot, e.g. "/overlay") --
+    // never for a direct file path like "/classic-v2.html" or "/index.html", which must NOT
+    // get a trailing slash appended (that would 404 against a real static file server).
+    var lastSegment = location.pathname.split("/").pop();
+    if (!location.pathname.endsWith("/") && lastSegment.indexOf(".") === -1) {
+      location.replace(location.pathname + "/" + location.search + location.hash);
+    }
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Code Black Storm Overlay — v2</title>
@@ -30,10 +52,21 @@
       --safe-edge: 28px;
       --lower-gap: 502px;               /* distance from each side edge to the context card */
       --weather-card-width: 460px;      /* bottom-left environment panel */
-      --weather-card-height: 300px;
+      /* V1.4 restrained polish pass: real broadcast feedback was that the whole lower package
+         reads as too tall/bulky against storm footage. Trended toward the requested ~75-145px
+         directional range without literally hitting the low end -- a 2-row temp/dew/wind grid
+         and a real map both need enough room to stay clipping-free; these are the smallest
+         heights that still leave every existing label/value on one clean line. */
+      --weather-card-height: 165px;
       --radar-width: 460px;             /* bottom-right radar panel */
-      --radar-height: 300px;
-      --context-card-height: 120px;     /* bottom-center single alert/context card slot */
+      --radar-height: 145px;
+      --context-card-height: 120px;     /* bottom-center single alert/context card slot -- left
+         as-is: already specifically tuned via real V1.1/V1.2 broadcast feedback to avoid
+         clipping the longest real alert copy; not re-touched this pass without the same kind
+         of live verification that produced the current value. */
+      --panel-head-height: 40px;        /* was 57px -- header chrome was the single biggest
+         fixed cost in both side panels; shrinking it (with a smaller title) is what makes the
+         weather/radar height cuts above land without cramping their actual content area. */
     }
     * { box-sizing: border-box; }
 
@@ -69,14 +102,14 @@
       background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.85;
     }
     .panel-head, .radar-head {
-      position: absolute; top: 0; left: 0; right: 0; height: 57px; z-index: 1;
+      position: absolute; top: 0; left: 0; right: 0; height: var(--panel-head-height); z-index: 1;
       display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 18px 12px 18px;
+      padding: 0 16px;
       background: linear-gradient(180deg, rgba(12,12,15,0.78), rgba(12,12,15,0.58));
       border-bottom: 1px solid rgba(255,255,255,0.08);
     }
-    .panel-title { font-size: 22px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
-    .radar-panel-f .radar-title { font-size: 22px; letter-spacing: 0.07em; }
+    .panel-title { font-size: 16px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+    .radar-panel-f .radar-title { font-size: 16px; letter-spacing: 0.06em; }
     .live-dot {
       display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: var(--accent);
       box-shadow: 0 0 8px rgba(255,42,42,0.6);
@@ -126,7 +159,7 @@
 
     .wind-panel { top: auto; bottom: var(--safe-edge); left: var(--safe-edge); width: var(--weather-card-width); height: var(--weather-card-height); }
     .cond-grid {
-      position: absolute; inset: 57px 0 0 0;
+      position: absolute; inset: var(--panel-head-height) 0 0 0;
       display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
     }
     /* V1.3 Part J: when GPS heading is unavailable, the tile is omitted entirely (see
@@ -190,7 +223,7 @@
     .radar-title { font-size: 15px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
     .radar-live { font-size: 21px; letter-spacing: 0.03em; font-weight: 700; color: var(--muted); white-space: nowrap; }
     .radar-body {
-      position: absolute; inset: 57px 0 0 0;
+      position: absolute; inset: var(--panel-head-height) 0 0 0;
       background: linear-gradient(155deg, #1c2b1f 0%, #14181c 55%, #0e1114 100%);
       transition: background 0.3s ease;
     }
