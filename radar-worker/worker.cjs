@@ -396,14 +396,30 @@ async function drainHistoryBackfill() {
   while (backfillQueue.length) {
     const { jobKey, site, product, tilt, limit } = backfillQueue.shift();
     try {
-    const keys = await recentLevel2Keys(site, limit);
-    // Keep this deliberately sequential. It runs after the live frame has been returned and avoids
-    // a burst of large Level II downloads/decodes exhausting the worker host.
-    for (const key of keys.reverse()) {
-      const count = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === tilt).length;
-      if (count >= limit) break;
-      try { await ensureLevel2Frame(site, product, tilt, key); } catch { /* skip corrupt archive objects */ }
-    }
+      let keys;
+      try {
+        // Called through module.exports (not the bare local name) so tests can substitute a
+        // failing implementation without touching real S3 -- the only reason this indirection
+        // exists is to make the crash this function used to cause reproducible in a test.
+        keys = await module.exports.recentLevel2Keys(site, limit);
+      } catch (error) {
+        // Root cause of a real production incident: an uncaught rejection here (a transient S3
+        // listing failure -- e.g. "SocketError: other side closed", an ordinary, expected
+        // condition against a public bucket) propagated out of this best-effort background job
+        // and crashed the entire live radar process 33 times in one session. Historical backfill
+        // is optional; live tile serving is not -- this job must never be able to take the
+        // process down. Log with enough context to actually debug a real outage, then abandon
+        // just this one backfill attempt and move on to the next queued job.
+        console.warn(`[backfill] recentLevel2Keys failed for ${jobKey}: ${error && error.message ? error.message : error}`);
+        continue;
+      }
+      // Keep this deliberately sequential. It runs after the live frame has been returned and avoids
+      // a burst of large Level II downloads/decodes exhausting the worker host.
+      for (const key of keys.reverse()) {
+        const count = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === tilt).length;
+        if (count >= limit) break;
+        try { await ensureLevel2Frame(site, product, tilt, key); } catch { /* skip corrupt archive objects */ }
+      }
     } finally {
       backfillJobs.delete(jobKey);
     }
@@ -416,7 +432,15 @@ function startHistoryBackfill(site, product, tilt, limit) {
   if (backfillJobs.has(jobKey)) return;
   backfillJobs.add(jobKey);
   backfillQueue.push({ jobKey, site, product, tilt, limit });
-  void drainHistoryBackfill();
+  // Defense-in-depth: drainHistoryBackfill() already catches the known failure mode internally,
+  // but this terminal .catch() is the last line of defense against any future/unexpected error
+  // escaping that implementation -- a fire-and-forget async call with no rejection handler is
+  // exactly the shape that crashed the process before. Never let a bug here become the second
+  // way a background job can kill live radar serving.
+  drainHistoryBackfill().catch((error) => {
+    console.warn(`[backfill] drainHistoryBackfill terminated unexpectedly: ${error && error.message ? error.message : error}`);
+    backfillRunning = false;
+  });
 }
 
 async function ensureEtFrame(siteId) {
@@ -842,9 +866,27 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Code Black Radar Worker listening on http://0.0.0.0:${PORT}`);
-  console.log(`Level II archive: ${LEVEL2_BUCKET}`);
-  console.log(`Level II chunks: ${LEVEL2_CHUNKS_BUCKET}`);
-  console.log(`Level III archive: ${LEVEL3_BUCKET}`);
-});
+// Test seam: importing this module for tests (node:test via require()) must never bind the real
+// port or start the real S3-backed server. Only the actual entrypoint (`node worker.cjs` /
+// `npm start`) does that.
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Code Black Radar Worker listening on http://0.0.0.0:${PORT}`);
+    console.log(`Level II archive: ${LEVEL2_BUCKET}`);
+    console.log(`Level II chunks: ${LEVEL2_CHUNKS_BUCKET}`);
+    console.log(`Level III archive: ${LEVEL3_BUCKET}`);
+  });
+}
+
+module.exports = {
+  drainHistoryBackfill,
+  startHistoryBackfill,
+  recentLevel2Keys,
+  backfillJobs,
+  backfillQueue,
+  // Test-only reset -- backfillRunning is module-private state with no other mutator; tests need
+  // to restore it to a known idle value between cases.
+  _resetBackfillRunning: () => {
+    backfillRunning = false;
+  },
+};

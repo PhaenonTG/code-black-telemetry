@@ -76,9 +76,18 @@
     .brand-clock-w { width: max-content; max-width: 440px; }
     .top-brand-f {
       top: 28px; left: 28px; height: 88px;
-      display: flex; align-items: center; justify-content: center; padding: 0 22px;
+      display: flex; align-items: center; justify-content: center; padding: 0 22px; gap: 14px;
     }
-    .top-brand-f .brand-text { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
+    /* Permanent Code Black shield -- the actual existing asset (web/overlay/src/assets/
+       codeblack-shield.png), shipped alongside this file, never redrawn/approximated. Visible
+       for the entire broadcast, sized to sit comfortably in the existing 88px-tall identity
+       panel without enlarging it. */
+    .top-brand-f .brand-shield { height: 52px; width: auto; flex: 0 0 auto; }
+    .top-brand-f .brand-text { display: flex; flex-direction: column; align-items: flex-start; text-align: left; min-width: 0; }
+    .top-brand-f .brand-broadcaster {
+      font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: var(--accent);
+      text-transform: uppercase; line-height: 1;
+    }
     .brand-dot {
       width: 14px; height: 14px; border-radius: 999px;
       background: var(--accent);
@@ -86,7 +95,7 @@
       flex: 0 0 auto;
       animation: brandDotPulse 1.4s infinite ease-in-out;
     }
-    .top-brand-f .brand-title-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .top-brand-f .brand-title-row { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
     .top-brand-f .brand-title { font-size: 24px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .top-brand-f .brand-sub { font-size: 21px; color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .brand-sub.count-flash { animation: countFlash 0.6s ease-out; }
@@ -202,6 +211,16 @@
       color: var(--muted); background: #0b0c10; transition: opacity 0.3s ease; z-index: 2;
     }
     .radar-loading.hidden { opacity: 0; pointer-events: none; }
+    .radar-loading.is-unavailable { color: #ffb3b3; }
+    .radar-loading.is-unavailable::before { content: '\26A0  '; }
+
+    /* Explicit radar health states -- a basemap with no confirmed radar imagery must never look
+       like a valid precipitation-free scan (see radarHealthState in the script below). */
+    .radar-live.is-aging .live-dot { background: #f4b623; box-shadow: 0 0 8px rgba(244,182,35,0.6); }
+    .radar-live.is-stale { color: #f4b623; }
+    .radar-live.is-stale .live-dot { background: #f4b623; box-shadow: 0 0 8px rgba(244,182,35,0.6); animation: none; opacity: 0.85; }
+    .radar-live.is-unavailable { color: var(--accent); }
+    .radar-live.is-unavailable .live-dot { background: var(--accent); animation: none; }
 
     .mid-bar {
       position: absolute; bottom: 28px; left: 502px; right: 502px;
@@ -474,7 +493,9 @@
 <body>
   <div class="canvas" id="canvas">
     <div class="panel top-brand-f brand-clock-w fx-panel">
+      <img class="brand-shield" src="codeblack-shield.png" alt="Code Black" />
       <div class="brand-text">
+        <div class="brand-broadcaster">Code Black WX</div>
         <div class="brand-title-row"><div class="brand-dot"></div><div class="brand-title" id="brandTitle">Nick Mounce</div></div>
         <div class="brand-sub" id="viewerCount"></div>
       </div>
@@ -2138,6 +2159,30 @@
     const CLOSE_MINI_LOOP_FRAMES = 3;
     let radarCloseLoopTick = 0;
     let radarFrameFetchInFlight = false;
+
+    // Explicit radar health state machine (Part 8): a basemap with no confirmed radar imagery
+    // must never look like a valid precipitation-free scan. Tracks ACTUAL tile-layer success
+    // (via Mapbox's own 'error'/'data' events below), not merely metadata (sites/frames) success
+    // -- metadata can succeed while every tile 502s, which is exactly the failure mode a real
+    // broadcast test hit.
+    // Starts as null (not 'LOADING') specifically so the very first setRadarHealthState('LOADING')
+    // call actually applies its DOM changes -- setRadarHealthState no-ops when `next` already
+    // equals the current value, and 'LOADING' is also this variable's steady-state starting
+    // *concept*, so a same-string initial value would have silently skipped ever showing the
+    // loading overlay at all.
+    let radarHealthState = null; // null (not yet computed) | LOADING | LIVE | AGING | STALE | UNAVAILABLE
+    let radarTileFailureStreak = 0;
+    let radarLastTileSuccessAt = null;
+    const RADAR_TILE_FAILURE_THRESHOLD = 4; // consecutive tile failures before declaring UNAVAILABLE
+    const RADAR_AGING_MS = 2 * 60 * 1000;
+    const RADAR_STALE_MS = 5 * 60 * 1000;
+    // Bounded retry/recovery: the existing 120s fetchRadarFrames() poll (unchanged) is already
+    // the recovery mechanism -- once tiles start succeeding again, radarTileFailureStreak resets
+    // via the 'data' handler above and updateRadarHealthState() moves off UNAVAILABLE
+    // automatically on the next tick. No separate outage-specific retry loop is added here, so
+    // there is nothing that could turn an outage into a request storm beyond the steady-state
+    // polling cadence that already exists.
+    let radarUnavailableSince = null;
     let radarTickCount = 0;
     let torRotationIndex = 0;
     let severeRotationIndex = 0;
@@ -2208,7 +2253,25 @@
       // hours, CEF's embedded GPU/ANGLE stack can lose its WebGL context; without reacting to
       // that the map just goes frozen/blank with no recovery. Neither is fatal to the rest of
       // the overlay, so both are logged/handled rather than left to crash or hang silently.
-      radarMap.on('error', (e) => console.warn('mapbox radar map error', e && e.error));
+      radarMap.on('error', (e) => {
+        console.warn('mapbox radar map error', e && e.error);
+        // Only count actual radar tile failures toward the health state -- a basemap/other
+        // source error shouldn't be able to declare radar itself unavailable.
+        const url = e && e.error && e.error.url;
+        if (typeof url === 'string' && url.includes('/radar/tiles/')) {
+          radarTileFailureStreak += 1;
+          updateRadarHealthState();
+        }
+      });
+      // Confirmed live that Mapbox's 'data'/isSourceLoaded event does not fire reliably for
+      // these raster sources under continuous zoom-level cycling (the viewport keeps requesting
+      // additional tiles, so a source rarely settles into "fully loaded") -- so success is
+      // tracked the other direction instead: markRadarTileLoadAttempted() (called from
+      // preloadRadarFrames below, only when a real, non-blank tile URL was actually assigned)
+      // arms a short timer, and if no 'error' event for a radar tile has landed by the time it
+      // fires, that absence of failure is the success signal. Any real error still short-circuits
+      // this immediately via radarTileFailureStreak above -- this only relaxes how "it worked" is
+      // detected, never how "it failed" is detected.
       const radarCanvas = radarMap.getCanvas();
       radarCanvas.addEventListener('webglcontextlost', (e) => {
         e.preventDefault();
@@ -2337,7 +2400,16 @@
           // window instead of revalidating: caught live showing an 8-minute-fresher scan sitting
           // one fetch away while the displayed frame was still the one from before. no-store
           // forces every poll to actually hit the network.
-          const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+          // A second, independent reliability gap found while re-verifying the crash fix: this
+          // call's own timeout (fetchWithTimeout's 8s default) is shorter than radar-worker's
+          // own cold-path S3 listing budget (20s, see S3_FETCH_TIMEOUT_MS in worker.cjs) --
+          // confirmed live, a genuinely cold /frames response took 16.7s. The client silently
+          // timed out first, threw into the catch below, and left radarFrames permanently empty
+          // (nothing else retries once the site is already resolved) -- basemap/site/frame-age
+          // still looked fine because those come from a separate, faster call. 20s matches the
+          // backend's own real worst-case budget instead of guessing a smaller number.
+          const RADAR_FRAMES_FETCH_TIMEOUT_MS = 20_000;
+          const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' }, cache: 'no-store' }, RADAR_FRAMES_FETCH_TIMEOUT_MS);
           if (!res.ok) throw new Error('frames fetch failed');
           const frames = await res.json();
           if (Array.isArray(frames) && frames.length) {
@@ -2345,7 +2417,9 @@
             radarLoopIndex = 0;
             radarCloseLoopTick = 0;
             preloadRadarFrames(radarFrames);
-            document.getElementById('radarLoading').classList.add('hidden');
+            // Loading-overlay visibility is now owned entirely by setRadarHealthState -- a
+            // metadata fetch succeeding is not proof real tile imagery rendered (the exact gap a
+            // real broadcast test exposed), so this no longer hides it directly.
           }
           return;
         }
@@ -2363,7 +2437,8 @@
           radarLoopIndex = 0;
           radarCloseLoopTick = 0;
           preloadRadarFrames(radarFrames);
-          document.getElementById('radarLoading').classList.add('hidden');
+          // See the comment on the own-worker branch above -- loading-overlay visibility is
+          // owned by setRadarHealthState now, not this metadata-only success path.
         }
       } catch (err) {
         // leave last-known frames in place -- a single missed poll isn't an outage
@@ -2390,10 +2465,33 @@
     }
 
     const RADAR_PRELOAD_STAGGER_MS = 650;
+    // Tracks which pool slots currently hold a REAL tile URL vs. the BLANK_TILE placeholder --
+    // the success signal below must not count a blank placeholder as proof real radar imagery is
+    // rendering (it always "succeeds" by definition, which would mask an actual outage).
+    const radarSourceHasRealTile = new Set();
+    // Confirmed live that Mapbox's 'data'/isSourceLoaded event does not fire reliably for these
+    // raster sources under continuous zoom-level cycling (the viewport keeps requesting
+    // additional tiles, so a source rarely settles into "fully loaded"). Success is tracked the
+    // other direction instead: called only when a real, non-blank tile URL was actually
+    // assigned, this arms a short timer, and if no radar 'error' event has landed by the time it
+    // fires, that absence of failure is the success signal (radarTileFailureStreak, incremented
+    // by the 'error' handler above, still catches every real failure immediately and
+    // independently of this).
+    const RADAR_TILE_SUCCESS_CONFIRM_MS = 3000;
+    function markRadarTileLoadAttempted() {
+      const streakAtAttempt = radarTileFailureStreak;
+      window.setTimeout(() => {
+        if (radarTileFailureStreak === streakAtAttempt) {
+          radarLastTileSuccessAt = Date.now();
+          updateRadarHealthState();
+        }
+      }, RADAR_TILE_SUCCESS_CONFIRM_MS);
+    }
     function preloadRadarFrames(frames) {
       if (!radarMapReady) { pendingRadarFrames = frames; return; }
       const sector = iemSectorFor(radarSiteId);
       const iemProduct = IEM_PRODUCT_CODE[radarProduct];
+      let assignedRealTile = false;
       for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
         const frame = frames[i];
         let url = BLANK_TILE;
@@ -2402,11 +2500,63 @@
         } else if (frame && frame.kind === 'own') {
           url = `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png`;
         }
+        if (url === BLANK_TILE) { radarSourceHasRealTile.delete(i); } else { radarSourceHasRealTile.add(i); assignedRealTile = true; }
         window.setTimeout(() => {
           const source = radarMap.getSource(radarSourceIds[i]);
           if (source) source.setTiles([url]);
         }, i * RADAR_PRELOAD_STAGGER_MS);
       }
+      if (assignedRealTile) markRadarTileLoadAttempted();
+    }
+
+    const radarLoadingEl = document.getElementById('radarLoading');
+    const radarLiveEl = document.querySelector('.radar-live');
+
+    // Central state transition -- the only place that touches the LOADING/UNAVAILABLE overlay or
+    // the live-dot's aging/stale/unavailable classes, so the DOM can never end up in a state that
+    // contradicts radarHealthState.
+    function setRadarHealthState(next) {
+      if (next === radarHealthState) return;
+      radarHealthState = next;
+      if (next === 'UNAVAILABLE' && radarUnavailableSince === null) radarUnavailableSince = Date.now();
+      if (next !== 'UNAVAILABLE') radarUnavailableSince = null;
+
+      radarLoadingEl.classList.toggle('is-unavailable', next === 'UNAVAILABLE');
+      if (next === 'LOADING') {
+        radarLoadingEl.textContent = 'Loading radar...';
+        radarLoadingEl.classList.remove('hidden');
+      } else if (next === 'UNAVAILABLE') {
+        radarLoadingEl.textContent = 'Radar unavailable';
+        radarLoadingEl.classList.remove('hidden');
+      } else {
+        radarLoadingEl.classList.add('hidden');
+      }
+      radarLiveEl.classList.remove('is-aging', 'is-stale', 'is-unavailable');
+      if (next === 'AGING') radarLiveEl.classList.add('is-aging');
+      else if (next === 'STALE') radarLiveEl.classList.add('is-stale');
+      else if (next === 'UNAVAILABLE') radarLiveEl.classList.add('is-unavailable');
+    }
+
+    // Recomputes health from the two independent signals that matter: whether tiles are
+    // ACTUALLY rendering (radarTileFailureStreak/radarLastTileSuccessAt, driven by Mapbox's own
+    // 'error'/'data' events) and how old the newest available scan is. Metadata (sites/frames)
+    // succeeding is not sufficient on its own -- that's exactly the gap a real broadcast test
+    // exposed (basemap/site/frame-age all looked healthy while every tile 502'd).
+    function updateRadarHealthState() {
+      if (radarTileFailureStreak >= RADAR_TILE_FAILURE_THRESHOLD) {
+        setRadarHealthState('UNAVAILABLE');
+        return;
+      }
+      if (radarLastTileSuccessAt === null) {
+        setRadarHealthState(radarSiteId ? 'LOADING' : 'LOADING');
+        return;
+      }
+      const newest = radarFrames[0];
+      const ageMs = newest && newest.time ? Date.now() - new Date(newest.time).getTime() : null;
+      if (ageMs === null || !Number.isFinite(ageMs)) { setRadarHealthState('LIVE'); return; }
+      if (ageMs >= RADAR_STALE_MS) setRadarHealthState('STALE');
+      else if (ageMs >= RADAR_AGING_MS) setRadarHealthState('AGING');
+      else setRadarHealthState('LIVE');
     }
 
     function applyRadarFrame(index) {
@@ -2414,6 +2564,18 @@
       radarLayerIds.forEach((id, i) => {
         if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === index ? 0.92 : 0);
       });
+      // Part 9: the displayed time/age must track the frame CURRENTLY ON SCREEN during looping,
+      // not always the newest -- updateRadarScanAge() (below) only ever reported radarFrames[0].
+      const shown = radarFrames[index];
+      if (shown && shown.time) {
+        const ageMs = Date.now() - new Date(shown.time).getTime();
+        if (Number.isFinite(ageMs) && ageMs >= 0) {
+          const mins = Math.floor(ageMs / 60000);
+          radarScanAgeText.textContent = index === 0
+            ? (mins < 1 ? 'Live' : `${mins}m ago`)
+            : `${mins < 1 ? '<1' : mins}m ago (loop)`;
+        }
+      }
     }
 
     // Draws every currently-active alert's real polygon, not just the single highest-severity
@@ -2517,6 +2679,12 @@
     // pictures every tick -- a flicker, not motion. Below this threshold, hold on the newest
     // frame instead; a calm still beats a jittery "loop" that was never really animating anything.
     const MIN_FRAMES_TO_LOOP = 3;
+    // Professional-broadcast cadence tuning: ~300-500ms per historical frame, then a longer
+    // (~900-1500ms) pause on the newest frame before wrapping back to oldest. Runs on its own
+    // dedicated interval (see setInterval(advanceRefLoop, ...) below), decoupled from
+    // radarModeTick's 700ms cadence, which still owns zoom/warning-product timing untouched.
+    const RADAR_LOOP_TICK_MS = 400;
+    const RADAR_NEWEST_HOLD_TICKS = 3; // ~3 * 400ms = 1200ms on the newest frame
     function advanceRefLoop() {
       if (!radarFrames.length) return;
       if (radarFrames.length < MIN_FRAMES_TO_LOOP || Date.now() - radarZoomChangedAt < currentZoomHoldMs() / 2) {
@@ -2533,21 +2701,32 @@
         }
         return;
       }
-      applyRadarFrame(radarLoopIndex);
-      radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
+      // Chronological oldest -> newest playback. radarFrames is newest-first (index 0 = newest --
+      // see updateRadarScanAge()'s own comment; the /frames API returns newest-first and nothing
+      // here re-sorts it), so animating forward in time means walking DOWN from the highest valid
+      // index (oldest) to 0 (newest), not incrementing up through this newest-first array. An
+      // earlier version incremented radarLoopIndex directly as the array index, which played the
+      // loop backward in time -- reported live during a real broadcast test (Spencer: "the radar
+      // loop appears to play backwards"). radarLoopIndex here counts ticks elapsed since the last
+      // reset (all existing `radarLoopIndex = 0` reset sites elsewhere in this file are unchanged
+      // and still correct under this meaning -- tick 0 always means "just reset").
+      const oldestIndex = radarFrames.length - 1;
+      const frameIndex = Math.max(0, oldestIndex - radarLoopIndex);
+      applyRadarFrame(frameIndex);
+      radarLoopIndex += 1;
+      if (frameIndex === 0 && radarLoopIndex > oldestIndex + RADAR_NEWEST_HOLD_TICKS) {
+        radarLoopIndex = 0; // hold on newest has elapsed -- wrap back to oldest for the next cycle
+      }
     }
 
-    // How old the newest available scan actually is -- real NEXRAD volume scans land minutes
-    // apart, so "Live" alone doesn't tell a viewer whether they're looking at a scan from 30
-    // seconds ago or 8 minutes ago. Always reflects radarFrames[0] (the newest frame), which is
-    // what applyRadarFrame(0) is showing during every hold/pin state in this file.
+    // Drives the health-state classification (LOADING/LIVE/AGING/STALE/UNAVAILABLE) off the
+    // newest available scan's age -- real NEXRAD volume scans land minutes apart, so a bare
+    // "Live" doesn't tell a viewer whether they're looking at a scan from 30 seconds ago or 8
+    // minutes ago. The visible age/time TEXT itself is owned by applyRadarFrame() (Part 9: it
+    // must reflect whatever frame is actually on screen during looping, not always the newest);
+    // this function only ever updates health classification, never radarScanAgeText directly.
     function updateRadarScanAge() {
-      const newest = radarFrames[0];
-      if (!newest || !newest.time) { radarScanAgeText.textContent = 'Live'; return; }
-      const ageMs = Date.now() - new Date(newest.time).getTime();
-      if (!Number.isFinite(ageMs) || ageMs < 0) { radarScanAgeText.textContent = 'Live'; return; }
-      const mins = Math.floor(ageMs / 60000);
-      radarScanAgeText.textContent = mins < 1 ? 'Live' : `${mins}m ago`;
+      updateRadarHealthState();
     }
     function radarModeTick() {
       radarTickCount += 1;
@@ -2573,9 +2752,10 @@
           return;
         }
         // Flash Flood Warning (and any other warning-tier alert without its own rule above)
-        // stays REF-only, looping normally.
+        // stays REF-only, looping normally. Frame advancement itself runs on its own dedicated
+        // faster interval (see setInterval(advanceRefLoop, RADAR_LOOP_TICK_MS) below) -- no call
+        // needed here.
         if (radarProduct !== 'REF') { setRadarProduct('REF'); torRotationIndex = 0; severeRotationIndex = 0; }
-        advanceRefLoop();
         return;
       }
       // No local alert -- REF only, EXCEPT when a real Severe Thunderstorm Warning is active
@@ -2594,7 +2774,8 @@
         torRotationIndex = 0; severeRotationIndex = 0; baselineNearbyRotationIndex = 0;
       }
       advanceZoom(BASELINE_ZOOM_ORDER, ZOOM_HOLD_MS[RADAR_ZOOM_LEVELS[radarZoomIndex].name] || WARNING_ZOOM_HOLD_MS);
-      advanceRefLoop();
+      // Frame advancement itself runs on its own dedicated faster interval (see
+      // setInterval(advanceRefLoop, RADAR_LOOP_TICK_MS) below) -- no call needed here.
     }
 
     const midContent = {
@@ -2801,6 +2982,11 @@
     setInterval(updateStormIntel, Math.max(300, settings.pollSeconds) * 1000); // HRRR updates hourly at best -- no need to poll as often as weather/alerts
     setInterval(updateNearbySevereWarnings, Math.max(90, settings.pollSeconds) * 1000);
     setInterval(radarModeTick, 700);
+    // Radar frame advancement runs on its own faster, dedicated interval -- decoupled from
+    // radarModeTick's 700ms zoom/warning-product cadence so the reflectivity loop itself can hit
+    // a professional-broadcast pace (~300-500ms/historical frame) without altering any of the
+    // existing zoom-hold/warning-rotation timing math above, which still counts in 700ms ticks.
+    setInterval(advanceRefLoop, RADAR_LOOP_TICK_MS);
     setInterval(fetchRadarFrames, 120_000); // pick up new radar volume scans independent of site changes
     showRotationCard('alert');
     scheduleAdvance('alert');
