@@ -101,7 +101,13 @@ class Handler(BaseHTTPRequestHandler):
         return bool(provided) and _constant_time_eq(provided, self._token)
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib handler name
-        if self.path.rstrip("/") != "/api/owntracks/v1/location":
+        # Accepts both the full path (direct/local testing) and the suffix Tailscale Serve
+        # forwards after stripping its "/owntracks" mount prefix (confirmed behavior: the
+        # existing "/overlay" mount strips the same way -- classic-v2.html's own relative
+        # asset requests only resolve correctly because of this). Avoids a fragile hard
+        # dependency on exactly how Serve rewrites the path.
+        accepted_paths = {"/api/owntracks/v1/location", "/v1/location"}
+        if self.path.rstrip("/") not in accepted_paths:
             self._send_json(404, {"ok": False, "error": "NOT_FOUND"})
             return
         if not self._authorized():
