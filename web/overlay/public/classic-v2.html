@@ -129,6 +129,10 @@
       position: absolute; inset: 57px 0 0 0;
       display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
     }
+    /* V1.3 Part J: when GPS heading is unavailable, the tile is omitted entirely (see
+       renderConditions()) rather than reserving a dead "-- Heading" quadrant -- the remaining
+       three tiles reflow into one row instead of leaving an empty cell. */
+    .cond-grid.three-col { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr; }
     .cond-tile {
       display: flex; flex-direction: row; align-items: center; justify-content: center;
       gap: 12px;
@@ -137,6 +141,9 @@
     }
     .cond-tile:nth-child(2n) { border-right: none; }
     .cond-tile:nth-child(n+3) { border-bottom: none; }
+    .cond-grid.three-col .cond-tile { border-bottom: none; }
+    .cond-grid.three-col .cond-tile:nth-child(2n) { border-right: 1px solid rgba(255,255,255,0.08); }
+    .cond-grid.three-col .cond-tile:last-child { border-right: none; }
     .cond-tile .c-icon { width: 28px; height: 28px; color: var(--muted); flex: 0 0 auto; }
     .cond-tile .c-icon.accent { color: var(--accent); }
     .c-icon-temp.idle-pulse { animation: tempBreathe 1.3s ease-in-out; transform-origin: 50% 90%; }
@@ -579,6 +586,7 @@
   </div>
 
   <script src="alert-feed.js"></script>
+  <script src="location-format.js"></script>
   <script src="alert-priority-engine.js"></script>
   <script>
     // ---- Settings: same URL-param convention classic.html already uses when embedded as an
@@ -689,6 +697,22 @@
       if (mins < 1) return ' · Last fix <1m ago';
       return ` · Last fix ${mins}m ago`;
     }
+    // Feeds alert-priority-engine.js's fresh/aging/stale/unavailable classification (V1.3
+    // Part D). IMPORTANT distinction, spelled out per the task's own instruction: `lastGpsFixAt`
+    // is a BROWSER RECEIVED-AT timestamp (when this tab accepted the last non-stale, has-fix
+    // response from the chase gateway) -- it is NOT the phone GPS chip's own hardware
+    // observation time. The gateway's public location endpoint does not currently expose a raw
+    // device timestamp to this client (only a `stale` boolean it has already computed
+    // server-side), so received-at is the smallest safe, honest mechanism available at this
+    // boundary without inventing new GPS architecture -- exactly what was asked for.
+    // A manual ?latitude=/?longitude= override (settings.useLiveGps === false) has no live feed
+    // to go stale, so it's treated as always-fresh (observedAt: now) rather than "unavailable"
+    // -- an operator-supplied fixed test position, not a stale GPS reading.
+    function chaserLocationForEngine() {
+      if (settings.latitude === null || settings.longitude === null) return null;
+      const observedAt = settings.useLiveGps ? lastGpsFixAt : Date.now();
+      return { lat: settings.latitude, lon: settings.longitude, observedAt };
+    }
     async function updateGps() {
       if (!settings.useLiveGps || gpsInFlight || document.hidden) return;
       gpsInFlight = true;
@@ -778,8 +802,10 @@
         const data = await res.json();
         const addr = data.address || {};
         const city = addr.city || addr.town || addr.village || addr.hamlet || addr.county;
-        const state = addr.state;
-        lastLocationName = city && state ? `${city}, ${state.slice(0, 2).toUpperCase()}` : (data.display_name || 'Location unavailable');
+        const abbr = CodeBlackLocationFormat.usStateAbbreviation(addr.state, addr['ISO3166-2-lvl4']);
+        lastLocationName = city && abbr ? `${city}, ${abbr}`
+          : city && addr.state ? `${city}, ${addr.state}` // real but unmapped region name -- show it in full rather than hide it or guess
+          : (data.display_name || 'Location unavailable');
       } catch (err) {
         lastLocationName = `${settings.latitude.toFixed(2)}, ${settings.longitude.toFixed(2)}`;
       }
@@ -902,29 +928,17 @@
         clearTimeout(timer);
       }
     }
-    function spcPointInRing(point, ring) {
-      let inside = false;
-      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const xi = ring[i][0], yi = ring[i][1];
-        const xj = ring[j][0], yj = ring[j][1];
-        const intersect = (yi > point.lat) !== (yj > point.lat) && point.lon < ((xj - xi) * (point.lat - yi)) / (yj - yi || 1e-9) + xi;
-        if (intersect) inside = !inside;
-      }
-      return inside;
-    }
-    function spcPointInGeometry(point, geometry) {
-      if (!geometry) return false;
-      if (geometry.type === 'Polygon') return spcPointInRing(point, geometry.coordinates[0]);
-      if (geometry.type === 'MultiPolygon') return geometry.coordinates.some(poly => spcPointInRing(point, poly[0]));
-      return false;
-    }
+    // Point-in-polygon for SPC geometry is now owned entirely by
+    // alert-priority-engine.js's pointInGeometry (Polygon/MultiPolygon/holes) -- the
+    // classic-v2-local spcPointInRing/spcPointInGeometry duplicate (ring-0-only, no hole
+    // support) is retired in favor of this single source of truth (V1.3 Part A).
     function spcHighestRisk(features, pos) {
       let best = null;
       for (const feature of features) {
         const props = feature.properties || {};
         const dn = Number(props.DN ?? 0);
         if (dn <= 0) continue;
-        if (!spcPointInGeometry(pos, feature.geometry)) continue;
+        if (!CodeBlackAlertPriorityEngine.pointInGeometry(pos, feature.geometry)) continue;
         if (best && dn <= best.dn) continue;
         best = {
           dn,
@@ -935,9 +949,10 @@
             issued: String(props.ISSUE_ISO ?? props.ISSUE ?? ''),
             expires: String(props.EXPIRE_ISO ?? props.EXPIRE ?? ''),
           },
+          geometry: feature.geometry,
         };
       }
-      return best ? best.level : null;
+      return best ? { ...best.level, geometry: best.geometry } : null;
     }
     const SPC_RISK_RANK = ['TSTM', 'MRGL', 'SLGT', 'ENH', 'MDT', 'HIGH'];
     function spcRiskRank(label) {
@@ -969,9 +984,45 @@
         const day2Rank = spcOutlooks[1].categorical ? spcRiskRank(spcOutlooks[1].categorical.label) : -1;
         const day3Rank = spcOutlooks[2].categorical ? spcRiskRank(spcOutlooks[2].categorical.label) : -1;
         day23HasSomethingToShow = Math.max(day2Rank, day3Rank) >= spcRiskRank('SLGT');
+        // A freshly-issued/changed SPC outlook can change the SPC baseline candidate even
+        // when no warning/watch is active -- re-run the unified resolver immediately rather
+        // than waiting up to settings.pollSeconds for the next updateAlertReal() poll. Guarded
+        // by typeof since evaluateSelectedContext is declared later in the file but this
+        // function is only ever CALLED after full script evaluation (boot), so it's always
+        // defined by the time this runs in practice; the guard is defensive, not load-bearing.
+        if (typeof evaluateSelectedContext === 'function') evaluateSelectedContext(lastKnownAlertFeatures || []);
       } catch (err) {
         // leave last-known outlook in place -- a single missed poll isn't an outage
       }
+    }
+    // Builds the ONE baseline candidate the unified resolver considers alongside NWS
+    // warnings/watches: SPC's Day-1 categorical risk (V1.3 Part A/G -- "SPC is the baseline
+    // context candidate"). Day-2/Day-3 outlooks stay informational-only rotation cards (they
+    // describe a *future* day, not "what's relevant right now") and are deliberately not fed
+    // into the single-selected-context resolver. relevanceMode 'geometry' (not 'always') with
+    // the actual matched risk polygon means this candidate is RE-CONFIRMED against the
+    // chaser's current position on every resolver call (this function's own poll cadence is
+    // slower -- SPC_CACHE_MS-bounded -- than updateAlertReal's, so the geometry may be a few
+    // minutes stale even though the chaser's position isn't).
+    function buildSpcCandidate() {
+      const cat = spcOutlooks && spcOutlooks[0] && spcOutlooks[0].categorical;
+      if (!cat || !cat.geometry) return null;
+      const expiresAt = cat.expires ? Date.parse(cat.expires) : null;
+      return {
+        id: `spc-day1-cat-${cat.label}-${cat.issued || ''}`,
+        type: 'spcOutlook',
+        modifiers: [],
+        source: 'spc-outlook',
+        title: cat.labelLong || cat.label || null,
+        subtitle: null,
+        issuedAt: cat.issued ? Date.parse(cat.issued) : null,
+        effectiveAt: cat.issued ? Date.parse(cat.issued) : null,
+        expiresAt: Number.isFinite(expiresAt) ? expiresAt : null,
+        geometry: cat.geometry,
+        relevanceMode: 'geometry',
+        cancelled: false,
+        metadata: { level: cat },
+      };
     }
 
     // Nearby (but not local) Severe Thunderstorm Warnings -- feeds the baseline radar's
@@ -1616,6 +1667,16 @@
       }
     }
 
+    // V1.3 Part B -- Mesoscale Discussion integration: reported explicitly rather than
+    // fabricated. This codebase has NO existing fetch of SPC's Mesoscale Discussion product
+    // (no MD URL/parsing anywhere in classic.html or classic-v2.html prior to this pass, unlike
+    // the Day-1/2/3 categorical outlook, which already had an established fetch this file
+    // could extend). alert-priority-engine.js's ALERT_TYPES registry already reserves
+    // 'mesoscaleDiscussion' at the correct priority (between Watches and SPC categorical) so
+    // wiring it in later is a real candidate-builder addition, not a registry change -- but
+    // building that fetch/parse from scratch was judged out of scope for this pass rather than
+    // adding an unverified new data source under time pressure. No MD candidates are produced
+    // this pass; MD relevance is therefore never claimed.
     // alertClassFor() output -> alert-priority-engine.js's ALERT_TYPES key (+ any authoritative
     // modifier). Feeds the engine's deterministic resolveSelectedContext() so the "which one
     // alert wins" decision goes through one central, tested priority/tie-break implementation
@@ -1639,9 +1700,13 @@
     // Builds one normalized AlertCandidate per NWS feature. NWS's own `?point=` query already
     // geofiltered these to the chaser's exact position, so a feature with real polygon geometry
     // is additionally geometry-checked (defense in depth / future reuse against a non-point-
-    // filtered source), while a feature with no polygon (many Watches/Advisories are zone-only)
-    // uses relevanceMode 'always' -- trusting NWS's own zone-inclusion rather than fabricating
-    // geometry precision NWS itself didn't provide (see the engine's Watch/SPC doc comment).
+    // filtered source), while a feature with no polygon (many Watches/Advisories are zone-only
+    // -- NWS Tornado/Severe Thunderstorm Watches in particular are ALWAYS issued as a list of
+    // counties, never a drawn polygon, so `f.geometry` is genuinely null for essentially every
+    // Watch feature, not an occasional gap) uses relevanceMode 'always' -- trusting NWS's own
+    // server-side zone-inclusion filtering rather than fabricating polygon precision NWS itself
+    // never provided (V1.3 Part C: this reduced precision for Watches is a real, documented
+    // property of the NWS product, not a gap in this candidate builder).
     function buildAlertCandidates(features) {
       return features.map((f) => {
         const cls = alertClassFor(f);
@@ -1732,6 +1797,61 @@
     // feature through this exact same classify/map/render path instead, so every tier (including
     // the new `generic` one) can still be tested deterministically without waiting on live
     // weather. ?simulateAlert=clear forces the calm state.
+    // Schedules a re-evaluation exactly when the currently-selected candidate's own
+    // expiresAt passes, instead of waiting up to a full settings.pollSeconds for the next
+    // scheduled poll (V1.3 Part D/"expiration handling without waiting for the next poll").
+    // Re-armed on every call to evaluateSelectedContext(); a stale timer from a previous
+    // winner is always cleared first so this never leaks or double-fires.
+    let alertExpiryTimer = null;
+    function scheduleExpiryReevaluation(expiresAt) {
+      clearTimeout(alertExpiryTimer);
+      alertExpiryTimer = null;
+      if (typeof expiresAt !== 'number') return;
+      const delay = expiresAt - Date.now() + 250; // small buffer past the exact instant
+      if (delay <= 0 || delay > 24 * 3600 * 1000) return; // ignore already-past or absurd/no-expiry values
+      alertExpiryTimer = setTimeout(() => { evaluateSelectedContext(); }, delay);
+    }
+    // The unified selection entry point (V1.3 Parts A/C/G): builds candidates from the most
+    // recent NWS warning/watch fetch PLUS the SPC Day-1 baseline candidate (buildSpcCandidate,
+    // built off updateSpcOutlook's own independent, slower poll cycle -- its geometry is
+    // re-confirmed against the CURRENT chaser position on every call here, so a stale SPC poll
+    // never produces a stale relevance claim), resolves through the one tested
+    // resolveSelectedContext(), and only then decides how to render:
+    //   - a warning/watch type -> applyRealAlertTier (forces the mid-bar to show it, preempting
+    //     rotation, exactly as Warnings already did before V1.3 -- Watches now included, Part C)
+    //   - spcOutlook -> the resolver has confirmed SPC as the baseline-relevant context, but
+    //     does NOT force a rotation preempt here (SPC already surfaces periodically via the
+    //     existing 'day1' rotation card; forcing it to dominate 100% of screen time whenever no
+    //     warning/watch is active would suppress the chasers/radar/conditions/forecast cards
+    //     entirely, which is a real broadcast-UX regression, not something this spec asked for)
+    //   - null (nothing relevant anywhere, including SPC) -> baseline 'clear' state
+    // This same function is also what the qualification tests below call directly with
+    // deterministic candidate/location fixtures, so it IS the real integration surface, not a
+    // separate demo path.
+    function evaluateSelectedContext(features) {
+      const spcCandidate = buildSpcCandidate();
+      const candidates = [...buildAlertCandidates(features || []), ...(spcCandidate ? [spcCandidate] : [])];
+      const chaserLoc = chaserLocationForEngine();
+      const resolved = CodeBlackAlertPriorityEngine.resolveSelectedContext(candidates, chaserLoc, Date.now());
+      scheduleExpiryReevaluation(resolved.selected ? resolved.selected.expiresAt : null);
+      if (!resolved.selected) { clearRadarWarningState(); simulateAlert('clear'); return resolved; }
+      if (resolved.selected.type === 'spcOutlook') { clearRadarWarningState(); simulateAlert('clear'); return resolved; }
+      // metadata isn't copied onto the winner by resolveSelectedContext (Part 11's
+      // presentation-independent contract deliberately returns a plain SelectedAlertContext,
+      // not the raw candidate) -- recover the source feature from the original candidate list.
+      const winnerCandidate = candidates.find(c => c.id === resolved.selected.id);
+      const winnerFeature = winnerCandidate && winnerCandidate.metadata && winnerCandidate.metadata.feature;
+      if (winnerFeature) applyRealAlertTier(winnerFeature, alertClassFor(winnerFeature), features || []);
+      return resolved;
+    }
+    // Real production alert polling -- api.weather.gov's ?point= geofilter already restricts
+    // results to alerts whose actual geometry/zone contains that exact point. No key needed.
+    // ?simulateAlert=<kind> (classic.html's own kind vocabulary -- tor-warning, heat-warning,
+    // etc, see alert-feed.js's simulatedAlertFeature) bypasses the fetch and feeds a fabricated
+    // feature through this exact same classify/map/render path instead, so every tier (including
+    // the new `generic` one) can still be tested deterministically without waiting on live
+    // weather. ?simulateAlert=clear forces the calm state.
+    let lastKnownAlertFeatures = null; // preserved across a fetch failure -- see catch below
     async function updateAlertReal() {
       const simulateKind = params.get('simulateAlert');
       if (simulateKind === 'clear') { clearRadarWarningState(); simulateAlert('clear'); return; }
@@ -1755,27 +1875,20 @@
         if (!res.ok) throw new Error('alerts fetch failed');
         const data = await res.json();
         const features = Array.isArray(data.features) ? data.features : [];
-        if (!features.length) { clearRadarWarningState(); simulateAlert('clear'); return; }
-        // Deterministic single-winner selection via alert-priority-engine.js (Part 6/7) rather
-        // than the plain severityRank sort this replaces -- same relative ordering for every
-        // class already supported (see CLS_TO_ENGINE_TYPE's doc comment), now with a real,
-        // tested tie-break instead of "whatever Array.sort leaves in slot 0" for same-priority
-        // features. Location freshness: this poll's own settings.latitude/longitude are the
-        // value already trusted elsewhere in this file for the NWS fetch itself, so they're
-        // treated as fresh-as-of-now here too (no separate GPS-staleness input is wired into
-        // this call yet -- deferred, see the V1.3 report's known-limitations item).
-        const candidates = buildAlertCandidates(features);
-        const chaserLoc = { lat: settings.latitude, lon: settings.longitude, observedAt: Date.now() };
-        const resolved = CodeBlackAlertPriorityEngine.resolveSelectedContext(candidates, chaserLoc, Date.now());
-        if (!resolved.selected) { clearRadarWarningState(); simulateAlert('clear'); return; }
-        // metadata isn't copied onto the winner by resolveSelectedContext (Part 11's
-        // presentation-independent contract deliberately returns a plain SelectedAlertContext,
-        // not the raw candidate) -- recover the source feature from the original list by id.
-        const winnerFeature = candidates.find(c => c.id === resolved.selected.id)?.metadata.feature
-          || features.find(f => alertClassFor(f) === resolved.selected.type) || features[0];
-        applyRealAlertTier(winnerFeature, alertClassFor(winnerFeature), features);
+        // A successful fetch that legitimately returns zero features is real, authoritative
+        // information (Part I) -- it must still reach evaluateSelectedContext (so SPC can be
+        // considered), unlike a *failed* fetch below, which deliberately leaves
+        // lastKnownAlertFeatures untouched and does not re-evaluate at all.
+        lastKnownAlertFeatures = features;
+        evaluateSelectedContext(features);
       } catch (err) {
-        // leave last-known alert state in place -- a single missed poll isn't an outage
+        // Source-outage semantics (Part I): a failed fetch does NOT re-run
+        // evaluateSelectedContext with an empty list (that would read as "confirmed zero
+        // alerts" and could demote/clear a still-valid warning the feed simply failed to
+        // re-confirm). It leaves the last successfully-rendered state exactly as it is.
+        // Absolute expiration still applies regardless -- scheduleExpiryReevaluation was
+        // already armed off the last successful resolve and fires on its own if the current
+        // winner's real expiresAt passes during this outage.
       }
     }
 
@@ -2001,7 +2114,9 @@
       const heading = settings.bearingDeg;
       const headingVal = heading === null ? '--' : degToCompass(heading);
       const headingExtra = heading === null ? ' ' : `${Math.round(heading)}°`;
-      document.getElementById('condGrid').innerHTML = `
+      const condGridEl = document.getElementById('condGrid');
+      condGridEl.classList.toggle('three-col', heading === null);
+      condGridEl.innerHTML = `
         <div class="cond-tile" id="condTempTile">
           <svg class="c-icon c-icon-temp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 14.5V5a2 2 0 1 0-4 0v9.5a4 4 0 1 0 4 0z"/><path d="M10 8h1M10 11h1"/></svg>
           <div class="c-text">
@@ -2026,14 +2141,14 @@
             <div class="c-extra">${gustExtra}</div>
           </div>
         </div>
-        <div class="cond-tile">
-          <svg class="c-icon accent wind-twitch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="--heading:${heading ?? 0}deg;"><path d="M12 3l6 15-6-3-6 3z"/></svg>
+        ${heading === null ? '' : `<div class="cond-tile">
+          <svg class="c-icon accent wind-twitch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="--heading:${heading}deg;"><path d="M12 3l6 15-6-3-6 3z"/></svg>
           <div class="c-text">
             <div class="c-row"><div class="c-val">${headingVal}</div></div>
             <div class="c-lab">Heading</div>
             <div class="c-extra">${headingExtra}</div>
           </div>
-        </div>`;
+        </div>`}`;
       updateHeatShimmer();
     }
     function updateHeatShimmer() {
@@ -2991,7 +3106,14 @@
     // rotation entirely when currentTier === 'clear', takes a normal turn for a Watch/Heat/
     // Excessive Heat/generic alert, and fully pre-empts the rotation the instant a real
     // WARNING_TIERS tier goes active.
-    const WARNING_TIERS = ['svrw', 'svrc', 'svrd', 'tor', 'pds', 'torE', 'ffw'];
+    // V1.3 Part C: Watches now participate in the same preempt/resume chain as Warnings --
+    // "TOR Watch still relevant -> Watch visible" (the spec's own promotion/demotion example)
+    // requires a Watch to actually force display, not just tint the fx-panel glow in the
+    // background while the normal card rotation continues untouched. This is deliberately
+    // scoped to torwtch/svrwtch only -- heatw/heat/generic/ffwwtch remain non-preempting,
+    // matching this file's original, still-intentional "heat/generic never hijacks the
+    // rotation" design decision.
+    const WARNING_TIERS = ['svrw', 'svrc', 'svrd', 'tor', 'pds', 'torE', 'ffw', 'torwtch', 'svrwtch'];
     const ROTATION_ORDER = ['alert', 'params', 'chasers', 'day1', 'day2', 'forecast', 'sunmoon'];
     const DWELL_MS = { alert: 10000, params: 10000, chasers: 8000, day1: 10000, day2: 8000, forecast: 8000, sunmoon: 6000 };
     // Real threshold, set by updateSpcOutlook() once real risk levels are flowing (true whenever

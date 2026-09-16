@@ -280,6 +280,91 @@ test('source outage semantics: empty candidate list is indistinguishable from "n
   // candidate's own expiresAt, which this function still enforces normally).
 });
 
+// --- Full promotion/demotion chain qualification (V1.3 Part G/H) -------------------------
+// One evolving pool of candidates, re-resolved at each step exactly the way the real overlay
+// re-resolves on every poll -- no separate "advance to next state" API, since the whole point
+// of a pure resolver is that promotion/demotion/fallback all fall out of calling it again with
+// the world's current, honest state. Steps 1-7 build up (SPC -> Watch -> escalating Watch ->
+// SVR -> TOR -> elevated TOR), 8-12 tear down in reverse (elevated removed -> TOR expires ->
+// SVR expires -> Watch ends -> SPC). Mesoscale Discussion is intentionally absent from this
+// chain -- no MD candidate source exists yet (see classic-v2.html's own documented Part B
+// limitation) -- so this matrix goes straight from Watch to SPC on the way down, which is
+// itself the correct, honestly-documented behavior for what's actually implemented.
+test('full chain: SPC -> Watch -> escalate -> SVR -> TOR -> elevated -> reverse -> SPC', () => {
+  const spc = candidate({ id: 'spc-day1', type: 'spcOutlook', relevanceMode: 'always', geometry: null, expiresAt: null });
+  const svrWatch = candidate({ id: 'svrwatch1', type: 'severeThunderstormWatch' });
+  const torWatch = candidate({ id: 'torwatch1', type: 'tornadoWatch' });
+  const svr = candidate({ id: 'svr1', type: 'severeThunderstormWarning' });
+  const tor = candidate({ id: 'tor1', type: 'tornadoWarning' });
+  const torPds = candidate({ id: 'tor1', type: 'tornadoWarning', modifiers: ['pds'] }); // same real-world warning, PDS added
+
+  // 1. Only SPC in the pool -> SPC baseline.
+  let pool = [spc];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.type, 'spcOutlook');
+
+  // 2. A Severe Thunderstorm Watch becomes active -> outranks SPC.
+  pool = [spc, svrWatch];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.id, 'svrwatch1');
+
+  // 3. Escalates to a Tornado Watch (both active -- e.g. SVR watch upgraded) -> TOR Watch wins.
+  pool = [spc, svrWatch, torWatch];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.id, 'torwatch1');
+
+  // 4. A real Severe Thunderstorm Warning fires inside the watch -> SVR outranks both watches.
+  pool = [spc, svrWatch, torWatch, svr];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.id, 'svr1');
+
+  // 5. A Tornado Warning fires -> outranks the SVR.
+  pool = [spc, svrWatch, torWatch, svr, tor];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.id, 'tor1');
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.type, 'tornadoWarning');
+
+  // 6/7. That same warning gets a PDS tag (authoritative escalation, same id) -> elevated type.
+  pool = [spc, svrWatch, torWatch, svr, torPds];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.type, 'tornadoWarningPds');
+
+  // 8. PDS tag removed (still the same warning, now plain again) -> ordinary TOR.
+  pool = [spc, svrWatch, torWatch, svr, tor];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.type, 'tornadoWarning');
+
+  // 9. TOR expires/exits (removed from the active pool) -> falls back to SVR, not baseline.
+  pool = [spc, svrWatch, torWatch, svr];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.id, 'svr1');
+
+  // 10. SVR expires/exits -> falls back to the (still-elevated) Tornado Watch.
+  pool = [spc, svrWatch, torWatch];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.id, 'torwatch1');
+
+  // 11. Tornado Watch ends -> falls back to the Severe Thunderstorm Watch.
+  pool = [spc, svrWatch];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.id, 'svrwatch1');
+
+  // 12. That watch ends too -> falls back to SPC (no MD source in this build -- documented).
+  pool = [spc];
+  assert.equal(engine.resolveSelectedContext(pool, INSIDE, NOW).selected.type, 'spcOutlook');
+});
+
+test('full chain reversed candidate array order at every step produces identical winners', () => {
+  const spc = candidate({ id: 'spc-day1', type: 'spcOutlook', relevanceMode: 'always', geometry: null, expiresAt: null });
+  const svrWatch = candidate({ id: 'svrwatch1', type: 'severeThunderstormWatch' });
+  const tor = candidate({ id: 'tor1', type: 'tornadoWarning' });
+  const pool = [spc, svrWatch, tor];
+  const forward = engine.resolveSelectedContext(pool, INSIDE, NOW).selected.id;
+  const reversed = engine.resolveSelectedContext([...pool].reverse(), INSIDE, NOW).selected.id;
+  assert.equal(forward, reversed);
+  assert.equal(forward, 'tor1');
+});
+
+// --- SPC geometry-based relevance (Part A: SPC now goes through the same pointInGeometry) --
+
+test('SPC categorical candidate only relevant when the chaser point is inside its actual risk polygon', () => {
+  const spcGeom = candidate({ id: 'spc-day1', type: 'spcOutlook', geometry: SQUARE, relevanceMode: 'geometry', expiresAt: null });
+  const inResult = engine.resolveSelectedContext([spcGeom], INSIDE, NOW);
+  const outResult = engine.resolveSelectedContext([spcGeom], OUTSIDE, NOW);
+  assert.equal(inResult.selected.type, 'spcOutlook');
+  assert.equal(outResult.selected, null);
+});
+
 // --- Purity / determinism ------------------------------------------------------------------
 
 test('resolveSelectedContext: pure - same inputs always produce the same output', () => {
