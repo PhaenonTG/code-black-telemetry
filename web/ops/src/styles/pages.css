@@ -367,6 +367,7 @@
 .soundings-status-bar__point{font-size:11px;color:var(--cb-muted);font-weight:700;letter-spacing:.03em}
 .soundings-empty{padding:40px 20px;text-align:center;color:var(--cb-muted);font-size:12px;border:1px dashed var(--cb-line);border-radius:6px}
 .soundings-empty--error{color:var(--cb-warning);border-color:var(--cb-warning)}
+.soundings-retry{display:block;margin:10px auto 0;background:var(--cb-red);border:0;color:#000;font-weight:900;font-size:10px;letter-spacing:.06em;border-radius:3px;padding:7px 14px;cursor:pointer}
 
 .soundings-charts{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
 .soundings-chart-block{background:var(--cb-panel);border:1px solid var(--cb-line);padding:12px}
