@@ -452,6 +452,280 @@ function startHistoryBackfill(site, product, tilt, limit) {
   });
 }
 
+// ============================================================================================
+// Real-time Level II CHUNK assembler (V1) -- a shared Code Black radar capability, not an
+// overlay-specific feature. Feeds the exact same `frames` Map / cacheFrame() / renderTile()
+// pipeline the completed-volume path already uses, so classic-v2, OPS, and any future client
+// automatically get chunk-derived frames through the SAME /frames, /tiles, /status API they
+// already call -- no new endpoints, no parallel visual system.
+//
+// Evidence backing every constant/decision below comes from a real live KTWX volume 895
+// observation (2026-09-16), not assumption -- see the prototype run this was built from:
+//   - first chunk to trustworthy lowest-tilt REF: 30.6s (10/82 chunks)
+//   - completed volume for the same scan: 307s after the same first chunk (~10x slower)
+//   - REF agreement between the chunk-assembled and eventual complete-volume decode of the
+//     SAME scan: 22,745 samples compared, 0 mismatches, 0 median/max dBZ difference
+//   - isTruncated stayed false throughout the partial scan (chunks split on compressed-record
+//     boundaries) and hasGaps was true throughout -- neither is a usable completeness signal;
+//     explicit azimuth-coverage of the lowest tilt is what actually gates trustworthiness
+//   - dropping one real chunk out of a trustworthy 10-chunk set: radial count 720->600, max
+//     azimuth gap 0.6deg->60.5deg -- proves the gate below actually catches real degradation
+// ============================================================================================
+
+// V1 scope: lowest trustworthy tilt for REF and VEL only (the high-value live chase/broadcast
+// products) -- not every tilt/product. Complete-volume Level II remains the only source for
+// SRV/CC/ET and for any tilt beyond the lowest.
+const CHUNK_PRODUCTS = new Set(["REF", "VEL"]);
+// Event-driven decode cadence (Part 4): re-attempt roughly every 5 NEW chunks, not every
+// chunk (~4-5s) -- matches the prototype's own cadence, which was already sufficient to catch
+// the exact moment trustworthiness was reached without wasting CPU on every single arrival.
+const CHUNK_DECODE_EVERY_N = 5;
+// Trustworthy-sweep gate (Part 5) -- the SAME two numbers proven against real data above.
+// Deliberately NOT isTruncated/hasGaps (see the header comment): both were uninformative in
+// the real observation this is built from.
+const CHUNK_TRUSTWORTHY_MIN_RADIALS = 300;
+const CHUNK_TRUSTWORTHY_MAX_GAP_DEG = 10;
+// Bounded lookback/history: only the CURRENT (and, briefly during handoff, the immediately
+// previous) volume's chunk metadata+bytes are ever held per site -- no unbounded chunk
+// archive, matching the "no uncontrolled storage" hard invariant. A site with no chunk
+// activity for this long is dropped from chunkVolumeState entirely (bounded memory).
+const CHUNK_SITE_IDLE_EVICT_MS = 20 * 60_000;
+// Rate-limit how often a single site's chunk state is even considered for advancement --
+// this is what keeps a burst of concurrent viewer requests from turning into a burst of S3
+// listings; the real per-chunk cadence (~4-5s) means checking more often than this buys
+// nothing.
+const CHUNK_ADVANCE_MIN_INTERVAL_MS = 3_000;
+
+// site -> { volumeNum, chunks: Map<"S-1"|"I-2"|"E-999", {key,lastModified,size,seq,flag}>,
+//           firstChunkTime, newestChunkTime, sawE, lastDecodedChunkCount,
+//           trustworthyEmitted: Set<"REF"|"VEL">, lastAdvanceAt, lastDiscoveryAt }
+const chunkVolumeState = new Map();
+// Per-site in-flight dedup, mirroring frameLoads' existing pattern -- concurrent requests for
+// the same site never trigger overlapping chunk-advancement work.
+const chunkAdvanceInFlight = new Map();
+
+// Same shape as listS3() but also carries LastModified/Size -- listS3 intentionally only ever
+// returned bare keys (every existing caller only needed sort order), so this is a new function
+// rather than an expanded contract change to a function three other call sites already rely on.
+async function listChunkBucketXml(prefix) {
+  const xml = await fetchText(`${LEVEL2_CHUNKS_BUCKET}/?list-type=2&prefix=${encodeURIComponent(prefix)}&max-keys=1000`);
+  return [...xml.matchAll(/<Contents><Key>(.*?)<\/Key><LastModified>(.*?)<\/LastModified>.*?<Size>(\d+)<\/Size>/gs)]
+    .map((m) => ({ key: m[1].replace(/&amp;/g, "&"), lastModified: m[2], size: Number(m[3]) }));
+}
+
+async function chunkFolderHasKeys(site, volumeNum) {
+  const xml = await fetchText(`${LEVEL2_CHUNKS_BUCKET}/?list-type=2&prefix=${encodeURIComponent(`${site}/${volumeNum}/`)}&max-keys=1`);
+  return /<KeyCount>0<\/KeyCount>/.test(xml) === false;
+}
+
+// Volume folders are a monotonically increasing NUMBER embedded in the chunk's own Archive II
+// header (verified: "AR2V0006.890" for folder .../890/) -- NEVER compared lexicographically
+// ("999" > "1000" as strings). Two-phase bounded numeric search: phase 1 finds ANY populated
+// folder (exponential growth from 1 -- real volume numbers are already in the high hundreds by
+// the time a site has been scanning for a day, so folder 1 itself is expected to be empty),
+// phase 2 continues growing from that anchor to find the empty boundary above it, then binary
+// searches. Every step is bounded; this never lists more than ~2*log2(volumeNum) small
+// max-keys=1 requests (well under 40 in practice).
+async function discoverLatestChunkVolume(site) {
+  let anchor = null;
+  let probe = 1;
+  for (let i = 0; i < 40 && anchor === null; i++) {
+    if (await chunkFolderHasKeys(site, probe)) anchor = probe; else probe *= 2;
+    if (probe > 10_000_000) break;
+  }
+  if (anchor === null) throw new Error(`no Level II chunk data found for ${site}`);
+  let lo = anchor, hi = anchor + 1, step = 1;
+  while (await chunkFolderHasKeys(site, hi)) {
+    lo = hi;
+    step *= 2;
+    hi = lo + step;
+    if (hi - anchor > 10_000_000) break;
+  }
+  let left = lo, right = hi;
+  while (right - left > 1) {
+    const mid = left + Math.floor((right - left) / 2);
+    if (await chunkFolderHasKeys(site, mid)) left = mid; else right = mid;
+  }
+  return left;
+}
+
+const CHUNK_KEY_RE = /\/(\d{8}-\d{6})-(\d+)-([SIE])$/;
+const CHUNK_ORDER_RANK = { S: -1, I: 0, E: 1_000_000 };
+function orderChunkEntries(entries) {
+  return [...entries].sort((a, b) => (CHUNK_ORDER_RANK[a.flag] + a.seq) - (CHUNK_ORDER_RANK[b.flag] + b.seq));
+}
+
+function azimuthCoverageOf(azimuths) {
+  const sorted = [...new Set(azimuths.map((a) => Math.round(Number(a) * 10) / 10))].sort((a, b) => a - b);
+  if (sorted.length < 2) return { uniqueCount: sorted.length, maxGapDeg: 360 };
+  let maxGap = (sorted[0] + 360) - sorted[sorted.length - 1];
+  for (let i = 1; i < sorted.length; i++) maxGap = Math.max(maxGap, sorted[i] - sorted[i - 1]);
+  return { uniqueCount: sorted.length, maxGapDeg: Math.round(maxGap * 100) / 100 };
+}
+
+function isTrustworthySweep(radialCount, maxGapDeg) {
+  return radialCount >= CHUNK_TRUSTWORTHY_MIN_RADIALS && maxGapDeg <= CHUNK_TRUSTWORTHY_MAX_GAP_DEG;
+}
+
+// Builds a frame object in the EXACT shape ensureLevel2Frame() produces (same fields the
+// existing renderTile()/metadata()/frames-route sort already consume), plus additive
+// provenance fields (Part 8) -- never a parallel/incompatible frame shape. `key` is a
+// chunk-specific synthetic string (never collides with a real S3 volume key) so frameId()
+// naturally produces a distinct id from the eventual complete-volume frame for the same scan.
+function buildChunkFrame(site, product, radar, volumeNum, chunkState, coverage) {
+  radar.setElevation(Math.min(...radar.listElevations()));
+  const data = compactMomentData(radar[PRODUCT_TO_ACCESSOR[product]]());
+  const azimuths = radar.getAzimuth();
+  const headers = radar.getHeader();
+  const firstHeader = Array.isArray(headers) ? headers[0] : headers;
+  const volumeTime = volumeTimeFromHeader(radar);
+  const key = `chunk:${site.id}:${volumeNum}`;
+  const id = frameId(site.id, product, radar.listElevations()[0], key);
+  return {
+    id, site, product, sourceLevel: "LEVEL II (chunk)", sourceBucket: "unidata-nexrad-level2-chunks",
+    sourceChunkBucket: "unidata-nexrad-level2-chunks",
+    sourceNotification: "arn:aws:sns:us-east-1:684042711724:NewNEXRADLevel2ObjectFilterable",
+    key, checksum: crypto.createHash("sha1").update(`${key}:${chunkState.chunks.size}`).digest("hex").slice(0, 12),
+    tilt: radar.listElevations()[0], elevationAngle: firstHeader?.elevation_angle ?? null,
+    availableTilts: radar.listElevations(), time: volumeTime, processedAt: Date.now(),
+    processingDurationMs: 0, // set by the caller after decode timing is known
+    vcp: radar.vcp?.record?.pattern_number ?? firstHeader?.volume?.volume_coverage_pattern ?? null,
+    nyquistVelocity: firstHeader?.radial?.nyquist_velocity ?? null,
+    quality: radar.isTruncated ? "INCOMPLETE" : radar.hasGaps ? "GAPS" : "OK", data, azimuths,
+    // Additive provenance (Part 8) -- never breaks existing clients, since metadata() only
+    // forwards named fields today and this adds new ones rather than changing any existing one.
+    chunkVolume: volumeNum, chunkComplete: chunkState.sawE, trustworthy: true,
+    radialCount: data.length, maxAzimuthGapDeg: coverage.maxGapDeg, chunkCount: chunkState.chunks.size,
+  };
+}
+
+// Core per-site advancement step (Part 3/4). Never throws past its own try/catch (Part 7 --
+// any exception here must leave the existing completed-volume path completely unaffected);
+// callers invoke this fire-and-forget, exactly like the existing ensureMatchingCcFrame
+// pre-warm pattern, never awaited from inside a client-facing request.
+async function advanceChunkAssembly(siteId) {
+  const site = sites.find((item) => item.id === siteId);
+  if (!site) return;
+  const now = Date.now();
+  let state = chunkVolumeState.get(siteId);
+  if (state && now - state.lastAdvanceAt < CHUNK_ADVANCE_MIN_INTERVAL_MS) return;
+  if (chunkAdvanceInFlight.has(siteId)) return;
+  const work = (async () => {
+    try {
+      if (!state) {
+        // Through module.exports (not the bare local name) -- same test-seam indirection
+        // already established for recentLevel2Keys, so a test can substitute a failing
+        // discovery/listing without touching real S3 (Part 7/9-I: proves the fallback path).
+        const volumeNum = await module.exports.discoverLatestChunkVolume(siteId);
+        state = { volumeNum, chunks: new Map(), firstChunkTime: null, newestChunkTime: null, sawE: false,
+          lastDecodedChunkCount: 0, trustworthyEmitted: new Set(), lastAdvanceAt: now, lastDiscoveryAt: now };
+        chunkVolumeState.set(siteId, state);
+      }
+      state.lastAdvanceAt = now;
+
+      // If the currently-tracked volume already completed (sawE) last time we looked, check
+      // whether a NEWER volume has started before doing anything else -- a completed volume's
+      // chunk set never gains new data, so re-listing it forever would be wasted work.
+      if (state.sawE && now - state.lastDiscoveryAt > CHUNK_ADVANCE_MIN_INTERVAL_MS) {
+        const nextVolume = state.volumeNum + 1;
+        if (await chunkFolderHasKeys(siteId, nextVolume)) {
+          // Bounded volume history: drop the completed volume's chunk bytes entirely before
+          // starting to track the new one -- never accumulate more than one volume's chunk
+          // state per site.
+          state = { volumeNum: nextVolume, chunks: new Map(), firstChunkTime: null, newestChunkTime: null,
+            sawE: false, lastDecodedChunkCount: 0, trustworthyEmitted: new Set(), lastAdvanceAt: now, lastDiscoveryAt: now };
+          chunkVolumeState.set(siteId, state);
+        } else {
+          state.lastDiscoveryAt = now;
+        }
+      }
+      if (state.sawE) return; // still the same completed volume, nothing new to do
+
+      const entries = await listChunkBucketXml(`${siteId}/${state.volumeNum}/`);
+      if (!entries.length) return;
+      for (const e of entries) {
+        const m = e.key.match(CHUNK_KEY_RE);
+        if (!m) continue;
+        const seq = Number(m[2]);
+        const flag = m[3];
+        const dedupeKey = `${flag}-${seq}`;
+        // De-duplicate by (volume, sequence, flag) -- Part 3/9-A -- listing the same folder
+        // repeatedly must never double-count or double-concatenate a chunk already seen.
+        if (!state.chunks.has(dedupeKey)) state.chunks.set(dedupeKey, { ...e, seq, flag });
+      }
+      if (!state.firstChunkTime) {
+        const first = orderChunkEntries([...state.chunks.values()])[0];
+        state.firstChunkTime = first ? first.lastModified : null;
+      }
+      const ordered = orderChunkEntries([...state.chunks.values()]);
+      state.newestChunkTime = ordered.length ? ordered[ordered.length - 1].lastModified : state.newestChunkTime;
+      state.sawE = ordered.some((c) => c.flag === "E");
+
+      const progressed = state.chunks.size - state.lastDecodedChunkCount;
+      if (progressed < CHUNK_DECODE_EVERY_N && !state.sawE) return;
+      if (CHUNK_PRODUCTS.size === [...state.trustworthyEmitted].filter((p) => CHUNK_PRODUCTS.has(p)).length) return; // already trustworthy for everything this volume can offer
+      state.lastDecodedChunkCount = state.chunks.size;
+
+      // Fetch + concatenate RAW bytes, S through the current newest, in NUMERIC sequence
+      // order, with NO reformatting -- verified byte-for-byte against the eventual complete
+      // volume (0 mismatches across 22,745 real samples).
+      const buffers = [];
+      for (const c of ordered) buffers.push(await fetchBuffer(`${LEVEL2_CHUNKS_BUCKET}/${c.key}`));
+      const assembled = Buffer.concat(buffers);
+
+      const decodeStarted = Date.now();
+      let radar;
+      try {
+        radar = new Level2Radar(assembled, { logger: false });
+      } catch {
+        return; // malformed/incomplete partial buffer -- not an error state, just not decodable yet
+      }
+      const elevations = radar.listElevations();
+      if (!elevations.length) return;
+      const lowestTilt = Math.min(...elevations);
+      radar.setElevation(lowestTilt);
+
+      for (const product of CHUNK_PRODUCTS) {
+        if (state.trustworthyEmitted.has(product)) continue;
+        let moments;
+        try { moments = radar[PRODUCT_TO_ACCESSOR[product]](); } catch { continue; }
+        const azimuths = radar.getAzimuth();
+        const coverage = azimuthCoverageOf(azimuths || []);
+        if (!isTrustworthySweep(moments.length, coverage.maxGapDeg)) continue; // Part 5 gate -- REF
+        // trustworthy does not imply VEL trustworthy or vice versa; each product is gated
+        // independently and only the ones that actually pass are ever surfaced (Part 5).
+        const frame = buildChunkFrame(site, product, radar, state.volumeNum, state, coverage);
+        frame.processingDurationMs = Date.now() - decodeStarted;
+        cacheFrame(frame);
+        state.trustworthyEmitted.add(product);
+      }
+    } catch (error) {
+      // Part 7 hard invariant: ANY failure in the chunk path (listing, fetch, decode, malformed
+      // data, state inconsistency) is swallowed here -- the existing completed-volume path
+      // (ensureLevel2Frame, called independently by every /frames and /status request) is
+      // completely unaffected, and no frame is ever published from insufficient/corrupt data.
+      // Logged (not silent), matching the existing [backfill] warning convention, purely for
+      // operational visibility -- this is a best-effort background job, not a request failure.
+      console.warn(`[chunk] advanceChunkAssembly(${siteId}) failed: ${error && error.message ? error.message : error}`);
+    } finally {
+      chunkAdvanceInFlight.delete(siteId);
+    }
+  })();
+  chunkAdvanceInFlight.set(siteId, work);
+  await work;
+}
+
+// Bounded memory (Part 3): drop chunk-tracking state entirely for any site nobody has viewed
+// in a while, mirroring the existing siteUse/SITE_LIMIT eviction already applied to decoded
+// frames. Called opportunistically from the request path, not on a standalone timer, so it
+// costs nothing when the service is idle.
+function evictIdleChunkSites() {
+  const now = Date.now();
+  for (const [siteId, state] of chunkVolumeState) {
+    if (now - state.lastAdvanceAt > CHUNK_SITE_IDLE_EVICT_MS) chunkVolumeState.delete(siteId);
+  }
+}
+
 async function ensureEtFrame(siteId) {
   const site = sites.find((item) => item.id === siteId);
   if (!site) throw new Error(`Unknown radar site ${siteId}`);
@@ -766,6 +1040,14 @@ function metadata(frame) {
     checksum: frame.checksum,
     processingDurationMs: frame.processingDurationMs,
     legend: legend(frame.product),
+    // Additive chunk-assembler provenance (Part 8) -- undefined/omitted for every existing
+    // completed-volume frame, so no existing client's parsing of this response changes.
+    trustworthy: frame.trustworthy,
+    chunkVolume: frame.chunkVolume,
+    chunkComplete: frame.chunkComplete,
+    chunkCount: frame.chunkCount,
+    radialCount: frame.radialCount,
+    maxAzimuthGapDeg: frame.maxAzimuthGapDeg,
   };
 }
 
@@ -795,9 +1077,19 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/v1/radar/status") {
       const site = currentSiteForUrl(url);
       const product = url.searchParams.get("product") || selectedProduct;
+      // Fire-and-forget chunk-assembly advancement (Part 3/4/7) -- same pre-warm pattern as
+      // ensureMatchingCcFrame: never awaited from a client-facing request, never allowed to
+      // affect this response even on failure. Only progresses for sites actually being viewed.
+      if (CHUNK_PRODUCTS.has(product)) { evictIdleChunkSites(); advanceChunkAssembly(site).catch(() => {}); }
       let frame = null;
       try { frame = await ensureFrame(site, product, Number(url.searchParams.get("tilt") || selectedTilt)); latestError = ""; } catch (error) { latestError = error.message; }
+      // Same freshness-by-real-timestamp fix as /frames: ensureFrame() only ever resolves the
+      // completed-volume path, but a chunk-derived frame already cached for this site/product
+      // can be genuinely newer. "Current" status must reflect the actual freshest frame, not
+      // whichever code path this particular request happened to await.
       const matchingFrameCount = [...frames.values()].filter((item) => item.site.id === site && item.product === product).length;
+      const freshest = [...frames.values()].filter((item) => item.site.id === site && item.product === product).sort((a, b) => b.time - a.time)[0];
+      if (freshest && (!frame || freshest.time > frame.time)) frame = freshest;
       return send(res, 200, {
         backendState: frame ? "READY" : "DEGRADED",
         backendVersion: VERSION,
@@ -824,6 +1116,7 @@ const server = http.createServer(async (req, res) => {
       const product = url.searchParams.get("product") || selectedProduct;
       const tilt = Number(url.searchParams.get("tilt") || selectedTilt);
       const limit = Math.max(1, Math.min(FRAME_LIMIT, Number(url.searchParams.get("limit") || 6)));
+      if (CHUNK_PRODUCTS.has(product)) { evictIdleChunkSites(); advanceChunkAssembly(site).catch(() => {}); }
       const frame = await ensureFrame(site, product, tilt);
       // Must also filter by tilt (chosenTilt, since that's what's actually cached under -- the raw
       // request tilt can differ if the volume didn't have that exact cut) -- otherwise switching
@@ -831,7 +1124,14 @@ const server = http.createServer(async (req, res) => {
       // tilt's cached frames, silently showing the wrong elevation while labeled as the new one.
       const resolvedTilt = frame.tilt;
       let list = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === resolvedTilt).sort((a, b) => b.time - a.time).slice(0, limit);
-      if (!list.find((item) => item.id === frame.id)) list.unshift(frame);
+      // ensureFrame() above only ever resolves the completed-volume path -- it guarantees at
+      // least one real frame exists/gets fetched, but its result must NOT be forced to the
+      // front of the list unconditionally: a chunk-derived frame already in the cache can be
+      // genuinely NEWER (real volume observation time), and freshness must be decided by that
+      // real timestamp, never by which code path happened to produce a given entry. Re-sort
+      // (and re-slice back to `limit`) after guaranteeing inclusion, rather than unshift.
+      if (!list.find((item) => item.id === frame.id)) list.push(frame);
+      list = list.sort((a, b) => b.time - a.time).slice(0, limit);
       // First request for a site/product this process has seen: backfill a real short history
       // instead of returning a single frame -- otherwise the client's "last N frames" loop has
       // nothing to animate until enough real time has passed for new volumes to arrive on their own.
@@ -897,5 +1197,23 @@ module.exports = {
   // to restore it to a known idle value between cases.
   _resetBackfillRunning: () => {
     backfillRunning = false;
+  },
+  // Chunk-assembler exports (V1) -- pure/small functions tested directly, plus the module-level
+  // state maps reset between test cases the same way backfillJobs/backfillQueue already are.
+  orderChunkEntries,
+  azimuthCoverageOf,
+  isTrustworthySweep,
+  discoverLatestChunkVolume,
+  chunkFolderHasKeys,
+  advanceChunkAssembly,
+  chunkVolumeState,
+  CHUNK_TRUSTWORTHY_MIN_RADIALS,
+  CHUNK_TRUSTWORTHY_MAX_GAP_DEG,
+  CHUNK_DECODE_EVERY_N,
+  frames,
+  cacheFrame,
+  _resetChunkState: () => {
+    chunkVolumeState.clear();
+    chunkAdvanceInFlight.clear();
   },
 };
