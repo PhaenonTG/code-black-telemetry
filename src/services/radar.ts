@@ -38,6 +38,18 @@ export interface RadarFrame {
   tileTemplate?: string;
   imageUrl?: string;
   bounds?: { west: number; south: number; east: number; north: number };
+  // Additive diagnostic-only provenance from radar-worker's real-time Level II chunk assembler
+  // (V1) -- present only on a chunk-derived frame (sourceLevel === "LEVEL II (chunk)"), absent
+  // on a completed-volume frame. NEVER use these to determine freshness or trust yourself --
+  // that gate is entirely server-side (see `trustworthy`, which the server only ever sets true
+  // after already applying it); `freshness`/`ageSeconds` above remain the sole freshness
+  // authority regardless of source.
+  trustworthy?: boolean;
+  chunkVolume?: number;
+  chunkComplete?: boolean;
+  chunkCount?: number;
+  radialCount?: number;
+  maxAzimuthGapDeg?: number;
 }
 
 export interface RadarStatus {
@@ -107,6 +119,18 @@ export function radarWorkerBase(): string {
 
 export function webRadarEnabled() {
   return !Capacitor.isNativePlatform() && radarWorkerBase() !== "";
+}
+
+// radar-worker can now serve a trustworthy Level II real-time-chunk-derived frame roughly
+// every ~20-30s during an active scan (vs. waiting the full ~5-6min for a completed volume) --
+// a web dashboard on wall/wifi power should poll fast enough to actually realize that gain,
+// but a phone on battery/cellular (native) has no reason to pay that same polling cost just to
+// shave time off a freshness gain a chaser glancing at their phone every so often won't notice
+// the same way an OPS operator staring at a live dashboard would. Centralized here (not a
+// Capacitor check scattered into AtlasMap.tsx) since this module already owns every other
+// native-vs-web radar branch.
+export function recommendedRadarRefreshMs() {
+  return Capacitor.isNativePlatform() ? 90_000 : 8_000;
 }
 
 // True only for the specific "single-site radar will never load here" case: a web build with no

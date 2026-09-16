@@ -40,7 +40,7 @@ import { clusterViewportPoints, filterViewportPoints, viewportFromMap, zoomDetai
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, getSurfaceStationsForViewport, type RoadConditionEvent, type TrafficCamera, type SurfaceStationObservation, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
-import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, radarWorkerMissingOnWeb, setRadarStormMotion, type RadarFrame, type RadarProduct, type RadarSite, type StormMotion } from "../services/radar";
+import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, radarWorkerMissingOnWeb, recommendedRadarRefreshMs, setRadarStormMotion, type RadarFrame, type RadarProduct, type RadarSite, type StormMotion } from "../services/radar";
 import { useWind } from "../hooks/useTelemetry";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
 import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
@@ -50,7 +50,8 @@ import { getNearbyStormReports, type StormReport } from "../services/stormReport
 import { getRiverGaugesForViewport, type RiverGaugeObservation } from "../services/riverGaugeProvider";
 import { fetchNavigationRoute, type RoutePoint } from "../services/navigationRoute";
 
-const RADAR_REFRESH_MS = 90_000; // Poll the worker for a fresher scan well inside NEXRAD's ~4-6 min
+// Platform-aware (web/OPS polls faster to realize the chunk-assembler's freshness gain; native
+// stays conservative for battery/cellular) -- see recommendedRadarRefreshMs() in services/radar.
 // volume-scan cadence, without hammering it every render.
 const RADAR_LOOP_FRAME_COUNT = 12; // "Last so many frames" loop depth -- long enough to show real
 // storm motion, short enough that a slow worker/connection doesn't stall the toggle for ages.
@@ -999,7 +1000,7 @@ export function AtlasMap({
       if (frames[0]?.availableTilts?.length) setRadarAvailableTilts(frames[0].availableTilts);
     };
     void load();
-    const timer = window.setInterval(load, RADAR_REFRESH_MS);
+    const timer = window.setInterval(load, recommendedRadarRefreshMs());
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -1549,7 +1550,14 @@ export function AtlasMap({
           </div>
           <AtlasRadarLegend product={radarProduct} />
           {radarFrame && (
-            <div className={`atlas-radar-instrument__age atlas-radar-instrument__age--${radarFrame.freshness === "STALE" ? "stale" : radarFrame.ageSeconds < 120 ? "live" : "aging"}`}>
+            // title is a hover-only diagnostic (never a visible badge, per this integration's
+            // own "provenance is secondary" instruction) -- sourceLevel tells an operator
+            // troubleshooting a freshness complaint WHERE this frame came from, without ever
+            // being used to infer freshness itself (freshness/ageSeconds above already do that).
+            <div
+              className={`atlas-radar-instrument__age atlas-radar-instrument__age--${radarFrame.freshness === "STALE" ? "stale" : radarFrame.ageSeconds < 120 ? "live" : "aging"}`}
+              title={`Source: ${radarFrame.sourceLevel}${radarFrame.trustworthy ? " (trustworthy)" : ""}`}
+            >
               <span className="atlas-radar-instrument__pulse" />
               {radarProduct} · {ageText(radarFrame.ageSeconds)} old{radarFrame.freshness === "STALE" ? " · STALE" : ""}
             </div>
