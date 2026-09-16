@@ -1,0 +1,46 @@
+[Unit]
+Description=Code Black OwnTracks -> Fabric HTTP ingest adapter
+Wants=network-online.target
+Requires=codeblack-core-api.service
+After=network-online.target codeblack-core-api.service
+StartLimitIntervalSec=60
+StartLimitBurst=10
+ConditionPathExists=/srv/codeblack/config/owntracks/spencer-iphone.token
+
+[Service]
+Type=simple
+User=cbwx-core
+Group=cbwx-core
+WorkingDirectory=/srv/codeblack/releases/owntracks-bridge/current
+ExecStart=/usr/bin/python3 /srv/codeblack/releases/owntracks-bridge/current/owntracks_bridge.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectClock=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+CapabilityBoundingSet=
+AmbientCapabilities=
+IPAddressDeny=any
+IPAddressAllow=127.0.0.1/32
+MemoryMax=128M
+TasksMax=16
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
