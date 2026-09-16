@@ -291,9 +291,18 @@ function deriveSrv(velocity, azimuths) {
 function palette(product, value) {
   if (value == null || Number.isNaN(value)) return [0, 0, 0, 0];
   if (product === "REF") {
+    // Alpha raised across the board (colors/dBZ thresholds unchanged -- this is a rendering
+    // decision, never a falsification of the data). Root cause of a real "radar looks weak/soft"
+    // broadcast complaint: at the old alphas, moderate rain (35 dBZ, the yellow stop) was only
+    // 170/255 (~67%) opaque before the client's own 0.92 raster-opacity multiplier, and light
+    // returns (5-20 dBZ) were 85-130/255 (33-51%) -- washed out against the dark basemap even
+    // for real, meaningful precipitation. Weak returns (5 dBZ) stay noticeably lighter than
+    // moderate-and-up on purpose, so stratiform drizzle doesn't visually dominate the panel the
+    // same way a real storm core does -- but everything 45 dBZ and up (heavy rain/hail-capable
+    // cores) is now solidly opaque, matching how a real broadcast radar display reads at a glance.
     const stops = [
-      [-10, [0, 0, 0, 0]], [5, [42, 92, 120, 85]], [20, [23, 170, 80, 130]], [35, [235, 210, 33, 170]],
-      [45, [255, 122, 20, 200]], [55, [230, 36, 45, 225]], [65, [205, 65, 210, 235]], [80, [255, 255, 255, 245]],
+      [-10, [0, 0, 0, 0]], [5, [42, 92, 120, 140]], [20, [23, 170, 80, 190]], [35, [235, 210, 33, 225]],
+      [45, [255, 122, 20, 245]], [55, [230, 36, 45, 255]], [65, [205, 65, 210, 255]], [80, [255, 255, 255, 255]],
     ];
     return interpolateStops(stops, value);
   }

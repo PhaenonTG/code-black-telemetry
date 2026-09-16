@@ -224,7 +224,11 @@
 
     .mid-bar {
       position: absolute; bottom: 28px; left: 502px; right: 502px;
-      height: 150px; border-radius: 24px;
+      /* Was 150px -- real broadcast test feedback: the SPC/warning center card used more
+         vertical space than its content needed, at the cost of storm-video area. ~20% shorter,
+         recovering video without shrinking any text (MRGL/SLGT/ENH/MDT/HIGH and warning copy are
+         unchanged font sizes -- only the surrounding padding/whitespace is tighter). */
+      height: 120px; border-radius: 24px;
       display: flex; align-items: stretch; justify-content: center;
       padding: 0 6px;
       box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
@@ -2296,7 +2300,22 @@
           radarMap.addSource(radarSourceIds[i], { type: 'raster', tiles: [BLANK_TILE], tileSize: 256 });
           radarMap.addLayer({
             id: radarLayerIds[i], type: 'raster', source: radarSourceIds[i],
-            paint: { 'raster-opacity': 0, 'raster-opacity-transition': { duration: 260, delay: 0 } },
+            paint: {
+              'raster-opacity': 0, 'raster-opacity-transition': { duration: 260, delay: 0 },
+              // Root cause of a real "radar looks soft/weak" broadcast complaint, found by
+              // inspecting the actual rendering chain rather than guessing: neither of these was
+              // ever set, so both silently ran on Mapbox's own defaults --
+              // 'raster-resampling: linear' (bilinear-blurs the sharp color-bin edges that make a
+              // reflectivity image read as crisp) and 'raster-fade-duration: 300' (a second,
+              // independent 300ms crossfade on top of this app's own raster-opacity-transition-
+              // based frame swap above, compounding into a hazy look on every frame change).
+              // NEXRAD reflectivity is a discrete-threshold palette (interpolateStops in
+              // worker.cjs), not a continuous photographic image -- 'nearest' preserves those
+              // real thresholds' edges instead of smearing them, and confirmed visually (screenshot
+              // comparison) to read as materially crisper without becoming blocky/pixelated at
+              // this panel's actual zoom range.
+              'raster-resampling': 'nearest', 'raster-fade-duration': 0,
+            },
           });
         }
         // fill/line color is data-driven (per-feature 'color' property, set in
