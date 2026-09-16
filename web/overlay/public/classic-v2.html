@@ -21,6 +21,19 @@
       --shadow: 0 10px 30px rgba(0,0,0,0.35);
       --panel-bg: linear-gradient(180deg, rgba(12,12,15,0.84), rgba(12,12,15,0.64));
       --font-overlay: "Oswald", Arial, Helvetica, sans-serif;
+
+      /* Lower-third broadcast composition geometry (V1.3): centralized so a future change
+         like "move radar 20px left" or "make the environment panel taller" is a one-line edit
+         here rather than a hunt through three separate panel rules. Values below are the
+         EXISTING, already-tuned V1.2 layout carried forward unchanged (including the 150px ->
+         120px .mid-bar height reduction from V1.2) -- this is a pure refactor, not a re-tune. */
+      --safe-edge: 28px;
+      --lower-gap: 502px;               /* distance from each side edge to the context card */
+      --weather-card-width: 460px;      /* bottom-left environment panel */
+      --weather-card-height: 300px;
+      --radar-width: 460px;             /* bottom-right radar panel */
+      --radar-height: 300px;
+      --context-card-height: 120px;     /* bottom-center single alert/context card slot */
     }
     * { box-sizing: border-box; }
 
@@ -111,7 +124,7 @@
     .clock-pill .clock-date { font-size: 21px; color: var(--muted); margin-top: 4px; white-space: nowrap; }
     .clock-colon { transition: opacity 0.15s ease; }
 
-    .wind-panel { top: auto; bottom: 28px; left: 28px; width: 460px; height: 300px; }
+    .wind-panel { top: auto; bottom: var(--safe-edge); left: var(--safe-edge); width: var(--weather-card-width); height: var(--weather-card-height); }
     .cond-grid {
       position: absolute; inset: 57px 0 0 0;
       display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
@@ -165,7 +178,7 @@
     #condTempTile.heat-shimmer .c-val { animation: heatShimmerPulse 2.4s ease-in-out infinite; }
     @keyframes heatShimmerPulse { 0%, 100% { text-shadow: 0 0 0 rgba(255,102,0,0); } 50% { text-shadow: 0 0 16px rgba(255,102,0,0.6); } }
 
-    .radar-panel-f { top: auto; bottom: 28px; right: 28px; width: 460px; height: 300px; }
+    .radar-panel-f { top: auto; bottom: var(--safe-edge); right: var(--safe-edge); width: var(--radar-width); height: var(--radar-height); }
     .radar-title-row { display: flex; align-items: baseline; gap: 10px; }
     .radar-title { font-size: 15px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
     .radar-live { font-size: 21px; letter-spacing: 0.03em; font-weight: 700; color: var(--muted); white-space: nowrap; }
@@ -223,12 +236,12 @@
     .radar-live.is-unavailable .live-dot { background: var(--accent); animation: none; }
 
     .mid-bar {
-      position: absolute; bottom: 28px; left: 502px; right: 502px;
+      position: absolute; bottom: var(--safe-edge); left: var(--lower-gap); right: var(--lower-gap);
       /* Was 150px -- real broadcast test feedback: the SPC/warning center card used more
          vertical space than its content needed, at the cost of storm-video area. ~20% shorter,
          recovering video without shrinking any text (MRGL/SLGT/ENH/MDT/HIGH and warning copy are
          unchanged font sizes -- only the surrounding padding/whitespace is tighter). */
-      height: 120px; border-radius: 24px;
+      height: var(--context-card-height); border-radius: 24px;
       display: flex; align-items: stretch; justify-content: center;
       padding: 0 6px;
       box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
@@ -566,6 +579,7 @@
   </div>
 
   <script src="alert-feed.js"></script>
+  <script src="alert-priority-engine.js"></script>
   <script>
     // ---- Settings: same URL-param convention classic.html already uses when embedded as an
     // OBS Browser Source (?latitude=/?longitude= manual override, ?pollSeconds=, ?unitId=,
@@ -1602,6 +1616,55 @@
       }
     }
 
+    // alertClassFor() output -> alert-priority-engine.js's ALERT_TYPES key (+ any authoritative
+    // modifier). Feeds the engine's deterministic resolveSelectedContext() so the "which one
+    // alert wins" decision goes through one central, tested priority/tie-break implementation
+    // instead of the ad-hoc severityRank sort this replaces -- TIER_KEY_MAP below (unchanged)
+    // still owns "how the winning tier actually renders."
+    const CLS_TO_ENGINE_TYPE = {
+      'tor-emergency': { type: 'tornadoEmergency', modifiers: [] },
+      'tor-pds': { type: 'tornadoWarning', modifiers: ['pds'] },
+      'tor-warning': { type: 'tornadoWarning', modifiers: [] },
+      'svr-destructive': { type: 'severeThunderstormWarning', modifiers: ['destructive'] },
+      'svr-considerable': { type: 'severeThunderstormWarning', modifiers: ['considerable'] },
+      'svr-warning': { type: 'severeThunderstormWarning', modifiers: [] },
+      'ffw-warning': { type: 'flashFloodWarning', modifiers: [] },
+      'heat-warning': { type: 'heatWarning', modifiers: [] },
+      'heat-advisory': { type: 'heatAdvisory', modifiers: [] },
+      'tor-watch': { type: 'tornadoWatch', modifiers: [] },
+      'svr-watch': { type: 'severeThunderstormWatch', modifiers: [] },
+      'ffw-watch': { type: 'flashFloodWatch', modifiers: [] },
+      generic: { type: 'generic', modifiers: [] },
+    };
+    // Builds one normalized AlertCandidate per NWS feature. NWS's own `?point=` query already
+    // geofiltered these to the chaser's exact position, so a feature with real polygon geometry
+    // is additionally geometry-checked (defense in depth / future reuse against a non-point-
+    // filtered source), while a feature with no polygon (many Watches/Advisories are zone-only)
+    // uses relevanceMode 'always' -- trusting NWS's own zone-inclusion rather than fabricating
+    // geometry precision NWS itself didn't provide (see the engine's Watch/SPC doc comment).
+    function buildAlertCandidates(features) {
+      return features.map((f) => {
+        const cls = alertClassFor(f);
+        const mapped = CLS_TO_ENGINE_TYPE[cls] || CLS_TO_ENGINE_TYPE.generic;
+        const props = f.properties || {};
+        const expiresAt = props.expires ? Date.parse(props.expires) : null;
+        return {
+          id: props.id || props['@id'] || `${cls}-${props.sent || ''}`,
+          type: mapped.type,
+          modifiers: mapped.modifiers,
+          source: 'nws-alert',
+          title: null,
+          subtitle: null,
+          issuedAt: props.sent ? Date.parse(props.sent) : null,
+          effectiveAt: props.effective ? Date.parse(props.effective) : null,
+          expiresAt: Number.isFinite(expiresAt) ? expiresAt : null,
+          geometry: f.geometry || null,
+          relevanceMode: f.geometry ? 'geometry' : 'always',
+          cancelled: false,
+          metadata: { feature: f, cls },
+        };
+      });
+    }
     // classic.html's alertClassFor() output -> this file's ALERT_TIERS key.
     const TIER_KEY_MAP = {
       'tor-emergency': 'torE',
@@ -1693,9 +1756,24 @@
         const data = await res.json();
         const features = Array.isArray(data.features) ? data.features : [];
         if (!features.length) { clearRadarWarningState(); simulateAlert('clear'); return; }
-        const sorted = [...features].sort((a, b) => severityRank(alertClassFor(a)) - severityRank(alertClassFor(b)));
-        const primary = sorted[0];
-        applyRealAlertTier(primary, alertClassFor(primary), features);
+        // Deterministic single-winner selection via alert-priority-engine.js (Part 6/7) rather
+        // than the plain severityRank sort this replaces -- same relative ordering for every
+        // class already supported (see CLS_TO_ENGINE_TYPE's doc comment), now with a real,
+        // tested tie-break instead of "whatever Array.sort leaves in slot 0" for same-priority
+        // features. Location freshness: this poll's own settings.latitude/longitude are the
+        // value already trusted elsewhere in this file for the NWS fetch itself, so they're
+        // treated as fresh-as-of-now here too (no separate GPS-staleness input is wired into
+        // this call yet -- deferred, see the V1.3 report's known-limitations item).
+        const candidates = buildAlertCandidates(features);
+        const chaserLoc = { lat: settings.latitude, lon: settings.longitude, observedAt: Date.now() };
+        const resolved = CodeBlackAlertPriorityEngine.resolveSelectedContext(candidates, chaserLoc, Date.now());
+        if (!resolved.selected) { clearRadarWarningState(); simulateAlert('clear'); return; }
+        // metadata isn't copied onto the winner by resolveSelectedContext (Part 11's
+        // presentation-independent contract deliberately returns a plain SelectedAlertContext,
+        // not the raw candidate) -- recover the source feature from the original list by id.
+        const winnerFeature = candidates.find(c => c.id === resolved.selected.id)?.metadata.feature
+          || features.find(f => alertClassFor(f) === resolved.selected.type) || features[0];
+        applyRealAlertTier(winnerFeature, alertClassFor(winnerFeature), features);
       } catch (err) {
         // leave last-known alert state in place -- a single missed poll isn't an outage
       }
