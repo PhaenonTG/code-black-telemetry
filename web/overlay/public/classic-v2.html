@@ -2261,7 +2261,7 @@
     // from classic.html -- see there for the full rationale on each piece below.
     let MAPBOX_TOKEN = params.get('mapboxToken') || '';
     const MAPBOX_STYLE = params.get('mapboxStyle') || 'mapbox://styles/mapbox/navigation-night-v1';
-    const RADAR_FRAME_POOL_SIZE = 6;
+    const RADAR_FRAME_POOL_SIZE = 1; // Latest scan only; no historical animation.
     const radarSourceIds = Array.from({ length: RADAR_FRAME_POOL_SIZE }, (_, i) => `radar-source-${i}`);
     const radarLayerIds = Array.from({ length: RADAR_FRAME_POOL_SIZE }, (_, i) => `radar-layer-${i}`);
     const BLANK_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
@@ -2292,7 +2292,8 @@
     // untouched, wasn't part of this change.
     const ZOOM_HOLD_MS = { FAR: 20000, MID: 15000, CLOSE: 9000 };
     const WARNING_ZOOM_HOLD_MS = 11200;
-    let radarZoomIndex = 0;
+    let radarZoomIndex = 1; // Fixed regional view.
+    let radarCenterPinned = false;
     let radarZoomChangedAt = Date.now();
     let radarPositionMarker = null;
     let radarSiteId = null;
@@ -2447,7 +2448,10 @@
     function centerRadarMapOnPosition() {
       if (!radarMap || settings.latitude === null || settings.longitude === null) return;
       const lngLat = [settings.longitude, settings.latitude];
-      radarMap.easeTo({ center: lngLat, zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom, duration: 2000 });
+      if (!radarCenterPinned) {
+        radarMap.jumpTo({ center: lngLat, zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom });
+        radarCenterPinned = true;
+      }
       if (!radarPositionMarker) {
         const el = document.createElement('div');
         el.className = 'radar-position-marker';
@@ -2491,6 +2495,7 @@
     async function fetchRadarFrames() {
       if (!radarSiteId || radarFrameFetchInFlight) return;
       radarFrameFetchInFlight = true;
+      const requestedSite = radarSiteId, requestedProduct = radarProduct;
       try {
         if (OWN_WORKER_PRODUCTS.has(radarProduct)) {
           const limit = radarProduct === 'REF' ? RADAR_FRAME_POOL_SIZE : 1;
@@ -2504,8 +2509,9 @@
           const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
           if (!res.ok) throw new Error('frames fetch failed');
           const frames = await res.json();
+          if (requestedSite !== radarSiteId || requestedProduct !== radarProduct) return;
           if (Array.isArray(frames) && frames.length) {
-            radarFrames = frames.map(f => ({ kind: 'own', frameId: f.frameId, time: f.time }));
+            radarFrames = frames.filter(f => f.frameId && Number.isFinite(Date.parse(f.time))).sort((a, b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, 1).map(f => ({ kind: 'own', frameId: f.frameId, time: f.time }));
             radarLoopIndex = 0;
             radarCloseLoopTick = 0;
             preloadRadarFrames(radarFrames);
@@ -2713,52 +2719,18 @@
       const mins = Math.floor(ageMs / 60000);
       radarScanAgeText.textContent = mins < 1 ? 'Live' : `${mins}m ago`;
     }
+    // Stationary latest-scan view. Velocity is the only automatic product exception.
     function radarModeTick() {
       radarTickCount += 1;
       updateRadarScanAge();
-      if (isWarningActive) {
-        advanceZoom(WARNING_ZOOM_ORDER, WARNING_ZOOM_HOLD_MS);
-        if (isTorWarning) {
-          if (radarTickCount % WARNING_PRODUCT_HOLD_TICKS === 1) {
-            const product = TOR_PRODUCT_ROTATION[torRotationIndex % TOR_PRODUCT_ROTATION.length];
-            torRotationIndex += 1;
-            setRadarProduct(product);
-          }
-          if (radarFrames.length) applyRadarFrame(0);
-          return;
-        }
-        if (isSevereWarning) {
-          if (radarTickCount % WARNING_PRODUCT_HOLD_TICKS === 1) {
-            const product = SEVERE_PRODUCT_ROTATION[severeRotationIndex % SEVERE_PRODUCT_ROTATION.length];
-            severeRotationIndex += 1;
-            setRadarProduct(product);
-          }
-          if (radarFrames.length) applyRadarFrame(0);
-          return;
-        }
-        // Flash Flood Warning (and any other warning-tier alert without its own rule above)
-        // stays REF-only, looping normally.
-        if (radarProduct !== 'REF') { setRadarProduct('REF'); torRotationIndex = 0; severeRotationIndex = 0; }
-        advanceRefLoop();
-        return;
-      }
-      // No local alert -- REF only, EXCEPT when a real Severe Thunderstorm Warning is active
-      // somewhere nearby (within NEARBY_SEVERE_RADIUS_MILES of this position, even though it
-      // doesn't cover this exact point) and we're at MID or CLOSE range: a light VEL mix gives
-      // an early look at a threat that isn't here yet, without disrupting the calm FAR view.
-      const nearSevere = !atFarZoom() && nearbySevereWarningMiles !== null && nearbySevereWarningMiles <= NEARBY_SEVERE_RADIUS_MILES;
-      if (nearSevere) {
-        if (radarTickCount % WARNING_PRODUCT_HOLD_TICKS === 1) {
-          const product = SEVERE_PRODUCT_ROTATION[baselineNearbyRotationIndex % SEVERE_PRODUCT_ROTATION.length];
-          baselineNearbyRotationIndex += 1;
-          setRadarProduct(product);
-        }
-      } else if (radarProduct !== 'REF') {
+      const nearSevere = nearbySevereWarningMiles !== null && nearbySevereWarningMiles <= NEARBY_SEVERE_RADIUS_MILES;
+      const velocityRelevant = isTorWarning || isSevereWarning || nearSevere;
+      if (!velocityRelevant) {
         setRadarProduct('REF');
-        torRotationIndex = 0; severeRotationIndex = 0; baselineNearbyRotationIndex = 0;
+      } else if (radarTickCount % WARNING_PRODUCT_HOLD_TICKS === 1) {
+        setRadarProduct(radarProduct === 'REF' ? 'VEL' : 'REF');
       }
-      advanceZoom(BASELINE_ZOOM_ORDER, ZOOM_HOLD_MS[RADAR_ZOOM_LEVELS[radarZoomIndex].name] || WARNING_ZOOM_HOLD_MS);
-      advanceRefLoop();
+      if (radarFrames.length) applyRadarFrame(0);
     }
 
     const midContent = {
@@ -2970,7 +2942,7 @@
     setInterval(updateStormIntel, Math.max(300, settings.pollSeconds) * 1000); // HRRR updates hourly at best -- no need to poll as often as weather/alerts
     setInterval(updateNearbySevereWarnings, Math.max(90, settings.pollSeconds) * 1000);
     setInterval(radarModeTick, 700);
-    setInterval(fetchRadarFrames, 120_000); // pick up new radar volume scans independent of site changes
+    setInterval(fetchRadarFrames, 20_000); // pick up new radar volume scans independent of site changes
     showRotationCard('alert');
     scheduleAdvance('alert');
     scaleCanvas();
