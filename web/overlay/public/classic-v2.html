@@ -2283,7 +2283,7 @@
     const RADAR_ZOOM_LEVELS = [
       { name: 'CLOSE', zoom: params.get('radarZoomClose') ? Number(params.get('radarZoomClose')) : 9 },
       { name: 'MID', zoom: params.get('radarZoomMid') ? Number(params.get('radarZoomMid')) : 7 },
-      { name: 'FAR', zoom: params.get('radarZoomFar') ? Number(params.get('radarZoomFar')) : 5 },
+      { name: 'FAR', zoom: params.get('radarZoomFar') ? Number(params.get('radarZoomFar')) : 5.6 },
     ];
     function atFarZoom() { return radarZoomIndex === 2; }
     // Baseline (no local alert) hold times are asymmetric by design -- FAR gets the longest look
@@ -2292,7 +2292,7 @@
     // untouched, wasn't part of this change.
     const ZOOM_HOLD_MS = { FAR: 20000, MID: 15000, CLOSE: 9000 };
     const WARNING_ZOOM_HOLD_MS = 11200;
-    let radarZoomIndex = 1; // Fixed regional view.
+    let radarZoomIndex = 1; // Start at the regional view, then cycle without historical imagery.
     let radarCenterPinned = false;
     let radarZoomChangedAt = Date.now();
     let radarPositionMarker = null;
@@ -2656,7 +2656,9 @@
       radarZoomIndex = index;
       radarZoomChangedAt = Date.now();
       if (index === 0) radarCloseLoopTick = 0;
-      centerRadarMapOnPosition();
+      // Keep the radar image pinned to the newest frame. Zoom changes are deliberate framing
+      // changes only; they never advance or animate through older radar scans.
+      if (radarMap) radarMap.jumpTo({ zoom: RADAR_ZOOM_LEVELS[index].zoom });
     }
 
     // Baseline (no local alert) now runs FAR -> MID -> CLOSE -- the big-picture view first,
@@ -2707,17 +2709,19 @@
       radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
     }
 
-    // How old the newest available scan actually is -- real NEXRAD volume scans land minutes
-    // apart, so "Live" alone doesn't tell a viewer whether they're looking at a scan from 30
-    // seconds ago or 8 minutes ago. Always reflects radarFrames[0] (the newest frame), which is
-    // what applyRadarFrame(0) is showing during every hold/pin state in this file.
+    // Always show the actual timestamp of the one newest scan on screen. "Live" was ambiguous
+    // and pulsed even when the available NEXRAD volume was several minutes old.
     function updateRadarScanAge() {
       const newest = radarFrames[0];
-      if (!newest || !newest.time) { radarScanAgeText.textContent = 'Live'; return; }
-      const ageMs = Date.now() - new Date(newest.time).getTime();
-      if (!Number.isFinite(ageMs) || ageMs < 0) { radarScanAgeText.textContent = 'Live'; return; }
+      if (!newest || !newest.time) { radarScanAgeText.textContent = 'Awaiting scan'; return; }
+      const scanAt = new Date(newest.time);
+      const ageMs = Date.now() - scanAt.getTime();
+      if (!Number.isFinite(ageMs) || ageMs < 0) { radarScanAgeText.textContent = 'Awaiting scan'; return; }
       const mins = Math.floor(ageMs / 60000);
-      radarScanAgeText.textContent = mins < 1 ? 'Live' : `${mins}m ago`;
+      const timestamp = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short',
+      }).format(scanAt);
+      radarScanAgeText.textContent = `Scan ${timestamp}${mins < 1 ? '' : ` · ${mins}m ago`}`;
     }
     // Stationary latest-scan view. Velocity is the only automatic product exception.
     function radarModeTick() {
@@ -2730,6 +2734,9 @@
       } else if (radarTickCount % WARNING_PRODUCT_HOLD_TICKS === 1) {
         setRadarProduct(radarProduct === 'REF' ? 'VEL' : 'REF');
       }
+      // Zoom framing cycles independently of scan selection. The displayed raster remains the
+      // most recent scan for the current product throughout every zoom hold.
+      advanceZoom(isWarningActive ? WARNING_ZOOM_ORDER : BASELINE_ZOOM_ORDER, currentZoomHoldMs());
       if (radarFrames.length) applyRadarFrame(0);
     }
 
