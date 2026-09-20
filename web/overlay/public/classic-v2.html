@@ -73,7 +73,9 @@
     @keyframes brandDotPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.82); } }
     .panel-sub { font-size: 21px; font-weight: 700; letter-spacing: 0.03em; color: var(--muted); white-space: nowrap; }
 
-    .brand-clock-w { width: max-content; max-width: 440px; }
+    /* Matched top-corner weight: the name and clock remain content-safe while presenting as a
+       deliberate pair instead of two unrelated pill widths. */
+    .brand-clock-w { width: 250px; max-width: 250px; }
     .top-brand-f {
       top: 28px; left: 28px; height: 88px;
       display: flex; align-items: center; justify-content: center; padding: 0 22px;
@@ -102,7 +104,9 @@
     .clock-pill .clock-date { font-size: 21px; color: var(--muted); margin-top: 4px; white-space: nowrap; }
     .clock-colon { transition: opacity 0.15s ease; }
 
-    .wind-panel { top: auto; bottom: 28px; left: 28px; width: 460px; height: 300px; }
+    /* Broadcast-safe lower third: uniformly scale each card's internals so the text, icons,
+       borders, and data hierarchy retain their established proportions while freeing storm room. */
+    .wind-panel { top: auto; bottom: 16px; left: 16px; width: 460px; height: 300px; transform: scale(0.9); transform-origin: bottom left; }
     .cond-grid {
       position: absolute; inset: 57px 0 0 0;
       display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
@@ -156,7 +160,7 @@
     #condTempTile.heat-shimmer .c-val { animation: heatShimmerPulse 2.4s ease-in-out infinite; }
     @keyframes heatShimmerPulse { 0%, 100% { text-shadow: 0 0 0 rgba(255,102,0,0); } 50% { text-shadow: 0 0 16px rgba(255,102,0,0.6); } }
 
-    .radar-panel-f { top: auto; bottom: 28px; right: 28px; width: 460px; height: 300px; }
+    .radar-panel-f { top: auto; bottom: 16px; right: 16px; width: 460px; height: 300px; transform: scale(0.9); transform-origin: bottom right; }
     .radar-title-row { display: flex; align-items: baseline; gap: 10px; }
     .radar-title { font-size: 15px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
     .radar-live { font-size: 21px; letter-spacing: 0.03em; font-weight: 700; color: var(--muted); white-space: nowrap; }
@@ -204,10 +208,10 @@
     .radar-loading.hidden { opacity: 0; pointer-events: none; }
 
     .mid-bar {
-      position: absolute; bottom: 28px; left: 502px; right: 502px;
+      position: absolute; bottom: 16px; left: 502px; right: 502px;
       height: 150px; border-radius: 24px;
       display: flex; align-items: stretch; justify-content: center;
-      padding: 0 6px;
+      padding: 0 6px; transform: scale(0.9); transform-origin: bottom center;
       box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
     }
     .mid-bar.is-alert { border-color: rgba(255,255,255,0.18); text-align: center; }
