@@ -2556,7 +2556,10 @@
           paint: { 'line-color': 'rgba(154,205,225,0.60)', 'line-width': 0.85 },
         });
         for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
-          radarMap.addSource(radarSourceIds[i], { type: 'raster', tiles: [BLANK_TILE], tileSize: 256 });
+          radarMap.addSource(radarSourceIds[i], {
+            type: 'image', url: BLANK_TILE,
+            coordinates: [[-180, 85], [180, 85], [180, -85], [-180, -85]],
+          });
           radarMap.addLayer({
             id: radarLayerIds[i], type: 'raster', source: radarSourceIds[i],
             paint: { 'raster-opacity': 0, 'raster-opacity-transition': { duration: 520, delay: 0 } },
@@ -2717,69 +2720,56 @@
     // IEM single-archive WMS wants explicit UTC year/month/day/time(HHMM) query params, parsed
     // from the scan's ISO timestamp (e.g. "2026-09-10T02:51Z") -- confirmed live against the real
     // service during this change.
-    function iemArchiveTileUrl(sector, product, ts) {
+    function iemStaticImageUrl(sector, product, ts, bounds, width, height) {
       const d = new Date(ts);
-      const year = d.getUTCFullYear();
-      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(d.getUTCDate()).padStart(2, '0');
-      const time = String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0');
+      const mercator = (lng, lat) => {
+        const radius = 6378137;
+        const clipped = Math.max(-85.05112878, Math.min(85.05112878, lat));
+        return [radius * lng * Math.PI / 180, radius * Math.log(Math.tan(Math.PI / 4 + clipped * Math.PI / 360))];
+      };
+      const [minX, minY] = mercator(bounds.getWest(), bounds.getSouth());
+      const [maxX, maxY] = mercator(bounds.getEast(), bounds.getNorth());
       const qs = new URLSearchParams({
         SERVICE: 'WMS', VERSION: '1.1.1', REQUEST: 'GetMap', LAYERS: 'single-archive',
-        SRS: 'EPSG:3857', WIDTH: '256', HEIGHT: '256', FORMAT: 'image/png', TRANSPARENT: 'TRUE',
-        sector, prod: product, year: String(year), month, day, time,
+        SRS: 'EPSG:3857', WIDTH: String(Math.max(256, Math.round(width))), HEIGHT: String(Math.max(256, Math.round(height))),
+        FORMAT: 'image/png', TRANSPARENT: 'TRUE', sector, prod: product,
+        year: String(d.getUTCFullYear()), month: String(d.getUTCMonth() + 1).padStart(2, '0'),
+        day: String(d.getUTCDate()).padStart(2, '0'), time: String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0'),
+        BBOX: `${minX},${minY},${maxX},${maxY}`,
       });
-      return `${IEM_RIDGE_BASE}/cgi-bin/wms/nexrad/ridge.cgi?${qs}&BBOX={bbox-epsg-3857}`;
+      return `${IEM_RIDGE_BASE}/cgi-bin/wms/nexrad/ridge.cgi?${qs}`;
     }
 
     const RADAR_CROSSFADE_MS = 520;
     function preloadRadarFrames(frames, siteId = radarSiteId, product = radarProduct) {
       if (!radarMapReady) { pendingRadarFrames = { frames, siteId, product }; return; }
       const frame = frames[0];
-      if (!frame) return;
+      if (!frame || frame.kind !== 'iem') return;
       const targetIndex = radarActiveLayerIndex === 0 ? 1 : 0;
-      const sourceId = radarSourceIds[targetIndex];
-      const source = radarMap.getSource(sourceId);
+      const source = radarMap.getSource(radarSourceIds[targetIndex]);
       if (!source) return;
-      const sector = iemSectorFor(siteId);
-      const iemProduct = IEM_PRODUCT_CODE[product];
-      const url = frame.kind === 'iem'
-        ? iemArchiveTileUrl(sector, iemProduct, frame.ts)
-        : `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png`;
-      const generation = ++radarRenderGeneration;
-      let revealed = false;
-      const reveal = () => {
-        if (revealed || generation !== radarRenderGeneration) return;
-        revealed = true;
-        radarMap.off('sourcedata', revealWhenLoaded);
+      const bounds = radarMap.getBounds();
+      const canvas = radarMap.getCanvas();
+      const coordinates = [
+        [bounds.getWest(), bounds.getNorth()], [bounds.getEast(), bounds.getNorth()],
+        [bounds.getEast(), bounds.getSouth()], [bounds.getWest(), bounds.getSouth()],
+      ];
+      const url = iemStaticImageUrl(iemSectorFor(siteId), IEM_PRODUCT_CODE[product], frame.ts, bounds, canvas.clientWidth, canvas.clientHeight);
+      const image = new Image();
+      image.onload = () => {
+        // The browser has decoded the full PNG before Mapbox is asked to swap it in. This gives
+        // us an actual image-readiness signal and keeps the previous frame visible until then.
+        source.updateImage({ url, coordinates });
         radarActiveLayerIndex = targetIndex;
         radarFrames = frames;
         radarDisplayedProduct = product;
         radarModeText.textContent = product;
-        radarLayerIds.forEach((id, i) => {
-          if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === targetIndex ? 0.92 : 0);
-        });
+        radarLayerIds.forEach((id, i) => radarMap.setPaintProperty(id, 'raster-opacity', i === targetIndex ? 0.92 : 0));
         radarRasterReady = true;
-        if (radarBasemapReady) document.getElementById('radarLoading').classList.add('hidden');
+        document.getElementById('radarLoading').classList.add('hidden');
       };
-      const revealWhenLoaded = (event) => {
-        // Mapbox v3 does not consistently attach isSourceLoaded to every raster sourcedata event.
-        // The event means at least one replacement tile delivered, so keep the existing image
-        // beneath it and begin the crossfade rather than leaving the pane empty.
-        if (event.sourceId === sourceId) reveal();
-      };
-      // The old source stays at full opacity until Mapbox confirms the replacement source has
-      // loaded. Its opacity transition then crossfades the old raster out over 520ms.
-      radarMap.on('sourcedata', revealWhenLoaded);
-      source.setTiles([url]);
-      // The first frame has no earlier raster to protect. Its scan and WMS tile were already
-      // verified before this point, so reveal it after a short delivery window even when Mapbox
-      // v3 omits the raster completion callback. Every later replacement still retains the old
-      // layer until Mapbox confirms the new one.
-      window.setTimeout(() => {
-        if (generation !== radarRenderGeneration) return;
-        if (radarActiveLayerIndex < 0 || radarMap.isSourceLoaded(sourceId)) reveal();
-      }, 1800);
-      window.setTimeout(() => radarMap.off('sourcedata', revealWhenLoaded), 15_000);
+      image.onerror = () => { /* keep the last good image; never blank the pane */ };
+      image.src = url;
     }
 
     function applyRadarFrame(index) {
@@ -2852,12 +2842,10 @@
       if (index === 0) radarCloseLoopTick = 0;
       // Camera-only easing keeps the currently-rendered newest frame in place. No radar
       // source, tile URL, or scan selection changes during the move.
-      if (radarMap) radarMap.easeTo({
-        zoom: RADAR_ZOOM_LEVELS[index].zoom,
-        duration: RADAR_ZOOM_TRANSITION_MS,
-        easing: (t) => t * t * (3 - 2 * t),
-        essential: true,
-      });
+      if (radarMap) {
+        radarMap.easeTo({ zoom: RADAR_ZOOM_LEVELS[index].zoom, duration: RADAR_ZOOM_TRANSITION_MS, easing: (t) => t * t * (3 - 2 * t), essential: true });
+        radarMap.once('moveend', () => { if (radarFrames.length) preloadRadarFrames(radarFrames, radarSiteId, radarProduct); });
+      }
     }
 
     // Baseline (no local alert) now runs FAR -> MID -> CLOSE -- the big-picture view first,
