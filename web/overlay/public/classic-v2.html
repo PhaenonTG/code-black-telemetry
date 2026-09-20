@@ -545,6 +545,7 @@
   </div>
 
   <script src="alert-feed.js"></script>
+  <script src="alert-priority-engine.js"></script>
   <script>
     // ---- Settings: same URL-param convention classic.html already uses when embedded as an
     // OBS Browser Source (?latitude=/?longitude= manual override, ?pollSeconds=, ?unitId=,
@@ -661,6 +662,17 @@
       const mins = Math.floor((Date.now() - lastGpsFixAt) / 60000);
       if (mins < 1) return ' · Last fix <1m ago';
       return ` · Last fix ${mins}m ago`;
+    }
+    // The alert resolver only accepts a recently confirmed location for polygon relevance.
+    // A manual fixed position is operator-supplied and therefore treated as current for the
+    // life of that Browser Source; live GPS must carry a real receive timestamp.
+    function chaserLocationForEngine() {
+      if (settings.latitude === null || settings.longitude === null) return null;
+      return {
+        lat: settings.latitude,
+        lon: settings.longitude,
+        observedAt: settings.useLiveGps ? lastGpsFixAt : Date.now(),
+      };
     }
     // Shared by both GPS transports (Fabric WebSocket primary, HTTP polling fallback) so they
     // can never diverge in rendering/staleness/movement-threshold behavior -- each transport's
@@ -1053,7 +1065,7 @@
         const props = feature.properties || {};
         const dn = Number(props.DN ?? 0);
         if (dn <= 0) continue;
-        if (!spcPointInGeometry(pos, feature.geometry)) continue;
+        if (!CodeBlackAlertPriorityEngine.pointInGeometry(pos, feature.geometry)) continue;
         if (best && dn <= best.dn) continue;
         best = {
           dn,
@@ -1063,6 +1075,7 @@
             color: String(props.fill ?? props.stroke ?? ''),
             issued: String(props.ISSUE_ISO ?? props.ISSUE ?? ''),
             expires: String(props.EXPIRE_ISO ?? props.EXPIRE ?? ''),
+            geometry: feature.geometry || null,
           },
         };
       }
@@ -1098,6 +1111,9 @@
         const day2Rank = spcOutlooks[1].categorical ? spcRiskRank(spcOutlooks[1].categorical.label) : -1;
         const day3Rank = spcOutlooks[2].categorical ? spcRiskRank(spcOutlooks[2].categorical.label) : -1;
         day23HasSomethingToShow = Math.max(day2Rank, day3Rank) >= spcRiskRank('SLGT');
+        // SPC can be the calm baseline when no warning/watch wins. Re-run the same resolver
+        // immediately after a successful outlook update rather than waiting for the next NWS poll.
+        if (typeof evaluateSelectedContext === 'function') evaluateSelectedContext(lastKnownAlertFeatures);
       } catch (err) {
         // leave last-known outlook in place -- a single missed poll isn't an outage
       }
@@ -1805,42 +1821,127 @@
       simulateAlert(key);
     }
 
-    // Real production alert polling -- api.weather.gov's ?point= geofilter already restricts
-    // results to alerts whose actual geometry/zone contains that exact point. No key needed.
-    // ?simulateAlert=<kind> (classic.html's own kind vocabulary -- tor-warning, heat-warning,
-    // etc, see alert-feed.js's simulatedAlertFeature) bypasses the fetch and feeds a fabricated
-    // feature through this exact same classify/map/render path instead, so every tier (including
-    // the new `generic` one) can still be tested deterministically without waiting on live
-    // weather. ?simulateAlert=clear forces the calm state.
+    // One location-aware resolver governs every alert card.  Raw NWS features remain the source
+    // of truth; this layer only normalizes, checks the current chaser point against real geometry,
+    // and deterministically selects the one card that may preempt the lower-third.
+    const CLS_TO_ENGINE_TYPE = {
+      'tor-emergency': { type: 'tornadoEmergency', modifiers: [] },
+      'tor-pds': { type: 'tornadoWarning', modifiers: ['pds'] },
+      'tor-warning': { type: 'tornadoWarning', modifiers: [] },
+      'svr-destructive': { type: 'severeThunderstormWarning', modifiers: ['destructive'] },
+      'svr-considerable': { type: 'severeThunderstormWarning', modifiers: ['considerable'] },
+      'svr-warning': { type: 'severeThunderstormWarning', modifiers: [] },
+      'ffw-warning': { type: 'flashFloodWarning', modifiers: [] },
+      'heat-warning': { type: 'heatWarning', modifiers: [] },
+      'heat-advisory': { type: 'heatAdvisory', modifiers: [] },
+      'tor-watch': { type: 'tornadoWatch', modifiers: [] },
+      'svr-watch': { type: 'severeThunderstormWatch', modifiers: [] },
+      'ffw-watch': { type: 'flashFloodWatch', modifiers: [] },
+      generic: { type: 'generic', modifiers: [] },
+    };
+    function buildAlertCandidates(features) {
+      return (features || []).map((feature) => {
+        const cls = alertClassFor(feature);
+        const mapped = CLS_TO_ENGINE_TYPE[cls] || CLS_TO_ENGINE_TYPE.generic;
+        const props = feature.properties || {};
+        const expiresAt = props.expires ? Date.parse(props.expires) : NaN;
+        return {
+          id: props.id || props['@id'] || `${cls}-${props.sent || ''}`,
+          type: mapped.type,
+          modifiers: mapped.modifiers,
+          source: 'nws-alert',
+          issuedAt: props.sent ? Date.parse(props.sent) : null,
+          effectiveAt: props.effective ? Date.parse(props.effective) : null,
+          expiresAt: Number.isFinite(expiresAt) ? expiresAt : null,
+          geometry: feature.geometry || null,
+          // Watches and advisories normally have no storm polygon. NWS's point query already
+          // authoritatively established that the chaser is in their issued zone.
+          relevanceMode: feature.geometry ? 'geometry' : 'always',
+          cancelled: false,
+          metadata: { feature },
+        };
+      });
+    }
+    function buildSpcCandidate() {
+      const categorical = spcOutlooks && spcOutlooks[0] && spcOutlooks[0].categorical;
+      if (!categorical || !categorical.geometry) return null;
+      const issuedAt = categorical.issued ? Date.parse(categorical.issued) : NaN;
+      const expiresAt = categorical.expires ? Date.parse(categorical.expires) : NaN;
+      return {
+        id: `spc-day1-cat-${categorical.label}-${categorical.issued || ''}`,
+        type: 'spcOutlook', modifiers: [], source: 'spc-outlook',
+        title: categorical.labelLong || categorical.label || null,
+        issuedAt: Number.isFinite(issuedAt) ? issuedAt : null,
+        effectiveAt: Number.isFinite(issuedAt) ? issuedAt : null,
+        expiresAt: Number.isFinite(expiresAt) ? expiresAt : null,
+        geometry: categorical.geometry, relevanceMode: 'geometry', cancelled: false,
+      };
+    }
+    let lastKnownAlertFeatures = [];
+    let lastAlertResolution = null;
+    let alertExpiryTimer = null;
+    function scheduleExpiryReevaluation(expiresAt) {
+      clearTimeout(alertExpiryTimer);
+      alertExpiryTimer = null;
+      if (typeof expiresAt !== 'number') return;
+      const delay = expiresAt - Date.now() + 250;
+      if (delay <= 0 || delay > 24 * 60 * 60 * 1000) return;
+      alertExpiryTimer = setTimeout(() => evaluateSelectedContext(lastKnownAlertFeatures), delay);
+    }
+    function evaluateSelectedContext(features = lastKnownAlertFeatures) {
+      const spcCandidate = buildSpcCandidate();
+      const candidates = [...buildAlertCandidates(features), ...(spcCandidate ? [spcCandidate] : [])];
+      const resolution = CodeBlackAlertPriorityEngine.resolveSelectedContext(candidates, chaserLocationForEngine(), Date.now());
+      lastAlertResolution = resolution;
+      scheduleExpiryReevaluation(resolution.selected && resolution.selected.expiresAt);
+      if (!resolution.selected || resolution.selected.type === 'spcOutlook') {
+        clearRadarWarningState();
+        simulateAlert('clear');
+        return resolution;
+      }
+      const winner = candidates.find((candidate) => candidate.id === resolution.selected.id);
+      const feature = winner && winner.metadata && winner.metadata.feature;
+      if (feature) applyRealAlertTier(feature, alertClassFor(feature), features);
+      return resolution;
+    }
+    // Read-only diagnostics for browser qualification; never used to drive the rendered state.
+    window.__alertDiag = {
+      get resolution() { return lastAlertResolution; },
+      get featureCount() { return lastKnownAlertFeatures.length; },
+      get selectedTier() { return currentTier; },
+      get renderedWarningPolygonCount() { return renderedWarningPolygonCount; },
+    };
     async function updateAlertReal() {
       const simulateKind = params.get('simulateAlert');
-      if (simulateKind === 'clear') { clearRadarWarningState(); simulateAlert('clear'); return; }
+      if (simulateKind === 'clear') {
+        lastKnownAlertFeatures = [];
+        clearRadarWarningState();
+        simulateAlert('clear');
+        return;
+      }
       if (simulateKind) {
         const feature = simulatedAlertFeature(simulateKind);
         if (!feature) return;
-        applyRealAlertTier(feature, alertClassFor(feature));
+        lastKnownAlertFeatures = [feature];
+        evaluateSelectedContext(lastKnownAlertFeatures);
         return;
       }
       if (settings.latitude === null || settings.longitude === null) {
+        lastKnownAlertFeatures = [];
         clearRadarWarningState();
         simulateAlert('clear');
         return;
       }
       try {
         const url = `https://api.weather.gov/alerts/active?point=${settings.latitude},${settings.longitude}`;
-        // The most safety-critical fetch in this file -- force a real network hit every poll
-        // rather than risk a browser cache serving anything but this instant's actual alert
-        // state (see the radar-frames fetch above for the real bug this same pattern caused).
         const res = await fetchWithTimeout(url, { headers: { Accept: 'application/geo+json' }, cache: 'no-store' });
         if (!res.ok) throw new Error('alerts fetch failed');
         const data = await res.json();
-        const features = Array.isArray(data.features) ? data.features : [];
-        if (!features.length) { clearRadarWarningState(); simulateAlert('clear'); return; }
-        const sorted = [...features].sort((a, b) => severityRank(alertClassFor(a)) - severityRank(alertClassFor(b)));
-        const primary = sorted[0];
-        applyRealAlertTier(primary, alertClassFor(primary), features);
+        lastKnownAlertFeatures = Array.isArray(data.features) ? data.features : [];
+        evaluateSelectedContext(lastKnownAlertFeatures);
       } catch (err) {
-        // leave last-known alert state in place -- a single missed poll isn't an outage
+        // A failed fetch never masquerades as an authoritative all-clear. The last confirmed
+        // selection stays visible until its own expiration timer re-evaluates it.
       }
     }
 
@@ -2273,6 +2374,7 @@
     const WARNING_POLYGON_LINE_LAYER_ID = 'warning-polygon-line';
     const EMPTY_FEATURE_COLLECTION = { type: 'FeatureCollection', features: [] };
     let pendingWarningPolygonFeatures = undefined;
+    let renderedWarningPolygonCount = 0;
     // Real US Census cartographic county boundaries (2010, 1:20,000,000 -- the lightest public
     // simplification level), verified reachable during this change.
     const COUNTY_LINES_URL = 'https://raw.githubusercontent.com/kjhealy/us-county/master/data/geojson/gz_2010_us_050_00_20m.json';
@@ -2656,6 +2758,7 @@
         const color = (ALERT_TIERS[key] && ALERT_TIERS[key].color1) || '#FF0000';
         return { type: 'Feature', properties: { color }, geometry: f.geometry };
       });
+      renderedWarningPolygonCount = shapes.length;
       source.setData(shapes.length ? { type: 'FeatureCollection', features: shapes } : EMPTY_FEATURE_COLLECTION);
     }
 
