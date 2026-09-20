@@ -2288,6 +2288,16 @@
       { name: 'MID', zoom: params.get('radarZoomMid') ? Number(params.get('radarZoomMid')) : 7 },
       { name: 'FAR', zoom: params.get('radarZoomFar') ? Number(params.get('radarZoomFar')) : 5.6 },
     ];
+    // A radar image is still useful while the phone has deliberately stopped sharing its
+    // position. This is a site fallback only: it never populates weather, heading, location,
+    // alerts, or any vehicle-facing field, which continue to say GPS is unavailable. KTWX is
+    // the broadcast fallback for Nick's current operating area and can be overridden in the
+    // Browser Source URL when the broadcast moves.
+    const RADAR_FALLBACK = {
+      siteId: (params.get('radarFallbackSite') || 'KTWX').toUpperCase(),
+      latitude: Number(params.get('radarFallbackLatitude') || '38.9969'),
+      longitude: Number(params.get('radarFallbackLongitude') || '-96.2325'),
+    };
     function atFarZoom() { return radarZoomIndex === 2; }
     // Baseline (no local alert) hold times are asymmetric by design -- FAR gets the longest look
     // (the big-picture view), CLOSE the shortest (a quick current check before moving on).
@@ -2370,7 +2380,7 @@
       radarMap = new mapboxgl.Map({
         container: 'radarMap',
         style: MAPBOX_STYLE,
-        center: [-97.5, 35.5],
+        center: [RADAR_FALLBACK.longitude, RADAR_FALLBACK.latitude],
         zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom,
         interactive: false,
         attributionControl: true,
@@ -2481,6 +2491,19 @@
       }
     }
 
+    function activateRadarFallback() {
+      if (radarSiteId || !RADAR_FALLBACK.siteId || !Number.isFinite(RADAR_FALLBACK.latitude) || !Number.isFinite(RADAR_FALLBACK.longitude)) return;
+      radarSiteId = RADAR_FALLBACK.siteId;
+      radarSiteText.textContent = radarSiteId;
+      if (radarMap) {
+        radarMap.jumpTo({
+          center: [RADAR_FALLBACK.longitude, RADAR_FALLBACK.latitude],
+          zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom,
+        });
+      }
+      fetchRadarFrames();
+    }
+
     async function updateRadarSite() {
       if (settings.latitude === null || settings.longitude === null) return;
       centerRadarMapOnPosition();
@@ -2490,7 +2513,8 @@
         if (!res.ok) throw new Error('sites fetch failed');
         const sites = await res.json();
         const nearest = Array.isArray(sites) ? sites[0] : null;
-        if (!nearest || nearest.id === radarSiteId) return;
+        if (!nearest) return;
+        if (nearest.id === radarSiteId) return;
         radarSiteId = nearest.id;
         radarSiteText.textContent = radarSiteId;
         radarFrames = [];
@@ -2932,6 +2956,9 @@
     // ---- Boot ----
     renderConditions();
     initRadarMap();
+    // Queue the actual newest KTWX scan immediately. If live GPS becomes available,
+    // updateRadarSite replaces this fallback with the nearest live radar site.
+    activateRadarFallback();
     if (settings.useLiveGps) {
       document.getElementById('condTitleText').textContent = 'Awaiting GPS feed...';
       // Primary: Fabric WebSocket (direct Tunnel route, no chase-gateway Worker in the hot
