@@ -149,6 +149,12 @@ Cloudflare Access edge gate, which is documented at the bottom of this section f
   Supabase emails from `resetPasswordForEmail()`. Reachable regardless of auth state (it's outside
   `AuthGate` in `App.tsx`) because the recovery link itself establishes a temporary session; the
   page just waits for that, then calls `supabase.auth.updateUser({ password })`.
+- **`src/pages/AiHandoff.tsx`** — the deliberately narrow bridge to the private
+  `https://phaenon3.tail1d0673.ts.net/ai` console. OPS session storage is origin-scoped and
+  cannot be read by the Tailscale host, so an already authorized user is redirected with the
+  normal short-lived access token in a URL fragment. The fragment is not sent in HTTP requests;
+  the AI router independently validates it with Supabase and checks the same active `profiles`
+  role. This does not create an AI public route or relax cookie scope.
 
 ### Authorization: `public.profiles` (not "any valid Supabase user")
 

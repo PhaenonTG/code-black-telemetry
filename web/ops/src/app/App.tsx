@@ -17,6 +17,7 @@ const Operations = lazy(() => import("../pages/Operations"))
 const Settings = lazy(() => import("../pages/Settings"))
 const More = lazy(() => import("../pages/More"))
 const Stream = lazy(() => import("../pages/Stream"))
+const AiHandoff = lazy(() => import("../pages/AiHandoff"))
 
 // /update-password is reachable regardless of auth state -- it's the landing page for a
 // Supabase password-recovery email link, which itself establishes a temporary session (see
@@ -48,6 +49,7 @@ export default function App() {
                         <Route path="/chase" element={<Fleet />} />
                         <Route path="/fleet" element={<Navigate to="/chase" replace />} />
                         <Route path="/stream" element={<Stream />} />
+                        <Route path="/ai" element={<AiHandoff />} />
                         <Route path="/system" element={<Operations />} />
                         <Route path="/settings" element={<Settings />} />
                         <Route path="/more" element={<More />} />
