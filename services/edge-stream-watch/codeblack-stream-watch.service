@@ -1,0 +1,10 @@
+[Unit]
+Description=Normalize Code Black public stream state
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=codeblack
+Group=codeblack
+ExecStart=/usr/bin/python3 /srv/codeblack/services/edge-stream-watch/stream_watch.py

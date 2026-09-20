@@ -1,0 +1,69 @@
+diff --git a/notify.py b/notify.py
+--- a/notify.py
++++ b/notify.py
+@@ -142,6 +142,11 @@
+     if kind == "test":
+         return "🧪 Code Black Notification Test"
+ 
++    if kind == "stream_live":
++        stream = event.get("stream", {})
++        owner = stream.get("owner", "Code Black") if isinstance(stream, dict) else "Code Black"
++        return f"🔴 {owner} is LIVE"
++
+     return "Code Black Infrastructure Event"
+ 
+ 
+@@ -157,6 +162,9 @@
+     if kind == "test":
+         return 0x5865F2
+ 
++    if kind == "stream_live":
++        return 0xED4245
++
+     if kind == "incident_update":
+         return 0xFEE75C
+ 
+@@ -164,6 +172,11 @@
+ 
+ 
+ def summarize(event):
++    if event.get("type") == "stream_live":
++        stream = event.get("stream", {})
++        provider = stream.get("provider", "the stream provider") if isinstance(stream, dict) else "the stream provider"
++        return f"Live on {provider}."
++
+     issues = event.get(
+         "issues",
+         []
+@@ -235,6 +248,22 @@
+         ),
+         "inline": True,
+     })
++
++    if event.get("type") == "stream_live":
++        stream = event.get("stream", {})
++        if isinstance(stream, dict):
++            fields.append({
++                "name": "Stream",
++                "value": stream.get("provider", "Unknown provider"),
++                "inline": True,
++            })
++            url = stream.get("url")
++            if isinstance(url, str) and url.startswith("https://"):
++                fields.append({
++                    "name": "Watch",
++                    "value": url,
++                    "inline": False,
++                })
+ 
+     if core:
+         fields.append({
+@@ -292,7 +321,7 @@
+         ),
+         "fields": fields,
+         "footer": {
+-            "text": "CodeBlack-Edge • Infrastructure Watchdog"
++            "text": "CodeBlack-Edge • Stream Watch" if event.get("type") == "stream_live" else "CodeBlack-Edge • Infrastructure Watchdog"
+         },
+     }
+ 

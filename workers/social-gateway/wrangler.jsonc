@@ -1,0 +1,26 @@
+{
+  // Standalone public relay that resolves the current Facebook Live viewer count for
+  // classic-v2.html's brand box, the same way chase-gateway/radar-relay expose public NOAA/
+  // vehicle data under ops.codeblackwx.com without exposing a secret client-side. This Worker
+  // holds the real Facebook Page Access Token server-side (see README.md) -- the overlay only
+  // ever sees a plain `{ "count": <number> }` response, never the token itself. Not yet deployed
+  // or verified against a real Facebook Page/live video -- see README.md "Status".
+  "name": "codeblack-social-gateway",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-08",
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "ops.codeblackwx.com/overlay-core/facebook-viewers",
+      "zone_name": "codeblackwx.com"
+    },
+    {
+      "pattern": "ops.codeblackwx.com/overlay-core/facebook-live-state",
+      "zone_name": "codeblackwx.com"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}
