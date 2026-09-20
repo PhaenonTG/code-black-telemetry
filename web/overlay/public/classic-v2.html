@@ -2771,11 +2771,14 @@
       // loaded. Its opacity transition then crossfades the old raster out over 520ms.
       radarMap.on('sourcedata', revealWhenLoaded);
       source.setTiles([url]);
-      // A source that finishes before Mapbox emits a sourcedata callback still becomes visible.
-      // This guards the v3 event timing race without swapping in an unverified frame.
+      // The first frame has no earlier raster to protect. Its scan and WMS tile were already
+      // verified before this point, so reveal it after a short delivery window even when Mapbox
+      // v3 omits the raster completion callback. Every later replacement still retains the old
+      // layer until Mapbox confirms the new one.
       window.setTimeout(() => {
-        if (generation === radarRenderGeneration && radarMap.isSourceLoaded(sourceId)) reveal();
-      }, 1200);
+        if (generation !== radarRenderGeneration) return;
+        if (radarActiveLayerIndex < 0 || radarMap.isSourceLoaded(sourceId)) reveal();
+      }, 1800);
       window.setTimeout(() => radarMap.off('sourcedata', revealWhenLoaded), 15_000);
     }
 
