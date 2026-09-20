@@ -36,6 +36,7 @@ import {
 } from "../functions/lib/coreGateway";
 import { ARDOT_RELAY_PREFIX, handleArdotCameraStream } from "../functions/lib/ardotCameraRelay";
 import { OVERLAY_CORE_PREFIX, handlePublicStormIntelRequest } from "../functions/lib/publicStormIntelRelay";
+import { OVERLAY_CONTEXT_PATH, handleOverlayContextRequest } from "../functions/lib/overlayContextRelay";
 import { MAPBOX_TOKEN_PATH, handleMapboxTokenRequest, type MapboxTokenEnv } from "../functions/lib/publicMapboxToken";
 import { MODOT_PREFIX, handleModotRequest } from "../functions/lib/modotRelay";
 import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
@@ -93,6 +94,9 @@ export default {
     }
     if (url.pathname === MAPBOX_TOKEN_PATH) {
       return handleMapboxTokenRequest(request, env, ctx);
+    }
+    if (url.pathname === OVERLAY_CONTEXT_PATH) {
+      return handleOverlayContextRequest(request, env);
     }
     if (url.pathname.startsWith(OVERLAY_CORE_PREFIX)) {
       return handlePublicStormIntelRequest(request, env);

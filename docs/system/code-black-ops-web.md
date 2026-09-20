@@ -288,3 +288,17 @@ running in production; `env.ASSETS.fetch(request)` handles every other path exac
 - The Vite build still bundles Mapbox heavily; code-splitting is a later performance pass.
 - Headless Chromium may report WebGL unavailable during screenshot QA. That validates the existing
   renderer-fallback state but is not a substitute for a headed browser/GPU map rendering pass.
+
+## Public Overlay Context Relay
+
+`GET /overlay-core/overlay-context/v1/nick` is the deliberately narrow public relay used by
+Nick Mounce's browser overlay. It has no caller-selected unit or upstream URL. Each request first
+reads `cbwx-unit-tessa` from the server-side Fabric/Core gateway and accepts only a current LIVE or
+DEGRADED location. It then obtains the three-day forecast from Open-Meteo and Day 1/Day 2
+categorical and tornado outlooks from the SPC on the server side, returning only the location
+scoped summary the overlay needs.
+
+Fabric remains authoritative for whether the overlay has a current chase location. If Fabric does
+not supply one, the relay returns an explicit unavailable state and the overlay clears forecast and
+outlook cards instead of showing values for an older position. SPC source documents are cached for
+ten minutes; the Fabric location itself is checked for every relay request.

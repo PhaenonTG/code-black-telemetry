@@ -609,6 +609,60 @@
         clearTimeout(timer);
       }
     }
+    // The public overlay reads forecast and SPC context from one server-side endpoint. That
+    // endpoint resolves the active location from Fabric first, then queries the official
+    // upstream products. The browser therefore never decides which unit location to use or
+    // talks to weather/SPC providers directly during a live broadcast.
+    let overlayContextInFlight = false;
+    async function updateOverlayContext() {
+      if (!settings.useLiveGps || overlayContextInFlight) return;
+      overlayContextInFlight = true;
+      try {
+        const res = await fetchWithTimeout(`${settings.chaseGatewayBase}/overlay-core/overlay-context/v1/nick`, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('overlay context fetch failed');
+        const data = await res.json();
+        if (!data || data.available !== true) {
+          forecastDays = null;
+          spcOutlooks = null;
+          return;
+        }
+        if (data.forecast && data.forecast.status === 'available' && Array.isArray(data.forecast.days)) {
+          const labels = ['Today', 'Tomorrow'];
+          const days = data.forecast.days.map((day, index) => {
+            if (!day || !Number.isFinite(day.high) || !Number.isFinite(day.low) || typeof day.date !== 'string') throw new Error('overlay forecast payload malformed');
+            return {
+              lab: index < labels.length ? labels[index] : new Date(`${day.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' }),
+              cond: WMO_LABEL[day.weatherCode] || 'N/A',
+              icon: WMO_ICON[day.weatherCode] || 'cloudy',
+              hi: Math.round(day.high), lo: Math.round(day.low),
+              precip: Number.isFinite(day.precipitationProbability) ? Math.round(day.precipitationProbability) : null,
+            };
+          });
+          forecastDays = days;
+        } else {
+          forecastDays = null;
+        }
+        if (data.spc && data.spc.status === 'available') {
+          const source = risk => risk && typeof risk === 'object' ? {
+            label: String(risk.label || ''), labelLong: String(risk.labelLong || risk.label || ''),
+            color: typeof risk.color === 'string' ? risk.color : '', issued: String(risk.issued || ''),
+            expires: String(risk.expires || ''), geometry: null,
+          } : null;
+          spcOutlooks = [
+            { day: 1, categorical: source(data.spc.day1 && data.spc.day1.categorical), tornado: source(data.spc.day1 && data.spc.day1.tornado) },
+            { day: 2, categorical: source(data.spc.day2 && data.spc.day2.categorical), tornado: source(data.spc.day2 && data.spc.day2.tornado) },
+            { day: 3, categorical: null, tornado: null },
+          ];
+          day23HasSomethingToShow = true;
+        } else {
+          spcOutlooks = null;
+        }
+      } catch (err) {
+        // Keep the last verified context across one transient server-side provider failure.
+      } finally {
+        overlayContextInFlight = false;
+      }
+    }
     // Escapes external/crowd-sourced text (NWS free text, Spotter Network notes, Nominatim
     // reverse-geocode results, SPC outlook labels) before interpolating into innerHTML --
     // never developer-authored, so never trusted as-is.
@@ -731,9 +785,8 @@
         updateSurfaceObs();
         updateAlertReal();
         updateRadarSite();
-        updateSpcOutlook();
+        updateOverlayContext();
         updateChaserData();
-        updateForecast();
         updateStormIntel();
         updateNearbySevereWarnings();
       }
@@ -3133,9 +3186,14 @@
     setInterval(updateWeather, Math.max(30, settings.pollSeconds) * 1000);
     setInterval(updateSurfaceObs, Math.max(30, settings.pollSeconds) * 1000);
     setInterval(updateAlertReal, Math.max(30, settings.pollSeconds) * 1000);
-    setInterval(updateSpcOutlook, Math.max(300, settings.pollSeconds) * 1000); // SPC reissues rarely -- no need to poll as often as weather/alerts
+    setInterval(() => {
+      if (settings.useLiveGps) updateOverlayContext();
+      else updateSpcOutlook();
+    }, Math.max(300, settings.pollSeconds) * 1000);
     setInterval(updateChaserData, Math.max(30, settings.pollSeconds) * 1000);
-    setInterval(updateForecast, Math.max(600, settings.pollSeconds) * 1000); // forecast changes slowly -- no need to poll often
+    setInterval(() => {
+      if (!settings.useLiveGps) updateForecast();
+    }, Math.max(600, settings.pollSeconds) * 1000);
     setInterval(updateStormIntel, Math.max(300, settings.pollSeconds) * 1000); // HRRR updates hourly at best -- no need to poll as often as weather/alerts
     setInterval(updateNearbySevereWarnings, Math.max(90, settings.pollSeconds) * 1000);
     setInterval(radarModeTick, 700);
