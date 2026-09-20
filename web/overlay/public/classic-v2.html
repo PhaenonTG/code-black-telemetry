@@ -2628,15 +2628,11 @@
       }
     }
 
-    // REF/VEL/SRV/CC all come from our own radar-worker's real NEXRAD Level II decode (the same
-    // pipeline the CC dual-pol clutter-filtering was tuned against earlier) -- it has both more
-    // real frame history available and, critically, tiles our worker actually renders/styles
-    // itself, instead of whatever raw styling a third party's tile service applies. REF used to
-    // fall through to IEM's RIDGE service below (a leftover from before this worker existed),
-    // which is why it visibly looked and animated worse than VEL/CC on the same site: sparser
-    // frame history and completely unstyled tiles we have no control over. Only a product our own
-    // worker genuinely doesn't decode should ever reach the IEM fallback beneath this.
-    const OWN_WORKER_PRODUCTS = new Set(['REF', 'VEL', 'SRV', 'CC']);
+    // REF and VEL use IEM RIDGE because it has a reliable public scan index and tile service.
+    // Our worker remains the source for SRV/CC, neither of which IEM's RIDGE service provides.
+    // This fallback is intentional: a frame manifest without readable tiles must never blank the
+    // on-air radar pane.
+    const OWN_WORKER_PRODUCTS = new Set(['SRV', 'CC']);
     async function fetchRadarFrames() {
       if (!radarSiteId || radarFrameFetchInFlight) return;
       radarFrameFetchInFlight = true;
@@ -2717,8 +2713,10 @@
         ? iemArchiveTileUrl(sector, iemProduct, frame.ts)
         : `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png`;
       const generation = ++radarRenderGeneration;
-      const revealWhenLoaded = (event) => {
-        if (event.sourceId !== sourceId || !event.isSourceLoaded || generation !== radarRenderGeneration) return;
+      let revealed = false;
+      const reveal = () => {
+        if (revealed || generation !== radarRenderGeneration) return;
+        revealed = true;
         radarMap.off('sourcedata', revealWhenLoaded);
         radarActiveLayerIndex = targetIndex;
         radarFrames = frames;
@@ -2730,10 +2728,21 @@
         radarRasterReady = true;
         if (radarBasemapReady) document.getElementById('radarLoading').classList.add('hidden');
       };
+      const revealWhenLoaded = (event) => {
+        // Mapbox v3 does not consistently attach isSourceLoaded to every raster sourcedata event.
+        // The event means at least one replacement tile delivered, so keep the existing image
+        // beneath it and begin the crossfade rather than leaving the pane empty.
+        if (event.sourceId === sourceId) reveal();
+      };
       // The old source stays at full opacity until Mapbox confirms the replacement source has
       // loaded. Its opacity transition then crossfades the old raster out over 520ms.
       radarMap.on('sourcedata', revealWhenLoaded);
       source.setTiles([url]);
+      // A source that finishes before Mapbox emits a sourcedata callback still becomes visible.
+      // This guards the v3 event timing race without swapping in an unverified frame.
+      window.setTimeout(() => {
+        if (generation === radarRenderGeneration && radarMap.isSourceLoaded(sourceId)) reveal();
+      }, 1200);
       window.setTimeout(() => radarMap.off('sourcedata', revealWhenLoaded), 15_000);
     }
 
