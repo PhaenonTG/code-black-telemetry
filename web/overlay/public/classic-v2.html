@@ -1086,6 +1086,9 @@
       const i = SPC_RISK_RANK.indexOf(label);
       return i === -1 ? -1 : i;
     }
+    // Keep source availability separate from the local risk result. A valid SPC response with
+    // no polygon covering the chaser is a real, useful "no local risk" answer -- it must never
+    // be presented as though the feed is still loading.
     let spcOutlooks = null; // [{day:1,categorical,tornado}, {day:2,...}, {day:3,...}] once loaded
     async function updateSpcOutlook() {
       if (settings.latitude === null || settings.longitude === null) return;
@@ -1681,10 +1684,6 @@
       const shieldIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ALERT_ICONS.clear + '</svg>';
       midBar.innerHTML = `<div class="spc-split">
         <div class="spc-half">
-          <div class="chasers-glyph sm"><div class="glyph-halo"></div><div class="glyph-sweep"></div>${CHASER_GLYPH_SVG}</div>
-          <div class="chasers-hero-line sm"><span class="ch-hero-num">${CHASER_COUNT}</span>Chasers Nearby</div>
-        </div>
-        <div class="spc-half">
           <div class="clear-badge">${shieldIcon}</div>
           <div class="clear-textcol">
             <div class="clear-main">No Current Reports</div>
@@ -2077,10 +2076,10 @@
           const hi = d.temperature_2m_max?.[i];
           const lo = d.temperature_2m_min?.[i];
           const precip = d.precipitation_probability_max?.[i];
-          // A 200 OK with a malformed/short daily series must not silently turn into
-          // Math.round(undefined) === NaN rendering as literal "NaN°" -- if any day in the
-          // series is unusable, reject the whole update and keep the last-known forecast.
-          if (!Number.isFinite(hi) || !Number.isFinite(lo) || !Number.isFinite(precip)) {
+          // A 200 OK with a malformed/short temperature series must not silently turn into
+          // Math.round(undefined) === NaN. Precipitation probability, however, is legitimately
+          // absent for some model runs and should not discard otherwise valid forecast days.
+          if (!Number.isFinite(hi) || !Number.isFinite(lo)) {
             throw new Error('forecast response has non-numeric daily values');
           }
           const code = d.weathercode?.[i];
@@ -2091,7 +2090,7 @@
             icon: WMO_ICON[code] || 'cloudy',
             hi: Math.round(hi),
             lo: Math.round(lo),
-            precip: Math.round(precip),
+            precip: Number.isFinite(precip) ? Math.round(precip) : null,
           };
         });
         forecastDays = days;
@@ -2223,10 +2222,9 @@
     function renderChasers(hasReports) {
       const clock = ms => new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
       if (!hasReports || !latestChaserReport) {
-        midBar.innerHTML = `<div class="chasers-glyph-row">
-          <div class="chasers-glyph"><div class="glyph-halo"></div><div class="glyph-sweep"></div>${CHASER_GLYPH_SVG}</div>
-          <div class="chasers-hero-line"><span class="ch-hero-num">${CHASER_COUNT}</span>Storm Chasers Nearby</div>
-        </div>`;
+        // The rotation gate below only permits this card when a report exists. Retain a concise
+        // fallback in case an async refresh clears the report while this card is visible.
+        renderAlertClear();
         return;
       }
       const countCol = `<div class="chasers-half">
@@ -2347,7 +2345,7 @@
             ${F_ICONS[d.icon]}
             <div class="f-text">
               <div class="f-toprow"><span class="f-lab">${d.lab}</span><span class="f-hilo">${d.hi}°<span class="lo">${d.lo}°</span></span></div>
-              <div class="f-cond">${d.cond} · ${F_DROP}<span class="drop">${d.precip}%</span></div>
+              <div class="f-cond">${d.cond}${d.precip === null ? '' : ` · ${F_DROP}<span class="drop">${d.precip}%</span>`}</div>
             </div>
           </div>`).join('')}</div>
       </div>`;
@@ -2962,8 +2960,10 @@
         const torn = spcOutlooks && spcOutlooks[0].tornado;
         const catLabel = cat ? cat.label : '--';
         const catColor = cat ? (cat.color || '#e8c93a') : 'var(--muted)';
-        // labelLong is SPC's own free-text outlook label (props.LABEL2), not developer-authored.
-        const catName = cat ? escapeHtml(cat.labelLong) : 'Awaiting outlook data...';
+        // A valid SPC response can have no risk polygon at the current location. That is a
+        // complete answer, not an "awaiting" state.
+        const outlookLoaded = Boolean(spcOutlooks);
+        const catName = cat ? escapeHtml(cat.labelLong) : (outlookLoaded ? 'No SPC risk at location' : 'Awaiting outlook data...');
         const tornVal = torn ? torn.label : 'N/A';
         const tornColor = torn ? (torn.color || 'var(--text)') : 'var(--muted)';
         midBar.innerHTML = `<div class="spc-split">
@@ -2972,7 +2972,7 @@
               <div class="spc-pct" style="color:${catLabel === '--' ? 'var(--muted)' : catColor};">${catLabel}</div>
             </div>
             <div class="spc-textcol">
-              <div class="spc-namerow"><span class="spc-risk-name">${cat ? catName : 'SPC Outlook'}</span><span class="spc-daytag">Day 1</span></div>
+              <div class="spc-namerow"><span class="spc-risk-name">${cat ? catName : (outlookLoaded ? 'No local outlook' : 'SPC Outlook')}</span><span class="spc-daytag">Day 1</span></div>
               ${cat ? '' : `<div class="spc-desc">${catName}</div>`}
             </div>
           </div>
@@ -2991,7 +2991,7 @@
           const cat = outlook && outlook.categorical;
           if (!cat) return `<div class="spc-half">
             <div class="spc-risk-col"><div class="spc-pct" style="color:var(--muted);">--</div></div>
-            <div class="spc-textcol"><div class="spc-namerow"><span class="spc-daytag">Day ${dayNum}</span><span class="spc-namerow-dot">•</span><span class="spc-risk-name">Awaiting data</span></div></div>
+            <div class="spc-textcol"><div class="spc-namerow"><span class="spc-daytag">Day ${dayNum}</span><span class="spc-namerow-dot">•</span><span class="spc-risk-name">${spcOutlooks ? 'No local outlook' : 'Awaiting data'}</span></div></div>
           </div>`;
           return `<div class="spc-half">
             <div class="spc-risk-col"><div class="spc-pct" style="color:${cat.color || '#5cb85c'};">${cat.label}</div></div>
@@ -3046,13 +3046,13 @@
     const WARNING_TIERS = ['svrw', 'svrc', 'svrd', 'tor', 'pds', 'torE', 'ffw'];
     const ROTATION_ORDER = ['alert', 'params', 'chasers', 'day1', 'day2', 'forecast', 'sunmoon'];
     const DWELL_MS = { alert: 10000, params: 10000, chasers: 8000, day1: 10000, day2: 8000, forecast: 8000, sunmoon: 6000 };
-    // Real threshold, set by updateSpcOutlook() once real risk levels are flowing (true whenever
-    // either day is Slight or higher). Starts true so the card still takes its turn showing the
-    // "awaiting data" placeholder before the first fetch resolves, rather than vanishing.
+    // Day 2/3 earns a rotation turn once the source has responded, even for a calm location.
+    // This lets viewers distinguish no local outlook from a feed that has not arrived yet.
     let day23HasSomethingToShow = true;
     function cardEligible(key) {
       if (key === 'alert') return currentTier !== 'clear';
-      if (key === 'day2') return day23HasSomethingToShow;
+      if (key === 'chasers') return chasersHasReports && Boolean(latestChaserReport);
+      if (key === 'day2') return spcOutlooks !== null;
       return true;
     }
     function nextEligibleKey(afterKey) {
