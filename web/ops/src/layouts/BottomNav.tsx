@@ -1,15 +1,16 @@
 import { NavLink } from "react-router-dom"
 import { Icon } from "../components/Icon"
-import { ROUTES, MORE_ROUTE } from "../app/routes"
+const PHONE_ROUTES = [
+  { path: "/", label: "HOME", icon: "home" as const },
+  { path: "/radar", label: "RADAR", icon: "radar" as const },
+  { path: "/system", label: "OPS", icon: "system" as const },
+  { path: "/ai", label: "AEGIS", icon: "ops" as const },
+  { path: "/more", label: "MORE", icon: "more" as const },
+]
 
-const PHONE_ROUTES = [...ROUTES.filter((r) => r.inPhoneNav), MORE_ROUTE]
-
-// Exactly Live Ops / Radar / Storm Intel / Fleet / More -- this order and set is a locked
-// product decision, not something to casually extend even though the sidebar has more
-// destinations. (A "Home / Map / Weather / Alerts / More" set was planned at one point --
-// Home.tsx existed fully built but was never routed to anything, and /map, /weather, /alerts
-// exist in app/App.tsx as unreferenced aliases of OpsWorkstation. This comment used to describe
-// that older plan instead of what ROUTES/inPhoneNav below actually produces.)
+// Phone navigation is deliberately separate from the desktop sidebar.  Five
+// destinations preserve a one-handed layout; deeper weather/field controls live
+// under Home actions and More instead of becoming a sixth or seventh tiny tab.
 export function BottomNav() {
   return (
     <nav className="bottom-nav" aria-label="Primary">

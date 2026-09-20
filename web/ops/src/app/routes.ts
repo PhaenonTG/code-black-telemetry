@@ -6,8 +6,9 @@ export interface RouteDef {
   label: string
   icon: ComponentProps<typeof Icon>["name"]
   state: "LIVE" | "DEVELOPMENT"
-  // Shown in the phone bottom nav (exactly Live Ops/Radar/Storm Intel/Fleet/More -- do not add
-  // a 6th; see the fuller note in layouts/BottomNav.tsx).
+  // Exposed in the phone navigation model. BottomNav deliberately presents
+  // only five one-handed destinations; the remaining live routes are shown
+  // in More.
   inPhoneNav: boolean
   // Shown in the desktop/tablet sidebar. "More" itself isn't a sidebar destination there --
   // desktop/tablet have room to show Fleet/Operations/Settings directly instead.
@@ -17,13 +18,13 @@ export interface RouteDef {
 
 export const ROUTES: RouteDef[] = [
   { path: "/", label: "OPERATIONS MAP", icon: "map", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
-  { path: "/weather", label: "WEATHER ANALYSIS", icon: "cloud", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
+  { path: "/weather", label: "WEATHER ANALYSIS", icon: "cloud", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
   { path: "/radar", label: "RADAR LAB", icon: "radar", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
   { path: "/models", label: "MODELS", icon: "models", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/soundings", label: "SOUNDINGS", icon: "sounding", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
   { path: "/consensus", label: "CONSENSUS", icon: "consensus", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/targets", label: "TARGETS", icon: "target", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
-  { path: "/chase", label: "CHASE OPERATIONS", icon: "fleet", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "FIELD" },
+  { path: "/chase", label: "CHASE OPERATIONS", icon: "fleet", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/field", label: "FIELD INTELLIGENCE", icon: "radio", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/stream", label: "LIVE STREAM", icon: "stream", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/system", label: "SYSTEM", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
