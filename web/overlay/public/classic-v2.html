@@ -208,8 +208,8 @@
     .radar-loading.hidden { opacity: 0; pointer-events: none; }
 
     .mid-bar {
-      position: absolute; bottom: 16px; left: 502px; right: 502px;
-      height: 150px; border-radius: 24px;
+      position: absolute; bottom: 16px; left: 391px; right: 391px;
+      height: 120px; border-radius: 24px;
       display: flex; align-items: stretch; justify-content: center;
       padding: 0 6px; transform: scale(0.9); transform-origin: bottom center;
       box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
@@ -2133,15 +2133,12 @@
         <div class="chasers-hero-line sm"><span class="ch-hero-num">${CHASER_COUNT}</span>Chasers Nearby</div>
       </div>`;
       const r = latestChaserReport;
-      const locText = r.location + (r.state ? `, ${r.state}` : '');
-      const noteRow = r.remarks ? `<div class="r-note">${escapeHtml(r.remarks)}</div>` : '';
       midBar.innerHTML = `<div class="chasers-row">
         ${countCol}
         <div class="chasers-half">
           <div class="report-detail">
-            <div class="r-line1"><span class="loc">${escapeHtml(locText)}</span> — <b>${escapeHtml(r.type)}</b></div>
-            ${noteRow}
-            <div class="r-when">${clock(r.validTime)} · <span class="r-time" data-since="${r.validTime}">0:00</span> ago · via ${r.source}</div>
+            <div class="r-line1"><b>Recent storm report</b></div>
+            <div class="r-when"><span class="r-time" data-since="${r.validTime}">0:00</span> ago</div>
           </div>
         </div>
       </div>`;
@@ -2324,6 +2321,8 @@
     let isWarningActive = false;
     let radarMap = null;
     let radarMapReady = false;
+    let radarBasemapReady = false;
+    let radarRasterReady = false;
     let pendingRadarFrames = null;
     const TOR_PRODUCT_ROTATION = ['VEL', 'REF', 'VEL', 'CC', 'VEL', 'REF'];
     // Severe Thunderstorm Warning gets VEL mixed in too, but at a real minority share (1 of 4
@@ -2395,6 +2394,14 @@
         document.getElementById('radarLoading').classList.add('hidden');
       });
       radarMap.on('load', () => {
+        // Mapbox can initialize before the transformed OBS panel has its final paint bounds.
+        // Resize on the next frame so the canvas fills the radar body instead of exposing a
+        // single initialized tile in an otherwise black panel.
+        requestAnimationFrame(() => radarMap.resize());
+        radarMap.once('idle', () => {
+          radarBasemapReady = true;
+          if (radarRasterReady) document.getElementById('radarLoading').classList.add('hidden');
+        });
         // County lines -- below the radar raster, above the basemap. Real US Census cartographic
         // county boundaries (2010, 1:20,000,000 simplification -- light enough for a background
         // layer), fetched once; Mapbox GL handles the request itself when `data` is a URL.
@@ -2594,7 +2601,8 @@
         radarLayerIds.forEach((id, i) => {
           if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === targetIndex ? 0.92 : 0);
         });
-        document.getElementById('radarLoading').classList.add('hidden');
+        radarRasterReady = true;
+        if (radarBasemapReady) document.getElementById('radarLoading').classList.add('hidden');
       };
       // The old source stays at full opacity until Mapbox confirms the replacement source has
       // loaded. Its opacity transition then crossfades the old raster out over 520ms.
