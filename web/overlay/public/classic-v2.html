@@ -2362,7 +2362,7 @@
     // radar-relay Worker -- see workers/radar-relay/. No auth needed: public NOAA data. Ported
     // from classic.html -- see there for the full rationale on each piece below.
     let MAPBOX_TOKEN = params.get('mapboxToken') || '';
-    const MAPBOX_STYLE = params.get('mapboxStyle') || 'mapbox://styles/mapbox/navigation-night-v1';
+    const MAPBOX_STYLE = params.get('mapboxStyle') || 'mapbox://styles/mapbox/dark-v11';
     // Two layers are intentionally retained: one remains visible while the other loads the next
     // newest scan. This prevents a tile/network miss from ever punching a blank hole in OBS.
     const RADAR_FRAME_POOL_SIZE = 2;
@@ -2405,8 +2405,9 @@
     // (the big-picture view), CLOSE the shortest (a quick current check before moving on).
     // Warning-tier zoom cycling (CLOSE/MID only) keeps its own uniform legacy timing --
     // untouched, wasn't part of this change.
-    const ZOOM_HOLD_MS = { FAR: 20000, MID: 15000, CLOSE: 9000 };
-    const WARNING_ZOOM_HOLD_MS = 11200;
+    const ZOOM_HOLD_MS = { FAR: 28000, MID: 21000, CLOSE: 13000 };
+    const WARNING_ZOOM_HOLD_MS = 15000;
+    const RADAR_ZOOM_TRANSITION_MS = 2800;
     let radarZoomIndex = 1; // Start at the regional view, then cycle without historical imagery.
     let radarCenterPinned = false;
     let radarZoomChangedAt = Date.now();
@@ -2470,6 +2471,37 @@
       }
     }
 
+    function tuneRadarBasemap() {
+      if (!radarMap) return;
+      // The base map is deliberately quiet so the weather raster, alert polygons, and unit
+      // marker lead the eye. Boundaries stay cool and bright enough to read in OBS at a glance.
+      for (const layer of radarMap.getStyle().layers || []) {
+        const id = String(layer.id || '').toLowerCase();
+        const sourceLayer = String(layer['source-layer'] || '').toLowerCase();
+        try {
+          if (layer.type === 'background') {
+            radarMap.setPaintProperty(layer.id, 'background-color', '#03070d');
+          } else if (layer.type === 'fill' && (id.includes('water') || sourceLayer.includes('water'))) {
+            radarMap.setPaintProperty(layer.id, 'fill-color', '#071525');
+          } else if (layer.type === 'line' && (id.includes('admin-1') || id.includes('state') || sourceLayer.includes('admin'))) {
+            radarMap.setPaintProperty(layer.id, 'line-color', '#b7d8e8');
+            radarMap.setPaintProperty(layer.id, 'line-opacity', 0.86);
+            radarMap.setPaintProperty(layer.id, 'line-width', 1.15);
+          } else if (layer.type === 'line' && (id.includes('road') || sourceLayer.includes('road'))) {
+            radarMap.setPaintProperty(layer.id, 'line-color', '#5a798f');
+            radarMap.setPaintProperty(layer.id, 'line-opacity', 0.70);
+          } else if (layer.type === 'symbol' && (id.includes('road') || id.includes('place'))) {
+            radarMap.setPaintProperty(layer.id, 'text-color', '#b6d0dc');
+            radarMap.setPaintProperty(layer.id, 'text-halo-color', '#03070d');
+            radarMap.setPaintProperty(layer.id, 'text-halo-width', 1.2);
+          }
+        } catch (_) {
+          // Mapbox base-style layer paint differs by release. One unsupported override must not
+          // prevent the remaining radar layers from loading.
+        }
+      }
+    }
+
     async function initRadarMap() {
       if (radarMap || typeof mapboxgl === 'undefined') return;
       MAPBOX_TOKEN = await resolveMapboxToken();
@@ -2506,6 +2538,7 @@
         document.getElementById('radarLoading').classList.add('hidden');
       });
       radarMap.on('load', () => {
+        tuneRadarBasemap();
         // Mapbox can initialize before the transformed OBS panel has its final paint bounds.
         // Resize on the next frame so the canvas fills the radar body instead of exposing a
         // single initialized tile in an otherwise black panel.
@@ -2520,7 +2553,7 @@
         radarMap.addSource(COUNTY_LINES_SOURCE_ID, { type: 'geojson', data: COUNTY_LINES_URL });
         radarMap.addLayer({
           id: COUNTY_LINES_LAYER_ID, type: 'line', source: COUNTY_LINES_SOURCE_ID,
-          paint: { 'line-color': 'rgba(255,255,255,0.22)', 'line-width': 0.6 },
+          paint: { 'line-color': 'rgba(154,205,225,0.60)', 'line-width': 0.85 },
         });
         for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
           radarMap.addSource(radarSourceIds[i], { type: 'raster', tiles: [BLANK_TILE], tileSize: 256 });
@@ -2814,9 +2847,14 @@
       radarZoomIndex = index;
       radarZoomChangedAt = Date.now();
       if (index === 0) radarCloseLoopTick = 0;
-      // Keep the radar image pinned to the newest frame. Zoom changes are deliberate framing
-      // changes only; they never advance or animate through older radar scans.
-      if (radarMap) radarMap.jumpTo({ zoom: RADAR_ZOOM_LEVELS[index].zoom });
+      // Camera-only easing keeps the currently-rendered newest frame in place. No radar
+      // source, tile URL, or scan selection changes during the move.
+      if (radarMap) radarMap.easeTo({
+        zoom: RADAR_ZOOM_LEVELS[index].zoom,
+        duration: RADAR_ZOOM_TRANSITION_MS,
+        easing: (t) => t * t * (3 - 2 * t),
+        essential: true,
+      });
     }
 
     // Baseline (no local alert) now runs FAR -> MID -> CLOSE -- the big-picture view first,
