@@ -235,7 +235,45 @@ describe("codeblack-chase-gateway", () => {
     });
   });
 
-  describe("9. GET /api/chase/location/latest (private)", () => {
+  describe("9. pre-auth V1 config and telemetry boundary", () => {
+    it("requires the existing Chase bearer token before returning config", async () => {
+      const res = await handleRequest(new Request("https://x/api/chase/v1/config"), envWith({ CHASE_TOKEN: "secret" }));
+      expect(res.status).toBe(401);
+    });
+
+    it("forwards authorized config only to its fixed Core route with no-store", async () => {
+      const core = mockCoreVpc(() => new Response(JSON.stringify({ schema: "codeblack.chase.config" }), { status: 200 }));
+      const res = await handleRequest(
+        new Request("https://x/api/chase/v1/config", { headers: { Authorization: "Bearer secret" } }),
+        envWith({ CORE_VPC: core, CHASE_TOKEN: "secret" }),
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(core.fetch).toHaveBeenCalledWith(
+        "http://127.0.0.1:8000/api/chase/v1/config",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer secret" }) }),
+      );
+    });
+
+    it("forwards authorized telemetry to the existing fixed Core ingest route", async () => {
+      const core = mockCoreVpc(() => new Response(JSON.stringify({ accepted: true }), { status: 200 }));
+      const res = await handleRequest(
+        new Request("https://x/api/chase/v1/telemetry", {
+          method: "POST",
+          headers: { Authorization: "Bearer secret" },
+          body: JSON.stringify({ unit_id: "cbwx-unit-tessa" }),
+        }),
+        envWith({ CORE_VPC: core, CHASE_TOKEN: "secret" }),
+      );
+      expect(res.status).toBe(200);
+      expect(core.fetch).toHaveBeenCalledWith(
+        "http://127.0.0.1:8000/api/chase/location",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+  });
+
+  describe("10. GET /api/chase/location/latest (private)", () => {
     it("requires Bearer CHASE_TOKEN -> 401 without it", async () => {
       const res = await handleRequest(
         new Request("https://x/api/chase/location/latest?unit_id=cbwx-unit-tessa"),

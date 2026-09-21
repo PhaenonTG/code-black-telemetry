@@ -22,6 +22,8 @@
 
 const CORE_ORIGIN = "http://127.0.0.1:8000";
 const MAX_BODY_BYTES = 16 * 1024;
+const CONFIG_PATH = "/api/chase/v1/config";
+const TELEMETRY_PATH = "/api/chase/v1/telemetry";
 
 const PUBLIC_CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -93,6 +95,21 @@ async function forwardPost(request: Request, env: Env): Promise<Response> {
       Accept: "application/json",
     },
     body,
+  });
+}
+
+async function forwardConfig(request: Request, env: Env): Promise<Response> {
+  const response = await env.CORE_VPC!.fetch(`${CORE_ORIGIN}/api/chase/v1/config`, {
+    headers: { Authorization: request.headers.get("Authorization") ?? "", Accept: "application/json" },
+  });
+  // Configuration can contain temporary operational credentials. It must never be retained by
+  // a browser, intermediary cache, or another client after this tightly scoped response.
+  return new Response(response.body, {
+    status: response.status,
+    headers: {
+      "Content-Type": response.headers.get("Content-Type") ?? "application/json",
+      "Cache-Control": "no-store",
+    },
   });
 }
 
@@ -178,6 +195,12 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   if (!authorized(request, env.CHASE_TOKEN)) return json(401, { error: "AUTH_REQUIRED" });
 
   try {
+    if (url.pathname === CONFIG_PATH && request.method === "GET") {
+      return await forwardConfig(request, env);
+    }
+    if (url.pathname === TELEMETRY_PATH && request.method === "POST") {
+      return await forwardPost(request, env);
+    }
     if (url.pathname === "/api/chase/location" && request.method === "POST") {
       return await forwardPost(request, env);
     }
