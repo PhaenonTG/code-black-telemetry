@@ -1,6 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
 import { handleRequest, type Env } from "./index";
 
+function assetsOf(files: Record<string, string | Uint8Array>): NonNullable<Env["ASSETS"]> {
+  return {
+    fetch: async (input: RequestInfo | URL) => {
+      const raw = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const path = new URL(raw).pathname;
+      const body = files[path];
+      if (body == null) return new Response("missing", { status: 404 });
+      return new Response(body);
+    },
+  };
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 // Behavioral parity tests. Expected values below were captured against the LIVE deployed
 // Worker (read-only curl + the bundled source pulled from the Cloudflare API during the
 // 2026-09-13 recovery session) -- see CHASE_GATEWAY_RECOVERY.md. These are not aspirational;
@@ -328,6 +345,59 @@ describe("codeblack-chase-gateway", () => {
     );
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ error: "CORE_TRANSPORT_UNAVAILABLE" });
+  });
+
+  it("serves a signed Chase update without Core or a bearer token", async () => {
+    const apk = new TextEncoder().encode("chase-apk");
+    const sha = await sha256Hex(apk);
+    const manifest = JSON.stringify({
+      schema: "codeblack.chase.update",
+      schemaVersion: "1.0.0",
+      channel: "recovery",
+      versionName: "0.1.2",
+      versionCode: 7,
+      apkUrl: "https://ops.codeblackwx.com/api/chase/v1/releases/chase-recovery-7.apk",
+      sha256: sha,
+      signerSha256: "ab".repeat(32),
+      releaseNotes: "Field update",
+      publishedAt: "2026-09-21T17:00:00Z",
+      minimumSupportedVersionCode: 5,
+      required: false,
+    });
+    const env = { ASSETS: assetsOf({ "/update.json": manifest, "/chase-recovery-7.apk": apk }) };
+    const listed = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/v1/update"), env);
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({ versionCode: 7, sha256: sha });
+    const downloaded = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/v1/releases/chase-recovery-7.apk"), env);
+    expect(downloaded.status).toBe(200);
+    expect(new TextDecoder().decode(await downloaded.arrayBuffer())).toBe("chase-apk");
+  });
+
+  it("rejects a Chase release whose bytes do not match the manifest", async () => {
+    const manifest = JSON.stringify({
+      schema: "codeblack.chase.update",
+      schemaVersion: "1.0.0",
+      channel: "recovery",
+      versionName: "0.1.2",
+      versionCode: 7,
+      apkUrl: "https://ops.codeblackwx.com/api/chase/v1/releases/chase-recovery-7.apk",
+      sha256: "11".repeat(32),
+      signerSha256: "ab".repeat(32),
+      releaseNotes: "Field update",
+      publishedAt: "2026-09-21T17:00:00Z",
+      minimumSupportedVersionCode: 5,
+      required: false,
+    });
+    const env = { ASSETS: assetsOf({ "/update.json": manifest, "/chase-recovery-7.apk": "tampered" }) };
+    const res = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/v1/releases/chase-recovery-7.apk"), env);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "CHECKSUM_MISMATCH" });
+  });
+
+  it("does not publish an update when no release asset exists", async () => {
+    const res = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/v1/update"), {});
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "NO_UPDATE_PUBLISHED" });
   });
 
   it("maps a CORE_VPC.fetch() throw on the public route to 502 CORE_TRANSPORT_UNAVAILABLE", async () => {

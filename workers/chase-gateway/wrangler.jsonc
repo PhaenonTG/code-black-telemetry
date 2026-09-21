@@ -8,6 +8,13 @@
   // This is the existing, narrowly scoped public Chase ingress.
   "routes": [{ "pattern": "ops.codeblackwx.com/api/chase/*", "zone_name": "codeblackwx.com" }],
 
+  // Published by the local Chase release script. The directory stays free of secrets.
+  "assets": {
+    "directory": "./releases",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+
   // Workers VPC Service binding to private Core, verified from the deployed Worker version.
   "vpc_services": [
     {

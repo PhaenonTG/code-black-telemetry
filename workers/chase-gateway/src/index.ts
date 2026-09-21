@@ -36,11 +36,17 @@ export interface VpcServiceBinding {
   fetch(input: string | URL, init?: RequestInit): Promise<Response>;
 }
 
+export interface AssetBinding {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+}
+
 export interface Env {
   CORE_VPC?: VpcServiceBinding;
   // Shared bearer secret. Checked against the caller's `Authorization: Bearer <token>` header on
   // every authenticated route, and injected server-side (never exposed) on the public route.
   CHASE_TOKEN?: string;
+  // Static release manifest and APK. Absent until a Chase release is published.
+  ASSETS?: AssetBinding;
 }
 
 interface PublicLocationResponse {
@@ -192,10 +198,98 @@ async function forwardPublicLatest(url: URL, env: Env): Promise<Response> {
   return publicJson(200, body);
 }
 
-export async function handleRequest(request: Request, env: Env): Promise<Response> {
-  if (!env.CORE_VPC) return json(503, { error: "CORE_UNAVAILABLE" });
+const UPDATE_PATH = "/api/chase/v1/update";
+const RELEASE_PREFIX = "/api/chase/v1/releases/";
+const UPDATE_HOST = "ops.codeblackwx.com";
 
+function isSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
+}
+
+function releaseFileName(versionCode: number): string {
+  return `chase-recovery-${versionCode}.apk`;
+}
+
+function publishedManifestIsSafe(data: unknown): data is {
+  versionCode: number;
+  apkUrl: string;
+  sha256: string;
+} {
+  if (!data || typeof data !== "object") return false;
+  const manifest = data as Record<string, unknown>;
+  const versionCode = manifest.versionCode;
+  if (manifest.schema !== "codeblack.chase.update" || manifest.schemaVersion !== "1.0.0") return false;
+  if (manifest.channel !== "recovery") return false;
+  if (typeof versionCode !== "number" || !Number.isInteger(versionCode) || versionCode < 1) return false;
+  if (typeof manifest.versionName !== "string" || manifest.versionName.length < 1 || manifest.versionName.length > 40) return false;
+  if (!isSha256(manifest.sha256) || !isSha256(manifest.signerSha256)) return false;
+  if (typeof manifest.apkUrl !== "string") return false;
+  if (typeof manifest.publishedAt !== "string" || Number.isNaN(Date.parse(manifest.publishedAt))) return false;
+  if (typeof manifest.minimumSupportedVersionCode !== "number" || manifest.minimumSupportedVersionCode < 1 || manifest.minimumSupportedVersionCode > versionCode) return false;
+  if (typeof manifest.required !== "boolean") return false;
+  if (typeof manifest.releaseNotes !== "string" || manifest.releaseNotes.length > 2000) return false;
+  let url: URL;
+  try { url = new URL(manifest.apkUrl); } catch { return false; }
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) return false;
+  if (url.hostname !== UPDATE_HOST) return false;
+  if (url.pathname !== `${RELEASE_PREFIX}${releaseFileName(versionCode)}`) return false;
+  return true;
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function readAsset(env: Env, path: string): Promise<Uint8Array | null> {
+  if (!env.ASSETS) return null;
+  const response = await env.ASSETS.fetch(new Request(new URL(path, "https://assets.local")));
+  if (!response.ok) return null;
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function handleUpdateRoute(request: Request, url: URL, env: Env): Promise<Response> {
+  if (request.method !== "GET") return json(405, { error: "METHOD_NOT_ALLOWED" });
+  const manifestBytes = await readAsset(env, "/update.json");
+  if (!manifestBytes) return json(404, { error: "NO_UPDATE_PUBLISHED" });
+  let manifest: unknown;
+  try { manifest = JSON.parse(new TextDecoder().decode(manifestBytes)); } catch { return json(500, { error: "MANIFEST_INVALID" }); }
+  if (!publishedManifestIsSafe(manifest)) return json(500, { error: "MANIFEST_INVALID" });
+  if (url.pathname === UPDATE_PATH) {
+    return new Response(manifestBytes, {
+      status: 200,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    });
+  }
+  const fileName = url.pathname.slice(RELEASE_PREFIX.length);
+  if (fileName !== releaseFileName(manifest.versionCode) || url.pathname !== `${RELEASE_PREFIX}${fileName}`) {
+    return json(404, { error: "NOT_FOUND" });
+  }
+  const apk = await readAsset(env, `/${fileName}`);
+  if (!apk) return json(404, { error: "NOT_FOUND" });
+  const actual = await sha256Hex(apk);
+  if (actual.toLowerCase() !== String(manifest.sha256).toLowerCase()) return json(409, { error: "CHECKSUM_MISMATCH" });
+  return new Response(apk, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/vnd.android.package-archive",
+      "Cache-Control": "no-store",
+      "Content-Length": String(apk.byteLength),
+    },
+  });
+}
+
+export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === UPDATE_PATH || url.pathname.startsWith(RELEASE_PREFIX)) {
+    try {
+      return await handleUpdateRoute(request, url, env);
+    } catch {
+      return json(500, { error: "UPDATE_UNAVAILABLE" });
+    }
+  }
+
+  if (!env.CORE_VPC) return json(503, { error: "CORE_UNAVAILABLE" });
 
   if (url.pathname === "/api/chase/location/public") {
     if (request.method === "OPTIONS") {
