@@ -268,7 +268,10 @@ describe("codeblack-chase-gateway", () => {
       expect(res.status).toBe(200);
       expect(core.fetch).toHaveBeenCalledWith(
         "http://127.0.0.1:8000/api/chase/location",
-        expect.objectContaining({ method: "POST" }),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({ "X-CodeBlack-Chase-Source": "public-v1" }),
+        }),
       );
     });
   });

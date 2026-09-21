@@ -113,6 +113,24 @@ async function forwardConfig(request: Request, env: Env): Promise<Response> {
   });
 }
 
+async function forwardTelemetry(request: Request, env: Env): Promise<Response> {
+  const contentLength = Number(request.headers.get("Content-Length") || "0");
+  if (contentLength > MAX_BODY_BYTES) return json(413, { error: "PAYLOAD_TOO_LARGE" });
+  const body = await request.arrayBuffer();
+  if (body.byteLength > MAX_BODY_BYTES) return json(413, { error: "PAYLOAD_TOO_LARGE" });
+  return env.CORE_VPC!.fetch(`${CORE_ORIGIN}/api/chase/location`, {
+    method: "POST",
+    headers: {
+      Authorization: request.headers.get("Authorization") ?? "",
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      // This header is added only by the fixed public gateway route; callers cannot select it.
+      "X-CodeBlack-Chase-Source": "public-v1",
+    },
+    body,
+  });
+}
+
 async function forwardLatest(url: URL, request: Request, env: Env): Promise<Response> {
   const target = new URL("/api/chase/location/latest", CORE_ORIGIN);
   const unitId = url.searchParams.get("unit_id");
@@ -199,7 +217,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       return await forwardConfig(request, env);
     }
     if (url.pathname === TELEMETRY_PATH && request.method === "POST") {
-      return await forwardPost(request, env);
+      return await forwardTelemetry(request, env);
     }
     if (url.pathname === "/api/chase/location" && request.method === "POST") {
       return await forwardPost(request, env);
