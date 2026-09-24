@@ -343,7 +343,7 @@ describe("codeblack-chase-gateway", () => {
       try {
         const res = await handleRequest(new Request("https://x/api/chase/v1/comments", { headers: { Authorization: "Bearer secret" } }), commentEnv());
         expect(res.status).toBe(200);
-        expect(await res.json()).toEqual({ state: "ok", cursor: "", pollAfterMs: 2000, comments: [] });
+        expect(await res.json()).toEqual({ state: "ok", cursor: "", pollAfterMs: 2000, comments: [], page: { label: "Storm Chaser Nick Mounce", live: false } });
         const requested = new URL(graphFetch.mock.calls[0][0] as URL);
         expect(requested.pathname).toBe("/v26.0/650911364781023/live_videos");
         expect(requested.searchParams.get("access_token")).toBeNull();
@@ -361,7 +361,7 @@ describe("codeblack-chase-gateway", () => {
       try {
         const res = await handleRequest(new Request("https://x/api/chase/v1/comments?after=1758657600", { headers: { Authorization: "Bearer secret" } }), commentEnv());
         expect(res.status).toBe(200);
-        expect(await res.json()).toEqual({ state: "ok", cursor: "1790193605", pollAfterMs: 2000, comments: [{ id: "comment-1", author: "Nick", message: "Watching", createdAt: "2026-09-23T20:00:05.000Z" }] });
+        expect(await res.json()).toEqual({ state: "ok", cursor: "1790193605", pollAfterMs: 2000, comments: [{ id: "comment-1", author: "Nick", message: "Watching", createdAt: "2026-09-23T20:00:05.000Z" }], page: { label: "Storm Chaser Nick Mounce", live: true } });
         const requested = new URL(graphFetch.mock.calls[1][0] as URL);
         expect(requested.searchParams.get("since")).toBe("1758657600");
         expect(requested.searchParams.get("fields")).toBe("id,from{name},message,created_time");
@@ -376,7 +376,7 @@ describe("codeblack-chase-gateway", () => {
           new Request("https://x/api/chase/v1/comments", { headers: { Authorization: "Bearer secret" } }),
           envWith({ CHASE_TOKEN: "secret" }),
         );
-        expect(await res.json()).toEqual({ state: "not_configured", cursor: "", pollAfterMs: 2000, comments: [] });
+        expect(await res.json()).toEqual({ state: "not_configured", cursor: "", pollAfterMs: 2000, comments: [], page: { label: "Storm Chaser Nick Mounce", live: false } });
         expect(graphFetch).not.toHaveBeenCalled();
       } finally { vi.unstubAllGlobals(); }
     });

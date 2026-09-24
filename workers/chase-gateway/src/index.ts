@@ -28,6 +28,9 @@ const COMMENTS_PATH = "/api/chase/v1/comments";
 const FACEBOOK_GRAPH_ORIGIN = "https://graph.facebook.com/v26.0";
 const COMMENT_POLL_AFTER_MS = 2_000;
 const MAX_COMMENT_CURSOR_LENGTH = 32;
+// This relay is deliberately single-Page. The label is operator-facing identity only; the
+// numeric Page ID and Graph credential remain Worker secrets.
+const FACEBOOK_PAGE_LABEL = "Storm Chaser Nick Mounce";
 
 const PUBLIC_CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -115,8 +118,20 @@ type RelayComment = {
   createdAt: string;
 };
 
-function commentResponse(state: string, cursor: string, comments: RelayComment[] = [], pollAfterMs = COMMENT_POLL_AFTER_MS): Response {
-  return json(200, { state, cursor, pollAfterMs, comments });
+function commentResponse(
+  state: string,
+  cursor: string,
+  comments: RelayComment[] = [],
+  pollAfterMs = COMMENT_POLL_AFTER_MS,
+  facebookLive = false,
+): Response {
+  return json(200, {
+    state,
+    cursor,
+    pollAfterMs,
+    comments,
+    page: { label: FACEBOOK_PAGE_LABEL, live: facebookLive },
+  });
 }
 
 function validFacebookPageId(value: string | undefined): value is string {
@@ -193,7 +208,7 @@ async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
   if (!commentsResponse.ok) return commentResponse("reconnecting", cursor);
   try {
     const normalized = normalizeGraphComments(await commentsResponse.json(), cursor);
-    return commentResponse("ok", normalized.cursor, normalized.comments);
+    return commentResponse("ok", normalized.cursor, normalized.comments, COMMENT_POLL_AFTER_MS, true);
   } catch {
     return commentResponse("reconnecting", cursor);
   }
