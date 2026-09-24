@@ -45,6 +45,11 @@ export interface Env {
   // Shared bearer secret. Checked against the caller's `Authorization: Bearer <token>` header on
   // every authenticated route, and injected server-side (never exposed) on the public route.
   CHASE_TOKEN?: string;
+  // The same public Supabase project configuration used by Code Black OPS. These are public
+  // client values, stored as Worker secrets to avoid accidental source/config drift. No service
+  // role key is ever used by Chase or this Worker.
+  SUPABASE_URL?: string;
+  SUPABASE_PUBLISHABLE_KEY?: string;
   // Static release manifest and APK. Absent until a Chase release is published.
   ASSETS?: AssetBinding;
 }
@@ -82,10 +87,39 @@ function publicJson(status: number, body: unknown): Response {
   return response;
 }
 
-function authorized(request: Request, expected: string | undefined): boolean {
+function legacyAuthorized(request: Request, expected: string | undefined): boolean {
   if (!expected) return false;
   const header = request.headers.get("Authorization") || "";
   return header === `Bearer ${expected}`;
+}
+
+/**
+ * Authenticates a Chase operator through Supabase and its existing active-profile policy.
+ * During the signed migration window the pre-auth Chase token remains accepted so installed
+ * field clients never lose a working uplink; it is not returned to authenticated clients.
+ */
+async function authorized(request: Request, env: Env): Promise<boolean> {
+  if (legacyAuthorized(request, env.CHASE_TOKEN)) return true
+  const header = request.headers.get("Authorization") ?? ""
+  if (!header.startsWith("Bearer ") || !env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY) return false
+  const token = header.slice("Bearer ".length).trim()
+  if (!token) return false
+  const headers = { Authorization: `Bearer ${token}`, apikey: env.SUPABASE_PUBLISHABLE_KEY }
+  try {
+    const userResponse = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, { headers })
+    if (!userResponse.ok) return false
+    const user = await userResponse.json() as { id?: string }
+    if (!user.id) return false
+    const profileResponse = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/profiles?select=active&user_id=eq.${encodeURIComponent(user.id)}`,
+      { headers },
+    )
+    if (!profileResponse.ok) return false
+    const profiles = await profileResponse.json() as Array<{ active?: boolean }>
+    return Array.isArray(profiles) && profiles.some((profile) => profile.active === true)
+  } catch {
+    return false
+  }
 }
 
 async function forwardPost(request: Request, env: Env): Promise<Response> {
@@ -105,8 +139,9 @@ async function forwardPost(request: Request, env: Env): Promise<Response> {
 }
 
 async function forwardConfig(request: Request, env: Env): Promise<Response> {
+  if (!env.CHASE_TOKEN) return json(503, { error: "CORE_UNAVAILABLE" });
   const response = await env.CORE_VPC!.fetch(`${CORE_ORIGIN}/api/chase/v1/config`, {
-    headers: { Authorization: request.headers.get("Authorization") ?? "", Accept: "application/json" },
+    headers: { Authorization: `Bearer ${env.CHASE_TOKEN}`, Accept: "application/json" },
   });
   // Configuration can contain temporary operational credentials. It must never be retained by
   // a browser, intermediary cache, or another client after this tightly scoped response.
@@ -120,6 +155,7 @@ async function forwardConfig(request: Request, env: Env): Promise<Response> {
 }
 
 async function forwardTelemetry(request: Request, env: Env): Promise<Response> {
+  if (!env.CHASE_TOKEN) return json(503, { error: "CORE_UNAVAILABLE" });
   const contentLength = Number(request.headers.get("Content-Length") || "0");
   if (contentLength > MAX_BODY_BYTES) return json(413, { error: "PAYLOAD_TOO_LARGE" });
   const body = await request.arrayBuffer();
@@ -127,7 +163,7 @@ async function forwardTelemetry(request: Request, env: Env): Promise<Response> {
   return env.CORE_VPC!.fetch(`${CORE_ORIGIN}/api/chase/location`, {
     method: "POST",
     headers: {
-      Authorization: request.headers.get("Authorization") ?? "",
+      Authorization: `Bearer ${env.CHASE_TOKEN}`,
       "Content-Type": "application/json",
       Accept: "application/json",
       // This header is added only by the fixed public gateway route; callers cannot select it.
@@ -304,7 +340,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
   }
 
-  if (!authorized(request, env.CHASE_TOKEN)) return json(401, { error: "AUTH_REQUIRED" });
+  if (!(await authorized(request, env))) return json(401, { error: "AUTH_REQUIRED" });
 
   try {
     if (url.pathname === CONFIG_PATH && request.method === "GET") {

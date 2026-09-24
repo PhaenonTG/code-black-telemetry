@@ -291,6 +291,33 @@ describe("codeblack-chase-gateway", () => {
         }),
       );
     });
+
+    it("accepts an active OPS Supabase session and keeps the Core token private", async () => {
+      const authFetch = vi.fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ id: "operator-1" }), { status: 200 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify([{ active: true }]), { status: 200 }));
+      vi.stubGlobal("fetch", authFetch);
+      try {
+        const core = mockCoreVpc(() => new Response("{}", { status: 200 }));
+        const res = await handleRequest(
+          new Request("https://x/api/chase/v1/config", { headers: { Authorization: "Bearer user-jwt" } }),
+          envWith({
+            CORE_VPC: core,
+            CHASE_TOKEN: "private-core-token",
+            SUPABASE_URL: "https://project.supabase.co",
+            SUPABASE_PUBLISHABLE_KEY: "publishable-key",
+          }),
+        );
+        expect(res.status).toBe(200);
+        expect(authFetch).toHaveBeenCalledTimes(2);
+        expect(core.fetch).toHaveBeenCalledWith(
+          "http://127.0.0.1:8000/api/chase/v1/config",
+          expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer private-core-token" }) }),
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
   });
 
   describe("10. GET /api/chase/location/latest (private)", () => {
