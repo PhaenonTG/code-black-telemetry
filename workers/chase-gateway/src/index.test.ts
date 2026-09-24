@@ -462,6 +462,9 @@ describe("codeblack-chase-gateway", () => {
     const downloaded = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/v1/releases/chase-recovery-7.apk"), env);
     expect(downloaded.status).toBe(200);
     expect(new TextDecoder().decode(await downloaded.arrayBuffer())).toBe("chase-apk");
+    const stable = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/v1/download"), env);
+    expect(stable.status).toBe(200);
+    expect(new TextDecoder().decode(await stable.arrayBuffer())).toBe("chase-apk");
   });
 
   it("rejects a Chase release whose bytes do not match the manifest", async () => {

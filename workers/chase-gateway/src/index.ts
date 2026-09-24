@@ -394,6 +394,8 @@ async function forwardPublicLatest(url: URL, env: Env): Promise<Response> {
 }
 
 const UPDATE_PATH = "/api/chase/v1/update";
+// Human-friendly stable path: always returns the checksum-verified current release.
+const DOWNLOAD_PATH = "/api/chase/v1/download";
 const RELEASE_PREFIX = "/api/chase/v1/releases/";
 const ARCHIVE_PATH = "/api/chase/v1/releases/archive";
 const ARCHIVE_PREFIX = `${ARCHIVE_PATH}/`;
@@ -509,6 +511,9 @@ async function handleUpdateRoute(request: Request, url: URL, env: Env): Promise<
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
     });
   }
+  if (url.pathname === DOWNLOAD_PATH) {
+    return verifiedApkResponse(env, releaseFileName(manifest.versionCode), manifest.sha256);
+  }
   const fileName = url.pathname.slice(RELEASE_PREFIX.length);
   if (fileName !== releaseFileName(manifest.versionCode) || url.pathname !== `${RELEASE_PREFIX}${fileName}`) {
     return json(404, { error: "NOT_FOUND" });
@@ -518,7 +523,7 @@ async function handleUpdateRoute(request: Request, url: URL, env: Env): Promise<
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  if (url.pathname === UPDATE_PATH || url.pathname.startsWith(RELEASE_PREFIX)) {
+  if (url.pathname === UPDATE_PATH || url.pathname === DOWNLOAD_PATH || url.pathname.startsWith(RELEASE_PREFIX)) {
     try {
       return await handleUpdateRoute(request, url, env);
     } catch {
