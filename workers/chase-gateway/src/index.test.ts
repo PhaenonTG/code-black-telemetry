@@ -295,10 +295,10 @@ describe("codeblack-chase-gateway", () => {
     it("accepts an active OPS Supabase session and keeps the Core token private", async () => {
       const authFetch = vi.fn()
         .mockResolvedValueOnce(new Response(JSON.stringify({ id: "operator-1" }), { status: 200 }))
-        .mockResolvedValueOnce(new Response(JSON.stringify([{ active: true }]), { status: 200 }));
+        .mockResolvedValueOnce(new Response(JSON.stringify([{ active: true, email: "spencer@codeblackwx.com" }]), { status: 200 }));
       vi.stubGlobal("fetch", authFetch);
       try {
-        const core = mockCoreVpc(() => new Response("{}", { status: 200 }));
+        const core = mockCoreVpc(() => new Response(JSON.stringify({ schema: "codeblack.chase.config" }), { status: 200 }));
         const res = await handleRequest(
           new Request("https://x/api/chase/v1/config", { headers: { Authorization: "Bearer user-jwt" } }),
           envWith({
@@ -310,6 +310,8 @@ describe("codeblack-chase-gateway", () => {
         );
         expect(res.status).toBe(200);
         expect(authFetch).toHaveBeenCalledTimes(2);
+        expect(await res.json()).toEqual({ schema: "codeblack.chase.config", profile: { operator_name: "Spencer" } });
+        expect(String(authFetch.mock.calls[1][0])).toContain("select=active,email");
         expect(core.fetch).toHaveBeenCalledWith(
           "http://127.0.0.1:8000/api/chase/v1/config",
           expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer private-core-token" }) }),

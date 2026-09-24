@@ -219,28 +219,52 @@ async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
  * During the signed migration window the pre-auth Chase token remains accepted so installed
  * field clients never lose a working uplink; it is not returned to authenticated clients.
  */
-async function authorized(request: Request, env: Env): Promise<boolean> {
-  if (legacyAuthorized(request, env.CHASE_TOKEN)) return true
+type ChaseCaller = { operatorName?: string };
+
+/**
+ * Resolves the active, server-managed OPS profile. The display name is presentation data only:
+ * authorization still depends exclusively on the active row, never on an email-derived value.
+ */
+function displayNameFromProfileEmail(email: unknown): string | undefined {
+  if (typeof email !== "string") return undefined;
+  const local = email.trim().split("@", 1)[0] ?? "";
+  const name = local
+    .split(/[._+\-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ")
+    .slice(0, 24);
+  return name || undefined;
+}
+
+async function authorizeCaller(request: Request, env: Env): Promise<ChaseCaller | null> {
+  // Legacy field installs remain usable during migration, but cannot claim a user identity.
+  if (legacyAuthorized(request, env.CHASE_TOKEN)) return {};
   const header = request.headers.get("Authorization") ?? ""
-  if (!header.startsWith("Bearer ") || !env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY) return false
+  if (!header.startsWith("Bearer ") || !env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY) return null
   const token = header.slice("Bearer ".length).trim()
-  if (!token) return false
+  if (!token) return null
   const headers = { Authorization: `Bearer ${token}`, apikey: env.SUPABASE_PUBLISHABLE_KEY }
   try {
     const userResponse = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, { headers })
-    if (!userResponse.ok) return false
+    if (!userResponse.ok) return null
     const user = await userResponse.json() as { id?: string }
-    if (!user.id) return false
+    if (!user.id) return null
     const profileResponse = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/profiles?select=active&user_id=eq.${encodeURIComponent(user.id)}`,
+      `${env.SUPABASE_URL}/rest/v1/profiles?select=active,email&user_id=eq.${encodeURIComponent(user.id)}`,
       { headers },
     )
-    if (!profileResponse.ok) return false
-    const profiles = await profileResponse.json() as Array<{ active?: boolean }>
-    return Array.isArray(profiles) && profiles.some((profile) => profile.active === true)
+    if (!profileResponse.ok) return null
+    const profiles = await profileResponse.json() as Array<{ active?: boolean; email?: unknown }>
+    const profile = Array.isArray(profiles) ? profiles.find((candidate) => candidate.active === true) : undefined
+    return profile ? { operatorName: displayNameFromProfileEmail(profile.email) } : null
   } catch {
-    return false
+    return null
   }
+}
+
+async function authorized(request: Request, env: Env): Promise<boolean> {
+  return (await authorizeCaller(request, env)) !== null;
 }
 
 async function forwardPost(request: Request, env: Env): Promise<Response> {
@@ -259,13 +283,27 @@ async function forwardPost(request: Request, env: Env): Promise<Response> {
   });
 }
 
-async function forwardConfig(request: Request, env: Env): Promise<Response> {
+async function forwardConfig(env: Env, caller: ChaseCaller): Promise<Response> {
   if (!env.CHASE_TOKEN) return json(503, { error: "CORE_UNAVAILABLE" });
   const response = await env.CORE_VPC!.fetch(`${CORE_ORIGIN}/api/chase/v1/config`, {
     headers: { Authorization: `Bearer ${env.CHASE_TOKEN}`, Accept: "application/json" },
   });
   // Configuration can contain temporary operational credentials. It must never be retained by
   // a browser, intermediary cache, or another client after this tightly scoped response.
+  // The unit and operational values stay Core-authoritative; only the header's operator label
+  // is tailored from the authenticated, RLS-protected OPS profile.
+  if (response.ok && caller.operatorName) {
+    try {
+      const document = await response.json() as Record<string, unknown>;
+      const profile = document.profile && typeof document.profile === "object" && !Array.isArray(document.profile)
+        ? document.profile as Record<string, unknown>
+        : {};
+      document.profile = { ...profile, operator_name: caller.operatorName };
+      return json(response.status, document);
+    } catch {
+      return json(502, { error: "CONFIG_INVALID" });
+    }
+  }
   return new Response(response.body, {
     status: response.status,
     headers: {
@@ -510,12 +548,19 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
   }
 
+  if (url.pathname === CONFIG_PATH && request.method === "GET") {
+    const caller = await authorizeCaller(request, env);
+    if (!caller) return json(401, { error: "AUTH_REQUIRED" });
+    try {
+      return await forwardConfig(env, caller);
+    } catch {
+      return json(502, { error: "CORE_UNAVAILABLE" });
+    }
+  }
+
   if (!(await authorized(request, env))) return json(401, { error: "AUTH_REQUIRED" });
 
   try {
-    if (url.pathname === CONFIG_PATH && request.method === "GET") {
-      return await forwardConfig(request, env);
-    }
     if (url.pathname === TELEMETRY_PATH && request.method === "POST") {
       return await forwardTelemetry(request, env);
     }
