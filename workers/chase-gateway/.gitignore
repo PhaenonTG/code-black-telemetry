@@ -1,3 +1,4 @@
 releases/*.apk
 releases/*.json
+!releases/release-archive.json
 releases/*.partial

@@ -421,6 +421,22 @@ describe("codeblack-chase-gateway", () => {
     expect(await res.json()).toEqual({ error: "CHECKSUM_MISMATCH" });
   });
 
+  it("serves a checksum-verified archived release without making it the update target", async () => {
+    const apk = new TextEncoder().encode("previous-chase-apk");
+    const sha = await sha256Hex(apk);
+    const archive = JSON.stringify({
+      schema: "codeblack.chase.release-archive",
+      schemaVersion: "1.0.0",
+      releases: [{ versionCode: 8, fileName: "chase-recovery-8.apk", sha256: sha, signerSha256: "ab".repeat(32) }],
+    });
+    const env = { ASSETS: assetsOf({ "/release-archive.json": archive, "/chase-recovery-8.apk": apk }) };
+    const listed = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/v1/releases/archive"), env);
+    expect(listed.status).toBe(200);
+    const downloaded = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/v1/releases/archive/chase-recovery-8.apk"), env);
+    expect(downloaded.status).toBe(200);
+    expect(new TextDecoder().decode(await downloaded.arrayBuffer())).toBe("previous-chase-apk");
+  });
+
   it("does not publish an update when no release asset exists", async () => {
     const res = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/v1/update"), {});
     expect(res.status).toBe(404);

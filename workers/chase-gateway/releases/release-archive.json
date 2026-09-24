@@ -1,0 +1,14 @@
+{
+  "schema": "codeblack.chase.release-archive",
+  "schemaVersion": "1.0.0",
+  "releases": [
+    {
+      "versionName": "0.1.2",
+      "versionCode": 8,
+      "fileName": "chase-recovery-8.apk",
+      "sha256": "2f371b3edc27492de5e360d63cf0535ca0798cba15f6b260c63c3c803992ae1f",
+      "signerSha256": "e3643c7267ba38438bd7810c22571fced2e886a2aca9557f88b77d53d375be5f",
+      "archivedAt": "2026-09-24T01:23:56Z"
+    }
+  ]
+}

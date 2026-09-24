@@ -236,6 +236,8 @@ async function forwardPublicLatest(url: URL, env: Env): Promise<Response> {
 
 const UPDATE_PATH = "/api/chase/v1/update";
 const RELEASE_PREFIX = "/api/chase/v1/releases/";
+const ARCHIVE_PATH = "/api/chase/v1/releases/archive";
+const ARCHIVE_PREFIX = `${ARCHIVE_PATH}/`;
 const UPDATE_HOST = "ops.codeblackwx.com";
 
 function isSha256(value: unknown): value is string {
@@ -272,6 +274,28 @@ function publishedManifestIsSafe(data: unknown): data is {
   return true;
 }
 
+type ArchivedRelease = {
+  versionCode: number;
+  fileName: string;
+  sha256: string;
+  signerSha256: string;
+};
+
+function releaseArchiveIsSafe(data: unknown): data is { releases: ArchivedRelease[] } {
+  if (!data || typeof data !== "object") return false;
+  const archive = data as Record<string, unknown>;
+  if (archive.schema !== "codeblack.chase.release-archive" || archive.schemaVersion !== "1.0.0") return false;
+  if (!Array.isArray(archive.releases) || archive.releases.length > 50) return false;
+  return archive.releases.every((entry) => {
+    if (!entry || typeof entry !== "object") return false;
+    const release = entry as Record<string, unknown>;
+    return typeof release.versionCode === "number" && Number.isInteger(release.versionCode) && release.versionCode >= 1
+      && release.fileName === releaseFileName(release.versionCode)
+      && isSha256(release.sha256)
+      && isSha256(release.signerSha256);
+  });
+}
+
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -284,8 +308,37 @@ async function readAsset(env: Env, path: string): Promise<Uint8Array | null> {
   return new Uint8Array(await response.arrayBuffer());
 }
 
+async function verifiedApkResponse(env: Env, fileName: string, expectedSha256: string): Promise<Response> {
+  const apk = await readAsset(env, `/${fileName}`);
+  if (!apk) return json(404, { error: "NOT_FOUND" });
+  const actual = await sha256Hex(apk);
+  if (actual.toLowerCase() !== expectedSha256.toLowerCase()) return json(409, { error: "CHECKSUM_MISMATCH" });
+  return new Response(apk, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/vnd.android.package-archive",
+      "Cache-Control": "no-store",
+      "Content-Length": String(apk.byteLength),
+    },
+  });
+}
+
 async function handleUpdateRoute(request: Request, url: URL, env: Env): Promise<Response> {
   if (request.method !== "GET") return json(405, { error: "METHOD_NOT_ALLOWED" });
+  if (url.pathname === ARCHIVE_PATH || url.pathname.startsWith(ARCHIVE_PREFIX)) {
+    const archiveBytes = await readAsset(env, "/release-archive.json");
+    if (!archiveBytes) return json(404, { error: "ARCHIVE_NOT_FOUND" });
+    let archive: unknown;
+    try { archive = JSON.parse(new TextDecoder().decode(archiveBytes)); } catch { return json(500, { error: "ARCHIVE_INVALID" }); }
+    if (!releaseArchiveIsSafe(archive)) return json(500, { error: "ARCHIVE_INVALID" });
+    if (url.pathname === ARCHIVE_PATH) {
+      return new Response(archiveBytes, { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+    }
+    const fileName = url.pathname.slice(ARCHIVE_PREFIX.length);
+    const release = archive.releases.find((entry) => entry.fileName === fileName);
+    if (!release || url.pathname !== `${ARCHIVE_PREFIX}${fileName}`) return json(404, { error: "NOT_FOUND" });
+    return verifiedApkResponse(env, fileName, release.sha256);
+  }
   const manifestBytes = await readAsset(env, "/update.json");
   if (!manifestBytes) return json(404, { error: "NO_UPDATE_PUBLISHED" });
   let manifest: unknown;
@@ -301,18 +354,7 @@ async function handleUpdateRoute(request: Request, url: URL, env: Env): Promise<
   if (fileName !== releaseFileName(manifest.versionCode) || url.pathname !== `${RELEASE_PREFIX}${fileName}`) {
     return json(404, { error: "NOT_FOUND" });
   }
-  const apk = await readAsset(env, `/${fileName}`);
-  if (!apk) return json(404, { error: "NOT_FOUND" });
-  const actual = await sha256Hex(apk);
-  if (actual.toLowerCase() !== String(manifest.sha256).toLowerCase()) return json(409, { error: "CHECKSUM_MISMATCH" });
-  return new Response(apk, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/vnd.android.package-archive",
-      "Cache-Control": "no-store",
-      "Content-Length": String(apk.byteLength),
-    },
-  });
+  return verifiedApkResponse(env, fileName, manifest.sha256);
 }
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
