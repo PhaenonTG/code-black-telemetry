@@ -24,6 +24,10 @@ const CORE_ORIGIN = "http://127.0.0.1:8000";
 const MAX_BODY_BYTES = 16 * 1024;
 const CONFIG_PATH = "/api/chase/v1/config";
 const TELEMETRY_PATH = "/api/chase/v1/telemetry";
+const COMMENTS_PATH = "/api/chase/v1/comments";
+const FACEBOOK_GRAPH_ORIGIN = "https://graph.facebook.com/v26.0";
+const COMMENT_POLL_AFTER_MS = 2_000;
+const MAX_COMMENT_CURSOR_LENGTH = 32;
 
 const PUBLIC_CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +54,10 @@ export interface Env {
   // role key is ever used by Chase or this Worker.
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
+  // Page-scoped Graph credentials used only by the server-side comments relay. Both are Worker
+  // secrets; neither is returned to Chase, logged, or committed to this repository.
+  FACEBOOK_PAGE_ID?: string;
+  FACEBOOK_PAGE_ACCESS_TOKEN?: string;
   // Static release manifest and APK. Absent until a Chase release is published.
   ASSETS?: AssetBinding;
 }
@@ -91,6 +99,104 @@ function legacyAuthorized(request: Request, expected: string | undefined): boole
   if (!expected) return false;
   const header = request.headers.get("Authorization") || "";
   return header === `Bearer ${expected}`;
+}
+
+type GraphComment = {
+  id?: unknown;
+  from?: { name?: unknown };
+  message?: unknown;
+  created_time?: unknown;
+};
+
+type RelayComment = {
+  id: string;
+  author: string;
+  message: string;
+  createdAt: string;
+};
+
+function commentResponse(state: string, cursor: string, comments: RelayComment[] = [], pollAfterMs = COMMENT_POLL_AFTER_MS): Response {
+  return json(200, { state, cursor, pollAfterMs, comments });
+}
+
+function validFacebookPageId(value: string | undefined): value is string {
+  return typeof value === "string" && /^\d{5,30}$/.test(value);
+}
+
+function validCommentCursor(value: string | null): value is string {
+  return value !== null && /^\d{10,13}$/.test(value) && value.length <= MAX_COMMENT_CURSOR_LENGTH;
+}
+
+function normalizeGraphComments(data: unknown, previousCursor: string): { cursor: string; comments: RelayComment[] } {
+  if (!data || typeof data !== "object" || !Array.isArray((data as { data?: unknown }).data)) {
+    return { cursor: previousCursor, comments: [] };
+  }
+  let latest = Number(previousCursor) || 0;
+  const comments: RelayComment[] = [];
+  for (const item of (data as { data: GraphComment[] }).data) {
+    if (!item || typeof item.id !== "string" || typeof item.message !== "string" || typeof item.created_time !== "string") continue;
+    const createdAtMs = Date.parse(item.created_time);
+    if (!Number.isFinite(createdAtMs)) continue;
+    latest = Math.max(latest, Math.floor(createdAtMs / 1000));
+    comments.push({
+      id: item.id,
+      author: typeof item.from?.name === "string" && item.from.name.trim() ? item.from.name.slice(0, 120) : "Viewer",
+      message: item.message.slice(0, 2_000),
+      createdAt: new Date(createdAtMs).toISOString(),
+    });
+  }
+  return { cursor: latest > 0 ? String(latest) : previousCursor, comments };
+}
+
+/**
+ * Reads comments from the currently LIVE Page video without exposing Meta credentials to the
+ * mobile app. This deliberately has no Core dependency: the Worker is the public boundary.
+ */
+async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
+  if (!validFacebookPageId(env.FACEBOOK_PAGE_ID) || !env.FACEBOOK_PAGE_ACCESS_TOKEN) {
+    return commentResponse("not_configured", "");
+  }
+  const requestedCursor = url.searchParams.get("after");
+  const cursor = validCommentCursor(requestedCursor) ? requestedCursor : "";
+  const pageUrl = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${env.FACEBOOK_PAGE_ID}/live_videos`);
+  pageUrl.searchParams.set("broadcast_status", '["LIVE"]');
+  pageUrl.searchParams.set("fields", "id");
+  let liveResponse: Response;
+  try {
+    liveResponse = await fetch(pageUrl, { headers: { Authorization: `Bearer ${env.FACEBOOK_PAGE_ACCESS_TOKEN}` } });
+  } catch {
+    return commentResponse("reconnecting", cursor);
+  }
+  if (liveResponse.status === 401 || liveResponse.status === 403) return commentResponse("auth_failed", cursor);
+  if (liveResponse.status === 429) return new Response(JSON.stringify({ state: "rate_limited", cursor, pollAfterMs: 10_000, comments: [] }), { status: 429, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": "10" } });
+  if (!liveResponse.ok) return commentResponse("reconnecting", cursor);
+  let liveData: { data?: Array<{ id?: unknown }> };
+  try { liveData = await liveResponse.json() as { data?: Array<{ id?: unknown }> }; } catch { return commentResponse("reconnecting", cursor); }
+  const liveId = Array.isArray(liveData.data) ? liveData.data.find((video) => typeof video?.id === "string")?.id : undefined;
+  if (typeof liveId !== "string") return commentResponse("ok", cursor);
+
+  const commentsUrl = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${liveId}/comments`);
+  commentsUrl.searchParams.set("filter", "stream");
+  commentsUrl.searchParams.set("order", "reverse_chronological");
+  commentsUrl.searchParams.set("live_filter", "filter_low_quality");
+  commentsUrl.searchParams.set("fields", "id,from{name},message,created_time");
+  commentsUrl.searchParams.set("limit", "100");
+  if (cursor) commentsUrl.searchParams.set("since", cursor);
+  let commentsResponse: Response;
+  try {
+    commentsResponse = await fetch(commentsUrl, { headers: { Authorization: `Bearer ${env.FACEBOOK_PAGE_ACCESS_TOKEN}` } });
+  } catch {
+    return commentResponse("reconnecting", cursor);
+  }
+  if (commentsResponse.status === 401 || commentsResponse.status === 403) return commentResponse("auth_failed", cursor);
+  if (commentsResponse.status === 429) return new Response(JSON.stringify({ state: "rate_limited", cursor, pollAfterMs: 10_000, comments: [] }), { status: 429, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": "10" } });
+  if (!commentsResponse.ok) return commentResponse("reconnecting", cursor);
+  try {
+    const normalized = normalizeGraphComments(await commentsResponse.json(), cursor);
+    return commentResponse("ok", normalized.cursor, normalized.comments);
+  } catch {
+    return commentResponse("reconnecting", cursor);
+  }
 }
 
 /**
@@ -365,6 +471,13 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     } catch {
       return json(500, { error: "UPDATE_UNAVAILABLE" });
     }
+  }
+
+  // Facebook comments are fetched at this public Worker boundary, not from private Core.
+  if (url.pathname === COMMENTS_PATH) {
+    if (request.method !== "GET") return json(405, { error: "METHOD_NOT_ALLOWED" });
+    if (!(await authorized(request, env))) return json(401, { error: "AUTH_REQUIRED" });
+    return forwardFacebookComments(url, env);
   }
 
   if (!env.CORE_VPC) return json(503, { error: "CORE_UNAVAILABLE" });

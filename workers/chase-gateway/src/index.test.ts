@@ -320,6 +320,68 @@ describe("codeblack-chase-gateway", () => {
     });
   });
 
+  describe("9b. GET /api/chase/v1/comments", () => {
+    const commentEnv = (): Env => envWith({
+      CHASE_TOKEN: "secret",
+      FACEBOOK_PAGE_ID: "650911364781023",
+      FACEBOOK_PAGE_ACCESS_TOKEN: "facebook-secret",
+    });
+
+    it("requires existing Chase authorization and never calls Graph first", async () => {
+      const graphFetch = vi.fn();
+      vi.stubGlobal("fetch", graphFetch);
+      try {
+        const res = await handleRequest(new Request("https://x/api/chase/v1/comments"), commentEnv());
+        expect(res.status).toBe(401);
+        expect(graphFetch).not.toHaveBeenCalled();
+      } finally { vi.unstubAllGlobals(); }
+    });
+
+    it("returns an empty healthy feed when the Page has no live video", async () => {
+      const graphFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+      vi.stubGlobal("fetch", graphFetch);
+      try {
+        const res = await handleRequest(new Request("https://x/api/chase/v1/comments", { headers: { Authorization: "Bearer secret" } }), commentEnv());
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ state: "ok", cursor: "", pollAfterMs: 2000, comments: [] });
+        const requested = new URL(graphFetch.mock.calls[0][0] as URL);
+        expect(requested.pathname).toBe("/v26.0/650911364781023/live_videos");
+        expect(requested.searchParams.get("access_token")).toBeNull();
+        expect(graphFetch.mock.calls[0][1]).toEqual({ headers: { Authorization: "Bearer facebook-secret" } });
+      } finally { vi.unstubAllGlobals(); }
+    });
+
+    it("normalizes only safe comment fields and advances the relay cursor", async () => {
+      const graphFetch = vi.fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ id: "live-1" }] }), { status: 200 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{
+          id: "comment-1", from: { name: "Nick" }, message: "Watching", created_time: "2026-09-23T20:00:05Z", extra: "never-returned",
+        }] }), { status: 200 }));
+      vi.stubGlobal("fetch", graphFetch);
+      try {
+        const res = await handleRequest(new Request("https://x/api/chase/v1/comments?after=1758657600", { headers: { Authorization: "Bearer secret" } }), commentEnv());
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ state: "ok", cursor: "1790193605", pollAfterMs: 2000, comments: [{ id: "comment-1", author: "Nick", message: "Watching", createdAt: "2026-09-23T20:00:05.000Z" }] });
+        const requested = new URL(graphFetch.mock.calls[1][0] as URL);
+        expect(requested.searchParams.get("since")).toBe("1758657600");
+        expect(requested.searchParams.get("fields")).toBe("id,from{name},message,created_time");
+      } finally { vi.unstubAllGlobals(); }
+    });
+
+    it("is safe while unconfigured and does not request Graph", async () => {
+      const graphFetch = vi.fn();
+      vi.stubGlobal("fetch", graphFetch);
+      try {
+        const res = await handleRequest(
+          new Request("https://x/api/chase/v1/comments", { headers: { Authorization: "Bearer secret" } }),
+          envWith({ CHASE_TOKEN: "secret" }),
+        );
+        expect(await res.json()).toEqual({ state: "not_configured", cursor: "", pollAfterMs: 2000, comments: [] });
+        expect(graphFetch).not.toHaveBeenCalled();
+      } finally { vi.unstubAllGlobals(); }
+    });
+  });
+
   describe("10. GET /api/chase/location/latest (private)", () => {
     it("requires Bearer CHASE_TOKEN -> 401 without it", async () => {
       const res = await handleRequest(
