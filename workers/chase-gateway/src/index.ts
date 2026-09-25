@@ -219,7 +219,7 @@ async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
  * During the signed migration window the pre-auth Chase token remains accepted so installed
  * field clients never lose a working uplink; it is not returned to authenticated clients.
  */
-type ChaseCaller = { operatorName?: string };
+type ChaseCaller = { operatorName?: string; vehicleName?: string };
 
 /**
  * Resolves the active, server-managed OPS profile. The display name is presentation data only:
@@ -237,6 +237,18 @@ function displayNameFromProfileEmail(email: unknown): string | undefined {
   return name || undefined;
 }
 
+function displayNameFromProfile(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const name = value.trim().slice(0, 24);
+  return /^[\p{L}\p{N} .'-]{1,24}$/u.test(name) ? name : undefined;
+}
+
+function vehicleNameFromProfile(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const vehicle = value.trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9-]{0,62}$/.test(vehicle) ? vehicle : undefined;
+}
+
 async function authorizeCaller(request: Request, env: Env): Promise<ChaseCaller | null> {
   // Legacy field installs remain usable during migration, but cannot claim a user identity.
   if (legacyAuthorized(request, env.CHASE_TOKEN)) return {};
@@ -251,13 +263,20 @@ async function authorizeCaller(request: Request, env: Env): Promise<ChaseCaller 
     const user = await userResponse.json() as { id?: string }
     if (!user.id) return null
     const profileResponse = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/profiles?select=active,email&user_id=eq.${encodeURIComponent(user.id)}`,
+      `${env.SUPABASE_URL}/rest/v1/profiles?select=active,email,operator_name,vehicle_id&user_id=eq.${encodeURIComponent(user.id)}`,
       { headers },
     )
     if (!profileResponse.ok) return null
-    const profiles = await profileResponse.json() as Array<{ active?: boolean; email?: unknown }>
+    const profiles = await profileResponse.json() as Array<{
+      active?: boolean; email?: unknown; operator_name?: unknown; vehicle_id?: unknown;
+    }>
     const profile = Array.isArray(profiles) ? profiles.find((candidate) => candidate.active === true) : undefined
-    return profile ? { operatorName: displayNameFromProfileEmail(profile.email) } : null
+    return profile
+      ? {
+          operatorName: displayNameFromProfile(profile.operator_name) ?? displayNameFromProfileEmail(profile.email),
+          vehicleName: vehicleNameFromProfile(profile.vehicle_id),
+        }
+      : null
   } catch {
     return null
   }
@@ -290,15 +309,19 @@ async function forwardConfig(env: Env, caller: ChaseCaller): Promise<Response> {
   });
   // Configuration can contain temporary operational credentials. It must never be retained by
   // a browser, intermediary cache, or another client after this tightly scoped response.
-  // The unit and operational values stay Core-authoritative; only the header's operator label
-  // is tailored from the authenticated, RLS-protected OPS profile.
-  if (response.ok && caller.operatorName) {
+  // The unit and operational values stay Core-authoritative; only the header's operator and
+  // assigned-vehicle labels are tailored from the authenticated, RLS-protected OPS profile.
+  if (response.ok && (caller.operatorName || caller.vehicleName)) {
     try {
       const document = await response.json() as Record<string, unknown>;
       const profile = document.profile && typeof document.profile === "object" && !Array.isArray(document.profile)
         ? document.profile as Record<string, unknown>
         : {};
-      document.profile = { ...profile, operator_name: caller.operatorName };
+      document.profile = {
+        ...profile,
+        ...(caller.operatorName ? { operator_name: caller.operatorName } : {}),
+        ...(caller.vehicleName ? { vehicle_name: caller.vehicleName } : {}),
+      };
       return json(response.status, document);
     } catch {
       return json(502, { error: "CONFIG_INVALID" });
