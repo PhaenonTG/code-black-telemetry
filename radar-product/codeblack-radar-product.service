@@ -1,0 +1,41 @@
+[Unit]
+Description=Code Black Radar Product (server-side NEXRAD composite: manifest + immutable frames)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=8
+
+[Service]
+Type=simple
+User=cbwx-core
+Group=cbwx-core
+Environment=RADAR_PRODUCT_BIND=127.0.0.1
+Environment=RADAR_PRODUCT_PORT=8791
+Environment=RADAR_PRODUCT_DATA_DIR=/srv/codeblack/data/radar-product
+Environment=RADAR_PRODUCT_PUBLIC_PREFIX=/radar-product
+ExecStart=/usr/bin/python3 /srv/codeblack/releases/radar-product/current/product.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/codeblack/data/radar-product
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+TasksMax=64
+MemoryHigh=900M
+MemoryMax=1200M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=codeblack-radar-product
+
+[Install]
+WantedBy=multi-user.target

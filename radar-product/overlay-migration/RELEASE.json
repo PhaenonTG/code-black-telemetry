@@ -1,0 +1,8 @@
+{
+  "release_id": "radar-core-v1-20260928",
+  "source_commit": "923191e38296283af81d02674ce02deca21a0a88",
+  "source_repository": "Code Black Telemetry (web/overlay/public/classic-v2.html + alert-priority-engine.js + location-format.js + alert-feed.js + codeblack-shield.png), based on 923191e-live-repair-polish-v1-1",
+  "base_release": "923191e-monitor-settings-v1.1-1",
+  "built_at": "2026-09-28T22:26:46.535237+00:00",
+  "notes": "Radar Core V1 consumer. REF radar now comes from Core's standalone radar product (manifest + immutable timestamped frames at /radar-product/v1/composite/latest.json); the overlay no longer contacts any upstream radar provider (IEM RIDGE code removed) and no longer owns REF freshness thresholds -- FRESH/AGING/STALE/CRITICAL come from the manifest, advanced by local elapsed time between polls. AGING shows an age badge; STALE freezes on the newest frame, dims it and labels it STALE; CRITICAL hides radar and shows 'NO RADAR - Nm old'. Panel label shows CONUS for the composite. VEL/SRV/CC still use the single-site radar-worker path unchanged. Only index.html differs from the base release. Rollback: repoint /srv/codeblack/services/overlay-current to the base release directory."
+}

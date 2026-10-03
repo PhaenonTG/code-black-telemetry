@@ -4,6 +4,7 @@ import type { AtlasDiagnosticsSnapshot } from "../../map/types";
 import { readMapRuntimeDiagnostics, type MapRuntimeDiagnostics } from "../../services/mapTiles";
 import { clearRadarCache, getRadarCacheStatus, getRadarStatus, setRadarStormMotion, type RadarStatus } from "../../services/radar";
 import { readRadarLoopDiagnostics, type RadarLoopDiagnostics } from "../../services/radarLoop";
+import { CHASE_RADAR_ENABLED } from "../../services/radarPolicy";
 
 type CacheStatus = {
   usedBytes: number;
@@ -44,6 +45,10 @@ export function RadarEnginePanel() {
   };
 
   useEffect(() => {
+    if (!CHASE_RADAR_ENABLED) {
+      setMessage("Radar is server-side only - not rendered or polled on Chase.");
+      return;
+    }
     void refresh();
     const timer = window.setInterval(() => void refresh(), 30_000);
     return () => window.clearInterval(timer);

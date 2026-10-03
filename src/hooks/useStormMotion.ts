@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getRadarStatus, type StormMotion } from "../services/radar";
+import { CHASE_RADAR_ENABLED } from "../services/radarPolicy";
 
 // Same 30s poll interval as RadarEndpointPanel's own getRadarStatus call (services/radar.ts) --
 // independent polling rather than a shared store, matching this codebase's existing per-page-hook
@@ -10,6 +11,7 @@ export function useStormMotion(): StormMotion | null {
   const [motion, setMotion] = useState<StormMotion | null>(null);
 
   useEffect(() => {
+    if (!CHASE_RADAR_ENABLED) return;
     let cancelled = false;
     const refresh = async () => {
       try {

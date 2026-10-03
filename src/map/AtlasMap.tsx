@@ -45,6 +45,7 @@ import { useWind } from "../hooks/useTelemetry";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
 import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
 import { radarFailoverReason, radarFramesAreOperational } from "../services/radarFailover";
+import { CHASE_RADAR_ENABLED } from "../services/radarPolicy";
 import { LayerGlyph } from "../components/situational/LayerGlyph";
 import { getNearbyStormReports, type StormReport } from "../services/stormReports";
 import { getRiverGaugesForViewport, type RiverGaugeObservation } from "../services/riverGaugeProvider";
@@ -302,7 +303,9 @@ export function AtlasMap({
     window.addEventListener("codeblack:close-map-popovers", close);
     return () => window.removeEventListener("codeblack:close-map-popovers", close);
   }, []);
-  const { warnings: warningsVisible, watches: watchesVisible, mesoscaleDiscussions: mesoscaleDiscussionsVisible, specialStatements: specialStatementsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, radar: radarVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, surfaceStations: surfaceStationsVisible, stormReports: stormReportsVisible, riverGauges: riverGaugesVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
+  const { warnings: warningsVisible, watches: watchesVisible, mesoscaleDiscussions: mesoscaleDiscussionsVisible, specialStatements: specialStatementsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicRequested, radar: radarRequested, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, surfaceStations: surfaceStationsVisible, stormReports: stormReportsVisible, riverGauges: riverGaugesVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
+  const mosaicVisible = CHASE_RADAR_ENABLED && mosaicRequested;
+  const radarVisible = CHASE_RADAR_ENABLED && radarRequested;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
     const current = getMapLayerVisibility();
     void saveMapLayerVisibility({ ...current, [key]: !current[key] });
@@ -597,12 +600,14 @@ export function AtlasMap({
         // zoom forever -- looked like "doesn't auto-center," "zoom doesn't run." Moved to its own
         // effect below keyed on [loaded, gps] so it fires whenever GPS actually becomes available,
         // regardless of which one was ready first.
-        stopMosaicRef.current = startAtlasMosaicLayer(
-          map,
-          () => mosaicVisibleRef.current && activeRef.current,
-          styleInfoRef.current.firstSymbolLayerId,
-          setMosaicStatus,
-        );
+        if (CHASE_RADAR_ENABLED) {
+          stopMosaicRef.current = startAtlasMosaicLayer(
+            map,
+            () => mosaicVisibleRef.current && activeRef.current,
+            styleInfoRef.current.firstSymbolLayerId,
+            setMosaicStatus,
+          );
+        }
         updateAtlasSelectedPoint(map, selectedPoint);
         updateAtlasRangeRings(map, latestRef.current.gps, latestRef.current.rangeRings);
       };
@@ -872,7 +877,7 @@ export function AtlasMap({
     setStormMotionOpen(false);
   };
   useEffect(() => {
-    if (!radarVisible) {
+    if (!CHASE_RADAR_ENABLED || !radarVisible) {
       setRadarFrames([]);
       setRadarPlaybackIndex(0);
       setRadarPrimarySite(null);
@@ -984,7 +989,7 @@ export function AtlasMap({
   }, [radarVisible, radarProduct, radarTilt, stormMotion, radarFocusLat, radarFocusLon, radarSiteOverride]);
 
   useEffect(() => {
-    if (!radarVisible || radarFrames.length < 2) return;
+    if (!CHASE_RADAR_ENABLED || !radarVisible || radarFrames.length < 2) return;
     const timer = window.setInterval(() => {
       setRadarPlaybackIndex((index) => nextPlaybackIndex(index, radarFrames.length));
     }, playbackDelayMs(1));
@@ -994,7 +999,7 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    if (!radarVisible) {
+    if (!CHASE_RADAR_ENABLED || !radarVisible) {
       removeAtlasRadarLayer(map);
       return;
     }
@@ -1391,16 +1396,20 @@ export function AtlasMap({
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="specialStatement" /></span>
               Special Statements
             </label>
-            <label className="atlas-layers-popover__row">
-              <input type="checkbox" checked={mosaicVisible} onChange={() => toggleLayer("mosaic")} />
-              <span className="atlas-layers-popover__icon"><LayerGlyph visual="radar" /></span>
-              NEXRAD Mosaic
-            </label>
-            <label className="atlas-layers-popover__row">
-              <input type="checkbox" checked={radarVisible} onChange={() => toggleLayer("radar")} />
-              <span className="atlas-layers-popover__icon"><LayerGlyph visual="dish" /></span>
-              Single-Site Radar
-            </label>
+            {CHASE_RADAR_ENABLED && (
+              <>
+                <label className="atlas-layers-popover__row">
+                  <input type="checkbox" checked={mosaicVisible} onChange={() => toggleLayer("mosaic")} />
+                  <span className="atlas-layers-popover__icon"><LayerGlyph visual="radar" /></span>
+                  NEXRAD Mosaic
+                </label>
+                <label className="atlas-layers-popover__row">
+                  <input type="checkbox" checked={radarVisible} onChange={() => toggleLayer("radar")} />
+                  <span className="atlas-layers-popover__icon"><LayerGlyph visual="dish" /></span>
+                  Single-Site Radar
+                </label>
+              </>
+            )}
             <label className="atlas-layers-popover__row">
               <input type="checkbox" checked={stormReportsVisible} onChange={() => toggleLayer("stormReports")} />
               <span className="atlas-layers-popover__icon"><LayerGlyph visual="warning" /></span>
@@ -1553,7 +1562,7 @@ export function AtlasMap({
           <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
           <button type="button" aria-label="Toggle zoom lock" title="Stops the camera from re-zooming automatically as your speed changes" className={zoomLocked ? "active" : ""} onClick={() => setZoomLocked((value) => !value)}>ZOOM LOCK</button>
           <button type="button" aria-label="Toggle route ahead hazards" title="Uses the route to the selected map point; falls back to a 20-mile heading corridor" className={routeAheadOnly ? "active" : ""} onClick={() => setRouteAheadOnly((value) => !value)}>AHEAD{routeAheadOnly && navigationRoute.length > 1 ? " · ROUTE" : ""}</button>
-          <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>
+          {CHASE_RADAR_ENABLED && <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>}
           <button type="button" aria-label="Map layers" data-testid="atlas-map-layers-primary" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
         </div>
       )}

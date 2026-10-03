@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { CHASE_RADAR_ENABLED } from "./radarPolicy";
 
 export type RadarProduct = "REF" | "VEL" | "SRV" | "CC";
 export type RadarFreshness = "LIVE" | "DELAYED" | "STALE" | "CACHED" | "OFFLINE" | "INCOMPLETE" | "SITE DOWN";
@@ -106,7 +107,7 @@ export function radarWorkerBase(): string {
 }
 
 export function webRadarEnabled() {
-  return !Capacitor.isNativePlatform() && radarWorkerBase() !== "";
+  return CHASE_RADAR_ENABLED && !Capacitor.isNativePlatform() && radarWorkerBase() !== "";
 }
 
 // True only for the specific "single-site radar will never load here" case: a web build with no
@@ -118,7 +119,7 @@ export function radarWorkerMissingOnWeb() {
 }
 
 async function ensureInitialized() {
-  if (initialized) return;
+  if (!CHASE_RADAR_ENABLED || initialized) return;
   initialized = true;
   if (Capacitor.isNativePlatform()) {
     try {
@@ -130,6 +131,7 @@ async function ensureInitialized() {
 }
 
 async function workerFetch<T>(path: string): Promise<T> {
+  if (!CHASE_RADAR_ENABLED) throw new Error("radar disabled on Chase (server-side only)");
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 20_000);
   let response: Response;
@@ -229,6 +231,7 @@ function fixtureFrame(siteId: string, product: RadarProduct): RadarFrame {
 }
 
 export async function getRadarStatus(site: string, product: RadarProduct, tilt?: number | null) {
+  if (!CHASE_RADAR_ENABLED) return offlineStatus(site, product, "RADAR IS SERVER-SIDE - NOT RENDERED ON CHASE");
   await ensureInitialized();
   if (atlasFixtureEnabled()) {
     const frame = fixtureFrame(site === "AUTO" ? "KSRX" : site, product);
@@ -281,6 +284,7 @@ export async function getRadarStatus(site: string, product: RadarProduct, tilt?:
 }
 
 export async function getRadarFrames(site: string, product: RadarProduct, tilt?: number | null, limit = 6) {
+  if (!CHASE_RADAR_ENABLED) return [] as RadarFrame[];
   await ensureInitialized();
   if (atlasFixtureEnabled()) {
     const frame = fixtureFrame(site === "AUTO" ? "KSRX" : site, product);
@@ -322,7 +326,7 @@ export async function getNearestRadarSites(lat: number, lon: number) {
       // Use bundled web fallback below.
     }
   }
-  if (Capacitor.isNativePlatform()) {
+  if (CHASE_RADAR_ENABLED && Capacitor.isNativePlatform()) {
     try {
       const result = await RadarNative.getNearestSites({ lat, lon });
       return result.sites;
@@ -336,6 +340,7 @@ export async function getNearestRadarSites(lat: number, lon: number) {
 }
 
 export async function setRadarStormMotion(motion: { directionDegrees: number; speedKnots: number; source?: string }) {
+  if (!CHASE_RADAR_ENABLED) return { ...motion, source: motion.source ?? "MANUAL", updatedAt: Date.now() };
   await ensureInitialized();
   if (webRadarEnabled()) {
     const response = await fetch(`${radarWorkerBase()}/api/v1/radar/storm-motion`, {
@@ -378,19 +383,20 @@ export async function getStormMotionEstimate(site: string): Promise<StormMotionE
 
 export async function getRadarCacheStatus() {
   await ensureInitialized();
-  if (!Capacitor.isNativePlatform()) return { usedBytes: 0, limitBytes: 750 * 1024 * 1024, sites: 0, frames: 0, oldestFrame: null, newestFrame: null };
+  if (!CHASE_RADAR_ENABLED || !Capacitor.isNativePlatform()) return { usedBytes: 0, limitBytes: 750 * 1024 * 1024, sites: 0, frames: 0, oldestFrame: null, newestFrame: null };
   return RadarNative.getCacheStatus();
 }
 
 export async function clearRadarCache() {
   await ensureInitialized();
-  if (!Capacitor.isNativePlatform()) return { ok: true, cacheState: "EMPTY" };
+  if (!CHASE_RADAR_ENABLED || !Capacitor.isNativePlatform()) return { ok: true, cacheState: "EMPTY" };
   return RadarNative.clearCache();
 }
 
 export async function testRadarEndpoint() {
   await ensureInitialized();
-  return { ok: Capacitor.isNativePlatform(), status: Capacitor.isNativePlatform() ? 200 : 0, base: "ON_DEVICE" };
+  const live = CHASE_RADAR_ENABLED && Capacitor.isNativePlatform();
+  return { ok: live, status: live ? 200 : 0, base: "ON_DEVICE" };
 }
 
 export function ageText(seconds: number | null | undefined) {

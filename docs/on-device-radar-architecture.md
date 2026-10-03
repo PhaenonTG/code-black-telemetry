@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-09-28):** radar is server-side only; the Chase app no longer renders radar. See `docs/radar-product-v1.md`.
+
 # Retired On-Device Radar Architecture
 
 Status: removed from the shipped app on 2026-08-12.

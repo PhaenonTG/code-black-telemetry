@@ -56,12 +56,14 @@ in Capacitor Preferences by current design; revisit before wider distribution.
 
 ## Radar
 
-Production radar is mosaic-first:
+**Broadcast radar is server-side only. The Chase app does not render radar.**
 
-Iowa Environmental Mesonet NEXRAD N0Q composite -> Mapbox raster source -> Weather and Locate maps.
-
-The previous Android-native single-site Level II decoder path was removed from the active app. Any
-future single-site radar work should be treated as a fresh feature with explicit product approval.
+Radar is a standalone Core product (`codeblack-radar-product`): it continuously acquires the IEM NEXRAD N0Q CONUS composite,
+stores immutable timestamped frames, and publishes an atomic `latest.json` manifest with freshness state
+(FRESH/AGING/STALE/CRITICAL). The overlay (and any future native PROGRAM compositor) only consumes that manifest and its frames.
+Chase performs no radar fetching, polling, decoding, WebGL layers, fades or timers (`CHASE_RADAR_ENABLED = false` in
+`src/services/radarPolicy.ts`). Single-site products (VEL/SRV/CC) remain on the KSGF radar-worker.
+See `docs/radar-product-v1.md` for the contract, SLA, cache rules, failure behavior and the future compositor contract.
 
 ## Networking
 
