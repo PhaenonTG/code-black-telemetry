@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code Black - System Status</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#09090b; --panel:#121215; --panel2:#17171b; --line:#26262d; --line2:#33333c;
+  --text:#e9e9ec; --muted:#8c8c97; --red:#e5252a;
+  --ok:#3ccf7a; --warn:#f2b632; --bad:#ff4d52; --info:#7d9bc4; --unk:#7c7c88;
+  --labs:#a78bfa;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--text);font:13px/1.4 var(--sans)}
+body{min-height:100vh}
+a{color:#9cc0ff;text-decoration:none} a:hover{text-decoration:underline}
+h1,h2,h3,h4{margin:0;font-weight:700}
+.mono{font-family:var(--mono);font-size:12px}
+.muted{color:var(--muted)} .small{font-size:11px}
+.unk{color:var(--unk);font-style:italic;letter-spacing:.03em}
+.wrap{overflow-wrap:anywhere}
+
+/* header */
+#top{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:9px 16px;background:rgba(9,9,11,.94);border-bottom:2px solid var(--red);backdrop-filter:blur(6px)}
+.brand h1{font-size:16px;letter-spacing:.14em;white-space:nowrap}
+.brand h1 span{color:var(--red)}
+#overall{display:flex;align-items:center;gap:8px}
+.refresh{display:flex;flex-direction:column;line-height:1.2;font-size:11px;color:var(--muted)}
+.refresh b{color:var(--text);font-family:var(--mono);font-weight:600}
+.search{margin-left:auto;display:flex;align-items:center;gap:6px;min-width:240px;flex:0 1 380px}
+.search input{flex:1;min-width:0;background:var(--panel);color:var(--text);border:1px solid var(--line2);border-radius:6px;padding:7px 10px;font:inherit;outline:none}
+.search input:focus{border-color:var(--red)}
+.search button{background:var(--panel);color:var(--muted);border:1px solid var(--line2);border-radius:6px;padding:6px 9px;cursor:pointer}
+.tag{font-size:10px;letter-spacing:.08em;padding:2px 6px;border-radius:4px;border:1px solid var(--line2);color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.tag.fx{color:var(--labs);border-color:var(--labs)}
+
+.banner{margin:0;padding:8px 16px;font-weight:700;letter-spacing:.03em}
+.banner.bad{background:#3a0d0f;color:#ffb3b5;border-bottom:1px solid var(--bad)}
+.banner.warn{background:#3a2c07;color:#ffd98a;border-bottom:1px solid var(--warn)}
+
+main{padding:14px 16px 30px;max-width:2200px;margin:0 auto}
+#app.dim{opacity:.5;filter:saturate(.5)}
+
+/* chips */
+.chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.05em;border:1px solid;white-space:nowrap;text-transform:uppercase}
+.chip.ok{color:var(--ok);border-color:#1f6b40;background:#0e2a1a}
+.chip.warn{color:var(--warn);border-color:#7a5a12;background:#2c2208}
+.chip.bad{color:var(--bad);border-color:#7d2427;background:#2f1012}
+.chip.info{color:var(--info);border-color:#3a4a63;background:#141b26}
+.chip.unk{color:var(--unk);border-color:#3a3a44;background:#18181d;font-style:normal}
+.chip.big{font-size:14px;padding:3px 12px}
+.stalebadge{color:#1a1200;background:var(--warn);border-color:var(--warn)}
+
+/* sections & cards */
+.sect{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin:0 0 14px;min-width:0}
+.sect>header{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.sect>header h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#cfcfd6}
+.sect>header .sub{color:var(--muted);font-size:11px}
+.sect>header .tog{margin-left:auto;background:none;color:var(--muted);border:1px solid var(--line2);border-radius:4px;width:24px;height:22px;cursor:pointer;line-height:1}
+.sect>.body{padding:10px 12px}
+.sect.collapsed>.body{display:none}
+.searching .sect.collapsed>.body{display:block}
+.sect.labs{border-color:#4b3d8a;background:#100e1a}
+.sect.labs>header{border-bottom-color:#33295f}
+.sect.labs>header h2{color:var(--labs)}
+.cards{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:10px 11px;min-width:0}
+.card.stale,.srow.stale{border-color:#7a5a12}
+.card>.hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.card>.hd h3{font-size:14px}
+.kv{display:flex;gap:8px;padding:1px 0;min-width:0}
+.kv .k{flex:0 0 92px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding-top:1px}
+.kv .v{min-width:0;overflow-wrap:anywhere}
+.kv.wide .k{flex-basis:130px}
+.reason{color:var(--muted);font-size:12px;margin:2px 0 6px}
+.bar{height:7px;background:#25252c;border-radius:4px;overflow:hidden;margin:3px 0}
+.bar .fill{height:100%;background:var(--ok)}
+.bar.ok .fill{background:var(--ok)} .bar.warn .fill{background:var(--warn)} .bar.bad .fill{background:var(--bad)} .bar.unk .fill{background:var(--unk)} .bar.info .fill{background:var(--info)}
+.metric{margin:5px 0}
+.metric .ml{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--muted)}
+.metric .ml b{color:var(--text);font-weight:600}
+.linkrow{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.lnk{font-size:11px;padding:1px 7px;border:1px solid var(--line2);border-radius:4px;background:#0d0d10;white-space:nowrap}
+.note{color:var(--muted);font-size:11px;margin:0 0 8px}
+.emptynote{color:var(--muted);padding:6px 2px}
+.badge{font-size:10px;letter-spacing:.06em;padding:1px 6px;border-radius:4px;border:1px solid;text-transform:uppercase;white-space:nowrap}
+.acc-TAILSCALE{color:#7dd3fc;border-color:#1e4c63}
+.acc-LAN{color:#86efac;border-color:#235a37}
+.acc-LOCAL{color:#d4d4d8;border-color:#52525b}
+.acc-PUBLIC{color:#fca5a5;border-color:#7f2f31}
+.acc-EXTERNAL{color:#fcd34d;border-color:#7a5a12}
+
+/* tiles */
+.tiles{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(128px,1fr))}
+.tile{padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--panel);border-left-width:4px;min-width:0}
+.tile .tl{font-size:11px;letter-spacing:.12em;color:var(--muted)}
+.tile .ts{font-size:15px;font-weight:800;letter-spacing:.04em}
+.tile .td{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.ok{border-left-color:var(--ok)} .tile.ok .ts{color:var(--ok)}
+.tile.warn{border-left-color:var(--warn)} .tile.warn .ts{color:var(--warn)}
+.tile.bad{border-left-color:var(--bad)} .tile.bad .ts{color:var(--bad)}
+.tile.info{border-left-color:var(--info)} .tile.info .ts{color:var(--info)}
+.tile.unk{border-left-color:var(--unk)} .tile.unk .ts{color:var(--unk)}
+.tile.dom{background:#101014}
+
+/* attention */
+#s-attention{border-color:#5a2225}
+.att{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.att li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:start;padding:7px 10px;border-radius:6px;border:1px solid var(--line);border-left-width:4px;background:var(--panel2)}
+.att li.CRITICAL{border-left-color:var(--bad);background:#231012}
+.att li.WARNING{border-left-color:var(--warn);background:#221b0a}
+.att li.INFO{border-left-color:#3a4a63;padding:3px 10px;background:#101319;align-items:center}
+.att .at{font-weight:700}.att li.INFO .at{font-weight:500;color:#b6bfce}
+.att .ad{color:var(--muted);font-size:12px;grid-column:2}
+.att li.INFO .ad{font-size:11px}
+.att .am{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
+.attsum{display:flex;gap:8px;flex-wrap:wrap;margin-left:6px}
+
+/* layout */
+.layout{display:grid;gap:14px;grid-template-columns:minmax(0,1fr);align-items:start}
+.col-main,.col-side{min-width:0}
+@media(min-width:900px){.col-side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px;align-items:start}}
+@media(min-width:1200px){.layout{grid-template-columns:repeat(3,minmax(0,1fr))}.col-main{grid-column:span 2}.col-side{grid-template-columns:minmax(0,1fr)}}
+
+/* services */
+.svc-head,.srow{display:grid;grid-template-columns:minmax(0,2.4fr) 120px minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.2fr);gap:4px 10px;align-items:start}
+.svc-head{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:0 8px 4px}
+.srow{padding:4px 8px;border:1px solid var(--line);border-radius:5px;margin-bottom:3px;background:var(--panel2);font-size:12px}
+.srow .sn{font-weight:700}
+.srow .sn .tag{font-weight:400;padding:0 5px;font-size:9px}
+.srow .sn .sub{font-weight:400}
+.srow .linkrow{margin-top:0}
+.srow .sub{color:var(--muted);font-size:11px}
+.srow .err{color:#ff9d9f;font-size:11px}
+.srow .mets{display:flex;flex-wrap:wrap;gap:3px;margin-top:2px}
+.mchip{font-size:10px;padding:0 6px;border-radius:4px;background:#0d0d10;border:1px solid var(--line2);color:#b8b8c2}
+.grp{margin-bottom:6px}
+.grp>h3{font-size:12px;letter-spacing:.1em;color:#cfcfd6;margin:4px 0 6px;padding-bottom:3px;border-bottom:1px dashed var(--line2)}
+.grp>h3 small{color:var(--muted);font-weight:400;letter-spacing:0;margin-left:8px}
+.cat{font-size:10px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin:6px 2px 3px}
+.cell .cl{display:none}
+
+/* tables */
+.tablewrap{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%}
+th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:4px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
+td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.f-item:hover td{background:#16161b}
+
+/* link cards */
+.linkgrid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.linkcard{display:block;padding:9px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--text);min-width:0}
+a.linkcard:hover{border-color:var(--red);text-decoration:none}
+.linkcard .ln{font-weight:700;color:#cfe1ff}
+.linkcard .lp{color:var(--muted);font-size:12px}
+.linkcard .lm{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:5px;font-size:11px;color:var(--muted)}
+
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--unk);margin-right:6px}
+.dot.on{background:var(--ok)}
+.checks{list-style:none;margin:4px 0;padding:0}
+.checks li{display:flex;gap:8px;font-size:12px;padding:1px 0}
+.checks .r{font-weight:800;width:34px}.checks .r.ok{color:var(--ok)}.checks .r.bad{color:var(--bad)}
+.lane{display:grid;grid-template-columns:52px auto minmax(0,1fr);gap:8px;align-items:center;padding:2px 0}
+.contend{margin:8px 0;padding:8px 10px;border:1px solid var(--warn);background:#2c2208;color:#ffd98a;border-radius:6px;font-weight:700}
+.futurecard{border-style:dashed;color:var(--muted)}
+.foot{padding:12px 16px 24px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);max-width:2200px;margin:0 auto}
+#empty{padding:30px;text-align:center;color:var(--muted);font-size:14px}
+
+/* narrow */
+@media(max-width:899px){
+  #top{padding:8px 10px}
+  .search{order:5;flex:1 1 100%;margin-left:0}
+  main{padding:10px 10px 24px}
+  .svc-head{display:none}
+  .srow{display:block}
+  .srow .cell{display:flex;gap:8px;padding:2px 0}
+  .srow .cell .cl{display:block;flex:0 0 78px;color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding-top:2px}
+  .cards{grid-template-columns:minmax(0,1fr)}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .att li{grid-template-columns:auto minmax(0,1fr)}
+  .att .am{grid-column:2;text-align:left}
+  .kv .k{flex-basis:80px}
+}
+</style>
+</head>
+<body>
+<header id="top">
+  <div class="brand"><h1>CODE BLACK <span>-</span> SYSTEM STATUS</h1></div>
+  <div id="overall"></div>
+  <div class="refresh"><span>Last refresh <b id="clock">--:--:--</b></span><span id="dage">waiting for data</span></div>
+  <span id="fxtag" class="tag fx" hidden>fixture mode</span>
+  <div class="search"><input id="q" type="text" placeholder="Search: pihole, radar, edge, image, stream, aegis ...  ( / )" autocomplete="off" spellcheck="false" aria-label="Search the dashboard"><button id="qclear" type="button" aria-label="Clear search">Clear</button></div>
+</header>
+<div id="banner" class="banner bad" role="alert" hidden></div>
+<div id="agebanner" class="banner warn" hidden></div>
+<main id="app" class="">
+  <section class="sect" id="s-tiles"><header><h2>Global state</h2></header><div class="body"><div id="b-tiles" class="tiles"></div></div></section>
+  <section class="sect" id="s-attention"><header><h2>Needs attention</h2><span id="attsum" class="attsum"></span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-attention"></div></section>
+  <div class="layout">
+    <div class="col-main">
+      <section class="sect" id="s-hosts"><header><h2>Hosts</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-hosts"></div></section>
+      <section class="sect" id="s-services"><header><h2>Services</h2><span class="sub" id="svcsub"></span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-services"></div></section>
+      <section class="sect" id="s-streaming"><header><h2>Streaming</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-streaming"></div></section>
+      <section class="sect" id="s-radar"><header><h2>Radar</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-radar"></div></section>
+      <section class="sect" id="s-weather"><header><h2>Weather intelligence</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-weather"></div></section>
+    </div>
+    <div class="col-side">
+      <section class="sect" id="s-compute"><header><h2>Compute / GPU</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-compute"></div></section>
+      <section class="sect" id="s-network"><header><h2>Network</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-network"></div></section>
+      <section class="sect" id="s-dns"><header><h2>DNS / Pi-hole</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-dns"></div></section>
+      <section class="sect" id="s-storage"><header><h2>Storage &amp; backups</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-storage"></div></section>
+      <section class="sect" id="s-ai"><header><h2>AI / AEGIS</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-ai"></div></section>
+    </div>
+  </div>
+  <section class="sect labs" id="s-labs"><header><h2>Spencer Labs</h2><span class="sub">Infrastructure status only &mdash; not Code Black operational authority</span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-labs"></div></section>
+  <section class="sect" id="s-launchpad"><header><h2>Launchpad</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-launchpad"></div></section>
+  <section class="sect" id="s-address"><header><h2>Address book</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-address"></div></section>
+  <section class="sect collapsed" id="s-inventory"><header><h2>Full inventory</h2><span class="sub">every host and service with all known URLs</span><button class="tog" type="button" aria-label="Toggle section">+</button></header><div class="body" id="b-inventory"></div></section>
+  <div id="empty" hidden></div>
+</main>
+<footer class="foot" id="foot"></footer>
+
+<script>
+'use strict';
+const POLL_MS = 5000;
+const params = new URLSearchParams(location.search);
+const FIXTURE = params.get('fixture') === '1';
+const S = { doc: null, lastOk: 0, lastGen: 0, failing: false, fallbackFixture: false, sig: {}, timer: null, fetching: false };
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+
+/* ---------- DOM helpers (text only; never innerHTML with data) ---------- */
+function add(e, kids) {
+  if (kids == null || kids === false) return;
+  if (Array.isArray(kids)) kids.forEach((k) => add(e, k));
+  else if (kids instanceof Node) e.appendChild(kids);
+  else e.appendChild(document.createTextNode(String(kids)));
+}
+function h(tag, cls, kids, attrs) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (attrs) for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+  add(e, kids);
+  return e;
+}
+const isNull = (v) => v === null || v === undefined || v === '';
+const unk = () => h('span', 'unk', 'UNKNOWN');
+const nz = (v, f) => (isNull(v) ? unk() : f ? f(v) : String(v));
+const txt = (v) => (isNull(v) ? 'UNKNOWN' : String(v));
+function safeUrl(u) { return typeof u === 'string' && (/^https?:\/\//i.test(u) || u.charAt(0) === '#'); }
+function lnk(label, url, cls) {
+  if (!safeUrl(url)) return h('span', 'lnk muted', label + ': ' + (isNull(url) ? 'n/a' : url));
+  const a = h('a', cls || 'lnk', label, { href: url });
+  if (url.charAt(0) !== '#') { a.target = '_blank'; a.rel = 'noopener'; }
+  return a;
+}
+
+/* ---------- formatting ---------- */
+function durS(s) {
+  s = Math.max(0, Math.round(s));
+  const d = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (d >= 1) return d + 'd ' + hh + 'h';
+  if (hh >= 1) return hh + 'h ' + m + 'm';
+  if (m >= 1) return m + 'm ' + sec + 's';
+  return sec + 's';
+}
+const dur = (s) => nz(s, durS);
+function tm(iso) {
+  if (!iso) return unk();
+  const d = new Date(iso);
+  if (isNaN(d)) return unk();
+  const age = (Date.now() - d.getTime()) / 1000;
+  return h('span', 'mono', [d.toLocaleTimeString([], { hour12: false }), ' ', h('span', 'muted', age < 0 ? '(in ' + durS(-age) + ')' : '(' + durS(age) + ' ago)')]);
+}
+const ago = (iso) => (iso ? durS(Math.max(0, (Date.now() - Date.parse(iso)) / 1000)) + ' ago' : 'UNKNOWN');
+const pct = (v) => nz(v, (x) => Number(x).toFixed(0) + '%');
+const gb = (v) => nz(v, (x) => Number(x).toFixed(1) + ' GB');
+const mbToGb = (v) => nz(v, (x) => (Number(x) / 1024).toFixed(1) + ' GB');
+function bytes(n) {
+  if (isNull(n)) return unk();
+  const u = ['B', 'KiB', 'MiB', 'GiB', 'TiB']; let i = 0, v = Number(n);
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return v.toFixed(i ? 2 : 0) + ' ' + u[i];
+}
+
+/* ---------- state model ---------- */
+const OKS = new Set(['HEALTHY', 'FRESH', 'LIVE', 'OK', 'IDLE', 'VERIFYING', 'OPEN', 'DIRECT', 'COMPLETE', 'RUNNING', 'ONLINE', 'AVAILABLE']);
+const WARNS = new Set(['DEGRADED', 'AGING', 'WARNING', 'BUSY', 'STALE']);
+const BADS = new Set(['OFFLINE', 'CRITICAL', 'FAILED', 'UNREACHABLE', 'ERROR']);
+function sc(s) {
+  s = String(s == null ? '' : s).toUpperCase();
+  if (OKS.has(s)) return 'ok';
+  if (WARNS.has(s)) return 'warn';
+  if (BADS.has(s)) return 'bad';
+  if (s === 'INFO' || s === 'RELAYED') return 'info';
+  return 'unk';
+}
+const isStale = (t) => !!t && (t.stale === true || (t.stale === undefined && t.age_s != null && t.max_age_s != null && t.age_s > t.max_age_s));
+function chip(state, tel, o) {
+  o = o || {};
+  const s = isNull(state) ? 'UNKNOWN' : String(state).toUpperCase().replace(/_/g, ' ');
+  if (isStale(tel)) return [h('span', 'chip stalebadge' + (o.big ? ' big' : ''), 'STALE TELEMETRY'), ' ', h('span', 'small muted', 'last: ' + s)];
+  if (o.informational && s === 'OFFLINE') return h('span', 'chip info' + (o.big ? ' big' : ''), 'OFFLINE - EXPECTED');
+  return h('span', 'chip ' + sc(s) + (o.big ? ' big' : ''), s);
+}
+function stbar(p, cls) {
+  if (isNull(p)) return h('div', 'bar unk', h('div', 'fill', null, { style: 'width:0%' }));
+  return h('div', 'bar ' + (cls || ''), h('div', 'fill', null, { style: 'width:' + Math.max(0, Math.min(100, Number(p))) + '%' }));
+}
+const usageCls = (p) => (isNull(p) ? 'unk' : p >= 90 ? 'bad' : p >= 75 ? 'warn' : '');
+const diskCls = (st) => ({ CRITICAL: 'bad', WARNING: 'warn', HEALTHY: 'ok', UNKNOWN: 'unk' }[String(st).toUpperCase()] || 'unk');
+function metric(label, valNode, p, cls) {
+  return h('div', 'metric', [h('div', 'ml', [h('span', null, label), h('b', null, valNode)]), stbar(p, cls)]);
+}
+function kv(k, v) { return h('div', 'kv', [h('span', 'k', k), h('span', 'v', v == null ? unk() : v)]); }
+function card(cls, kids, tel) { return h('div', 'card f-item' + (isStale(tel) ? ' stale' : '') + (cls ? ' ' + cls : ''), kids); }
+function accBadge(a) {
+  const k = String(a || '').toUpperCase().split(' ')[0];
+  return h('span', 'badge acc-' + k, a || 'UNKNOWN');
+}
+function ipSpan(v) { return isNull(v) ? unk() : h('span', 'mono', v); }
+function normalizeLink(l) { return l && typeof l === 'object' ? l : (typeof l === 'string' ? { name: 'Open', url: l } : null); }
+
+/* ---------- renderers ---------- */
+const R = {};
+R.tiles = (d) => {
+  const box = $('#b-tiles'); box.replaceChildren();
+  const tiles = (d.summary && d.summary.tiles) || [];
+  tiles.forEach((t) => {
+    let cls = sc(t.state);
+    let label = isNull(t.state) ? 'UNKNOWN' : String(t.state).toUpperCase().replace(/_/g, ' ');
+    if (t.informational && String(t.state).toUpperCase() === 'OFFLINE') cls = 'info';
+    box.appendChild(h('div', 'tile f-item ' + cls + (t.group === 'domain' ? ' dom' : ''), [h('div', 'tl', t.label), h('div', 'ts', label), h('div', 'td', isNull(t.detail) ? '' : t.detail)], { title: t.detail || '' }));
+  });
+  if (!tiles.length) box.appendChild(h('div', 'emptynote', 'No summary tiles reported.'));
+};
+R.attention = (d) => {
+  const box = $('#b-attention'); box.replaceChildren();
+  const order = { CRITICAL: 0, WARNING: 1, INFO: 2 };
+  const items = (d.attention || []).slice().sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
+  const counts = { CRITICAL: 0, WARNING: 0, INFO: 0 };
+  items.forEach((i) => { counts[i.severity] = (counts[i.severity] || 0) + 1; });
+  const sum = $('#attsum'); sum.replaceChildren();
+  ['CRITICAL', 'WARNING', 'INFO'].forEach((k) => { if (counts[k]) sum.appendChild(h('span', 'chip ' + sc(k === 'INFO' ? 'INFO' : k), counts[k] + ' ' + k)); });
+  if (!items.length) { box.appendChild(h('div', 'emptynote f-item', 'Nothing needs attention.')); return; }
+  const ul = h('ul', 'att');
+  items.forEach((i) => {
+    const l = normalizeLink(i.link);
+    ul.appendChild(h('li', 'f-item ' + i.severity, [
+      h('span', 'chip ' + sc(i.severity), i.severity),
+      h('div', 'at wrap', i.severity === 'INFO' && !isNull(i.detail) ? [i.title, h('span', 'muted small', '  -  ' + i.detail)] : i.title),
+      h('div', 'am', [h('span', null, isNull(i.source) ? '' : i.source), i.since ? h('span', null, ' - since ' + ago(i.since)) : null, l ? [' ', lnk(l.name || 'Open', l.url)] : null]),
+      isNull(i.detail) || i.severity === 'INFO' ? null : h('div', 'ad wrap', i.detail),
+    ]));
+  });
+  box.appendChild(ul);
+};
+R.hosts = (d) => {
+  const box = $('#b-hosts'); box.replaceChildren();
+  const grid = h('div', 'cards');
+  (d.hosts || []).forEach((x) => {
+    const c = x.cpu || {}, m = x.memory || {}, g = x.gpu;
+    const kids = [
+      h('div', 'hd', [h('h3', null, x.name), chip(x.state, x.telemetry), h('span', 'tag', 'collector: ' + (x.collector || 'unknown'))]),
+      h('div', 'muted small wrap', x.role || ''),
+      isNull(x.state_reason) ? null : h('div', 'reason', x.state_reason),
+      kv('LAN', ipSpan(x.lan_ip)), kv('Tailscale', ipSpan(x.tailscale_ip)), kv('OS', nz(x.os)), kv('Uptime', dur(x.uptime_s)),
+      kv('Path', isNull(x.path) ? unk() : x.path), kv('Last contact', tm(x.last_contact)),
+      metric('CPU ' + (isNull(c.cores) ? '' : c.cores + ' cores '), h('span', null, [pct(c.percent), ' - load ', nz(c.load1)]), c.percent, usageCls(c.percent)),
+      isNull(c.model) ? null : h('div', 'small muted', c.model),
+      metric('Memory', h('span', null, [mbToGb(m.used_mb), ' / ', mbToGb(m.total_mb), ' (', pct(m.percent), ')']), m.percent, usageCls(m.percent)),
+    ];
+    if (x.disks && x.disks.length) x.disks.forEach((k) => kids.push(metric('Disk ' + k.mount, h('span', null, [gb(k.used_gb), ' / ', gb(k.total_gb), ' - free ', gb(k.free_gb)]), k.percent, diskCls(k.state))));
+    else kids.push(kv('Disk', unk()));
+    kids.push(kv('Temperature', nz(x.temperature_c, (t) => t + ' \u00B0C')));
+    if (g) {
+      const vp = g.vram_total_mb ? (g.vram_used_mb / g.vram_total_mb) * 100 : null;
+      kids.push(h('div', 'small muted', g.name || 'GPU'));
+      kids.push(metric('GPU VRAM', h('span', null, [mbToGb(g.vram_used_mb), ' / ', mbToGb(g.vram_total_mb)]), vp, usageCls(vp)));
+      kids.push(kv('GPU load', h('span', null, [pct(g.utilization), ' - ', nz(g.temperature_c, (t) => t + ' \u00B0C')])));
+    } else kids.push(kv('GPU', h('span', 'muted', 'none reported')));
+    if (x.links && x.links.length) kids.push(h('div', 'linkrow', x.links.map((l) => lnk(l.name, l.url))));
+    grid.appendChild(card('', kids, x.telemetry));
+  });
+  if (!(d.hosts || []).length) grid.appendChild(h('div', 'emptynote', 'No hosts reported.'));
+  box.appendChild(grid);
+};
+R.services = (d) => {
+  const box = $('#b-services'); box.replaceChildren();
+  const svcs = d.services || [];
+  box.appendChild(h('div', 'svc-head', [h('div', null, 'Service'), h('div', null, 'State'), h('div', null, 'Version / release'), h('div', null, 'Uptime / last ok'), h('div', null, 'Links')]));
+  const stale = svcs.filter((s) => isStale(s.telemetry)).length;
+  const bad = svcs.filter((s) => !s.informational && (s.state === 'DEGRADED' || s.state === 'OFFLINE')).length;
+  $('#svcsub').textContent = svcs.length + ' services' + (bad ? ' - ' + bad + ' not healthy' : '') + (stale ? ' - ' + stale + ' stale' : '');
+  const hostOrder = (d.hosts || []).map((x) => x.id);
+  const byHost = new Map();
+  svcs.forEach((s) => { if (!byHost.has(s.host)) byHost.set(s.host, []); byHost.get(s.host).push(s); });
+  const keys = [...hostOrder.filter((k) => byHost.has(k)), ...[...byHost.keys()].filter((k) => !hostOrder.includes(k))];
+  keys.forEach((hid) => {
+    const host = (d.hosts || []).find((x) => x.id === hid);
+    const grp = h('div', 'grp');
+    grp.appendChild(h('h3', null, [host ? host.name : String(hid).toUpperCase(), host ? h('small', 'mono', (host.lan_ip || '') + (host.tailscale_ip ? '  /  ' + host.tailscale_ip : '')) : null]));
+    const cats = new Map();
+    byHost.get(hid).forEach((s) => { const c = s.category || 'other'; if (!cats.has(c)) cats.set(c, []); cats.get(c).push(s); });
+    cats.forEach((list, cat) => {
+      list.forEach((s) => {
+        const u = s.urls || {};
+        const links = [['Tailscale', u.tailscale], ['Local', u.local], ['Public', u.public], ['Manage', u.manage], ['Health', u.health]].filter((p) => !isNull(p[1])).map((p) => lnk(p[0], p[1]));
+        const deps = s.dependencies && s.dependencies.length ? h('div', 'sub', 'depends on: ' + s.dependencies.join(', ')) : null;
+        const row = h('div', 'srow f-item' + (isStale(s.telemetry) ? ' stale' : ''), [
+          h('div', 'cell', [h('span', 'cl', 'Service'), h('div', null, [
+            h('div', 'sn wrap', [s.name, ' ', h('span', 'tag', s.category || 'other'), ' ', h('span', 'sub', s.role || '')]),
+            isNull(s.state_reason) ? null : h('div', 'sub wrap', s.state_reason),
+            isNull(s.last_error) ? null : h('div', 'err wrap', 'last error: ' + s.last_error),
+            (s.metrics && s.metrics.length) || deps || !isNull(s.docs) ? h('div', 'mets', [
+              (s.metrics || []).map((m) => h('span', 'mchip', m.label + ': ' + (isNull(m.value) ? 'UNKNOWN' : m.value))),
+              s.dependencies && s.dependencies.length ? h('span', 'mchip', 'needs: ' + s.dependencies.join(', ')) : null,
+              isNull(s.docs) ? null : h('span', 'mchip mono', 'docs: ' + s.docs)]) : null])]),
+          h('div', 'cell', [h('span', 'cl', 'State'), h('div', null, chip(s.state, s.telemetry, { informational: s.informational }))]),
+          h('div', 'cell', [h('span', 'cl', 'Version'), h('div', null, [nz(s.version), isNull(s.release) ? null : h('div', 'sub mono wrap', s.release)])]),
+          h('div', 'cell', [h('span', 'cl', 'Uptime'), h('div', null, [h('div', null, ['up ', dur(s.uptime_s)]), h('div', 'sub', ['ok ', tm(s.last_success)])])]),
+          h('div', 'cell', [h('span', 'cl', 'Links'), h('div', 'linkrow', links.length ? links : h('span', 'muted small', 'no URLs'))]),
+        ]);
+        grp.appendChild(row);
+      });
+    });
+    box.appendChild(grp);
+  });
+  if (!svcs.length) box.appendChild(h('div', 'emptynote', 'No services reported.'));
+};
+R.streaming = (d) => {
+  const box = $('#b-streaming'); box.replaceChildren();
+  const s = d.streaming; if (!s) { box.appendChild(h('div', 'emptynote', 'No streaming data.')); return; }
+  const allIdle = (s.sources || []).length && s.sources.every((x) => x.informational_offline);
+  box.appendChild(h('div', 'hd', [chip(s.state, s.telemetry, { big: true, informational: allIdle }), ' ', h('span', 'muted', s.summary || ''), ' ', s.monitor && s.monitor.url ? lnk('Open Stream Monitor', s.monitor.url) : null]));
+  const grid = h('div', 'cards');
+  (s.sources || []).forEach((x) => {
+    const rc = x.reconnect;
+    grid.appendChild(card('', [
+      h('div', 'hd', [h('h3', null, x.name), chip(x.state, s.telemetry, { informational: x.informational_offline })]),
+      isNull(x.reason) ? null : h('div', 'reason', x.reason),
+      kv('Aliases', x.aliases && x.aliases.length ? h('span', 'mono', x.aliases.join(', ')) : unk()),
+      kv('Publisher', x.publisher_online === true ? h('span', 'chip ok', 'ONLINE') : x.publisher_online === false ? h('span', 'chip unk', 'none') : unk()),
+      kv('Readers', nz(x.readers)), kv('Codec', nz(x.codec)), kv('Resolution', nz(x.resolution)),
+      kv('Bitrate', nz(x.bitrate_kbps, (b) => b + ' kbps')), kv('Source age', dur(x.source_age_s)),
+      kv('Reconnect', rc ? h('span', null, [chip(rc.state), ' ', h('span', 'muted', rc.detail || '')]) : unk()),
+    ], s.telemetry));
+  });
+  const ing = s.ingest || {};
+  grid.appendChild(card('', [
+    h('div', 'hd', [h('h3', null, 'Ingest / egress')]),
+    kv('SRT ingest', ing.srt ? h('span', null, [chip(ing.srt.state), ' ', h('span', 'muted', nz(ing.srt.connections) + ' conn - port ' + (isNull(ing.srt.port) ? 'UNKNOWN' : ing.srt.port))]) : unk()),
+    kv('WebRTC egress', ing.webrtc ? h('span', null, [chip(ing.webrtc.state), ' ', h('span', 'muted', nz(ing.webrtc.sessions) + ' sessions')]) : unk()),
+    s.mediamtx ? kv('MediaMTX', h('span', null, [chip(s.mediamtx.state), ' ', nz(s.mediamtx.version)])) : kv('MediaMTX', null),
+    s.mediamtx && s.mediamtx.paths && s.mediamtx.paths.length ? h('div', 'tablewrap', h('table', null, [
+      h('thead', null, h('tr', null, ['Path', 'Ready', 'Readers', 'Tracks', 'Bytes in', 'Source'].map((t) => h('th', null, t)))),
+      h('tbody', null, s.mediamtx.paths.map((p) => h('tr', null, [h('td', 'mono', p.name), h('td', null, p.ready ? h('span', 'chip ok', 'ready') : h('span', 'chip unk', 'idle')), h('td', null, nz(p.readers)), h('td', null, nz(p.tracks)), h('td', null, bytes(p.bytes_received)), h('td', null, nz(p.source_type))])))])) : null,
+  ], s.telemetry));
+  grid.appendChild(card('futurecard', [
+    h('div', 'hd', [h('h3', null, 'Native broadcast / Facebook Live'), s.broadcast ? chip(s.broadcast.state) : h('span', 'chip unk', 'NOT YET AVAILABLE')]),
+    h('div', 'muted', s.broadcast ? (s.broadcast.detail || '') : 'Reserved: appears here when the native broadcaster reports state. No inference from other services.'),
+  ]));
+  box.appendChild(grid);
+};
+R.radar = (d) => {
+  const box = $('#b-radar'); box.replaceChildren();
+  const r = d.radar; if (!r) { box.appendChild(h('div', 'emptynote', 'No radar data.')); return; }
+  if (r.state === 'NOT_AVAILABLE' || !r.latest) {
+    box.appendChild(card('', [h('div', 'hd', [h('span', 'chip unk big', 'NOT YET AVAILABLE'), ' ', h('span', 'muted', 'MIGRATION IN PROGRESS')]), h('div', 'muted', 'Radar product is not reporting; nothing is inferred from other services.')], r.telemetry));
+    return;
+  }
+  const L = r.latest, W = r.worker || {}, M = r.manifest_health || {}, P = r.product || {}, LG = r.legacy_worker, link = normalizeLink(r.link);
+  box.appendChild(card('', [
+    h('div', 'hd', [chip(r.state, r.telemetry, { big: true }), h('span', 'muted', 'age ' + (isNull(L.age_s) ? 'UNKNOWN' : durS(L.age_s))), link ? lnk(link.name || 'Manifest', link.url) : null]),
+    kv('Product', isNull(P.name) ? unk() : h('span', null, [P.name, ' ', h('span', 'muted', '(' + (P.source || '?') + ', every ' + (isNull(P.cadence_s) ? '?' : durS(P.cadence_s)) + ')')])),
+    kv('Latest frame', isNull(L.frame_id) ? unk() : h('span', 'mono', L.frame_id)),
+    kv('Observed', tm(L.observation_time)), kv('Received', tm(L.source_received_time)), kv('Published', tm(L.published_time)),
+    kv('Pipeline delay', isNull(L.pipeline_delay_s) ? unk() : h('span', null, [L.pipeline_delay_s + 's ', L.pipeline_delay_s < 0 ? h('span', 'muted small', '(negative: file landed before its label)') : null])),
+    kv('Manifest', h('span', null, [M.ok === true ? h('span', 'chip ok', 'OK') : M.ok === false ? h('span', 'chip bad', 'FAILING') : unk(), ' ', h('span', 'muted', isNull(M.age_s) ? '' : 'read ' + durS(M.age_s) + ' ago')])),
+    kv('Worker', h('span', null, [chip(W.state), ' v', nz(W.version), ' - failures ', nz(W.consecutive_failures)])),
+    kv('Last error', isNull(W.last_error) ? h('span', 'muted', 'none') : h('span', 'err', W.last_error)),
+    LG ? kv('Legacy worker', h('span', null, [chip(LG.state), ' ', h('span', 'muted small', LG.note || '')])) : null,
+  ], r.telemetry));
+};
+R.weather = (d) => {
+  const box = $('#b-weather'); box.replaceChildren();
+  const w = d.weather; if (!w) { box.appendChild(h('div', 'emptynote', 'No weather data.')); return; }
+  box.appendChild(h('div', 'hd', [chip(w.state, w.telemetry, { big: true })]));
+  const grid = h('div', 'cards');
+  (w.items || []).forEach((i) => {
+    const ratio = !isNull(i.age_s) && !isNull(i.max_age_s) && i.max_age_s > 0 ? Math.min(100, (i.age_s / i.max_age_s) * 100) : null;
+    grid.appendChild(card('', [
+      h('div', 'hd', [h('h3', null, i.name), chip(i.state, w.telemetry)]),
+      h('div', 'small muted', 'host: ' + (i.host || 'unknown')),
+      metric('Age vs limit', h('span', null, [dur(i.age_s), ' / ', dur(i.max_age_s)]), ratio, ratio == null ? 'unk' : ratio >= 100 ? 'bad' : ratio >= 75 ? 'warn' : ''),
+      kv('Last product', tm(i.last_product_time)), kv('Last success', tm(i.last_success)),
+      isNull(i.error) ? null : kv('Error', h('span', 'err', i.error)), isNull(i.note) ? null : h('div', 'small muted wrap', i.note),
+    ], w.telemetry));
+  });
+  box.appendChild(grid);
+};
+function laneChip(s) {
+  const x = String(s || '').toUpperCase();
+  const cls = ['IDLE', 'VERIFYING', 'COMPLETE', 'OPEN'].includes(x) ? 'ok' : ['RUNNING', 'BUSY', 'WAITING', 'QUEUED'].includes(x) ? 'warn' : ['BLOCKED', 'FAILED'].includes(x) ? 'bad' : 'unk';
+  return h('span', 'chip ' + cls, isNull(s) ? 'UNKNOWN' : x);
+}
+R.compute = (d) => {
+  const box = $('#b-compute'); box.replaceChildren();
+  const c = d.compute; if (!c) { box.appendChild(h('div', 'emptynote', 'No compute data.')); return; }
+  const g = c.gpu, J = c.jobs || {};
+  const busy = String(c.state).toUpperCase() === 'BUSY';
+  const owner = isNull(c.owner) ? (busy ? unk() : h('span', 'muted', 'none (GPU idle)')) : c.owner;
+  const kids = [h('div', 'hd', [h('h3', null, c.host || 'Compute'), chip(c.state, c.telemetry, { big: true })])];
+  if (!isNull(c.contention)) kids.push(h('div', 'contend', 'CONTENTION: ' + c.contention));
+  kids.push(kv('GPU owner', owner));
+  if (g) {
+    const vp = g.vram_total_mb ? (g.vram_used_mb / g.vram_total_mb) * 100 : null;
+    kids.push(h('div', 'small muted', g.name || 'GPU'));
+    kids.push(metric('VRAM', h('span', null, [mbToGb(g.vram_used_mb), ' used / ', mbToGb(g.vram_total_mb), ' - ', mbToGb(g.vram_free_mb), ' free']), vp, usageCls(vp)));
+    kids.push(kv('Utilization', pct(g.utilization))); kids.push(kv('Temperature', nz(g.temperature_c, (t) => t + ' \u00B0C')));
+  } else kids.push(kv('GPU', unk()));
+  ['image', 'media', 'ai'].forEach((k) => { const j = J[k]; kids.push(h('div', 'lane', [h('span', 'muted small', k.toUpperCase()), j ? laneChip(j.state) : h('span', 'chip unk', 'UNKNOWN'), h('span', 'small muted wrap', j && !isNull(j.detail) ? j.detail : '')])); });
+  const a = c.admission;
+  kids.push(kv('GPU admission', a ? h('span', null, [laneChip(a.state), ' ', h('span', 'small muted', a.detail || '')]) : unk()));
+  box.appendChild(card('', kids, c.telemetry));
+};
+R.network = (d) => {
+  const box = $('#b-network'); box.replaceChildren();
+  const n = d.network; if (!n) { box.appendChild(h('div', 'emptynote', 'No network data.')); return; }
+  const ts = n.tailscale || {};
+  const kids = [h('div', 'hd', [h('h3', null, 'Tailscale'), chip(ts.state, n.telemetry)]), kv('Backend', nz(ts.backend)), kv('Self', ipSpan(ts.self_ip)), kv('Tailnet', nz(ts.tailnet))];
+  if (n.internet) kids.push(kv('Internet', h('span', null, [chip(n.internet.state), ' ', h('span', 'small muted', n.internet.detail || '')])));
+  box.appendChild(card('', kids, n.telemetry));
+  if ((n.pairs || []).length) box.appendChild(card('', [h('div', 'hd', [h('h3', null, 'Reachability')])].concat(n.pairs.map((p) => h('div', 'kv wide', [h('span', 'k', p.from + ' > ' + p.to), h('span', 'v', [chip(p.state), ' ', h('span', 'mono', isNull(p.latency_ms) ? 'UNKNOWN' : p.latency_ms + ' ms'), ' ', h('span', 'chip ' + sc(p.path === 'direct' ? 'DIRECT' : p.path === 'relayed' ? 'RELAYED' : 'UNKNOWN'), isNull(p.path) ? 'unknown' : p.path)])]))), n.telemetry));
+  if ((n.peers || []).length) box.appendChild(card('', [h('div', 'hd', [h('h3', null, 'Peers')]), h('div', 'tablewrap', h('table', null, [
+    h('thead', null, h('tr', null, ['Peer', 'IP', 'Path', 'Latency', 'Seen'].map((t) => h('th', null, t)))),
+    h('tbody', null, n.peers.map((p) => h('tr', 'f-item', [
+      h('td', null, [h('span', 'dot' + (p.online ? ' on' : '')), p.name]), h('td', 'mono', nz(p.tailscale_ip)),
+      h('td', null, p.online ? h('span', 'chip ' + sc(p.path === 'direct' ? 'DIRECT' : p.path === 'relayed' ? 'RELAYED' : 'UNKNOWN'), (isNull(p.path) ? 'unknown' : p.path) + (p.relay ? ' (' + p.relay + ')' : '')) : h('span', 'chip unk', 'offline')),
+      h('td', 'mono', isNull(p.latency_ms) ? unk() : p.latency_ms + ' ms'), h('td', 'muted small', p.last_seen ? ago(p.last_seen) : unk())])))]))], n.telemetry));
+};
+R.dns = (d) => {
+  const box = $('#b-dns'); box.replaceChildren();
+  const x = d.dns; if (!x) { box.appendChild(h('div', 'emptynote', 'No DNS data.')); return; }
+  box.appendChild(h('div', 'hd', [chip(x.state, x.telemetry, { big: true })]));
+  if (!isNull(x.note)) box.appendChild(h('p', 'note', x.note));
+  (x.instances || []).forEach((i) => {
+    const v = i.version, st = i.stats, gr = i.gravity;
+    box.appendChild(card('', [
+      h('div', 'hd', [h('h3', null, i.name), chip(i.state, i.telemetry)]),
+      kv('Host', h('span', 'mono', i.host || 'unknown')), kv('LAN', ipSpan(i.lan_ip)), kv('Tailscale', ipSpan(i.tailscale_ip)), kv('DNS port', nz(i.dns_port)),
+      kv('Web', nz(i.web_status)), kv('FTL', nz(i.ftl_status)),
+      kv('Version', v ? h('span', 'mono', 'core ' + txt(v.core) + ' / web ' + txt(v.web) + ' / FTL ' + txt(v.ftl)) : unk()),
+      kv('Queries', st ? nz(st.queries_today) : unk()), kv('Blocked', st ? h('span', null, [nz(st.blocked_today), ' (', pct(st.percent_blocked), ')']) : unk()),
+      kv('Gravity', gr ? h('span', null, [nz(gr.domains), ' domains / ', nz(gr.lists), ' lists']) : unk()), kv('Last update', gr ? tm(gr.last_update) : unk()),
+      h('ul', 'checks', (i.checks || []).map((c) => h('li', null, [h('span', 'r ' + (c.ok ? 'ok' : 'bad'), c.ok ? 'OK' : 'FAIL'), h('span', 'wrap', c.name), h('span', 'muted small', [isNull(c.detail) ? '' : c.detail, isNull(c.latency_ms) ? '' : ' - ' + c.latency_ms + ' ms'].join(''))]))),
+      h('div', 'linkrow', (i.dashboard_urls || []).map((u) => h('span', null, [lnk(u.label, u.url), ' ', accBadge(u.access)]))),
+    ], i.telemetry));
+  });
+};
+R.storage = (d) => {
+  const box = $('#b-storage'); box.replaceChildren();
+  const s = d.storage; if (!s) { box.appendChild(h('div', 'emptynote', 'No storage data.')); return; }
+  box.appendChild(h('div', 'hd', [chip(s.state, s.telemetry, { big: true })]));
+  (s.hosts || []).forEach((x) => {
+    const kids = [h('div', 'hd', [h('h3', null, x.host)])];
+    if (x.disks && x.disks.length) x.disks.forEach((k) => kids.push(h('div', null, [metric('Disk ' + k.mount, h('span', null, [gb(k.free_gb), ' free of ', gb(k.total_gb), ' (', pct(k.percent), ' used) ', h('span', 'chip ' + diskCls(k.state), String(k.state))]), k.percent, diskCls(k.state))])));
+    else kids.push(kv('Disk', unk()));
+    box.appendChild(card('', kids, s.telemetry));
+  });
+  (s.backups || []).forEach((b) => box.appendChild(card('', [
+    h('div', 'hd', [h('h3', null, b.name), chip(b.state, s.telemetry)]),
+    kv('Host', nz(b.host)), kv('Last backup', tm(b.last_backup)), kv('Backup age', dur(b.age_s)), kv('Verified', tm(b.last_verification)),
+  ].concat((b.detail || []).map((k) => kv(k.label, nz(k.value)))), s.telemetry)));
+};
+R.ai = (d) => {
+  const box = $('#b-ai'); box.replaceChildren();
+  const a = d.ai; if (!a) { box.appendChild(h('div', 'emptynote', 'No AI data.')); return; }
+  box.appendChild(h('div', 'hd', [chip(a.state, a.telemetry, { big: true })]));
+  if (!isNull(a.note)) box.appendChild(h('p', 'note', a.note));
+  box.appendChild(card('', [kv('Loaded model', nz(a.model_loaded)), kv('Queue depth', nz(a.queue_depth)), kv('Active job', nz(a.active_job)), kv('Last request', typeof a.last_request === 'string' && /^\d{4}-/.test(a.last_request) ? tm(a.last_request) : nz(a.last_request))], a.telemetry));
+  (a.items || []).forEach((i) => box.appendChild(card('', [h('div', 'hd', [h('h3', null, i.name), chip(i.state, a.telemetry)])].concat((i.detail || []).map((k) => kv(k.label, nz(k.value)))), a.telemetry)));
+};
+R.labs = (d) => {
+  const box = $('#b-labs'); box.replaceChildren();
+  const l = d.labs; if (!l) { box.appendChild(h('div', 'emptynote', 'No Spencer Labs data.')); return; }
+  box.appendChild(h('div', 'hd', [chip(l.state, l.telemetry, { big: true }), ' ', h('span', 'muted small', l.note || '')]));
+  const grid = h('div', 'cards');
+  (l.items || []).forEach((i) => grid.appendChild(card('', [h('div', 'hd', [h('h3', null, i.name), chip(i.state, l.telemetry)])].concat((i.detail || []).map((k) => kv(k.label, nz(k.value)))).concat([i.url ? h('div', 'linkrow', lnk('Open ' + i.name, i.url)) : null]), l.telemetry)));
+  const dl = l.download;
+  if (dl) {
+    const verifying = String(dl.state).toUpperCase() === 'VERIFYING';
+    grid.appendChild(card('', [
+      h('div', 'hd', [h('h3', null, 'Media Lab download'), verifying ? h('span', 'chip ok', 'VERIFYING (integrity check)') : chip(dl.state, l.telemetry)]),
+      kv('Model', nz(dl.model)),
+      metric('Progress', h('span', null, [bytes(dl.bytes_downloaded), ' / ', bytes(dl.bytes_total), ' (', pct(dl.percent), ')']), dl.percent, ''),
+      kv('Rate', isNull(dl.rate_bps) ? unk() : bytes(dl.rate_bps) + '/s'), kv('Retries', nz(dl.retries)), kv('Last progress', tm(dl.last_progress_at)), kv('Integrity', nz(dl.integrity)),
+    ], l.telemetry));
+  }
+  box.appendChild(grid);
+};
+R.launchpad = (d) => {
+  const box = $('#b-launchpad'); box.replaceChildren();
+  const links = d.links || [];
+  const groups = new Map();
+  links.forEach((l) => { const g = l.group || 'Other'; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(l); });
+  groups.forEach((list, g) => {
+    const grp = h('div', 'grp', h('h3', null, g));
+    const grid = h('div', 'linkgrid');
+    list.forEach((l) => {
+      const v = l.verified;
+      const inner = [h('div', 'ln wrap', l.name), h('div', 'lp', l.purpose || ''), h('div', 'lm', [accBadge(l.access), h('span', 'mono', l.host || ''), v ? (v.ok ? h('span', 'chip ok', 'verified ' + nz(v.status)) : h('span', 'chip bad', 'FAILED ' + nz(v.status))) : h('span', 'muted', 'not verified')])];
+      if (safeUrl(l.url)) grid.appendChild(h('a', 'linkcard f-item', inner, { href: l.url, target: '_blank', rel: 'noopener' }));
+      else grid.appendChild(h('div', 'linkcard f-item', inner));
+    });
+    grp.appendChild(grid); box.appendChild(grp);
+  });
+  if (!links.length) box.appendChild(h('div', 'emptynote', 'No links configured.'));
+};
+R.address = (d) => {
+  const box = $('#b-address'); box.replaceChildren();
+  const rows = d.address_book || [];
+  const tbl = h('table', null, [
+    h('thead', null, h('tr', null, ['Name', 'Host', 'LAN', 'Tailscale', 'URL', 'Purpose', 'Access'].map((t) => h('th', null, t)))),
+    h('tbody', null, rows.map((r) => h('tr', 'f-item', [h('td', null, r.name), h('td', 'mono', nz(r.host)), h('td', 'mono', nz(r.lan)), h('td', 'mono', nz(r.tailscale)),
+      h('td', 'wrap', isNull(r.url) ? unk() : lnk(r.url, r.url)), h('td', 'wrap', nz(r.purpose)), h('td', null, accBadge(r.access))])))]);
+  box.appendChild(h('div', 'tablewrap', tbl));
+  if (!rows.length) box.appendChild(h('div', 'emptynote', 'Address book is empty.'));
+};
+R.inventory = (d) => {
+  const box = $('#b-inventory'); box.replaceChildren();
+  (d.hosts || []).forEach((x) => box.appendChild(h('div', 'srow f-item', [h('div', null, [h('div', 'sn', x.name), h('div', 'sub', x.role || '')]), h('div', null, chip(x.state, x.telemetry)), h('div', 'mono', nz(x.lan_ip)), h('div', 'mono', nz(x.tailscale_ip)), h('div', 'small muted', nz(x.os))])));
+  (d.services || []).forEach((s) => {
+    const u = s.urls || {};
+    const links = Object.keys(u).filter((k) => !isNull(u[k])).map((k) => lnk(k, u[k]));
+    box.appendChild(h('div', 'srow f-item', [h('div', null, [h('div', 'sn', s.name), h('div', 'sub', s.host + ' / ' + (s.category || ''))]), h('div', null, chip(s.state, s.telemetry, { informational: s.informational })), h('div', 'small mono wrap', nz(s.release || s.version)), h('div', 'small muted', dur(s.uptime_s)), h('div', 'linkrow', links.length ? links : h('span', 'muted small', 'no URLs'))]));
+  });
+};
+R.footer = (d) => {
+  const f = $('#foot'); f.replaceChildren();
+  const b = d.backend || {};
+  f.appendChild(document.createTextNode(['schema ' + (d.schema || '?'), 'backend v' + (b.version || '?') + ' on ' + (b.host || '?'), 'backend up ' + (isNull(b.uptime_s) ? '?' : durS(b.uptime_s)),
+    'probes ' + (isNull(b.probes_total) ? '?' : b.probes_total) + ' total / ' + (isNull(b.probes_stale) ? '?' : b.probes_stale) + ' stale / ' + (isNull(b.probes_failing) ? '?' : b.probes_failing) + ' failing',
+    'generated ' + (d.generated_at || '?'), 'read-only view'].join('  |  ')));
+};
+const SECTIONS = [['tiles', (d) => d.summary], ['attention', (d) => d.attention], ['hosts', (d) => d.hosts], ['services', (d) => d.services], ['streaming', (d) => d.streaming], ['radar', (d) => d.radar],
+  ['weather', (d) => d.weather], ['compute', (d) => d.compute], ['network', (d) => d.network], ['dns', (d) => d.dns], ['storage', (d) => d.storage], ['ai', (d) => d.ai], ['labs', (d) => d.labs],
+  ['launchpad', (d) => d.links], ['address', (d) => d.address_book], ['inventory', (d) => [d.hosts, d.services]], ['footer', (d) => [d.backend, d.schema]]];
+const RELTIME = new Set(['hosts', 'services', 'streaming', 'radar', 'weather', 'compute', 'network', 'dns', 'storage', 'ai', 'labs', 'attention']);
+function render(d) {
+  let changed = false;
+  SECTIONS.forEach(([k, pick]) => {
+    let sig; try { sig = JSON.stringify(pick(d)); } catch (e) { sig = String(Math.random()); }
+    if (S.sig[k] !== sig) { S.sig[k] = sig; try { R[k](d); changed = true; } catch (e) { console.warn('render ' + k + ' failed', e); } }
+  });
+  if (changed) applyFilter();
+}
+
+/* ---------- search ---------- */
+const norm = (s) => { s = String(s).toLowerCase(); return s + ' ' + s.replace(/[-_\s]+/g, ''); };
+function hay(el) { return norm(el.textContent + ' ' + $$('a', el).map((a) => a.href + ' ' + a.textContent).join(' ')); }
+function applyFilter() {
+  const raw = $('#q').value.trim().toLowerCase();
+  const tokens = raw.split(/\s+/).filter(Boolean).map((t) => t.replace(/[-_]+/g, ''));
+  document.body.classList.toggle('searching', tokens.length > 0);
+  const empty = $('#empty');
+  if (!tokens.length) { $$('[hidden].f-item,[hidden].grp,[hidden].sect').forEach((e) => { e.hidden = false; }); empty.hidden = true; return; }
+  let any = false;
+  $$('.sect').forEach((sect) => {
+    if (sect.id === 's-tiles') { /* filtered like the rest */ }
+    const titleHay = norm($('h2', sect).textContent);
+    const titleMatch = tokens.every((t) => titleHay.includes(t));
+    let vis = 0;
+    $$('.f-item', sect).forEach((it) => { const m = titleMatch || tokens.every((t) => hay(it).includes(t)); it.hidden = !m; if (m) vis++; });
+    $$('.grp', sect).forEach((g) => { g.hidden = !g.querySelector('.f-item:not([hidden])'); });
+    sect.hidden = vis === 0; if (vis) any = true;
+  });
+  empty.hidden = any;
+  if (!any) empty.textContent = 'No matches for "' + $('#q').value.trim() + '"';
+}
+
+/* ---------- chrome / refresh ---------- */
+function isoRe(s) { return typeof s === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(s); }
+function shiftIso(o, delta) {
+  if (Array.isArray(o)) return o.map((x) => shiftIso(x, delta));
+  if (o && typeof o === 'object') { const r = {}; for (const k in o) r[k] = shiftIso(o[k], delta); return r; }
+  if (isoRe(o)) return new Date(Date.parse(o) + delta).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  return o;
+}
+function validate(doc) {
+  if (!doc || doc.schema !== 'codeblack.status.v1' || !Array.isArray(doc.hosts) || !Array.isArray(doc.services)) throw new Error('invalid status document');
+  return doc;
+}
+async function getFixture() {
+  const r = await fetch('fixture.json', { cache: 'no-store' });
+  if (!r.ok) throw new Error('fixture HTTP ' + r.status);
+  const doc = validate(await r.json());
+  return shiftIso(doc, Date.now() - Date.parse(doc.generated_at));
+}
+async function fetchDoc() {
+  if (FIXTURE) return getFixture();
+  const r = await fetch('api/status', { cache: 'no-store' });
+  if (r.status === 404) { S.fallbackFixture = true; return getFixture(); }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  S.fallbackFixture = false;
+  return validate(JSON.parse(await r.text()));
+}
+async function poll() {
+  clearTimeout(S.timer);
+  if (S.fetching) return;
+  S.fetching = true;
+  try {
+    const doc = await fetchDoc();
+    S.doc = doc; S.lastOk = Date.now(); S.failing = false;
+    const g = Date.parse(doc.generated_at); S.lastGen = isFinite(g) ? g : S.lastOk;
+    render(doc);
+  } catch (e) { S.failing = true; }
+  S.fetching = false;
+  chrome();
+  if (!document.hidden) S.timer = setTimeout(poll, POLL_MS);
+}
+function hms(ms) { return new Date(ms).toLocaleTimeString([], { hour12: false }); }
+function chrome() {
+  const d = S.doc, now = Date.now();
+  $('#app').classList.toggle('dim', S.failing && !!d);
+  const ban = $('#banner');
+  if (S.failing) { ban.hidden = false; ban.textContent = 'STATUS BACKEND UNREACHABLE - last data ' + (S.lastOk ? hms(S.lastOk) + ' (' + durS((now - S.lastOk) / 1000) + ' ago)' : 'never'); } else ban.hidden = true;
+  const ab = $('#agebanner');
+  if (S.fallbackFixture && !S.failing) { ab.hidden = false; ab.textContent = 'SHOWING FIXTURE DATA - backend api/status is not available on this server'; }
+  else if (d && !S.failing) {
+    const fast = (d.backend && d.backend.refresh_hints && d.backend.refresh_hints.fast_s) || 5;
+    const age = (now - S.lastGen) / 1000;
+    if (age > Math.max(15, 3 * fast) && Math.abs(age) < 3600) { ab.hidden = false; ab.textContent = 'DATA IS ' + durS(age) + ' OLD - backend may have stopped refreshing; treat green states with suspicion'; } else ab.hidden = true;
+  } else ab.hidden = true;
+  $('#fxtag').hidden = !FIXTURE;
+  $('#clock').textContent = S.lastOk ? hms(S.lastOk) : '--:--:--';
+  $('#dage').textContent = S.lastOk ? 'data ' + durS(Math.max(0, (now - Math.min(S.lastGen || now, now)) / 1000)) + ' old' : 'waiting for data';
+  const ov = $('#overall');
+  if (d && d.summary) {
+    ov.replaceChildren(chip(d.summary.overall, null, { big: true }), h('span', 'muted', (d.summary.attention_count || 0) + ' need attention'));
+    document.title = String(d.summary.overall || 'UNKNOWN') + ' - Code Black Status';
+  }
+}
+/* ---------- wiring ---------- */
+document.addEventListener('click', (e) => {
+  const t = e.target.closest && e.target.closest('.tog'); if (!t) return;
+  const s = t.closest('.sect'); const c = s.classList.toggle('collapsed'); t.textContent = c ? '+' : '-';
+});
+$('#q').addEventListener('input', applyFilter);
+$('#qclear').addEventListener('click', () => { $('#q').value = ''; applyFilter(); $('#q').focus(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && document.activeElement !== $('#q') && !/input|textarea/i.test(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); }
+  else if (e.key === 'Escape' && document.activeElement === $('#q')) { $('#q').value = ''; applyFilter(); $('#q').blur(); }
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(S.timer); else poll(); });
+if (window.matchMedia('(max-width:899px)').matches) {
+  ['s-services', 's-address'].forEach((id) => { const e = document.getElementById(id); e.classList.add('collapsed'); e.querySelector('.tog').textContent = '+'; });
+}
+setInterval(chrome, 1000);
+poll();
+</script>
+</body>
+</html>

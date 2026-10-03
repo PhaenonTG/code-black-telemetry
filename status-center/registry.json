@@ -1,0 +1,1509 @@
+{
+  "schema": "codeblack.status-registry.v1",
+  "instance": {
+    "name": "Code Black System Status Center",
+    "public_base": "https://codeblack-core.tail1d0673.ts.net/status/",
+    "tailnet": "tail1d0673.ts.net"
+  },
+  "defaults": {
+    "fast_s": 8,
+    "host_s": 15,
+    "slow_s": 60,
+    "probe_timeout_s": 4,
+    "stale_factor": 3
+  },
+  "thresholds": {
+    "disk": {
+      "warn_pct": 85,
+      "crit_pct": 92,
+      "warn_free_gb": 25,
+      "crit_free_gb": 10
+    },
+    "weather_ingest_s": {
+      "fresh": 5400,
+      "aging": 10800,
+      "stale": 21600
+    },
+    "weather_watcher_s": {
+      "fresh": 1800,
+      "aging": 3600,
+      "stale": 10800
+    },
+    "backup_age_s": {
+      "warn": 129600,
+      "crit": 259200
+    },
+    "verification_age_s": {
+      "warn": 172800,
+      "crit": 345600
+    }
+  },
+  "hosts": [
+    {
+      "id": "core",
+      "name": "CORE",
+      "role": "Operational core: stream ingest, monitor, radar, Core API, MQTT",
+      "lan_ip": "192.168.0.187",
+      "tailscale_ip": "100.96.77.89",
+      "tailscale_peer": "codeblack-core",
+      "expected_online": true,
+      "critical": true,
+      "collector": {
+        "mode": "in-process"
+      },
+      "checks": {
+        "disks": [
+          "/"
+        ],
+        "units": [
+          "codeblack-core-api",
+          "mediamtx",
+          "codeblack-monitor",
+          "codeblack-radar-worker",
+          "codeblack-radar-product",
+          "codeblack-overlay",
+          "codeblack-overlay-dev",
+          "codeblack-mqtt-broker",
+          "codeblack-mqtt-bridge",
+          "codeblack-owntracks-bridge",
+          "codeblack-ai",
+          "ollama",
+          "cloudflared",
+          "tailscaled",
+          "codeblack-status-center"
+        ],
+        "symlinks": [
+          {
+            "name": "core-api",
+            "path": "/srv/codeblack/services/core-api-current"
+          },
+          {
+            "name": "monitor",
+            "path": "/srv/codeblack/services/monitor-current"
+          },
+          {
+            "name": "overlay",
+            "path": "/srv/codeblack/services/overlay-current"
+          },
+          {
+            "name": "radar-product",
+            "path": "/srv/codeblack/releases/radar-product/current"
+          },
+          {
+            "name": "status-center",
+            "path": "/srv/codeblack/releases/status-center/current"
+          }
+        ]
+      }
+    },
+    {
+      "id": "edge",
+      "name": "EDGE",
+      "role": "Edge infrastructure: Pi-hole DNS, weather intelligence, notifications, backups",
+      "lan_ip": "192.168.0.12",
+      "tailscale_ip": "100.88.198.67",
+      "tailscale_peer": "codeblack-edge",
+      "expected_online": true,
+      "critical": true,
+      "collector": {
+        "mode": "remote",
+        "url": "http://100.88.198.67:9110/v1/metrics",
+        "bind": "100.88.198.67",
+        "port": 9110
+      },
+      "checks": {
+        "disks": [
+          "/"
+        ],
+        "units": [
+          "pihole-FTL",
+          "codeblack-edge-status",
+          "codeblack-edge-dashboard",
+          "codeblack-discord-bot",
+          "tailscaled",
+          "codeblack-functional-probes.timer",
+          "codeblack-weather-ingest.timer",
+          "codeblack-weather-publication-watcher.timer",
+          "codeblack-weather-ingest.service",
+          "codeblack-weather-publication-watcher.service",
+          "codeblack-core-health.timer",
+          "codeblack-edge-health.timer",
+          "codeblack-core-backup.timer",
+          "codeblack-core-backup.service",
+          "codeblack-backup-verify.timer",
+          "codeblack-backup-verify.service",
+          "codeblack-edge-alert-evaluate.timer",
+          "codeblack-edge-reliability.timer",
+          "codeblack-edge-status-collect.timer",
+          "codeblack-fleet-presence.timer",
+          "codeblack-notification-dispatch.timer",
+          "codeblack-ops-infrastructure.timer"
+        ],
+        "files": [
+          {
+            "name": "functional-probes",
+            "path": "/srv/codeblack/data/status/functional-probes.json",
+            "pick": [
+              "status",
+              "core_api.ok",
+              "mqtt.connect_latency_ms",
+              "phaenon3.ok",
+              "phaenon3.status",
+              "phaenon3.gpu.used_mb",
+              "phaenon3.gpu.total_mb",
+              "phaenon3.learning_queue.currently_running",
+              "phaenon3.learning_queue.last_result"
+            ]
+          },
+          {
+            "name": "stream-state",
+            "path": "/srv/codeblack/data/status/stream.json",
+            "pick": [
+              "source",
+              "availability",
+              "checked_at",
+              "last_error"
+            ]
+          },
+          {
+            "name": "backup-verification",
+            "path": "/srv/codeblack/data/status/backup-verification.json",
+            "pick": [
+              "status",
+              "generated_at",
+              "snapshot",
+              "backup_complete",
+              "inventory_present",
+              "repositories_checked",
+              "repositories_expected"
+            ]
+          },
+          {
+            "name": "notification-status",
+            "path": "/srv/codeblack/data/status/notification-status.json",
+            "pick": [
+              "generated_at",
+              "enabled",
+              "configured",
+              "queue.outbox",
+              "queue.failed",
+              "last_result"
+            ]
+          },
+          {
+            "name": "edge-status-json",
+            "path": "/srv/codeblack/data/status/status.json"
+          },
+          {
+            "name": "ops-infrastructure-json",
+            "path": "/srv/codeblack/data/status/ops-infrastructure.json"
+          },
+          {
+            "name": "fleet-presence-json",
+            "path": "/srv/codeblack/data/status/fleet-presence.json"
+          }
+        ],
+        "newest": [
+          {
+            "name": "hrrr-grib",
+            "dir": "/srv/codeblack/data/weather-cache/grib",
+            "pattern": "\\.grib2$",
+            "depth": 0
+          },
+          {
+            "name": "core-snapshots",
+            "dir": "/srv/codeblack/backups/core/snapshots",
+            "dirs": true,
+            "pattern": "^\\d{8}T\\d{6}Z$"
+          }
+        ],
+        "commands": [
+          "pihole_version"
+        ]
+      }
+    },
+    {
+      "id": "phaenon3",
+      "name": "PHAENON3",
+      "role": "Shared GPU compute: AEGIS/AI router, AI Lab, Spencer Labs (also a gaming PC; node.json marks it non-authoritative)",
+      "lan_ip": "192.168.0.231",
+      "tailscale_ip": "100.66.216.11",
+      "tailscale_peer": "PHAENON3",
+      "expected_online": true,
+      "critical": false,
+      "collector": {
+        "mode": "remote",
+        "url": "https://phaenon3.tail1d0673.ts.net/status-collector/v1/metrics",
+        "bind": "127.0.0.1",
+        "port": 9110
+      },
+      "checks": {
+        "gpu": true,
+        "disks": [
+          "C:\\"
+        ],
+        "units": [
+          "CodeBlack-AI-Router",
+          "CodeBlack Aegis Factory Watchdog",
+          "CodeBlack-AILab-Deploy",
+          "CodeBlack-AILab-HealthWatch",
+          "Spencer Labs Media Lab",
+          "Spencer Labs Wan 2.2 Q4 Status Monitor",
+          "Spencer Labs Wan 2.2 Q4 Verification Watcher",
+          "Spencer Labs Wan 2.2 Q4 Download Recovery"
+        ],
+        "http": [
+          {
+            "name": "ollama-ps",
+            "url": "http://127.0.0.1:11434/api/ps",
+            "pick": [
+              "names:models"
+            ]
+          },
+          {
+            "name": "ollama-version",
+            "url": "http://127.0.0.1:11434/api/version",
+            "pick": [
+              "version"
+            ]
+          },
+          {
+            "name": "sandbox-comfy-queue",
+            "url": "http://127.0.0.1:8190/queue",
+            "pick": [
+              "len:queue_running",
+              "len:queue_pending"
+            ]
+          },
+          {
+            "name": "ailab-health",
+            "url": "http://127.0.0.1:8800/health",
+            "pick": [
+              "ok",
+              "state"
+            ]
+          },
+          {
+            "name": "ailab-status",
+            "url": "http://127.0.0.1:8800/status",
+            "pick": [
+              "data.mode",
+              "data.queue",
+              "data.experiments_total",
+              "data.proposals_pending"
+            ]
+          },
+          {
+            "name": "weather-worker",
+            "url": "http://100.66.216.11:8798/health",
+            "pick": [
+              "status",
+              "version",
+              "uptime_seconds",
+              "latest_received_at"
+            ]
+          }
+        ],
+        "files": [
+          {
+            "name": "weather-watchdog-state",
+            "path": "C:\\CodeBlack\\services\\weather-worker\\watchdog-state.json",
+            "pick": [
+              "weather_worker",
+              "supervisor",
+              "last_health_check",
+              "recovery_count"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "hytetower",
+      "name": "HYTETOWER",
+      "role": "Streaming workstation (OBS/production; services not documented, reachability only)",
+      "lan_ip": "192.168.0.27",
+      "tailscale_ip": "100.103.139.120",
+      "tailscale_peer": "hytetower",
+      "expected_online": true,
+      "critical": false,
+      "collector": {
+        "mode": "none"
+      },
+      "reach": [
+        {
+          "probe": "hytetower_rdp",
+          "label": "RDP 3389"
+        },
+        {
+          "probe": "hytetower_ssh",
+          "label": "SSH 22"
+        }
+      ],
+      "checks": {}
+    },
+    {
+      "id": "raspberrypi",
+      "name": "raspberrypi",
+      "role": "Raspberry Pi (Tailscale peer; role not documented)",
+      "lan_ip": null,
+      "tailscale_ip": "100.80.136.32",
+      "tailscale_peer": "raspberrypi",
+      "expected_online": false,
+      "critical": false,
+      "collector": {
+        "mode": "none"
+      },
+      "checks": {}
+    }
+  ],
+  "probes": [
+    {
+      "id": "core_api",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8000/health",
+      "interval": "host",
+      "ok_json": {
+        "path": "status",
+        "in": [
+          "healthy",
+          "ok"
+        ]
+      }
+    },
+    {
+      "id": "core_api_storm",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8000/api/storm-intel/v1/health",
+      "interval": "slow",
+      "ok_json": {
+        "path": "status",
+        "in": [
+          "healthy"
+        ]
+      }
+    },
+    {
+      "id": "core_api_soundings",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8000/api/soundings/v1/health",
+      "interval": "slow",
+      "ok_json": {
+        "path": "status",
+        "in": [
+          "healthy"
+        ]
+      }
+    },
+    {
+      "id": "core_api_fabric",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8000/api/fabric/v1/health",
+      "interval": "slow",
+      "ok_json": {
+        "path": "status",
+        "in": [
+          "healthy"
+        ]
+      }
+    },
+    {
+      "id": "mtx_paths",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:9997/v3/paths/list",
+      "interval": "fast"
+    },
+    {
+      "id": "mtx_srt",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:9997/v3/srtconns/list",
+      "interval": "fast"
+    },
+    {
+      "id": "mtx_webrtc",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:9997/v3/webrtcsessions/list",
+      "interval": "fast"
+    },
+    {
+      "id": "monitor_health",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8896/api/source-health",
+      "interval": "fast"
+    },
+    {
+      "id": "radar_product",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8791/v1/composite/latest.json",
+      "interval": "fast"
+    },
+    {
+      "id": "radar_product_health",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8791/v1/health",
+      "interval": "slow",
+      "pick": [
+        "version",
+        "ok"
+      ]
+    },
+    {
+      "id": "radar_worker",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8787/api/v1/radar/health",
+      "interval": "host",
+      "ok_json": {
+        "path": "ok",
+        "in": [
+          true
+        ]
+      }
+    },
+    {
+      "id": "overlay_http",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8899/",
+      "interval": "slow",
+      "no_json": true
+    },
+    {
+      "id": "ollama_core",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:11434/api/version",
+      "interval": "slow"
+    },
+    {
+      "id": "mqtt_tcp",
+      "kind": "tcp",
+      "host": "100.96.77.89",
+      "port": 8883,
+      "interval": "host"
+    },
+    {
+      "id": "tailscale",
+      "kind": "tailscale",
+      "interval": "host"
+    },
+    {
+      "id": "internet_dns",
+      "kind": "dns",
+      "server": "1.1.1.1",
+      "port": 53,
+      "interval": "slow",
+      "queries": [
+        {
+          "name": "resolve example.com (1.1.1.1)",
+          "qname": "example.com",
+          "expect": "answer"
+        }
+      ]
+    },
+    {
+      "id": "pihole_dns_lan",
+      "kind": "dns",
+      "server": "192.168.0.12",
+      "port": 53,
+      "interval": "slow",
+      "queries": [
+        {
+          "name": "resolves example.com",
+          "qname": "example.com",
+          "expect": "answer"
+        },
+        {
+          "name": "resolves github.com",
+          "qname": "github.com",
+          "expect": "answer"
+        },
+        {
+          "name": "blocks ads.google.com",
+          "qname": "ads.google.com",
+          "expect": "blocked"
+        }
+      ]
+    },
+    {
+      "id": "pihole_dns_ts",
+      "kind": "dns",
+      "server": "100.88.198.67",
+      "port": 53,
+      "interval": "slow",
+      "queries": [
+        {
+          "name": "resolves example.com",
+          "qname": "example.com",
+          "expect": "answer"
+        },
+        {
+          "name": "blocks ads.google.com",
+          "qname": "ads.google.com",
+          "expect": "blocked"
+        }
+      ]
+    },
+    {
+      "id": "pihole_web_lan",
+      "kind": "http_json",
+      "url": "http://192.168.0.12/admin/",
+      "interval": "slow",
+      "no_json": true,
+      "accept": [
+        200,
+        301,
+        302,
+        401,
+        403
+      ]
+    },
+    {
+      "id": "pihole_web_ts",
+      "kind": "http_json",
+      "url": "http://100.88.198.67/admin/",
+      "interval": "slow",
+      "no_json": true,
+      "accept": [
+        200,
+        301,
+        302,
+        401,
+        403
+      ]
+    },
+    {
+      "id": "core_collector",
+      "kind": "collector_local",
+      "host": "core",
+      "interval": "host"
+    },
+    {
+      "id": "edge_collector",
+      "kind": "collector",
+      "host": "edge",
+      "interval": "host"
+    },
+    {
+      "id": "phaenon3_collector",
+      "kind": "collector",
+      "host": "phaenon3",
+      "interval": "host"
+    },
+    {
+      "id": "medialab_health",
+      "kind": "http_json",
+      "url": "https://phaenon3.tail1d0673.ts.net/api/health",
+      "interval": "host",
+      "pick": [
+        "ok",
+        "name",
+        "version"
+      ],
+      "ok_json": {
+        "path": "ok",
+        "in": [
+          true
+        ]
+      }
+    },
+    {
+      "id": "medialab_system",
+      "kind": "http_json",
+      "url": "https://phaenon3.tail1d0673.ts.net/api/system",
+      "interval": "host",
+      "pick": [
+        "gpu",
+        "memory",
+        "priority"
+      ]
+    },
+    {
+      "id": "medialab_download",
+      "kind": "http_json",
+      "url": "https://phaenon3.tail1d0673.ts.net/api/download",
+      "interval": "host",
+      "pick": [
+        "ready",
+        "workflow",
+        "quant",
+        "download.state",
+        "download.bytes",
+        "download.expected_bytes",
+        "download.percentage",
+        "download.current_rate_bps",
+        "download.retry_count",
+        "download.last_progress_timestamp",
+        "download.integrity_verification",
+        "download.message",
+        "download.updated_at",
+        "files.diffusion.checksum_verified"
+      ]
+    },
+    {
+      "id": "sandbox_health",
+      "kind": "http_json",
+      "url": "https://phaenon3.tail1d0673.ts.net/image-sandbox/api/health",
+      "interval": "host",
+      "pick": [
+        "draft.available",
+        "draft.device",
+        "quality.state",
+        "quality.model",
+        "quality.required_free_mib",
+        "quality.gpu.free_mib",
+        "quality.gpu.used_mib",
+        "quality.gpu.utilization_percent"
+      ]
+    },
+    {
+      "id": "ai_health",
+      "kind": "http_json",
+      "url": "https://phaenon3.tail1d0673.ts.net/ai/health",
+      "interval": "host",
+      "pick": [
+        "status",
+        "service",
+        "version",
+        "build",
+        "started_at",
+        "ollama_reachable",
+        "general_model_ready",
+        "vision_model_ready",
+        "coder_model_ready",
+        "models_available",
+        "status_adapter.state",
+        "status_adapter.last_sync",
+        "status_adapter.schema",
+        "status_adapter.source_generated_at",
+        "status_adapter.source_age_s",
+        "status_adapter.consecutive_failures"
+      ],
+      "ok_json": {
+        "path": "status",
+        "in": [
+          "ok"
+        ]
+      }
+    },
+    {
+      "id": "hytetower_rdp",
+      "kind": "tcp",
+      "host": "100.103.139.120",
+      "port": 3389,
+      "interval": "host"
+    },
+    {
+      "id": "hytetower_ssh",
+      "kind": "tcp",
+      "host": "100.103.139.120",
+      "port": 22,
+      "interval": "host"
+    },
+    {
+      "id": "phaenon3_tcp",
+      "kind": "tcp",
+      "host": "100.66.216.11",
+      "port": 443,
+      "interval": "host"
+    }
+  ],
+  "services": [
+    {
+      "id": "core-api",
+      "name": "Core API",
+      "host": "core",
+      "category": "core",
+      "role": "Fabric/chase/storm-intel API",
+      "critical": true,
+      "unit": "codeblack-core-api",
+      "probe": "core_api",
+      "release_symlink": "core-api",
+      "deps": [],
+      "urls": {
+        "local": "http://127.0.0.1:8000/",
+        "health": "http://127.0.0.1:8000/health"
+      },
+      "docs": "/srv/codeblack/CORE_ROLLOUT_STATUS.md (Core host)"
+    },
+    {
+      "id": "mediamtx",
+      "name": "MediaMTX",
+      "host": "core",
+      "category": "streaming",
+      "role": "SRT ingest, WebRTC egress, path registry",
+      "critical": true,
+      "unit": "mediamtx",
+      "probe": "mtx_paths",
+      "deps": [],
+      "urls": {
+        "local": "http://127.0.0.1:9997/v3/paths/list",
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net/mtx/",
+        "health": "http://127.0.0.1:9997/v3/paths/list"
+      },
+      "docs": "/etc/mediamtx/mediamtx.yml (Core host)"
+    },
+    {
+      "id": "stream-monitor",
+      "name": "Stream Monitor",
+      "host": "core",
+      "category": "streaming",
+      "role": "Source health, video+overlay compositor frontend",
+      "critical": true,
+      "unit": "codeblack-monitor",
+      "probe": "monitor_health",
+      "release_symlink": "monitor",
+      "deps": [
+        "mediamtx"
+      ],
+      "urls": {
+        "local": "http://127.0.0.1:8896/",
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net/monitor/",
+        "manage": "https://codeblack-core.tail1d0673.ts.net/monitor/",
+        "health": "http://127.0.0.1:8896/api/source-health"
+      },
+      "docs": "STREAM-MONITOR.md (Core monitor release)"
+    },
+    {
+      "id": "radar-product",
+      "name": "Radar Product (server-side)",
+      "host": "core",
+      "category": "radar",
+      "role": "NEXRAD composite acquisition, immutable frames, freshness manifest",
+      "critical": true,
+      "unit": "codeblack-radar-product",
+      "probe": "radar_product",
+      "release_symlink": "radar-product",
+      "deps": [],
+      "urls": {
+        "local": "http://127.0.0.1:8791/v1/composite/latest.json",
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json",
+        "health": "http://127.0.0.1:8791/v1/health"
+      },
+      "docs": "docs/radar-product-v1.md (Chase repo)"
+    },
+    {
+      "id": "radar-worker",
+      "name": "Radar Worker (KSGF single-site)",
+      "host": "core",
+      "category": "radar",
+      "role": "Client-demand single-site NEXRAD (VEL/SRV/CC); health is process liveness only",
+      "unit": "codeblack-radar-worker",
+      "probe": "radar_worker",
+      "deps": [],
+      "urls": {
+        "local": "http://127.0.0.1:8787/api/v1/radar/health",
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net/radar/api/v1/radar/health",
+        "health": "http://127.0.0.1:8787/api/v1/radar/health"
+      },
+      "docs": "radar-worker/worker.cjs (Chase repo)"
+    },
+    {
+      "id": "overlay",
+      "name": "Broadcast Overlay",
+      "host": "core",
+      "category": "streaming",
+      "role": "Browser overlay page (PROGRAM graphics)",
+      "unit": "codeblack-overlay",
+      "probe": "overlay_http",
+      "release_symlink": "overlay",
+      "deps": [
+        "radar-product"
+      ],
+      "urls": {
+        "local": "http://127.0.0.1:8899/",
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net/overlay/"
+      },
+      "docs": "docs/live-overlay-telemetry.md (Chase repo)"
+    },
+    {
+      "id": "overlay-dev",
+      "name": "Overlay (dev)",
+      "host": "core",
+      "category": "streaming",
+      "role": "Private overlay iteration path",
+      "unit": "codeblack-overlay-dev",
+      "informational": true,
+      "deps": [],
+      "urls": {
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net/overlay-dev/"
+      }
+    },
+    {
+      "id": "mqtt-broker",
+      "name": "MQTT Broker",
+      "host": "core",
+      "category": "network",
+      "role": "Private mTLS MQTT transport",
+      "unit": "codeblack-mqtt-broker",
+      "probe": "mqtt_tcp",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "mqtt-bridge",
+      "name": "MQTT Bridge",
+      "host": "core",
+      "category": "network",
+      "role": "MQTT -> Fabric engine",
+      "unit": "codeblack-mqtt-bridge",
+      "deps": [
+        "mqtt-broker",
+        "core-api"
+      ],
+      "urls": {}
+    },
+    {
+      "id": "owntracks-bridge",
+      "name": "OwnTracks / Mobile Mesonet Bridge",
+      "host": "core",
+      "category": "network",
+      "role": "OwnTracks -> Fabric HTTP ingest (no health endpoint; systemd state only)",
+      "unit": "codeblack-owntracks-bridge",
+      "deps": [
+        "core-api"
+      ],
+      "urls": {
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net/owntracks/"
+      }
+    },
+    {
+      "id": "core-ai",
+      "name": "Code Black Intelligence",
+      "host": "core",
+      "category": "ai",
+      "role": "Core-side AI service (V1.3)",
+      "unit": "codeblack-ai",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "ollama-core",
+      "name": "Ollama (Core)",
+      "host": "core",
+      "category": "ai",
+      "role": "Local model runtime on Core (no models loaded)",
+      "unit": "ollama",
+      "probe": "ollama_core",
+      "informational": true,
+      "deps": [],
+      "urls": {
+        "local": "http://127.0.0.1:11434/"
+      }
+    },
+    {
+      "id": "cloudflared",
+      "name": "cloudflared",
+      "host": "core",
+      "category": "network",
+      "role": "Cloudflare tunnel client (existing; not managed here)",
+      "unit": "cloudflared",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "tailscaled-core",
+      "name": "Tailscale (Core)",
+      "host": "core",
+      "category": "network",
+      "role": "Tailnet node + Serve mounts",
+      "unit": "tailscaled",
+      "probe": "tailscale",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "status-center",
+      "name": "System Status Center",
+      "host": "core",
+      "category": "core",
+      "role": "This dashboard (read-only aggregator)",
+      "unit": "codeblack-status-center",
+      "release_symlink": "status-center",
+      "deps": [],
+      "urls": {
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net/status/"
+      },
+      "docs": "docs/status-center-v1.md (Chase repo)"
+    },
+    {
+      "id": "pihole-ftl",
+      "name": "Pi-hole FTL (DNS)",
+      "host": "edge",
+      "category": "dns",
+      "role": "Network DNS filtering resolver",
+      "critical": true,
+      "unit": "pihole-FTL",
+      "probe": "pihole_dns_lan",
+      "deps": [],
+      "urls": {
+        "local": "http://192.168.0.12/admin/",
+        "tailscale": "http://100.88.198.67/admin/",
+        "manage": "http://192.168.0.12/admin/"
+      },
+      "docs": "Pi-hole v6 (Edge host)"
+    },
+    {
+      "id": "edge-status",
+      "name": "Edge Status API",
+      "host": "edge",
+      "category": "edge",
+      "role": "Serves Edge status.json (data currently stale; collectors stopped)",
+      "unit": "codeblack-edge-status",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-dashboard",
+      "name": "Edge Dashboard",
+      "host": "edge",
+      "category": "edge",
+      "role": "Edge infrastructure dashboard (overview data currently stale)",
+      "unit": "codeblack-edge-dashboard",
+      "deps": [],
+      "urls": {
+        "tailscale": "https://codeblack-edge.tail1d0673.ts.net/",
+        "manage": "https://codeblack-edge.tail1d0673.ts.net/"
+      }
+    },
+    {
+      "id": "discord-bot",
+      "name": "Discord Bot",
+      "host": "edge",
+      "category": "edge",
+      "role": "Notifications / weather intelligence bot",
+      "unit": "codeblack-discord-bot",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-functional-probes",
+      "name": "Edge Functional Probes",
+      "host": "edge",
+      "category": "edge",
+      "role": "Every-minute Core/MQTT/PHAENON3 probes (timer)",
+      "unit": "codeblack-functional-probes.timer",
+      "fresh_file": {
+        "name": "functional-probes",
+        "max_age_s": 180
+      },
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-notification-dispatch",
+      "name": "Edge Notification Dispatch",
+      "host": "edge",
+      "category": "edge",
+      "role": "Dispatches queued alerts (timer)",
+      "unit": "codeblack-notification-dispatch.timer",
+      "critical": true,
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-alert-evaluate",
+      "name": "Edge Alert Evaluate",
+      "host": "edge",
+      "category": "edge",
+      "role": "Evaluates alert rules (timer)",
+      "unit": "codeblack-edge-alert-evaluate.timer",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-status-collect",
+      "name": "Edge Status Collect",
+      "host": "edge",
+      "category": "edge",
+      "role": "Builds Edge status.json (timer)",
+      "unit": "codeblack-edge-status-collect.timer",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-ops-infrastructure",
+      "name": "Edge Ops Infrastructure",
+      "host": "edge",
+      "category": "edge",
+      "role": "Builds ops-infrastructure.json (timer)",
+      "unit": "codeblack-ops-infrastructure.timer",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-fleet-presence",
+      "name": "Edge Fleet Presence",
+      "host": "edge",
+      "category": "edge",
+      "role": "Builds fleet-presence.json (timer)",
+      "unit": "codeblack-fleet-presence.timer",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-reliability",
+      "name": "Edge Reliability",
+      "host": "edge",
+      "category": "edge",
+      "role": "Edge reliability evaluation (timer)",
+      "unit": "codeblack-edge-reliability.timer",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-weather-ingest",
+      "name": "HRRR Weather Ingest",
+      "host": "edge",
+      "category": "weather",
+      "role": "Bounded HRRR local weather-store ingest (timer)",
+      "unit": "codeblack-weather-ingest.timer",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-weather-watcher",
+      "name": "HRRR Publication Watcher",
+      "host": "edge",
+      "category": "weather",
+      "role": "Lightweight HRRR publication watcher (timer)",
+      "unit": "codeblack-weather-publication-watcher.timer",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-core-backup",
+      "name": "Core Backup Pull",
+      "host": "edge",
+      "category": "backup",
+      "role": "Daily pull of Core snapshots to Edge (timer)",
+      "unit": "codeblack-core-backup.timer",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "edge-backup-verify",
+      "name": "Backup Verification",
+      "host": "edge",
+      "category": "backup",
+      "role": "Daily snapshot verification (timer)",
+      "unit": "codeblack-backup-verify.timer",
+      "deps": [
+        "edge-core-backup"
+      ],
+      "urls": {}
+    },
+    {
+      "id": "ai-router",
+      "name": "AI Router / AEGIS",
+      "host": "phaenon3",
+      "category": "ai",
+      "role": "Auth-gated local AI router; only /ai/health is open (queue/active job need auth: UNKNOWN)",
+      "unit": "CodeBlack-AI-Router",
+      "probe": "ai_health",
+      "deps": [
+        "ollama-phaenon3"
+      ],
+      "urls": {
+        "local": "http://127.0.0.1:8799/ai/health",
+        "tailscale": "https://phaenon3.tail1d0673.ts.net/ai/health",
+        "health": "https://phaenon3.tail1d0673.ts.net/ai/health"
+      },
+      "docs": "services/ai-router/docs/AUTH_ARCHITECTURE.md (PHAENON3)"
+    },
+    {
+      "id": "aegis-factory-watchdog",
+      "name": "Aegis Factory Watchdog",
+      "host": "phaenon3",
+      "category": "ai",
+      "role": "Keeps the AEGIS factory running (scheduled task)",
+      "unit": "CodeBlack Aegis Factory Watchdog",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "ailab-runner",
+      "name": "AI Lab Deployment Runner",
+      "host": "phaenon3",
+      "category": "ai",
+      "role": "AI Lab experiment/deployment runner",
+      "unit": "CodeBlack-AILab-Deploy",
+      "collector_http": "ailab-health",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "ailab-healthwatch",
+      "name": "AI Lab Health Watch",
+      "host": "phaenon3",
+      "category": "ai",
+      "role": "AI Lab health task",
+      "unit": "CodeBlack-AILab-HealthWatch",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "ollama-phaenon3",
+      "name": "Ollama (PHAENON3)",
+      "host": "phaenon3",
+      "category": "ai",
+      "role": "Local model runtime (loaded model from /api/ps)",
+      "collector_http": "ollama-version",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "weather-worker",
+      "name": "Weather Worker (PHAENON3)",
+      "host": "phaenon3",
+      "category": "weather",
+      "role": "Temporary GPU weather worker (non-authoritative); health is liveness only (task state not readable without elevation)",
+      "collector_http": "weather-worker",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "weather-watchdog",
+      "name": "Weather Worker Watchdog",
+      "host": "phaenon3",
+      "category": "weather",
+      "role": "Supervises the weather worker (state file freshness)",
+      "deps": [],
+      "urls": {},
+      "fresh_file": {
+        "name": "weather-watchdog-state",
+        "max_age_s": 900
+      }
+    },
+    {
+      "id": "media-lab",
+      "name": "Media Lab",
+      "host": "phaenon3",
+      "category": "labs",
+      "labs": true,
+      "role": "Spencer Labs media generation UI",
+      "unit": "Spencer Labs Media Lab",
+      "probe": "medialab_health",
+      "deps": [],
+      "urls": {
+        "local": "http://127.0.0.1:8877/",
+        "tailscale": "https://phaenon3.tail1d0673.ts.net/",
+        "manage": "https://phaenon3.tail1d0673.ts.net/",
+        "health": "https://phaenon3.tail1d0673.ts.net/api/health"
+      }
+    },
+    {
+      "id": "image-sandbox",
+      "name": "Image Sandbox",
+      "host": "phaenon3",
+      "category": "labs",
+      "labs": true,
+      "role": "Spencer Labs image generation",
+      "probe": "sandbox_health",
+      "deps": [
+        "sandbox-comfyui"
+      ],
+      "urls": {
+        "local": "http://127.0.0.1:8878/",
+        "tailscale": "https://phaenon3.tail1d0673.ts.net/image-sandbox/",
+        "manage": "https://phaenon3.tail1d0673.ts.net/image-sandbox/",
+        "health": "https://phaenon3.tail1d0673.ts.net/image-sandbox/api/health"
+      }
+    },
+    {
+      "id": "sandbox-comfyui",
+      "name": "Sandbox ComfyUI (CPU)",
+      "host": "phaenon3",
+      "category": "labs",
+      "labs": true,
+      "role": "Image Sandbox ComfyUI worker (port 8190)",
+      "collector_http": "sandbox-comfy-queue",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "q4-status-monitor",
+      "name": "Wan 2.2 Q4 Status Monitor",
+      "host": "phaenon3",
+      "category": "labs",
+      "labs": true,
+      "role": "Q4 download status task",
+      "unit": "Spencer Labs Wan 2.2 Q4 Status Monitor",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "q4-verification-watcher",
+      "name": "Wan 2.2 Q4 Verification Watcher",
+      "host": "phaenon3",
+      "category": "labs",
+      "labs": true,
+      "role": "Q4 integrity verification task",
+      "unit": "Spencer Labs Wan 2.2 Q4 Verification Watcher",
+      "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "q4-download-recovery",
+      "name": "Wan 2.2 Q4 Download Recovery",
+      "host": "phaenon3",
+      "category": "labs",
+      "labs": true,
+      "role": "Q4 download recovery task (runs on demand)",
+      "unit": "Spencer Labs Wan 2.2 Q4 Download Recovery",
+      "informational": true,
+      "deps": [],
+      "urls": {}
+    }
+  ],
+  "links": [
+    {
+      "id": "ops",
+      "name": "OPS",
+      "purpose": "Code Black OPS web app / gateway",
+      "host": "public",
+      "access": "PUBLIC",
+      "url": "https://ops.codeblackwx.com/",
+      "group": "Operations",
+      "verify": true
+    },
+    {
+      "id": "stream-monitor",
+      "name": "Stream Monitor",
+      "purpose": "Source health and video+overlay monitor",
+      "host": "core",
+      "access": "TAILSCALE",
+      "url": "https://codeblack-core.tail1d0673.ts.net/monitor/",
+      "group": "Streaming",
+      "verify": true
+    },
+    {
+      "id": "overlay",
+      "name": "Broadcast Overlay",
+      "purpose": "PROGRAM overlay page",
+      "host": "core",
+      "access": "TAILSCALE",
+      "url": "https://codeblack-core.tail1d0673.ts.net/overlay/",
+      "group": "Streaming",
+      "verify": true
+    },
+    {
+      "id": "overlay-dev",
+      "name": "Overlay (dev)",
+      "purpose": "Overlay iteration path",
+      "host": "core",
+      "access": "TAILSCALE",
+      "url": "https://codeblack-core.tail1d0673.ts.net/overlay-dev/",
+      "group": "Streaming",
+      "verify": true
+    },
+    {
+      "id": "mtx-striker",
+      "name": "WebRTC viewer: STRIKER",
+      "purpose": "MediaMTX WebRTC player for path 'spencer'",
+      "host": "core",
+      "access": "TAILSCALE",
+      "url": "https://codeblack-core.tail1d0673.ts.net/mtx/spencer/",
+      "group": "Streaming",
+      "verify": true
+    },
+    {
+      "id": "mtx-tessa",
+      "name": "WebRTC viewer: TESSA",
+      "purpose": "MediaMTX WebRTC player for path 'tessa'",
+      "host": "core",
+      "access": "TAILSCALE",
+      "url": "https://codeblack-core.tail1d0673.ts.net/mtx/tessa/",
+      "group": "Streaming",
+      "verify": true
+    },
+    {
+      "id": "radar-product",
+      "name": "Radar product manifest",
+      "purpose": "Server-side radar freshness/frames (JSON)",
+      "host": "core",
+      "access": "TAILSCALE",
+      "url": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json",
+      "group": "Radar & Weather",
+      "verify": true
+    },
+    {
+      "id": "radar-product-health",
+      "name": "Radar product health",
+      "purpose": "Radar service health (JSON)",
+      "host": "core",
+      "access": "TAILSCALE",
+      "url": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/health",
+      "group": "Radar & Weather",
+      "verify": true
+    },
+    {
+      "id": "radar-worker",
+      "name": "Radar worker health (KSGF)",
+      "purpose": "Single-site worker liveness (JSON)",
+      "host": "core",
+      "access": "TAILSCALE",
+      "url": "https://codeblack-core.tail1d0673.ts.net/radar/api/v1/radar/health",
+      "group": "Radar & Weather",
+      "verify": true
+    },
+    {
+      "id": "pihole-edge-lan",
+      "name": "Pi-hole (Edge) - LAN",
+      "purpose": "Pi-hole admin dashboard (login required)",
+      "host": "edge",
+      "access": "LAN",
+      "url": "http://192.168.0.12/admin/",
+      "group": "DNS",
+      "verify": true
+    },
+    {
+      "id": "pihole-edge-ts",
+      "name": "Pi-hole (Edge) - Tailscale",
+      "purpose": "Pi-hole admin dashboard (login required)",
+      "host": "edge",
+      "access": "TAILSCALE",
+      "url": "http://100.88.198.67/admin/",
+      "group": "DNS",
+      "verify": true
+    },
+    {
+      "id": "edge-dashboard",
+      "name": "Edge Dashboard",
+      "purpose": "Edge infrastructure dashboard (overview data currently stale)",
+      "host": "edge",
+      "access": "TAILSCALE",
+      "url": "https://codeblack-edge.tail1d0673.ts.net/",
+      "group": "Operations",
+      "verify": true
+    },
+    {
+      "id": "aegis-health",
+      "name": "AEGIS / AI router health",
+      "purpose": "AI router health (JSON; UI requires sign-in)",
+      "host": "phaenon3",
+      "access": "TAILSCALE",
+      "url": "https://phaenon3.tail1d0673.ts.net/ai/health",
+      "group": "AI",
+      "verify": true
+    },
+    {
+      "id": "media-lab",
+      "name": "Media Lab",
+      "purpose": "Spencer Labs media generation",
+      "host": "phaenon3",
+      "access": "TAILSCALE",
+      "url": "https://phaenon3.tail1d0673.ts.net/",
+      "group": "Spencer Labs",
+      "verify": true
+    },
+    {
+      "id": "image-sandbox",
+      "name": "Image Sandbox",
+      "purpose": "Spencer Labs image generation",
+      "host": "phaenon3",
+      "access": "TAILSCALE",
+      "url": "https://phaenon3.tail1d0673.ts.net/image-sandbox/",
+      "group": "Spencer Labs",
+      "verify": true
+    },
+    {
+      "id": "status-center",
+      "name": "System Status Center",
+      "purpose": "This page",
+      "host": "core",
+      "access": "TAILSCALE",
+      "url": "https://codeblack-core.tail1d0673.ts.net/status/",
+      "group": "Operations",
+      "verify": true
+    }
+  ],
+  "streaming": {
+    "monitor_url": "https://codeblack-core.tail1d0673.ts.net/monitor/",
+    "sources": [
+      {
+        "id": "STRIKER",
+        "name": "STRIKER",
+        "aliases": [
+          "spencer"
+        ],
+        "operator": "Spencer"
+      },
+      {
+        "id": "TESSA",
+        "name": "TESSA",
+        "aliases": [
+          "nick",
+          "tessa"
+        ],
+        "operator": "Nick"
+      }
+    ]
+  },
+  "weather": [
+    {
+      "id": "hrrr-core-provider",
+      "name": "Core storm-intel provider (HRRR/RAP)",
+      "host": "core",
+      "kind": "core_api_health",
+      "probe": "core_api_storm",
+      "note": "Core API exposes provider health only, not a product time"
+    },
+    {
+      "id": "hrrr-edge-ingest",
+      "name": "Edge HRRR ingest (newest GRIB)",
+      "host": "edge",
+      "kind": "edge_newest",
+      "newest": "hrrr-grib",
+      "unit": "codeblack-weather-ingest.service",
+      "thresholds": "weather_ingest_s"
+    },
+    {
+      "id": "hrrr-edge-watcher",
+      "name": "Edge HRRR publication watcher",
+      "host": "edge",
+      "kind": "edge_unit_run",
+      "unit": "codeblack-weather-publication-watcher.service",
+      "thresholds": "weather_watcher_s"
+    },
+    {
+      "id": "weather-worker-phaenon3",
+      "name": "PHAENON3 weather worker (non-authoritative)",
+      "host": "phaenon3",
+      "kind": "worker_latest",
+      "collector_http": "weather-worker",
+      "thresholds": "weather_ingest_s",
+      "informational": true,
+      "note": "Process liveness says ok; freshness comes from latest_received_at"
+    }
+  ],
+  "dns": [
+    {
+      "id": "pihole-edge",
+      "name": "Pi-hole (Edge)",
+      "host": "edge",
+      "lan_ip": "192.168.0.12",
+      "tailscale_ip": "100.88.198.67",
+      "dns_port": 53,
+      "ftl_unit": "pihole-FTL",
+      "dns_probes": [
+        "pihole_dns_lan",
+        "pihole_dns_ts"
+      ],
+      "web_probes": [
+        "pihole_web_lan",
+        "pihole_web_ts"
+      ],
+      "dashboard_urls": [
+        {
+          "label": "LAN",
+          "url": "http://192.168.0.12/admin/",
+          "access": "LAN"
+        },
+        {
+          "label": "Tailscale",
+          "url": "http://100.88.198.67/admin/",
+          "access": "TAILSCALE"
+        }
+      ]
+    }
+  ],
+  "dns_note": "Only Edge runs Pi-hole. Core has no Pi-hole (its port 53 is the local resolver); raspberrypi is offline and its role is undocumented. Stats/gravity need Pi-hole API auth and are UNKNOWN in V1 by decision."
+}

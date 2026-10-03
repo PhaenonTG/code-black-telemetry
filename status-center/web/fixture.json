@@ -1,0 +1,2248 @@
+{
+ "schema": "codeblack.status.v1",
+ "generated_at": "2026-09-28T23:00:00Z",
+ "backend": {
+  "version": "1.0.0",
+  "host": "codeblack-core",
+  "uptime_s": 5400,
+  "probes_total": 42,
+  "probes_stale": 2,
+  "probes_failing": 1,
+  "refresh_hints": {
+   "fast_s": 5,
+   "host_s": 15,
+   "slow_s": 60
+  }
+ },
+ "summary": {
+  "overall": "DEGRADED",
+  "attention_count": 7,
+  "tiles": [
+   {
+    "id": "host-core",
+    "label": "CORE",
+    "state": "HEALTHY",
+    "detail": "cpu 4% - mem 37%",
+    "group": "host"
+   },
+   {
+    "id": "host-edge",
+    "label": "EDGE",
+    "state": "DEGRADED",
+    "detail": "collectors stale 21h",
+    "group": "host"
+   },
+   {
+    "id": "host-phaenon3",
+    "label": "PHAENON3",
+    "state": "DEGRADED",
+    "detail": "disk 98%",
+    "group": "host"
+   },
+   {
+    "id": "host-hytetower",
+    "label": "HYTETOWER",
+    "state": "UNKNOWN",
+    "detail": "reachability only",
+    "group": "host"
+   },
+   {
+    "id": "radar",
+    "label": "RADAR",
+    "state": "FRESH",
+    "detail": "3m old",
+    "group": "domain"
+   },
+   {
+    "id": "weather",
+    "label": "WEATHER",
+    "state": "DEGRADED",
+    "detail": "HRRR 17h old",
+    "group": "domain"
+   },
+   {
+    "id": "dns",
+    "label": "DNS",
+    "state": "HEALTHY",
+    "detail": "Pi-hole ok",
+    "group": "domain"
+   },
+   {
+    "id": "streaming",
+    "label": "STREAMING",
+    "state": "OFFLINE",
+    "detail": "idle - nobody live",
+    "group": "domain",
+    "informational": true
+   },
+   {
+    "id": "ai",
+    "label": "AI",
+    "state": "HEALTHY",
+    "detail": "no model loaded",
+    "group": "domain"
+   },
+   {
+    "id": "labs",
+    "label": "LABS",
+    "state": "HEALTHY",
+    "detail": "Q4 verifying",
+    "group": "domain"
+   },
+   {
+    "id": "storage",
+    "label": "STORAGE",
+    "state": "CRITICAL",
+    "detail": "PHAENON3 98%",
+    "group": "domain"
+   },
+   {
+    "id": "network",
+    "label": "NETWORK",
+    "state": "HEALTHY",
+    "detail": "tailscale ok",
+    "group": "domain"
+   }
+  ]
+ },
+ "attention": [
+  {
+   "id": "p3-disk",
+   "severity": "CRITICAL",
+   "title": "PHAENON3 disk C: 98% used",
+   "detail": "14.6 GB free of 931 GB; below the 25 GB warning and 10 GB critical thresholds",
+   "source": "storage",
+   "since": "2026-09-28T14:40:00Z",
+   "link": {
+    "name": "Storage",
+    "url": "#s-storage"
+   }
+  },
+  {
+   "id": "edge-collectors",
+   "severity": "WARNING",
+   "title": "EDGE status collectors stopped ~21h ago",
+   "detail": "edge-status / ops-infrastructure / fleet-presence / alert-evaluate timers last ran 01:15Z; Edge dashboard alerts are stale and falsely report Core unreachable",
+   "source": "host:edge",
+   "since": "2026-09-28T02:01:40Z",
+   "link": {
+    "name": "Edge dashboard",
+    "url": "https://codeblack-edge.tail1d0673.ts.net/"
+   }
+  },
+  {
+   "id": "striker-idle",
+   "severity": "INFO",
+   "title": "STRIKER offline",
+   "detail": "No publisher on path 'spencer' - nobody is streaming",
+   "source": "streaming",
+   "since": null,
+   "link": {
+    "name": "Stream Monitor",
+    "url": "https://codeblack-core.tail1d0673.ts.net/monitor/"
+   }
+  },
+  {
+   "id": "tessa-idle",
+   "severity": "INFO",
+   "title": "TESSA offline",
+   "detail": "No publisher on paths 'nick'/'tessa' - nobody is streaming",
+   "source": "streaming",
+   "since": null,
+   "link": {
+    "name": "Stream Monitor",
+    "url": "https://codeblack-core.tail1d0673.ts.net/monitor/"
+   }
+  },
+  {
+   "id": "p3-weather",
+   "severity": "INFO",
+   "title": "PHAENON3 weather worker has no recent product",
+   "detail": "Temporary, non-authoritative worker; latest product 15 days old",
+   "source": "weather",
+   "since": "2026-09-13T23:00:00Z",
+   "link": null
+  },
+  {
+   "id": "q4-verify",
+   "severity": "INFO",
+   "title": "Media Lab Q4 download verifying (SHA-256)",
+   "detail": "Expected: 100% downloaded, integrity check running",
+   "source": "labs",
+   "since": "2026-09-28T17:15:00Z",
+   "link": null
+  },
+  {
+   "id": "hyte-obs",
+   "severity": "INFO",
+   "title": "HYTETOWER OBS not observable",
+   "detail": "obs-websocket (4455) closed; only reachability is monitored",
+   "source": "host:hytetower",
+   "since": null,
+   "link": null
+  }
+ ],
+ "hosts": [
+  {
+   "id": "core",
+   "name": "CORE",
+   "role": "Operational hub: MediaMTX, Stream Monitor, overlay, radar, MQTT, Core API",
+   "state": "HEALTHY",
+   "state_reason": "all probes ok",
+   "lan_ip": "192.168.0.187",
+   "tailscale_ip": "100.96.77.89",
+   "os": "Ubuntu 24.04 (kernel 6.8.0-139)",
+   "uptime_s": 673200,
+   "cpu": {
+    "model": "Intel Core i5-6500",
+    "cores": 4,
+    "load1": 0.17,
+    "percent": 4.2
+   },
+   "memory": {
+    "used_mb": 2900,
+    "total_mb": 7825,
+    "percent": 37.1
+   },
+   "disks": [
+    {
+     "mount": "/",
+     "used_gb": 38.7,
+     "total_gb": 233.0,
+     "free_gb": 194.3,
+     "percent": 16.6,
+     "state": "HEALTHY"
+    }
+   ],
+   "temperature_c": 29.8,
+   "gpu": null,
+   "last_contact": "2026-09-28T22:59:58Z",
+   "path": "self",
+   "collector": "in-process",
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:58Z",
+    "last_success": "2026-09-28T22:59:58Z",
+    "age_s": 2,
+    "max_age_s": 45,
+    "stale": false
+   },
+   "links": [
+    {
+     "name": "Monitor",
+     "url": "https://codeblack-core.tail1d0673.ts.net/monitor/"
+    },
+    {
+     "name": "Overlay",
+     "url": "https://codeblack-core.tail1d0673.ts.net/overlay/"
+    }
+   ]
+  },
+  {
+   "id": "edge",
+   "name": "EDGE",
+   "role": "Weather intelligence, notifications, Pi-hole DNS, Core backups",
+   "state": "DEGRADED",
+   "state_reason": "status collectors stopped ~21h ago (functional probes still fresh)",
+   "lan_ip": "192.168.0.12",
+   "tailscale_ip": "100.88.198.67",
+   "os": "Ubuntu 24.04 (kernel 6.8.0-142)",
+   "uptime_s": 75600,
+   "cpu": {
+    "model": "AMD GX-415GA",
+    "cores": 4,
+    "load1": 0.14,
+    "percent": 3.5
+   },
+   "memory": {
+    "used_mb": 900,
+    "total_mb": 7371,
+    "percent": 12.2
+   },
+   "disks": [
+    {
+     "mount": "/",
+     "used_gb": 173.9,
+     "total_gb": 915.0,
+     "free_gb": 741.1,
+     "percent": 19.0,
+     "state": "HEALTHY"
+    }
+   ],
+   "temperature_c": 45.0,
+   "gpu": null,
+   "last_contact": "2026-09-28T22:59:51Z",
+   "path": "direct",
+   "collector": "remote",
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:51Z",
+    "last_success": "2026-09-28T22:59:51Z",
+    "age_s": 9,
+    "max_age_s": 60,
+    "stale": false
+   },
+   "links": [
+    {
+     "name": "Edge dashboard",
+     "url": "https://codeblack-edge.tail1d0673.ts.net/"
+    },
+    {
+     "name": "Pi-hole (LAN)",
+     "url": "http://192.168.0.12/admin/"
+    }
+   ]
+  },
+  {
+   "id": "phaenon3",
+   "name": "PHAENON3",
+   "role": "Shared compute: AEGIS, Media Lab, Image Sandbox, ComfyUI (temporary GPU weather worker)",
+   "state": "DEGRADED",
+   "state_reason": "disk C: only 14.6 GB free",
+   "lan_ip": "192.168.0.231",
+   "tailscale_ip": "100.66.216.11",
+   "os": "Windows 11 Pro 10.0.26200",
+   "uptime_s": 90000,
+   "cpu": {
+    "model": "AMD Ryzen 5 7600X",
+    "cores": 6,
+    "load1": null,
+    "percent": 5.0
+   },
+   "memory": {
+    "used_mb": 17950,
+    "total_mb": 31949,
+    "percent": 56.2
+   },
+   "disks": [
+    {
+     "mount": "C:",
+     "used_gb": 916.4,
+     "total_gb": 931.0,
+     "free_gb": 14.6,
+     "percent": 98.4,
+     "state": "CRITICAL"
+    }
+   ],
+   "temperature_c": null,
+   "gpu": {
+    "name": "NVIDIA GeForce RTX 3070 Ti",
+    "vram_used_mb": 732,
+    "vram_total_mb": 8192,
+    "utilization": 0,
+    "temperature_c": 36
+   },
+   "last_contact": "2026-09-28T22:59:54Z",
+   "path": "direct",
+   "collector": "remote",
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:54Z",
+    "last_success": "2026-09-28T22:59:54Z",
+    "age_s": 6,
+    "max_age_s": 45,
+    "stale": false
+   },
+   "links": [
+    {
+     "name": "Media Lab",
+     "url": "https://phaenon3.tail1d0673.ts.net/"
+    },
+    {
+     "name": "Image Sandbox",
+     "url": "https://phaenon3.tail1d0673.ts.net/image-sandbox/"
+    }
+   ]
+  },
+  {
+   "id": "hytetower",
+   "name": "HYTETOWER",
+   "role": "OBS / streaming PC (reachability only)",
+   "state": "UNKNOWN",
+   "state_reason": "reachability only - no collector installed; OBS not observable",
+   "lan_ip": "192.168.0.27",
+   "tailscale_ip": "100.103.139.120",
+   "os": "Windows",
+   "uptime_s": null,
+   "cpu": {
+    "model": null,
+    "cores": null,
+    "load1": null,
+    "percent": null
+   },
+   "memory": {
+    "used_mb": null,
+    "total_mb": null,
+    "percent": null
+   },
+   "disks": [],
+   "temperature_c": null,
+   "gpu": null,
+   "last_contact": "2026-09-28T22:59:48Z",
+   "path": "relayed",
+   "collector": "none",
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:48Z",
+    "last_success": "2026-09-28T22:59:48Z",
+    "age_s": 12,
+    "max_age_s": 60,
+    "stale": false
+   },
+   "links": []
+  }
+ ],
+ "services": [
+  {
+   "id": "core-api",
+   "name": "Core API",
+   "host": "core",
+   "category": "core",
+   "role": "Fabric/chase/storm-intel API",
+   "state": "HEALTHY",
+   "state_reason": "/health ok",
+   "informational": false,
+   "version": null,
+   "release": "core-api/b38f00e-soundings-v1-1",
+   "uptime_s": 673000,
+   "last_success": "2026-09-28T22:59:55Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:8000/",
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": "http://127.0.0.1:8000/health"
+   },
+   "docs": "/srv/codeblack/CORE_ROLLOUT_STATUS.md",
+   "metrics": [
+    {
+     "label": "fabric",
+     "value": "healthy"
+    },
+    {
+     "label": "storm-intel",
+     "value": "healthy"
+    },
+    {
+     "label": "AI sub-health",
+     "value": "offline (not configured)"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "mediamtx",
+   "name": "MediaMTX",
+   "host": "core",
+   "category": "streaming",
+   "role": "SRT/WebRTC ingest and relay",
+   "state": "HEALTHY",
+   "state_reason": "API ok, 3 paths configured",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 250000,
+   "last_success": "2026-09-28T22:59:56Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:9997/",
+    "tailscale": "https://codeblack-core.tail1d0673.ts.net/mtx/",
+    "public": null,
+    "manage": null,
+    "health": "http://127.0.0.1:9997/v3/paths/list"
+   },
+   "docs": "/etc/mediamtx/mediamtx.yml",
+   "metrics": [
+    {
+     "label": "paths",
+     "value": "3 (0 ready)"
+    },
+    {
+     "label": "SRT connections",
+     "value": "0"
+    },
+    {
+     "label": "WebRTC sessions",
+     "value": "0"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "monitor",
+   "name": "Stream Monitor",
+   "host": "core",
+   "category": "streaming",
+   "role": "Video + overlay compositor frontend and status proxy",
+   "state": "HEALTHY",
+   "state_reason": "source-health ok",
+   "informational": false,
+   "version": null,
+   "release": "monitor/v1-20260928-mobile-source-selector",
+   "uptime_s": 52000,
+   "last_success": "2026-09-28T22:59:57Z",
+   "last_error": null,
+   "dependencies": [
+    "mediamtx"
+   ],
+   "urls": {
+    "local": "http://127.0.0.1:8896/",
+    "tailscale": "https://codeblack-core.tail1d0673.ts.net/monitor/",
+    "public": null,
+    "manage": "https://codeblack-core.tail1d0673.ts.net/monitor/",
+    "health": "https://codeblack-core.tail1d0673.ts.net/monitor/api/source-health"
+   },
+   "docs": "/srv/codeblack/STREAM-MONITOR.md",
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "radar-product",
+   "name": "Radar Product",
+   "host": "core",
+   "category": "radar",
+   "role": "Server-side NEXRAD composite: manifest + immutable frames",
+   "state": "HEALTHY",
+   "state_reason": "FRESH, manifest ok",
+   "informational": false,
+   "version": "1.0.1",
+   "release": "radar-product/v1-20260928-metrics",
+   "uptime_s": 1400,
+   "last_success": "2026-09-28T22:59:40Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:8791/v1/health",
+    "tailscale": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json",
+    "public": null,
+    "manage": null,
+    "health": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/health"
+   },
+   "docs": "docs/radar-product-v1.md",
+   "metrics": [
+    {
+     "label": "frames",
+     "value": "12"
+    },
+    {
+     "label": "age",
+     "value": "3m"
+    },
+    {
+     "label": "consecutive failures",
+     "value": "0"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "radar-worker",
+   "name": "Radar Worker (KSGF single-site)",
+   "host": "core",
+   "category": "radar",
+   "role": "Single-site Level II/III tiles (client-demand driven)",
+   "state": "DEGRADED",
+   "state_reason": "process alive; newest KSGF frame 13m old (not a broadcast freshness authority)",
+   "informational": false,
+   "version": "0.2.0",
+   "release": "radar-worker/v1",
+   "uptime_s": 259000,
+   "last_success": "2026-09-28T22:47:00Z",
+   "last_error": "advanceChunkAssembly(KSGF) failed: fetch failed",
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:8787/api/v1/radar/health",
+    "tailscale": "https://codeblack-core.tail1d0673.ts.net/radar/api/v1/radar/health",
+    "public": null,
+    "manage": null,
+    "health": "https://codeblack-core.tail1d0673.ts.net/radar/api/v1/radar/health"
+   },
+   "docs": null,
+   "metrics": [
+    {
+     "label": "newest frame age",
+     "value": "13m (DELAYED)"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "overlay",
+   "name": "Overlay",
+   "host": "core",
+   "category": "streaming",
+   "role": "Broadcast overlay page (browser source)",
+   "state": "HEALTHY",
+   "state_reason": "HTTP 200",
+   "informational": false,
+   "version": null,
+   "release": "overlay/radar-core-v1-20260928",
+   "uptime_s": 1700,
+   "last_success": "2026-09-28T22:59:53Z",
+   "last_error": null,
+   "dependencies": [
+    "radar-product"
+   ],
+   "urls": {
+    "local": "http://127.0.0.1:8899/",
+    "tailscale": "https://codeblack-core.tail1d0673.ts.net/overlay/",
+    "public": null,
+    "manage": null,
+    "health": "http://127.0.0.1:8899/"
+   },
+   "docs": "radar-product/overlay-migration/README.md",
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "mqtt-broker",
+   "name": "MQTT broker (mTLS)",
+   "host": "core",
+   "category": "messaging",
+   "role": "Private mutually-authenticated MQTT broker",
+   "state": "HEALTHY",
+   "state_reason": "TCP 8883 reachable (9.1 ms)",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 600000,
+   "last_success": "2026-09-28T22:59:49Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "tcp://127.0.0.1:8883",
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [
+    {
+     "label": "tcp latency",
+     "value": "9.1 ms"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "mqtt-bridge",
+   "name": "MQTT bridge",
+   "host": "core",
+   "category": "messaging",
+   "role": "MQTT transport into the Fabric engine",
+   "state": "HEALTHY",
+   "state_reason": "unit active",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 600000,
+   "last_success": "2026-09-28T22:59:49Z",
+   "last_error": null,
+   "dependencies": [
+    "mqtt-broker",
+    "core-api"
+   ],
+   "urls": {
+    "local": null,
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "owntracks",
+   "name": "OwnTracks bridge",
+   "host": "core",
+   "category": "messaging",
+   "role": "OwnTracks -> Fabric HTTP ingest adapter",
+   "state": "HEALTHY",
+   "state_reason": "unit active (no health endpoint)",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 600000,
+   "last_success": "2026-09-28T22:59:49Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:8081/",
+    "tailscale": "https://codeblack-core.tail1d0673.ts.net/owntracks/",
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "ollama-core",
+   "name": "Ollama (Core)",
+   "host": "core",
+   "category": "ai",
+   "role": "Local model runtime on Core",
+   "state": "HEALTHY",
+   "state_reason": "API ok, no model loaded",
+   "informational": false,
+   "version": "0.34.0",
+   "release": null,
+   "uptime_s": 600000,
+   "last_success": "2026-09-28T22:59:54Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:11434/",
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": "http://127.0.0.1:11434/api/version"
+   },
+   "docs": null,
+   "metrics": [
+    {
+     "label": "loaded models",
+     "value": "0"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "pihole-ftl",
+   "name": "Pi-hole FTL",
+   "host": "edge",
+   "category": "dns",
+   "role": "DNS resolver + ad blocking",
+   "state": "HEALTHY",
+   "state_reason": "DNS and block tests pass",
+   "informational": false,
+   "version": "v6.7.1",
+   "release": null,
+   "uptime_s": 75000,
+   "last_success": "2026-09-28T22:59:30Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://192.168.0.12/admin/",
+    "tailscale": "http://100.88.198.67/admin/",
+    "public": null,
+    "manage": "http://192.168.0.12/admin/",
+    "health": "http://192.168.0.12/admin/"
+   },
+   "docs": null,
+   "metrics": [
+    {
+     "label": "core / web / FTL",
+     "value": "v6.4.3 / v6.6 / v6.7.1"
+    },
+    {
+     "label": "stats",
+     "value": "UNKNOWN (API needs auth)"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "edge-dashboard",
+   "name": "Edge Dashboard",
+   "host": "edge",
+   "category": "edge",
+   "role": "Edge infrastructure dashboard (routes overview/alerts/backup)",
+   "state": "DEGRADED",
+   "state_reason": "serves 21h-old collector output; its alerts falsely report Core unreachable",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 75000,
+   "last_success": "2026-09-28T22:59:40Z",
+   "last_error": "collector output stale since 01:15Z",
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:8088/",
+    "tailscale": "https://codeblack-edge.tail1d0673.ts.net/",
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "edge-status",
+   "name": "Edge Status API",
+   "host": "edge",
+   "category": "edge",
+   "role": "status.json aggregator (port 9100)",
+   "state": "DEGRADED",
+   "state_reason": "status.json last written ~21h ago",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 75000,
+   "last_success": "2026-09-28T02:01:40Z",
+   "last_error": "collector timers stopped (edge-alert-evaluate last run 01:15Z)",
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:9100/",
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T02:01:40Z",
+    "last_success": "2026-09-28T02:01:40Z",
+    "age_s": 75500,
+    "max_age_s": 600,
+    "stale": true
+   }
+  },
+  {
+   "id": "discord-bot",
+   "name": "Discord bot",
+   "host": "edge",
+   "category": "edge",
+   "role": "Code Black Discord bot",
+   "state": "HEALTHY",
+   "state_reason": "unit active (last probe old)",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 75000,
+   "last_success": "2026-09-28T22:52:10Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": null,
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:52:10Z",
+    "last_success": "2026-09-28T22:52:10Z",
+    "age_s": 470,
+    "max_age_s": 120,
+    "stale": true
+   }
+  },
+  {
+   "id": "weather-ingest",
+   "name": "Weather ingest",
+   "host": "edge",
+   "category": "weather",
+   "role": "HRRR/weather ingest timer",
+   "state": "HEALTHY",
+   "state_reason": "last run ok",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": null,
+   "last_success": "2026-09-28T22:53:13Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": null,
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:53:13Z",
+    "last_success": "2026-09-28T22:53:13Z",
+    "age_s": 407,
+    "max_age_s": 3600,
+    "stale": false
+   }
+  },
+  {
+   "id": "weather-publication",
+   "name": "Weather publication watcher",
+   "host": "edge",
+   "category": "weather",
+   "role": "Publication watcher timer",
+   "state": "HEALTHY",
+   "state_reason": "last run ok",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": null,
+   "last_success": "2026-09-28T22:48:40Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": null,
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:48:40Z",
+    "last_success": "2026-09-28T22:48:40Z",
+    "age_s": 680,
+    "max_age_s": 900,
+    "stale": false
+   }
+  },
+  {
+   "id": "core-backup",
+   "name": "Core backup pull",
+   "host": "edge",
+   "category": "backup",
+   "role": "Pulls Core snapshots (daily)",
+   "state": "HEALTHY",
+   "state_reason": "last success 00:09:44Z",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": null,
+   "last_success": "2026-09-28T00:10:00Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": null,
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T00:10:00Z",
+    "last_success": "2026-09-28T00:10:00Z",
+    "age_s": 82200,
+    "max_age_s": 90000,
+    "stale": false
+   }
+  },
+  {
+   "id": "ai-router",
+   "name": "AI Router (AEGIS)",
+   "host": "phaenon3",
+   "category": "ai",
+   "role": "AEGIS / AI router",
+   "state": "HEALTHY",
+   "state_reason": "/ai/health ok, ollama reachable",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 88000,
+   "last_success": "2026-09-28T22:59:54Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:8799/ai/health",
+    "tailscale": "https://phaenon3.tail1d0673.ts.net/ai/health",
+    "public": null,
+    "manage": null,
+    "health": "https://phaenon3.tail1d0673.ts.net/ai/health"
+   },
+   "docs": "C:\\CodeBlack\\services\\ai-router\\docs\\AUTH_ARCHITECTURE.md",
+   "metrics": [
+    {
+     "label": "general model ready",
+     "value": "yes"
+    },
+    {
+     "label": "queue / active job",
+     "value": "UNKNOWN (auth required)"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "ollama-p3",
+   "name": "Ollama (PHAENON3)",
+   "host": "phaenon3",
+   "category": "ai",
+   "role": "Local model runtime (GPU)",
+   "state": "HEALTHY",
+   "state_reason": "API ok, no model loaded",
+   "informational": false,
+   "version": "0.34.4",
+   "release": null,
+   "uptime_s": 88000,
+   "last_success": "2026-09-28T22:59:54Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:11434/",
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": "http://127.0.0.1:11434/api/version"
+   },
+   "docs": null,
+   "metrics": [
+    {
+     "label": "loaded models",
+     "value": "0"
+    },
+    {
+     "label": "installed models",
+     "value": "8"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "ailab-runner",
+   "name": "AI Lab deployment runner",
+   "host": "phaenon3",
+   "category": "ai",
+   "role": "ailab serve (mode LAB_EXPERIMENT)",
+   "state": "HEALTHY",
+   "state_reason": "/health ok",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 80000,
+   "last_success": "2026-09-28T22:59:54Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:8800/health",
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": "http://127.0.0.1:8800/health"
+   },
+   "docs": null,
+   "metrics": [
+    {
+     "label": "queue",
+     "value": "0 queued / 0 running"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "weather-worker-p3",
+   "name": "Weather worker (PHAENON3)",
+   "host": "phaenon3",
+   "category": "weather",
+   "role": "Temporary GPU weather worker (non-authoritative)",
+   "state": "DEGRADED",
+   "state_reason": "status ok but latest product is 15 days old",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 90000,
+   "last_success": "2026-09-13T23:00:00Z",
+   "last_error": "no product received since 2026-09-13",
+   "dependencies": [],
+   "urls": {
+    "local": null,
+    "tailscale": "http://100.66.216.11:8798/health",
+    "public": null,
+    "manage": null,
+    "health": "http://100.66.216.11:8798/health"
+   },
+   "docs": "C:\\CodeBlack\\services\\weather-worker\\SUPERVISION.md",
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "media-lab",
+   "name": "Media Lab",
+   "host": "phaenon3",
+   "category": "spencer-labs",
+   "role": "Spencer Labs media tooling",
+   "state": "HEALTHY",
+   "state_reason": "/api/health ok",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 80000,
+   "last_success": "2026-09-28T22:59:54Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:8877/",
+    "tailscale": "https://phaenon3.tail1d0673.ts.net/",
+    "public": null,
+    "manage": "https://phaenon3.tail1d0673.ts.net/",
+    "health": "https://phaenon3.tail1d0673.ts.net/api/health"
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "image-sandbox",
+   "name": "Image Sandbox",
+   "host": "phaenon3",
+   "category": "spencer-labs",
+   "role": "Spencer Labs image generation",
+   "state": "HEALTHY",
+   "state_reason": "quality path AVAILABLE",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 80000,
+   "last_success": "2026-09-28T22:59:54Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:8878/",
+    "tailscale": "https://phaenon3.tail1d0673.ts.net/image-sandbox/",
+    "public": null,
+    "manage": "https://phaenon3.tail1d0673.ts.net/image-sandbox/",
+    "health": "https://phaenon3.tail1d0673.ts.net/image-sandbox/api/health"
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "sandbox-comfy",
+   "name": "ComfyUI (Sandbox, CPU)",
+   "host": "phaenon3",
+   "category": "spencer-labs",
+   "role": "Sandbox ComfyUI worker",
+   "state": "HEALTHY",
+   "state_reason": "queue empty",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": 80000,
+   "last_success": "2026-09-28T22:59:54Z",
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": "http://127.0.0.1:8190/",
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [
+    {
+     "label": "queue",
+     "value": "0 running / 0 pending"
+    }
+   ],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:52Z",
+    "last_success": "2026-09-28T22:59:52Z",
+    "age_s": 8,
+    "max_age_s": 30,
+    "stale": false
+   }
+  },
+  {
+   "id": "obs",
+   "name": "OBS Studio",
+   "host": "hytetower",
+   "category": "streaming",
+   "role": "OBS (not observable)",
+   "state": "UNKNOWN",
+   "state_reason": "obs-websocket port 4455 closed; nothing observable",
+   "informational": false,
+   "version": null,
+   "release": null,
+   "uptime_s": null,
+   "last_success": null,
+   "last_error": null,
+   "dependencies": [],
+   "urls": {
+    "local": null,
+    "tailscale": null,
+    "public": null,
+    "manage": null,
+    "health": null
+   },
+   "docs": null,
+   "metrics": [],
+   "telemetry": {
+    "observed_at": "2026-09-28T22:59:48Z",
+    "last_success": "2026-09-28T22:59:48Z",
+    "age_s": 12,
+    "max_age_s": 60,
+    "stale": false
+   }
+  }
+ ],
+ "streaming": {
+  "state": "OFFLINE",
+  "summary": "No publisher on STRIKER or TESSA (idle)",
+  "sources": [
+   {
+    "id": "striker",
+    "name": "STRIKER",
+    "aliases": [
+     "spencer"
+    ],
+    "state": "OFFLINE",
+    "reason": "no publisher on this path (nobody streaming)",
+    "publisher_online": false,
+    "readers": 0,
+    "codec": null,
+    "resolution": null,
+    "bitrate_kbps": null,
+    "source_age_s": null,
+    "reconnect": null,
+    "informational_offline": true
+   },
+   {
+    "id": "tessa",
+    "name": "TESSA",
+    "aliases": [
+     "nick",
+     "tessa"
+    ],
+    "state": "OFFLINE",
+    "reason": "no publisher on this path (nobody streaming)",
+    "publisher_online": false,
+    "readers": 0,
+    "codec": null,
+    "resolution": null,
+    "bitrate_kbps": null,
+    "source_age_s": null,
+    "reconnect": null,
+    "informational_offline": true
+   }
+  ],
+  "ingest": {
+   "srt": {
+    "state": "HEALTHY",
+    "connections": 0,
+    "port": 8890
+   },
+   "webrtc": {
+    "state": "HEALTHY",
+    "sessions": 0
+   }
+  },
+  "mediamtx": {
+   "state": "HEALTHY",
+   "version": null,
+   "paths": [
+    {
+     "name": "spencer",
+     "ready": false,
+     "readers": 0,
+     "tracks": 0,
+     "bytes_received": 0,
+     "source_type": null
+    },
+    {
+     "name": "nick",
+     "ready": false,
+     "readers": 0,
+     "tracks": 0,
+     "bytes_received": 0,
+     "source_type": null
+    },
+    {
+     "name": "tessa",
+     "ready": false,
+     "readers": 0,
+     "tracks": 0,
+     "bytes_received": 0,
+     "source_type": null
+    }
+   ]
+  },
+  "monitor": {
+   "state": "HEALTHY",
+   "url": "https://codeblack-core.tail1d0673.ts.net/monitor/"
+  },
+  "broadcast": null,
+  "telemetry": {
+   "observed_at": "2026-09-28T22:59:56Z",
+   "last_success": "2026-09-28T22:59:56Z",
+   "age_s": 4,
+   "max_age_s": 30,
+   "stale": false
+  }
+ },
+ "radar": {
+  "state": "FRESH",
+  "product": {
+   "name": "NEXRAD CONUS composite reflectivity (N0Q)",
+   "source": "IEM USCOMP N0Q",
+   "cadence_s": 300
+  },
+  "latest": {
+   "frame_id": "20260928T2255Z",
+   "observation_time": "2026-09-28T22:57:00Z",
+   "source_received_time": "2026-09-28T22:55:40Z",
+   "published_time": "2026-09-28T22:55:41Z",
+   "age_s": 180,
+   "pipeline_delay_s": -79
+  },
+  "manifest_health": {
+   "ok": true,
+   "observed_at": "2026-09-28T22:59:57Z",
+   "age_s": 3
+  },
+  "worker": {
+   "state": "OK",
+   "version": "1.0.1",
+   "consecutive_failures": 0,
+   "last_error": null
+  },
+  "legacy_worker": {
+   "state": "DEGRADED",
+   "note": "KSGF single-site worker is client-demand driven; newest frame 13m old; not a broadcast freshness authority"
+  },
+  "link": {
+   "name": "Radar manifest",
+   "url": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json"
+  },
+  "telemetry": {
+   "observed_at": "2026-09-28T22:59:57Z",
+   "last_success": "2026-09-28T22:59:57Z",
+   "age_s": 3,
+   "max_age_s": 30,
+   "stale": false
+  }
+ },
+ "weather": {
+  "state": "DEGRADED",
+  "items": [
+   {
+    "id": "hrrr",
+    "name": "HRRR (storm-intel cache)",
+    "host": "core",
+    "state": "DEGRADED",
+    "last_product_time": "2026-09-28T06:20:00Z",
+    "last_success": "2026-09-28T06:20:00Z",
+    "age_s": 60000,
+    "max_age_s": 7200,
+    "error": null,
+    "note": "newest cached GRIB ~17h old"
+   },
+   {
+    "id": "ingest",
+    "name": "Weather ingest",
+    "host": "edge",
+    "state": "HEALTHY",
+    "last_product_time": "2026-09-28T22:53:13Z",
+    "last_success": "2026-09-28T22:53:13Z",
+    "age_s": 407,
+    "max_age_s": 3600,
+    "error": null,
+    "note": null
+   },
+   {
+    "id": "pubwatch",
+    "name": "Publication watcher",
+    "host": "edge",
+    "state": "HEALTHY",
+    "last_product_time": "2026-09-28T22:48:40Z",
+    "last_success": "2026-09-28T22:48:40Z",
+    "age_s": 680,
+    "max_age_s": 900,
+    "error": null,
+    "note": null
+   },
+   {
+    "id": "p3worker",
+    "name": "Weather worker (PHAENON3)",
+    "host": "phaenon3",
+    "state": "DEGRADED",
+    "last_product_time": "2026-09-13T23:00:00Z",
+    "last_success": "2026-09-13T23:00:00Z",
+    "age_s": 1296000,
+    "max_age_s": 3600,
+    "error": "no product received since 2026-09-13",
+    "note": "temporary, non-authoritative"
+   },
+   {
+    "id": "mesonet",
+    "name": "Mobile mesonet",
+    "host": "core",
+    "state": "UNKNOWN",
+    "last_product_time": null,
+    "last_success": null,
+    "age_s": null,
+    "max_age_s": null,
+    "error": null,
+    "note": "no freshness probe wired yet"
+   }
+  ],
+  "telemetry": {
+   "observed_at": "2026-09-28T22:59:50Z",
+   "last_success": "2026-09-28T22:59:50Z",
+   "age_s": 10,
+   "max_age_s": 60,
+   "stale": false
+  }
+ },
+ "dns": {
+  "state": "HEALTHY",
+  "note": "Health only (V1): Pi-hole stats/gravity need an API password (401 without auth). Only EDGE runs Pi-hole; CORE runs a local resolver only; raspberrypi is offline.",
+  "instances": [
+   {
+    "id": "edge-pihole",
+    "name": "EDGE Pi-hole",
+    "host": "edge",
+    "lan_ip": "192.168.0.12",
+    "tailscale_ip": "100.88.198.67",
+    "dns_port": 53,
+    "web_status": "HTTP 200 /admin/",
+    "ftl_status": "listening",
+    "state": "HEALTHY",
+    "checks": [
+     {
+      "name": "Resolve example.com",
+      "ok": true,
+      "detail": "answered",
+      "latency_ms": 14
+     },
+     {
+      "name": "Resolve github.com",
+      "ok": true,
+      "detail": "answered",
+      "latency_ms": 18
+     },
+     {
+      "name": "Blocking (ads.google.com)",
+      "ok": true,
+      "detail": "-> 0.0.0.0",
+      "latency_ms": 12
+     },
+     {
+      "name": "Upstream resolution (uncached)",
+      "ok": true,
+      "detail": "answered",
+      "latency_ms": 41
+     },
+     {
+      "name": "Web UI /admin/",
+      "ok": true,
+      "detail": "HTTP 200",
+      "latency_ms": 22
+     }
+    ],
+    "version": {
+     "core": "v6.4.3",
+     "web": "v6.6",
+     "ftl": "v6.7.1"
+    },
+    "stats": null,
+    "gravity": null,
+    "dashboard_urls": [
+     {
+      "label": "LAN dashboard",
+      "url": "http://192.168.0.12/admin/",
+      "access": "LAN"
+     },
+     {
+      "label": "Tailscale dashboard",
+      "url": "http://100.88.198.67/admin/",
+      "access": "TAILSCALE"
+     }
+    ],
+    "telemetry": {
+     "observed_at": "2026-09-28T22:59:32Z",
+     "last_success": "2026-09-28T22:59:32Z",
+     "age_s": 28,
+     "max_age_s": 90,
+     "stale": false
+    }
+   }
+  ]
+ },
+ "ai": {
+  "state": "HEALTHY",
+  "note": "Operational health only. Queue depth, active job and last request need the authenticated /ai/status and show UNKNOWN.",
+  "items": [
+   {
+    "id": "router",
+    "name": "AI Router (AEGIS)",
+    "state": "HEALTHY",
+    "detail": [
+     {
+      "label": "ollama reachable",
+      "value": "yes"
+     },
+     {
+      "label": "general model ready",
+      "value": "yes"
+     },
+     {
+      "label": "vision model ready",
+      "value": "yes"
+     }
+    ]
+   },
+   {
+    "id": "ollama-p3",
+    "name": "Ollama (PHAENON3)",
+    "state": "HEALTHY",
+    "detail": [
+     {
+      "label": "loaded model",
+      "value": "none"
+     },
+     {
+      "label": "installed models",
+      "value": "8"
+     }
+    ]
+   },
+   {
+    "id": "ailab",
+    "name": "AI Lab runner",
+    "state": "HEALTHY",
+    "detail": [
+     {
+      "label": "mode",
+      "value": "LAB_EXPERIMENT"
+     },
+     {
+      "label": "proposals pending",
+      "value": "1"
+     }
+    ]
+   }
+  ],
+  "model_loaded": "none loaded",
+  "queue_depth": null,
+  "active_job": null,
+  "last_request": null,
+  "telemetry": {
+   "observed_at": "2026-09-28T22:59:54Z",
+   "last_success": "2026-09-28T22:59:54Z",
+   "age_s": 6,
+   "max_age_s": 45,
+   "stale": false
+  }
+ },
+ "labs": {
+  "state": "HEALTHY",
+  "note": "Infrastructure status only - not Code Black operational authority",
+  "items": [
+   {
+    "id": "media-lab",
+    "name": "Media Lab",
+    "state": "HEALTHY",
+    "url": "https://phaenon3.tail1d0673.ts.net/",
+    "detail": [
+     {
+      "label": "health",
+      "value": "ok"
+     },
+     {
+      "label": "ComfyUI",
+      "value": "not running (expected)"
+     }
+    ]
+   },
+   {
+    "id": "image-sandbox",
+    "name": "Image Sandbox",
+    "state": "HEALTHY",
+    "url": "https://phaenon3.tail1d0673.ts.net/image-sandbox/",
+    "detail": [
+     {
+      "label": "quality path",
+      "value": "AVAILABLE (needs 7000 MiB free)"
+     },
+     {
+      "label": "draft device",
+      "value": "cpu"
+     }
+    ]
+   },
+   {
+    "id": "sandbox-comfy",
+    "name": "ComfyUI (Sandbox, CPU)",
+    "state": "HEALTHY",
+    "url": null,
+    "detail": [
+     {
+      "label": "queue",
+      "value": "0 running / 0 pending"
+     }
+    ]
+   },
+   {
+    "id": "gpu-admission",
+    "name": "GPU admission",
+    "state": "HEALTHY",
+    "url": null,
+    "detail": [
+     {
+      "label": "state",
+      "value": "OPEN"
+     },
+     {
+      "label": "VRAM free",
+      "value": "7460 MiB"
+     }
+    ]
+   }
+  ],
+  "download": {
+   "model": "Q4 diffusion model",
+   "bytes_downloaded": 12618574112,
+   "bytes_total": 12618574112,
+   "percent": 100,
+   "rate_bps": null,
+   "state": "VERIFYING",
+   "retries": 0,
+   "last_progress_at": "2026-09-28T17:15:00Z",
+   "integrity": "running"
+  },
+  "telemetry": {
+   "observed_at": "2026-09-28T22:59:54Z",
+   "last_success": "2026-09-28T22:59:54Z",
+   "age_s": 6,
+   "max_age_s": 45,
+   "stale": false
+  }
+ },
+ "compute": {
+  "host": "PHAENON3",
+  "state": "IDLE",
+  "gpu": {
+   "name": "NVIDIA GeForce RTX 3070 Ti",
+   "vram_used_mb": 732,
+   "vram_total_mb": 8192,
+   "vram_free_mb": 7460,
+   "utilization": 0,
+   "temperature_c": 36
+  },
+  "owner": null,
+  "jobs": {
+   "image": {
+    "state": "idle",
+    "detail": "Sandbox quality path AVAILABLE"
+   },
+   "media": {
+    "state": "verifying",
+    "detail": "Q4 checksum verification (disk/CPU, no GPU)"
+   },
+   "ai": {
+    "state": "idle",
+    "detail": "no model loaded"
+   }
+  },
+  "admission": {
+   "state": "OPEN",
+   "detail": "7460 MiB free >= 7000 MiB required"
+  },
+  "contention": null,
+  "telemetry": {
+   "observed_at": "2026-09-28T22:59:54Z",
+   "last_success": "2026-09-28T22:59:54Z",
+   "age_s": 6,
+   "max_age_s": 45,
+   "stale": false
+  }
+ },
+ "network": {
+  "tailscale": {
+   "state": "HEALTHY",
+   "backend": "Running",
+   "self_ip": "100.96.77.89",
+   "tailnet": "tail1d0673.ts.net"
+  },
+  "peers": [
+   {
+    "id": "phaenon3",
+    "name": "PHAENON3",
+    "tailscale_ip": "100.66.216.11",
+    "online": true,
+    "path": "direct",
+    "relay": null,
+    "last_seen": "2026-09-28T22:59:54Z",
+    "latency_ms": 4.2
+   },
+   {
+    "id": "edge",
+    "name": "codeblack-edge",
+    "tailscale_ip": "100.88.198.67",
+    "online": true,
+    "path": "direct",
+    "relay": null,
+    "last_seen": "2026-09-28T22:59:51Z",
+    "latency_ms": 3.1
+   },
+   {
+    "id": "hytetower",
+    "name": "hytetower",
+    "tailscale_ip": "100.103.139.120",
+    "online": true,
+    "path": "relayed",
+    "relay": "ord",
+    "last_seen": "2026-09-28T22:59:48Z",
+    "latency_ms": 38.0
+   },
+   {
+    "id": "desktop-5r7",
+    "name": "DESKTOP-5R7S8U1",
+    "tailscale_ip": "100.69.170.95",
+    "online": true,
+    "path": "relayed",
+    "relay": "ord",
+    "last_seen": "2026-09-28T22:59:20Z",
+    "latency_ms": null
+   },
+   {
+    "id": "iphone172",
+    "name": "iPhone",
+    "tailscale_ip": "100.81.104.15",
+    "online": true,
+    "path": "relayed",
+    "relay": "ord",
+    "last_seen": "2026-09-28T22:59:00Z",
+    "latency_ms": null
+   },
+   {
+    "id": "rpi",
+    "name": "raspberrypi",
+    "tailscale_ip": "100.80.136.32",
+    "online": false,
+    "path": "unreachable",
+    "relay": null,
+    "last_seen": "2026-09-28T21:53:20Z",
+    "latency_ms": null
+   },
+   {
+    "id": "phaenonmsi",
+    "name": "PhaenonMSI",
+    "tailscale_ip": "100.109.103.87",
+    "online": false,
+    "path": "unreachable",
+    "relay": null,
+    "last_seen": "2026-09-20T20:33:20Z",
+    "latency_ms": null
+   },
+   {
+    "id": "taba11",
+    "name": "Code's Tab A11+",
+    "tailscale_ip": "100.111.207.44",
+    "online": false,
+    "path": "unreachable",
+    "relay": null,
+    "last_seen": "2026-08-03T05:53:20Z",
+    "latency_ms": null
+   }
+  ],
+  "pairs": [
+   {
+    "from": "CORE",
+    "to": "EDGE",
+    "state": "HEALTHY",
+    "latency_ms": 3.1,
+    "path": "direct"
+   },
+   {
+    "from": "CORE",
+    "to": "PHAENON3",
+    "state": "HEALTHY",
+    "latency_ms": 4.2,
+    "path": "direct"
+   },
+   {
+    "from": "CORE",
+    "to": "HYTETOWER",
+    "state": "HEALTHY",
+    "latency_ms": 38.0,
+    "path": "relayed"
+   }
+  ],
+  "internet": {
+   "state": "HEALTHY",
+   "detail": "DNS + HTTPS to mesonet.agron.iastate.edu ok"
+  },
+  "telemetry": {
+   "observed_at": "2026-09-28T22:59:46Z",
+   "last_success": "2026-09-28T22:59:46Z",
+   "age_s": 14,
+   "max_age_s": 60,
+   "stale": false
+  }
+ },
+ "storage": {
+  "state": "CRITICAL",
+  "hosts": [
+   {
+    "host": "CORE",
+    "disks": [
+     {
+      "mount": "/",
+      "used_gb": 38.7,
+      "total_gb": 233.0,
+      "free_gb": 194.3,
+      "percent": 16.6,
+      "state": "HEALTHY"
+     }
+    ]
+   },
+   {
+    "host": "EDGE",
+    "disks": [
+     {
+      "mount": "/",
+      "used_gb": 173.9,
+      "total_gb": 915.0,
+      "free_gb": 741.1,
+      "percent": 19.0,
+      "state": "HEALTHY"
+     }
+    ]
+   },
+   {
+    "host": "PHAENON3",
+    "disks": [
+     {
+      "mount": "C:",
+      "used_gb": 916.4,
+      "total_gb": 931.0,
+      "free_gb": 14.6,
+      "percent": 98.4,
+      "state": "CRITICAL"
+     }
+    ]
+   },
+   {
+    "host": "HYTETOWER",
+    "disks": []
+   }
+  ],
+  "backups": [
+   {
+    "id": "core-snapshots",
+    "name": "Core snapshots (pulled by EDGE)",
+    "host": "edge",
+    "state": "HEALTHY",
+    "last_backup": "2026-09-28T00:10:00Z",
+    "age_s": 82200,
+    "last_verification": "2026-09-28T13:20:00Z",
+    "detail": [
+     {
+      "label": "snapshots",
+      "value": "28"
+     },
+     {
+      "label": "newest",
+      "value": "20260928T000944Z"
+     },
+     {
+      "label": "next run",
+      "value": "00:10:47Z"
+     }
+    ]
+   }
+  ],
+  "telemetry": {
+   "observed_at": "2026-09-28T22:59:30Z",
+   "last_success": "2026-09-28T22:59:30Z",
+   "age_s": 30,
+   "max_age_s": 300,
+   "stale": false
+  }
+ },
+ "links": [
+  {
+   "id": "ops",
+   "name": "OPS",
+   "purpose": "Chase/OPS application and gateway",
+   "host": "cloudflare",
+   "access": "PUBLIC",
+   "url": "https://ops.codeblackwx.com/",
+   "group": "Code Black",
+   "verified": null
+  },
+  {
+   "id": "monitor",
+   "name": "Stream Monitor",
+   "purpose": "Live source monitor, overlay controls",
+   "host": "core",
+   "access": "TAILSCALE",
+   "url": "https://codeblack-core.tail1d0673.ts.net/monitor/",
+   "group": "Streaming",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "mtx",
+   "name": "MediaMTX (WebRTC)",
+   "purpose": "WebRTC egress via /mtx",
+   "host": "core",
+   "access": "TAILSCALE",
+   "url": "https://codeblack-core.tail1d0673.ts.net/mtx/",
+   "group": "Streaming",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "overlay",
+   "name": "Overlay",
+   "purpose": "Broadcast overlay page",
+   "host": "core",
+   "access": "TAILSCALE",
+   "url": "https://codeblack-core.tail1d0673.ts.net/overlay/",
+   "group": "Streaming",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "overlay-dev",
+   "name": "Overlay (dev)",
+   "purpose": "Private overlay iteration path",
+   "host": "core",
+   "access": "TAILSCALE",
+   "url": "https://codeblack-core.tail1d0673.ts.net/overlay-dev/",
+   "group": "Streaming",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "radar-product",
+   "name": "Radar manifest",
+   "purpose": "Radar product manifest (latest.json)",
+   "host": "core",
+   "access": "TAILSCALE",
+   "url": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json",
+   "group": "Weather / Radar",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "radar-health",
+   "name": "Radar product health",
+   "purpose": "Radar service health",
+   "host": "core",
+   "access": "TAILSCALE",
+   "url": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/health",
+   "group": "Weather / Radar",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "edge-dash",
+   "name": "Edge Dashboard",
+   "purpose": "Edge infrastructure dashboard",
+   "host": "edge",
+   "access": "TAILSCALE",
+   "url": "https://codeblack-edge.tail1d0673.ts.net/",
+   "group": "Code Black",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "pihole-lan",
+   "name": "EDGE Pi-hole (LAN)",
+   "purpose": "Pi-hole admin dashboard",
+   "host": "edge",
+   "access": "LAN",
+   "url": "http://192.168.0.12/admin/",
+   "group": "DNS",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "pihole-ts",
+   "name": "EDGE Pi-hole (Tailscale)",
+   "purpose": "Pi-hole admin dashboard",
+   "host": "edge",
+   "access": "TAILSCALE",
+   "url": "http://100.88.198.67/admin/",
+   "group": "DNS",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "ai-health",
+   "name": "AI Router health",
+   "purpose": "AEGIS / AI router health (open endpoint)",
+   "host": "phaenon3",
+   "access": "TAILSCALE",
+   "url": "https://phaenon3.tail1d0673.ts.net/ai/health",
+   "group": "Code Black",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "media-lab",
+   "name": "Media Lab",
+   "purpose": "Spencer Labs media tooling",
+   "host": "phaenon3",
+   "access": "TAILSCALE",
+   "url": "https://phaenon3.tail1d0673.ts.net/",
+   "group": "Spencer Labs",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  },
+  {
+   "id": "image-sandbox",
+   "name": "Image Sandbox",
+   "purpose": "Spencer Labs image generation",
+   "host": "phaenon3",
+   "access": "TAILSCALE",
+   "url": "https://phaenon3.tail1d0673.ts.net/image-sandbox/",
+   "group": "Spencer Labs",
+   "verified": {
+    "ok": true,
+    "status": 200,
+    "checked_at": "2026-09-28T22:59:20Z"
+   }
+  }
+ ],
+ "address_book": [
+  {
+   "name": "CORE",
+   "host": "core",
+   "lan": "192.168.0.187",
+   "tailscale": "100.96.77.89",
+   "url": "https://codeblack-core.tail1d0673.ts.net/",
+   "purpose": "Operational hub",
+   "access": "TAILSCALE"
+  },
+  {
+   "name": "EDGE",
+   "host": "edge",
+   "lan": "192.168.0.12",
+   "tailscale": "100.88.198.67",
+   "url": "https://codeblack-edge.tail1d0673.ts.net/",
+   "purpose": "Weather, notifications, DNS, backups",
+   "access": "TAILSCALE"
+  },
+  {
+   "name": "PHAENON3",
+   "host": "phaenon3",
+   "lan": "192.168.0.231",
+   "tailscale": "100.66.216.11",
+   "url": "https://phaenon3.tail1d0673.ts.net/",
+   "purpose": "Shared compute / Spencer Labs",
+   "access": "TAILSCALE"
+  },
+  {
+   "name": "HYTETOWER",
+   "host": "hytetower",
+   "lan": "192.168.0.27",
+   "tailscale": "100.103.139.120",
+   "url": null,
+   "purpose": "OBS / streaming PC",
+   "access": "TAILSCALE"
+  },
+  {
+   "name": "EDGE Pi-hole",
+   "host": "edge",
+   "lan": "192.168.0.12",
+   "tailscale": "100.88.198.67",
+   "url": "http://192.168.0.12/admin/",
+   "purpose": "DNS resolver + blocking (port 53)",
+   "access": "LAN"
+  },
+  {
+   "name": "Stream Monitor",
+   "host": "core",
+   "lan": null,
+   "tailscale": null,
+   "url": "https://codeblack-core.tail1d0673.ts.net/monitor/",
+   "purpose": "Live source monitor, overlay controls",
+   "access": "TAILSCALE"
+  },
+  {
+   "name": "Overlay",
+   "host": "core",
+   "lan": null,
+   "tailscale": null,
+   "url": "https://codeblack-core.tail1d0673.ts.net/overlay/",
+   "purpose": "Broadcast overlay page",
+   "access": "TAILSCALE"
+  },
+  {
+   "name": "Radar manifest",
+   "host": "core",
+   "lan": null,
+   "tailscale": null,
+   "url": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json",
+   "purpose": "Radar product manifest (latest.json)",
+   "access": "TAILSCALE"
+  },
+  {
+   "name": "AI Router health",
+   "host": "phaenon3",
+   "lan": null,
+   "tailscale": null,
+   "url": "https://phaenon3.tail1d0673.ts.net/ai/health",
+   "purpose": "AEGIS / AI router health (open endpoint)",
+   "access": "TAILSCALE"
+  },
+  {
+   "name": "Media Lab",
+   "host": "phaenon3",
+   "lan": null,
+   "tailscale": null,
+   "url": "https://phaenon3.tail1d0673.ts.net/",
+   "purpose": "Spencer Labs media tooling",
+   "access": "TAILSCALE"
+  },
+  {
+   "name": "Image Sandbox",
+   "host": "phaenon3",
+   "lan": null,
+   "tailscale": null,
+   "url": "https://phaenon3.tail1d0673.ts.net/image-sandbox/",
+   "purpose": "Spencer Labs image generation",
+   "access": "TAILSCALE"
+  }
+ ]
+}
