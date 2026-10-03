@@ -1,0 +1,323 @@
+--- deployed/index.html
++++ radar-core-v1/index.html
+@@ -2367,6 +2367,19 @@
+     const SPOTTER_PINS_SOURCE_ID = 'spotter-pins-source';
+     const SPOTTER_PINS_LAYER_ID = 'spotter-pins-layer';
+     const radarSettings = { gatewayBase: params.get('radarGatewayBase') || 'https://ops.codeblackwx.com' };
++    // ---- Core radar product consumer (composite REF) ----
++    // REF now comes from Core's standalone radar product: an atomically-published manifest plus
++    // immutable timestamped frames (see the radar-product service). This page does NOT acquire
++    // upstream radar, own acquisition timing, or decide source freshness -- the FRESH/AGING/STALE/
++    // CRITICAL thresholds come from the manifest itself. Between manifest polls the age advances by
++    // local elapsed time (monotonic clock) and is re-classified with the server's thresholds, so a
++    // dead link degrades toward STALE/CRITICAL instead of freezing at "Live".
++    const radarProductOrigin = (params.get('radarProductBase') || location.origin).replace(/\/+$/, '');
++    const CORE_RADAR_MANIFEST_URL = `${radarProductOrigin}/radar-product/v1/composite/latest.json`;
++    const CORE_RADAR_POLL_MS = 20_000;
++    let coreRadar = null; // { thresholds, fetchedPerfMs, serverAgeS, frames, ids }
++    let coreRadarFetchInFlight = false;
++    let coreRadarFailStreak = 0;
+     const RADAR_ZOOM_LEVELS = [
+       { name: 'CLOSE', zoom: params.get('radarZoomClose') ? Number(params.get('radarZoomClose')) : 9 },
+       { name: 'MID', zoom: params.get('radarZoomMid') ? Number(params.get('radarZoomMid')) : 7 },
+@@ -2400,7 +2413,7 @@
+     // equals the current value, and 'LOADING' is also this variable's steady-state starting
+     // *concept*, so a same-string initial value would have silently skipped ever showing the
+     // loading overlay at all.
+-    let radarHealthState = null; // null (not yet computed) | LOADING | LIVE | AGING | STALE | UNAVAILABLE
++    let radarHealthState = null; // null (not yet computed) | LOADING | LIVE | AGING | STALE | CRITICAL | UNAVAILABLE
+     let radarTileFailureStreak = 0;
+     let radarLastTileSuccessAt = null;
+     const RADAR_TILE_FAILURE_THRESHOLD = 4; // consecutive tile failures before declaring UNAVAILABLE
+@@ -2433,20 +2446,7 @@
+     const SEVERE_PRODUCT_ROTATION = ['REF', 'REF', 'REF', 'VEL'];
+     const WARNING_PRODUCT_HOLD_TICKS = 8;
+ 
+-    // REF/VEL now render from IEM's RIDGE WMS (mesonet.agron.iastate.edu) instead of our own
+-    // radar-relay/radar-worker pipeline -- real NWS-quality pre-rendered/smoothed single-site
+-    // imagery, free, no key. Verified live during this change: real scan timestamps, real PNG
+-    // tiles for both products. CC has no IEM RIDGE equivalent (dual-pol correlation coefficient
+-    // isn't part of the legacy RIDGE product set) and stays on our own radar-relay/radar-worker
+-    // decode, which is untouched and still fully live -- a real upgrade to that decoder (proper
+-    // gate/radial interpolation instead of nearest-neighbor) is future work, not scrapped.
+-    const IEM_RIDGE_BASE = 'https://mesonet.agron.iastate.edu';
+-    const IEM_PRODUCT_CODE = { REF: 'N0B', VEL: 'N0S' };
+-    function iemSectorFor(siteId) {
+-      // IEM's `sector` param is the 3-letter site code with no leading K (CONUS sites only --
+-      // Alaska/Hawaii/PR/Guam sites use different prefixes and aren't handled here).
+-      return String(siteId || '').replace(/^K/i, '').toUpperCase();
+-    }
++    // Radar acquisition is server-side only: this page never talks to an upstream radar provider.
+ 
+     async function resolveMapboxToken() {
+       if (MAPBOX_TOKEN) return MAPBOX_TOKEN;
+@@ -2523,7 +2523,7 @@
+           paint: { 'line-color': 'rgba(255,255,255,0.22)', 'line-width': 0.6 },
+         });
+         for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
+-          radarMap.addSource(radarSourceIds[i], { type: 'raster', tiles: [BLANK_TILE], tileSize: 256 });
++          radarMap.addSource(radarSourceIds[i], { type: 'raster', tiles: [BLANK_TILE], tileSize: 256, attribution: 'Radar: NWS NEXRAD via Iowa Environmental Mesonet' });
+           radarMap.addLayer({
+             id: radarLayerIds[i], type: 'raster', source: radarSourceIds[i],
+             paint: {
+@@ -2613,7 +2613,7 @@
+         const nearest = Array.isArray(sites) ? sites[0] : null;
+         if (!nearest || nearest.id === radarSiteId) return;
+         radarSiteId = nearest.id;
+-        radarSiteText.textContent = radarSiteId;
++        refreshRadarSiteLabel();
+         radarFrames = [];
+         radarLoopIndex = 0;
+         radarCloseLoopTick = 0;
+@@ -2633,6 +2633,7 @@
+     // worker genuinely doesn't decode should ever reach the IEM fallback beneath this.
+     const OWN_WORKER_PRODUCTS = new Set(['REF', 'VEL', 'SRV', 'CC']);
+     async function fetchRadarFrames() {
++      if (radarProduct === 'REF') { applyCoreFramesFromCache(); return fetchCoreRadar(); }
+       if (!radarSiteId || radarFrameFetchInFlight) return;
+       radarFrameFetchInFlight = true;
+       try {
+@@ -2668,23 +2669,6 @@
+           }
+           return;
+         }
+-        const iemProduct = IEM_PRODUCT_CODE[radarProduct];
+-        const sector = iemSectorFor(radarSiteId);
+-        const limit = radarProduct === 'REF' ? RADAR_FRAME_POOL_SIZE : 1;
+-        const url = `${IEM_RIDGE_BASE}/json/radar.py?operation=list&radar=${encodeURIComponent(sector)}&product=${iemProduct}`;
+-        const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
+-        if (!res.ok) throw new Error('IEM scan list fetch failed');
+-        const data = await res.json();
+-        const scans = Array.isArray(data.scans) ? data.scans : [];
+-        const sorted = scans.map(s => s.ts).filter(Boolean).sort().reverse().slice(0, limit);
+-        if (sorted.length) {
+-          radarFrames = sorted.map(ts => ({ kind: 'iem', ts, time: ts }));
+-          radarLoopIndex = 0;
+-          radarCloseLoopTick = 0;
+-          preloadRadarFrames(radarFrames);
+-          // See the comment on the own-worker branch above -- loading-overlay visibility is
+-          // owned by setRadarHealthState now, not this metadata-only success path.
+-        }
+       } catch (err) {
+         // leave last-known frames in place -- a single missed poll isn't an outage
+       } finally {
+@@ -2692,24 +2676,8 @@
+       }
+     }
+ 
+-    // IEM single-archive WMS wants explicit UTC year/month/day/time(HHMM) query params, parsed
+-    // from the scan's ISO timestamp (e.g. "2026-09-10T02:51Z") -- confirmed live against the real
+-    // service during this change.
+-    function iemArchiveTileUrl(sector, product, ts) {
+-      const d = new Date(ts);
+-      const year = d.getUTCFullYear();
+-      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+-      const day = String(d.getUTCDate()).padStart(2, '0');
+-      const time = String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0');
+-      const qs = new URLSearchParams({
+-        SERVICE: 'WMS', VERSION: '1.1.1', REQUEST: 'GetMap', LAYERS: 'single-archive',
+-        SRS: 'EPSG:3857', WIDTH: '256', HEIGHT: '256', FORMAT: 'image/png', TRANSPARENT: 'TRUE',
+-        sector, prod: product, year: String(year), month, day, time,
+-      });
+-      return `${IEM_RIDGE_BASE}/cgi-bin/wms/nexrad/ridge.cgi?${qs}&BBOX={bbox-epsg-3857}`;
+-    }
+-
+     const RADAR_PRELOAD_STAGGER_MS = 650;
++    const radarSlotUrls = [];
+     // Tracks which pool slots currently hold a REAL tile URL vs. the BLANK_TILE placeholder --
+     // the success signal below must not count a blank placeholder as proof real radar imagery is
+     // rendering (it always "succeeds" by definition, which would mask an actual outage).
+@@ -2734,18 +2702,22 @@
+     }
+     function preloadRadarFrames(frames) {
+       if (!radarMapReady) { pendingRadarFrames = frames; return; }
+-      const sector = iemSectorFor(radarSiteId);
+-      const iemProduct = IEM_PRODUCT_CODE[radarProduct];
+       let assignedRealTile = false;
+       for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
+         const frame = frames[i];
+         let url = BLANK_TILE;
+-        if (frame && frame.kind === 'iem') {
+-          url = iemArchiveTileUrl(sector, iemProduct, frame.ts);
++        if (frame && frame.kind === 'core') {
++          url = frame.tileUrl;
+         } else if (frame && frame.kind === 'own') {
+           url = `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png`;
+         }
+-        if (url === BLANK_TILE) { radarSourceHasRealTile.delete(i); } else { radarSourceHasRealTile.add(i); assignedRealTile = true; }
++        if (url === BLANK_TILE) { radarSourceHasRealTile.delete(i); } else { radarSourceHasRealTile.add(i); }
++        // Core frame URLs are immutable: re-assigning an unchanged URL would only force a needless
++        // source reload, so slots whose URL did not change are left alone.
++        const unchangedCore = frame && frame.kind === 'core' && radarSlotUrls[i] === url;
++        radarSlotUrls[i] = url;
++        if (unchangedCore) continue;
++        if (url !== BLANK_TILE) assignedRealTile = true;
+         window.setTimeout(() => {
+           const source = radarMap.getSource(radarSourceIds[i]);
+           if (source) source.setTiles([url]);
+@@ -2766,8 +2738,11 @@
+       if (next === 'UNAVAILABLE' && radarUnavailableSince === null) radarUnavailableSince = Date.now();
+       if (next !== 'UNAVAILABLE') radarUnavailableSince = null;
+ 
+-      radarLoadingEl.classList.toggle('is-unavailable', next === 'UNAVAILABLE');
+-      if (next === 'LOADING') {
++      radarLoadingEl.classList.toggle('is-unavailable', next === 'UNAVAILABLE' || next === 'CRITICAL');
++      if (next === 'CRITICAL') {
++        radarLoadingEl.textContent = 'Radar hidden - data critically old';
++        radarLoadingEl.classList.remove('hidden');
++      } else if (next === 'LOADING') {
+         radarLoadingEl.textContent = 'Loading radar...';
+         radarLoadingEl.classList.remove('hidden');
+       } else if (next === 'UNAVAILABLE') {
+@@ -2779,7 +2754,7 @@
+       radarLiveEl.classList.remove('is-aging', 'is-stale', 'is-unavailable');
+       if (next === 'AGING') radarLiveEl.classList.add('is-aging');
+       else if (next === 'STALE') radarLiveEl.classList.add('is-stale');
+-      else if (next === 'UNAVAILABLE') radarLiveEl.classList.add('is-unavailable');
++      else if (next === 'UNAVAILABLE' || next === 'CRITICAL') radarLiveEl.classList.add('is-unavailable');
+     }
+ 
+     // Recomputes health from the two independent signals that matter: whether tiles are
+@@ -2788,6 +2763,10 @@
+     // succeeding is not sufficient on its own -- that's exactly the gap a real broadcast test
+     // exposed (basemap/site/frame-age all looked healthy while every tile 502'd).
+     function updateRadarHealthState() {
++      if (radarProduct === 'REF' && coreRadar === null && coreRadarFailStreak >= 3) {
++        setRadarHealthState('UNAVAILABLE');
++        return;
++      }
+       if (radarTileFailureStreak >= RADAR_TILE_FAILURE_THRESHOLD) {
+         setRadarHealthState('UNAVAILABLE');
+         return;
+@@ -2796,6 +2775,12 @@
+         setRadarHealthState(radarSiteId ? 'LOADING' : 'LOADING');
+         return;
+       }
++      if (radarProduct === 'REF') {
++        const coreState = coreRadarState();
++        if (coreState === null) { setRadarHealthState('LOADING'); return; }
++        setRadarHealthState(coreState === 'FRESH' ? 'LIVE' : coreState);
++        return;
++      }
+       const newest = radarFrames[0];
+       const ageMs = newest && newest.time ? Date.now() - new Date(newest.time).getTime() : null;
+       if (ageMs === null || !Number.isFinite(ageMs)) { setRadarHealthState('LIVE'); return; }
+@@ -2804,19 +2789,84 @@
+       else setRadarHealthState('LIVE');
+     }
+ 
++    function coreFrameAgeS(frame) {
++      return frame.ageAtFetchS + (performance.now() - coreRadar.fetchedPerfMs) / 1000;
++    }
++    // FRESH/AGING/STALE/CRITICAL from the newest frame's server-reported age (advanced by local
++    // elapsed time) using the thresholds published in the manifest -- never overlay-owned numbers.
++    function coreRadarState() {
++      if (!coreRadar || !coreRadar.frames.length) return null;
++      const age = coreFrameAgeS(coreRadar.frames[0]);
++      const t = coreRadar.thresholds;
++      if (age <= t.fresh_max) return 'FRESH';
++      if (age <= t.aging_max) return 'AGING';
++      if (age <= t.stale_max) return 'STALE';
++      return 'CRITICAL';
++    }
++    function applyCoreFramesFromCache() {
++      if (!coreRadar) return;
++      radarFrames = coreRadar.frames;
++      preloadRadarFrames(radarFrames);
++    }
++    async function fetchCoreRadar() {
++      if (coreRadarFetchInFlight) return;
++      coreRadarFetchInFlight = true;
++      try {
++        const res = await fetchWithTimeout(CORE_RADAR_MANIFEST_URL, { headers: { Accept: 'application/json' }, cache: 'no-store' }, 8000);
++        if (!res.ok) throw new Error('radar manifest fetch failed');
++        const m = await res.json();
++        if (!m || m.schema_version !== 1 || !Array.isArray(m.frames) || !m.frames.length || !m.freshness_thresholds_seconds) throw new Error('radar manifest invalid');
++        const fetchedPerfMs = performance.now();
++        const newestFirst = m.frames.slice(-RADAR_FRAME_POOL_SIZE).reverse().map(f => ({
++          kind: 'core', frameId: f.frame_id, time: f.observation_time, ageAtFetchS: f.age_seconds,
++          tileUrl: radarProductOrigin + f.assets.tile_template,
++        }));
++        const ids = newestFirst.map(f => f.frameId).join(',');
++        const changed = !coreRadar || coreRadar.ids !== ids;
++        coreRadar = { thresholds: m.freshness_thresholds_seconds, fetchedPerfMs, frames: newestFirst, ids };
++        coreRadarFailStreak = 0;
++        if (radarProduct === 'REF' && changed) {
++          radarFrames = newestFirst;
++          radarLoopIndex = 0;
++          radarCloseLoopTick = 0;
++          preloadRadarFrames(radarFrames);
++        } else if (radarProduct === 'REF') {
++          radarFrames = newestFirst; // refresh ages only; tile URLs are unchanged
++        }
++        updateRadarHealthState();
++      } catch (err) {
++        coreRadarFailStreak += 1;
++        updateRadarHealthState();
++      } finally {
++        coreRadarFetchInFlight = false;
++      }
++    }
++
++    function refreshRadarSiteLabel() {
++      radarSiteText.textContent = radarProduct === 'REF' ? 'CONUS' : (radarSiteId || '----');
++    }
++
+     function applyRadarFrame(index) {
+       if (!radarMapReady) return;
++      // CRITICAL suppresses radar entirely; STALE dims it (and the loop freezes on the newest frame)
++      // so old imagery can never read as current.
++      const shownOpacity = radarProduct === 'REF' && radarHealthState === 'CRITICAL' ? 0
++        : radarProduct === 'REF' && radarHealthState === 'STALE' ? 0.55 : 0.92;
+       radarLayerIds.forEach((id, i) => {
+-        if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === index ? 0.92 : 0);
++        if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === index ? shownOpacity : 0);
+       });
+       // Part 9: the displayed time/age must track the frame CURRENTLY ON SCREEN during looping,
+       // not always the newest -- updateRadarScanAge() (below) only ever reported radarFrames[0].
+       const shown = radarFrames[index];
+       if (shown && shown.time) {
+-        const ageMs = Date.now() - new Date(shown.time).getTime();
++        const isCore = shown.kind === 'core' && coreRadar;
++        const ageMs = isCore ? coreFrameAgeS(shown) * 1000 : Date.now() - new Date(shown.time).getTime();
+         if (Number.isFinite(ageMs) && ageMs >= 0) {
+           const mins = Math.floor(ageMs / 60000);
+-          radarScanAgeText.textContent = index === 0
++          if (isCore && index === 0 && radarHealthState === 'CRITICAL') radarScanAgeText.textContent = `NO RADAR \u00B7 ${mins}m old`;
++          else if (isCore && index === 0 && radarHealthState === 'STALE') radarScanAgeText.textContent = `STALE \u00B7 ${mins}m ago`;
++          else if (isCore && index === 0 && radarHealthState === 'AGING') radarScanAgeText.textContent = `${mins}m ago \u00B7 AGING`;
++          else radarScanAgeText.textContent = index === 0
+             ? (mins < 1 ? 'Live' : `${mins}m ago`)
+             : `${mins < 1 ? '<1' : mins}m ago (loop)`;
+         }
+@@ -2873,6 +2923,7 @@
+       if (radarProduct === product) return;
+       radarProduct = product;
+       radarModeText.textContent = product;
++      refreshRadarSiteLabel();
+       radarFrames = [];
+       radarLoopIndex = 0;
+       radarCloseLoopTick = 0;
+@@ -2932,6 +2983,10 @@
+     const RADAR_NEWEST_HOLD_TICKS = 3; // ~3 * 400ms = 1200ms on the newest frame
+     function advanceRefLoop() {
+       if (!radarFrames.length) return;
++      if (radarProduct === 'REF' && (radarHealthState === 'STALE' || radarHealthState === 'CRITICAL')) {
++        applyRadarFrame(0); // freeze on the newest frame; never loop old data as if it were live
++        return;
++      }
+       if (radarFrames.length < MIN_FRAMES_TO_LOOP || Date.now() - radarZoomChangedAt < currentZoomHoldMs() / 2) {
+         applyRadarFrame(0);
+         return;
+@@ -3239,7 +3294,10 @@
+     // a professional-broadcast pace (~300-500ms/historical frame) without altering any of the
+     // existing zoom-hold/warning-rotation timing math above, which still counts in 700ms ticks.
+     setInterval(advanceRefLoop, RADAR_LOOP_TICK_MS);
+-    setInterval(fetchRadarFrames, 120_000); // pick up new radar volume scans independent of site changes
++    setInterval(fetchRadarFrames, 120_000); // single-site (VEL/SRV/CC) frame refresh; REF polls the Core manifest below
++    refreshRadarSiteLabel();
++    fetchCoreRadar();
++    setInterval(fetchCoreRadar, CORE_RADAR_POLL_MS);
+     showRotationCard('alert');
+     scheduleAdvance('alert');
+     scaleCanvas();

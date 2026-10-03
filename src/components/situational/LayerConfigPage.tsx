@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { CHASE_RADAR_ENABLED } from "../../services/radarPolicy";
 import { Panel } from "./Panel";
 import {
   loadMapLayerVisibility,
@@ -248,7 +249,7 @@ export function LayerConfigPage() {
 
   return (
     <Panel title="Layer Configuration" className="layer-config-panel">
-      {LAYERS.map(({ key, label, source, status, description, visual, configured = true }) => (
+      {LAYERS.filter((layer) => CHASE_RADAR_ENABLED || (layer.key !== "mosaic" && layer.key !== "radar")).map(({ key, label, source, status, description, visual, configured = true }) => (
         <div key={key} className="settings-row layer-config-row" data-testid={`layer-row-${key}`}>
           <div className="layer-config-row__summary">
             <span className="layer-config-row__icon"><LayerGlyph visual={visual} /></span>
