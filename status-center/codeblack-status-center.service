@@ -1,0 +1,39 @@
+[Unit]
+Description=Code Black System Status Center (read-only aggregator + dashboard)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=8
+
+[Service]
+Type=simple
+User=codeblack
+Group=codeblack
+Environment=STATUS_CENTER_BIND=127.0.0.1
+Environment=STATUS_CENTER_PORT=8795
+ExecStart=/usr/bin/python3 /srv/codeblack/releases/status-center/current/server.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/codeblack/data/status-center
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+TasksMax=128
+MemoryHigh=300M
+MemoryMax=500M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=codeblack-status-center
+
+[Install]
+WantedBy=multi-user.target
