@@ -71,6 +71,7 @@ main{padding:14px 16px 30px;max-width:2200px;margin:0 auto}
 .cards{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
 .card{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:10px 11px;min-width:0}
 .card.stale,.srow.stale{border-color:#7a5a12}
+.reach-note{margin:8px 0 4px;padding:8px 10px;border-left:3px solid var(--info);background:#141b26;color:#b9cce7;font-size:11px;line-height:1.45}
 .card>.hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .card>.hd h3{font-size:14px}
 .kv{display:flex;gap:8px;padding:1px 0;min-width:0}
@@ -179,13 +180,27 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
   .svc-head{display:none}
   .srow{display:block}
   .srow .cell{display:flex;gap:8px;padding:2px 0}
-  .srow .cell .cl{display:block;flex:0 0 78px;color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding-top:2px}
+.srow .cell .cl{display:block;flex:0 0 78px;color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding-top:2px}
   .cards{grid-template-columns:minmax(0,1fr)}
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
   .att li{grid-template-columns:auto minmax(0,1fr)}
   .att .am{grid-column:2;text-align:left}
   .kv .k{flex-basis:80px}
 }
+
+/* Command-surface redesign: additive; the original renderers remain the source of truth. */
+:root{--surface:#111216;--surface-raised:#17181d;--signal:#ef3d41;--signal-soft:#401518;--focus:#ffcf56;--radius:14px}
+html{scroll-behavior:smooth}
+body{background:radial-gradient(900px 540px at 76% -160px,#281014 0%,transparent 66%),#0a0a0c}
+#top{position:relative;min-height:72px;padding:14px max(18px,calc((100vw - 1500px)/2));gap:14px;border-bottom:1px solid #303035;background:rgba(10,10,12,.94)}
+#top:before{content:"";position:absolute;left:0;right:0;bottom:-2px;height:2px;background:linear-gradient(90deg,var(--signal),#7d2026 28%,transparent 70%)}
+.brand{display:flex;align-items:center;gap:11px}.brand:before{content:"";width:30px;height:36px;background:url('codeblack-shield.png') center/contain no-repeat;filter:drop-shadow(0 0 12px rgba(229,37,42,.28))}.brand h1{font-size:13px;line-height:1.05;letter-spacing:.18em}.brand h1:after{content:"SYSTEM STATUS";display:block;margin-top:5px;color:#96969e;font-size:9px;letter-spacing:.18em}.brand h1 span{display:none}
+#overall{order:3;margin-left:auto}.refresh{order:4;min-width:130px;padding-left:14px;border-left:1px solid #303035}.search{order:5;margin-left:0;flex-basis:330px}.search input,.search button{border-radius:9px;background:#16171b}.search input{padding:9px 11px}.search button{padding:8px 10px}.search button:hover{color:var(--text);border-color:#777780}
+.status-command{max-width:2200px;margin:0 auto;padding:24px 16px 14px;display:grid;grid-template-columns:minmax(300px,1.35fr) minmax(320px,.9fr);gap:14px}.command-title{padding:12px 2px}.command-title h2{font-size:clamp(25px,3vw,38px);letter-spacing:-.045em;line-height:1.05}.command-title p{margin:8px 0 0;color:#a9a9b0;max-width:58ch}.condition-card{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;padding:17px 18px;border:1px solid #38383f;border-left:3px solid var(--signal);border-radius:var(--radius);background:linear-gradient(110deg,#19191e,#111216)}.condition-card .label,.command-meta .label{color:#aaaab4;font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase}.condition-card .condition-state{margin-top:7px}.condition-card .condition-state .chip{font-size:16px;padding:4px 12px}.command-meta{display:flex;gap:14px;align-items:stretch}.command-meta>div{flex:1;padding:12px 0 12px 14px;border-left:1px solid #35353c}.command-meta strong{display:block;margin-top:6px;font-family:var(--mono);font-size:13px}.command-meta .attention-num{color:var(--signal);font-size:25px;line-height:1;font-family:var(--mono)}
+.status-nav{max-width:2200px;margin:0 auto;padding:0 16px 15px;display:flex;gap:7px;overflow-x:auto;scrollbar-width:thin}.status-nav button{flex:0 0 auto;border:1px solid #303037;border-radius:999px;background:#121317;color:#b8b8c0;padding:7px 11px;font:700 10px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.status-nav button:hover,.status-nav button:focus-visible{color:#fff;border-color:#9d3c42;outline:none}.status-nav button[data-attention="true"]{border-color:#963237;color:#ffb1b4}
+main{padding-top:4px}.sect{border-radius:var(--radius);background:linear-gradient(180deg,#14151a,#111216);border-color:#2e2f35;box-shadow:0 10px 24px rgba(0,0,0,.12)}.sect>header{padding:11px 14px}.sect>header h2{font-size:11px;letter-spacing:.16em}.sect>header .tog{border-radius:7px}.tiles{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}.tile{border-radius:10px}.card{border-radius:10px;background:#191a1f}.banner{padding:10px max(16px,calc((100vw - 1500px)/2));letter-spacing:.04em}.foot{max-width:2200px;margin:0 auto;padding-left:16px;padding-right:16px}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.status-nav button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+@media(max-width:800px){#top{position:relative;align-items:center;padding:12px 14px}.brand{flex:1}.refresh{order:3;margin-left:auto;padding-left:10px;min-width:0}.search{order:5;flex:1 0 100%;margin:0}.status-command{padding:16px 14px 10px;grid-template-columns:1fr;gap:10px}.command-title{padding:2px 0}.command-title h2{font-size:28px}.condition-card{padding:14px}.command-meta{gap:8px}.command-meta>div{padding-left:9px}.status-nav{padding:0 14px 13px}.sect{border-radius:10px}main{padding-left:14px;padding-right:14px}.foot{padding-left:14px;padding-right:14px}}
 </style>
 </head>
 <body>
@@ -198,6 +213,11 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 </header>
 <div id="banner" class="banner bad" role="alert" hidden></div>
 <div id="agebanner" class="banner warn" hidden></div>
+<section class="status-command" aria-label="System condition overview">
+  <div class="command-title"><h2>System condition, at a glance.</h2><p>Live operational context across infrastructure, services, and dependent systems.</p></div>
+  <div class="condition-card"><div><div class="label">Overall condition</div><div class="condition-state" id="command-overall"><span class="chip unk big">UNKNOWN</span></div></div><div class="command-meta"><div><span class="label">Freshness</span><strong id="command-age">Awaiting data</strong></div><div><span class="label">Attention</span><strong class="attention-num" id="command-attention">—</strong></div></div></div>
+</section>
+<nav class="status-nav" aria-label="Status sections" id="status-nav"></nav>
 <main id="app" class="">
   <section class="sect" id="s-tiles"><header><h2>Global state</h2></header><div class="body"><div id="b-tiles" class="tiles"></div></div></section>
   <section class="sect" id="s-attention"><header><h2>Needs attention</h2><span id="attsum" class="attsum"></span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-attention"></div></section>
@@ -332,8 +352,9 @@ R.tiles = (d) => {
   const box = $('#b-tiles'); box.replaceChildren();
   const tiles = (d.summary && d.summary.tiles) || [];
   tiles.forEach((t) => {
-    let cls = sc(t.state);
-    let label = isNull(t.state) ? 'UNKNOWN' : String(t.state).toUpperCase().replace(/_/g, ' ');
+    const reachOnly = (d.hosts || []).some((x) => x.id === t.id && x.collector === 'none' && x.state === 'HEALTHY');
+    let cls = reachOnly ? 'info' : sc(t.state);
+    let label = reachOnly ? 'REACHABLE' : isNull(t.state) ? 'UNKNOWN' : String(t.state).toUpperCase().replace(/_/g, ' ');
     if (t.informational && String(t.state).toUpperCase() === 'OFFLINE') cls = 'info';
     box.appendChild(h('div', 'tile f-item ' + cls + (t.group === 'domain' ? ' dom' : ''), [h('div', 'tl', t.label), h('div', 'ts', label), h('div', 'td', isNull(t.detail) ? '' : t.detail)], { title: t.detail || '' }));
   });
@@ -365,25 +386,33 @@ R.hosts = (d) => {
   const grid = h('div', 'cards');
   (d.hosts || []).forEach((x) => {
     const c = x.cpu || {}, m = x.memory || {}, g = x.gpu;
+    const reachOnly = x.collector === 'none';
+    const stateChip = reachOnly && x.state === 'HEALTHY' && !isStale(x.telemetry)
+      ? h('span', 'chip info', 'REACHABLE') : chip(x.state, x.telemetry);
     const kids = [
-      h('div', 'hd', [h('h3', null, x.name), chip(x.state, x.telemetry), h('span', 'tag', 'collector: ' + (x.collector || 'unknown'))]),
+      h('div', 'hd', [h('h3', null, x.name), stateChip, h('span', 'tag', reachOnly ? 'reachability only' : 'collector: ' + (x.collector || 'unknown'))]),
       h('div', 'muted small wrap', x.role || ''),
       isNull(x.state_reason) ? null : h('div', 'reason', x.state_reason),
-      kv('LAN', ipSpan(x.lan_ip)), kv('Tailscale', ipSpan(x.tailscale_ip)), kv('OS', nz(x.os)), kv('Uptime', dur(x.uptime_s)),
-      kv('Path', isNull(x.path) ? unk() : x.path), kv('Last contact', tm(x.last_contact)),
-      metric('CPU ' + (isNull(c.cores) ? '' : c.cores + ' cores '), h('span', null, [pct(c.percent), ' - load ', nz(c.load1)]), c.percent, usageCls(c.percent)),
-      isNull(c.model) ? null : h('div', 'small muted', c.model),
-      metric('Memory', h('span', null, [mbToGb(m.used_mb), ' / ', mbToGb(m.total_mb), ' (', pct(m.percent), ')']), m.percent, usageCls(m.percent)),
+      kv('LAN', ipSpan(x.lan_ip)), kv('Tailscale', ipSpan(x.tailscale_ip)),
+      kv('Path', isNull(x.path) ? unk() : x.path), kv('Last observation', tm(x.last_contact)),
     ];
-    if (x.disks && x.disks.length) x.disks.forEach((k) => kids.push(metric('Disk ' + k.mount, h('span', null, [gb(k.used_gb), ' / ', gb(k.total_gb), ' - free ', gb(k.free_gb)]), k.percent, diskCls(k.state))));
-    else kids.push(kv('Disk', unk()));
-    kids.push(kv('Temperature', nz(x.temperature_c, (t) => t + ' \u00B0C')));
-    if (g) {
-      const vp = g.vram_total_mb ? (g.vram_used_mb / g.vram_total_mb) * 100 : null;
-      kids.push(h('div', 'small muted', g.name || 'GPU'));
-      kids.push(metric('GPU VRAM', h('span', null, [mbToGb(g.vram_used_mb), ' / ', mbToGb(g.vram_total_mb)]), vp, usageCls(vp)));
-      kids.push(kv('GPU load', h('span', null, [pct(g.utilization), ' - ', nz(g.temperature_c, (t) => t + ' \u00B0C')])));
-    } else kids.push(kv('GPU', h('span', 'muted', 'none reported')));
+    if (reachOnly) {
+      kids.push(h('div', 'reach-note', 'Connectivity is observed. CPU, memory, disk, and service health are not collected from this host.'));
+    } else {
+      kids.push(kv('OS', nz(x.os)), kv('Uptime', dur(x.uptime_s)));
+      kids.push(metric('CPU ' + (isNull(c.cores) ? '' : c.cores + ' cores '), h('span', null, [pct(c.percent), ' - load ', nz(c.load1)]), c.percent, usageCls(c.percent)));
+      if (!isNull(c.model)) kids.push(h('div', 'small muted', c.model));
+      kids.push(metric('Memory', h('span', null, [mbToGb(m.used_mb), ' / ', mbToGb(m.total_mb), ' (', pct(m.percent), ')']), m.percent, usageCls(m.percent)));
+      if (x.disks && x.disks.length) x.disks.forEach((k) => kids.push(metric('Disk ' + k.mount, h('span', null, [gb(k.used_gb), ' / ', gb(k.total_gb), ' - free ', gb(k.free_gb)]), k.percent, diskCls(k.state))));
+      else kids.push(kv('Disk', unk()));
+      kids.push(kv('Temperature', nz(x.temperature_c, (t) => t + ' \u00B0C')));
+      if (g) {
+        const vp = g.vram_total_mb ? (g.vram_used_mb / g.vram_total_mb) * 100 : null;
+        kids.push(h('div', 'small muted', g.name || 'GPU'));
+        kids.push(metric('GPU VRAM', h('span', null, [mbToGb(g.vram_used_mb), ' / ', mbToGb(g.vram_total_mb)]), vp, usageCls(vp)));
+        kids.push(kv('GPU load', h('span', null, [pct(g.utilization), ' - ', nz(g.temperature_c, (t) => t + ' \u00B0C')])));
+      } else kids.push(kv('GPU', h('span', 'muted', 'none reported')));
+    }
     if (x.links && x.links.length) kids.push(h('div', 'linkrow', x.links.map((l) => lnk(l.name, l.url))));
     grid.appendChild(card('', kids, x.telemetry));
   });
@@ -745,8 +774,35 @@ function chrome() {
     ov.replaceChildren(chip(d.summary.overall, null, { big: true }), h('span', 'muted', (d.summary.attention_count || 0) + ' need attention'));
     document.title = String(d.summary.overall || 'UNKNOWN') + ' - Code Black Status';
   }
+  const cmdOverall = $('#command-overall'), cmdAge = $('#command-age'), cmdAttention = $('#command-attention');
+  if (d && d.summary) {
+    cmdOverall.replaceChildren(chip(d.summary.overall, null, { big: true }));
+    cmdAttention.textContent = String(d.summary.attention_count ?? 0);
+  } else { cmdOverall.replaceChildren(h('span', 'chip unk big', 'UNKNOWN')); cmdAttention.textContent = '—'; }
+  cmdAge.textContent = S.lastOk ? (S.failing ? 'Backend unreachable' : 'Data ' + durS(Math.max(0, (now - Math.min(S.lastGen || now, now)) / 1000)) + ' old') : 'Awaiting data';
 }
 /* ---------- wiring ---------- */
+const NAV_ITEMS = [['s-attention','Attention'],['s-hosts','Hosts'],['s-services','Services'],['s-streaming','Streaming'],['s-radar','Radar'],['s-weather','Weather'],['s-compute','Compute'],['s-network','Network'],['s-dns','DNS'],['s-storage','Storage'],['s-ai','AI'],['s-labs','Labs'],['s-launchpad','Links'],['s-address','Addresses']];
+const nav = $('#status-nav');
+nav.addEventListener('click', (e) => { if (e.target.matches('button') && $('#q').value) { $('#q').value = ''; applyFilter(); } }, true);
+const HASH_SECTIONS = new Set(NAV_ITEMS.map(([id]) => id));
+let lastHashActivation = null;
+function activateHashSection() {
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (!HASH_SECTIONS.has(id) || id === lastHashActivation) return;
+  const target = document.getElementById(id); if (!target) return;
+  if ($('#q').value) { $('#q').value = ''; applyFilter(); }
+  target.hidden = false;
+  if (target.classList.contains('collapsed')) { target.classList.remove('collapsed'); const t = $('.tog', target); if (t) t.textContent = '-'; }
+  const heading = $('h2', target); if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({preventScroll:true}); }
+  target.scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'});
+  lastHashActivation = id;
+}
+NAV_ITEMS.forEach(([id,label]) => { const b = h('button', '', label, {type:'button','data-section':id}); b.addEventListener('click', () => { if (location.hash.slice(1) === id) { lastHashActivation = null; activateHashSection(); } else location.hash = id; }); nav.appendChild(b); });
+window.addEventListener('hashchange', () => { lastHashActivation = null; activateHashSection(); });
+function refreshNav() { const attention = S.doc && S.doc.summary && Number(S.doc.summary.attention_count) > 0; const first = $('button', nav); if (first) first.dataset.attention = attention ? 'true' : 'false'; }
+const originalRender = render;
+render = function(d) { originalRender(d); refreshNav(); activateHashSection(); };
 document.addEventListener('click', (e) => {
   const t = e.target.closest && e.target.closest('.tog'); if (!t) return;
   const s = t.closest('.sect'); const c = s.classList.toggle('collapsed'); t.textContent = c ? '+' : '-';

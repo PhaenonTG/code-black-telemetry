@@ -28,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import collector  # noqa: E402
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 SCHEMA = "codeblack.status.v1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 REGISTRY_PATH = os.environ.get("STATUS_CENTER_REGISTRY", os.path.join(HERE, "registry.json"))
@@ -566,12 +566,13 @@ def build_service(svc):
 def build_host(h, services):
     doc, ctel, cfresh = coll(h["id"]) if h["collector"]["mode"] != "none" else (None, None, False)
     peer = tail_peer(h["tailscale_peer"])
+    peer_observed = pfresh_ok("tailscale") is True
     reach = []
     for pid in [r["probe"] for r in h.get("reach", [])]:
         p = PROBES.get(pid)
         reach.append(bool(p and p.ok and not p.stale))
     edge_peer_alive = h["id"] == "edge" and pfresh_ok("tailscale") is True and bool(peer and peer["online"])
-    online = cfresh or any(reach) or edge_peer_alive or bool(peer and peer["online"] and h["collector"]["mode"] == "none")
+    online = cfresh or any(reach) or edge_peer_alive or bool(peer_observed and peer and peer["online"] and h["collector"]["mode"] == "none")
     mem, cpu, disks, gpu = {}, {}, [], None
     hm = (doc or {}).get("host") or {}
     if h["id"] == "phaenon3":
@@ -595,7 +596,7 @@ def build_host(h, services):
         if peer and not peer["online"]:
             why = "Tailscale peer offline"
     elif h["collector"]["mode"] == "none":
-        state, why = "HEALTHY", "reachable; no service telemetry (reachability only)"
+        state, why = "HEALTHY", "reachable; host metrics unavailable (no collector)"
     elif not doc:
         state, why = "UNKNOWN", "collector has not reported"
     elif not cfresh:
@@ -606,19 +607,22 @@ def build_host(h, services):
     else:
         state, why = "HEALTHY", None
     path = "unknown"
-    if peer:
+    if peer and peer_observed:
         path = peer["path"]
     elif h["id"] == "core":
         path = "self"
     last_contact = ctel["last_success"] if ctel and ctel.get("last_success") else None
     if not last_contact and h["collector"]["mode"] == "none":
         ps = [PROBES[r["probe"]].last_success for r in h.get("reach", []) if PROBES[r["probe"]].last_success]
+        if not ps and peer and peer_observed and PROBES.get("tailscale") and PROBES["tailscale"].last_success:
+            ps = [PROBES["tailscale"].last_success]
         last_contact = iso(max(ps)) if ps else None
+    reach_telemetry = tel(*[r["probe"] for r in h.get("reach", [])]) if h.get("reach") else tel("tailscale") if h.get("tailscale_peer") else tel()
     return {"id": h["id"], "name": h["name"], "role": h["role"], "state": state, "state_reason": why, "lan_ip": h.get("lan_ip"), "tailscale_ip": h.get("tailscale_ip"),
             "os": hm.get("os"), "uptime_s": hm.get("uptime_s"), "cpu": {"model": (hm.get("cpu") or {}).get("model"), "cores": (hm.get("cpu") or {}).get("cores"), "load1": (hm.get("cpu") or {}).get("load1"), "percent": (hm.get("cpu") or {}).get("percent")},
             "memory": {"used_mb": (hm.get("memory") or {}).get("used_mb"), "total_mb": (hm.get("memory") or {}).get("total_mb"), "percent": (hm.get("memory") or {}).get("percent")},
             "disks": disks, "temperature_c": hm.get("temperature_c"), "gpu": gpu, "last_contact": last_contact, "path": path,
-            "collector": h["collector"]["mode"], "expected_online": h.get("expected_online", True), "telemetry": ctel or (tel(*[r["probe"] for r in h.get("reach", [])]) if h.get("reach") else tel()),
+            "collector": h["collector"]["mode"], "expected_online": h.get("expected_online", True), "telemetry": ctel or reach_telemetry,
             "links": [{"name": l["name"], "url": l["url"]} for l in REG["links"] if l["host"] == h["id"]][:3]}
 
 
