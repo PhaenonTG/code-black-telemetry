@@ -77,6 +77,7 @@ export default function Operations() {
 
   const rows = buildSystemStatus({
     coreReachable: coreState.core.state === "LIVE",
+    fabric: coreState.fabric,
     map: health.map,
     radar: health.radar,
     singleSiteRadar: health.singleSiteRadar,

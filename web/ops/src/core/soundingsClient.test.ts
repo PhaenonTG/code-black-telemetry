@@ -43,6 +43,14 @@ function representativeSoundingBody() {
 describe("fetchSoundingPoint", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("allows the cold sounding request 75 seconds without changing other Core timeouts", async () => {
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(representativeSoundingBody()), { status: 200 })));
+    await fetchSoundingPoint(config(), { lat: 35.22, lon: -97.44 });
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 75_000);
   });
 
   it("requests the soundings point route with lat/lon and an optional location name", async () => {

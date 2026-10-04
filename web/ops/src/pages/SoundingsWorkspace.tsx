@@ -4,7 +4,7 @@ import { Hodograph } from "../components/Hodograph";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { SkewT } from "../components/SkewT";
 import { browserLocationAdapter, type LocationState } from "../adapters";
-import { fetchSoundingPoint, searchSoundingLocation, OpsCoreClientError } from "../core/client";
+import { fetchSoundingPoint, searchSoundingLocation, OpsCoreClientError, SOUNDING_REQUEST_TIMEOUT_MS } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
 import type { OpsConnectionState, SoundingPointResult, SoundingRequestState } from "../core/types";
 import { LatestRequest } from "./latestRequest";
@@ -152,7 +152,11 @@ export default function SoundingsWorkspace() {
         // location search (which never reaches here; see handleSearch's own catch).
         setResult(null);
         setPhase("unavailable");
-        setError(err instanceof OpsCoreClientError ? err.message : "Sounding request failed.");
+        setError(
+          err instanceof OpsCoreClientError && err.message === "request timeout"
+            ? `Sounding exceeded ${SOUNDING_REQUEST_TIMEOUT_MS / 1000} seconds. Retry the request.`
+            : err instanceof OpsCoreClientError ? err.message : "Sounding request failed.",
+        );
       }
     },
     [beginRequest, config],
@@ -295,7 +299,9 @@ export default function SoundingsWorkspace() {
         </div>
 
         {phase === "idle" && <div className="soundings-empty">Select a location to load a sounding.</div>}
-        {phase === "loading" && !result && <div className="soundings-empty">Loading sounding…</div>}
+        {phase === "loading" && !result && (
+          <div className="soundings-empty">Loading sounding… Cold model data can take up to {SOUNDING_REQUEST_TIMEOUT_MS / 1000} seconds.</div>
+        )}
         {phase === "unavailable" && (
           <div className="soundings-empty soundings-empty--error">
             {error ?? "Sounding unavailable."}

@@ -187,9 +187,9 @@ export function fabricWsUrl(config: OpsCoreConfig): string {
   return `${config.coreWsUrl}/api/fabric/v1/ws`;
 }
 
-// A cold HRRR profile can take roughly 25 seconds on Core before the gateway and browser
-// overhead. Give Soundings headroom without changing the faster Storm Intel point timeout.
-const SOUNDING_REQUEST_TIMEOUT_MS = 60_000;
+// Cold HRRR profiles can take over 50 seconds on Core. Leave room for network variation
+// without changing the faster Storm Intel point or location-search timeouts.
+export const SOUNDING_REQUEST_TIMEOUT_MS = 75_000;
 
 export async function fetchSoundingPoint(
   config: OpsCoreConfig,
