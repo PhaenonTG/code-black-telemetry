@@ -14,7 +14,7 @@ function contextValue(): CoreOpsContextValue {
     config: { mode: "LIVE_CORE", coreBaseUrl: "https://ops.codeblackwx.com/api/core", coreWsUrl: "wss://ops.codeblackwx.com/api/core", unitId: "cbwx-unit-tessa", stormIntelPollSeconds: 30 },
     state: {
       core: { state: "LIVE", detail: "", checkedAt: 0 },
-      fabric: { state: "LIVE", detail: "", checkedAt: 0, health: null, units: null, wsState: "disabled", lastWsEventAt: null, lastContactAt: null, error: null },
+      fabric: { state: "LIVE", detail: "", checkedAt: 0, health: null, units: null, streamState: "disabled", lastStreamEventAt: null, lastContactAt: null, error: null },
       stormIntel: { state: "LIVE", detail: "", checkedAt: 0, health: null, selectedPoint: null, pointLoading: false, requestId: 0, pointSnapshot: null, pointError: null, pointHistory: [] },
       refreshedAt: 0,
     },

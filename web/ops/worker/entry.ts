@@ -28,6 +28,7 @@
 // had.
 import {
   type GatewayEnv,
+  forwardFabricStream,
   forwardToCore,
   gatewayErrorResponse,
   normalizeRouteKey,
@@ -61,6 +62,10 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
   const routeKey = normalizeRouteKey(url.pathname.slice(GATEWAY_PREFIX.length).split("/"));
   const route = resolveAllowlistRoute(routeKey);
   if (!route) return gatewayErrorResponse(404, "ROUTE_NOT_ALLOWED");
+
+  if (route.upstreamPath === "/api/fabric/v1/stream") {
+    return forwardFabricStream(env, request.signal);
+  }
 
   const result = await forwardToCore(route, url, env);
   if (result.status !== 200) return gatewayErrorResponse(result.status, result.reason ?? "CORE_UNAVAILABLE");

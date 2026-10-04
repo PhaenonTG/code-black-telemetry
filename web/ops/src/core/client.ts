@@ -25,7 +25,7 @@ export class OpsCoreClientError extends Error {
   }
 }
 
-export interface FabricWsEvent {
+export interface FabricEvent {
   eventType: string;
   timestamp: string | null;
   payload: unknown;
@@ -103,11 +103,11 @@ export async function fetchCoreHealth(config: OpsCoreConfig): Promise<CoreHealth
   }
 }
 
-export async function fetchFabricRest(config: OpsCoreConfig, previous?: Pick<FabricSnapshotState, "wsState" | "lastWsEventAt" | "lastContactAt" | "error">): Promise<FabricSnapshotState> {
+export async function fetchFabricRest(config: OpsCoreConfig, previous?: Pick<FabricSnapshotState, "streamState" | "lastStreamEventAt" | "lastContactAt" | "error">): Promise<FabricSnapshotState> {
   const now = Date.now();
   const unavailable = unavailableState(config, "Fabric");
   if (!coreConfigured(config)) {
-    return { ...unavailable, checkedAt: now, health: null, units: null, wsState: "disabled", lastWsEventAt: null, lastContactAt: null, error: null };
+    return { ...unavailable, checkedAt: now, health: null, units: null, streamState: "disabled", lastStreamEventAt: null, lastContactAt: null, error: null };
   }
   try {
     const [health, units] = await Promise.all([
@@ -121,8 +121,8 @@ export async function fetchFabricRest(config: OpsCoreConfig, previous?: Pick<Fab
       checkedAt: Date.now(),
       health,
       units,
-      wsState: previous?.wsState ?? "disabled",
-      lastWsEventAt: previous?.lastWsEventAt ?? null,
+      streamState: previous?.streamState ?? "disabled",
+      lastStreamEventAt: previous?.lastStreamEventAt ?? null,
       lastContactAt: Date.now(),
       error: previous?.error ?? null,
     };
@@ -133,8 +133,8 @@ export async function fetchFabricRest(config: OpsCoreConfig, previous?: Pick<Fab
       checkedAt: Date.now(),
       health: null,
       units: null,
-      wsState: previous?.wsState ?? "disabled",
-      lastWsEventAt: previous?.lastWsEventAt ?? null,
+      streamState: previous?.streamState ?? "disabled",
+      lastStreamEventAt: previous?.lastStreamEventAt ?? null,
       lastContactAt: previous?.lastContactAt ?? null,
       error: error instanceof Error ? error.message : "Fabric REST failed",
     };
@@ -165,17 +165,17 @@ export async function fetchStormIntelPoint(config: OpsCoreConfig, point: { lat: 
   return normalizeStormIntelSnapshot(raw);
 }
 
-export function normalizeFabricWsEvent(raw: string): FabricWsEvent {
+export function normalizeFabricEvent(raw: string): FabricEvent {
   let body: unknown;
   try {
     body = JSON.parse(raw);
   } catch {
-    throw new OpsCoreClientError("Malformed Fabric WebSocket JSON");
+    throw new OpsCoreClientError("Malformed Fabric stream JSON");
   }
-  if (typeof body !== "object" || body === null || Array.isArray(body)) throw new OpsCoreClientError("Malformed Fabric WebSocket event");
+  if (typeof body !== "object" || body === null || Array.isArray(body)) throw new OpsCoreClientError("Malformed Fabric stream event");
   const record = body as Record<string, unknown>;
   const eventType = typeof record.event_type === "string" ? record.event_type : "";
-  if (!eventType) throw new OpsCoreClientError("Fabric WebSocket event missing event_type");
+  if (!eventType) throw new OpsCoreClientError("Fabric stream event missing event_type");
   return {
     eventType,
     timestamp: typeof record.timestamp === "string" ? record.timestamp : null,
@@ -183,8 +183,43 @@ export function normalizeFabricWsEvent(raw: string): FabricWsEvent {
   };
 }
 
-export function fabricWsUrl(config: OpsCoreConfig): string {
-  return `${config.coreWsUrl}/api/fabric/v1/ws`;
+export async function consumeFabricStream(
+  config: OpsCoreConfig,
+  signal: AbortSignal,
+  onEvent: (event: FabricEvent) => void,
+): Promise<void> {
+  const token = await currentAccessToken();
+  const response = await fetch(`${config.coreBaseUrl}/api/fabric/v1/stream`, {
+    cache: "no-store",
+    signal,
+    headers: { ...buildCoreRequestHeaders(token), Accept: "application/x-ndjson" },
+  });
+  if (!response.ok) throw new OpsCoreClientError(`Fabric stream HTTP ${response.status}`);
+  if (!response.body || !response.headers.get("Content-Type")?.startsWith("application/x-ndjson")) {
+    throw new OpsCoreClientError("Fabric stream response unavailable");
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let pending = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      pending += decoder.decode(value, { stream: true });
+      if (pending.length > 2_000_000) throw new OpsCoreClientError("Fabric stream frame too large");
+      let newline = pending.indexOf("\n");
+      while (newline >= 0) {
+        const line = pending.slice(0, newline).trim();
+        pending = pending.slice(newline + 1);
+        if (line) onEvent(normalizeFabricEvent(line));
+        newline = pending.indexOf("\n");
+      }
+    }
+    if (pending.trim()) throw new OpsCoreClientError("Incomplete Fabric stream frame");
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
 }
 
 // Cold HRRR profiles can take over 50 seconds on Core. Leave room for network variation

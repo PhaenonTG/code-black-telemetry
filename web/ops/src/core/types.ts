@@ -15,8 +15,8 @@ export interface FabricSnapshotState {
   checkedAt: number;
   health: unknown | null;
   units: FabricNormalizedState | null;
-  wsState: "disabled" | "connecting" | "open" | "closed" | "error";
-  lastWsEventAt: number | null;
+  streamState: "disabled" | "connecting" | "open" | "closed" | "error";
+  lastStreamEventAt: number | null;
   lastContactAt: number | null;
   error: string | null;
 }

@@ -207,22 +207,17 @@ no duplicate Supabase configuration was introduced.
   -authenticated, misbehaving, or compromised client. This is a deployment-console step outside
   this repository and was not performed in this pass.
 
-## WebSocket / live Fabric state
+## Live Fabric state
 
-**Not implemented this pass.** `src/core/CoreOpsProvider.tsx` already no-ops its WebSocket effect
-whenever `coreWsUrl` is empty (`if (!coreConfigured(config) || !config.coreWsUrl) return;`),
-leaving `fabric.wsState = "disabled"` -- a real, already-modeled state, not a hack. Production can
-ship with Fabric REST-only (health + units, polled) with zero frontend changes, which is what this
-pass does.
+OPS uses an authenticated, read-only NDJSON feed at `/api/core/api/fabric/v1/stream` through
+the private VPC service binding. Core emits current normalized snapshots every two seconds,
+including passive presence expiry, and closes the connection after roughly 44 seconds so the
+Pages gateway rechecks Supabase authorization on reconnect. The browser falls back to bounded
+REST polling when the feed is unavailable. The original Core WebSocket remains available on
+loopback, but is not proxied through OPS; no WebSocket ticket or browser auth bypass is used.
 
-Designed-but-not-built path for later: a short-lived, single-use ticket handshake --
-`POST /api/core/auth/ws-ticket` (authenticated, same auth check as above) returns a signed ticket
-with a short TTL; the browser opens `wss://ops.codeblackwx.com/api/core/fabric/ws?ticket=...`; the
-gateway validates the ticket (WebSocket upgrade requests cannot carry a normal `Authorization`
-header) and pairs the two sockets. Deferred because it depends on the same not-yet-built Core-side
-transport also supporting a WebSocket upgrade through it, and adds real additional
-complexity/attack surface that deserves its own reviewed pass once the REST path is proven live in
-production.
+The feed is private OPS data. A future livestream overlay needs a separate reviewed public-safe
+contract, not direct access to this endpoint.
 
 ## Stage 2: Core-side tunnel -- installed, not yet activated
 

@@ -15,15 +15,15 @@ export function StatusBar({ locationLabel }: { locationLabel: string }) {
     return () => window.clearInterval(id)
   }, [])
   // This pill reports the Fabric WebSocket only; REST health is reported separately on System.
-  const wsTone: OpsConnectionState = state.fabric.wsState === "open" ? "LIVE"
-    : state.fabric.wsState === "connecting" ? "CHECKING"
-    : state.fabric.wsState === "error" ? "DEGRADED"
-    : state.fabric.wsState === "closed" ? "OFFLINE"
+  const wsTone: OpsConnectionState = state.fabric.streamState === "open" ? "LIVE"
+    : state.fabric.streamState === "connecting" ? "CHECKING"
+    : state.fabric.streamState === "error" ? "DEGRADED"
+    : state.fabric.streamState === "closed" ? "OFFLINE"
     : "UNAVAILABLE"
   return (
     <div className="statusbar">
       <OpsStatusPill state={state.core.state} label={`CORE ${state.core.state}`} />
-      <OpsStatusPill state={wsTone} label={`FABRIC WS ${state.fabric.wsState.toUpperCase()}`} />
+      <OpsStatusPill state={wsTone} label={`FABRIC FEED ${state.fabric.streamState.toUpperCase()}`} />
       <div className="statusbar__spacer" />
       <div className="statusbar__item statusbar__location">{locationLabel}</div>
       <div className="statusbar__item">UTC {now.toISOString().slice(11, 19)}</div>

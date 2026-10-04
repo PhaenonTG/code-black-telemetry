@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   forwardToCore,
+  forwardFabricStream,
   normalizeRouteKey,
   resolveAllowlistRoute,
   verifyOpsAuth,
@@ -21,6 +22,7 @@ describe("route allowlist", () => {
     expect(resolveAllowlistRoute("health")).toEqual({ upstreamPath: "/health", allowedQueryParams: [] });
     expect(resolveAllowlistRoute("api/fabric/v1/health")).toEqual({ upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] });
     expect(resolveAllowlistRoute("api/fabric/v1/units")).toEqual({ upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] });
+    expect(resolveAllowlistRoute("api/fabric/v1/stream")).toEqual({ upstreamPath: "/api/fabric/v1/stream", allowedQueryParams: [] });
     expect(resolveAllowlistRoute("api/storm-intel/v1/point")).toEqual({
       upstreamPath: "/api/storm-intel/v1/point",
       allowedQueryParams: ["latitude", "longitude"],
@@ -293,5 +295,31 @@ describe("forwardToCore (opt-in Service Binding / VPC transport path)", () => {
       CORE_GATEWAY_WORKER: { fetch: workerFetch },
     });
     expect(result).toEqual({ status: 404, reason: "LOCATION_NOT_FOUND" });
+  });
+});
+
+describe("private Fabric stream", () => {
+  it("fails closed without a private service binding", async () => {
+    const response = await forwardFabricStream({ CORE_GATEWAY_UPSTREAM_BASE: "https://public.example" });
+    expect(response.status).toBe(502);
+  });
+
+  it("forwards only the private bounded stream without buffering", async () => {
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode("{}\n")); } });
+    let requestedUrl = "";
+    const response = await forwardFabricStream({ CORE_GATEWAY_WORKER: { fetch: async (url) => {
+      requestedUrl = String(url);
+      return new Response(body, { headers: { "Content-Type": "application/x-ndjson" } });
+    } } });
+    expect(requestedUrl).toBe("https://internal-core-gateway-worker/api/fabric/v1/stream");
+    expect(response.status).toBe(200);
+    expect(response.body).toBe(body);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    await response.body?.cancel();
+  });
+
+  it("rejects an unexpected upstream media type", async () => {
+    const response = await forwardFabricStream({ CORE_GATEWAY_WORKER: { fetch: async () => jsonResponse(200, { hidden: true }) } });
+    expect(response.status).toBe(502);
   });
 });

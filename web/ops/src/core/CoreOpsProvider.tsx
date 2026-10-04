@@ -2,17 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { BoundedBackoff } from "./backoff";
 import { coreConfigured, readOpsCoreConfig } from "./config";
 import { CoreOpsContext, type OpsSelectedPoint } from "./CoreOpsContext";
-import { fabricWsUrl, fetchCoreHealth, fetchFabricRest, fetchStormIntelHealth, fetchStormIntelPoint, normalizeFabricWsEvent } from "./client";
+import { consumeFabricStream, fetchCoreHealth, fetchFabricRest, fetchStormIntelHealth, fetchStormIntelPoint } from "./client";
 import { fabricStateFromSnapshot } from "./fabricSnapshot";
 import { LatestRequestGate } from "./requestGate";
 import { addPointHistoryEntry, historyEntryFromSnapshot } from "../stormIntel/pointHistory";
 import type { OpsCoreState } from "./types";
 
-// How recently the Fabric WebSocket must have delivered something for the 30s REST refresh to
-// treat it as "healthy" and skip the redundant Fabric/Storm-Intel REST calls -- generous enough
-// to absorb a normal gap between events, tight enough that a WS silently gone dead (socket
-// object still exists but stopped receiving) falls back to REST well within one poll cycle.
-const FABRIC_WS_FRESH_MS = 90_000;
+const FABRIC_STREAM_FRESH_MS = 10_000;
 
 function initialState(): OpsCoreState {
   const now = Date.now();
@@ -25,8 +21,8 @@ function initialState(): OpsCoreState {
       checkedAt: now,
       health: null,
       units: null,
-      wsState: "disabled",
-      lastWsEventAt: null,
+      streamState: "disabled",
+      lastStreamEventAt: null,
       lastContactAt: null,
       error: null,
     },
@@ -62,26 +58,14 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
       const core = await fetchCoreHealth(config);
       if (cancelled) return;
 
-      // Fabric REST (health + units) exists only to seed/refresh the same state the Fabric
-      // WebSocket below already delivers live -- the merge logic further down already discards
-      // REST's `units` once the WS has supplied a real snapshot (`current.fabric.units ?? ...`).
-      // While the WS is genuinely live (open, and it actually delivered something recently --
-      // not just "the socket claims open"), firing this REST pair every 30s just produces a
-      // response that gets thrown away, and it's the same story for Storm Intel's health ping:
-      // that service is co-located in the same Core process Fabric's WS is already proving is
-      // reachable, so a live Fabric WS is a reliable live-presence signal for it too. Neither is
-      // bulky model/radar data -- this is exactly the "small live presence/state" the WS is
-      // for -- so both get skipped while the WS is healthy, and resume as the bounded fallback
-      // on the very next 30s tick the moment it isn't (closed/error/stale all flip `wsState`
-      // away from "open" immediately in the WS handlers below, so recovery/failure is reflected
-      // within one interval tick, not a separate timer to manage).
+      // REST remains a fallback whenever the authenticated feed is disconnected or stale.
       const fabricNow = fabricRef.current;
-      const wsHealthy =
-        fabricNow.wsState === "open" &&
-        fabricNow.lastWsEventAt !== null &&
-        Date.now() - fabricNow.lastWsEventAt < FABRIC_WS_FRESH_MS;
+      const streamHealthy =
+        fabricNow.streamState === "open" &&
+        fabricNow.lastStreamEventAt !== null &&
+        Date.now() - fabricNow.lastStreamEventAt < FABRIC_STREAM_FRESH_MS;
 
-      if (wsHealthy) {
+      if (streamHealthy) {
         setState((current) => ({ ...current, core, refreshedAt: Date.now() }));
         return;
       }
@@ -96,9 +80,10 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
         core,
         fabric: {
           ...fabric,
-          units: current.fabric.units ?? fabric.units,
-          wsState: current.fabric.wsState,
-          lastWsEventAt: current.fabric.lastWsEventAt,
+          units: current.fabric.streamState === "open" && current.fabric.lastStreamEventAt !== null && Date.now() - current.fabric.lastStreamEventAt < FABRIC_STREAM_FRESH_MS
+            ? current.fabric.units : fabric.units,
+          streamState: current.fabric.streamState,
+          lastStreamEventAt: current.fabric.lastStreamEventAt,
           lastContactAt: current.fabric.lastContactAt ?? fabric.lastContactAt,
           error: current.fabric.error,
         },
@@ -118,66 +103,62 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
   }, [config]);
 
   useEffect(() => {
-    if (!coreConfigured(config) || !config.coreWsUrl) return;
-    let socket: WebSocket | null = null;
+    if (!coreConfigured(config)) return;
     let cancelled = false;
     let reconnectTimer: number | null = null;
+    let controller: AbortController | null = null;
+    let watchdog: number | null = null;
     const backoff = new BoundedBackoff();
 
     const connect = () => {
       if (cancelled) return;
-      setState((current) => ({ ...current, fabric: { ...current.fabric, wsState: "connecting", error: null } }));
-      socket = new WebSocket(fabricWsUrl(config));
-      socket.onopen = () => {
+      controller = new AbortController();
+      setState((current) => ({ ...current, fabric: { ...current.fabric, streamState: "connecting", error: null } }));
+      watchdog = window.setTimeout(() => controller?.abort(), FABRIC_STREAM_FRESH_MS);
+      void consumeFabricStream(config, controller.signal, (event) => {
+        if (cancelled || event.eventType !== "fabric.snapshot") return;
+        const snapshot = fabricStateFromSnapshot(event.payload);
+        if (!snapshot) throw new Error("Malformed Fabric snapshot");
+        if (watchdog !== null) window.clearTimeout(watchdog);
+        watchdog = window.setTimeout(() => controller?.abort(), FABRIC_STREAM_FRESH_MS);
         backoff.reset();
-        setState((current) => ({ ...current, fabric: { ...current.fabric, wsState: "open", lastContactAt: Date.now(), error: null } }));
-      };
-      socket.onmessage = (message) => {
-        try {
-          const event = normalizeFabricWsEvent(String(message.data));
-          setState((current) => {
-            const snapshot = event.eventType === "fabric.snapshot" ? fabricStateFromSnapshot(event.payload) : null;
-            return {
-              ...current,
-              fabric: {
-                ...current.fabric,
-                state: "LIVE",
-                detail: snapshot ? `Fabric WebSocket snapshot; ${snapshot.units.length} registered units` : `Fabric WebSocket event: ${event.eventType}`,
-                units: snapshot ?? current.fabric.units,
-                wsState: "open",
-                lastWsEventAt: Date.now(),
-                lastContactAt: Date.now(),
-                error: null,
-              },
-            };
-          });
-        } catch (error) {
-          setState((current) => ({
-            ...current,
-            fabric: {
-              ...current.fabric,
-              state: "DEGRADED",
-              wsState: "error",
-              error: error instanceof Error ? error.message : "Malformed Fabric WebSocket event",
-              lastContactAt: Date.now(),
-            },
-          }));
-        }
-      };
-      socket.onerror = () => {
-        setState((current) => ({ ...current, fabric: { ...current.fabric, wsState: "error", error: "Fabric WebSocket error" } }));
-      };
-      socket.onclose = () => {
+        setState((current) => ({
+          ...current,
+          fabric: {
+            ...current.fabric,
+            state: "LIVE",
+            detail: `Fabric live feed; ${snapshot.units.length} registered units`,
+            units: snapshot,
+            streamState: "open",
+            lastStreamEventAt: Date.now(),
+            lastContactAt: Date.now(),
+            error: null,
+          },
+        }));
+      }).catch((error: unknown) => {
         if (cancelled) return;
-        setState((current) => ({ ...current, fabric: { ...current.fabric, wsState: "closed", state: current.fabric.state === "LIVE" ? "STALE" : current.fabric.state } }));
+        setState((current) => ({ ...current, fabric: {
+          ...current.fabric,
+          streamState: "error",
+          error: error instanceof Error ? error.message : "Fabric live feed failed",
+        } }));
+      }).finally(() => {
+        if (watchdog !== null) window.clearTimeout(watchdog);
+        if (cancelled) return;
+        setState((current) => ({ ...current, fabric: {
+          ...current.fabric,
+          streamState: "closed",
+          state: current.fabric.state === "LIVE" ? "STALE" : current.fabric.state,
+        } }));
         reconnectTimer = window.setTimeout(connect, backoff.next());
-      };
+      });
     };
     connect();
     return () => {
       cancelled = true;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      socket?.close();
+      if (watchdog !== null) window.clearTimeout(watchdog);
+      controller?.abort();
     };
   }, [config]);
 

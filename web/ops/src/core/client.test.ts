@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { normalizeStormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/normalize";
 import { coreConfigured, readOpsCoreConfig } from "./config";
-import { normalizeFabricWsEvent } from "./client";
+import { normalizeFabricEvent } from "./client";
 import { fabricStateFromSnapshot } from "./fabricSnapshot";
 
 const productionPoint = {
@@ -77,7 +77,7 @@ const productionPoint = {
 
 describe("Core transport helpers", () => {
   it("normalizes production Fabric snapshot events", () => {
-    const event = normalizeFabricWsEvent(JSON.stringify({
+    const event = normalizeFabricEvent(JSON.stringify({
       event_type: "fabric.snapshot",
       timestamp: "2026-09-06T19:12:20Z",
       payload: { schema: "codeblack.fabric.unit-state", schema_version: "1.0.0", generated_at: "2026-09-06T19:12:20Z", units: [], transports: {} },
@@ -86,9 +86,9 @@ describe("Core transport helpers", () => {
     expect(fabricStateFromSnapshot(event.payload)?.units).toEqual([]);
   });
 
-  it("rejects malformed Fabric WebSocket events", () => {
-    expect(() => normalizeFabricWsEvent("{")).toThrow(/Malformed Fabric/);
-    expect(() => normalizeFabricWsEvent(JSON.stringify({ timestamp: "x" }))).toThrow(/missing event_type/);
+  it("rejects malformed Fabric stream events", () => {
+    expect(() => normalizeFabricEvent("{")).toThrow(/Malformed Fabric/);
+    expect(() => normalizeFabricEvent(JSON.stringify({ timestamp: "x" }))).toThrow(/missing event_type/);
   });
 
   it("preserves production Storm Intel provenance and MODEL_FORECAST semantics", () => {

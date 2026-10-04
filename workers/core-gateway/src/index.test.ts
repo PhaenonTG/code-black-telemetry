@@ -38,6 +38,19 @@ describe("handleRequest -- allowlisted routes forward correctly", () => {
     expect(calledUrl).toBe("http://127.0.0.1:8000/api/fabric/v1/units");
   });
 
+  it("GET /api/fabric/v1/stream forwards the body without buffering", async () => {
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode("{\"event_type\":\"fabric.snapshot\"}\n")); } });
+    let accept = "";
+    const env: Env = { CORE_VPC: fakeVpc(async (_url, init) => {
+      accept = new Headers(init?.headers).get("Accept") ?? "";
+      return new Response(body, { headers: { "Content-Type": "application/x-ndjson" } });
+    }) };
+    const res = await handleRequest(req("/api/fabric/v1/stream"), env);
+    expect(res.body).toBe(body);
+    expect(accept).toBe("application/x-ndjson");
+    await res.body?.cancel();
+  });
+
   it("GET /api/storm-intel/v1/health forwards correctly", async () => {
     let calledUrl = "";
     const env: Env = { CORE_VPC: fakeVpc(async (url) => { calledUrl = String(url); return jsonResponse(200, {}); }) };

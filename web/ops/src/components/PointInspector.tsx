@@ -102,10 +102,10 @@ export function PointInspector({
           <OpsStatusPill state={coreState.fabric.state} />
         </div>
         <div className="ops-inspector__row">
-          <span>Fabric WS</span>
-          <b>{coreState.fabric.wsState.toUpperCase()}</b>
+          <span>Fabric feed</span>
+          <b>{coreState.fabric.streamState.toUpperCase()}</b>
         </div>
-        <p>Last WS event: {timeLabel(coreState.fabric.lastWsEventAt)}</p>
+        <p>Last feed event: {timeLabel(coreState.fabric.lastStreamEventAt)}</p>
       </section>
 
       <section className="ops-inspector__block ops-inspector__block--system">

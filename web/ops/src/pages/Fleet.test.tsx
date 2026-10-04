@@ -19,7 +19,7 @@ function renderFleet(hasSnapshot: boolean): string {
             commands: { lane: "commands", current_contract: "", preferred_future_transport: "", implemented: false, deferred: [] },
           },
         } : null,
-        wsState: "disabled", lastWsEventAt: null, lastContactAt: null, error: null,
+        streamState: "disabled", lastStreamEventAt: null, lastContactAt: null, error: null,
       },
       stormIntel: { state: "LIVE", detail: "", checkedAt: 0, health: null, selectedPoint: null, pointLoading: false, requestId: 0, pointSnapshot: null, pointError: null, pointHistory: [] },
       refreshedAt: 0,

@@ -25,9 +25,8 @@ export interface GatewayEnv {
   // Optional internal Service Binding to the standalone Core Gateway VPC transport Worker
   // (workers/core-gateway/). When present, forwardToCore() routes through it -- and through
   // Workers VPC to Core -- instead of the public Access-protected tunnel hostname above.
-  // Absent in production today: nothing binds this yet, so the public-fetch path below
-  // remains the active, proven transport until the VPC path is created and verified end to
-  // end. See workers/core-gateway/README.md for the full rollout plan.
+  // Bound in production. The public-fetch path remains a rollback fallback for REST only;
+  // Fabric streaming explicitly requires this private binding.
   CORE_GATEWAY_WORKER?: { fetch(input: string | URL, init?: RequestInit): Promise<Response> };
 }
 
@@ -50,6 +49,7 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "health": { upstreamPath: "/health", allowedQueryParams: [] },
   "api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
+  "api/fabric/v1/stream": { upstreamPath: "/api/fabric/v1/stream", allowedQueryParams: [] },
   "api/storm-intel/v1/health": { upstreamPath: "/api/storm-intel/v1/health", allowedQueryParams: [] },
   "api/storm-intel/v1/point": { upstreamPath: "/api/storm-intel/v1/point", allowedQueryParams: ["latitude", "longitude"] },
   "api/soundings/v1/health": { upstreamPath: "/api/soundings/v1/health", allowedQueryParams: [] },
@@ -70,6 +70,32 @@ export function normalizeRouteKey(path: string | string[] | undefined): string {
 
 export function resolveAllowlistRoute(routeKey: string): AllowlistRoute | null {
   return CORE_GATEWAY_ALLOWLIST[routeKey] ?? null;
+}
+
+// Streaming is permitted only over the private service binding, after the same
+// Supabase authorization as every REST route. Never fall back to the public tunnel.
+export async function forwardFabricStream(env: GatewayEnv, signal?: AbortSignal): Promise<Response> {
+  if (!env.CORE_GATEWAY_WORKER) return gatewayErrorResponse(502, "CORE_UNAVAILABLE");
+  try {
+    const upstream = await env.CORE_GATEWAY_WORKER.fetch(
+      "https://internal-core-gateway-worker/api/fabric/v1/stream",
+      { headers: { Accept: "application/x-ndjson" }, signal },
+    );
+    if (!upstream.ok || !upstream.body || !upstream.headers.get("Content-Type")?.startsWith("application/x-ndjson")) {
+      await upstream.body?.cancel();
+      return gatewayErrorResponse(502, "CORE_UNAVAILABLE");
+    }
+    return new Response(upstream.body, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-store, no-transform",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch {
+    return gatewayErrorResponse(502, "CORE_UNAVAILABLE");
+  }
 }
 
 export type GatewayErrorReason =

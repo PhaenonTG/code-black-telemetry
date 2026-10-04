@@ -19,18 +19,13 @@
 // see src/allowlist.ts.
 import { buildCoreUrl, resolveRoute, validateQueryParams } from "./allowlist";
 
-// The future Workers VPC Service binding. Not created yet -- see README.md. Modeled after the
-// documented VPC binding fetch() surface (developers.cloudflare.com/workers-vpc/api/) so the
-// real binding can be dropped in later with no code change here.
+// Workers VPC Service binding; optional only so missing deployment configuration fails closed.
 export interface VpcServiceBinding {
   fetch(input: string | URL, init?: RequestInit): Promise<Response>;
 }
 
 export interface Env {
-  // Bound as CORE_VPC once the real Workers VPC Service exists (wrangler.jsonc vpc_services).
-  // Deliberately optional: this lets the Worker build, typecheck, and be tested today, and
-  // fail safely (502 VPC_NOT_CONFIGURED) rather than crash if ever invoked before the binding
-  // is wired up.
+  // Configured in wrangler.jsonc; fail safely if a future deployment omits it.
   CORE_VPC?: VpcServiceBinding;
 }
 
@@ -66,7 +61,10 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     // Deliberately no CF-Access-Client-Id / CF-Access-Client-Secret headers here -- the VPC
     // Service binding authenticates this request at the Cloudflare network layer via the
     // tunnel binding itself, not via a header Core or Access would otherwise need to check.
-    return await env.CORE_VPC.fetch(targetUrl, { headers: { Accept: "application/json" } });
+    return await env.CORE_VPC.fetch(targetUrl, {
+      headers: { Accept: route.upstreamPath === "/api/fabric/v1/stream" ? "application/x-ndjson" : "application/json" },
+      signal: request.signal,
+    });
   } catch {
     // Never surface the underlying exception (which could contain internal network detail) to
     // the caller -- map every VPC transport failure to one generic, safe reason.
