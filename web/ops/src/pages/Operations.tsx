@@ -96,7 +96,7 @@ export default function Operations() {
           <p>{coreState.core.detail}</p>
         </section>
         <section>
-          <span>FABRIC</span>
+          <span>FABRIC WS</span>
           <b>{coreState.fabric.wsState.toUpperCase()}</b>
           <p>{coreState.fabric.detail}</p>
         </section>

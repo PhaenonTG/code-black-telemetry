@@ -14,11 +14,7 @@ export function StatusBar({ locationLabel }: { locationLabel: string }) {
     const id = window.setInterval(() => setNow(new Date()), 1000)
     return () => window.clearInterval(id)
   }, [])
-  // The label already reads "FABRIC {wsState}" -- the pill next to it needs to be colored by that
-  // same wsState, not by a different metric (Fabric REST health) that happens to also be called
-  // "fabric". The old `wsState === "open" ? LIVE : state.fabric.state` fallback showed a green
-  // LIVE pill next to a "FABRIC DISABLED" label whenever REST was healthy but the WS just wasn't
-  // open -- the color and the text were answering two different questions.
+  // This pill reports the Fabric WebSocket only; REST health is reported separately on System.
   const wsTone: OpsConnectionState = state.fabric.wsState === "open" ? "LIVE"
     : state.fabric.wsState === "connecting" ? "CHECKING"
     : state.fabric.wsState === "error" ? "DEGRADED"
@@ -27,7 +23,7 @@ export function StatusBar({ locationLabel }: { locationLabel: string }) {
   return (
     <div className="statusbar">
       <OpsStatusPill state={state.core.state} label={`CORE ${state.core.state}`} />
-      <OpsStatusPill state={wsTone} label={`FABRIC ${state.fabric.wsState.toUpperCase()}`} />
+      <OpsStatusPill state={wsTone} label={`FABRIC WS ${state.fabric.wsState.toUpperCase()}`} />
       <div className="statusbar__spacer" />
       <div className="statusbar__item statusbar__location">{locationLabel}</div>
       <div className="statusbar__item">UTC {now.toISOString().slice(11, 19)}</div>
