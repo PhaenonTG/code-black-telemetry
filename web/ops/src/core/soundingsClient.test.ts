@@ -129,4 +129,16 @@ describe("searchSoundingLocation", () => {
       "Location not found. Check the city and state.",
     );
   });
+
+  it("passes an already-aborted request signal to fetch", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchSpy = vi.fn(async (_url: string, options: RequestInit) => {
+      expect(options.signal?.aborted).toBe(true);
+      throw new DOMException("The operation was aborted", "AbortError");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    await expect(fetchSoundingPoint(config(), { lat: 35.22, lon: -97.44 }, undefined, controller.signal)).rejects.toThrow("request cancelled");
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
 });

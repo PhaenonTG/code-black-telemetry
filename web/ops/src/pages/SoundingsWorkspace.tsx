@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalogMatchesPanel } from "../components/AnalogMatchesPanel";
 import { Hodograph } from "../components/Hodograph";
 import { OpsStatusPill } from "../components/OpsStatusPill";
@@ -7,6 +7,7 @@ import { browserLocationAdapter, type LocationState } from "../adapters";
 import { fetchSoundingPoint, searchSoundingLocation, OpsCoreClientError } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
 import type { OpsConnectionState, SoundingPointResult, SoundingRequestState } from "../core/types";
+import { LatestRequest } from "./latestRequest";
 
 const RECENT_KEY = "codeblack.ops.soundings.recent-locations.v1";
 const MAX_RECENT = 6;
@@ -105,6 +106,13 @@ export default function SoundingsWorkspace() {
   const [stateInput, setStateInput] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const requests = useRef(new LatestRequest());
+
+  const beginRequest = useCallback(() => {
+    return requests.current.begin();
+  }, []);
+
+  useEffect(() => () => requests.current.cancel(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,10 +126,14 @@ export default function SoundingsWorkspace() {
 
   const loadSounding = useCallback(
     async (target: { lat: number; lon: number; label: string }) => {
+      const request = beginRequest();
       setPhase("loading");
       setError(null);
+      setResult(null);
+      setLoadedAt(null);
       try {
-        const sounding = await fetchSoundingPoint(config, target, { locationName: target.label });
+        const sounding = await fetchSoundingPoint(config, target, { locationName: target.label }, request.controller.signal);
+        if (!requests.current.isCurrent(request)) return;
         setResult(sounding);
         setPhase("ready");
         setLoadedAt(Date.now());
@@ -134,6 +146,7 @@ export default function SoundingsWorkspace() {
           return next;
         });
       } catch (err) {
+        if (!requests.current.isCurrent(request)) return;
         // Location resolution already succeeded (that's how loadSounding got called at all) --
         // this is specifically a sounding-generation failure, a distinct state from a failed
         // location search (which never reaches here; see handleSearch's own catch).
@@ -142,11 +155,13 @@ export default function SoundingsWorkspace() {
         setError(err instanceof OpsCoreClientError ? err.message : "Sounding request failed.");
       }
     },
-    [config],
+    [beginRequest, config],
   );
 
   const selectPoint = useCallback(
     (next: { lat: number; lon: number; label: string }) => {
+      setSearchBusy(false);
+      setSearchError(null);
       setPoint(next);
       void loadSounding(next);
     },
@@ -165,6 +180,7 @@ export default function SoundingsWorkspace() {
 
   const handleSearch = useCallback(async () => {
     if (!cityInput.trim() || !stateInput.trim()) return;
+    const request = beginRequest();
     setSearchBusy(true);
     setSearchError(null);
     // Clear any stale result/phase from a previous point before this search resolves -- a fresh
@@ -174,9 +190,11 @@ export default function SoundingsWorkspace() {
     setResult(null);
     setPhase("idle");
     try {
-      const found = await searchSoundingLocation(config, cityInput.trim(), stateInput.trim());
+      const found = await searchSoundingLocation(config, cityInput.trim(), stateInput.trim(), request.controller.signal);
+      if (!requests.current.isCurrent(request)) return;
       selectPoint({ lat: found.latitude, lon: found.longitude, label: found.display_name });
     } catch (err) {
+      if (!requests.current.isCurrent(request)) return;
       // Location search itself failed -- never reaches loadSounding, so `phase` stays "idle"
       // (never "loading") and the main workspace shows "select a location" underneath this
       // concise, retryable error rather than a stuck spinner. The entered city/state remain in
@@ -184,9 +202,9 @@ export default function SoundingsWorkspace() {
       // immediate retry as-is if the failure was transient (e.g. upstream 502).
       setSearchError(err instanceof OpsCoreClientError ? err.message : "Location search failed.");
     } finally {
-      setSearchBusy(false);
+      if (requests.current.isCurrent(request)) setSearchBusy(false);
     }
-  }, [cityInput, stateInput, config, selectPoint]);
+  }, [beginRequest, cityInput, stateInput, config, selectPoint]);
 
   const derivedEntries = useMemo(() => {
     if (!result) return [];

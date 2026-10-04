@@ -66,6 +66,7 @@ async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, outerSi
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const abort = () => controller.abort();
   outerSignal?.addEventListener("abort", abort, { once: true });
+  if (outerSignal?.aborted) controller.abort();
   try {
     return await work(controller.signal);
   } catch (error) {
