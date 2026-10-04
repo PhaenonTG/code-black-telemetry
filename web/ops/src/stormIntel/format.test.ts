@@ -80,6 +80,7 @@ describe("Storm Intel formatting", () => {
   });
 
   it("summarizes unavailable snapshots honestly", () => {
+    expect(stormIntelSummary(null)).toBe("No Storm Intel snapshot available.");
     const snapshot = {
       available: false,
       unavailableReason: "provider unavailable",

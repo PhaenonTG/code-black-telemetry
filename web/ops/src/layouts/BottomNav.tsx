@@ -1,12 +1,6 @@
 import { NavLink } from "react-router-dom"
 import { Icon } from "../components/Icon"
-const PHONE_ROUTES = [
-  { path: "/", label: "HOME", icon: "home" as const },
-  { path: "/radar", label: "RADAR", icon: "radar" as const },
-  { path: "/system", label: "OPS", icon: "system" as const },
-  { path: "/ai", label: "AEGIS", icon: "ops" as const },
-  { path: "/more", label: "MORE", icon: "more" as const },
-]
+import { PHONE_ROUTES } from "./phoneRoutes"
 
 // Phone navigation is deliberately separate from the desktop sidebar.  Five
 // destinations preserve a one-handed layout; deeper weather/field controls live

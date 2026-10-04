@@ -38,6 +38,11 @@ export default function StormIntelWorkspace() {
   const { config, state: coreState, selectedPoint, pointHistory, selectPoint, selectHistoryPoint } = useCoreOps();
   const snapshot = coreState.stormIntel.pointSnapshot;
   const source = firstAvailableSource(snapshot);
+  const summary = !selectedPoint
+    ? "Select a map point for Storm Intel."
+    : coreState.stormIntel.pointLoading
+      ? "Loading Storm Intel for selected point…"
+      : coreState.stormIntel.pointError ?? stormIntelSummary(snapshot);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +109,7 @@ export default function StormIntelWorkspace() {
         <div>
           <span>WEATHER ANALYSIS</span>
           <h1>{selectedPoint ? (locality?.displayName ?? "RESOLVING LOCATION…") : "SELECT A MAP POINT"}</h1>
-          <p>{selectedPoint ? `${coord(selectedPoint, 3)} · ${stormIntelSummary(snapshot)}` : stormIntelSummary(snapshot)}</p>
+          <p>{selectedPoint ? `${coord(selectedPoint, 3)} · ${summary}` : summary}</p>
         </div>
         <div className="storm-workspace__status">
           <OpsStatusPill state={coreState.stormIntel.state} label={`INTEL ${coreState.stormIntel.state}`} />
