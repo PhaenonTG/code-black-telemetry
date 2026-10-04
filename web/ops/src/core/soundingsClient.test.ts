@@ -125,6 +125,8 @@ describe("searchSoundingLocation", () => {
 
   it("surfaces an unknown location as OpsCoreClientError, not a silent fallback point", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "not found" }), { status: 404 })));
-    await expect(searchSoundingLocation(config(), "Nowhereville", "ZZ")).rejects.toBeInstanceOf(OpsCoreClientError);
+    await expect(searchSoundingLocation(config(), "Nowhereville", "ZZ")).rejects.toThrow(
+      "Location not found. Check the city and state.",
+    );
   });
 });

@@ -215,8 +215,15 @@ export async function searchSoundingLocation(
 ): Promise<SoundingLocationSearchResult> {
   if (!coreConfigured(config)) throw new OpsCoreClientError(unavailableState(config, "Location search").detail);
   const params = new URLSearchParams({ city, state });
-  return withTimeout(
-    (timeoutSignal) => fetchJson<SoundingLocationSearchResult>(`${config.coreBaseUrl}/api/soundings/v1/search-location?${params}`, timeoutSignal),
-    signal,
-  );
+  try {
+    return await withTimeout(
+      (timeoutSignal) => fetchJson<SoundingLocationSearchResult>(`${config.coreBaseUrl}/api/soundings/v1/search-location?${params}`, timeoutSignal),
+      signal,
+    );
+  } catch (error) {
+    if (error instanceof OpsCoreClientError && error.message === "HTTP 404") {
+      throw new OpsCoreClientError("Location not found. Check the city and state.");
+    }
+    throw error;
+  }
 }

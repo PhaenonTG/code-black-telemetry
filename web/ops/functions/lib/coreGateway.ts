@@ -80,6 +80,7 @@ export type GatewayErrorReason =
   | "ROUTE_NOT_ALLOWED"
   | "METHOD_NOT_ALLOWED"
   | "CORE_UNAVAILABLE"
+  | "LOCATION_NOT_FOUND"
   | "CORE_TIMEOUT"
   | "CORE_MALFORMED_RESPONSE"
   | "GATEWAY_MISCONFIGURED";
@@ -220,6 +221,9 @@ export async function forwardToCore(
       return { status: 502, reason: "CORE_MALFORMED_RESPONSE" };
     }
 
+    if (route.upstreamPath === "/api/soundings/v1/search-location" && upstreamResponse.status === 404) {
+      return { status: 404, reason: "LOCATION_NOT_FOUND" };
+    }
     if (!upstreamResponse.ok) {
       return { status: 502, reason: "CORE_UNAVAILABLE" };
     }
@@ -264,6 +268,9 @@ async function forwardToCoreViaServiceBinding(
       return { status: 502, reason: "CORE_MALFORMED_RESPONSE" };
     }
 
+    if (route.upstreamPath === "/api/soundings/v1/search-location" && response.status === 404) {
+      return { status: 404, reason: "LOCATION_NOT_FOUND" };
+    }
     if (!response.ok) {
       return { status: 502, reason: "CORE_UNAVAILABLE" };
     }

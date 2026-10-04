@@ -195,6 +195,23 @@ describe("forwardToCore (open-proxy prevention + bounded behavior)", () => {
     expect(result).toEqual({ status: 502, reason: "CORE_UNAVAILABLE" });
   });
 
+  it("reports a missing Soundings location without leaking Core's response body", async () => {
+    const searchRoute = { upstreamPath: "/api/soundings/v1/search-location", allowedQueryParams: ["city", "state"] };
+    const fetchImpl = (async () => jsonResponse(404, { detail: "private upstream detail" })) as typeof fetch;
+    const result = await forwardToCore(searchRoute, new URL("https://ops.codeblackwx.com/api/core/api/soundings/v1/search-location?city=Nowhere&state=MO"), {
+      CORE_GATEWAY_UPSTREAM_BASE: "https://core-gateway.internal.example",
+    }, fetchImpl);
+    expect(result).toEqual({ status: 404, reason: "LOCATION_NOT_FOUND" });
+  });
+
+  it("still masks a 404 from other Core routes", async () => {
+    const fetchImpl = (async () => jsonResponse(404, { detail: "private upstream detail" })) as typeof fetch;
+    const result = await forwardToCore(route, new URL("https://ops.codeblackwx.com/api/core/api/storm-intel/v1/point"), {
+      CORE_GATEWAY_UPSTREAM_BASE: "https://core-gateway.internal.example",
+    }, fetchImpl);
+    expect(result).toEqual({ status: 502, reason: "CORE_UNAVAILABLE" });
+  });
+
   it("returns the upstream JSON body on success (Storm Intel proxy success)", async () => {
     const payload = { requested: { lat: 36.5, lon: -93.7 }, resolved: { lat: 36.51, lon: -93.69 }, dataClass: "MODEL_ANALYSIS" };
     const fetchImpl = (async () => jsonResponse(200, payload)) as typeof fetch;
@@ -267,5 +284,14 @@ describe("forwardToCore (opt-in Service Binding / VPC transport path)", () => {
       CORE_GATEWAY_WORKER: { fetch: workerFetch },
     });
     expect(result).toEqual({ status: 502, reason: "CORE_UNAVAILABLE" });
+  });
+
+  it("reports a missing Soundings location through the VPC binding", async () => {
+    const searchRoute = { upstreamPath: "/api/soundings/v1/search-location", allowedQueryParams: ["city", "state"] };
+    const workerFetch = async () => jsonResponse(404, { detail: "private upstream detail" });
+    const result = await forwardToCore(searchRoute, new URL("https://ops.codeblackwx.com/api/core/api/soundings/v1/search-location?city=Nowhere&state=MO"), {
+      CORE_GATEWAY_WORKER: { fetch: workerFetch },
+    });
+    expect(result).toEqual({ status: 404, reason: "LOCATION_NOT_FOUND" });
   });
 });
