@@ -6,7 +6,7 @@ import { SkewT } from "../components/SkewT";
 import { browserLocationAdapter, type LocationState } from "../adapters";
 import { fetchSoundingPoint, searchSoundingLocation, OpsCoreClientError } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
-import type { OpsConnectionState, SoundingPointResult } from "../core/types";
+import type { OpsConnectionState, SoundingPointResult, SoundingRequestState } from "../core/types";
 
 const RECENT_KEY = "codeblack.ops.soundings.recent-locations.v1";
 const MAX_RECENT = 6;
@@ -92,7 +92,12 @@ export default function SoundingsWorkspace() {
   const [gps, setGps] = useState<LocationState>({ status: "requesting" });
   const [point, setPoint] = useState<{ lat: number; lon: number; label: string } | null>(null);
   const [result, setResult] = useState<SoundingPointResult | null>(null);
-  const [status, setStatus] = useState<OpsConnectionState>("CHECKING");
+  // "idle" -- not "CHECKING" -- until a sounding request has actually been made. Root cause of a
+  // real production bug: this used to default to a fetch-in-flight-shaped state (OpsConnectionState
+  // has no true "nothing requested yet" value), so a workspace that never made a request, or a
+  // search that failed before ever calling loadSounding, both rendered "Loading sounding..."
+  // forever -- indistinguishable from a real hang.
+  const [phase, setPhase] = useState<SoundingRequestState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [recent, setRecent] = useState<RecentLocation[]>(() => loadRecent());
@@ -113,12 +118,12 @@ export default function SoundingsWorkspace() {
 
   const loadSounding = useCallback(
     async (target: { lat: number; lon: number; label: string }) => {
-      setStatus("CHECKING");
+      setPhase("loading");
       setError(null);
       try {
         const sounding = await fetchSoundingPoint(config, target, { locationName: target.label });
         setResult(sounding);
-        setStatus("LIVE");
+        setPhase("ready");
         setLoadedAt(Date.now());
         setRecent((prev) => {
           const next = [
@@ -129,8 +134,11 @@ export default function SoundingsWorkspace() {
           return next;
         });
       } catch (err) {
+        // Location resolution already succeeded (that's how loadSounding got called at all) --
+        // this is specifically a sounding-generation failure, a distinct state from a failed
+        // location search (which never reaches here; see handleSearch's own catch).
         setResult(null);
-        setStatus("UNAVAILABLE");
+        setPhase("unavailable");
         setError(err instanceof OpsCoreClientError ? err.message : "Sounding request failed.");
       }
     },
@@ -147,10 +155,10 @@ export default function SoundingsWorkspace() {
 
   useEffect(() => {
     // Auto-becomes stale rather than silently continuing to show an old sounding as current.
-    if (status !== "LIVE" || loadedAt === null) return;
-    const timer = window.setTimeout(() => setStatus("STALE"), STALE_AFTER_MS);
+    if (phase !== "ready" || loadedAt === null) return;
+    const timer = window.setTimeout(() => setPhase("stale"), STALE_AFTER_MS);
     return () => window.clearTimeout(timer);
-  }, [status, loadedAt]);
+  }, [phase, loadedAt]);
 
   const strikerPoint = useMemo(() => fabricUnitPoint(state.fabric.units, "cbwx-unit-striker"), [state.fabric.units]);
   const tessaPoint = useMemo(() => fabricUnitPoint(state.fabric.units, "cbwx-unit-tessa"), [state.fabric.units]);
@@ -159,10 +167,21 @@ export default function SoundingsWorkspace() {
     if (!cityInput.trim() || !stateInput.trim()) return;
     setSearchBusy(true);
     setSearchError(null);
+    // Clear any stale result/phase from a previous point before this search resolves -- a fresh
+    // search attempt should never leave a prior failure (or prior sounding) showing behind it
+    // while this one is in flight or if it fails before ever reaching loadSounding.
+    setPoint(null);
+    setResult(null);
+    setPhase("idle");
     try {
       const found = await searchSoundingLocation(config, cityInput.trim(), stateInput.trim());
       selectPoint({ lat: found.latitude, lon: found.longitude, label: found.display_name });
     } catch (err) {
+      // Location search itself failed -- never reaches loadSounding, so `phase` stays "idle"
+      // (never "loading") and the main workspace shows "select a location" underneath this
+      // concise, retryable error rather than a stuck spinner. The entered city/state remain in
+      // the inputs (never cleared) so retry is a single click after fixing a typo, or an
+      // immediate retry as-is if the failure was transient (e.g. upstream 502).
       setSearchError(err instanceof OpsCoreClientError ? err.message : "Location search failed.");
     } finally {
       setSearchBusy(false);
@@ -253,13 +272,22 @@ export default function SoundingsWorkspace() {
 
       <main className="soundings-main">
         <div className="soundings-status-bar">
-          <OpsStatusPill state={status} label={statusLabel(status, error)} />
+          {phase !== "idle" && <OpsStatusPill state={pillStateFor(phase)} label={statusLabel(phase, error)} />}
           <span className="soundings-status-bar__point">{point ? point.label : "No location selected"}</span>
         </div>
 
-        {status === "CHECKING" && !result && <div className="soundings-empty">Loading sounding…</div>}
-        {status === "UNAVAILABLE" && <div className="soundings-empty soundings-empty--error">{error ?? "Sounding unavailable."}</div>}
-        {!point && status !== "CHECKING" && <div className="soundings-empty">Select a location to load a sounding.</div>}
+        {phase === "idle" && <div className="soundings-empty">Select a location to load a sounding.</div>}
+        {phase === "loading" && !result && <div className="soundings-empty">Loading sounding…</div>}
+        {phase === "unavailable" && (
+          <div className="soundings-empty soundings-empty--error">
+            {error ?? "Sounding unavailable."}
+            {point && (
+              <button type="button" className="soundings-retry" onClick={() => void loadSounding(point)}>
+                Retry
+              </button>
+            )}
+          </div>
+        )}
 
         {result && (
           <>
@@ -337,7 +365,27 @@ export default function SoundingsWorkspace() {
   );
 }
 
-function statusLabel(state: OpsConnectionState, error: string | null): string {
-  if (state === "UNAVAILABLE") return error ? `UNAVAILABLE — ${error}` : "UNAVAILABLE";
-  return state;
+// Maps this workspace's own request-lifecycle state to the shared OpsStatusPill vocabulary.
+// "idle" has no sensible mapping (it means "no request made," not a connectivity assessment) --
+// callers must not render the pill at all in that phase, matching every call site below.
+function pillStateFor(phase: SoundingRequestState): OpsConnectionState {
+  switch (phase) {
+    case "loading":
+      return "CHECKING";
+    case "ready":
+      return "LIVE";
+    case "stale":
+      return "STALE";
+    case "unavailable":
+      return "UNAVAILABLE";
+    case "degraded":
+      return "DEGRADED";
+    case "idle":
+      return "UNAVAILABLE";
+  }
+}
+
+function statusLabel(phase: SoundingRequestState, error: string | null): string {
+  if (phase === "unavailable") return error ? `UNAVAILABLE — ${error}` : "UNAVAILABLE";
+  return pillStateFor(phase);
 }
