@@ -186,10 +186,9 @@ export function fabricWsUrl(config: OpsCoreConfig): string {
   return `${config.coreWsUrl}/api/fabric/v1/ws`;
 }
 
-// A real HRRR fetch + full derived-parameter calculation on Core, same cost class as the
-// storm-intel point lookup -- reuses that same generous timeout rather than inventing a
-// shorter one that would time out normal (not hung) responses.
-const SOUNDING_REQUEST_TIMEOUT_MS = POINT_REQUEST_TIMEOUT_MS;
+// A cold HRRR profile can take roughly 25 seconds on Core before the gateway and browser
+// overhead. Give Soundings headroom without changing the faster Storm Intel point timeout.
+const SOUNDING_REQUEST_TIMEOUT_MS = 60_000;
 
 export async function fetchSoundingPoint(
   config: OpsCoreConfig,
