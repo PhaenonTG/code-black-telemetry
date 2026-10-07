@@ -25,7 +25,7 @@ export interface PhoneRadarChromeProps {
 
 export function PhoneRadarChrome(p: PhoneRadarChromeProps) {
   const [open, setOpen] = useState(false);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const single = p.visibility.radar;
   const age = p.frame ? Math.max(p.frame.ageSeconds, Math.floor((now - Date.parse(p.frame.time)) / 1000)) : 0;
