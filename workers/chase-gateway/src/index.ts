@@ -565,6 +565,22 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
   if (!env.CORE_VPC) return json(503, { error: "CORE_UNAVAILABLE" });
 
+  if (url.pathname === "/api/chase/mesonet/ota/check" ||
+      /^\/api\/chase\/mesonet\/ota\/image\/(wind|weather)\/\d{1,5}\.\d{1,5}\.\d{1,5}$/.test(url.pathname)) {
+    if (request.method !== "GET") return json(405, { error: "METHOD_NOT_ALLOWED" });
+    const authorization = request.headers.get("Authorization");
+    if (!authorization?.startsWith("Bearer ")) return json(401, { error: "AUTH_REQUIRED" });
+    const path = url.pathname.replace("/api/chase/mesonet/ota", "/api/mesonet/v1/ota");
+    try {
+      const upstream = await env.CORE_VPC.fetch(`${CORE_ORIGIN}${path}${url.search}`, {
+        headers: { Authorization: authorization },
+      });
+      const headers = new Headers(upstream.headers);
+      headers.set("Cache-Control", "no-store");
+      return new Response(upstream.body, { status: upstream.status, headers });
+    } catch { return json(502, { error: "CORE_TRANSPORT_UNAVAILABLE" }); }
+  }
+
   if (url.pathname === "/api/chase/mesonet/ingest") {
     if (request.method !== "POST") return json(405, { error: "METHOD_NOT_ALLOWED" });
     if (!request.headers.get("Authorization")?.startsWith("Bearer ")) {
