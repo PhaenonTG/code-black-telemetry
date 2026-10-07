@@ -662,7 +662,7 @@ async function advanceChunkAssembly(siteId) {
           chunkVolumeState.set(siteId, state);
         }
       }
-      if (state.sawE) return; // still the same completed volume, nothing new to do
+      // A completed scan may still need decoding after a transient download failure.
 
       const entries = await listChunkBucketXml(`${siteId}/${state.volumeNum}/`);
       if (!entries.length) return;
@@ -685,9 +685,9 @@ async function advanceChunkAssembly(siteId) {
       state.sawE = ordered.some((c) => c.flag === "E");
 
       const progressed = state.chunks.size - state.lastDecodedChunkCount;
+      if (progressed <= 0 && state.lastDecodedChunkCount > 0) return;
       if (progressed < CHUNK_DECODE_EVERY_N && !state.sawE) return;
       if (CHUNK_PRODUCTS.size === [...state.trustworthyEmitted].filter((p) => CHUNK_PRODUCTS.has(p)).length) return; // already trustworthy for everything this volume can offer
-      state.lastDecodedChunkCount = state.chunks.size;
 
       // Fetch + concatenate RAW bytes, S through the current newest, in NUMERIC sequence
       // order, with NO reformatting -- verified byte-for-byte against the eventual complete
@@ -695,6 +695,8 @@ async function advanceChunkAssembly(siteId) {
       const buffers = [];
       for (const c of ordered) buffers.push(await fetchBuffer(`${LEVEL2_CHUNKS_BUCKET}/${c.key}`));
       const assembled = Buffer.concat(buffers);
+      // Only consume this batch after every byte arrived; network errors must be retryable.
+      state.lastDecodedChunkCount = state.chunks.size;
 
       const decodeStarted = Date.now();
       let radar;
