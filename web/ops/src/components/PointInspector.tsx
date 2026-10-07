@@ -14,9 +14,15 @@ function timeLabel(value: number | string | null | undefined) {
 export function PointInspector({
   selectedPoint,
   coreState,
+  onRetry,
+  onFollow,
+  locationMode,
 }: {
   selectedPoint: { lat: number; lon: number } | null;
   coreState: OpsCoreState;
+  onRetry?: () => void;
+  onFollow?: () => void;
+  locationMode?: "follow" | "manual";
 }) {
   const snapshot = coreState.stormIntel.pointSnapshot;
   const units = coreState.fabric.units?.units ?? [];
@@ -39,6 +45,10 @@ export function PointInspector({
         <div className="ops-inspector__eyebrow">POINT INSPECTOR</div>
         <h2>{selectedPoint ? (locality?.displayName ?? "RESOLVING LOCATION…") : "No point selected"}</h2>
         {selectedPoint && <small className="ops-inspector__coords">{selectedPoint.lat.toFixed(3)}, {selectedPoint.lon.toFixed(3)}</small>}
+        <div className="ops-point-actions">
+          {onFollow && <button type="button" onClick={onFollow}>My location{locationMode === "follow" ? " · following" : ""}</button>}
+          {onRetry && <button type="button" disabled={!selectedPoint || coreState.stormIntel.pointLoading} onClick={onRetry}>{coreState.stormIntel.pointError ? "Retry" : "Refresh"}</button>}
+        </div>
         <p>{!selectedPoint
           ? "Tap the map to request Storm Intel for a point."
           : coreState.stormIntel.pointLoading
@@ -55,11 +65,12 @@ export function PointInspector({
           <span>Storm Intel</span>
           <OpsStatusPill state={coreState.stormIntel.state} />
         </div>
-        <p>{coreState.stormIntel.detail}</p>
+        {!coreState.stormIntel.pointLoading && <p>{coreState.stormIntel.detail}</p>}
         {coreState.stormIntel.pointLoading && <p className="ops-loading">Loading newest selected point...</p>}
         {coreState.stormIntel.pointError && <p className="ops-error-text">{coreState.stormIntel.pointError}</p>}
-        {selectedPoint ? (
+        {snapshot ? (
           <>
+            {(coreState.stormIntel.pointLoading || coreState.stormIntel.pointError) && <p className="ops-retained-result">Previous result · {coreState.stormIntel.snapshotPoint ? `${coreState.stormIntel.snapshotPoint.lat.toFixed(3)}, ${coreState.stormIntel.snapshotPoint.lon.toFixed(3)}` : "previous location"} · valid {timeLabel(source?.validTime)}. Not a new result for the requested point.</p>}
             <div className="ops-metric-stack">
               {PRIMARY_STORM_METRICS.map((key) => {
                 const metric = metricByKey(snapshot, key);
@@ -74,7 +85,7 @@ export function PointInspector({
             <details className="ops-provenance-details">
               <summary>Provenance</summary>
               <div className="ops-provenance-grid">
-                <span>Requested</span><b>{`${selectedPoint.lat.toFixed(4)}, ${selectedPoint.lon.toFixed(4)}`}</b>
+                <span>Result location</span><b>{coreState.stormIntel.snapshotPoint ? `${coreState.stormIntel.snapshotPoint.lat.toFixed(4)}, ${coreState.stormIntel.snapshotPoint.lon.toFixed(4)}` : "UNAVAILABLE"}</b>
                 <span>Resolved grid</span><b>{source?.resolvedLatitude != null && source.resolvedLongitude != null ? `${source.resolvedLatitude.toFixed(4)}, ${source.resolvedLongitude.toFixed(4)}` : "UNAVAILABLE"}</b>
                 <span>Grid distance</span><b>{source?.gridDistanceKm != null ? `${source.gridDistanceKm.toFixed(2)} km` : "UNAVAILABLE"}</b>
                 <span>Provider</span><b>{source?.provider ?? snapshot?.providerName ?? "UNAVAILABLE"}</b>
@@ -87,7 +98,7 @@ export function PointInspector({
             </details>
           </>
         ) : (
-          <p className="ops-inspector__prompt">Tap the map to load provenance and metrics.</p>
+          <p className="ops-inspector__prompt">{coreState.stormIntel.pointLoading ? "Waiting for model data. Metrics will appear when the request completes." : coreState.stormIntel.pointError ? "Retry, or select another point. No model values are being substituted." : "Tap the map to load provenance and metrics."}</p>
         )}
       </section>
 

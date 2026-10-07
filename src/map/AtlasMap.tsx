@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import mapboxgl from "mapbox-gl";
+import { PhoneRadarChrome } from "./PhoneRadarChrome";
+import type { MapLayerVisibility } from "../services/settings";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagnostics } from "../services/mapTiles";
 import type { AlertProduct } from "../services/situational";
@@ -127,7 +129,10 @@ type AtlasMapProps = {
   // "compact" is the Weather-page card: owner asked for mosaic + layer visibility only, no zoom/
   // north-up/rings/clear-trail/mosaic-toggle buttons and no single-site radar UI at all -- that
   // full toolbar only exists on the "full" Locate page, which has the room for it.
-  controlsVariant?: "full" | "compact";
+  controlsVariant?: "full" | "compact" | "phone-radar";
+  visibility?: MapLayerVisibility;
+  onVisibilityChange?: (value: MapLayerVisibility) => void;
+  phoneTools?: ReactNode;
   escapeControl?: ReactNode;
   selectedPoint?: AtlasSelectedPoint | null;
   onPointSelect?: (point: AtlasSelectedPoint) => void;
@@ -241,11 +246,15 @@ export function AtlasMap({
   poiPlaces = EMPTY_POI,
   nearbyBest = EMPTY_NEARBY_BEST,
   controlsVariant = "full",
+  visibility,
+  onVisibilityChange,
+  phoneTools,
   escapeControl,
   selectedPoint = null,
   onPointSelect,
 }: AtlasMapProps) {
   const compact = controlsVariant === "compact";
+  const phone = controlsVariant === "phone-radar";
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const styleInfoRef = useRef(EMPTY_MODIFIERS);
@@ -303,13 +312,18 @@ export function AtlasMap({
     window.addEventListener("codeblack:close-map-popovers", close);
     return () => window.removeEventListener("codeblack:close-map-popovers", close);
   }, []);
-  const { warnings: warningsVisible, watches: watchesVisible, mesoscaleDiscussions: mesoscaleDiscussionsVisible, specialStatements: specialStatementsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, radar: radarVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, surfaceStations: surfaceStationsVisible, stormReports: stormReportsVisible, riverGauges: riverGaugesVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = layerVisibility;
+  const effectiveVisibility = visibility ?? layerVisibility;
+  const saveVisibility = (value: MapLayerVisibility) => {
+    if (onVisibilityChange) onVisibilityChange(value);
+    else void saveMapLayerVisibility(value);
+  };
+  const { warnings: warningsVisible, watches: watchesVisible, mesoscaleDiscussions: mesoscaleDiscussionsVisible, specialStatements: specialStatementsVisible, team: teamVisible, chasers: chasersVisible, poi: poiVisible, mosaic: mosaicVisible, radar: radarVisible, roadConditions: roadConditionsVisible, trafficCameras: trafficCamerasVisible, surfaceStations: surfaceStationsVisible, stormReports: stormReportsVisible, riverGauges: riverGaugesVisible, breadcrumbs: breadcrumbsVisible, chaserNet: chaserNetVisible } = effectiveVisibility;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
-    const current = getMapLayerVisibility();
-    void saveMapLayerVisibility({ ...current, [key]: !current[key] });
+    const current = visibility ?? getMapLayerVisibility();
+    saveVisibility({ ...current, [key]: !current[key] });
   };
   const applyLayerPreset = (preset: "intercept" | "travel" | "flood" | "night" | "low-bandwidth") => {
-    const current = getMapLayerVisibility();
+    const current = visibility ?? getMapLayerVisibility();
     const common = { ...current, warnings: true, watches: true, mosaic: true, poi: false };
     const next = preset === "intercept"
       ? { ...common, mesoscaleDiscussions: true, specialStatements: true, chasers: true, roadConditions: true, trafficCameras: true, surfaceStations: true, stormReports: true }
@@ -320,7 +334,7 @@ export function AtlasMap({
           : preset === "night"
             ? { ...common, mesoscaleDiscussions: true, specialStatements: true, chasers: true, roadConditions: true, trafficCameras: true, surfaceStations: true }
             : { ...common, mesoscaleDiscussions: false, specialStatements: false, chasers: true, roadConditions: true, trafficCameras: false, surfaceStations: false, radar: false };
-    void saveMapLayerVisibility(next);
+    saveVisibility(next);
   };
   const mosaicVisibleRef = useRef(mosaicVisible);
   mosaicVisibleRef.current = mosaicVisible;
@@ -851,6 +865,7 @@ export function AtlasMap({
   // below walks it back through history and wraps to 0, matching a normal radar-loop UX.
   const [radarFrames, setRadarFrames] = useState<RadarFrame[]>([]);
   const [radarPlaybackIndex, setRadarPlaybackIndex] = useState(0);
+  const [radarPlaying, setRadarPlaying] = useState(!phone);
   const [radarLoadError, setRadarLoadError] = useState(false);
   const [radarPrimarySite, setRadarPrimarySite] = useState<string | null>(null);
   const [radarSelectedSite, setRadarSelectedSite] = useState<string | null>(null);
@@ -1008,12 +1023,12 @@ export function AtlasMap({
   }, [radarVisible, radarProduct, radarTilt, stormMotion, radarFocusLat, radarFocusLon, radarSiteOverride]);
 
   useEffect(() => {
-    if (!radarVisible || radarFrames.length < 2) return;
+    if (!radarVisible || radarFrames.length < 2 || (phone && !radarPlaying)) return;
     const timer = window.setInterval(() => {
       setRadarPlaybackIndex((index) => nextPlaybackIndex(index, radarFrames.length));
     }, playbackDelayMs(1));
     return () => window.clearInterval(timer);
-  }, [radarVisible, radarFrames.length]);
+  }, [radarVisible, radarFrames.length, phone, radarPlaying]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1349,7 +1364,14 @@ export function AtlasMap({
     : null;
 
   return (
-    <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"} ${visibleError ? "atlas-map-shell--error" : ""}`} data-testid={compact ? "atlas-map-compact" : "atlas-map-primary"}>
+    <div className={`${compact ? "atlas-map-shell atlas-map-shell--compact" : "atlas-map-shell"} ${phone ? "atlas-map-shell--phone-radar" : ""} ${active ? "atlas-map-shell--active" : "atlas-map-shell--inactive"} ${visibleError ? "atlas-map-shell--error" : ""}`} data-testid={compact ? "atlas-map-compact" : "atlas-map-primary"}>
+      {phone && <PhoneRadarChrome product={radarProduct} onProduct={product => { if (product !== radarProduct) { setRadarFrames([]); setRadarPlaybackIndex(0); setRadarLoadError(false); } setRadarProduct(product); }} frame={radarFrame} frameCount={radarFrames.length} frameIndex={radarPlaybackIndex} onFrame={setRadarPlaybackIndex} playing={radarPlaying} onPlaying={setRadarPlaying} loadError={radarLoadError}
+        sites={radarNearbySites} site={radarSiteOverride} onSite={chooseRadarSite} tilt={radarTilt} tilts={radarAvailableTilts} onTilt={tilt => { setRadarFrames([]); setRadarPlaybackIndex(0); setRadarTilt(tilt); }}
+        visibility={effectiveVisibility} onVisibility={saveVisibility} onZoom={(delta) => delta > 0 ? mapRef.current?.zoomIn({ duration: 250 }) : mapRef.current?.zoomOut({ duration: 250 })}
+        onHeading={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")} heading={followLabel} onZoomLock={() => setZoomLocked(v => !v)} zoomLocked={zoomLocked}
+        onAhead={() => setRouteAheadOnly(v => !v)} ahead={routeAheadOnly} hasTrail={trail.length > 0} onExportTrail={() => downloadBreadcrumbExport(trail, "gpx")} onClearTrail={() => clearBreadcrumbTrail()}
+        diagnostics={[...statusLines, cameraStatusLabel, mosaicStatusLabel ?? "", radarStatusLabel ?? "", radarSiteFailoverReason, roadStatusLabel ?? "", cameraProviderStatusLabel ?? ""]} tools={phoneTools}
+        motion={close => <StormMotionQuickEntry initial={stormMotion} site={radarFrame?.site.id ?? "AUTO"} onApply={applyStormMotion} onClose={close} />} />}
       <div className="atlas-map-canvas-area">
         <div ref={containerRef} className="atlas-map" data-testid={compact ? "atlas-map-canvas-compact" : "atlas-map-canvas-primary"} data-camera-mode={cameraMode} />
         {visibleError && (
@@ -1359,7 +1381,8 @@ export function AtlasMap({
           </div>
         )}
         {!compact && escapeControl && <div className="atlas-map-escape-slot" data-testid="atlas-map-escape-slot">{escapeControl}</div>}
-        {!compact && (
+        {phone && <button type="button" className="ops-radar-recenter" aria-label="Recenter map" onClick={() => recenter("FOLLOW_NORTH")}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="3" /><path d="M12 1v4m0 14v4M1 12h4m14 0h4" /></svg></button>}
+        {!compact && !phone && (
           <div className="radar-strip atlas-radar-strip">
             {statusLines.map((line, index) => <span key={index}>{line}</span>)}
             <span>{cameraStatusLabel}</span>
@@ -1390,7 +1413,7 @@ export function AtlasMap({
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5Z" /><path d="M2 12l10 5 10-5" /><path d="M2 17l10 5 10-5" /></svg>
           </button>
         )}
-        {layersPopoverOpen && (
+        {layersPopoverOpen && !phone && (
           <div className="atlas-layers-popover" role="dialog" aria-label="Map layers" data-testid={compact ? "atlas-map-layers-popover-compact" : "atlas-map-layers-popover-primary"}>
             <div className="atlas-layers-popover__header">
               <div className="atlas-layers-popover__title">Layers</div>
@@ -1506,7 +1529,7 @@ export function AtlasMap({
           instead of silently doing nothing. Also hidden outright on a web build with no radar
           worker configured -- a product/tilt picker for a layer that can never actually load a
           frame is just clutter, not a control. */}
-      {!compact && radarVisible && !radarWorkerMissingOnWeb() && (
+      {!compact && !phone && radarVisible && !radarWorkerMissingOnWeb() && (
         <div className="atlas-radar-instrument" aria-label="Single-site radar product and tilt">
           <div className="atlas-radar-instrument__heading"><strong>RADAR</strong><span>{radarFrame ? `${radarFrame.site.id}${radarSelectedSite && radarPrimarySite && radarSelectedSite !== radarPrimarySite ? ` · FAILOVER (${radarSiteFailoverReason})` : ""} · FRAME ${radarPlaybackIndex + 1}/${radarFrames.length} · ${new Date(radarFrame.time).toISOString().slice(11, 19)}Z` : "LOADING FRAMES"}</span></div>
           <div className="atlas-radar-instrument__row">
@@ -1584,7 +1607,7 @@ export function AtlasMap({
       {/* Compact (Weather-page) card: no control row at all -- per the owner's explicit call,
           layer visibility now lives entirely on the Layer Configuration page (reached via the dock
           corner button), not duplicated here. Pan/zoom still work via touch gestures. */}
-      {!compact && (
+      {!compact && !phone && (
         <div className="map-controls atlas-map-controls" aria-label="Atlas map controls">
           <div className="atlas-map-controls__zoom" aria-label="Map zoom controls">
             <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => mapRef.current?.zoomIn({ duration: 250 })}>+</button>

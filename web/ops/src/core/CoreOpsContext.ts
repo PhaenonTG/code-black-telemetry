@@ -9,6 +9,10 @@ export interface CoreOpsContextValue {
   state: OpsCoreState;
   selectedPoint: OpsSelectedPoint | null;
   pointHistory: StormIntelHistoryEntry[];
+  locationMode: "follow" | "manual";
+  updateDeviceLocation(point: OpsSelectedPoint): void;
+  followDeviceLocation(): void;
+  refreshPoint(): void;
   selectPoint(point: OpsSelectedPoint | null): void;
   selectHistoryPoint(entry: StormIntelHistoryEntry): void;
 }

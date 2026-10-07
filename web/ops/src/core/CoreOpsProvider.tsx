@@ -5,6 +5,7 @@ import { CoreOpsContext, type OpsSelectedPoint } from "./CoreOpsContext";
 import { consumeFabricStream, fetchCoreHealth, fetchFabricRest, fetchStormIntelHealth, fetchStormIntelPoint } from "./client";
 import { fabricStateFromSnapshot } from "./fabricSnapshot";
 import { LatestRequestGate } from "./requestGate";
+import { mergeStormHealth, shouldRefreshPoint } from "./pointRefresh";
 import { addPointHistoryEntry, historyEntryFromSnapshot } from "../stormIntel/pointHistory";
 import type { OpsCoreState } from "./types";
 
@@ -45,6 +46,10 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
   const config = useMemo(() => readOpsCoreConfig(), []);
   const [state, setState] = useState<OpsCoreState>(() => initialState());
   const [selectedPoint, setSelectedPoint] = useState<OpsSelectedPoint | null>(null);
+  const [locationMode, setLocationMode] = useState<"follow" | "manual">("follow");
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const devicePointRef = useRef<OpsSelectedPoint | null>(null);
+  const lastRequestedRef = useRef<{ point: OpsSelectedPoint | null; at: number }>({ point: null, at: 0 });
   const fabricRef = useRef(state.fabric);
   const pointRequestRef = useRef(new LatestRequestGate());
 
@@ -54,8 +59,12 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
     async function refresh() {
-      const core = await fetchCoreHealth(config);
+      if (inFlight || document.hidden) return;
+      inFlight = true;
+      const [core, stormIntelHealth] = await Promise.all([fetchCoreHealth(config), fetchStormIntelHealth(config)]);
+      inFlight = false;
       if (cancelled) return;
 
       // REST remains a fallback whenever the authenticated feed is disconnected or stale.
@@ -66,14 +75,13 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
         Date.now() - fabricNow.lastStreamEventAt < FABRIC_STREAM_FRESH_MS;
 
       if (streamHealthy) {
-        setState((current) => ({ ...current, core, refreshedAt: Date.now() }));
+        setState((current) => ({ ...current, core, stormIntel: mergeStormHealth(current.stormIntel, stormIntelHealth), refreshedAt: Date.now() }));
         return;
       }
 
-      const [fabric, stormIntelHealth] = await Promise.all([
-        fetchFabricRest(config, fabricRef.current),
-        fetchStormIntelHealth(config),
-      ]);
+      inFlight = true;
+      const fabric = await fetchFabricRest(config, fabricRef.current);
+      inFlight = false;
       if (cancelled) return;
       setState((current) => ({
         ...current,
@@ -87,18 +95,17 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
           lastContactAt: current.fabric.lastContactAt ?? fabric.lastContactAt,
           error: current.fabric.error,
         },
-        stormIntel: {
-          ...current.stormIntel,
-          ...stormIntelHealth,
-        },
+        stormIntel: mergeStormHealth(current.stormIntel, stormIntelHealth),
         refreshedAt: Date.now(),
       }));
     }
     void refresh();
     const id = window.setInterval(refresh, 30_000);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      document.removeEventListener("visibilitychange", refresh);
     };
   }, [config]);
 
@@ -170,9 +177,12 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
         stormIntel: {
           ...current.stormIntel,
           selectedPoint: null,
+          state: "CHECKING",
+          detail: "Choose a location for model data.",
           pointLoading: false,
           requestId,
           pointSnapshot: null,
+          snapshotPoint: null,
           pointError: null,
         },
       }));
@@ -180,22 +190,24 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
     }
 
     const controller = new AbortController();
+    lastRequestedRef.current = { point: selectedPoint, at: Date.now() };
     setState((current) => ({
       ...current,
       stormIntel: {
         ...current.stormIntel,
         selectedPoint,
+        state: coreConfigured(config) ? "CHECKING" : "UNAVAILABLE",
+        detail: coreConfigured(config) ? "Loading model data…" : "Model service is not configured.",
         pointLoading: coreConfigured(config),
         requestId,
-        pointSnapshot: null,
-        pointError: coreConfigured(config) ? null : current.stormIntel.detail,
+        pointError: coreConfigured(config) ? null : "Model service is not configured.",
       },
     }));
 
     if (!coreConfigured(config)) return;
     void fetchStormIntelPoint(config, selectedPoint, controller.signal)
       .then((snapshot) => {
-        if (!pointRequestRef.current.isCurrent(requestId)) return;
+        if (!pointRequestRef.current.isCurrent(requestId) || controller.signal.aborted) return;
         setState((current) => ({
           ...current,
           stormIntel: {
@@ -206,8 +218,9 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
             selectedPoint,
             pointLoading: false,
             requestId,
-            pointSnapshot: snapshot,
-            pointError: snapshot.available ? null : snapshot.unavailableReason,
+            pointSnapshot: snapshot.available ? snapshot : current.stormIntel.pointSnapshot,
+            snapshotPoint: snapshot.available ? selectedPoint : current.stormIntel.snapshotPoint,
+            pointError: snapshot.available ? null : (snapshot.unavailableReason ?? "Model data unavailable for this point."),
             pointHistory: snapshot.available
               ? addPointHistoryEntry(current.stormIntel.pointHistory, historyEntryFromSnapshot(selectedPoint, snapshot))
               : current.stormIntel.pointHistory,
@@ -226,19 +239,42 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
             selectedPoint,
             pointLoading: false,
             requestId,
-            pointSnapshot: null,
             pointError: error instanceof Error ? error.message : "point request failed",
           },
         }));
       });
     return () => controller.abort();
-  }, [config, selectedPoint]);
+  }, [config, selectedPoint, refreshNonce]);
+
+  const updateDeviceLocation = useCallback((point: OpsSelectedPoint) => {
+    devicePointRef.current = point;
+    if (locationMode !== "follow" || document.hidden) return;
+    const last = lastRequestedRef.current;
+    if (shouldRefreshPoint(last.point, point, Date.now() - last.at)) setSelectedPoint({ ...point });
+  }, [locationMode]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (devicePointRef.current) updateDeviceLocation(devicePointRef.current);
+    };
+    const timer = window.setInterval(refresh, 15_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+  }, [updateDeviceLocation]);
+
+  const followDeviceLocation = useCallback(() => {
+    setLocationMode("follow");
+    if (devicePointRef.current) setSelectedPoint({ ...devicePointRef.current });
+  }, []);
+  const refreshPoint = useCallback(() => setRefreshNonce((value) => value + 1), []);
 
   const selectPoint = useCallback((point: OpsSelectedPoint | null) => {
+    setLocationMode(point ? "manual" : "follow");
     setSelectedPoint(point);
   }, []);
 
   const selectHistoryPoint = useCallback((entry: { requested: OpsSelectedPoint }) => {
+    setLocationMode("manual");
     setSelectedPoint(entry.requested);
   }, []);
 
@@ -248,10 +284,14 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
       state,
       selectedPoint,
       pointHistory: state.stormIntel.pointHistory,
+      locationMode,
+      updateDeviceLocation,
+      followDeviceLocation,
+      refreshPoint,
       selectPoint,
       selectHistoryPoint,
     }),
-    [config, state, selectedPoint, selectPoint, selectHistoryPoint],
+    [config, state, selectedPoint, selectPoint, selectHistoryPoint, locationMode, updateDeviceLocation, followDeviceLocation, refreshPoint],
   );
   return <CoreOpsContext.Provider value={value}>{children}</CoreOpsContext.Provider>;
 }

@@ -11,6 +11,7 @@ import SoundingsWorkspace from "./SoundingsWorkspace";
 // recovered from "Loading sounding...".
 function contextValue(): CoreOpsContextValue {
   return {
+    locationMode: "follow", updateDeviceLocation: () => {}, followDeviceLocation: () => {}, refreshPoint: () => {},
     config: { mode: "LIVE_CORE", coreBaseUrl: "https://ops.codeblackwx.com/api/core", coreWsUrl: "wss://ops.codeblackwx.com/api/core", unitId: "cbwx-unit-tessa", stormIntelPollSeconds: 30 },
     state: {
       core: { state: "LIVE", detail: "", checkedAt: 0 },

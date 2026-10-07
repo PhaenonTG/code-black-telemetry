@@ -67,8 +67,15 @@ async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, outerSi
   const abort = () => controller.abort();
   outerSignal?.addEventListener("abort", abort, { once: true });
   if (outerSignal?.aborted) controller.abort();
+  let rejectAbort: () => void = () => {};
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = () => reject(new DOMException("Request aborted", "AbortError"));
+    controller.signal.addEventListener("abort", rejectAbort, { once: true });
+    if (controller.signal.aborted) rejectAbort();
+  });
   try {
-    return await work(controller.signal);
+    // Bound the entire operation, including session acquisition before fetch.
+    return await Promise.race([aborted, work(controller.signal)]);
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new OpsCoreClientError(outerSignal?.aborted ? "request cancelled" : "request timeout");
@@ -76,6 +83,7 @@ async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, outerSi
     throw error;
   } finally {
     outerSignal?.removeEventListener("abort", abort);
+    controller.signal.removeEventListener("abort", rejectAbort);
     clearTimeout(timer);
   }
 }

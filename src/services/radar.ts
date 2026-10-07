@@ -112,7 +112,11 @@ export function radarWorkerBase(): string {
   const configured = ((import.meta.env.VITE_RADAR_WORKER_URL as string | undefined) ?? "").trim().replace(/\/+$/, "");
   if (typeof window !== "undefined") {
     const hostname = window.location.hostname.toLowerCase();
-    if (hostname === "ops.codeblackwx.com" || hostname.endsWith(".codeblack-ops.pages.dev")) return window.location.origin;
+    if (hostname === "ops.codeblackwx.com") return window.location.origin;
+    // Pages previews do not have the production zone's radar-relay route.
+    // Reuse its existing public, CORS-enabled NOAA gateway rather than receiving
+    // the preview's SPA HTML in place of frame JSON.
+    if (hostname === "codeblack-ops.pages.dev" || hostname.endsWith(".codeblack-ops.pages.dev")) return "https://ops.codeblackwx.com";
   }
   return configured;
 }

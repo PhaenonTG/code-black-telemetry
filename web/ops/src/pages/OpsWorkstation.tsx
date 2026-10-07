@@ -17,7 +17,9 @@ import { PointInspector } from "../components/PointInspector";
 import { useCoreOps } from "../core/useCoreOps";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings";
-import { mapWorkspaceVisibility, type MapWorkspace } from "../mapWorkspace";
+import { mapWorkspaceVisibility, PHONE_RADAR_LAYERS, type MapWorkspace } from "../mapWorkspace";
+import { useViewport } from "../hooks/useViewport";
+import { PhoneSheet } from "../../../../src/components/PhoneSheet";
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null;
@@ -47,6 +49,9 @@ function unitLocation(location: Record<string, unknown> | null | undefined): { l
 }
 
 export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string }) {
+  const phoneRadar = useViewport() === "phone" && focus === "RADAR LAB";
+  const [radarVisibility, setRadarVisibility] = useState(PHONE_RADAR_LAYERS);
+  const [pointOpen, setPointOpen] = useState(false);
   const [gps, setGps] = useState<LocationState>({ status: "requesting" });
   const [camera, setCamera] = useState<TrafficCamera | null>(null);
   const [pinnedCameras, setPinnedCameras] = useState<TrafficCamera[]>(() => {
@@ -59,7 +64,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [operationalItems, setOperationalItems] = useState<{ roads: RoadConditionEvent[]; reports: StormReport[] }>({ roads: [], reports: [] });
   const [nearbyUnitId, setNearbyUnitId] = useState<string>("");
-  const { state: coreState, selectedPoint, selectPoint } = useCoreOps();
+  const { state: coreState, selectedPoint, selectPoint, updateDeviceLocation, refreshPoint, followDeviceLocation, locationMode } = useCoreOps();
 
   useEffect(() => { localStorage.setItem(CAMERA_WALL_KEY, JSON.stringify(pinnedCameras)); }, [pinnedCameras]);
   useEffect(() => { localStorage.setItem(CAMERA_BANDWIDTH_KEY, String(lowBandwidth)); }, [lowBandwidth]);
@@ -84,35 +89,34 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   // First landing anywhere in the app (selectedPoint is shared app-wide state) with nothing picked
   // yet defaults to the viewer's own position instead of requiring a map tap before Point
   // Inspector shows anything -- same one-shot-into-a-null-slot behavior as Storm Intel's.
-  const atlasGpsForAutoSelect = toAtlasGps(gps);
   useEffect(() => {
-    if (selectedPoint || !atlasGpsForAutoSelect) return;
-    selectPoint({ lat: atlasGpsForAutoSelect.lat, lon: atlasGpsForAutoSelect.lon });
-  }, [atlasGpsForAutoSelect, selectedPoint, selectPoint]);
+    if (gps.status === "ready") updateDeviceLocation({ lat: gps.lat, lon: gps.lon });
+  }, [gps, updateDeviceLocation]);
 
   // Device GPS denied/unavailable leaves the effect above with nothing to auto-select -- fall back
   // to a coarse, IP-based approximate location instead of leaving Point Inspector permanently empty
   // until a manual map tap. Only kicks in once GPS has actually settled to denied/unavailable (not
   // while still "requesting"), so real GPS always wins the race when it's available.
   useEffect(() => {
-    if (selectedPoint || atlasGpsForAutoSelect) return;
+    if (selectedPoint) return;
     if (gps.status !== "denied" && gps.status !== "unavailable") return;
     let cancelled = false;
     void ipLocationAdapter.getApprox().then((approx) => {
       if (cancelled || !approx) return;
-      selectPoint({ lat: approx.lat, lon: approx.lon });
+      updateDeviceLocation({ lat: approx.lat, lon: approx.lon });
     });
     return () => { cancelled = true; };
-  }, [gps.status, selectedPoint, atlasGpsForAutoSelect, selectPoint]);
+  }, [gps.status, selectedPoint, updateDeviceLocation]);
 
   useEffect(() => {
+    if (phoneRadar) return;
     const workspace: MapWorkspace = focus === "RADAR LAB" ? "radar" : focus === "FIELD INTELLIGENCE" ? "field" : "operations";
     let cancelled = false;
     void loadMapLayerVisibility().then((current) => {
       if (!cancelled) void saveMapLayerVisibility(mapWorkspaceVisibility(current, workspace));
     });
     return () => { cancelled = true; };
-  }, [focus]);
+  }, [focus, phoneRadar]);
 
   useEffect(() => {
     const cam = (e: Event) => {
@@ -175,13 +179,19 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   }, [operationalItems.roads, voiceAlerts]);
 
   return (
-    <div className="ops-workstation">
+    <div className={phoneRadar ? "ops-workstation ops-workstation--phone-radar" : "ops-workstation"}>
       <div className="ops-map-stage">
         <AtlasMap
           gps={atlasGps}
           rangeRings="off"
           statusLines={[gpsStatusLine(gps)]}
-          controlsVariant="full"
+          controlsVariant={phoneRadar ? "phone-radar" : "full"}
+          visibility={phoneRadar ? radarVisibility : undefined}
+          onVisibilityChange={phoneRadar ? setRadarVisibility : undefined}
+          phoneTools={<>
+            <label className="ops-radar-field">Nearby for<select value={nearbyUnitId} onChange={event => setNearbyUnitId(event.target.value)}>{chaserReferences.length === 0 && <option value="">This device</option>}{chaserReferences.map(({ unit }) => <option key={unit.unit_id} value={unit.unit_id}>{unit.operator_name || unit.display_name}</option>)}</select></label>
+            <button type="button" aria-pressed={voiceAlerts} onClick={() => setVoiceAlerts(value => !value)}>Voice alerts {voiceAlerts ? "on" : "off"}</button>
+          </>}
           spotters={spotters.spotters}
           showAllActiveSpotters
           poiPlaces={poi.places}
@@ -190,7 +200,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
           selectedPoint={selectedPoint}
           onPointSelect={(point: AtlasSelectedPoint) => selectPoint(point)}
         />
-        <div className="ops-map-overlay ops-map-overlay--top">
+        {!phoneRadar && <div className="ops-map-overlay ops-map-overlay--top">
           <div>
             {/* Was a "FOCUS" kicker sitting directly above this h1 -- an eyebrow labeling a
                 heading that already says the same thing (the h1's own value, e.g. "OPERATIONS
@@ -209,15 +219,22 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
           </label>
           <OpsStatusPill state={coreState.stormIntel.state} label="STORM INTEL" />
           <button type="button" className={voiceAlerts ? "ops-voice-toggle active" : "ops-voice-toggle"} onClick={() => setVoiceAlerts((value) => !value)} title="Speak new tornado and flash-flood warnings">VOICE {voiceAlerts ? "ON" : "OFF"}</button>
-        </div>
+        </div>}
         {camera && <MapCameraViewer camera={camera} onClose={() => setCamera(null)} pinned={pinnedCameras.some((item) => item.id === camera.id)} onTogglePin={() => togglePinnedCamera(camera)} lowBandwidth={lowBandwidth} onLowBandwidthChange={setLowBandwidth} />}
         {selection && <MapSituationPanel selection={selection} onClose={() => setSelection(null)} />}
       </div>
-      <div className="ops-side-rail">
+      {phoneRadar ? <>
+        <button type="button" className="ops-point-summary" aria-haspopup="dialog" onClick={() => setPointOpen(true)}><span><strong>Point details</strong><small>{coreState.stormIntel.pointLoading ? "Loading model data…" : coreState.stormIntel.pointError ? "Model data unavailable · retry" : coreState.stormIntel.pointSnapshot ? "Model data ready" : gps.status === "requesting" ? "Locating your device…" : "Choose a map point"}</small></span><span aria-hidden="true">⌄</span></button>
+        <PhoneSheet open={pointOpen} title="Point details" onClose={() => setPointOpen(false)}>
+          <PointInspector selectedPoint={selectedPoint} coreState={coreState} onRetry={refreshPoint} onFollow={followDeviceLocation} locationMode={locationMode} />
+          {pinnedCameras.length > 0 && <CameraWall cameras={pinnedCameras} onOpen={item => { setPointOpen(false); setCamera(item); }} onRemove={id => setPinnedCameras(current => current.filter(item => item.id !== id))} />}
+          {(alertProducts.products.length + operationalItems.roads.length + operationalItems.reports.length > 0) && <IncidentTimeline alerts={alertProducts.products} roads={operationalItems.roads} reports={operationalItems.reports} onRoad={road => { setPointOpen(false); setSelection({ kind: "road", road }); }} onAlert={alert => { setPointOpen(false); setSelection({ kind: "alert", alert }); }} onReport={report => selectPoint({ lat: report.lat, lon: report.lon })} />}
+        </PhoneSheet>
+      </> : <div className="ops-side-rail">
         <CameraWall cameras={pinnedCameras} onOpen={setCamera} onRemove={(id) => setPinnedCameras((current) => current.filter((item) => item.id !== id))} />
         <IncidentTimeline alerts={alertProducts.products} roads={operationalItems.roads} reports={operationalItems.reports} onRoad={(road) => { setCamera(null); setSelection({ kind: "road", road }); }} onAlert={(alert) => { setCamera(null); setSelection({ kind: "alert", alert }); }} onReport={(report) => selectPoint({ lat: report.lat, lon: report.lon })} />
-        <PointInspector selectedPoint={selectedPoint} coreState={coreState} />
-      </div>
+        <PointInspector selectedPoint={selectedPoint} coreState={coreState} onRetry={refreshPoint} onFollow={followDeviceLocation} locationMode={locationMode} />
+      </div>}
     </div>
   );
 }

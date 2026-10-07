@@ -2,6 +2,13 @@ import type { MapLayerVisibility } from "../../../src/services/settings";
 
 export type MapWorkspace = "operations" | "radar" | "field" | "weather";
 
+export const PHONE_RADAR_LAYERS: MapLayerVisibility = {
+  warnings: true, watches: true, mesoscaleDiscussions: false, specialStatements: false,
+  radar: true, mosaic: false, team: false, chasers: false, poi: false,
+  roadConditions: false, trafficCameras: false, surfaceStations: false,
+  stormReports: false, riverGauges: false, probes: false, chaserNet: false, breadcrumbs: false,
+};
+
 export function mapWorkspaceVisibility(current: MapLayerVisibility, workspace: MapWorkspace): MapLayerVisibility {
   const common = { ...current, mosaic: true, poi: false };
   switch (workspace) {

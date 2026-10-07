@@ -35,6 +35,13 @@ function state(): OpsCoreState {
 }
 
 describe("PointInspector", () => {
+  it("does not show unavailable metric rows while waiting for a result", () => {
+    const value = state();
+    value.stormIntel.pointLoading = true;
+    const html = renderToString(<PointInspector selectedPoint={{ lat: 36.45, lon: -94.12 }} coreState={value} />);
+    expect(html).toContain("Waiting for model data");
+    expect(html).not.toContain("ops-metric-line");
+  });
   it("renders selected point and omits unfinished feature placeholders", () => {
     const html = renderToString(<PointInspector selectedPoint={{ lat: 36.45, lon: -94.12 }} coreState={state()} />);
     expect(html).toContain("36.450");

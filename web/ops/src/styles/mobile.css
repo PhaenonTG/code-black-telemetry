@@ -95,3 +95,72 @@
 @media (prefers-reduced-motion: reduce) {
   .auth-screen__loading-shield { animation: none; }
 }
+
+/* Approved compact launcher and map-first radar presentation. */
+.ops-phone-sheet { color: var(--cb-text); background: var(--cb-shell); border: 1px solid var(--cb-line); border-radius: 16px 16px 0 0; padding: 0; width: min(100%, 600px); max-width: 100%; max-height: 85dvh; margin: auto auto 0; overflow: hidden; }
+.ops-phone-sheet[open] { display: flex; flex-direction: column; }
+.ops-phone-sheet::backdrop { background: rgba(0,0,0,.65); }
+.ops-phone-sheet > header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; gap: 12px; border-bottom: 1px solid var(--cb-line); flex-shrink: 0; }
+.ops-phone-sheet h2 { margin: 0; font-size: 18px; text-transform: none; letter-spacing: 0; }
+.ops-phone-sheet button, .ops-point-actions button { min-height: 44px; border: 1px solid var(--cb-line); border-radius: 8px; color: var(--cb-text); background: var(--cb-panel); padding: 8px 12px; font-size: 14px; cursor: pointer; }
+.ops-phone-sheet button[aria-pressed="true"] { color: var(--cb-red); border-color: var(--cb-red); }
+.ops-phone-sheet button:disabled, .ops-radar-transport button:disabled { opacity: .4; cursor: default; }
+.ops-phone-sheet__body { overflow-y: auto; overscroll-behavior: contain; padding: 16px 16px max(20px, env(safe-area-inset-bottom)); min-height: 0; }
+.ops-phone-sheet details { border-top: 1px solid var(--cb-line); margin-top: 14px; }
+.ops-phone-sheet summary { min-height: 48px; padding: 14px 0; cursor: pointer; font-size: 15px; }
+.ops-phone-sheet p { overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; color: var(--cb-muted); }
+.ops-phone-sheet .ops-inspector { padding: 0; border: 0; background: transparent; }
+.ops-phone-sheet .ops-inspector__block { clip-path: none; padding: 14px 0; border: 0; border-bottom: 1px solid var(--cb-line); background: transparent; }
+.ops-radar-field { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; font-size: 13px; color: var(--cb-muted); }
+.ops-radar-field select { width: 100%; min-height: 44px; font-size: 16px; color: var(--cb-text); border: 1px solid var(--cb-line); background: var(--cb-panel); border-radius: 8px; padding: 8px; }
+.ops-radar-layers label { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+.ops-radar-layers input { width: 22px; height: 22px; accent-color: var(--cb-red); }
+.ops-radar-tool-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.ops-point-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.ops-retained-result { padding: 12px; border-left: 2px solid var(--cb-amber); }
+
+@media (max-width: 767px) {
+  .mobile-home--compact { padding: 16px 20px 24px; }
+  .mobile-home--compact .mobile-home__header { margin-bottom: 14px; }
+  .mobile-home--compact .mobile-home__readiness { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 8px; margin-bottom: 14px; }
+  .mobile-home--compact .mobile-home__readiness strong { font-size: 14px; font-weight: 500; }
+  .mobile-home__status-link { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--cb-muted); font-size: 13px; }
+  .mobile-home--compact .mobile-home__actions { display: flex; flex-direction: column; gap: 0; margin: 0; }
+  .mobile-home--compact .mobile-action { display: flex; flex-direction: row; align-items: center; gap: 16px; min-height: 64px; padding: 10px 0; background: transparent; border: 0; border-bottom: 1px solid var(--cb-line); border-radius: 0; }
+  .mobile-home--compact .mobile-action > svg:first-child { flex-shrink: 0; font-size: 25px; color: var(--cb-text); }
+  .mobile-home--compact .mobile-action span { flex: 1; }
+  .mobile-home--compact .mobile-action b { font-size: 17px; font-weight: 600; }
+  .mobile-home--compact .mobile-action small { font-size: 13px; }
+  .mobile-home--compact .mobile-action__chevron { position: static; align-self: auto; margin-left: auto; }
+  .mobile-home--compact .mobile-action--aegis { margin-top: 8px; }
+  .mobile-home--compact .mobile-action--aegis > svg:first-child { color: var(--cb-red); }
+  .mobile-home--compact .mobile-home__watch { padding: 0; margin: 16px 0 0; border: 0; background: transparent; }
+  .mobile-home--compact .mobile-home__section-title { margin: 0; gap: 6px; }
+  .mobile-home--compact .mobile-home__section-title > span { font-size: 16px; font-weight: 600; }
+  .mobile-home--compact .mobile-home__section-title > a { color: var(--cb-muted); font-weight: 500; }
+  .mobile-home--compact .mobile-home__location { min-height: 64px; }
+  .mobile-home--compact .mobile-home__location b { font-weight: 500; font-size: 15px; }
+
+  .ops-workstation.ops-workstation--phone-radar { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+  .ops-workstation--phone-radar .ops-map-stage { flex: 1; min-height: 0; height: auto; }
+  .ops-workstation--phone-radar .ops-map-stage > .atlas-map-shell--phone-radar { height: 100%; flex: 1; display: grid; grid-template-rows: 48px 44px minmax(0,1fr) 68px; grid-template-areas: "header" "products" "map" "transport"; background: var(--cb-black); }
+  .atlas-map-shell--phone-radar .atlas-map-canvas-area { grid-area: map; min-height: 0; }
+  .ops-radar-header { grid-area: header; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; gap: 12px; }
+  .ops-radar-header h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.02em; text-transform: none; }
+  .ops-radar-header button { min-height: 44px; padding: 0 12px; color: var(--cb-text); border: 0; background: transparent; font-size: 14px; }
+  .ops-radar-products { grid-area: products; display: grid; grid-template-columns: repeat(4,1fr); padding: 0 12px; }
+  .ops-radar-products button { border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; font-size: 14px; font-weight: 600; min-height: 44px; background: var(--cb-panel); color: var(--cb-muted); }
+  .ops-radar-products button[aria-pressed="true"] { background: var(--cb-red); color: #080809; }
+  .ops-radar-recenter { position: absolute; z-index: 25; bottom: 14px; right: 14px; width: 44px; height: 44px; border-radius: 10px; background: var(--cb-shell); color: var(--cb-text); border: 1px solid var(--cb-line); font-size: 28px; }
+  .ops-radar-transport { grid-area: transport; display: grid; grid-template-columns: 44px minmax(36px,1fr) minmax(110px,auto); align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--cb-line); }
+  .ops-radar-transport button { height: 44px; border: 1px solid var(--cb-line); border-radius: 8px; background: var(--cb-panel); color: var(--cb-text); }
+  .ops-radar-transport input { width: 100%; min-width: 0; height: 44px; accent-color: var(--cb-red); }
+  .ops-radar-freshness { display: flex; flex-direction: column; gap: 3px; max-width: 180px; }
+  .ops-radar-freshness strong { font-size: 12px; font-weight: 600; }
+  .ops-radar-freshness span { font-size: 11px; color: var(--cb-amber); line-height: 1.3; }
+  .ops-radar-freshness[data-freshness="LIVE"] span { color: var(--cb-green); }
+  .ops-point-summary { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; min-height: 60px; padding: 10px 16px; gap: 12px; border: 0; border-top: 1px solid var(--cb-line); background: var(--cb-panel); color: var(--cb-text); text-align: left; }
+  .ops-point-summary strong, .ops-point-summary small { display: block; }
+  .ops-point-summary strong { font-size: 14px; font-weight: 600; }
+  .ops-point-summary small { margin-top: 4px; font-size: 12px; color: var(--cb-muted); }
+}

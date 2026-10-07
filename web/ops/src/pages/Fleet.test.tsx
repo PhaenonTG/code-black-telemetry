@@ -6,6 +6,7 @@ import Fleet from "./Fleet"
 
 function renderFleet(hasSnapshot: boolean): string {
   const value: CoreOpsContextValue = {
+    locationMode: "follow", updateDeviceLocation: () => {}, followDeviceLocation: () => {}, refreshPoint: () => {},
     config: { mode: "LIVE_CORE", coreBaseUrl: "http://localhost:8000", coreWsUrl: "ws://localhost:8000", unitId: "cbwx-unit-tessa", stormIntelPollSeconds: 30 },
     state: {
       core: { state: "LIVE", detail: "Core ready", checkedAt: 0 },

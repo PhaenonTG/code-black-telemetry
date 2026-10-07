@@ -22,6 +22,9 @@ export interface FabricSnapshotState {
 }
 
 export interface StormIntelState {
+  serviceState?: OpsConnectionState;
+  serviceDetail?: string;
+  snapshotPoint?: { lat: number; lon: number } | null;
   state: OpsConnectionState;
   detail: string;
   checkedAt: number;

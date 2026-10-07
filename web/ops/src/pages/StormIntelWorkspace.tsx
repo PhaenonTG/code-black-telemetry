@@ -35,7 +35,7 @@ function isoShort(value: string | null | undefined): string {
 export default function StormIntelWorkspace() {
   const [gps, setGps] = useState<LocationState>({ status: "requesting" });
   const [locality, setLocality] = useState<LocalityResult | null>(null);
-  const { config, state: coreState, selectedPoint, pointHistory, selectPoint, selectHistoryPoint } = useCoreOps();
+  const { config, state: coreState, selectedPoint, pointHistory, selectPoint, selectHistoryPoint, updateDeviceLocation, refreshPoint, followDeviceLocation } = useCoreOps();
   const snapshot = coreState.stormIntel.pointSnapshot;
   const source = firstAvailableSource(snapshot);
   const summary = !selectedPoint
@@ -66,24 +66,23 @@ export default function StormIntelWorkspace() {
   // point" prompt. Only ever fires once, into a null slot -- never overrides a point the chaser
   // (or Live Ops) already selected.
   useEffect(() => {
-    if (selectedPoint || !atlasGps) return;
-    selectPoint({ lat: atlasGps.lat, lon: atlasGps.lon });
-  }, [atlasGps, selectedPoint, selectPoint]);
+    if (gps.status === "ready") updateDeviceLocation({ lat: gps.lat, lon: gps.lon });
+  }, [gps, updateDeviceLocation]);
 
   // Device GPS denied/unavailable leaves the effect above with nothing to auto-select -- fall back
   // to a coarse, IP-based approximate location instead of leaving this on "SELECT A MAP POINT"
   // until a manual tap. Only kicks in once GPS has actually settled to denied/unavailable (not
   // while still "requesting"), so real GPS always wins the race when it's available.
   useEffect(() => {
-    if (selectedPoint || atlasGps) return;
+    if (selectedPoint) return;
     if (gps.status !== "denied" && gps.status !== "unavailable") return;
     let cancelled = false;
     void ipLocationAdapter.getApprox().then((approx) => {
       if (cancelled || !approx) return;
-      selectPoint({ lat: approx.lat, lon: approx.lon });
+      updateDeviceLocation({ lat: approx.lat, lon: approx.lon });
     });
     return () => { cancelled = true; };
-  }, [gps.status, selectedPoint, atlasGps, selectPoint]);
+  }, [gps.status, selectedPoint, updateDeviceLocation]);
 
   useEffect(() => {
     if (!selectedPoint) { setLocality(null); return; }
@@ -113,6 +112,8 @@ export default function StormIntelWorkspace() {
         </div>
         <div className="storm-workspace__status">
           <OpsStatusPill state={coreState.stormIntel.state} label={`INTEL ${coreState.stormIntel.state}`} />
+          <button type="button" className="page-action-link" onClick={followDeviceLocation}>My location</button>
+          <button type="button" className="page-action-link" disabled={!selectedPoint || coreState.stormIntel.pointLoading} onClick={refreshPoint}>{coreState.stormIntel.pointError ? "Retry" : "Refresh"}</button>
         </div>
       </header>
 
@@ -175,8 +176,11 @@ export default function StormIntelWorkspace() {
         </aside>
       </main>
 
-      <StormIntelMetricBoard coreState={coreState} />
-      <PointInspector selectedPoint={selectedPoint} coreState={coreState} />
+      {snapshot && <>
+        {(coreState.stormIntel.pointLoading || coreState.stormIntel.pointError) && <p className="ops-retained-result">Showing the previous result while the requested point is unavailable. Its location and valid time remain in Point details below.</p>}
+        <StormIntelMetricBoard coreState={coreState} />
+      </>}
+      <PointInspector selectedPoint={selectedPoint} coreState={coreState} onRetry={refreshPoint} onFollow={followDeviceLocation} />
     </div>
   );
 }

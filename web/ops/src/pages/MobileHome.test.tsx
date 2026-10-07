@@ -15,16 +15,16 @@ describe("phone readiness", () => {
   it.each<OpsConnectionState>(["OFFLINE", "UNAVAILABLE", "STALE", "DEGRADED", "CHECKING", "DEVELOPMENT"])("reports %s without a false ready/checking state", (state) => {
     fixture.state = state
     const html = renderToString(<MemoryRouter><MobileHome /></MemoryRouter>)
-    expect(html).toContain(`CORE ${state}`)
+    expect(html).toContain(`Core ${state.toLowerCase()}`)
     expect(html).toContain(`data-state="${state}"`)
-    expect(html).toContain("Core test detail")
+    expect(html).not.toContain("Core test detail")
     expect(html).not.toContain("OPS READY")
     expect(html).not.toContain("Unrelated weather detail")
   })
   it("labels a live Core narrowly, without claiming all services are ready", () => {
     fixture.state = "LIVE"
     const html = renderToString(<MemoryRouter><MobileHome /></MemoryRouter>)
-    expect(html).toContain("CORE ONLINE")
+    expect(html.replaceAll("<!-- -->", "")).toContain("Core online")
     expect(html).not.toContain("OPS READY")
   })
 })
