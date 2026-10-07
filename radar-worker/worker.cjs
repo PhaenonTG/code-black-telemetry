@@ -105,6 +105,12 @@ function stormCentroid(frame) {
   let sumEast = 0;
   let sumNorth = 0;
   let sumWeight = 0;
+  // Real, literal reflectivity-core reading, not a derived/blended value: the single highest
+  // finite REF gate found while doing the SAME threshold/range-bounded scan the weighted
+  // centroid above already performs -- adds one comparison per in-range gate, no second pass.
+  let maxDbz = null;
+  let maxDbzEastKm = 0;
+  let maxDbzNorthKm = 0;
   const siteLatRad = (frame.site.lat * Math.PI) / 180;
   for (let i = 0; i < frame.data.length; i += 1) {
     const radial = frame.data[i];
@@ -121,6 +127,11 @@ function stormCentroid(frame) {
       sumEast += eastPerKm * rangeKm * weight;
       sumNorth += northPerKm * rangeKm * weight;
       sumWeight += weight;
+      if (maxDbz === null || value > maxDbz) {
+        maxDbz = value;
+        maxDbzEastKm = eastPerKm * rangeKm;
+        maxDbzNorthKm = northPerKm * rangeKm;
+      }
     }
   }
   if (sumWeight <= 0) return null;
@@ -131,6 +142,9 @@ function stormCentroid(frame) {
     lon: frame.site.lon + meanEastKm / (111.32 * Math.cos(siteLatRad)),
     weight: sumWeight,
     time: frame.time,
+    maxDbz,
+    maxDbzLat: frame.site.lat + maxDbzNorthKm / 111.32,
+    maxDbzLon: frame.site.lon + maxDbzEastKm / (111.32 * Math.cos(siteLatRad)),
   };
 }
 
@@ -168,12 +182,25 @@ function estimateStormMotion(site) {
   const confidence = distanceKm < 1.5 ? "LOW" : distanceKm < 4 ? "MEDIUM" : "HIGH";
   return {
     ok: true,
+    // Honest identity for what this actually is (see the header comment above stormCentroid:
+    // single dominant-cell tracking, not multi-cell SCIT) -- a consumer must never read this as
+    // "the only storm in range," only "the current tracked dominant cell for this site."
+    id: `${site}-primary`,
     directionDegrees,
     speedKnots,
     confidence,
     sampleSpanMinutes: Math.round(elapsedHours * 60),
     baselineFrameId: baseline.id,
     newestFrameId: newest.id,
+    // Additive location/core fields (V1 radar-intelligence pass) -- the newest frame's own
+    // centroid and literal max-dBZ core reading, both real values already computed above, never
+    // fabricated to fill out a schema. observedAt is the NEWEST frame's real scan time, matching
+    // the freshness contract every other radar-worker response already uses (see metadata()'s
+    // `time` field) -- never "now," so a stalled estimate still ages honestly downstream.
+    location: { lat: c2.lat, lon: c2.lon },
+    maxDbz: c2.maxDbz,
+    maxDbzLocation: c2.maxDbz == null ? null : { lat: c2.maxDbzLat, lon: c2.maxDbzLon },
+    observedAt: new Date(newest.time).toISOString(),
   };
 }
 
@@ -495,11 +522,15 @@ const CHUNK_SITE_IDLE_EVICT_MS = 20 * 60_000;
 // listings; the real per-chunk cadence (~4-5s) means checking more often than this buys
 // nothing.
 const CHUNK_ADVANCE_MIN_INTERVAL_MS = 3_000;
+// When a site's chunk prefix is unavailable, do not repeat the bounded but expensive discovery
+// search on every frame request. The completed-volume renderer remains live during this backoff.
+const CHUNK_DISCOVERY_RETRY_MS = 5 * 60_000;
 
 // site -> { volumeNum, chunks: Map<"S-1"|"I-2"|"E-999", {key,lastModified,size,seq,flag}>,
 //           firstChunkTime, newestChunkTime, sawE, lastDecodedChunkCount,
 //           trustworthyEmitted: Set<"REF"|"VEL">, lastAdvanceAt, lastDiscoveryAt }
 const chunkVolumeState = new Map();
+const chunkDiscoveryBackoffUntil = new Map();
 // Per-site in-flight dedup, mirroring frameLoads' existing pattern -- concurrent requests for
 // the same site never trigger overlapping chunk-advancement work.
 const chunkAdvanceInFlight = new Map();
@@ -518,35 +549,10 @@ async function chunkFolderHasKeys(site, volumeNum) {
   return /<KeyCount>0<\/KeyCount>/.test(xml) === false;
 }
 
-// Volume folders are a monotonically increasing NUMBER embedded in the chunk's own Archive II
-// header (verified: "AR2V0006.890" for folder .../890/) -- NEVER compared lexicographically
-// ("999" > "1000" as strings). Two-phase bounded numeric search: phase 1 finds ANY populated
-// folder (exponential growth from 1 -- real volume numbers are already in the high hundreds by
-// the time a site has been scanning for a day, so folder 1 itself is expected to be empty),
-// phase 2 continues growing from that anchor to find the empty boundary above it, then binary
-// searches. Every step is bounded; this never lists more than ~2*log2(volumeNum) small
-// max-keys=1 requests (well under 40 in practice).
+// Search actual timestamps, not numeric continuity: live retention leaves gaps.
+// Bounded pagination fails closed; callers retain the completed-volume fallback.
 async function discoverLatestChunkVolume(site) {
-  let anchor = null;
-  let probe = 1;
-  for (let i = 0; i < 40 && anchor === null; i++) {
-    if (await chunkFolderHasKeys(site, probe)) anchor = probe; else probe *= 2;
-    if (probe > 10_000_000) break;
-  }
-  if (anchor === null) throw new Error(`no Level II chunk data found for ${site}`);
-  let lo = anchor, hi = anchor + 1, step = 1;
-  while (await chunkFolderHasKeys(site, hi)) {
-    lo = hi;
-    step *= 2;
-    hi = lo + step;
-    if (hi - anchor > 10_000_000) break;
-  }
-  let left = lo, right = hi;
-  while (right - left > 1) {
-    const mid = left + Math.floor((right - left) / 2);
-    if (await chunkFolderHasKeys(site, mid)) left = mid; else right = mid;
-  }
-  return left;
+  return require('./chunkDiscovery.cjs').discoverLatestChunkVolume(site, fetchText, LEVEL2_CHUNKS_BUCKET);
 }
 
 const CHUNK_KEY_RE = /\/(\d{8}-\d{6})-(\d+)-([SIE])$/;
@@ -607,6 +613,7 @@ async function advanceChunkAssembly(siteId) {
   const site = sites.find((item) => item.id === siteId);
   if (!site) return;
   const now = Date.now();
+  if ((chunkDiscoveryBackoffUntil.get(siteId) || 0) > now) return;
   let state = chunkVolumeState.get(siteId);
   if (state && now - state.lastAdvanceAt < CHUNK_ADVANCE_MIN_INTERVAL_MS) return;
   if (chunkAdvanceInFlight.has(siteId)) return;
@@ -616,7 +623,13 @@ async function advanceChunkAssembly(siteId) {
         // Through module.exports (not the bare local name) -- same test-seam indirection
         // already established for recentLevel2Keys, so a test can substitute a failing
         // discovery/listing without touching real S3 (Part 7/9-I: proves the fallback path).
-        const volumeNum = await module.exports.discoverLatestChunkVolume(siteId);
+        let volumeNum;
+        try {
+          volumeNum = await module.exports.discoverLatestChunkVolume(siteId);
+        } catch (error) {
+          chunkDiscoveryBackoffUntil.set(siteId, Date.now() + CHUNK_DISCOVERY_RETRY_MS);
+          throw error;
+        }
         state = { volumeNum, chunks: new Map(), firstChunkTime: null, newestChunkTime: null, sawE: false,
           lastDecodedChunkCount: 0, trustworthyEmitted: new Set(), lastAdvanceAt: now, lastDiscoveryAt: now };
         chunkVolumeState.set(siteId, state);
@@ -626,17 +639,27 @@ async function advanceChunkAssembly(siteId) {
       // If the currently-tracked volume already completed (sawE) last time we looked, check
       // whether a NEWER volume has started before doing anything else -- a completed volume's
       // chunk set never gains new data, so re-listing it forever would be wasted work.
-      if (state.sawE && now - state.lastDiscoveryAt > CHUNK_ADVANCE_MIN_INTERVAL_MS) {
-        const nextVolume = state.volumeNum + 1;
-        if (await chunkFolderHasKeys(siteId, nextVolume)) {
+      const stalled = now - Date.parse(state.newestChunkTime || new Date(state.lastDiscoveryAt).toISOString()) > 90_000;
+      if (state.sawE || stalled) {
+        let nextVolume = state.volumeNum;
+        // Normal handoff costs one small listing; confirm its timestamp so an old
+        // folder cannot be mistaken for the next scan after a numbering reset.
+        if (state.sawE) {
+          const nextEntries = await listChunkBucketXml(`${siteId}/${state.volumeNum + 1}/`);
+          if (nextEntries.some(entry => Date.parse(entry.lastModified) > Date.parse(state.newestChunkTime || 0))) nextVolume++;
+        }
+        // Full chronological recovery is only needed for missing/stalled scans.
+        if (nextVolume === state.volumeNum && now - state.lastDiscoveryAt > 60_000) {
+          state.lastDiscoveryAt = now;
+          nextVolume = await module.exports.discoverLatestChunkVolume(siteId);
+        }
+        if (nextVolume !== state.volumeNum) {
           // Bounded volume history: drop the completed volume's chunk bytes entirely before
           // starting to track the new one -- never accumulate more than one volume's chunk
           // state per site.
           state = { volumeNum: nextVolume, chunks: new Map(), firstChunkTime: null, newestChunkTime: null,
             sawE: false, lastDecodedChunkCount: 0, trustworthyEmitted: new Set(), lastAdvanceAt: now, lastDiscoveryAt: now };
           chunkVolumeState.set(siteId, state);
-        } else {
-          state.lastDiscoveryAt = now;
         }
       }
       if (state.sawE) return; // still the same completed volume, nothing new to do
@@ -723,6 +746,9 @@ function evictIdleChunkSites() {
   const now = Date.now();
   for (const [siteId, state] of chunkVolumeState) {
     if (now - state.lastAdvanceAt > CHUNK_SITE_IDLE_EVICT_MS) chunkVolumeState.delete(siteId);
+  }
+  for (const [siteId, retryAt] of chunkDiscoveryBackoffUntil) {
+    if (retryAt <= now) chunkDiscoveryBackoffUntil.delete(siteId);
   }
 }
 
@@ -1212,6 +1238,10 @@ module.exports = {
   CHUNK_DECODE_EVERY_N,
   frames,
   cacheFrame,
+  // V1 radar-intelligence exports -- pure functions, tested directly against synthetic frames
+  // (see worker.storm-intel.test.cjs). No new state, no new route logic exported here.
+  stormCentroid,
+  estimateStormMotion,
   _resetChunkState: () => {
     chunkVolumeState.clear();
     chunkAdvanceInFlight.clear();
