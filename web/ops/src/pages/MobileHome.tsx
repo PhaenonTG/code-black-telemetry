@@ -1,9 +1,10 @@
+import { lazy, Suspense } from "react"
 import { Link } from "react-router-dom"
 import { Icon } from "../components/Icon"
 import { OpsStatusPill } from "../components/OpsStatusPill"
 import { useCoreOps } from "../core/useCoreOps"
 import { useViewport } from "../hooks/useViewport"
-import OpsWorkstation from "./OpsWorkstation"
+const OpsWorkstation = lazy(() => import("./OpsWorkstation"))
 
 const PRIMARY_ACTIONS = [
   { to: "/field", icon: "map" as const, title: "Map", detail: "Live operating picture" },
@@ -18,7 +19,7 @@ export default function MobileHome() {
 
   // Desktop keeps the map-first workstation it was designed for.  The phone gets
   // an intentionally different command surface rather than a compressed map rail.
-  if (viewport !== "phone") return <OpsWorkstation focus="OPERATIONS MAP" />
+  if (viewport !== "phone") return <Suspense fallback={<div className="page-empty" role="status">Loading map…</div>}><OpsWorkstation focus="OPERATIONS MAP" /></Suspense>
 
   const online = state.core.state === "LIVE"
   return (
@@ -31,14 +32,14 @@ export default function MobileHome() {
         <Link to="/system" className="mobile-home__header-link" aria-label="Open system status"><Icon name="system" /></Link>
       </header>
 
-      <section className="mobile-home__readiness" aria-label="Operations readiness">
+      <section className="mobile-home__readiness" data-state={state.core.state} aria-label="Operations readiness">
         <div className="mobile-home__readiness-head">
           <span className={online ? "mobile-home__signal mobile-home__signal--live" : "mobile-home__signal"} />
-          <strong>{online ? "OPS READY" : "OPS CHECKING"}</strong>
+          <strong>{online ? "CORE ONLINE" : `CORE ${state.core.state}`}</strong>
           <OpsStatusPill state={state.core.state} label="CORE" />
         </div>
         <h1>Operations</h1>
-        <p>{state.stormIntel.detail || "Live status and decision tools for the field."}</p>
+        <p>{state.core.detail || "Live status and decision tools for the field."}</p>
         <Link to="/system" className="mobile-home__manage">Manage <Icon name="chevron" /></Link>
       </section>
 

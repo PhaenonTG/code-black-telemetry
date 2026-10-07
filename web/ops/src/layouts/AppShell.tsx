@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { useLocation } from "react-router-dom"
 import { useViewport } from "../hooks/useViewport"
 import { browserLocationAdapter, type LocationState } from "../adapters"
 import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings"
@@ -28,15 +29,26 @@ function locationLabel(state: LocationState): string {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const viewport = useViewport()
+  const { pathname } = useLocation()
+  const contentRef = useRef<HTMLElement>(null)
   const [location, setLocation] = useState<LocationState>({ status: "requesting" })
   const [collapsed, setCollapsed] = useState(readSidebarCollapsed)
 
+  // This shell, not the document, owns scrolling. Route changes must not inherit
+  // the scroll position of the previous long page (e.g. Settings -> Home).
+  useLayoutEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, left: 0, behavior: "instant" })
+  }, [pathname])
+
   useEffect(() => {
+    // Phone chrome has no GPS readout. Map/weather routes own their own location
+    // subscriptions; avoid an invisible, persistent watcher on every phone page.
+    if (viewport === "phone") return
     let cancelled = false
     void browserLocationAdapter.getCurrent().then((s) => { if (!cancelled) setLocation(s) })
     const unwatch = browserLocationAdapter.watch((s) => { if (!cancelled) setLocation(s) })
     return () => { cancelled = true; unwatch() }
-  }, [])
+  }, [viewport])
 
   // Nearby (gas/food/hotel/ER) defaults on for the native in-vehicle app, where it's core to the
   // chase experience -- OPS web is a shared dashboard viewed by more than just the person driving,
@@ -59,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (viewport === "phone") {
     return (
       <div className="shell shell--phone">
-        <main className="shell__content">{children}</main>
+        <main ref={contentRef} className="shell__content">{children}</main>
         <BottomNav />
       </div>
     )
@@ -79,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar rail={rail} collapsible={collapsible} onToggleCollapse={collapsible ? toggleCollapsed : undefined} />
       <div className="shell__main">
         <StatusBar locationLabel={locationLabel(location)} />
-        <main className="shell__content">{children}</main>
+        <main ref={contentRef} className="shell__content">{children}</main>
       </div>
     </div>
   )
