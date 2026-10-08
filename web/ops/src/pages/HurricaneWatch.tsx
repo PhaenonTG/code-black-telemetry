@@ -15,7 +15,7 @@ type HurricaneSnapshot = {
   storm?: { id: string; name: string; classification: string; intensity: string; pressure: string; latitudeNumeric: number; longitudeNumeric: number; movementDir: number; movementSpeed: number; lastUpdate: string; forecastGraphics?: { url: string }; publicAdvisory?: { url: string } };
   track?: TrackPoint[]; watch_point?: { label: string; latitude: number; longitude: number };
   assessment?: { updated_at: string; advisory: string; advisory_changed: boolean; intensity_mph: number; intensity_change_mph: number | null; center_distance_miles: number; forecast_point_distance_miles: number | null; closest_forecast_hour: number | null; summary: string; limitations: string };
-  alerts?: Alert[]; alerts_status?: string; reports?: Report[]; reports_status?: string;
+  alerts?: Alert[]; alerts_status?: string; alerts_checked_at?: string; reports?: Report[]; reports_status?: string;
   ai?: { status: string; summary?: string; supporting_factors?: string; limiting_factors?: string; uncertainties?: string; recommended_attention?: string };
   history?: { checked_at?: string; advisory?: string; intensity_mph?: number; summary?: string }[];
 };
@@ -91,6 +91,18 @@ export default function HurricaneWatch() {
     const load = async () => {
       try {
         const next = await fetchForecast<HurricaneSnapshot>(config, "hurricane-watch");
+        if (next.watch_point) {
+          const params = new URLSearchParams({ latitude: String(next.watch_point.latitude), longitude: String(next.watch_point.longitude) });
+          try {
+            const warnings = await fetchForecast<{ status: string; alerts: Alert[]; queried_at?: string }>(config, `alerts?${params}`);
+            next.alerts = warnings.alerts;
+            next.alerts_status = warnings.status;
+            next.alerts_checked_at = warnings.queried_at;
+          } catch {
+            next.alerts = [];
+            next.alerts_status = "unavailable";
+          }
+        }
         if (live) { setData(next); setError(""); }
       } catch (cause) {
         if (live) setError(cause instanceof Error ? cause.message : "Hurricane watch is unavailable");
@@ -123,7 +135,7 @@ export default function HurricaneWatch() {
         {data.ai?.status === "ready" ? <div className="hurricane-watch__ai"><h3>AI findings</h3><p>{data.ai.summary}</p>{data.ai.supporting_factors && <p><b>Evidence:</b> {data.ai.supporting_factors}</p>}{data.ai.limiting_factors && <p><b>Limits:</b> {data.ai.limiting_factors}</p>}{data.ai.uncertainties && <p><b>Uncertainty:</b> {data.ai.uncertainties}</p>}</div>
           : <p className="hurricane-watch__caution">AI commentary unavailable for this cycle; the official source assessment is current.</p>}
       </section>
-      <section className="hurricane-watch__panel"><h2>Grand Bay warning watch</h2><p>{data.watch_point?.label} · {data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} active NWS alerts` : "NWS alerts unavailable"}</p>
+      <section className="hurricane-watch__panel"><h2>Grand Bay warning watch</h2><p>{data.watch_point?.label} · {data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} active NWS alerts` : "NWS alerts unavailable"}{data.alerts_checked_at ? ` · checked ${time(data.alerts_checked_at)}` : ""}</p>
         {data.alerts?.map((alert) => <details key={alert.id}><summary>{alert.event} · {alert.severity}</summary><p>{alert.headline}</p><p>{alert.description}</p><small>Expires {time(alert.expires)}</small>{alert.url && <p><a href={alert.url} target="_blank" rel="noreferrer">Official warning ↗</a></p>}</details>)}
       </section>
       <section className="hurricane-watch__panel"><h2>Preliminary storm reports</h2><p>Mobile NWS office · last 36 hours · {data.reports_status === "ready" ? `${data.reports?.length ?? 0} products` : "Feed unavailable"}</p>
