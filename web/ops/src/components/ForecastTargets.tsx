@@ -9,7 +9,8 @@ type Candidate = {
   forecast_hour: number; candidate_index: number; classification: string; score: number;
   distance_miles: number; hazard_screening_indices: Record<string, number>; missing_fields: string[];
   briefing_status?: string; briefing_notice?: string; change_from_previous?: string;
-  automatic_review?: { status?: string; summary?: string; advisory?: boolean };
+  automatic_review?: { status?: string; summary?: string; advisory?: boolean; briefing?: { bottom_line?: string; why?: string; what_could_invalidate?: string; uncertainties?: string; storm_mode?: string; initiation?: string; attention?: string; data_boundary?: string } };
+  rap_agreement?: { status?: string; model?: string; summary?: string; mlcape?: number; mlcin?: number };
 };
 type Result = { candidates: Candidate[]; notice: string };
 type Alert = { id?: string; event?: string; headline?: string; severity?: string; effective?: string; expires?: string; description?: string; sender?: string };
@@ -95,7 +96,8 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
           <p>Route: {candidate.arrival.status === "unknown" ? "unknown — reachability not established" : `${candidate.arrival.duration_minutes} min · ${candidate.arrival.status === "reachable" ? "arrives before selected margin" : "too late for selected margin"}`}</p>
           {candidate.change_from_previous && <p className="forecast-change">{candidate.change_from_previous}</p>}
           <details><summary>Numerical screening evidence</summary><p>Environment index: {candidate.score.toFixed(2)}. These indices are not probabilities or calibrated threat levels.</p>{["tornado", "hail", "wind"].map((hazard) => <p key={hazard}>{hazard}: {candidate.hazard_screening_indices[hazard]?.toFixed(2) ?? "insufficient fields"}</p>)}<p>Missing: {candidate.missing_fields.join(", ") || "none of the screening fields"}</p></details>
-          {candidate.automatic_review?.summary && <p className="forecast-briefing"><strong>Automatic briefing:</strong> {candidate.automatic_review.summary}</p>}
+          {candidate.rap_agreement && <p className="forecast-change"><strong>RAP agreement · {candidate.rap_agreement.status ?? "unknown"}:</strong> {candidate.rap_agreement.summary}</p>}
+          {candidate.automatic_review?.briefing ? <details className="forecast-briefing" open><summary>Automatic AI briefing</summary><p><strong>Bottom line:</strong> {candidate.automatic_review.briefing.bottom_line}</p>{candidate.automatic_review.briefing.why && <p><strong>Why this area:</strong> {candidate.automatic_review.briefing.why}</p>}{candidate.automatic_review.briefing.initiation && <p><strong>Initiation:</strong> {candidate.automatic_review.briefing.initiation}</p>}{candidate.automatic_review.briefing.storm_mode && <p><strong>Storm mode:</strong> {candidate.automatic_review.briefing.storm_mode}</p>}{candidate.automatic_review.briefing.what_could_invalidate && <p><strong>What could invalidate it:</strong> {candidate.automatic_review.briefing.what_could_invalidate}</p>}{candidate.automatic_review.briefing.uncertainties && <p><strong>Uncertainty:</strong> {candidate.automatic_review.briefing.uncertainties}</p>}<p className="forecast-source">{candidate.automatic_review.briefing.data_boundary}</p></details> : candidate.automatic_review?.summary && <p className="forecast-briefing"><strong>Automatic briefing:</strong> {candidate.automatic_review.summary}</p>}
           {candidate.briefing_status === "pending" && <p className="forecast-source">Automatic briefing is being prepared for this completed model run.</p>}
           {import.meta.env.VITE_FORECAST_AI_ENABLED === "1" && <><button type="button" className="page-action-link" onClick={() => void review(candidate)}>Refresh AI review</button>{reviews[id] && <p>{reviews[id]}</p>}</>}
         </article>;
