@@ -20,13 +20,14 @@ type HurricaneSnapshot = {
   observed_trend?: { period_hours: number | null; wind_change_mph: number | null; pressure_change_mb: number | null; baseline_time?: string };
   assessment?: { updated_at: string; advisory: string; advisory_changed: boolean; intensity_mph: number; intensity_change_mph: number | null; center_distance_miles: number; forecast_point_distance_miles: number | null; closest_forecast_hour: number | null; summary: string; limitations: string };
   alerts?: Alert[]; alerts_status?: string; alerts_checked_at?: string; reports?: Report[]; reports_status?: string;
-  ai?: { status: string; summary?: string; supporting_factors?: string; limiting_factors?: string; uncertainties?: string; recommended_attention?: string };
+  ai?: { status: string; summary?: string; supporting_factors?: string | string[]; limiting_factors?: string | string[]; uncertainties?: string | string[]; recommended_attention?: string | string[] };
   history?: { checked_at?: string; advisory?: string; intensity_mph?: number; summary?: string }[];
 };
 
 const time = (value?: string) => value ? new Date(value).toLocaleString() : "Unavailable";
 const shortTime = (value?: string) => value ? new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric" }) : "—";
 const signed = (value: number | null | undefined, suffix: string) => value == null ? "Not available" : `${value > 0 ? "+" : ""}${value} ${suffix}`;
+const narrative = (value?: string | string[]) => Array.isArray(value) ? value.join("; ") : value;
 const line = (points: { latitude: number; longitude: number }[]) => ({
   type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) },
 });
@@ -150,7 +151,8 @@ function shareText(data: HurricaneSnapshot) {
   const active = data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} active NWS alert(s) at Grand Bay` : "NWS alert status unavailable";
   const warnings = data.alerts_status === "ready" ? (data.alerts ?? []).slice(0, 4).map((alert) => `• ${alert.event ?? "Warning"}: ${alert.headline ?? "See official NWS alert"} (expires ${time(alert.expires)})`).join("\n") : "";
   const trend = data.observed_trend?.wind_change_mph == null ? "Observed trend unavailable" : `Observed wind change: ${signed(data.observed_trend.wind_change_mph, "mph")} over ${data.observed_trend.period_hours}h`;
-  return `${data.storm!.name} · Grand Bay family watch\nNHC advisory ${a.advisory} · ${time(data.storm?.lastUpdate)}\nMax wind ${a.intensity_mph} mph · ${data.storm!.pressure} mb · center ${a.center_distance_miles} mi from watch point\n${trend}\n${active}${warnings ? `\n${warnings}` : ""}\n${a.summary}\nOfficial advisory: ${data.storm?.publicAdvisory?.url ?? "https://www.nhc.noaa.gov/"}\nOPS map: ${window.location.origin}/hurricane\nForecasts change. Follow NHC/NWS warnings and local emergency officials.`;
+  const aiRead = data.ai?.status === "ready" && data.ai.summary ? `\nAegis interpretation (not official): ${data.ai.summary}` : "";
+  return `${data.storm!.name} · Grand Bay family watch\nNHC advisory ${a.advisory} · ${time(data.storm?.lastUpdate)}\nMax wind ${a.intensity_mph} mph · ${data.storm!.pressure} mb · center ${a.center_distance_miles} mi from watch point\n${trend}\n${active}${warnings ? `\n${warnings}` : ""}\n${a.summary}${aiRead}\nOfficial advisory: ${data.storm?.publicAdvisory?.url ?? "https://www.nhc.noaa.gov/"}\nOPS map: ${window.location.origin}/hurricane\nForecasts change. Follow NHC/NWS warnings and local emergency officials.`;
 }
 
 export default function HurricaneWatch() {
@@ -226,7 +228,7 @@ export default function HurricaneWatch() {
         </div><div className="hurricane-watch__brief-side"><strong>{data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} active NWS alerts` : "Alerts unavailable"}</strong><span>Watch point checked {time(data.alerts_checked_at)}</span><span>Hourly analysis {time(a.updated_at)}</span></div></section>
       <section className="hurricane-watch__panel"><h2>Intensity: observed + projected</h2><Trend data={data} /></section>
       <section className="hurricane-watch__panel"><h2>Aegis findings</h2>
-        {data.ai?.status === "ready" ? <div className="hurricane-watch__ai"><p>{data.ai.summary}</p>{data.ai.supporting_factors && <p><b>Evidence:</b> {data.ai.supporting_factors}</p>}{data.ai.limiting_factors && <p><b>Limits:</b> {data.ai.limiting_factors}</p>}{data.ai.uncertainties && <p><b>Uncertainty:</b> {data.ai.uncertainties}</p>}</div>
+        {data.ai?.status === "ready" ? <div className="hurricane-watch__ai"><p>{data.ai.summary}</p>{data.ai.supporting_factors && <p><b>Evidence:</b> {narrative(data.ai.supporting_factors)}</p>}{data.ai.limiting_factors && <p><b>Limits:</b> {narrative(data.ai.limiting_factors)}</p>}{data.ai.uncertainties && <p><b>Uncertainty:</b> {narrative(data.ai.uncertainties)}</p>}{data.ai.recommended_attention && <p><b>Watch next:</b> {narrative(data.ai.recommended_attention)}</p>}<p className="hurricane-watch__caution">Aegis interpretation is not an official forecast or an evacuation instruction. Follow NHC, NWS, and local officials.</p></div>
           : <p className="hurricane-watch__caution">AI commentary unavailable for this cycle; the official source assessment is current.</p>}
       </section>
       <section className="hurricane-watch__panel hurricane-watch__warnings"><h2>Grand Bay warning watch</h2><p>{data.watch_point?.label} · {data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} active NWS alerts` : "NWS alerts unavailable"}{data.alerts_checked_at ? ` · checked ${time(data.alerts_checked_at)}` : ""}</p>
