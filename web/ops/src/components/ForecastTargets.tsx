@@ -19,6 +19,8 @@ type Briefing = { run: string; run_time: string; generated_at?: string; targets:
 type BriefingsResult = { status: string; history_hours: number; briefings: Briefing[]; notice: string };
 type VerifiedEvent = { event_id?: string; event_type: string; begin?: string; latitude: number; longitude: number; distance_miles: number; tor_f_scale?: string; tor_length_miles?: number | null; tor_width_yards?: number | null; source?: string; state?: string; cz_name?: string; event_narrative?: string };
 type VerifiedEventsResult = { status: string; events: VerifiedEvent[]; notice: string; synced_at?: string };
+type AiBriefing = NonNullable<Candidate["automatic_review"]>["briefing"];
+type ReviewResult = { message: string; briefing?: AiBriefing };
 const localNow = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 const label = (value: string) => new Date(value).toLocaleString();
 
@@ -29,7 +31,7 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ candidates: (Candidate & { arrival: Arrival })[]; notice: string; alerts: AlertsResult | null; briefings: BriefingsResult | null; verified: VerifiedEventsResult | null } | null>(null);
-  const [reviews, setReviews] = useState<Record<string, string>>({});
+  const [reviews, setReviews] = useState<Record<string, ReviewResult>>({});
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   async function search() {
@@ -54,20 +56,20 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
   }
   async function review(candidate: Candidate) {
     const id = `${candidate.run}/${candidate.forecast_hour}/${candidate.candidate_index}`;
-    setReviews((previous) => ({ ...previous, [id]: "Reviewing forecast evidence…" }));
+    setReviews((previous) => ({ ...previous, [id]: { message: "Reviewing forecast evidence…" }));
     try {
       const params = new URLSearchParams({ run: candidate.run, forecast_hour: String(candidate.forecast_hour), candidate_index: String(candidate.candidate_index) });
       const signal = controller.current?.signal;
       const deadline = Date.now() + 110_000;
       while (!signal?.aborted && Date.now() < deadline) {
-        const response = await fetchForecast<{ summary: string; status: string }>(config, `review?${params}`, signal);
+        const response = await fetchForecast<{ summary: string; status: string; briefing?: AiBriefing }>(config, `review?${params}`, signal);
         if (signal?.aborted) return;
-        setReviews((previous) => ({ ...previous, [id]: `${response.status === "ready" ? "AI advisory" : "AI status"}: ${response.summary}` }));
+        setReviews((previous) => ({ ...previous, [id]: { message: `${response.status === "ready" ? "AI advisory" : "AI status"}: ${response.summary}`, briefing: response.briefing } }));
         if (response.status !== "pending") return;
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
       }
-      if (!signal?.aborted) setReviews((previous) => ({ ...previous, [id]: "AI review took too long. Numerical evidence remains available." }));
-    } catch { setReviews((previous) => ({ ...previous, [id]: "AI review unavailable; use the numerical evidence." })); }
+      if (!signal?.aborted) setReviews((previous) => ({ ...previous, [id]: { message: "AI review took too long. Numerical evidence remains available." } }));
+    } catch { setReviews((previous) => ({ ...previous, [id]: { message: "AI review unavailable; use the numerical evidence." } })); }
   }
   return <section className="forecast-timeline" aria-label="Experimental chase target screening">
     <header><div><span>EXPERIMENTAL · HRRR ONLY</span><h2>Potential target areas</h2></div></header>
@@ -99,7 +101,7 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
           {candidate.rap_agreement && <p className="forecast-change"><strong>RAP agreement · {candidate.rap_agreement.status ?? "unknown"}:</strong> {candidate.rap_agreement.summary}</p>}
           {candidate.automatic_review?.briefing ? <details className="forecast-briefing" open><summary>Automatic AI briefing</summary><p><strong>Bottom line:</strong> {candidate.automatic_review.briefing.bottom_line}</p>{candidate.automatic_review.briefing.why && <p><strong>Why this area:</strong> {candidate.automatic_review.briefing.why}</p>}{candidate.automatic_review.briefing.initiation && <p><strong>Initiation:</strong> {candidate.automatic_review.briefing.initiation}</p>}{candidate.automatic_review.briefing.storm_mode && <p><strong>Storm mode:</strong> {candidate.automatic_review.briefing.storm_mode}</p>}{candidate.automatic_review.briefing.what_could_invalidate && <p><strong>What could invalidate it:</strong> {candidate.automatic_review.briefing.what_could_invalidate}</p>}{candidate.automatic_review.briefing.uncertainties && <p><strong>Uncertainty:</strong> {candidate.automatic_review.briefing.uncertainties}</p>}<p className="forecast-source">{candidate.automatic_review.briefing.data_boundary}</p></details> : candidate.automatic_review?.summary && <p className="forecast-briefing"><strong>Automatic briefing:</strong> {candidate.automatic_review.summary}</p>}
           {candidate.briefing_status === "pending" && <p className="forecast-source">Automatic briefing is being prepared for this completed model run.</p>}
-          {import.meta.env.VITE_FORECAST_AI_ENABLED === "1" && <><button type="button" className="page-action-link" onClick={() => void review(candidate)}>Refresh AI review</button>{reviews[id] && <p>{reviews[id]}</p>}</>}
+          {import.meta.env.VITE_FORECAST_AI_ENABLED === "1" && <><button type="button" className="page-action-link" onClick={() => void review(candidate)}>Refresh AI review</button>{reviews[id] && <><p>{reviews[id].message}</p>{reviews[id].briefing?.why && <details className="forecast-briefing"><summary>AI findings</summary><p><strong>Why this area:</strong> {reviews[id].briefing.why}</p>{reviews[id].briefing.initiation && <p><strong>Initiation:</strong> {reviews[id].briefing.initiation}</p>{reviews[id].briefing.storm_mode && <p><strong>Storm mode:</strong> {reviews[id].briefing.storm_mode}</p>{reviews[id].briefing.what_could_invalidate && <p><strong>What could invalidate it:</strong> {reviews[id].briefing.what_could_invalidate}</p>{reviews[id].briefing.uncertainties && <p><strong>Uncertainty:</strong> {reviews[id].briefing.uncertainties}</p></details>}</>}</>}
         </article>;
       })}</>}
   </section>;
