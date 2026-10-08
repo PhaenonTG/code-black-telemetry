@@ -1,9 +1,10 @@
 export type ForecastDestination = { latitude: number; longitude: number; valid_time: string };
 export type Arrival = { status: "reachable" | "late" | "unknown"; duration_minutes?: number; arrival_time?: string };
+export const mapboxDeparture = (value: string) => new Date(value).toISOString().replace(/\.\d{3}Z$/, "Z");
 const cache = new Map<string, { expires: number; duration: number }>();
 
 export function arrivalStatus(durationSeconds: number, departure: string, validTime: string, marginMinutes: number): Arrival {
-  if (!Number.isFinite(durationSeconds) || durationSeconds < 0 || !Number.isFinite(Date.parse(departure)) || !Number.isFinite(Date.parse(validTime))) return { status: "unknown" };
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 0 || !Number.isFinite(marginMinutes) || marginMinutes < 0 || !Number.isFinite(Date.parse(departure)) || !Number.isFinite(Date.parse(validTime))) return { status: "unknown" };
   const arrival = Date.parse(departure) + durationSeconds * 1000;
   return { status: arrival + marginMinutes * 60_000 <= Date.parse(validTime) ? "reachable" : "late", duration_minutes: Math.ceil(durationSeconds / 60), arrival_time: new Date(arrival).toISOString() };
 }
@@ -19,9 +20,10 @@ export async function routeForecastTargets<T extends ForecastDestination>(target
       const coordinates = `${origin.longitude},${origin.latitude};${target.longitude},${target.latitude}`;
       const key = `${coordinates}/${departure}`;
       try {
-        let duration = cache.get(key)?.expires! > Date.now() ? cache.get(key)?.duration : undefined;
+        const cached = cache.get(key);
+        let duration = cached && cached.expires > Date.now() ? cached.duration : undefined;
         if (duration === undefined) {
-          const params = new URLSearchParams({ access_token: token, overview: "false", steps: "false", depart_at: departure });
+          const params = new URLSearchParams({ access_token: token, overview: "false", steps: "false", depart_at: mapboxDeparture(departure) });
           const response = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coordinates}?${params}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]) });
           if (!response.ok) continue;
           const body = await response.json() as { code?: string; routes?: { duration?: number }[] };
