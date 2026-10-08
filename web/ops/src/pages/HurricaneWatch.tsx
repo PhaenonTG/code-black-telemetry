@@ -31,7 +31,7 @@ const line = (points: { latitude: number; longitude: number }[]) => ({
   type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) },
 });
 
-function HurricaneMap({ data }: { data: HurricaneSnapshot }) {
+function HurricaneMap({ data, registerCapture, printMap }: { data: HurricaneSnapshot; registerCapture: (capture: (() => string | null) | null) => void; printMap: string | null }) {
   const host = useRef<HTMLDivElement>(null);
   const visible = useRef(true);
   const [radarOn, setRadarOn] = useState(true);
@@ -46,6 +46,10 @@ function HurricaneMap({ data }: { data: HurricaneSnapshot }) {
       container: host.current, style: "mapbox://styles/mapbox/dark-v11", preserveDrawingBuffer: true,
       center: [data.storm.longitudeNumeric, data.storm.latitudeNumeric], zoom: 4.6,
       attributionControl: false, interactive: true,
+    });
+    registerCapture(() => {
+      try { return map.getCanvas().toDataURL("image/png"); }
+      catch { return null; }
     });
     let stopRadar: (() => void) | undefined;
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
@@ -63,6 +67,11 @@ function HurricaneMap({ data }: { data: HurricaneSnapshot }) {
       map.addSource("nhc-track", { type: "geojson", data: line(data.track!) });
       map.addLayer({ id: "nhc-track-line", type: "line", source: "nhc-track",
         paint: { "line-color": "#ff6b58", "line-width": 3, "line-dasharray": [2, 1] } });
+      map.addSource("nhc-forecast-points", { type: "geojson", data: { type: "FeatureCollection", features: data.track!.map((point) => ({ type: "Feature", properties: { hour: point.hour }, geometry: { type: "Point", coordinates: [point.longitude, point.latitude] } })) } });
+      map.addLayer({ id: "nhc-forecast-dots", type: "circle", source: "nhc-forecast-points", paint: { "circle-radius": 6, "circle-color": "#ff715f", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
+      map.addSource("nhc-watch-point", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [data.watch_point!.longitude, data.watch_point!.latitude] } } });
+      map.addLayer({ id: "nhc-watch-dot", type: "circle", source: "nhc-watch-point", paint: { "circle-radius": 9, "circle-color": "#35d5ce", "circle-stroke-color": "#ffffff", "circle-stroke-width": 3 } });
+      map.addLayer({ id: "nhc-watch-label", type: "symbol", source: "nhc-watch-point", layout: { "text-field": "Grand Bay watch", "text-size": 12, "text-offset": [0, 1.5], "text-anchor": "top" }, paint: { "text-color": "#d7fffa", "text-halo-color": "#10202a", "text-halo-width": 2 } });
       for (const point of data.track!) {
         const marker = document.createElement("span");
         marker.className = "hurricane-watch__forecast-marker";
@@ -81,7 +90,7 @@ function HurricaneMap({ data }: { data: HurricaneSnapshot }) {
       bounds.extend([data.watch_point!.longitude, data.watch_point!.latitude]);
       map.fitBounds(bounds, { padding: 48, maxZoom: 6 });
     });
-    return () => { stopRadar?.(); map.remove(); };
+    return () => { registerCapture(null); stopRadar?.(); map.remove(); };
   // Minute-by-minute warning polling must not reset the map camera.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapKey, token]);
@@ -106,6 +115,7 @@ function HurricaneMap({ data }: { data: HurricaneSnapshot }) {
     </svg>;
   }
   return <div className="hurricane-watch__map-wrap"><div ref={host} className="hurricane-watch__map" role="img" aria-label="Current IEM NEXRAD radar mosaic, NHC cone, observed and forecast track, and Grand Bay watch location" />
+    {printMap && <img className="hurricane-watch__print-map" src={printMap} alt="Captured radar map for this briefing" />}
     <div className="hurricane-watch__radar"><span className={`hurricane-watch__radar-dot hurricane-watch__radar-dot--${radarStatus}`} /> Radar {radarOn ? radarStatus : "off"}<button type="button" aria-pressed={radarOn} onClick={() => setRadarOn((on) => !on)}>{radarOn ? "Hide" : "Show"}</button></div>
     <div className="hurricane-watch__legend"><span><i className="hurricane-watch__legend-observed" />Observed</span><span><i className="hurricane-watch__legend-forecast" />NHC forecast</span><span><i className="hurricane-watch__legend-watch" />Watch point</span></div>
   </div>;
@@ -148,6 +158,8 @@ export default function HurricaneWatch() {
   const [data, setData] = useState<HurricaneSnapshot | null>(null);
   const [error, setError] = useState("");
   const [shareStatus, setShareStatus] = useState("");
+  const [printMap, setPrintMap] = useState<string | null>(null);
+  const captureMap = useRef<(() => string | null) | null>(null);
   useEffect(() => {
     let live = true;
     const load = async () => {
@@ -185,6 +197,13 @@ export default function HurricaneWatch() {
       if (cause instanceof Error && cause.name !== "AbortError") setShareStatus("Sharing failed. Try Save / print PDF.");
     }
   };
+  const printBrief = () => {
+    setPrintMap(captureMap.current?.() ?? null);
+    const closedWarnings = [...document.querySelectorAll<HTMLDetailsElement>(".hurricane-watch__warnings details:not([open])")];
+    closedWarnings.forEach((item) => { item.open = true; });
+    window.addEventListener("afterprint", () => closedWarnings.forEach((item) => { item.open = false; }), { once: true });
+    window.setTimeout(() => window.print(), 150);
+  };
   return <main className="hurricane-watch">
     <header className="hurricane-watch__header"><div><h1>{data?.storm ? `${data.storm.name} storm watch` : "Gulf storm watch"}</h1><p>Grand Bay, Alabama · hourly Aegis briefing</p></div><Link to="/weather">Weather →</Link></header>
     {error && <p role="alert" className="hurricane-watch__error">{error}</p>}
@@ -193,9 +212,9 @@ export default function HurricaneWatch() {
     {data?.freshness === "stale" && <p role="alert" className="hurricane-watch__error">Hourly assessment is stale. Last successful update: {time(data.checked_at)}.</p>}
     {data?.status === "inactive" && <p className="hurricane-watch__error">NHC no longer lists this storm as active. The last assessment remains below.</p>}
     {data?.storm && a && <>
-      <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button type="button" onClick={() => void share()}>Share update</button><button type="button" onClick={() => window.print()}>Save / print PDF</button></div>
+      <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button type="button" onClick={() => void share()}>Share update</button><button type="button" onClick={printBrief}>Save / print PDF</button></div>
       {shareStatus && <p role="status" className="hurricane-watch__share-status">{shareStatus}</p>}
-      <section className="hurricane-watch__map-section" aria-label="Live radar and official track"><HurricaneMap data={data} /><p className="hurricane-watch__caption">Current IEM NEXRAD mosaic refreshes approximately every 3 minutes; radar coverage can be limited offshore. The NHC cone shows likely center positions, <b>not</b> the full area of wind, surge, rain, or tornado risk.</p></section>
+      <section className="hurricane-watch__map-section" aria-label="Live radar and official track"><HurricaneMap data={data} registerCapture={(capture) => { captureMap.current = capture; }} printMap={printMap} /><p className="hurricane-watch__caption">Current IEM NEXRAD mosaic refreshes approximately every 3 minutes; radar coverage can be limited offshore. The NHC cone shows likely center positions, <b>not</b> the full area of wind, surge, rain, or tornado risk.</p></section>
       <section className="hurricane-watch__metrics" aria-label="Official storm status">
         <div><small>{data.status === "inactive" ? "LAST NHC WIND" : "MAX WIND · NHC"}</small><strong>{a.intensity_mph} mph</strong><span>{data.storm.classification} · {data.storm.pressure} mb</span></div>
         <div><small>{data.status === "inactive" ? "LAST CENTER → WATCH POINT" : "CENTER → WATCH POINT"}</small><strong>{a.center_distance_miles} mi</strong><span>{data.status === "inactive" ? "Historical center distance" : "Current center distance"}</span></div>
@@ -210,7 +229,7 @@ export default function HurricaneWatch() {
         {data.ai?.status === "ready" ? <div className="hurricane-watch__ai"><p>{data.ai.summary}</p>{data.ai.supporting_factors && <p><b>Evidence:</b> {data.ai.supporting_factors}</p>}{data.ai.limiting_factors && <p><b>Limits:</b> {data.ai.limiting_factors}</p>}{data.ai.uncertainties && <p><b>Uncertainty:</b> {data.ai.uncertainties}</p>}</div>
           : <p className="hurricane-watch__caution">AI commentary unavailable for this cycle; the official source assessment is current.</p>}
       </section>
-      <section className="hurricane-watch__panel"><h2>Grand Bay warning watch</h2><p>{data.watch_point?.label} · {data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} active NWS alerts` : "NWS alerts unavailable"}{data.alerts_checked_at ? ` · checked ${time(data.alerts_checked_at)}` : ""}</p>
+      <section className="hurricane-watch__panel hurricane-watch__warnings"><h2>Grand Bay warning watch</h2><p>{data.watch_point?.label} · {data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} active NWS alerts` : "NWS alerts unavailable"}{data.alerts_checked_at ? ` · checked ${time(data.alerts_checked_at)}` : ""}</p>
         {data.alerts?.map((alert) => <details key={alert.id}><summary>{alert.event} · {alert.severity}</summary><p>{alert.headline}</p><p>{alert.description}</p><small>Expires {time(alert.expires)}</small>{alert.url && <p><a href={alert.url} target="_blank" rel="noreferrer">Official warning ↗</a></p>}</details>)}
       </section>
       <section className="hurricane-watch__panel"><h2>Preliminary storm reports</h2><p>Mobile NWS office · last 36 hours · {data.reports_status === "ready" ? `${data.reports?.length ?? 0} products` : "Feed unavailable"}</p>
