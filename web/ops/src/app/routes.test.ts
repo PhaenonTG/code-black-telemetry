@@ -7,6 +7,7 @@ describe("OPS workstation routes", () => {
     expect(ROUTES.map((route) => route.label)).toEqual([
       "OPERATIONS MAP",
       "WEATHER ANALYSIS",
+      "HURRICANE WATCH",
       "RADAR LAB",
       "MODELS",
       "SOUNDINGS",
@@ -31,7 +32,7 @@ describe("OPS workstation routes", () => {
       "OPERATIONS MAP", "RADAR LAB", "MORE",
     ]);
     expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual([
-      "WEATHER ANALYSIS", "SOUNDINGS", "CHASE OPERATIONS", "FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "SETTINGS",
+      "WEATHER ANALYSIS", "HURRICANE WATCH", "SOUNDINGS", "CHASE OPERATIONS", "FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "SETTINGS",
     ]);
   });
 });

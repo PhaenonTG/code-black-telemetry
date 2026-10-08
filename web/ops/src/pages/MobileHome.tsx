@@ -48,6 +48,7 @@ export default function MobileHome() {
       </section>
 
       <Link to="/ai" className="mobile-action mobile-action--aegis"><Icon name="ops" /><span><b>Aegis</b><small>Open console</small></span><Icon name="chevron" className="mobile-action__chevron" /></Link>
+      <Link to="/hurricane" className="mobile-action mobile-action--aegis"><Icon name="cloud" /><span><b>Hurricane watch</b><small>Isaias · Grand Bay · hourly assessment</small></span><Icon name="chevron" className="mobile-action__chevron" /></Link>
 
       <section className="mobile-home__watch" aria-label="Watch locations">
         <div className="mobile-home__section-title"><span>Watch locations</span><Link to="/weather">Weather</Link></div>
