@@ -11,7 +11,7 @@ type TrackPoint = { hour: number; latitude: number; longitude: number; wind_mph:
 type Alert = { id?: string; event?: string; headline?: string; severity?: string; expires?: string; description?: string; url?: string };
 type Report = { issued: string; office: string; text: string; url: string };
 type HurricaneSnapshot = {
-  status: "active" | "inactive" | "pending"; notice?: string; checked_at?: string;
+  status: "active" | "inactive" | "pending"; notice?: string; checked_at?: string; freshness?: "current" | "stale";
   storm?: { id: string; name: string; classification: string; intensity: string; pressure: string; latitudeNumeric: number; longitudeNumeric: number; movementDir: number; movementSpeed: number; lastUpdate: string; forecastGraphics?: { url: string }; publicAdvisory?: { url: string } };
   track?: TrackPoint[]; watch_point?: { label: string; latitude: number; longitude: number };
   assessment?: { updated_at: string; advisory: string; advisory_changed: boolean; intensity_mph: number; intensity_change_mph: number | null; center_distance_miles: number; forecast_point_distance_miles: number | null; closest_forecast_hour: number | null; summary: string; limitations: string };
@@ -27,9 +27,10 @@ const line = (points: TrackPoint[]) => ({
 
 function HurricaneMap({ data }: { data: HurricaneSnapshot }) {
   const host = useRef<HTMLDivElement>(null);
+  const token = mapboxAccessToken();
   useEffect(() => {
-    if (!host.current || !data.storm || !data.watch_point || !data.track?.length || !mapboxAccessToken()) return;
-    mapboxgl.accessToken = mapboxAccessToken();
+    if (!host.current || !data.storm || !data.watch_point || !data.track?.length || !token) return;
+    mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({
       container: host.current, style: "mapbox://styles/mapbox/dark-v11",
       center: [data.storm.longitudeNumeric, data.storm.latitudeNumeric], zoom: 4.6,
@@ -59,7 +60,25 @@ function HurricaneMap({ data }: { data: HurricaneSnapshot }) {
       map.fitBounds(bounds, { padding: 48, maxZoom: 6 });
     });
     return () => map.remove();
-  }, [data]);
+  }, [data, token]);
+  if (!token && data.track?.length && data.watch_point) {
+    const places = [...data.track, data.watch_point];
+    const west = Math.min(...places.map((point) => point.longitude)) - 1.5;
+    const east = Math.max(...places.map((point) => point.longitude)) + 1.5;
+    const south = Math.min(...places.map((point) => point.latitude)) - 1;
+    const north = Math.max(...places.map((point) => point.latitude)) + 1;
+    const x = (longitude: number) => 35 + 530 * (longitude - west) / (east - west);
+    const y = (latitude: number) => 305 - 270 * (latitude - south) / (north - south);
+    return <svg className="hurricane-watch__map hurricane-watch__diagram" viewBox="0 0 600 340" role="img" aria-label="NHC forecast center positions and Grand Bay watch point">
+      <rect width="600" height="340" fill="#0a1822" />
+      {[1, 2, 3, 4].map((step) => <g key={step} stroke="#214052" strokeWidth="1"><line x1={step * 120} y1="0" x2={step * 120} y2="340" /><line x1="0" y1={step * 68} x2="600" y2={step * 68} /></g>)}
+      <polyline fill="none" stroke="#ff6b58" strokeWidth="3" strokeDasharray="7 5" points={data.track.map((point) => `${x(point.longitude)},${y(point.latitude)}`).join(" ")} />
+      {data.track.map((point) => <g key={point.hour}><circle cx={x(point.longitude)} cy={y(point.latitude)} r="6" fill="#ff6b58" stroke="white" strokeWidth="2" /><text x={x(point.longitude) + 10} y={y(point.latitude) - 9} fill="#fff" fontSize="12">+${point.hour}h · ${point.wind_mph ?? "?"} mph</text></g>)}
+      <circle cx={x(data.watch_point.longitude)} cy={y(data.watch_point.latitude)} r="8" fill="#35d5ce" stroke="white" strokeWidth="3" />
+      <text x={Math.min(460, x(data.watch_point.longitude) + 12)} y={y(data.watch_point.latitude) + 4} fill="#aefbf7" fontSize="13">Grand Bay watch</text>
+      <text x="15" y="326" fill="#90a5b4" fontSize="11">NHC forecast points · schematic coordinate plot</text>
+    </svg>;
+  }
   return <div ref={host} className="hurricane-watch__map" role="img" aria-label="NHC forecast center points and Grand Bay watch location" />;
 }
 
@@ -87,6 +106,7 @@ export default function HurricaneWatch() {
     {error && <p role="alert" className="hurricane-watch__error">{error}</p>}
     {!data && !error && <p role="status">Loading the latest assessment…</p>}
     {data?.status === "pending" && <p role="status">{data.notice}</p>}
+    {data?.freshness === "stale" && <p role="alert" className="hurricane-watch__error">Hourly assessment is stale. Last successful update: {time(data.checked_at)}.</p>}
     {data?.status === "inactive" && <p className="hurricane-watch__error">NHC no longer lists this storm as active. The last assessment remains below.</p>}
     {data?.storm && a && <>
       <section className="hurricane-watch__metrics" aria-label="Official storm status">
