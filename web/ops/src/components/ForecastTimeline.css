@@ -14,6 +14,11 @@
 .forecast-alerts summary { color: #f0c36a; cursor: pointer; font-weight: 700; }
 .forecast-briefing { border-left: 2px solid #52b788; color: #d4e7dc; margin: 10px 0; padding-left: 9px; }
 .forecast-change { color: #a8c5e3; font-size: 13px; }
+.forecast-history { border-top: 1px solid #384455; margin: 14px 0; padding-top: 10px; }
+.forecast-history summary { color: #d5deea; cursor: pointer; font-weight: 700; }
+.forecast-history article { border-top: 1px solid #252e39; margin-top: 10px; padding-top: 8px; }
+.forecast-history h3 { font-size: 14px; margin: 0; }
+.forecast-history p { color: #b8c2cd; font-size: 13px; line-height: 1.45; }
 .forecast-note, .forecast-source, .forecast-timeline details { color: #b4bfcc; font-size: 13px; line-height: 1.5; }
 .forecast-notice { border-left: 2px solid #e6b252; padding-left: 10px; color: #efd199; font-size: 13px; }
 .forecast-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
