@@ -122,13 +122,13 @@ export default function HurricaneWatch() {
     {data?.status === "inactive" && <p className="hurricane-watch__error">NHC no longer lists this storm as active. The last assessment remains below.</p>}
     {data?.storm && a && <>
       <section className="hurricane-watch__metrics" aria-label="Official storm status">
-        <div><small>MAX WIND · NHC</small><strong>{a.intensity_mph} mph</strong><span>{data.storm.classification} · {data.storm.pressure} mb</span></div>
-        <div><small>CENTER → WATCH POINT</small><strong>{a.center_distance_miles} mi</strong><span>Current center distance</span></div>
-        <div><small>CLOSEST FORECAST CENTER</small><strong>{a.forecast_point_distance_miles ?? "—"} mi</strong><span>{a.closest_forecast_hour != null ? `At NHC +${a.closest_forecast_hour}h point` : "Track unavailable"}</span></div>
+        <div><small>{data.status === "inactive" ? "LAST NHC WIND" : "MAX WIND · NHC"}</small><strong>{a.intensity_mph} mph</strong><span>{data.storm.classification} · {data.storm.pressure} mb</span></div>
+        <div><small>{data.status === "inactive" ? "LAST CENTER → WATCH POINT" : "CENTER → WATCH POINT"}</small><strong>{a.center_distance_miles} mi</strong><span>{data.status === "inactive" ? "Historical center distance" : "Current center distance"}</span></div>
+        <div><small>{data.status === "inactive" ? "LAST FORECAST CENTER" : "CLOSEST FORECAST CENTER"}</small><strong>{a.forecast_point_distance_miles ?? "—"} mi</strong><span>{a.closest_forecast_hour != null ? `At NHC +${a.closest_forecast_hour}h point` : "Track unavailable"}</span></div>
       </section>
       <p className="hurricane-watch__stamp">NHC advisory {a.advisory} · issued {time(data.storm.lastUpdate)} · evaluated {time(a.updated_at)}</p>
       <HurricaneMap data={data} />
-      <p className="hurricane-watch__caption">Dots are official NHC forecast center positions and wind estimates. The connecting line is for orientation only. Storm effects extend well beyond the center.</p>
+      <p className="hurricane-watch__caption">{data.status === "inactive" ? "Last published NHC forecast. " : ""}Dots are official NHC forecast center positions and wind estimates. The connecting line is for orientation only. Storm effects extend well beyond the center.</p>
       <section className="hurricane-watch__panel"><h2>Aegis assessment</h2><p>{a.summary}</p>
         {a.intensity_change_mph != null && <p>Wind change since the prior hourly assessment: {a.intensity_change_mph > 0 ? "+" : ""}{a.intensity_change_mph} mph.</p>}
         <p className="hurricane-watch__caution">{a.limitations}</p>
