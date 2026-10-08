@@ -16,6 +16,8 @@ type Alert = { id?: string; event?: string; headline?: string; severity?: string
 type AlertsResult = { status: string; source: string; queried_at?: string; alerts: Alert[]; notice: string };
 type Briefing = { run: string; run_time: string; generated_at?: string; targets: Array<{ latitude: number; longitude: number; score: number; classification: string; ai_review?: { summary?: string }; change_from_previous?: string }> };
 type BriefingsResult = { status: string; history_hours: number; briefings: Briefing[]; notice: string };
+type VerifiedEvent = { event_id?: string; event_type: string; begin?: string; latitude: number; longitude: number; distance_miles: number; tor_f_scale?: string; tor_length_miles?: number | null; tor_width_yards?: number | null; source?: string; state?: string; cz_name?: string; event_narrative?: string };
+type VerifiedEventsResult = { status: string; events: VerifiedEvent[]; notice: string; synced_at?: string };
 const localNow = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 const label = (value: string) => new Date(value).toLocaleString();
 
@@ -25,7 +27,7 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
   const [margin, setMargin] = useState(30);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<{ candidates: (Candidate & { arrival: Arrival })[]; notice: string; alerts: AlertsResult | null; briefings: BriefingsResult | null } | null>(null);
+  const [result, setResult] = useState<{ candidates: (Candidate & { arrival: Arrival })[]; notice: string; alerts: AlertsResult | null; briefings: BriefingsResult | null; verified: VerifiedEventsResult | null } | null>(null);
   const [reviews, setReviews] = useState<Record<string, string>>({});
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
@@ -38,13 +40,14 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
       const date = new Date(departure);
       if (!Number.isFinite(date.getTime()) || date.getTime() < Date.now() - 60_000) throw new Error("Choose a departure time now or in the future.");
       const params = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radius_miles: String(radius) });
-      const [data, alerts, briefings] = await Promise.all([
+      const [data, alerts, briefings, verified] = await Promise.all([
         fetchForecast<Result>(config, `targets?${params}`, active.signal),
         fetchForecast<AlertsResult>(config, `alerts?${params}`, active.signal).catch(() => null),
         fetchForecast<BriefingsResult>(config, "briefings", active.signal).catch(() => null),
+        fetchForecast<VerifiedEventsResult>(config, `verified-events?${params}`, active.signal).catch(() => null),
       ]);
       const routed = await routeForecastTargets(data.candidates, { latitude, longitude }, mapboxAccessToken(), date.toISOString(), margin, active.signal);
-      if (!active.signal.aborted) setResult({ candidates: routed.sort((a, b) => Number(b.arrival.status === "reachable") - Number(a.arrival.status === "reachable")).slice(0, 5), notice: data.notice, alerts, briefings });
+      if (!active.signal.aborted) setResult({ candidates: routed.sort((a, b) => Number(b.arrival.status === "reachable") - Number(a.arrival.status === "reachable")).slice(0, 5), notice: data.notice, alerts, briefings, verified });
     } catch (cause) { if (!active.signal.aborted) setError(cause instanceof Error ? cause.message : "Target search unavailable"); }
     finally { if (!active.signal.aborted) setBusy(false); }
   }
@@ -81,6 +84,7 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
         <p className="forecast-notice">{result.alerts.notice}</p>
       </section>}
       {result.briefings && <details className="forecast-history"><summary>Run briefing history · last {result.briefings.history_hours} hours</summary><p className="forecast-note">{result.briefings.notice}</p>{result.briefings.briefings.map((briefing) => <article key={briefing.run}><h3>{label(briefing.run_time)}</h3>{briefing.targets.map((target, index) => <p key={`${briefing.run}-${index}`}><strong>{target.classification === "forecast_storm" ? "Forecast storm" : "Conditional"}</strong> · {target.latitude.toFixed(2)}, {target.longitude.toFixed(2)} · index {target.score.toFixed(2)}{target.change_from_previous ? <><br />{target.change_from_previous}</> : null}{target.ai_review?.summary ? <><br />AI: {target.ai_review.summary}</> : null}</p>)}</article>)}</details>}
+      {result.verified && <details className="forecast-history"><summary>Verified NCEI event history</summary><p className="forecast-note">{result.verified.notice}</p>{result.verified.events.slice(0, 10).map((event) => <article key={event.event_id ?? `${event.begin}-${event.latitude}`}><h3>{event.event_type}{event.tor_f_scale ? ` · ${event.tor_f_scale}` : ""} · {event.distance_miles} mi</h3><p>{event.begin ?? "Date unavailable"} · {event.cz_name ?? event.state ?? "Location unavailable"}<br />{event.source ?? "Source unavailable"}{event.tor_length_miles != null ? ` · ${event.tor_length_miles} mi path` : ""}{event.tor_width_yards != null ? ` · ${event.tor_width_yards} yd wide` : ""}{event.event_narrative ? <><br />{event.event_narrative}</> : null}</p></article>)}</details>}
       {!result.candidates.length && <p>No qualifying areas in the available forecast hours. This does not mean severe weather is impossible.</p>}
       {result.candidates.map((candidate) => {
         const id = `${candidate.run}/${candidate.forecast_hour}/${candidate.candidate_index}`;

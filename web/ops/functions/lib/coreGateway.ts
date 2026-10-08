@@ -52,6 +52,7 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "api/forecast/v1/point": { upstreamPath: "/api/forecast/v1/point", allowedQueryParams: ["latitude", "longitude", "run"] },
   "api/forecast/v1/alerts": { upstreamPath: "/api/forecast/v1/alerts", allowedQueryParams: ["latitude", "longitude"] },
   "api/forecast/v1/briefings": { upstreamPath: "/api/forecast/v1/briefings", allowedQueryParams: [] },
+  "api/forecast/v1/verified-events": { upstreamPath: "/api/forecast/v1/verified-events", allowedQueryParams: ["latitude", "longitude", "radius_miles", "year"] },
   "health": { upstreamPath: "/health", allowedQueryParams: [] },
   "api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
