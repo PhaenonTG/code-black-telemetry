@@ -28,6 +28,7 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
   const [radius, setRadius] = useState(500);
   const [departure, setDeparture] = useState(localNow);
   const [margin, setMargin] = useState(30);
+  const [origin, setOrigin] = useState({ latitude, longitude, source: "selected map point" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ candidates: (Candidate & { arrival: Arrival })[]; notice: string; alerts: AlertsResult | null; briefings: BriefingsResult | null; verified: VerifiedEventsResult | null } | null>(null);
@@ -42,18 +43,27 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
     try {
       const date = new Date(departureOverride);
       if (!Number.isFinite(date.getTime()) || date.getTime() < Date.now() - 60_000) throw new Error("Choose a departure time now or in the future.");
-      const params = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radius_miles: String(radius) });
+      const params = new URLSearchParams({ latitude: String(origin.latitude), longitude: String(origin.longitude), radius_miles: String(radius) });
       const [data, alerts, briefings, verified] = await Promise.all([
         fetchForecast<Result>(config, `targets?${params}`, active.signal),
         fetchForecast<AlertsResult>(config, `alerts?${params}`, active.signal).catch(() => null),
         fetchForecast<BriefingsResult>(config, "briefings", active.signal).catch(() => null),
         fetchForecast<VerifiedEventsResult>(config, `verified-events?${params}`, active.signal).catch(() => null),
       ]);
-      const routed = await routeForecastTargets(data.candidates, { latitude, longitude }, mapboxAccessToken(), date.toISOString(), margin, active.signal);
+      const routed = await routeForecastTargets(data.candidates, origin, mapboxAccessToken(), date.toISOString(), margin, active.signal);
       if (!active.signal.aborted) setResult({ candidates: routed.sort((a, b) => Number(b.arrival.status === "reachable") - Number(a.arrival.status === "reachable")).slice(0, 5), notice: data.notice, alerts, briefings, verified });
     } catch (cause) { if (!active.signal.aborted) setError(cause instanceof Error ? cause.message : "Target search unavailable"); }
     finally { if (!active.signal.aborted) setBusy(false); }
   }
+  useEffect(() => {
+    setOrigin({ latitude, longitude, source: "selected map point" });
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => setOrigin({ latitude: position.coords.latitude, longitude: position.coords.longitude, source: "device location" }),
+      () => undefined,
+      { enableHighAccuracy: false, maximumAge: 5 * 60_000, timeout: 8_000 },
+    );
+  }, [latitude, longitude]);
   useEffect(() => {
     const departNow = localNow();
     setDeparture(departNow);
@@ -62,7 +72,7 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
     return () => window.clearInterval(refresh);
     // A new selected map/device location is the origin; periodic refresh keeps the snapshot current.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latitude, longitude]);
+  }, [origin.latitude, origin.longitude]);
   async function review(candidate: Candidate) {
     const id = `${candidate.run}/${candidate.forecast_hour}/${candidate.candidate_index}`;
     setReviews((previous) => ({ ...previous, [id]: { message: "Reviewing forecast evidence…" } }));
@@ -82,7 +92,7 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
   }
   return <section className="forecast-timeline" aria-label="Experimental chase target screening">
     <header><div><span>AEGIS SNAPSHOT · HRRR + RAP</span><h2>Current target picture</h2></div></header>
-    <p className="forecast-note">Aegis is screening the latest completed forecast from your selected map/device location ({latitude.toFixed(3)}, {longitude.toFixed(3)}), with travel calculated from now. It refreshes every five minutes and when you choose a new location.</p>
+    <p className="forecast-note">Aegis is screening the latest completed forecast from your {origin.source} ({origin.latitude.toFixed(3)}, {origin.longitude.toFixed(3)}), with travel calculated from now. It refreshes every five minutes and when you choose a new location.</p>
     <button type="button" className="page-action-link" disabled={busy} onClick={() => void search(localNow())}>{busy ? "Updating Aegis snapshot…" : "Refresh snapshot"}</button>
     <details className="forecast-history"><summary>Optional route assumptions</summary><label>Search radius (miles)<input disabled={busy} type="number" min="25" max="1000" value={radius} onChange={(event) => { setRadius(Number(event.target.value)); setResult(null); }} /></label><label>Arrival margin (minutes)<input disabled={busy} type="number" min="0" max="180" value={margin} onChange={(event) => { setMargin(Number(event.target.value)); setResult(null); }} /></label><button type="button" className="page-action-link" disabled={busy || radius < 25 || radius > 1000 || margin < 0 || margin > 180} onClick={() => void search(localNow())}>Apply route assumptions</button></details>
     {error && <p role="alert">{error}</p>}
