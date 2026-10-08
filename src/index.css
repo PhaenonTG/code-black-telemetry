@@ -8815,7 +8815,7 @@ body {
    with !important, scaled by the same map-zoom factor every other pin shrinks by. A fixed CSS
    size here previously ignored zoom entirely, so this badge stayed full-size at nationwide zoom
    while every dot pin around it shrank -- genuinely oversized, not just visually busy. */
-.atlas-pin-marker--station:not(.atlas-pin-marker--cluster) {
+.atlas-pin-marker--station.atlas-pin-marker--label:not(.atlas-pin-marker--cluster) {
   width: auto !important;
   height: auto !important;
   border-radius: 999px !important;

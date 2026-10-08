@@ -66,10 +66,12 @@ function operationalPinOpacity(point: PinPoint, zoom: number) {
   return point.stale ? opacity * 0.68 : opacity;
 }
 
-function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number, point: PinPoint) {
+export function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number, point: PinPoint) {
   const size = pinSizeForZoom(zoom, style.sizeScale ?? 1);
   const borderWidth = Math.max(1, size / 10);
-  if (point.markerLabel) {
+  const hasLabel = Boolean(point.markerLabel) && !(point.clusterCount && point.clusterCount > 1);
+  el.classList.toggle("atlas-pin-marker--label", hasLabel);
+  if (hasLabel) {
     // Label pins (e.g. a station's dewpoint reading) need room for text, not just a dot, so
     // AtlasMap.tsx's .atlas-pin-marker--station CSS gives them a fixed pill size via !important --
     // but a *fixed* size ignores the zoom-based shrink every other pin gets, so at nationwide zoom
@@ -85,8 +87,11 @@ function applyPinStyle(el: HTMLDivElement, style: PinStyle, zoom: number, point:
     el.style.setProperty("padding", `0 ${Math.max(2, 5 * scale)}px`, "important");
     el.style.setProperty("font-size", `${Math.max(7, 9.5 * scale)}px`, "important");
   } else {
-    el.style.width = `${size}px`;
-    el.style.height = `${size}px`;
+    // A station can lose its reading or become a cluster on the same DOM node.
+    // Remove label-only inline constraints, including their !important priority.
+    for (const property of ["min-width", "min-height", "padding", "font-size"]) el.style.removeProperty(property);
+    el.style.setProperty("width", `${size}px`);
+    el.style.setProperty("height", `${size}px`);
   }
   el.style.backgroundColor = style.color;
   el.style.border = `${borderWidth}px solid rgba(0, 0, 0, 0.65)`;
