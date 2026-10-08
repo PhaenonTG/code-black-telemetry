@@ -15,6 +15,8 @@ import { firstAvailableSource, stormIntelSummary } from "../stormIntel/format";
 import { getReverseLocality, type LocalityResult } from "../../../../src/services/situational";
 import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings";
 import { mapWorkspaceVisibility } from "../mapWorkspace";
+import { ForecastTimeline } from "../components/ForecastTimeline";
+import { ForecastTargets } from "../components/ForecastTargets";
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null;
@@ -176,6 +178,8 @@ export default function StormIntelWorkspace() {
         </aside>
       </main>
 
+      {import.meta.env.VITE_FORECAST_TIMELINE_ENABLED === "1" && selectedPoint && <ForecastTimeline config={config} latitude={selectedPoint.lat} longitude={selectedPoint.lon} />}
+      {import.meta.env.VITE_FORECAST_TARGETS_ENABLED === "1" && selectedPoint && <ForecastTargets key={`${selectedPoint.lat},${selectedPoint.lon}`} config={config} latitude={selectedPoint.lat} longitude={selectedPoint.lon} />}
       {snapshot && <>
         {(coreState.stormIntel.pointLoading || coreState.stormIntel.pointError) && <p className="ops-retained-result">Showing the previous result while the requested point is unavailable. Its location and valid time remain in Point details below.</p>}
         <StormIntelMetricBoard coreState={coreState} />

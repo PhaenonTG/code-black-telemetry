@@ -46,6 +46,10 @@ export interface AllowlistRoute {
 // paths; keeping the gateway's keys identical means this same client code needs no
 // gateway-vs-direct branching and both paths were verified live against production.
 export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
+  "api/forecast/v1/targets": { upstreamPath: "/api/forecast/v1/targets", allowedQueryParams: ["latitude", "longitude", "radius_miles"] },
+  "api/forecast/v1/review": { upstreamPath: "/api/forecast/v1/review", allowedQueryParams: ["run", "forecast_hour", "candidate_index"] },
+  "api/forecast/v1/runs": { upstreamPath: "/api/forecast/v1/runs", allowedQueryParams: [] },
+  "api/forecast/v1/point": { upstreamPath: "/api/forecast/v1/point", allowedQueryParams: ["latitude", "longitude", "run"] },
   "health": { upstreamPath: "/health", allowedQueryParams: [] },
   "api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
