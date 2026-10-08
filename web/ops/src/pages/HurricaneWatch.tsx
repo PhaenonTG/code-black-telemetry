@@ -28,6 +28,7 @@ const line = (points: TrackPoint[]) => ({
 function HurricaneMap({ data }: { data: HurricaneSnapshot }) {
   const host = useRef<HTMLDivElement>(null);
   const token = mapboxAccessToken();
+  const mapKey = JSON.stringify([data.storm?.id, data.assessment?.advisory, data.track, data.watch_point]);
   useEffect(() => {
     if (!host.current || !data.storm || !data.watch_point || !data.track?.length || !token) return;
     mapboxgl.accessToken = token;
@@ -60,7 +61,9 @@ function HurricaneMap({ data }: { data: HurricaneSnapshot }) {
       map.fitBounds(bounds, { padding: 48, maxZoom: 6 });
     });
     return () => map.remove();
-  }, [data, token]);
+  // Minute-by-minute warning polling must not reset the map camera.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapKey, token]);
   if (!token && data.track?.length && data.watch_point) {
     const places = [...data.track, data.watch_point];
     const west = Math.min(...places.map((point) => point.longitude)) - 1.5;
