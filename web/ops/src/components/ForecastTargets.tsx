@@ -34,13 +34,13 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
   const [reviews, setReviews] = useState<Record<string, ReviewResult>>({});
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
-  async function search() {
+  async function search(departureOverride = departure) {
     controller.current?.abort();
     const active = new AbortController();
     controller.current = active;
     setBusy(true); setError(""); setResult(null); setReviews({});
     try {
-      const date = new Date(departure);
+      const date = new Date(departureOverride);
       if (!Number.isFinite(date.getTime()) || date.getTime() < Date.now() - 60_000) throw new Error("Choose a departure time now or in the future.");
       const params = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radius_miles: String(radius) });
       const [data, alerts, briefings, verified] = await Promise.all([
@@ -54,9 +54,18 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
     } catch (cause) { if (!active.signal.aborted) setError(cause instanceof Error ? cause.message : "Target search unavailable"); }
     finally { if (!active.signal.aborted) setBusy(false); }
   }
+  useEffect(() => {
+    const departNow = localNow();
+    setDeparture(departNow);
+    void search(departNow);
+    const refresh = window.setInterval(() => void search(localNow()), 5 * 60_000);
+    return () => window.clearInterval(refresh);
+    // A new selected map/device location is the origin; periodic refresh keeps the snapshot current.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latitude, longitude]);
   async function review(candidate: Candidate) {
     const id = `${candidate.run}/${candidate.forecast_hour}/${candidate.candidate_index}`;
-    setReviews((previous) => ({ ...previous, [id]: { message: "Reviewing forecast evidence…" }));
+    setReviews((previous) => ({ ...previous, [id]: { message: "Reviewing forecast evidence…" } }));
     try {
       const params = new URLSearchParams({ run: candidate.run, forecast_hour: String(candidate.forecast_hour), candidate_index: String(candidate.candidate_index) });
       const signal = controller.current?.signal;
@@ -72,13 +81,10 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
     } catch { setReviews((previous) => ({ ...previous, [id]: { message: "AI review unavailable; use the numerical evidence." } })); }
   }
   return <section className="forecast-timeline" aria-label="Experimental chase target screening">
-    <header><div><span>EXPERIMENTAL · HRRR ONLY</span><h2>Potential target areas</h2></div></header>
-    <p className="forecast-note">Confirm the selected map point as your departure origin: {latitude.toFixed(3)}, {longitude.toFixed(3)}. This is model screening, not a recommendation that a chase is safe.</p>
-    <label>Search radius (miles)<input disabled={busy} type="number" min="25" max="1000" value={radius} onChange={(event) => { setRadius(Number(event.target.value)); setResult(null); }} /></label>
-    <label>Departure (your local time)<input disabled={busy} type="datetime-local" value={departure} onChange={(event) => { setDeparture(event.target.value); setResult(null); }} /></label>
-    <button type="button" disabled={busy} className="page-action-link" onClick={() => { setDeparture(localNow()); setResult(null); }}>Depart now</button>
-    <label>Arrival margin (minutes)<input disabled={busy} type="number" min="0" max="180" value={margin} onChange={(event) => { setMargin(Number(event.target.value)); setResult(null); }} /></label>
-    <button type="button" className="page-action-link" disabled={busy || radius < 25 || radius > 1000 || margin < 0 || margin > 180} onClick={() => void search()}>{busy ? "Checking forecast and routes…" : "Use this origin · Find areas"}</button>
+    <header><div><span>AEGIS SNAPSHOT · HRRR + RAP</span><h2>Current target picture</h2></div></header>
+    <p className="forecast-note">Aegis is screening the latest completed forecast from your selected map/device location ({latitude.toFixed(3)}, {longitude.toFixed(3)}), with travel calculated from now. It refreshes every five minutes and when you choose a new location.</p>
+    <button type="button" className="page-action-link" disabled={busy} onClick={() => void search(localNow())}>{busy ? "Updating Aegis snapshot…" : "Refresh snapshot"}</button>
+    <details className="forecast-history"><summary>Optional route assumptions</summary><label>Search radius (miles)<input disabled={busy} type="number" min="25" max="1000" value={radius} onChange={(event) => { setRadius(Number(event.target.value)); setResult(null); }} /></label><label>Arrival margin (minutes)<input disabled={busy} type="number" min="0" max="180" value={margin} onChange={(event) => { setMargin(Number(event.target.value)); setResult(null); }} /></label><button type="button" className="page-action-link" disabled={busy || radius < 25 || radius > 1000 || margin < 0 || margin > 180} onClick={() => void search(localNow())}>Apply route assumptions</button></details>
     {error && <p role="alert">{error}</p>}
     {result && <><p className="forecast-note">{result.notice}</p>
       {result.alerts && <section className="forecast-alerts" aria-label="Live National Weather Service alerts">
@@ -101,7 +107,20 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
           {candidate.rap_agreement && <p className="forecast-change"><strong>RAP agreement · {candidate.rap_agreement.status ?? "unknown"}:</strong> {candidate.rap_agreement.summary}</p>}
           {candidate.automatic_review?.briefing ? <details className="forecast-briefing" open><summary>Automatic AI briefing</summary><p><strong>Bottom line:</strong> {candidate.automatic_review.briefing.bottom_line}</p>{candidate.automatic_review.briefing.why && <p><strong>Why this area:</strong> {candidate.automatic_review.briefing.why}</p>}{candidate.automatic_review.briefing.initiation && <p><strong>Initiation:</strong> {candidate.automatic_review.briefing.initiation}</p>}{candidate.automatic_review.briefing.storm_mode && <p><strong>Storm mode:</strong> {candidate.automatic_review.briefing.storm_mode}</p>}{candidate.automatic_review.briefing.what_could_invalidate && <p><strong>What could invalidate it:</strong> {candidate.automatic_review.briefing.what_could_invalidate}</p>}{candidate.automatic_review.briefing.uncertainties && <p><strong>Uncertainty:</strong> {candidate.automatic_review.briefing.uncertainties}</p>}<p className="forecast-source">{candidate.automatic_review.briefing.data_boundary}</p></details> : candidate.automatic_review?.summary && <p className="forecast-briefing"><strong>Automatic briefing:</strong> {candidate.automatic_review.summary}</p>}
           {candidate.briefing_status === "pending" && <p className="forecast-source">Automatic briefing is being prepared for this completed model run.</p>}
-          {import.meta.env.VITE_FORECAST_AI_ENABLED === "1" && <><button type="button" className="page-action-link" onClick={() => void review(candidate)}>Refresh AI review</button>{reviews[id] && <><p>{reviews[id].message}</p>{reviews[id].briefing?.why && <details className="forecast-briefing"><summary>AI findings</summary><p><strong>Why this area:</strong> {reviews[id].briefing.why}</p>{reviews[id].briefing.initiation && <p><strong>Initiation:</strong> {reviews[id].briefing.initiation}</p>{reviews[id].briefing.storm_mode && <p><strong>Storm mode:</strong> {reviews[id].briefing.storm_mode}</p>{reviews[id].briefing.what_could_invalidate && <p><strong>What could invalidate it:</strong> {reviews[id].briefing.what_could_invalidate}</p>{reviews[id].briefing.uncertainties && <p><strong>Uncertainty:</strong> {reviews[id].briefing.uncertainties}</p></details>}</>}</>}
+          {import.meta.env.VITE_FORECAST_AI_ENABLED === "1" && <>
+            <button type="button" className="page-action-link" onClick={() => void review(candidate)}>Refresh AI review</button>
+            {reviews[id] && <>
+              <p>{reviews[id].message}</p>
+              {reviews[id].briefing?.why && <details className="forecast-briefing">
+                <summary>AI findings</summary>
+                <p><strong>Why this area:</strong> {reviews[id].briefing.why}</p>
+                {reviews[id].briefing.initiation && <p><strong>Initiation:</strong> {reviews[id].briefing.initiation}</p>}
+                {reviews[id].briefing.storm_mode && <p><strong>Storm mode:</strong> {reviews[id].briefing.storm_mode}</p>}
+                {reviews[id].briefing.what_could_invalidate && <p><strong>What could invalidate it:</strong> {reviews[id].briefing.what_could_invalidate}</p>}
+                {reviews[id].briefing.uncertainties && <p><strong>Uncertainty:</strong> {reviews[id].briefing.uncertainties}</p>}
+              </details>}
+            </>}
+          </>}
         </article>;
       })}</>}
   </section>;
