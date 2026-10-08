@@ -8,8 +8,12 @@ type Candidate = {
   latitude: number; longitude: number; valid_time: string; run_time: string; run: string;
   forecast_hour: number; candidate_index: number; classification: string; score: number;
   distance_miles: number; hazard_screening_indices: Record<string, number>; missing_fields: string[];
+  briefing_status?: string; briefing_notice?: string; change_from_previous?: string;
+  automatic_review?: { status?: string; summary?: string; advisory?: boolean };
 };
 type Result = { candidates: Candidate[]; notice: string };
+type Alert = { id?: string; event?: string; headline?: string; severity?: string; effective?: string; expires?: string; description?: string; sender?: string };
+type AlertsResult = { status: string; source: string; queried_at?: string; alerts: Alert[]; notice: string };
 const localNow = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 const label = (value: string) => new Date(value).toLocaleString();
 
@@ -19,7 +23,7 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
   const [margin, setMargin] = useState(30);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<{ candidates: (Candidate & { arrival: Arrival })[]; notice: string } | null>(null);
+  const [result, setResult] = useState<{ candidates: (Candidate & { arrival: Arrival })[]; notice: string; alerts: AlertsResult | null } | null>(null);
   const [reviews, setReviews] = useState<Record<string, string>>({});
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
@@ -32,9 +36,12 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
       const date = new Date(departure);
       if (!Number.isFinite(date.getTime()) || date.getTime() < Date.now() - 60_000) throw new Error("Choose a departure time now or in the future.");
       const params = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radius_miles: String(radius) });
-      const data = await fetchForecast<Result>(config, `targets?${params}`, active.signal);
+      const [data, alerts] = await Promise.all([
+        fetchForecast<Result>(config, `targets?${params}`, active.signal),
+        fetchForecast<AlertsResult>(config, `alerts?${params}`, active.signal).catch(() => null),
+      ]);
       const routed = await routeForecastTargets(data.candidates, { latitude, longitude }, mapboxAccessToken(), date.toISOString(), margin, active.signal);
-      if (!active.signal.aborted) setResult({ candidates: routed.sort((a, b) => Number(b.arrival.status === "reachable") - Number(a.arrival.status === "reachable")).slice(0, 5), notice: data.notice });
+      if (!active.signal.aborted) setResult({ candidates: routed.sort((a, b) => Number(b.arrival.status === "reachable") - Number(a.arrival.status === "reachable")).slice(0, 5), notice: data.notice, alerts });
     } catch (cause) { if (!active.signal.aborted) setError(cause instanceof Error ? cause.message : "Target search unavailable"); }
     finally { if (!active.signal.aborted) setBusy(false); }
   }
@@ -64,7 +71,13 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
     <label>Arrival margin (minutes)<input disabled={busy} type="number" min="0" max="180" value={margin} onChange={(event) => { setMargin(Number(event.target.value)); setResult(null); }} /></label>
     <button type="button" className="page-action-link" disabled={busy || radius < 25 || radius > 1000 || margin < 0 || margin > 180} onClick={() => void search()}>{busy ? "Checking forecast and routes…" : "Use this origin · Find areas"}</button>
     {error && <p role="alert">{error}</p>}
-    {result && <><p className="forecast-note">{result.notice}</p>{!result.candidates.length && <p>No qualifying areas in the available forecast hours. This does not mean severe weather is impossible.</p>}
+    {result && <><p className="forecast-note">{result.notice}</p>
+      {result.alerts && <section className="forecast-alerts" aria-label="Live National Weather Service alerts">
+        <h3>Live NWS alert context</h3><p className="forecast-source">{result.alerts.status === "ready" ? `${result.alerts.alerts.length} relevant active alert${result.alerts.alerts.length === 1 ? "" : "s"} near this origin` : "NWS alerts currently unavailable"}</p>
+        {result.alerts.alerts.map((alert, index) => <details key={alert.id ?? `${alert.event}-${index}`}><summary>{alert.event ?? "Weather alert"} · {alert.severity ?? "unknown severity"}</summary><p>{alert.headline ?? "No headline supplied."}</p><p className="forecast-source">{alert.sender ?? "National Weather Service"}{alert.expires ? ` · expires ${label(alert.expires)}` : ""}</p>{alert.description && <p>{alert.description}</p>}</details>)}
+        <p className="forecast-notice">{result.alerts.notice}</p>
+      </section>}
+      {!result.candidates.length && <p>No qualifying areas in the available forecast hours. This does not mean severe weather is impossible.</p>}
       {result.candidates.map((candidate) => {
         const id = `${candidate.run}/${candidate.forecast_hour}/${candidate.candidate_index}`;
         return <article className="forecast-target" key={id}>
@@ -72,8 +85,11 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
           <p>{candidate.classification === "forecast_storm" ? "Model forecasts convection" : "Conditional environment · storms may not form"}</p>
           <p className="forecast-source">Valid {label(candidate.valid_time)}<br />Run {label(candidate.run_time)} · f{candidate.forecast_hour}</p>
           <p>Route: {candidate.arrival.status === "unknown" ? "unknown — reachability not established" : `${candidate.arrival.duration_minutes} min · ${candidate.arrival.status === "reachable" ? "arrives before selected margin" : "too late for selected margin"}`}</p>
+          {candidate.change_from_previous && <p className="forecast-change">{candidate.change_from_previous}</p>}
           <details><summary>Numerical screening evidence</summary><p>Environment index: {candidate.score.toFixed(2)}. These indices are not probabilities or calibrated threat levels.</p>{["tornado", "hail", "wind"].map((hazard) => <p key={hazard}>{hazard}: {candidate.hazard_screening_indices[hazard]?.toFixed(2) ?? "insufficient fields"}</p>)}<p>Missing: {candidate.missing_fields.join(", ") || "none of the screening fields"}</p></details>
-          {import.meta.env.VITE_FORECAST_AI_ENABLED === "1" && <><button type="button" className="page-action-link" onClick={() => void review(candidate)}>Review with AI</button>{reviews[id] && <p>{reviews[id]}</p>}</>}
+          {candidate.automatic_review?.summary && <p className="forecast-briefing"><strong>Automatic briefing:</strong> {candidate.automatic_review.summary}</p>}
+          {candidate.briefing_status === "pending" && <p className="forecast-source">Automatic briefing is being prepared for this completed model run.</p>}
+          {import.meta.env.VITE_FORECAST_AI_ENABLED === "1" && <><button type="button" className="page-action-link" onClick={() => void review(candidate)}>Refresh AI review</button>{reviews[id] && <p>{reviews[id]}</p>}</>}
         </article>;
       })}</>}
   </section>;

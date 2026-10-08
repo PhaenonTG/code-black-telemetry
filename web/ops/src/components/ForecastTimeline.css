@@ -8,6 +8,12 @@
 .forecast-timeline input:not([type=range]) { display: block; width: 100%; box-sizing: border-box; min-height: 44px; background: #161c24; color: #f4f6f8; border: 1px solid #384455; border-radius: 6px; padding: 8px; font-size: 16px; }
 .forecast-target { border-top: 1px solid #384455; margin-top: 16px; padding-top: 8px; font-size: 14px; line-height: 1.5; }
 .forecast-target h3 { font-size: 16px; }
+.forecast-alerts { border-top: 1px solid #384455; border-bottom: 1px solid #384455; margin: 14px 0; padding: 10px 0; }
+.forecast-alerts h3 { font-size: 15px; margin: 0 0 4px; }
+.forecast-alerts details { border-top: 1px solid #252e39; padding: 8px 0; }
+.forecast-alerts summary { color: #f0c36a; cursor: pointer; font-weight: 700; }
+.forecast-briefing { border-left: 2px solid #52b788; color: #d4e7dc; margin: 10px 0; padding-left: 9px; }
+.forecast-change { color: #a8c5e3; font-size: 13px; }
 .forecast-note, .forecast-source, .forecast-timeline details { color: #b4bfcc; font-size: 13px; line-height: 1.5; }
 .forecast-notice { border-left: 2px solid #e6b252; padding-left: 10px; color: #efd199; font-size: 13px; }
 .forecast-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
