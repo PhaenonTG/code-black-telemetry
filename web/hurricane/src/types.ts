@@ -3,7 +3,7 @@ export type ProjectionPoint = { latitude: number; longitude: number; hour: numbe
 export type Model = { id: string; name: string; cycle: string | null; points: TrackPoint[]; shift_48h_miles: number | null };
 export type PublicHurricane = {
   status: string; checked_at: string | null; freshness: string | null;
-  storm: { id: string | null; name: string | null; classification: string | null; intensity: string | null; pressure_mb: number | null;
+  storm: { id: string | null; name: string | null; classification: string | null; max_wind_mph: number | null; pressure_mb: number | null;
     center: { latitude: number | null; longitude: number | null }; movement_degrees: number | null; movement_mph: number | null; last_update: string | null };
   official: { track: TrackPoint[]; cone: number[][]; cone_status: string | null; advisory_url: string | null; discussion_url: string | null };
   projection: { status: string; points: ProjectionPoint[]; cycle?: string; method: string; member_ids?: string[] };

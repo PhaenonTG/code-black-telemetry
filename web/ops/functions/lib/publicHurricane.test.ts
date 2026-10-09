@@ -5,7 +5,7 @@ const sample = {
   status: "active", checked_at: "2026-10-09T00:00:00Z", storm: { id: "al092026", name: "Isaias", pressure: "974", latitudeNumeric: 24.9,
     longitudeNumeric: -88.8, publicAdvisory: { url: "https://www.nhc.noaa.gov/" } },
   watch_point: { label: "12150 Rolling Meadows Ln", latitude: 30.447577800627, longitude: -88.329515563521 },
-  assessment: { summary: "Private family watch at 12150 Rolling Meadows Ln" },
+  assessment: { summary: "Private family watch at 12150 Rolling Meadows Ln", intensity_mph: 100 },
   ai: { summary: "Private family watch at 12150 Rolling Meadows Ln" },
   alerts: [{ description: "Private point alert" }], reports: [{ text: "Private local report" }],
   track: [{ hour: 0, latitude: 24.9, longitude: -88.8 }],
@@ -25,6 +25,7 @@ describe("public hurricane boundary", () => {
     }
     expect(publicData.projection.status).toBe("ready");
     expect(publicData.projection.points[0].members).toBe(2);
+    expect(publicData.storm.max_wind_mph).toBe(100);
   });
 
   it("keeps consensus aids out of the blend", () => {

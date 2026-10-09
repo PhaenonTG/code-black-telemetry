@@ -82,7 +82,7 @@ export function deriveProjection(models: unknown[], latestCycle: unknown) {
 }
 
 export function toPublicHurricane(raw: unknown) {
-  const data = object(raw), storm = object(data.storm), guidance = object(data.model_guidance), trend = object(data.observed_trend);
+  const data = object(raw), storm = object(data.storm), guidance = object(data.model_guidance), trend = object(data.observed_trend), assessment = object(data.assessment);
   const models = array(guidance.models).map(object).filter((model) => ["HFAI", "HFBI", "AVNI", "HCCA", "TVCN"].includes(String(model.id)))
     .map((model) => ({ id: model.id, name: string(model.name), cycle: string(model.cycle),
       points: array(model.points).map(trackPoint).filter(Boolean), shift_48h_miles: number(model.shift_48h_miles) }));
@@ -99,7 +99,7 @@ export function toPublicHurricane(raw: unknown) {
   const advisory = object(storm.publicAdvisory), discussion = object(storm.forecastDiscussion);
   return {
     status: string(data.status) ?? "unavailable", checked_at: string(data.checked_at), freshness: string(data.freshness),
-    storm: { id: string(storm.id), name: string(storm.name), classification: string(storm.classification), intensity: string(storm.intensity),
+    storm: { id: string(storm.id), name: string(storm.name), classification: string(storm.classification), max_wind_mph: number(assessment.intensity_mph),
       pressure_mb: number(storm.pressure), center: { latitude: number(storm.latitudeNumeric), longitude: number(storm.longitudeNumeric) },
       movement_degrees: number(storm.movementDir), movement_mph: number(storm.movementSpeed), last_update: string(storm.lastUpdate) },
     official: { track: officialTrack, cone: array(data.cone).filter((entry) => Array.isArray(entry) && entry.length >= 2 && number(entry[0]) !== null && number(entry[1]) !== null).map((entry) => [Number((entry as number[])[0]), Number((entry as number[])[1])]),

@@ -29,7 +29,7 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   ctx.fillStyle = muted; ctx.font = "28px system-ui"; ctx.fillText(`Updated ${displayTime(data.checked_at)}  •  NHC ${displayTime(data.storm.last_update)}`, 80, 277);
   ctx.fillStyle = "#102535"; ctx.fillRect(80, 318, 1440, 138);
   const metrics = [
-    ["MAX WIND", data.storm.intensity ?? "—"], ["PRESSURE", data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`],
+    ["MAX WIND", data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`], ["PRESSURE", data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`],
     ["48H MODEL SPREAD", data.guidance.spread_48h_miles == null ? "—" : `${data.guidance.spread_48h_miles} mi`],
   ];
   metrics.forEach(([label, value], i) => { const x = 110 + i * 470; ctx.fillStyle = muted; ctx.font = "700 20px system-ui"; ctx.fillText(label, x, 360); ctx.fillStyle = ink; ctx.font = "700 39px system-ui"; ctx.fillText(value, x, 418); });
@@ -51,6 +51,11 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
     `Observed wind change: ${signed(data.observed.trend.wind_change_mph, "mph")} over ${data.observed.trend.period_hours ?? "?"} hours.`,
   ];
   for (const item of evidence) { ctx.fillStyle = cyan; ctx.fillRect(80, y - 17, 10, 10); ctx.fillStyle = ink; y += wrap(ctx, item, 112, y, 1390, 39, 2) + 20; }
+  if (data.regional_alerts.length) {
+    ctx.fillStyle = coral; ctx.font = "700 21px system-ui"; ctx.fillText("MOBILE COASTAL-AREA ALERT", 80, y + 27);
+    ctx.fillStyle = ink; ctx.font = "26px system-ui";
+    wrap(ctx, data.regional_alerts.map((item) => item.event).filter(Boolean).join("  •  "), 80, y + 72, 1400, 36, 2);
+  }
   ctx.fillStyle = coral; ctx.font = "700 26px system-ui"; ctx.fillText("EXPERIMENTAL — NOT AN OFFICIAL FORECAST", 80, 1840);
   ctx.fillStyle = muted; ctx.font = "24px system-ui";
   wrap(ctx, data.disclosure, 80, 1885, 1430, 34, 2);

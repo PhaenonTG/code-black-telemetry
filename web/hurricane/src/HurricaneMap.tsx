@@ -68,7 +68,8 @@ export default function HurricaneMap({ data, token, onCapture }: { data: PublicH
       const center = data.storm.center;
       map.addSource("storm", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [center.longitude!, center.latitude!] } } });
       map.addLayer({ id: "storm", type: "circle", source: "storm", paint: { "circle-radius": 9, "circle-color": "#fb716a", "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
-      const positions = [...data.official.track, ...data.projection.points, ...data.observed.track];
+      // Lead with the active Gulf/landfall window; visitors can pan to later days.
+      const positions = [...data.official.track.filter((p) => p.hour <= 48), ...data.projection.points.filter((p) => p.hour <= 48), ...data.observed.track.slice(-4)];
       if (positions.length > 1) {
         const bounds = new mapboxgl.LngLatBounds();
         for (const p of positions) bounds.extend([p.longitude, p.latitude]);
