@@ -1,7 +1,9 @@
 import type { PublicHurricane } from "./types";
 import { displayTime, signed } from "./types";
+import { watchSummary } from "./watchLocation";
+import type { PointAlert, WatchLocation } from "./watchLocation";
 
-const W = 1600, H = 2100;
+const W = 1600, H = 2300;
 const ink = "#eef5f5", muted = "#a3b8c1", cyan = "#45d9d1", coral = "#fb716a";
 
 function wrap(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, width: number, lineHeight: number, maxLines: number) {
@@ -19,7 +21,7 @@ function wrap(ctx: CanvasRenderingContext2D, value: string, x: number, y: number
   return count * lineHeight;
 }
 
-export async function saveBriefingImage(data: PublicHurricane, mapPng: string | null) {
+export async function saveBriefingImage(data: PublicHurricane, mapPng: string | null, watch: WatchLocation, alerts: PointAlert[], alertsStatus: string) {
   const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Canvas is unavailable");
   ctx.fillStyle = "#06121c"; ctx.fillRect(0, 0, W, H);
@@ -42,25 +44,34 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   ctx.fillStyle = cyan; ctx.font = "700 21px system-ui"; ctx.fillText("━━  AEGIS EXPERIMENTAL", 104, 1378);
   ctx.fillStyle = "#0b1c29"; ctx.fillRect(750, 1326, 770, 84);
   ctx.fillStyle = ink; ctx.fillText("┄┄  NHC OFFICIAL FORECAST", 775, 1378);
-  ctx.fillStyle = ink; ctx.font = "700 32px system-ui"; ctx.fillText("What the data says", 80, 1496);
+  const proximity = watchSummary(data, watch);
+  ctx.fillStyle = cyan; ctx.font = "700 21px system-ui"; ctx.fillText("WATCH LOCATION", 80, 1470);
+  ctx.fillStyle = ink; ctx.font = "700 32px system-ui"; wrap(ctx, watch.label, 80, 1518, 1430, 42, 2);
+  ctx.fillStyle = muted; ctx.font = "25px system-ui";
+  ctx.fillText(`Current center: ${proximity.currentMiles == null ? "unavailable" : `${proximity.currentMiles} mi away`}   •   Closest NHC center: ${proximity.official ? `${proximity.official.miles} mi at +${proximity.official.point.hour}h` : "unavailable"}`, 80, 1620);
+  ctx.fillText(`Closest Aegis blended center: ${proximity.aegis ? `${proximity.aegis.miles} mi at +${proximity.aegis.point.hour}h` : "unavailable"}   •   Center distance does not predict local impacts.`, 80, 1662);
+  ctx.fillStyle = ink; ctx.font = "700 32px system-ui"; ctx.fillText("What the data says", 80, 1730);
   ctx.fillStyle = muted; ctx.font = "26px system-ui";
-  let y = 1550;
+  let y = 1784;
   const evidence = [
     `Projection uses ${data.projection.member_ids?.length ?? 0} independent model aids: ${data.projection.member_ids?.join(", ") ?? "none available"}.`,
-    `Model center spread at 48 hours: ${data.guidance.spread_48h_miles == null ? "not available" : `${data.guidance.spread_48h_miles} miles`}. Spread is not a probability cone.`,
-    `Observed wind change: ${signed(data.observed.trend.wind_change_mph, "mph")} over ${data.observed.trend.period_hours ?? "?"} hours.`,
+    `48-hour center spread: ${data.guidance.spread_48h_miles == null ? "not available" : `${data.guidance.spread_48h_miles} mi`}; not a probability cone. Observed wind change: ${signed(data.observed.trend.wind_change_mph, "mph")}.`,
   ];
   for (const item of evidence) { ctx.fillStyle = cyan; ctx.fillRect(80, y - 17, 10, 10); ctx.fillStyle = ink; y += wrap(ctx, item, 112, y, 1390, 39, 2) + 20; }
-  if (data.regional_alerts.length) {
-    ctx.fillStyle = coral; ctx.font = "700 21px system-ui"; ctx.fillText("MOBILE COASTAL-AREA ALERT", 80, y + 27);
+  if (alertsStatus === "ready" && alerts.length) {
+    ctx.fillStyle = coral; ctx.font = "700 21px system-ui"; ctx.fillText("NWS ALERTS AT WATCH LOCATION", 80, y + 27);
     ctx.fillStyle = ink; ctx.font = "26px system-ui";
-    wrap(ctx, data.regional_alerts.map((item) => item.event).filter(Boolean).join("  •  "), 80, y + 72, 1400, 36, 2);
+    wrap(ctx, alerts.map((item) => item.event).join("  •  "), 80, y + 72, 1400, 36, 2);
+  } else if (alertsStatus !== "ready") {
+    ctx.fillStyle = coral; ctx.font = "700 21px system-ui"; ctx.fillText("NWS ALERT CHECK UNAVAILABLE — VERIFY OFFICIAL SOURCES", 80, y + 27);
+  } else {
+    ctx.fillStyle = muted; ctx.font = "700 21px system-ui"; ctx.fillText("NO ACTIVE NWS ALERT RETURNED AT THIS CHECK — KEEP MONITORING", 80, y + 27);
   }
-  ctx.fillStyle = coral; ctx.font = "700 26px system-ui"; ctx.fillText("EXPERIMENTAL — NOT AN OFFICIAL FORECAST", 80, 1840);
+  ctx.fillStyle = coral; ctx.font = "700 26px system-ui"; ctx.fillText("EXPERIMENTAL — NOT AN OFFICIAL FORECAST", 80, 2090);
   ctx.fillStyle = muted; ctx.font = "24px system-ui";
-  wrap(ctx, data.disclosure, 80, 1885, 1430, 34, 2);
-  ctx.fillText("Official source: nhc.noaa.gov  •  Weather alerts: weather.gov", 80, 2015);
-  ctx.fillText("hurricane.codeblackwx.com", 80, 2055);
+  wrap(ctx, data.disclosure, 80, 2135, 1430, 34, 2);
+  ctx.fillText("Official source: nhc.noaa.gov  •  Weather alerts: weather.gov", 80, 2230);
+  ctx.fillText("hurricane.codeblackwx.com", 80, 2270);
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Image generation failed")), "image/png"));
   const url = URL.createObjectURL(blob), link = document.createElement("a");
   link.href = url; link.download = `codeblack-aegis-hurricane-${data.storm.name?.toLowerCase() ?? "watch"}.png`;
