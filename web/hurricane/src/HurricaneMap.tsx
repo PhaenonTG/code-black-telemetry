@@ -76,10 +76,12 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       const camera = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
       const originalProjection = map.getProjection().name;
       const radarVisible = map.getLayer("radar") ? map.getLayoutProperty("radar", "visibility") : null;
+      const modelVisibility = models.map((model) => [model.id, map.getLayer(`model-${model.id}`) ? map.getLayoutProperty(`model-${model.id}`, "visibility") : null] as const);
       try {
         Object.assign(container.style, { position: "fixed", left: "-2000px", top: "0", width: "1440px", height: "800px" });
         map.resize();
         if (radarVisible === "visible") map.setLayoutProperty("radar", "visibility", "none");
+        for (const [id, visibility] of modelVisibility) if (visibility === "visible") map.setLayoutProperty(`model-${id}`, "visibility", "none");
         map.setProjection("mercator");
         map.fitBounds(focusBounds(data, watchRef.current), { padding: { top: 80, bottom: 75, left: 90, right: 90 }, maxZoom: 7.3, duration: 0 });
         await afterMapIdle(map);
@@ -90,6 +92,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
         map.resize();
         map.setProjection(originalProjection);
         if (radarVisible === "visible" && map.getLayer("radar")) map.setLayoutProperty("radar", "visibility", "visible");
+        for (const [id, visibility] of modelVisibility) if (visibility === "visible" && map.getLayer(`model-${id}`)) map.setLayoutProperty(`model-${id}`, "visibility", "visible");
         map.jumpTo(camera);
       }
     });
