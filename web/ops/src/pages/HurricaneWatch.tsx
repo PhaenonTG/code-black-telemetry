@@ -6,6 +6,7 @@ import { startAtlasMosaicLayer, type MosaicStatus } from "../../../../src/map/At
 import { mapboxAccessToken } from "../../../../src/services/mapTiles";
 import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
+import { createHurricaneBriefingImage } from "./hurricaneBriefingImage";
 import "./HurricaneWatch.css";
 
 type TrackPoint = { hour: number; latitude: number; longitude: number; wind_mph: number | null };
@@ -212,8 +213,21 @@ export default function HurricaneWatch() {
   const [data, setData] = useState<HurricaneSnapshot | null>(null);
   const [error, setError] = useState("");
   const [shareStatus, setShareStatus] = useState("");
+  const [imageStatus, setImageStatus] = useState("");
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [briefingImage, setBriefingImage] = useState<{ url: string; blob: Blob } | null>(null);
+  const imageUrl = useRef<string | null>(null);
   const [printMap, setPrintMap] = useState<string | null>(null);
   const captureMap = useRef<(() => string | null) | null>(null);
+  useEffect(() => () => { if (imageUrl.current) URL.revokeObjectURL(imageUrl.current); }, []);
+  useEffect(() => {
+    if (!briefingImage) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") closeImage(); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  // closeImage only revokes the current URL; this listener is scoped to the open preview.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [briefingImage]);
   useEffect(() => {
     let live = true;
     const load = async () => {
@@ -249,6 +263,36 @@ export default function HurricaneWatch() {
     return () => { live = false; window.clearInterval(timer); };
   }, [config]);
   const a = data?.assessment;
+  const closeImage = () => {
+    setBriefingImage(null);
+    if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
+    imageUrl.current = null;
+  };
+  const createImage = async () => {
+    if (!data?.storm || !a || generatingImage) return;
+    setGeneratingImage(true);
+    setImageStatus("");
+    try {
+      const blob = await createHurricaneBriefingImage(data, captureMap.current?.() ?? null);
+      if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
+      const url = URL.createObjectURL(blob);
+      imageUrl.current = url;
+      setBriefingImage({ url, blob });
+    } catch (cause) {
+      setImageStatus(cause instanceof Error ? cause.message : "The briefing image could not be generated.");
+    } finally { setGeneratingImage(false); }
+  };
+  const imageFilename = `${data?.storm?.name?.toLowerCase() ?? "storm"}-grand-bay-briefing.png`;
+  const shareImage = async () => {
+    if (!briefingImage) return;
+    const file = new File([briefingImage.blob], imageFilename, { type: "image/png" });
+    if (!navigator.share || !navigator.canShare?.({ files: [file] })) {
+      setImageStatus("Image sharing is unavailable in this browser. Use Download PNG instead.");
+      return;
+    }
+    try { await navigator.share({ files: [file], title: `${data?.storm?.name ?? "Storm"} · Grand Bay briefing` }); }
+    catch (cause) { if (!(cause instanceof Error && cause.name === "AbortError")) setImageStatus("Sharing failed. Use Download PNG instead."); }
+  };
   const share = async () => {
     if (!data?.storm || !a) return;
     const text = shareText(data);
@@ -267,20 +311,24 @@ export default function HurricaneWatch() {
     window.setTimeout(() => window.print(), 150);
   };
   return <main className="hurricane-watch">
-    <header className="hurricane-watch__header"><div><h1>{data?.storm ? `${data.storm.name} storm watch` : "Gulf storm watch"}</h1><p>Grand Bay, Alabama · hourly Aegis briefing</p></div><Link to="/weather">Weather →</Link></header>
+    <header className="hurricane-watch__header"><div><h1><span>{data?.storm?.classification === "HU" ? "Hurricane" : "Storm"}</span> <em>{data?.storm?.name ?? "Gulf"}</em></h1><p>Grand Bay watch · hourly Aegis briefing</p></div><Link to="/weather">Weather →</Link></header>
     {error && <p role="alert" className="hurricane-watch__error">{error}</p>}
     {!data && !error && <p role="status">Loading the latest assessment…</p>}
     {data?.status === "pending" && <p role="status">{data.notice}</p>}
     {data?.freshness === "stale" && <p role="alert" className="hurricane-watch__error">Hourly assessment is stale. Last successful update: {time(data.checked_at)}.</p>}
     {data?.status === "inactive" && <p className="hurricane-watch__error">NHC no longer lists this storm as active. The last assessment remains below.</p>}
     {data?.storm && a && <>
-      <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button type="button" onClick={() => void share()}>Share update</button><button type="button" onClick={printBrief}>Save / print PDF</button></div>
+      <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button className="hurricane-watch__image-action" type="button" disabled={generatingImage} onClick={() => void createImage()}>{generatingImage ? "Creating image…" : "Create one-page image"}</button><button type="button" onClick={() => void share()}>Share text</button><button type="button" onClick={printBrief}>Print / PDF</button></div>
       {shareStatus && <p role="status" className="hurricane-watch__share-status">{shareStatus}</p>}
-      <section className="hurricane-watch__map-section" aria-label="Live radar and official track"><HurricaneMap data={data} registerCapture={(capture) => { captureMap.current = capture; }} printMap={printMap} /><p className="hurricane-watch__caption">Current IEM NEXRAD mosaic refreshes approximately every 3 minutes; radar coverage can be limited offshore. The NHC cone shows likely center positions, <b>not</b> the full area of wind, surge, rain, or tornado risk.</p></section>
+      {imageStatus && <p role="status" className="hurricane-watch__share-status">{imageStatus}</p>}
       <section className="hurricane-watch__metrics" aria-label="Official storm status">
         <div><small>{data.status === "inactive" ? "LAST NHC WIND" : "MAX WIND · NHC"}</small><strong>{a.intensity_mph} mph</strong><span>{data.storm.classification} · {data.storm.pressure} mb</span></div>
         <div><small>{data.status === "inactive" ? "LAST CENTER → WATCH POINT" : "CENTER → WATCH POINT"}</small><strong>{a.center_distance_miles} mi</strong><span>{data.status === "inactive" ? "Historical center distance" : "Current center distance"}</span></div>
         <div><small>{data.status === "inactive" ? "LAST FORECAST CENTER" : "CLOSEST FORECAST CENTER"}</small><strong>{a.forecast_point_distance_miles ?? "—"} mi</strong><span>{a.closest_forecast_hour != null ? `At NHC +${a.closest_forecast_hour}h point` : "Track unavailable"}</span></div>
+      </section>
+      <section className="hurricane-watch__map-section" aria-label="Live radar and official track"><HurricaneMap data={data} registerCapture={(capture) => { captureMap.current = capture; }} printMap={printMap} /><p className="hurricane-watch__caption">Current IEM NEXRAD mosaic refreshes approximately every 3 minutes; radar coverage can be limited offshore. The NHC cone shows likely center positions, <b>not</b> the full area of wind, surge, rain, or tornado risk.</p></section>
+      <section className="hurricane-watch__panel hurricane-watch__warnings"><h2>Grand Bay warning watch</h2><p>{data.watch_point?.label} · {data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} NWS alerts` : "NWS alerts partially unavailable"}{data.alerts_checked_at ? ` · full hazard check ${time(data.alerts_checked_at)}` : ""}</p>
+        {data.alerts?.map((alert) => <details key={alert.id}><summary>{alert.event} · {alert.severity}</summary><p>{alert.headline}</p><p>{alert.description}</p><small>Expires {time(alert.expires)}</small>{alert.url && <p><a href={alert.url} target="_blank" rel="noreferrer">Official warning ↗</a></p>}</details>)}
       </section>
       <Guidance guidance={data.model_guidance} checkedAt={data.checked_at} />
       <section className="hurricane-watch__panel hurricane-watch__brief"><div><h2>Grand Bay briefing</h2><p>{a.summary}</p>
@@ -292,14 +340,12 @@ export default function HurricaneWatch() {
         {data.ai?.status === "ready" ? <div className="hurricane-watch__ai"><p>{data.ai.summary}</p>{data.ai.supporting_factors && <p><b>Evidence:</b> {narrative(data.ai.supporting_factors)}</p>}{data.ai.limiting_factors && <p><b>Limits:</b> {narrative(data.ai.limiting_factors)}</p>}{data.ai.uncertainties && <p><b>Uncertainty:</b> {narrative(data.ai.uncertainties)}</p>}{data.ai.recommended_attention && <p><b>Watch next:</b> {narrative(data.ai.recommended_attention)}</p>}<p className="hurricane-watch__caution">Aegis interpretation is not an official forecast or an evacuation instruction. Follow NHC, NWS, and local officials.</p></div>
           : <p className="hurricane-watch__caution">AI commentary unavailable for this cycle; the official source assessment is current.</p>}
       </section>
-      <section className="hurricane-watch__panel hurricane-watch__warnings"><h2>Grand Bay warning watch</h2><p>{data.watch_point?.label} · {data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} NWS alerts` : "NWS alerts partially unavailable"}{data.alerts_checked_at ? ` · full hazard check ${time(data.alerts_checked_at)}` : ""}</p>
-        {data.alerts?.map((alert) => <details key={alert.id}><summary>{alert.event} · {alert.severity}</summary><p>{alert.headline}</p><p>{alert.description}</p><small>Expires {time(alert.expires)}</small>{alert.url && <p><a href={alert.url} target="_blank" rel="noreferrer">Official warning ↗</a></p>}</details>)}
-      </section>
       <section className="hurricane-watch__panel"><h2>Preliminary storm reports</h2><p>Mobile NWS office · last 36 hours · {data.reports_status === "ready" ? `${data.reports?.length ?? 0} products` : "Feed unavailable"}</p>
         {data.reports?.map((report) => <details key={report.url}><summary>{time(report.issued)} · {report.office}</summary><pre>{report.text}</pre><a href={report.url} target="_blank" rel="noreferrer">Official report ↗</a></details>)}
       </section>
       <details className="hurricane-watch__panel"><summary>Hourly Aegis assessment history</summary>{data.history?.map((item, index) => <p key={item.checked_at ?? index}><b>{time(item.checked_at)}</b> · advisory {item.advisory} · {item.intensity_mph} mph<br />{item.summary}</p>)}</details>
       <p className="hurricane-watch__sources"><a href={data.storm.publicAdvisory?.url} target="_blank" rel="noreferrer">NHC advisory ↗</a><a href={data.storm.forecastDiscussion?.url} target="_blank" rel="noreferrer">NHC model discussion ↗</a><a href={data.storm.forecastGraphics?.url} target="_blank" rel="noreferrer">NHC graphics ↗</a><a href="https://mesonet.agron.iastate.edu/docs/nexrad_mosaic/" target="_blank" rel="noreferrer">Radar source ↗</a></p>
     </>}
+    {briefingImage && <div className="hurricane-watch__image-modal" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) closeImage(); }}><div className="hurricane-watch__image-dialog" role="dialog" aria-modal="true" aria-labelledby="hurricane-image-title"><div className="hurricane-watch__image-dialog-head"><div><h2 id="hurricane-image-title">One-page hurricane briefing</h2><p>Generated from the current OPS snapshot. Check the issue times before sharing.</p></div><button type="button" onClick={closeImage} aria-label="Close image preview">×</button></div><img src={briefingImage.url} alt={`${data?.storm?.name ?? "Storm"} one-page Grand Bay briefing with radar, official forecast, model guidance, warnings, and analysis`} /><div className="hurricane-watch__image-dialog-actions"><button type="button" onClick={() => void shareImage()}>Share image</button><a href={briefingImage.url} download={imageFilename}>Download PNG</a></div>{imageStatus && <p role="status">{imageStatus}</p>}</div></div>}
   </main>;
 }
