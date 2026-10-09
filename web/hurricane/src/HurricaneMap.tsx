@@ -224,7 +224,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
           const feature = event.features?.[0] as unknown as { geometry: { type: string; coordinates: number[] }; properties?: Record<string, number> } | undefined;
           if (!feature || feature.geometry.type !== "Point") return;
           new mapboxgl.Popup({ closeButton: false, maxWidth: "220px" }).setLngLat(feature.geometry.coordinates as [number, number])
-            .setText(`Aegis blend +${feature.properties?.hour}h · model center spread ${feature.properties?.spread} mi · ${feature.properties?.members} members`).addTo(map);
+            .setText(`Experimental model blend +${feature.properties?.hour}h · model center spread ${feature.properties?.spread} mi · ${feature.properties?.members} members`).addTo(map);
         });
       }
       const center = data.storm.center;
@@ -247,7 +247,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     <div className="map-frame">{token ? <div ref={host} className="map-canvas" aria-label="Interactive Gulf hurricane map with watch location, Aegis, NHC, and model tracks" /> : <div className="map-fallback">Loading live map…</div>}
       {clouds && <div className="satellite-map-tag">GOES · {satelliteMode === "ir" ? "Infrared" : satelliteMode === "vapor" ? "Water vapor" : satelliteMode === "shortwave" ? "Shortwave IR" : "Visible"} · {compactTime(layerTimes[SATELLITE_LAYERS[satelliteMode]])}</div>}
       {mapError && <div className="map-error" role="status">{mapError}</div>}</div>
-    <div className="map-legend"><span><i className="key-aegis"/>Aegis · experimental</span><span><i className="key-nhc"/>NHC · official</span><span><i className="key-observed"/>Past track</span><span><i className="key-watch"/>Watch point</span></div>
+    <div className="map-legend"><span><i className="key-aegis"/>Model blend · experimental</span><span><i className="key-nhc"/>NHC · official</span><span><i className="key-observed"/>Past track</span><span><i className="key-watch"/>Watch point</span></div>
     <details className="model-layers"><summary>Compare model tracks <span>{selectedModels.length} selected</span></summary><div className="model-switches">{models.map((model) => <button key={model.id} type="button" aria-pressed={selectedModels.includes(model.id)} onClick={() => toggle(model.id)} style={{ "--model-color": colors[model.id] ?? "#acbfd0" } as React.CSSProperties}>{model.name}</button>)}</div></details>
   </div>;
 }

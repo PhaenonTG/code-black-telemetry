@@ -102,7 +102,17 @@ export function toPublicHurricane(raw: unknown) {
   const models = array(guidance.models).map(object).filter((model) => DISPLAY_MODEL_IDS.has(String(model.id)))
     .map((model) => ({ id: model.id, name: string(model.name), cycle: string(model.cycle),
       points: array(model.points).map(trackPoint).filter(Boolean), shift_48h_miles: number(model.shift_48h_miles) }));
-  const projection = deriveProjection(array(guidance.models), guidance.latest_cycle);
+  const storedProjection = object(data.projection);
+  const projectionPoints = array(storedProjection.points).map((entry) => {
+    const row = object(entry), base = trackPoint(entry), spread = number(row.spread_miles), members = number(row.members);
+    return base && base.valid_time && spread !== null && spread >= 0 && members !== null && members >= 2
+      ? { ...base, valid_time: base.valid_time, spread_miles: spread, members } : null;
+  }).filter(Boolean);
+  const projectionCurrent = storedProjection.status === "ready" && string(storedProjection.checked_at) === string(data.checked_at) && projectionPoints.length >= 3;
+  const projection = { status: projectionCurrent ? "ready" : "unavailable", points: projectionCurrent ? projectionPoints : [],
+    checked_at: projectionCurrent ? string(storedProjection.checked_at) : null, cycle: string(storedProjection.cycle),
+    method: string(storedProjection.method) ?? "Independent-model track blend unavailable",
+    member_ids: array(storedProjection.member_ids).filter((id) => typeof id === "string" && MODEL_IDS.has(id)) };
   const officialTrack = array(data.track).map(trackPoint).filter(Boolean);
   const observed = array(data.observed_track).map((entry) => {
     const row = object(entry), coordinates = point(row);
@@ -130,7 +140,7 @@ export function toPublicHurricane(raw: unknown) {
       model_cycle_changes: array(changes.model_cycle_changes).slice(0, 13).map(publicNarrative).filter(Boolean),
       new_report_count: array(changes.new_reports).length },
     monitoring: { radar_analysis: "not_ingested", source_check_minutes: 5,
-      ai_mode: "on_source_change", model_tracks: models.length },
+      ai_mode: "every_completed_source_check", model_tracks: models.length },
     regional_alerts: alerts, regional_alerts_status: string(data.coastal_context_status),
     ai: { status: aiSummary ? "ready" : ai.status === "ready" ? "withheld" : "unavailable",
       analyzed_at: aiSummary ? string(ai.analyzed_at) : null, summary: aiSummary,
@@ -138,7 +148,7 @@ export function toPublicHurricane(raw: unknown) {
       supporting_factors: aiSummary ? publicNarrativeList(ai.supporting_factors) : [],
       uncertainties: aiSummary ? publicNarrativeList(ai.uncertainties) : [],
       recommended_attention: aiSummary ? publicNarrativeList(ai.recommended_attention) : [] },
-    disclosure: "Aegis projection is an experimental blend of model center tracks, not an official NHC forecast or impact prediction. Use NHC, NWS, and local officials for decisions.",
+    disclosure: "The experimental track is a deterministic blend of model center tracks. Aegis reviews the evidence separately; the blend is not a free-form AI forecast, official NHC forecast, or impact prediction. Use NHC, NWS, and local officials for decisions.",
   };
 }
 
@@ -148,7 +158,7 @@ export async function handlePublicHurricane(request: Request, env: GatewayEnv, c
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "GET, OPTIONS" } });
   if (request.method !== "GET") return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: { "Content-Type": "application/json", ...cors } });
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v6");
+  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v7");
   const cached = cache ? await cache.match(cacheKey) : null;
   if (cached) return new Response(cached.body, { status: 200, headers: { ...Object.fromEntries(cached.headers), ...cors } });
   const result = await forwardToCore(CORE_ROUTE, new URL(request.url), env);

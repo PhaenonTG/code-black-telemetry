@@ -25,8 +25,8 @@ describe("public hurricane boundary", () => {
     for (const secret of ["12150", "Rolling Meadows", "30.447577800627", "Private point alert", "Private local report"]) {
       expect(text).not.toContain(secret);
     }
-    expect(publicData.projection.status).toBe("ready");
-    expect(publicData.projection.points[0].members).toBe(2);
+    expect(publicData.projection.status).toBe("unavailable");
+    expect(publicData.projection.points).toEqual([]);
     expect(publicData.storm.max_wind_mph).toBe(100);
     expect(publicData.guidance.models.map((model) => model.id)).toEqual(["HFAI", "HFBI", "CTCI", "AEMI", "HCCA"]);
     expect(publicData.ai.status).toBe("withheld");
@@ -75,6 +75,15 @@ describe("public hurricane boundary", () => {
     const result = deriveProjection(sample.model_guidance.models, sample.model_guidance.latest_cycle);
     expect(result.member_ids).toEqual(["HFAI", "HFBI"]);
     expect(result.points[0].latitude).toBe(25.5);
+  });
+
+  it("only publishes a persisted projection from this exact completed source check", () => {
+    const blend = deriveProjection(sample.model_guidance.models, sample.model_guidance.latest_cycle);
+    const current = toPublicHurricane({ ...sample, projection: { ...blend, checked_at: sample.checked_at } });
+    const stale = toPublicHurricane({ ...sample, projection: { ...blend, checked_at: "2026-10-08T23:55:00Z" } });
+    expect(current.projection.status).toBe("ready");
+    expect(current.projection.points[0].members).toBe(2);
+    expect(stale.projection.status).toBe("unavailable");
   });
 
   it("never returns raw upstream data through the public route", async () => {
