@@ -34,7 +34,7 @@ const time = (value?: string) => value ? new Date(value).toLocaleString() : "Una
 const shortTime = (value?: string) => value ? new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric" }) : "—";
 const signed = (value: number | null | undefined, suffix: string) => value == null ? "Not available" : `${value > 0 ? "+" : ""}${value} ${suffix}`;
 const narrative = (value?: string | string[]) => Array.isArray(value) ? value.join("; ") : value;
-const modelColors: Record<string, string> = { HFAI: "#f6bf64", HFBI: "#be9df7", AVNI: "#82aeff", HCCA: "#c5d4e1", TVCN: "#91dcaa" };
+const modelColors: Record<string, string> = { HFAI: "#f6bf64", HFBI: "#be9df7", AVNI: "#82aeff", CTCI: "#fa9372", CMCI: "#6db6ff", NVGI: "#9bbdd9", UKXI: "#f5cf75", AEMI: "#8bcfa5", GDMI: "#b5da7c", HWFI: "#f18cbb", HMNI: "#c48de8", HCCA: "#c5d4e1", TVCN: "#91dcaa" };
 const rapidEvents = new Set(["Tornado Warning", "Severe Thunderstorm Warning", "Tornado Watch", "Severe Thunderstorm Watch"]);
 const line = (points: { latitude: number; longitude: number }[]) => ({
   type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) },

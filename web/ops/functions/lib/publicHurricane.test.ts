@@ -12,6 +12,8 @@ const sample = {
   model_guidance: { status: "ready", latest_cycle: "2026-10-09T00:00:00Z", models: [
     { id: "HFAI", name: "HAFS-A", cycle: "2026-10-09T00:00:00Z", points: [0, 6, 12].map((hour) => ({ hour, valid_time: new Date(Date.parse("2026-10-09T00:00:00Z") + hour * 3600_000).toISOString(), latitude: 25 + hour / 10, longitude: -88 })) },
     { id: "HFBI", name: "HAFS-B", cycle: "2026-10-09T00:00:00Z", points: [0, 6, 12].map((hour) => ({ hour, valid_time: new Date(Date.parse("2026-10-09T00:00:00Z") + hour * 3600_000).toISOString(), latitude: 26 + hour / 10, longitude: -87 })) },
+    { id: "CTCI", name: "COAMPS-TC", cycle: "2026-10-09T00:00:00Z", points: [0, 6, 12].map((hour) => ({ hour, valid_time: new Date(Date.parse("2026-10-09T00:00:00Z") + hour * 3600_000).toISOString(), latitude: 27 + hour / 10, longitude: -86 })) },
+    { id: "AEMI", name: "GEFS ensemble mean", cycle: "2026-10-09T00:00:00Z", points: [] },
     { id: "HCCA", name: "HCCA consensus", cycle: "2026-10-09T00:00:00Z", points: [] },
   ] },
 };
@@ -26,6 +28,7 @@ describe("public hurricane boundary", () => {
     expect(publicData.projection.status).toBe("ready");
     expect(publicData.projection.points[0].members).toBe(2);
     expect(publicData.storm.max_wind_mph).toBe(100);
+    expect(publicData.guidance.models.map((model) => model.id)).toEqual(["HFAI", "HFBI", "CTCI", "AEMI", "HCCA"]);
   });
 
   it("keeps consensus aids out of the blend", () => {

@@ -10,7 +10,7 @@ import codeblackShield from "../../../src/assets/codeblack-shield.png";
 const dataUrl = import.meta.env.DEV ? "/api/hurricane" : "https://ops.codeblackwx.com/api/public/hurricane";
 const tokenUrl = import.meta.env.DEV ? "/api/mapbox-token" : "https://ops.codeblackwx.com/overlay-core/mapbox-token";
 const ageMinutes = (value: string | null | undefined) => value ? Math.round((Date.now() - Date.parse(value)) / 60000) : Infinity;
-const modelNames: Record<string, string> = { HFAI: "HAFS-A", HFBI: "HAFS-B", AVNI: "GFS", HCCA: "HCCA", TVCN: "TVCN" };
+const modelNames: Record<string, string> = { HFAI: "HAFS-A", HFBI: "HAFS-B", AVNI: "GFS" };
 
 function AegisAssessment({ data, watch }: { data: PublicHurricane; watch: WatchLocation }) {
   const projection = data.projection;
@@ -50,13 +50,13 @@ function TrendChart({ data }: { data: PublicHurricane }) {
 function App() {
   const [data, setData] = useState<PublicHurricane | null>(null), [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null), [loading, setLoading] = useState(true), [exporting, setExporting] = useState(false);
-  const [capture, setCapture] = useState<(() => string | null) | null>(null);
+  const [capture, setCapture] = useState<(() => Promise<string | null>) | null>(null);
   const [watch, setWatch] = useState<WatchLocation>(DEFAULT_WATCH);
   const [editingWatch, setEditingWatch] = useState(false), [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false), [searchError, setSearchError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<WatchLocation[]>([]);
   const [pointAlerts, setPointAlerts] = useState<PointAlert[]>([]), [alertsStatus, setAlertsStatus] = useState<"loading" | "ready" | "unavailable">("loading");
-  const registerCapture = useCallback((value: (() => string | null) | null) => setCapture(() => value), []);
+  const registerCapture = useCallback((value: (() => Promise<string | null>) | null) => setCapture(() => value), []);
   const refresh = useCallback(async () => {
     try { const response = await fetch(dataUrl, { cache: "no-store" }); if (!response.ok) throw new Error(`Feed returned ${response.status}`);
       const next = await response.json() as PublicHurricane; setData(next); setError(null);
@@ -94,7 +94,7 @@ function App() {
   const selectWatch = (candidate: WatchLocation) => { setWatch(candidate); setEditingWatch(false); setCandidates([]); setQuery(""); setSearchError(null); };
   const stale = useMemo(() => data ? ageMinutes(data.checked_at) > 90 || ageMinutes(data.guidance.latest_cycle) > 900 : false, [data]);
   const proximity = useMemo(() => data ? watchSummary(data, watch) : null, [data, watch]);
-  const exportImage = async () => { if (!data) return; setExporting(true); try { await saveBriefingImage(data, capture?.() ?? null, watch, pointAlerts, alertsStatus); } catch { setError("The image could not be created on this device. Try print / PDF instead."); } finally { setExporting(false); } };
+  const exportImage = async () => { if (!data) return; setExporting(true); try { await saveBriefingImage(data, await capture?.() ?? null, watch, pointAlerts, alertsStatus); } catch { setError("The image could not be created on this device. Try print / PDF instead."); } finally { setExporting(false); } };
   return <div className="site-shell"><header className="site-header"><a href="/" className="brand"><img className="brand-shield" src={codeblackShield} alt=""/><span>CODE BLACK <em>AEGIS</em><small>FROM WATCHING TO WARNING</small></span></a>
     <nav aria-label="Primary"><a href="#projection">Projection</a><a href="#models">Models</a><a href="#history">History</a><a href="#alerts">Alerts</a></nav><a className="official-link" href="https://www.nhc.noaa.gov/" target="_blank" rel="noreferrer">Official NHC ↗</a></header>
     <main>{loading && !data ? <div className="loading">Loading current hurricane analysis…</div> : !data ? <div className="failure"><h1>Analysis unavailable</h1><p>{error}</p><a href="https://www.nhc.noaa.gov/">View the official NHC forecast ↗</a></div> : <>
@@ -108,7 +108,7 @@ function App() {
       <section className="source-banner"><p><b>Aegis is not the National Hurricane Center.</b> The cyan track is an experimental model-center blend. The dashed white track and cone are official NHC guidance. Neither line predicts impacts at an address.</p><a href={data.official.advisory_url ?? "https://www.nhc.noaa.gov/"} target="_blank" rel="noreferrer">Read official advisory ↗</a></section>
       <section className="lower-grid"><div className="models-section" id="models"><div className="section-heading"><div><h2>Model guidance</h2><p>Most recent available cycle per aid; some cycles may differ.</p></div><span>{data.guidance.status === "ready" ? `${data.guidance.models.length} aids` : "Unavailable"}</span></div>
         <div className="model-table-wrap"><table><thead><tr><th>Guidance</th><th>Cycle</th><th>48h shift vs prior</th></tr></thead><tbody>{data.guidance.models.map((model) => <tr key={model.id}><td><i className={`model-dot model-dot--${model.id}`}/>{model.name}</td><td>{displayTime(model.cycle)}</td><td>{model.shift_48h_miles == null ? "Not comparable" : `${model.shift_48h_miles} mi`}</td></tr>)}</tbody></table></div>
-        <p className="table-note">HCCA and TVCN are consensus aids, displayed for context but not counted as independent members in the Aegis blend. Track shifts compare the same valid time.</p></div>
+        <p className="table-note">The Aegis blend remains HAFS-A, HAFS-B, and GFS. Other tracks, ensemble means, and consensus aids are shown for comparison, not silently averaged into it. Cycles may differ; track shifts compare the same valid time. <a href="https://www.nhc.noaa.gov/modelsummary.shtml" target="_blank" rel="noreferrer">NHC model guide ↗</a></p></div>
       <div className="history-section" id="history"><div className="section-heading"><div><h2>Observed history</h2><p>NHC preliminary best-track observations</p></div></div><div className="trend-stats"><div><span>Wind change</span><b>{signed(data.observed.trend.wind_change_mph, "mph")}</b></div><div><span>Pressure change</span><b>{signed(data.observed.trend.pressure_change_mb, "mb")}</b></div></div><TrendChart data={data}/></div></section>
       <section className="alerts-section" id="alerts"><div className="section-heading"><div><h2>Alerts at watch location</h2><p>Active NWS alerts returned for {watch.label}. Check the official alert for its exact coverage and instructions.</p></div><a href={`https://forecast.weather.gov/MapClick.php?lat=${watch.latitude}&lon=${watch.longitude}`} target="_blank" rel="noreferrer">Local NWS forecast ↗</a></div>
         {alertsStatus === "loading" ? <p className="empty">Checking NWS alerts for this location…</p> : alertsStatus === "unavailable" ? <p className="empty">NWS alerts could not be checked right now. Do not treat this as an all-clear; use the official local forecast.</p> : pointAlerts.length ? <div className="alert-list">{pointAlerts.map((alert, index) => <a key={`${alert.event}-${index}`} href={alert.url ?? "https://www.weather.gov/"} target="_blank" rel="noreferrer"><strong>{alert.event}</strong><span>{alert.headline}</span><small>{alert.expires ? `Expires ${displayTime(alert.expires)}` : "Expiration unavailable"} ↗</small></a>)}</div> : <p className="empty">No active NWS alert was returned for this point at this check. Keep monitoring official sources.</p>}</section>

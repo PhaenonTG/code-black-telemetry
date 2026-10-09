@@ -35,7 +35,7 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   ctx.fillStyle = "#111216"; ctx.fillRect(80, 318, 1440, 138);
   const metrics = [
     ["MAX WIND", data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`], ["PRESSURE", data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`],
-    ["48H MODEL SPREAD", data.guidance.spread_48h_miles == null ? "—" : `${data.guidance.spread_48h_miles} mi`],
+    ["48H BLEND MEMBER SPREAD", data.guidance.spread_48h_miles == null ? "—" : `${data.guidance.spread_48h_miles} mi`],
   ];
   metrics.forEach(([label, value], i) => { const x = 110 + i * 470; ctx.fillStyle = muted; ctx.font = "700 20px system-ui"; ctx.fillText(label, x, 360); ctx.fillStyle = ink; ctx.font = "700 39px system-ui"; ctx.fillText(value, x, 418); });
   ctx.fillStyle = ink; ctx.font = "700 32px system-ui"; ctx.fillText("Aegis model synthesis", 80, 530);
@@ -43,6 +43,9 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   ctx.fillStyle = "#0d0e11"; ctx.fillRect(80, 610, 1440, 800);
   if (mapPng) { const image = new Image(); image.src = mapPng; await image.decode(); ctx.drawImage(image, 80, 610, 1440, 800); }
   else { ctx.fillStyle = muted; ctx.font = "30px system-ui"; ctx.fillText("Map image unavailable — consult the live briefing for tracks.", 140, 1000); }
+  ctx.fillStyle = "#02080edb"; ctx.fillRect(104, 632, 558, 69);
+  ctx.fillStyle = ink; ctx.font = "800 26px system-ui"; ctx.fillText("NORTHERN GULF IMPACT WINDOW", 124, 674);
+  ctx.fillStyle = cyan; ctx.fillRect(104, 700, 160, 5);
   ctx.fillStyle = "#0d0e11"; ctx.fillRect(80, 1326, 650, 84);
   ctx.fillStyle = cyan; ctx.font = "700 21px system-ui"; ctx.fillText("━━  AEGIS EXPERIMENTAL", 104, 1378);
   ctx.fillStyle = "#0d0e11"; ctx.fillRect(750, 1326, 770, 84);

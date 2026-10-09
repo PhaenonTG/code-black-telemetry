@@ -4,6 +4,7 @@ import { forwardToCore, type GatewayEnv } from "./coreGateway";
 export const PUBLIC_HURRICANE_PATH = "/api/public/hurricane";
 const CORE_ROUTE = { upstreamPath: "/api/forecast/v1/hurricane-watch", allowedQueryParams: [] };
 const MODEL_IDS = new Set(["HFAI", "HFBI", "AVNI"]);
+const DISPLAY_MODEL_IDS = new Set(["HFAI", "HFBI", "AVNI", "CTCI", "CMCI", "NVGI", "UKXI", "AEMI", "GDMI", "HWFI", "HMNI", "HCCA", "TVCN"]);
 const PUBLIC_ORIGINS = new Set([
   "https://hurricane.codeblackwx.com",
   "https://storms.codeblackwx.com",
@@ -83,7 +84,7 @@ export function deriveProjection(models: unknown[], latestCycle: unknown) {
 
 export function toPublicHurricane(raw: unknown) {
   const data = object(raw), storm = object(data.storm), guidance = object(data.model_guidance), trend = object(data.observed_trend), assessment = object(data.assessment);
-  const models = array(guidance.models).map(object).filter((model) => ["HFAI", "HFBI", "AVNI", "HCCA", "TVCN"].includes(String(model.id)))
+  const models = array(guidance.models).map(object).filter((model) => DISPLAY_MODEL_IDS.has(String(model.id)))
     .map((model) => ({ id: model.id, name: string(model.name), cycle: string(model.cycle),
       points: array(model.points).map(trackPoint).filter(Boolean), shift_48h_miles: number(model.shift_48h_miles) }));
   const projection = deriveProjection(array(guidance.models), guidance.latest_cycle);

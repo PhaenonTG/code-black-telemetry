@@ -5,14 +5,37 @@ import type { PublicHurricane } from "./types";
 import type { WatchLocation } from "./watchLocation";
 import { distanceMiles } from "./watchLocation";
 
-const colors: Record<string, string> = { HFAI: "#e9b568", HFBI: "#bca9ef", AVNI: "#82aaff", HCCA: "#d8ddd8", TVCN: "#90b987" };
+const colors: Record<string, string> = { HFAI: "#e9b568", HFBI: "#bca9ef", AVNI: "#82aaff", CTCI: "#fa9372", CMCI: "#6db6ff", NVGI: "#9bbdd9", UKXI: "#f5cf75", AEMI: "#8bcfa5", GDMI: "#b5da7c", HWFI: "#f18cbb", HMNI: "#c48de8", HCCA: "#d8ddd8", TVCN: "#90b987" };
 const line = (points: { latitude: number; longitude: number }[]) => ({ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) } });
 
-export default function HurricaneMap({ data, token, onCapture, watch }: { data: PublicHurricane; token: string | null; onCapture: (capture: (() => string | null) | null) => void; watch: WatchLocation }) {
+type ViewMode = "impact" | "approach" | "basin";
+function focusBounds(data: PublicHurricane, watch: WatchLocation, view: ViewMode = "impact") {
+  const bounds = new mapboxgl.LngLatBounds();
+  bounds.extend([watch.longitude, watch.latitude]);
+  const firstHour = view === "impact" ? 24 : 0, lastHour = view === "basin" ? 72 : 36;
+  for (const point of [...data.official.track, ...data.projection.points]) {
+    if (point.hour >= firstHour && point.hour <= lastHour) bounds.extend([point.longitude, point.latitude]);
+  }
+  if (view !== "impact" && data.storm.center.latitude != null && data.storm.center.longitude != null) {
+    bounds.extend([data.storm.center.longitude, data.storm.center.latitude]);
+  }
+  if (view === "basin") for (const point of data.observed.track) bounds.extend([point.longitude, point.latitude]);
+  return bounds;
+}
+
+const afterMapIdle = (map: mapboxgl.Map) => new Promise<void>((resolve) => {
+  if (map.loaded() && !map.isMoving()) { resolve(); return; }
+  const timer = window.setTimeout(() => { map.off("idle", finish); resolve(); }, 5000);
+  const finish = () => { window.clearTimeout(timer); resolve(); };
+  map.once("idle", finish);
+});
+
+export default function HurricaneMap({ data, token, onCapture, watch }: { data: PublicHurricane; token: string | null; onCapture: (capture: (() => Promise<string | null>) | null) => void; watch: WatchLocation }) {
   const host = useRef<HTMLDivElement>(null), mapRef = useRef<mapboxgl.Map | null>(null);
   const watchRef = useRef(watch);
   watchRef.current = watch;
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>("impact");
   const [radar, setRadar] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const models = data.guidance.models;
@@ -30,22 +53,46 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     if (!map?.isStyleLoaded()) return;
     const source = map.getSource("watch") as mapboxgl.GeoJSONSource | undefined;
     source?.setData({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [watch.longitude, watch.latitude] } });
+    map.setProjection(viewMode === "basin" ? "globe" : "mercator");
+    if (viewMode === "basin") {
+      map.easeTo({ center: [-89, 29], zoom: 3.15, duration: 500 });
+      return;
+    }
     const center = data.storm.center;
-    if (center.latitude != null && center.longitude != null && distanceMiles({ latitude: center.latitude, longitude: center.longitude }, watch) < 700) {
-      const bounds = new mapboxgl.LngLatBounds();
-      bounds.extend([watch.longitude, watch.latitude]);
-      for (const point of data.official.track.filter((item) => item.hour <= 48)) bounds.extend([point.longitude, point.latitude]);
-      bounds.extend([center.longitude, center.latitude]);
-      map.fitBounds(bounds, { padding: 65, maxZoom: 6, duration: 500 });
-    } else map.easeTo({ center: [watch.longitude, watch.latitude], zoom: 5, duration: 500 });
-  }, [watch, data]);
+    if (center.latitude != null && center.longitude != null && distanceMiles({ latitude: center.latitude, longitude: center.longitude }, watch) < 700)
+      map.fitBounds(focusBounds(data, watch, viewMode), { padding: 35, maxZoom: viewMode === "impact" ? 7.5 : 6.5, duration: 500 });
+    else map.easeTo({ center: [watch.longitude, watch.latitude], zoom: 5, duration: 500 });
+  }, [watch, data, viewMode]);
   useEffect(() => {
     if (!token || !host.current || !data.storm.center.latitude || !data.storm.center.longitude) return;
     mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({ container: host.current, style: "mapbox://styles/mapbox/dark-v11", center: [data.storm.center.longitude, data.storm.center.latitude],
       zoom: 4.3, preserveDrawingBuffer: true, attributionControl: true });
     mapRef.current = map;
-    onCapture(() => { try { return map.getCanvas().toDataURL("image/png"); } catch { return null; } });
+    onCapture(async () => {
+      const container = host.current;
+      if (!container || !map.isStyleLoaded()) return null;
+      const originalStyle = container.getAttribute("style");
+      const camera = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
+      const originalProjection = map.getProjection().name;
+      const radarVisible = map.getLayer("radar") ? map.getLayoutProperty("radar", "visibility") : null;
+      try {
+        Object.assign(container.style, { position: "fixed", left: "-2000px", top: "0", width: "1440px", height: "800px" });
+        map.resize();
+        if (radarVisible === "visible") map.setLayoutProperty("radar", "visibility", "none");
+        map.setProjection("mercator");
+        map.fitBounds(focusBounds(data, watchRef.current), { padding: { top: 80, bottom: 75, left: 90, right: 90 }, maxZoom: 7.3, duration: 0 });
+        await afterMapIdle(map);
+        return map.getCanvas().toDataURL("image/png");
+      } catch { return null; }
+      finally {
+        if (originalStyle === null) container.removeAttribute("style"); else container.setAttribute("style", originalStyle);
+        map.resize();
+        map.setProjection(originalProjection);
+        if (radarVisible === "visible" && map.getLayer("radar")) map.setLayoutProperty("radar", "visibility", "visible");
+        map.jumpTo(camera);
+      }
+    });
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
     map.on("error", () => setMapError("Map tiles are temporarily unavailable. Track details remain below."));
     map.on("load", () => {
@@ -89,20 +136,15 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       map.addSource("watch", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [watchRef.current.longitude, watchRef.current.latitude] } } });
       map.addLayer({ id: "watch-halo", type: "circle", source: "watch", paint: { "circle-radius": 15, "circle-color": "#45d9d1", "circle-opacity": 0.16 } });
       map.addLayer({ id: "watch", type: "circle", source: "watch", paint: { "circle-radius": 7, "circle-color": "#45d9d1", "circle-stroke-color": "#06121c", "circle-stroke-width": 2 } });
+      map.addLayer({ id: "watch-label", type: "symbol", source: "watch", layout: { "text-field": "WATCH POINT", "text-size": 13, "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"], "text-anchor": "left", "text-offset": [1.2, -0.2], "text-allow-overlap": true }, paint: { "text-color": "#f3ffff", "text-halo-color": "#06121c", "text-halo-width": 2 } });
       map.on("click", "watch", () => new mapboxgl.Popup({ maxWidth: "220px" }).setLngLat([watchRef.current.longitude, watchRef.current.latitude]).setText(`Watch location: ${watchRef.current.label}`).addTo(map));
-      // Lead with the active Gulf/landfall window; visitors can pan to later days.
-      const positions = [...data.official.track.filter((p) => p.hour <= 48), ...data.projection.points.filter((p) => p.hour <= 48), ...data.observed.track.slice(-4)];
-      if (positions.length > 1) {
-        const bounds = new mapboxgl.LngLatBounds();
-        for (const p of positions) bounds.extend([p.longitude, p.latitude]);
-        if (distanceMiles({ latitude: center.latitude!, longitude: center.longitude! }, watchRef.current) < 700) bounds.extend([watchRef.current.longitude, watchRef.current.latitude]);
-        map.fitBounds(bounds, { padding: { top: 65, bottom: 65, left: 65, right: 65 }, maxZoom: 6, duration: 0 });
-      }
+      map.fitBounds(focusBounds(data, watchRef.current), { padding: 35, maxZoom: 7.5, duration: 0 });
     });
     return () => { onCapture(null); mapRef.current = null; map.remove(); };
   }, [data, token, onCapture]);
   const toggle = (id: string) => setSelectedModels((selected) => selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]);
-  return <div className="map-block"><div className="map-heading"><h2>Projection map</h2><div className="map-actions"><button type="button" aria-pressed={radar} onClick={() => setRadar((on) => !on)}>Radar {radar ? "on" : "off"}</button></div></div>
+  return <div className="map-block"><div className="map-heading"><h2>{viewMode === "impact" ? "Impact window · 24–36h" : viewMode === "approach" ? "Gulf approach · 0–36h" : "Basin overview"}</h2><div className="map-actions"><button type="button" aria-pressed={radar} onClick={() => setRadar((on) => !on)}>Radar {radar ? "on" : "off"}</button></div></div>
+    <div className="map-view-switch" role="group" aria-label="Map view"><button type="button" aria-pressed={viewMode === "impact"} onClick={() => setViewMode("impact")}>Impact</button><button type="button" aria-pressed={viewMode === "approach"} onClick={() => setViewMode("approach")}>Approach</button><button type="button" aria-pressed={viewMode === "basin"} onClick={() => setViewMode("basin")}>Globe overview</button></div>
     <div className="map-frame">{token ? <div ref={host} className="map-canvas" aria-label="Interactive Gulf hurricane map with watch location, Aegis, NHC, and model tracks" /> : <div className="map-fallback">Loading live map…</div>}
       {mapError && <div className="map-error" role="status">{mapError}</div>}
       <div className="map-legend"><span><i className="key-aegis"/>Aegis blend · experimental</span><span><i className="key-nhc"/>NHC official</span><span><i className="key-observed"/>Observed center</span><span><i className="key-watch"/>Watch location</span></div></div>
