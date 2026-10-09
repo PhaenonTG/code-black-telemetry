@@ -190,7 +190,8 @@ def send_status_transitions(state):
     if not state.get("attention_baselined") or state.get("coverage_version", 0) < 2:
         for key, item in current.items():
             tracked[key] = {"active": True, "bad": BAD_POLLS, "good": 0, "title": item.get("title", key),
-                            "severity": item.get("severity"), "marker": attention_marker(item)}
+                            "severity": item.get("severity"), "marker": attention_marker(item),
+                            "notified": attention_marker(item) != "UNKNOWN"}
         state["attention_baselined"] = True
         state["coverage_version"] = 2
         return 0
@@ -209,9 +210,11 @@ def send_status_transitions(state):
             if not old.get("active") and old["bad"] >= BAD_POLLS:
                 publish("Code Black alert", f"{old['title']}\n{item.get('detail', '')}", attention_priority(item), "warning")
                 old["active"] = True
+                old["notified"] = True
                 sent += 1
             elif changed:
                 publish("Code Black alert changed", f"{old['title']}\n{item.get('detail', '')}", attention_priority(item), "warning")
+                old["notified"] = True
                 sent += 1
             old["severity"] = item.get("severity")
             old["marker"] = attention_marker(item)
@@ -219,9 +222,13 @@ def send_status_transitions(state):
             old["good"] = min(GOOD_POLLS, old.get("good", 0) + 1)
             old["bad"] = 0
             if old.get("active") and old["good"] >= GOOD_POLLS:
-                publish("Code Black issue cleared", old.get("title", key), "default", "white_check_mark")
+                # Core cold-start UNKNOWN telemetry can appear for seconds
+                # while probes warm. If it was merely baselined, never page a
+                # recovery for an issue we did not actually announce.
+                if old.get("marker") != "UNKNOWN" or old.get("notified"):
+                    publish("Code Black issue cleared", old.get("title", key), "default", "white_check_mark")
+                    sent += 1
                 old["active"] = False
-                sent += 1
         if old.get("active") or old.get("bad") or old.get("good", 0) < GOOD_POLLS:
             tracked[key] = old
         else:

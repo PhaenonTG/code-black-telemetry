@@ -78,6 +78,16 @@ class BridgeTests(unittest.TestCase):
             send.assert_not_called()
         self.assertEqual(state["coverage_version"], 2)
 
+    def test_unannounced_cold_start_unknown_recovery_is_silent(self):
+        item = {"id": "svc:api", "title": "API UNKNOWN", "detail": "probe warming", "severity": "WARNING"}
+        state = {"attention_baselined": True, "attention": {}}
+        with patch.object(bridge, "get_attention", return_value={item["id"]: item}), patch.object(bridge, "publish") as send:
+            bridge.send_status_transitions(state)
+            with patch.object(bridge, "get_attention", return_value={}):
+                bridge.send_status_transitions(state)
+                bridge.send_status_transitions(state)
+            send.assert_not_called()
+
     def test_other_edge_event_sent_once_across_outbox_move(self):
         outbox = bridge.NOTIFICATION_DIR / "outbox"
         sent_dir = bridge.NOTIFICATION_DIR / "sent"
