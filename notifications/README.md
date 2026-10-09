@@ -27,6 +27,27 @@ Core stores the reader password and PHAENON3 publisher token outside Git.
 Do not paste either into shared ChatGPT, Discord, or Git. The reader account
 has read-only access to `silas-aegis`; the publisher has write-only access.
 
+## Whole-system operational alerts
+
+The existing Edge alert evaluator remains the authority for host reachability,
+Core API, MQTT, backups, PHAENON3 functional health, and failed services. The
+Core Status Center remains the inventory and dashboard for the broader fleet.
+`edge_ntfy_bridge.py` runs once per minute from the existing Edge notification
+dispatcher and forwards new Edge incident transitions and actionable Status
+Center attention transitions to the private `ops-monitoring` topic. A condition
+must appear in three Status Center polls to page and clear in two to recover.
+Pre-existing conditions are baselined on installation. Numeric incident updates
+with the same underlying issue are suppressed. Expected-offline HYTETOWER and
+Nick's currently unpowered ESPs are excluded from phone pages, not hidden from
+Status Center. Discord remains the fallback when Core/ntfy itself is down.
+
+The dedicated `ops-watcher` account has write-only access to `ops-monitoring`;
+`glenn` has read-only access. The Edge token is stored outside Git at
+`/srv/codeblack/private/ntfy/ops-publisher-token.txt`. The bridge writes health
+to `/srv/codeblack/data/status/ntfy-bridge-status.json`; its health and freshness
+are visible as **iPhone Ops Alerts** in Status Center. A bridge failure also
+becomes an Edge incident for Discord fallback.
+
 ## iPhone enrollment
 
 1. Install the free **ntfy** iOS app and keep Tailscale connected.
@@ -36,8 +57,9 @@ has read-only access to `silas-aegis`; the publisher has write-only access.
    in a local terminal with
    `ssh codeblack-core 'cat /srv/codeblack/config/ntfy/reader-password.txt'`.
    Never paste the output into shared chat.
-4. Subscribe to topic `silas-aegis` and allow iOS notifications. A harmless
-   connection-test message is already cached on the topic.
+4. Subscribe to both `silas-aegis` (full conversation text) and
+   `ops-monitoring` (system incidents and recovery) and allow iOS
+   notifications. Harmless connection-test messages are cached on both topics.
 
 If iOS shows only "New message" instead of the text, check that Tailscale is
 connected and the server URL matches exactly. Disable lock-screen previews

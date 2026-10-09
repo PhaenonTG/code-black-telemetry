@@ -20,6 +20,8 @@ class AlertPolicyTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.status = self.root / "status.json"
         self.probes = self.root / "functional-probes.json"
+        self.ntfy_bridge = self.root / "ntfy-bridge-status.json"
+        self.ntfy_bridge.write_text(json.dumps({"ok": True}))
         self.status.write_text(json.dumps({
             "core": {"tailscale_reachable": True, "ssh_reachable": True, "failed_services": 0},
             "edge": {"failed_services": 0, "root_disk_used_percent": 30},
@@ -35,6 +37,7 @@ class AlertPolicyTests(unittest.TestCase):
         env = {**os.environ,
                "CODEBLACK_STATUS_FILE": str(self.status),
                "CODEBLACK_PROBES_FILE": str(self.probes),
+               "CODEBLACK_NTFY_BRIDGE_FILE": str(self.ntfy_bridge),
                "CODEBLACK_ALERT_DATA_DIR": str(self.root / "alerts"),
                "CODEBLACK_NOTIFICATION_OUTBOX": str(self.root / "outbox"),
                "CODEBLACK_DEBOUNCE_BAD": "1"}
@@ -70,6 +73,10 @@ class AlertPolicyTests(unittest.TestCase):
         issues = self.evaluate()["issues"]
         self.assertIn("edge_status_telemetry_stale", issues)
         self.assertIn("functional_probe_telemetry_stale", issues)
+
+    def test_notification_bridge_failure_reaches_discord_fallback(self):
+        self.ntfy_bridge.write_text(json.dumps({"ok": False}))
+        self.assertIn("ops_ntfy_bridge_unhealthy", self.evaluate()["issues"])
 
 
 if __name__ == "__main__":

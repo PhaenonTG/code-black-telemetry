@@ -565,6 +565,8 @@ def build_service(svc):
         if f and f.get("exists"):
             if f["age_s"] > svc["fresh_file"]["max_age_s"]:
                 sigs.append("DEGRADED"); reasons.append(f"output file {f['age_s']}s old (max {svc['fresh_file']['max_age_s']}s)")
+            elif svc["fresh_file"].get("require_json_ok") and (f.get("json") or {}).get("ok") is not True:
+                sigs.append("DEGRADED"); reasons.append("last notification bridge run failed")
             else:
                 sigs.append("HEALTHY")
         elif fresh:

@@ -193,6 +193,17 @@
             ]
           },
           {
+            "name": "ntfy-bridge-status",
+            "path": "/srv/codeblack/data/status/ntfy-bridge-status.json",
+            "pick": [
+              "generated_at",
+              "ok",
+              "sent",
+              "errors",
+              "attention_tracked"
+            ]
+          },
+          {
             "name": "edge-status-json",
             "path": "/srv/codeblack/data/status/status.json"
           },
@@ -1212,6 +1223,24 @@
       "unit": "CodeBlack-AILab-HealthWatch",
       "deps": [],
       "urls": {}
+    },
+    {
+      "id": "edge-ntfy-bridge",
+      "name": "iPhone Ops Alerts",
+      "host": "edge",
+      "category": "edge",
+      "role": "Forwards Edge incidents and actionable Status Center transitions to the private ntfy app",
+      "fresh_file": {
+        "name": "ntfy-bridge-status",
+        "max_age_s": 180,
+        "require_json_ok": true
+      },
+      "critical": true,
+      "deps": ["ntfy-private", "edge-notification-dispatch"],
+      "urls": {
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net:8443/"
+      },
+      "docs": "notifications/README.md"
     },
     {
       "id": "silas-aegis-notify",

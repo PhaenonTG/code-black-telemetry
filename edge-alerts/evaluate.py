@@ -20,6 +20,13 @@ PROBES_FILE = Path(
     )
 )
 
+NTFY_BRIDGE_FILE = Path(
+    os.environ.get(
+        "CODEBLACK_NTFY_BRIDGE_FILE",
+        "/srv/codeblack/data/status/ntfy-bridge-status.json",
+    )
+)
+
 DATA_DIR = Path(
     os.environ.get(
         "CODEBLACK_ALERT_DATA_DIR",
@@ -132,6 +139,8 @@ if not telemetry_fresh(STATUS_FILE):
     issues.append("edge_status_telemetry_stale")
 if not telemetry_fresh(PROBES_FILE):
     issues.append("functional_probe_telemetry_stale")
+if not telemetry_fresh(NTFY_BRIDGE_FILE) or not load(NTFY_BRIDGE_FILE, {}).get("ok"):
+    issues.append("ops_ntfy_bridge_unhealthy")
 
 core = status.get("core", {})
 edge = status.get("edge", {})
