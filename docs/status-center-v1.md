@@ -80,6 +80,11 @@ coordinates. Keep these entries current whenever Mesonet firmware, receiver or
 alerting architecture changes. An authorized release still needs separate OTA
 verification on the physical board.
 
+Core's private ntfy service and PHAENON3's Silas/AEGIS notification watcher
+are also monitored as services. This dashboard receives only their health
+states; conversation text remains in AEGIS's own audit and Core's protected
+ntfy cache. See `notifications/README.md` for enrollment and retention.
+
 PHAENON3 VRAM occupancy is an informational capacity metric, even above 90%:
 the GPU is expected to run full. Edge Discord incidents exclude the
 `vram_above_90_percent` observation. GPU probe failures, orphaned runners,

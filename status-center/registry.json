@@ -71,7 +71,8 @@
           "ollama",
           "cloudflared",
           "tailscaled",
-          "codeblack-status-center"
+          "codeblack-status-center",
+          "codeblack-ntfy"
         ],
         "symlinks": [
           {
@@ -248,6 +249,7 @@
           "CodeBlack Aegis Factory Watchdog",
           "CodeBlack-AILab-Deploy",
           "CodeBlack-AILab-HealthWatch",
+          "CodeBlack-Silas-Aegis-Notify",
           "Spencer Labs Media Lab",
           "Spencer Labs Wan 2.2 Q4 Status Monitor",
           "Spencer Labs Wan 2.2 Q4 Verification Watcher",
@@ -315,6 +317,10 @@
               "last_health_check",
               "recovery_count"
             ]
+          },
+          {
+            "name": "silas-notify-heartbeat",
+            "path": "C:\\CodeBlack\\services\\ai-router\\data\\silas-aegis-notify-heartbeat.json"
           }
         ]
       }
@@ -359,6 +365,16 @@
     }
   ],
   "probes": [
+    {
+      "id": "ntfy_health",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:2586/v1/health",
+      "interval": "host",
+      "ok_json": {
+        "path": "healthy",
+        "in": [true]
+      }
+    },
     {
       "id": "core_api",
       "kind": "http_json",
@@ -968,6 +984,20 @@
       "docs": "docs/status-center-v1.md (Chase repo)"
     },
     {
+      "id": "ntfy-private",
+      "name": "Private iPhone Notifications",
+      "host": "core",
+      "category": "core",
+      "role": "Tailnet-only authenticated ntfy push gateway; seven-day message cache",
+      "unit": "codeblack-ntfy",
+      "probe": "ntfy_health",
+      "deps": [],
+      "urls": {
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net:8443/"
+      },
+      "docs": "notifications/README.md"
+    },
+    {
       "id": "pihole-ftl",
       "name": "Pi-hole FTL (DNS)",
       "host": "edge",
@@ -1182,6 +1212,21 @@
       "unit": "CodeBlack-AILab-HealthWatch",
       "deps": [],
       "urls": {}
+    },
+    {
+      "id": "silas-aegis-notify",
+      "name": "Silas / AEGIS Notify Watcher",
+      "host": "phaenon3",
+      "category": "ai",
+      "role": "Scheduled audit reader; forwards new messages to private Core ntfy",
+      "unit": "CodeBlack-Silas-Aegis-Notify",
+      "fresh_file": {
+        "name": "silas-notify-heartbeat",
+        "max_age_s": 180
+      },
+      "deps": ["ai-router", "ntfy-private"],
+      "urls": {},
+      "docs": "notifications/README.md"
     },
     {
       "id": "ollama-phaenon3",
