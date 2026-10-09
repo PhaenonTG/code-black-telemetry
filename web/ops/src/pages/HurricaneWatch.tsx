@@ -39,7 +39,7 @@ const line = (points: { latitude: number; longitude: number }[]) => ({
   type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) },
 });
 
-function HurricaneMap({ data, registerCapture, printMap }: { data: HurricaneSnapshot; registerCapture: (capture: (() => string | null) | null) => void; printMap: string | null }) {
+function HurricaneMap({ data, registerCapture, onRadarStatus, printMap }: { data: HurricaneSnapshot; registerCapture: (capture: (() => string | null) | null) => void; onRadarStatus: (status: MosaicStatus) => void; printMap: string | null }) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<InstanceType<typeof mapboxgl.Map> | null>(null);
   const visible = useRef(true);
@@ -77,7 +77,7 @@ function HurricaneMap({ data, registerCapture, printMap }: { data: HurricaneSnap
     let stopRadar: (() => void) | undefined;
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
     map.on("load", () => {
-      stopRadar = startAtlasMosaicLayer(map as unknown as Parameters<typeof startAtlasMosaicLayer>[0], () => visible.current, undefined, setRadarStatus);
+      stopRadar = startAtlasMosaicLayer(map as unknown as Parameters<typeof startAtlasMosaicLayer>[0], () => visible.current, undefined, (status) => { setRadarStatus(status); onRadarStatus(status); });
       if (data.cone && data.cone.length >= 4) {
         map.addSource("nhc-cone", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [data.cone] } } });
         map.addLayer({ id: "nhc-cone-fill", type: "fill", source: "nhc-cone", paint: { "fill-color": "#d5e4ee", "fill-opacity": 0.13 } });
@@ -215,6 +215,7 @@ export default function HurricaneWatch() {
   const [shareStatus, setShareStatus] = useState("");
   const [imageStatus, setImageStatus] = useState("");
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [exportRadarStatus, setExportRadarStatus] = useState<MosaicStatus>("loading");
   const [briefingImage, setBriefingImage] = useState<{ url: string; blob: Blob } | null>(null);
   const imageUrl = useRef<string | null>(null);
   const [printMap, setPrintMap] = useState<string | null>(null);
@@ -273,7 +274,7 @@ export default function HurricaneWatch() {
     setGeneratingImage(true);
     setImageStatus("");
     try {
-      const blob = await createHurricaneBriefingImage(data, captureMap.current?.() ?? null);
+      const blob = await createHurricaneBriefingImage(data, captureMap.current?.() ?? null, exportRadarStatus);
       if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
       const url = URL.createObjectURL(blob);
       imageUrl.current = url;
@@ -326,7 +327,7 @@ export default function HurricaneWatch() {
         <div><small>{data.status === "inactive" ? "LAST CENTER → WATCH POINT" : "CENTER → WATCH POINT"}</small><strong>{a.center_distance_miles} mi</strong><span>{data.status === "inactive" ? "Historical center distance" : "Current center distance"}</span></div>
         <div><small>{data.status === "inactive" ? "LAST FORECAST CENTER" : "CLOSEST FORECAST CENTER"}</small><strong>{a.forecast_point_distance_miles ?? "—"} mi</strong><span>{a.closest_forecast_hour != null ? `At NHC +${a.closest_forecast_hour}h point` : "Track unavailable"}</span></div>
       </section>
-      <section className="hurricane-watch__map-section" aria-label="Live radar and official track"><HurricaneMap data={data} registerCapture={(capture) => { captureMap.current = capture; }} printMap={printMap} /><p className="hurricane-watch__caption">Current IEM NEXRAD mosaic refreshes approximately every 3 minutes; radar coverage can be limited offshore. The NHC cone shows likely center positions, <b>not</b> the full area of wind, surge, rain, or tornado risk.</p></section>
+      <section className="hurricane-watch__map-section" aria-label="Live radar and official track"><HurricaneMap data={data} registerCapture={(capture) => { captureMap.current = capture; }} onRadarStatus={setExportRadarStatus} printMap={printMap} /><p className="hurricane-watch__caption">Current IEM NEXRAD mosaic refreshes approximately every 3 minutes; radar coverage can be limited offshore. The NHC cone shows likely center positions, <b>not</b> the full area of wind, surge, rain, or tornado risk.</p></section>
       <section className="hurricane-watch__panel hurricane-watch__warnings"><h2>Grand Bay warning watch</h2><p>{data.watch_point?.label} · {data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} NWS alerts` : "NWS alerts partially unavailable"}{data.alerts_checked_at ? ` · full hazard check ${time(data.alerts_checked_at)}` : ""}</p>
         {data.alerts?.map((alert) => <details key={alert.id}><summary>{alert.event} · {alert.severity}</summary><p>{alert.headline}</p><p>{alert.description}</p><small>Expires {time(alert.expires)}</small>{alert.url && <p><a href={alert.url} target="_blank" rel="noreferrer">Official warning ↗</a></p>}</details>)}
       </section>

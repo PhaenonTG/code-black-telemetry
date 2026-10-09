@@ -126,7 +126,7 @@ function mapFallback(ctx: CanvasRenderingContext2D, x: number, y: number, width:
   paragraph(ctx, "Use the official NHC forecast link below. This image does not contain live radar.", x + 42, y + height / 2 + 50, width - 84, 34, 2, C.muted);
 }
 
-export async function createHurricaneBriefingImage(data: BriefingImageData, mapDataUrl: string | null): Promise<Blob> {
+export async function createHurricaneBriefingImage(data: BriefingImageData, mapDataUrl: string | null, radarStatus: string): Promise<Blob> {
   if (!data.storm || !data.assessment) throw new Error("The current hurricane assessment is not ready.");
   await document.fonts.ready;
   const canvas = document.createElement("canvas");
@@ -156,7 +156,7 @@ export async function createHurricaneBriefingImage(data: BriefingImageData, mapD
   });
   rule(ctx, 465);
 
-  label(ctx, "LIVE RADAR & OFFICIAL NHC FORECAST", 72, 505, C.white);
+  label(ctx, `RADAR ${radarStatus.toUpperCase()} & OFFICIAL NHC FORECAST`, 72, 505, C.white);
   label(ctx, "NHC CONE = CENTER UNCERTAINTY, NOT IMPACT AREA", 780, 505);
   panel(ctx, 72, 525, 1456, 540);
   ctx.save(); ctx.beginPath(); ctx.roundRect(75, 528, 1450, 534, 15); ctx.clip();
@@ -171,7 +171,7 @@ export async function createHurricaneBriefingImage(data: BriefingImageData, mapD
   ctx.restore();
   ctx.fillStyle = "#08111bdd"; ctx.fillRect(88, 995, 1120, 55);
   ctx.fillStyle = C.white; ctx.font = "600 23px Inter, system-ui, sans-serif";
-  ctx.fillText("Coral: NHC forecast   ·   Teal: Grand Bay watch   ·   Model overlays: optional", 106, 1030);
+  ctx.fillText(`Radar ${radarStatus}  ·  Coral: NHC forecast  ·  Teal: Grand Bay watch  ·  Model overlays: optional`, 106, 1030);
 
   label(ctx, "GRAND BAY WARNING WATCH", 72, 1120, C.white);
   label(ctx, `FULL HAZARD CHECK ${printTime(data.alerts_checked_at ?? data.checked_at)}`, 690, 1120);
