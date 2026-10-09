@@ -448,6 +448,18 @@ def service_metrics(svc, sig):
         m += [("SRT connections", (pval("mtx_srt") or {}).get("json", {}).get("itemCount") if pval("mtx_srt") else None), ("WebRTC sessions", (pval("mtx_webrtc") or {}).get("json", {}).get("itemCount") if pval("mtx_webrtc") else None)]
     elif sid == "stream-monitor" and j:
         m += [(u["unit"], u.get("state")) for u in j.get("units", [])]
+    elif sid == "edge-ntfy-bridge":
+        doc, _t, fresh = coll("edge")
+        bridge = (((doc or {}).get("files") or {}).get("ntfy-bridge-status") or {}).get("json") if fresh else None
+        if bridge:
+            m += [("coverage", bridge.get("coverage")), ("active alerts", bridge.get("attention_tracked")),
+                  ("sent last run", bridge.get("sent"))]
+    elif sid == "nick-mesonet-ntfy-bridge":
+        doc, _t, fresh = coll("core")
+        bridge = (((doc or {}).get("files") or {}).get("mesonet-ntfy-health") or {}).get("json") if fresh else None
+        if bridge:
+            m += [("coverage", bridge.get("coverage")), ("active alerts", bridge.get("active")),
+                  ("sent last run", bridge.get("sent"))]
     elif sid == "core-api" and j:
         m += [("environment", j.get("environment")), ("service", j.get("service"))]
     elif sid == "radar-product":
@@ -1072,11 +1084,11 @@ def build_attention(hosts, services, streaming, radar, weather, dns, storage, la
             add(f"timers:{hid}", "WARNING", f"{hid.upper()}: {len(lst)} scheduled timers stopped (no next run)", f"{names}. Likely stalled since the last run; alert delivery and status files may be stale.", hid)
     grouped = {s["id"] for lst in elapsed.values() if len(lst) >= 2 for s in lst}
     for s in services:
-        if s["informational"] or s["id"] in grouped:
+        if s["id"] in grouped:
             continue
         host_state = next((h["state"] for h in hosts if h["id"] == s["host"]), None)
-        if s["state"] in ("DEGRADED", "OFFLINE") and host_state != "OFFLINE":
-            sev = "CRITICAL" if (s["critical"] and s["state"] == "OFFLINE") else "WARNING"
+        if s["state"] in ("DEGRADED", "OFFLINE", "UNKNOWN") and host_state != "OFFLINE":
+            sev = "INFO" if s["informational"] else ("CRITICAL" if (s["critical"] and s["state"] == "OFFLINE") else "WARNING")
             add(f"svc:{s['id']}", sev, f"{s['name']} {s['state']}", s["state_reason"], s["host"], (s["urls"].get("manage") or s["urls"].get("tailscale")))
     rs = radar["state"]
     if rs in ("STALE", "CRITICAL"):

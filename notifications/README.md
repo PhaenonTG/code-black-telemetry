@@ -33,19 +33,32 @@ The existing Edge alert evaluator remains the authority for host reachability,
 Core API, MQTT, backups, PHAENON3 functional health, and failed services. The
 Core Status Center remains the inventory and dashboard for the broader fleet.
 `edge_ntfy_bridge.py` runs once per minute from the existing Edge notification
-dispatcher and forwards new Edge incident transitions and actionable Status
-Center attention transitions to the private `ops-monitoring` topic. A condition
-must appear in three Status Center polls to page and clear in two to recover.
-Pre-existing conditions are baselined on installation. Numeric incident updates
-with the same underlying issue are suppressed. Expected-offline HYTETOWER and
-Nick's currently unpowered ESPs are excluded from phone pages, not hidden from
-Status Center. Discord remains the fallback when Core/ntfy itself is down.
+dispatcher and forwards every new Edge incident/event type and every Status
+Center attention transition (Info, Warning, Critical, and severity/state
+changes) to the private `ops-monitoring` topic. This includes expected-offline
+hosts and unpowered ESPs; they are baselined at rollout and alert on later
+recovery or re-failure. A new condition must appear in three Status Center
+polls to page and clear in two to recover. Numeric incident updates with the
+same underlying issue are suppressed, as is normal GPU occupancy over 90% per
+operator preference. Unchanged conditions never generate repeated pushes.
+Discord remains the fallback when Core/ntfy itself is down.
+
+Nick's dedicated Core mesonet evaluator also has a private 15-second ntfy
+mirror, `codeblack-mesonet-ntfy-bridge.timer`. It reads its durable alert rows
+for offline, short-stale telemetry, reboot loops, and OTA update failures,
+including open and resolution transitions. A row that opens and clears between
+checks is reported as a short event. Existing rows were baselined at install;
+failed publishes remain pending for the next run. Its write-only token and
+cursor stay under Core's private mesonet management directory. Status Center
+shows this separately as **Nick Mesonet iPhone Alerts**. The original mesonet
+Discord delivery is unchanged.
 
 The dedicated `ops-watcher` account has write-only access to `ops-monitoring`;
 `glenn` has read-only access. The Edge token is stored outside Git at
 `/srv/codeblack/private/ntfy/ops-publisher-token.txt`. The bridge writes health
 to `/srv/codeblack/data/status/ntfy-bridge-status.json`; its health and freshness
-are visible as **iPhone Ops Alerts** in Status Center. A bridge failure also
+are visible as **iPhone Ops Alerts** in Status Center, along with coverage and
+tracked-alert counts. A bridge failure also
 becomes an Edge incident for Discord fallback.
 
 ## iPhone enrollment

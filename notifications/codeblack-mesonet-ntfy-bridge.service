@@ -1,0 +1,19 @@
+[Unit]
+Description=Mirror durable Nick mesonet alert transitions to private ntfy
+After=network-online.target codeblack-ntfy.service codeblack-mesonet-alerts.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cbwx-core
+Group=cbwx-core
+SupplementaryGroups=codeblack
+ExecStart=/usr/bin/python3 /srv/codeblack/data/mesonet/ops/mesonet_ntfy_bridge.py
+UMask=0027
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/srv/codeblack/data/mesonet/management /srv/codeblack/data/status-center/mesonet-ntfy
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+

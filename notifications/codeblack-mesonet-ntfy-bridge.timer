@@ -1,0 +1,12 @@
+[Unit]
+Description=Check Nick mesonet alert transitions every 15 seconds
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=15s
+AccuracySec=1s
+Persistent=true
+Unit=codeblack-mesonet-ntfy-bridge.service
+
+[Install]
+WantedBy=timers.target

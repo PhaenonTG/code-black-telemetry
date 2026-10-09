@@ -58,6 +58,7 @@
         "units": [
           "codeblack-core-api",
           "codeblack-mesonet-alerts",
+          "codeblack-mesonet-ntfy-bridge.timer",
           "mediamtx",
           "codeblack-monitor",
           "codeblack-radar-worker",
@@ -73,6 +74,21 @@
           "tailscaled",
           "codeblack-status-center",
           "codeblack-ntfy"
+        ],
+        "files": [
+          {
+            "name": "mesonet-ntfy-health",
+            "path": "/srv/codeblack/data/status-center/mesonet-ntfy/health.json",
+            "pick": [
+              "generated_at",
+              "ok",
+              "sent",
+              "active",
+              "tracked",
+              "error",
+              "coverage"
+            ]
+          }
         ],
         "symlinks": [
           {
@@ -200,7 +216,9 @@
               "ok",
               "sent",
               "errors",
-              "attention_tracked"
+              "attention_tracked",
+              "coverage",
+              "coverage_version"
             ]
           },
           {
@@ -795,6 +813,25 @@
       "docs": "firmware/mesonet-idf/ARCHITECTURE.md (Nick Mesonet project)"
     },
     {
+      "id": "nick-mesonet-ntfy-bridge",
+      "name": "Nick Mesonet iPhone Alerts",
+      "host": "core",
+      "category": "weather",
+      "role": "Mirrors all durable ESP32 offline, stale, reboot-loop and OTA-failure alert transitions to private ntfy",
+      "unit": "codeblack-mesonet-ntfy-bridge.timer",
+      "fresh_file": {
+        "name": "mesonet-ntfy-health",
+        "max_age_s": 90,
+        "require_json_ok": true
+      },
+      "critical": true,
+      "deps": ["nick-mesonet-alerts", "ntfy-private"],
+      "urls": {
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net:8443/"
+      },
+      "docs": "notifications/README.md"
+    },
+    {
       "id": "mediamtx",
       "name": "MediaMTX",
       "host": "core",
@@ -1229,7 +1266,7 @@
       "name": "iPhone Ops Alerts",
       "host": "edge",
       "category": "edge",
-      "role": "Forwards Edge incidents and actionable Status Center transitions to the private ntfy app",
+      "role": "Forwards all Edge-generated events and all Status Center attention transitions, including Info and severity changes, to private ntfy",
       "fresh_file": {
         "name": "ntfy-bridge-status",
         "max_age_s": 180,

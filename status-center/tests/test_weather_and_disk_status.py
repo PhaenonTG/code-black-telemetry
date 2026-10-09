@@ -48,6 +48,21 @@ class WeatherAndDiskStatusTests(unittest.TestCase):
     def test_busy_compute_is_not_an_incident_transition(self):
         self.assertEqual(server.state_rank("BUSY"), server.state_rank("HEALTHY"))
 
+    def test_attention_includes_informational_and_unknown_services(self):
+        host = {"id": "edge", "name": "EDGE", "state": "HEALTHY", "state_reason": None,
+                "expected_online": True, "disks": []}
+        service = {"id": "optional", "name": "Optional feed", "host": "edge", "state": "OFFLINE",
+                   "state_reason": "not publishing", "informational": True, "critical": False, "urls": {}}
+        with patch.object(server, "FIRST_SEEN", {}), patch.object(server, "probes_warmed", return_value=False):
+            items = server.build_attention([host], [service], {"sources": []}, {"state": "FRESH"},
+                                           {"items": []}, {"instances": []}, {"backups": []}, {}, {})
+            self.assertEqual(items[0]["id"], "svc:optional")
+            self.assertEqual(items[0]["severity"], "INFO")
+            service.update(state="UNKNOWN", informational=False)
+            items = server.build_attention([host], [service], {"sources": []}, {"state": "FRESH"},
+                                           {"items": []}, {"instances": []}, {"backups": []}, {}, {})
+            self.assertEqual(items[0]["severity"], "WARNING")
+
     def test_attention_since_survives_restart_and_resets_after_recovery(self):
         host = {"id": "hytetower", "name": "HYTETOWER", "state": "OFFLINE",
                 "state_reason": "peer offline", "expected_online": True, "disks": []}

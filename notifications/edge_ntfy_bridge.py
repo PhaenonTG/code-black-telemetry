@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Forward actionable Edge and Status Center transitions to private ntfy.
+"""Forward all monitored Edge and Status Center alert transitions to ntfy.
 
 The existing Edge evaluator owns infrastructure incidents. Status Center owns
 service-level attention. This bridge only delivers transitions; it does not
@@ -9,6 +9,7 @@ create a second monitoring authority or re-page existing conditions on install.
 import datetime as dt
 import json
 import os
+import re
 import time
 import urllib.request
 from pathlib import Path
@@ -20,7 +21,9 @@ TOKEN = Path(os.environ.get("CODEBLACK_NTFY_OPS_TOKEN", "/srv/codeblack/private/
 STATUS_URL = os.environ.get("CODEBLACK_STATUS_URL", "https://codeblack-core.tail1d0673.ts.net/status/api/status")
 NTFY_URL = os.environ.get("CODEBLACK_NTFY_URL", "https://codeblack-core.tail1d0673.ts.net:8443/ops-monitoring")
 DASHBOARD_URL = "https://codeblack-core.tail1d0673.ts.net/status/"
-IGNORED_ATTENTION = {"host:hytetower", "svc:nick-mesonet-wind", "svc:nick-mesonet-weather"}
+NOTIFICATION_DIR = Path(os.environ.get("CODEBLACK_NOTIFICATION_DIR", "/srv/codeblack/data/notifications"))
+INCIDENT_TYPES = {"incident_start", "incident_update", "recovery"}
+STATE_WORDS = re.compile(r"\b(OFFLINE|DEGRADED|UNKNOWN|STALE|AGING|CRITICAL|ERROR|UNAVAILABLE|VERIFYING)\b", re.I)
 BAD_POLLS = 3
 GOOD_POLLS = 2
 
@@ -66,7 +69,13 @@ def publish(title, body, priority="default", tags="warning"):
 
 
 def issue_keys(event):
-    return sorted(str(issue).split(":", 1)[0] for issue in event.get("issues", []))
+    keys = []
+    for issue in event.get("issues", []):
+        name, _, value = str(issue).partition(":")
+        # A changing backup age or disk percentage is not a new incident;
+        # a different failed node or service is.
+        keys.append(name if value.replace(".", "", 1).isdigit() else str(issue))
+    return sorted(keys)
 
 
 def send_edge_events(state):
@@ -93,7 +102,7 @@ def send_edge_events(state):
                 state["event_offset"] = next_offset
                 continue
             kind = event.get("type")
-            if kind not in {"incident_start", "incident_update", "recovery"}:
+            if kind not in INCIDENT_TYPES:
                 state["event_offset"] = next_offset
                 continue
             keys = issue_keys(event)
@@ -110,6 +119,45 @@ def send_edge_events(state):
     return sent
 
 
+def send_other_edge_events(state):
+    """Deliver non-incident events from the shared Discord outbox as well."""
+    files = {}
+    for folder in ("outbox", "sent", "failed"):
+        for path in (NOTIFICATION_DIR / folder).glob("*.json"):
+            files.setdefault(path.name, path)
+    seen = set(state.get("other_edge_seen", []))
+    if not state.get("other_edge_baselined"):
+        state["other_edge_seen"] = sorted(files)
+        state["other_edge_baselined"] = True
+        return 0
+    sent = 0
+    for name, path in sorted(files.items()):
+        if name in seen:
+            continue
+        if not path.exists():
+            continue  # Discord may have moved an outbox file during this scan.
+        event = load(path, {})
+        kind = str(event.get("type", "unknown"))
+        if kind not in INCIDENT_TYPES:
+            stream = event.get("stream") or {}
+            if kind == "stream_live" and isinstance(stream, dict):
+                body = f"{stream.get('owner', 'Code Black')} live on {stream.get('provider', 'stream provider')}"
+                if str(stream.get("url", "")).startswith("https://"):
+                    body += f"\n{stream['url']}"
+                title = "Code Black stream live"
+            elif kind == "test":
+                title, body = "Code Black notification test", "Test event from Edge."
+            else:
+                title = f"Code Black event: {kind[:80]}"
+                body = "\n".join(str(issue) for issue in event.get("issues", [])[:12]) or "See Status Center for details."
+            publish(title, body, "default", "information_source")
+            sent += 1
+        seen.add(name)
+        state["other_edge_seen"] = sorted(seen)
+        save(STATE, state)
+    return sent
+
+
 def get_attention():
     with urllib.request.urlopen(STATUS_URL, timeout=8) as response:
         payload = json.load(response)
@@ -120,18 +168,31 @@ def get_attention():
             raise RuntimeError(f"Status Center snapshot stale ({age:.0f}s)")
     return {
         item["id"]: item for item in payload.get("attention", [])
-        if item.get("severity") in {"WARNING", "ERROR", "CRITICAL"}
-        and item.get("id") not in IGNORED_ATTENTION
+        if item.get("severity") in {"INFO", "WARNING", "ERROR", "CRITICAL"}
+        and "vram_above_90_percent" not in item.get("id", "").lower()
     }
+
+
+def attention_marker(item):
+    match = STATE_WORDS.search(item.get("title", ""))
+    return match.group(1).upper() if match else ""
+
+
+def attention_priority(item):
+    return "urgent" if item.get("severity") in {"CRITICAL", "ERROR"} else (
+        "high" if item.get("severity") == "WARNING" else "default"
+    )
 
 
 def send_status_transitions(state):
     current = get_attention()
     tracked = state.setdefault("attention", {})
-    if not state.get("attention_baselined"):
+    if not state.get("attention_baselined") or state.get("coverage_version", 0) < 2:
         for key, item in current.items():
-            tracked[key] = {"active": True, "bad": BAD_POLLS, "good": 0, "title": item.get("title", key)}
+            tracked[key] = {"active": True, "bad": BAD_POLLS, "good": 0, "title": item.get("title", key),
+                            "severity": item.get("severity"), "marker": attention_marker(item)}
         state["attention_baselined"] = True
+        state["coverage_version"] = 2
         return 0
     sent = 0
     for key in sorted(set(tracked) | set(current)):
@@ -140,11 +201,20 @@ def send_status_transitions(state):
         if item:
             old["bad"] = min(BAD_POLLS, old.get("bad", 0) + 1)
             old["good"] = 0
+            changed = old.get("active") and (
+                old.get("severity") not in (None, item.get("severity"))
+                or old.get("marker") not in (None, attention_marker(item))
+            )
             old["title"] = item.get("title", key)
             if not old.get("active") and old["bad"] >= BAD_POLLS:
-                publish("Code Black needs attention", f"{old['title']}\n{item.get('detail', '')}", "high", "warning")
+                publish("Code Black alert", f"{old['title']}\n{item.get('detail', '')}", attention_priority(item), "warning")
                 old["active"] = True
                 sent += 1
+            elif changed:
+                publish("Code Black alert changed", f"{old['title']}\n{item.get('detail', '')}", attention_priority(item), "warning")
+                sent += 1
+            old["severity"] = item.get("severity")
+            old["marker"] = attention_marker(item)
         else:
             old["good"] = min(GOOD_POLLS, old.get("good", 0) + 1)
             old["bad"] = 0
@@ -169,12 +239,17 @@ def main():
     except Exception as exc:
         errors.append(f"edge-events: {exc}")
     try:
+        sent += send_other_edge_events(state)
+    except Exception as exc:
+        errors.append(f"other-edge-events: {exc}")
+    try:
         sent += send_status_transitions(state)
     except Exception as exc:
         errors.append(f"status-center: {exc}")
     save(STATE, state)
     save(HEALTH, {"generated_at": utcnow(), "ok": not errors, "sent": sent, "errors": errors,
-                  "event_offset": state.get("event_offset"), "attention_tracked": len(state.get("attention", {}))})
+                  "event_offset": state.get("event_offset"), "attention_tracked": len(state.get("attention", {})),
+                  "coverage": "all-status-attention-and-edge-events", "coverage_version": 2})
     print(f"ntfy bridge: sent={sent}, errors={len(errors)}")
     for error in errors:
         print(error)
