@@ -95,7 +95,7 @@ export function deriveProjection(models: unknown[], latestCycle: unknown) {
 }
 
 export function toPublicHurricane(raw: unknown) {
-  const data = object(raw), storm = object(data.storm), guidance = object(data.model_guidance), trend = object(data.observed_trend), assessment = object(data.assessment), ai = object(data.ai);
+  const data = object(raw), storm = object(data.storm), guidance = object(data.model_guidance), trend = object(data.observed_trend), assessment = object(data.assessment), ai = object(data.ai), changes = object(data.changes_since_previous);
   const aiSummary = ai.status === "ready" ? publicNarrative(ai.summary) : null;
   const models = array(guidance.models).map(object).filter((model) => DISPLAY_MODEL_IDS.has(String(model.id)))
     .map((model) => ({ id: model.id, name: string(model.name), cycle: string(model.cycle),
@@ -121,6 +121,14 @@ export function toPublicHurricane(raw: unknown) {
     projection, guidance: { status: string(guidance.status), latest_cycle: string(guidance.latest_cycle), models,
       spread_48h_miles: number(guidance.spread_48h_miles), wind_48h_mph_range: Array.isArray(guidance.wind_48h_mph_range) ? guidance.wind_48h_mph_range.map(number) : null },
     observed: { track: observed, trend: { period_hours: number(trend.period_hours), wind_change_mph: number(trend.wind_change_mph), pressure_change_mb: number(trend.pressure_change_mb) } },
+    changes: { first_run: changes.first_run === true, previous_checked_at: string(changes.previous_checked_at),
+      advisory_changed: changes.advisory_changed === true, wind_change_mph: number(changes.wind_change_mph), pressure_change_mb: number(changes.pressure_change_mb),
+      new_alerts: array(changes.new_alerts).slice(0, 8).map(publicNarrative).filter(Boolean),
+      cleared_alerts: array(changes.cleared_alerts).slice(0, 8).map(publicNarrative).filter(Boolean),
+      model_cycle_changes: array(changes.model_cycle_changes).slice(0, 13).map(publicNarrative).filter(Boolean),
+      new_report_count: array(changes.new_reports).length },
+    monitoring: { radar_analysis: "not_ingested", source_check_minutes: 5,
+      ai_mode: "on_source_change", model_tracks: models.length },
     regional_alerts: alerts, regional_alerts_status: string(data.coastal_context_status),
     ai: { status: aiSummary ? "ready" : ai.status === "ready" ? "withheld" : "unavailable",
       analyzed_at: aiSummary ? string(ai.analyzed_at) : null, summary: aiSummary,
@@ -137,7 +145,7 @@ export async function handlePublicHurricane(request: Request, env: GatewayEnv, c
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "GET, OPTIONS" } });
   if (request.method !== "GET") return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: { "Content-Type": "application/json", ...cors } });
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v3");
+  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v5");
   const cached = cache ? await cache.match(cacheKey) : null;
   if (cached) return new Response(cached.body, { status: 200, headers: { ...Object.fromEntries(cached.headers), ...cors } });
   const result = await forwardToCore(CORE_ROUTE, new URL(request.url), env);

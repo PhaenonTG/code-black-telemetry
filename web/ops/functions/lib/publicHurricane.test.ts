@@ -45,6 +45,17 @@ describe("public hurricane boundary", () => {
       recommended_attention: ["Monitor National Weather Service updates"] });
   });
 
+  it("exposes bounded change signals without private report or watch-point detail", () => {
+    const result = toPublicHurricane({ ...sample, changes_since_previous: {
+      previous_checked_at: "2026-10-09T00:00:00Z", advisory_changed: true,
+      new_alerts: ["Tornado Warning", "12150 Rolling Meadows Ln"],
+      new_reports: ["private report text"], model_cycle_changes: ["HAFS-A"] } });
+    expect(result.changes.new_alerts).toEqual(["Tornado Warning"]);
+    expect(result.changes.new_report_count).toBe(1);
+    expect(result.changes.model_cycle_changes).toEqual(["HAFS-A"]);
+    expect(JSON.stringify(result)).not.toContain("Rolling Meadows");
+  });
+
   it("withholds an uninformative Aegis fallback instead of displaying it as analysis", () => {
     const result = toPublicHurricane({ ...sample, ai: { status: "ready", summary: "Environment status is unsupported with no available fields." } });
     expect(result.ai.status).toBe("withheld");

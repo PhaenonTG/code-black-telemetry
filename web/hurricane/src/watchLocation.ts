@@ -34,7 +34,19 @@ export function watchSummary(data: PublicHurricane, watch: WatchLocation) {
 export async function fetchPointAlerts(watch: WatchLocation, signal: AbortSignal): Promise<PointAlert[]> {
   const url = new URL("https://api.weather.gov/alerts/active");
   url.searchParams.set("point", `${watch.latitude.toFixed(4)},${watch.longitude.toFixed(4)}`);
-  const response = await fetch(url, { signal, headers: { Accept: "application/geo+json" } });
+  let response: Response;
+  try {
+    response = await fetch(url, { signal, headers: { Accept: "application/geo+json" } });
+    if (response.status >= 500 || response.status === 429) throw new Error(`NWS alerts returned ${response.status}`);
+  } catch (cause) {
+    if (signal.aborted) throw cause;
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => { signal.removeEventListener("abort", onAbort); resolve(); }, 1500);
+      const onAbort = () => { window.clearTimeout(timer); reject(signal.reason); };
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+    response = await fetch(url, { signal, headers: { Accept: "application/geo+json" } });
+  }
   if (!response.ok) throw new Error(`NWS alerts returned ${response.status}`);
   const body = await response.json() as { features?: { id?: string; properties?: Record<string, unknown> }[] };
   return (body.features ?? []).map((feature) => {

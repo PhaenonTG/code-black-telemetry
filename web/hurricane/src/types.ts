@@ -10,6 +10,9 @@ export type PublicHurricane = {
   guidance: { status: string | null; latest_cycle: string | null; models: Model[]; spread_48h_miles: number | null; wind_48h_mph_range: number[] | null };
   observed: { track: { latitude: number; longitude: number; valid_time: string | null; wind_mph: number | null; pressure_mb: number | null }[];
     trend: { period_hours: number | null; wind_change_mph: number | null; pressure_change_mb: number | null } };
+  changes: { first_run: boolean; previous_checked_at: string | null; advisory_changed: boolean; wind_change_mph: number | null; pressure_change_mb: number | null;
+    new_alerts: string[]; cleared_alerts: string[]; model_cycle_changes: string[]; new_report_count: number };
+  monitoring: { radar_analysis: string; source_check_minutes: number; ai_mode: string; model_tracks: number };
   regional_alerts: { event: string | null; headline: string | null; severity: string | null; expires: string | null; url: string | null }[];
   regional_alerts_status: string | null; disclosure: string;
   ai?: { status: "ready" | "withheld" | "unavailable"; analyzed_at: string | null; summary: string | null;

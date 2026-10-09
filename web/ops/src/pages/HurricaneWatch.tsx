@@ -319,7 +319,7 @@ export default function HurricaneWatch() {
     window.setTimeout(() => window.print(), 150);
   };
   return <main className="hurricane-watch">
-    <header className="hurricane-watch__header"><div><h1><span>{data?.storm?.classification === "HU" ? "Hurricane" : "Storm"}</span> <em>{data?.storm?.name ?? "Gulf"}</em></h1><p>Grand Bay watch · source checks about every ten minutes</p></div><Link to="/weather">Weather →</Link></header>
+    <header className="hurricane-watch__header"><div><h1><span>{data?.storm?.classification === "HU" ? "Hurricane" : "Storm"}</span> <em>{data?.storm?.name ?? "Gulf"}</em></h1><p>Grand Bay watch · source checks about every five minutes</p></div><Link to="/weather">Weather →</Link></header>
     {error && <p role="alert" className="hurricane-watch__error">{error}</p>}
     {!data && !error && <p role="status">Loading the latest assessment…</p>}
     {data?.status === "pending" && <p role="status">{data.notice}</p>}
