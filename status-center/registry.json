@@ -376,7 +376,7 @@
       "id": "mesonet_latest",
       "kind": "mesonet_latest",
       "url": "http://127.0.0.1:8000/api/mesonet/v1/latest",
-      "interval": "fast"
+      "interval": 2
     },
     {
       "id": "core_api_storm",

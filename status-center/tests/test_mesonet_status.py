@@ -30,6 +30,10 @@ class Response:
 
 
 class MesonetStatusTests(unittest.TestCase):
+    def test_probe_interval_matches_live_reporting(self):
+        probe = next(p for p in server.REG["probes"] if p["id"] == "mesonet_latest")
+        self.assertEqual(probe["interval"], 2)
+
     def test_probe_retains_only_role_ages(self):
         private = {"wind": {"received_age_ms": 1200, "readings": {"wind_mps": 8}},
                    "weather": {"received_age_ms": 40000, "readings": {"latitude": 37.1}}}
