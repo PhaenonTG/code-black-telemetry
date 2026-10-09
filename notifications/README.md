@@ -73,6 +73,16 @@ If iOS shows only "New message" instead of the text, check that Tailscale is
 connected and the server URL matches exactly. Disable lock-screen previews
 in iOS Settings if message text should not be visible on the lock screen.
 
+If a test is visible after manually refreshing a topic but never appears as a
+push notification, first test again with the ntfy app in the background and
+the phone locked. Confirm iOS Settings → Notifications → ntfy allows alerts.
+If still silent, remove and re-add the subscription to force Firebase/APNS
+registration; ntfy documents this as a recovery step. On Core, run
+`python3 notifications/diagnose_ios_push.py` from a staged copy to verify a
+harmless publish produces the hashed upstream `poll_request`. This diagnostic
+prints no credentials or message text. It does not prove that the iPhone
+registered or that iOS displayed the alert.
+
 Checks:
 
 - `systemctl is-active codeblack-ntfy` and `curl -fsS http://127.0.0.1:2586/v1/health` on Core.
