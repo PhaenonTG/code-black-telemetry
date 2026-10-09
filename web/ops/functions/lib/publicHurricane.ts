@@ -6,6 +6,7 @@ const CORE_ROUTE = { upstreamPath: "/api/forecast/v1/hurricane-watch", allowedQu
 const MODEL_IDS = new Set(["HFAI", "HFBI", "AVNI"]);
 const DISPLAY_MODEL_IDS = new Set(["HFAI", "HFBI", "AVNI", "CTCI", "CMCI", "NVGI", "UKXI", "AEMI", "GDMI", "HWFI", "HMNI", "HCCA", "TVCN"]);
 const PUBLIC_ORIGINS = new Set([
+  "https://tropics.codeblackwx.com",
   "https://hurricane.codeblackwx.com",
   "https://storms.codeblackwx.com",
   "https://codeblack-hurricane.pages.dev",
@@ -23,10 +24,11 @@ const string = (value: unknown): string | null => typeof value === "string" ? va
 // The Core assessment may know a private watch point. Publish only guarded,
 // non-numeric narrative; never forward raw AI output or private identifiers.
 const privateNarrative = /\d|@|https?:|rolling\s+meadows|\b(?:street|st\.?|road|rd\.?|lane|ln\.?|drive|dr\.?|avenue|ave\.?|boulevard|blvd\.?)\b/i;
+const lowValueNarrative = /\b(?:unsupported with no available fields|no available fields|insufficient data to analyze|as an ai language model)\b/i;
 const publicNarrative = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
   const prose = value.trim();
-  return prose && prose.length <= 650 && !privateNarrative.test(prose) ? prose : null;
+  return prose && prose.length <= 650 && !privateNarrative.test(prose) && !lowValueNarrative.test(prose) ? prose : null;
 };
 const publicNarrativeList = (value: unknown): string[] =>
   array(value).slice(0, 5).map(publicNarrative).filter((item): item is string => !!item);
@@ -135,7 +137,7 @@ export async function handlePublicHurricane(request: Request, env: GatewayEnv, c
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "GET, OPTIONS" } });
   if (request.method !== "GET") return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: { "Content-Type": "application/json", ...cors } });
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v2");
+  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v3");
   const cached = cache ? await cache.match(cacheKey) : null;
   if (cached) return new Response(cached.body, { status: 200, headers: { ...Object.fromEntries(cached.headers), ...cors } });
   const result = await forwardToCore(CORE_ROUTE, new URL(request.url), env);

@@ -9,5 +9,8 @@
     "directory": "./dist",
     "not_found_handling": "single-page-application"
   },
-  "routes": [{ "pattern": "hurricane.codeblackwx.com", "custom_domain": true }]
+  "routes": [
+    { "pattern": "tropics.codeblackwx.com", "custom_domain": true },
+    { "pattern": "hurricane.codeblackwx.com", "custom_domain": true }
+  ]
 }

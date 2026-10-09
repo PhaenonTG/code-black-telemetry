@@ -45,6 +45,12 @@ describe("public hurricane boundary", () => {
       recommended_attention: ["Monitor National Weather Service updates"] });
   });
 
+  it("withholds an uninformative Aegis fallback instead of displaying it as analysis", () => {
+    const result = toPublicHurricane({ ...sample, ai: { status: "ready", summary: "Environment status is unsupported with no available fields." } });
+    expect(result.ai.status).toBe("withheld");
+    expect(result.ai.summary).toBeNull();
+  });
+
   it("keeps consensus aids out of the blend", () => {
     const result = deriveProjection(sample.model_guidance.models, sample.model_guidance.latest_cycle);
     expect(result.member_ids).toEqual(["HFAI", "HFBI"]);
@@ -57,5 +63,11 @@ describe("public hurricane boundary", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("https://hurricane.codeblackwx.com");
     expect(await response.text()).not.toContain("Rolling Meadows");
+  });
+
+  it("allows the Tropics origin to read the public feed", async () => {
+    const env = { CORE_GATEWAY_WORKER: { fetch: async () => new Response(JSON.stringify(sample), { status: 200, headers: { "Content-Type": "application/json" } }) } };
+    const response = await handlePublicHurricane(new Request("https://ops.codeblackwx.com/api/public/hurricane", { headers: { Origin: "https://tropics.codeblackwx.com" } }), env);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("https://tropics.codeblackwx.com");
   });
 });

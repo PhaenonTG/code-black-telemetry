@@ -3,7 +3,7 @@ import type { PublicHurricane, TrackPoint, ProjectionPoint } from "./types";
 export type WatchLocation = { label: string; latitude: number; longitude: number };
 export type PointAlert = { event: string; headline: string; severity: string | null; expires: string | null; url: string | null };
 export const DEFAULT_WATCH: WatchLocation = {
-  label: "12150 Rolling Meadows Ln, Grand Bay, AL 36541",
+  label: "Grand Bay, Alabama",
   latitude: 30.447577800627,
   longitude: -88.329515563521,
 };

@@ -12,7 +12,7 @@ type ViewMode = "impact" | "approach" | "basin";
 function focusBounds(data: PublicHurricane, watch: WatchLocation, view: ViewMode = "impact") {
   const bounds = new mapboxgl.LngLatBounds();
   bounds.extend([watch.longitude, watch.latitude]);
-  const firstHour = view === "impact" ? 24 : 0, lastHour = view === "basin" ? 72 : 36;
+  const firstHour = view === "impact" ? 24 : 0, lastHour = view === "basin" ? 72 : view === "approach" ? 24 : 36;
   for (const point of [...data.official.track, ...data.projection.points]) {
     if (point.hour >= firstHour && point.hour <= lastHour) bounds.extend([point.longitude, point.latitude]);
   }
@@ -35,7 +35,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
   const watchRef = useRef(watch);
   watchRef.current = watch;
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>("impact");
+  const [viewMode, setViewMode] = useState<ViewMode>("approach");
   const [radar, setRadar] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const models = data.guidance.models;
@@ -71,7 +71,9 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     mapRef.current = map;
     onCapture(async () => {
       const container = host.current;
-      if (!container || !map.isStyleLoaded()) return null;
+      if (!container) return null;
+      await afterMapIdle(map);
+      if (!map.isStyleLoaded()) return null;
       const originalStyle = container.getAttribute("style");
       const camera = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
       const originalProjection = map.getProjection().name;
@@ -83,7 +85,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
         if (radarVisible === "visible") map.setLayoutProperty("radar", "visibility", "none");
         for (const [id, visibility] of modelVisibility) if (visibility === "visible") map.setLayoutProperty(`model-${id}`, "visibility", "none");
         map.setProjection("mercator");
-        map.fitBounds(focusBounds(data, watchRef.current), { padding: { top: 80, bottom: 75, left: 90, right: 90 }, maxZoom: 7.3, duration: 0 });
+        map.fitBounds(focusBounds(data, watchRef.current, "approach"), { padding: { top: 80, bottom: 75, left: 90, right: 90 }, maxZoom: 7.3, duration: 0 });
         await afterMapIdle(map);
         return map.getCanvas().toDataURL("image/png");
       } catch { return null; }
@@ -113,6 +115,15 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       if (data.official.track.length > 1) {
         map.addSource("official", { type: "geojson", data: line(data.official.track) });
         map.addLayer({ id: "official", type: "line", source: "official", paint: { "line-color": "#f2f4ef", "line-width": 3, "line-dasharray": [2, 1.5] } });
+        map.addSource("official-points", { type: "geojson", data: { type: "FeatureCollection", features: data.official.track.filter((point) => point.hour > 0).map((point) => ({ type: "Feature", properties: { hour: point.hour, wind_mph: point.wind_mph, valid_time: point.valid_time }, geometry: { type: "Point", coordinates: [point.longitude, point.latitude] } })) } });
+        map.addLayer({ id: "official-dots", type: "circle", source: "official-points", paint: { "circle-radius": 5, "circle-color": "#f2f4ef", "circle-stroke-color": "#071015", "circle-stroke-width": 1.5 } });
+        map.on("click", "official-dots", (event) => {
+          const feature = event.features?.[0] as unknown as { geometry: { type: string; coordinates: number[] }; properties?: Record<string, number | string | null> } | undefined;
+          if (!feature || feature.geometry.type !== "Point") return;
+          const hour = Number(feature.properties?.hour ?? 0), wind = Number(feature.properties?.wind_mph);
+          new mapboxgl.Popup({ closeButton: false, maxWidth: "220px" }).setLngLat(feature.geometry.coordinates as [number, number])
+            .setText(`NHC official forecast +${hour}h${Number.isFinite(wind) && wind > 0 ? ` · max wind ${wind} mph` : ""}. This is a center forecast, not a local impact prediction.`).addTo(map);
+        });
       }
       for (const model of models) {
         if (model.points.length < 2) continue;
@@ -141,17 +152,17 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       map.addLayer({ id: "watch", type: "circle", source: "watch", paint: { "circle-radius": 7, "circle-color": "#45d9d1", "circle-stroke-color": "#06121c", "circle-stroke-width": 2 } });
       map.addLayer({ id: "watch-label", type: "symbol", source: "watch", layout: { "text-field": "WATCH POINT", "text-size": 13, "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"], "text-anchor": "left", "text-offset": [1.2, -0.2], "text-allow-overlap": true }, paint: { "text-color": "#f3ffff", "text-halo-color": "#06121c", "text-halo-width": 2 } });
       map.on("click", "watch", () => new mapboxgl.Popup({ maxWidth: "220px" }).setLngLat([watchRef.current.longitude, watchRef.current.latitude]).setText(`Watch location: ${watchRef.current.label}`).addTo(map));
-      map.fitBounds(focusBounds(data, watchRef.current), { padding: 35, maxZoom: 7.5, duration: 0 });
+      map.fitBounds(focusBounds(data, watchRef.current, viewMode), { padding: 35, maxZoom: 7.5, duration: 0 });
     });
     return () => { onCapture(null); mapRef.current = null; map.remove(); };
   }, [data, token, onCapture]);
   const toggle = (id: string) => setSelectedModels((selected) => selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]);
-  return <div className="map-block"><div className="map-heading"><h2>{viewMode === "impact" ? "Impact window · 24–36h" : viewMode === "approach" ? "Gulf approach · 0–36h" : "Basin overview"}</h2><div className="map-actions"><button type="button" aria-pressed={radar} onClick={() => setRadar((on) => !on)}>Radar {radar ? "on" : "off"}</button></div></div>
-    <div className="map-view-switch" role="group" aria-label="Map view"><button type="button" aria-pressed={viewMode === "impact"} onClick={() => setViewMode("impact")}>Impact</button><button type="button" aria-pressed={viewMode === "approach"} onClick={() => setViewMode("approach")}>Approach</button><button type="button" aria-pressed={viewMode === "basin"} onClick={() => setViewMode("basin")}>Globe overview</button></div>
+  return <div className="map-block"><div className="map-heading"><h2>Storm track</h2><div className="map-actions"><button type="button" aria-pressed={radar} onClick={() => setRadar((on) => !on)}>Radar {radar ? "on" : "off"}</button></div></div>
+    <div className="map-view-switch" role="group" aria-label="Map view"><button type="button" aria-pressed={viewMode === "approach"} onClick={() => setViewMode("approach")}>Gulf approach</button><button type="button" aria-pressed={viewMode === "impact"} onClick={() => setViewMode("impact")}>Coast focus</button><button type="button" aria-pressed={viewMode === "basin"} onClick={() => setViewMode("basin")}>Basin</button></div>
     <div className="map-frame">{token ? <div ref={host} className="map-canvas" aria-label="Interactive Gulf hurricane map with watch location, Aegis, NHC, and model tracks" /> : <div className="map-fallback">Loading live map…</div>}
-      {mapError && <div className="map-error" role="status">{mapError}</div>}
-      <div className="map-legend"><span><i className="key-aegis"/>Aegis blend · experimental</span><span><i className="key-nhc"/>NHC official</span><span><i className="key-observed"/>Observed center</span><span><i className="key-watch"/>Watch location</span></div></div>
-    <div className="model-switches"><strong>Optional model tracks</strong>{models.map((model) => <button key={model.id} type="button" aria-pressed={selectedModels.includes(model.id)} onClick={() => toggle(model.id)} style={{ "--model-color": colors[model.id] ?? "#acbfd0" } as React.CSSProperties}>{model.name}</button>)}</div>
-    <p className="map-caption">Paths depict storm centers, not the full wind, surge, rainfall, or tornado hazard. Radar is observed precipitation; it is not a forecast. Map attribution appears on the map.</p>
+      {mapError && <div className="map-error" role="status">{mapError}</div>}</div>
+    <div className="map-legend"><span><i className="key-aegis"/>Aegis · experimental</span><span><i className="key-nhc"/>NHC · official</span><span><i className="key-observed"/>Past track</span><span><i className="key-watch"/>Watch point</span></div>
+    <details className="model-layers"><summary>Compare model tracks <span>{selectedModels.length} selected</span></summary><div className="model-switches">{models.map((model) => <button key={model.id} type="button" aria-pressed={selectedModels.includes(model.id)} onClick={() => toggle(model.id)} style={{ "--model-color": colors[model.id] ?? "#acbfd0" } as React.CSSProperties}>{model.name}</button>)}</div></details>
+    <p className="map-caption">Radar shows observed precipitation, not a forecast. Model tracks are optional comparison layers.</p>
   </div>;
 }
