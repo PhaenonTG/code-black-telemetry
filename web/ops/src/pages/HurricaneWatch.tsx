@@ -26,7 +26,8 @@ type HurricaneSnapshot = {
   assessment?: { updated_at: string; advisory: string; advisory_changed: boolean; intensity_mph: number; intensity_change_mph: number | null; center_distance_miles: number; forecast_point_distance_miles: number | null; closest_forecast_hour: number | null; summary: string; limitations: string };
   alerts?: Alert[]; alerts_status?: string; alerts_checked_at?: string; rapid_alerts_status?: string; rapid_alerts_checked_at?: string; reports?: Report[]; reports_status?: string;
   coastal_context_alerts?: Alert[]; coastal_context_status?: string; coastal_context_zone?: string;
-  ai?: { status: string; summary?: string; supporting_factors?: string | string[]; limiting_factors?: string | string[]; uncertainties?: string | string[]; recommended_attention?: string | string[] };
+  ai?: { status: string; analyzed_at?: string; reused?: boolean; summary?: string; supporting_factors?: string | string[]; limiting_factors?: string | string[]; uncertainties?: string | string[]; recommended_attention?: string | string[] };
+  changes_since_previous?: { advisory_changed?: boolean; wind_change_mph?: number | null; pressure_change_mb?: number | null; new_alerts?: string[]; cleared_alerts?: string[]; new_reports?: string[]; model_cycle_changes?: string[] };
   history?: { checked_at?: string; advisory?: string; intensity_mph?: number; summary?: string }[];
 };
 
@@ -318,11 +319,11 @@ export default function HurricaneWatch() {
     window.setTimeout(() => window.print(), 150);
   };
   return <main className="hurricane-watch">
-    <header className="hurricane-watch__header"><div><h1><span>{data?.storm?.classification === "HU" ? "Hurricane" : "Storm"}</span> <em>{data?.storm?.name ?? "Gulf"}</em></h1><p>Grand Bay watch · hourly Aegis briefing</p></div><Link to="/weather">Weather →</Link></header>
+    <header className="hurricane-watch__header"><div><h1><span>{data?.storm?.classification === "HU" ? "Hurricane" : "Storm"}</span> <em>{data?.storm?.name ?? "Gulf"}</em></h1><p>Grand Bay watch · source checks about every ten minutes</p></div><Link to="/weather">Weather →</Link></header>
     {error && <p role="alert" className="hurricane-watch__error">{error}</p>}
     {!data && !error && <p role="status">Loading the latest assessment…</p>}
     {data?.status === "pending" && <p role="status">{data.notice}</p>}
-    {data?.freshness === "stale" && <p role="alert" className="hurricane-watch__error">Hourly assessment is stale. Last successful update: {time(data.checked_at)}.</p>}
+    {data?.freshness === "stale" && <p role="alert" className="hurricane-watch__error">Source assessment is stale. Last successful check: {time(data.checked_at)}.</p>}
     {data?.status === "inactive" && <p className="hurricane-watch__error">NHC no longer lists this storm as active. The last assessment remains below.</p>}
     {data?.storm && a && <>
       <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button className="hurricane-watch__image-action" type="button" disabled={generatingImage || exportRadarStatus === "loading" || !radarVisible} onClick={() => void createImage()}>{generatingImage ? "Creating image…" : !radarVisible ? "Show radar for image" : exportRadarStatus === "loading" ? "Waiting for radar…" : "Create one-page image"}</button><button type="button" onClick={() => void share()}>Share text</button><button type="button" onClick={printBrief}>Print / PDF</button></div>
@@ -342,9 +343,11 @@ export default function HurricaneWatch() {
       </section>
       <Guidance guidance={data.model_guidance} checkedAt={data.checked_at} />
       <section className="hurricane-watch__panel hurricane-watch__brief"><div><h2>Grand Bay briefing</h2><p>{a.summary}</p>
-        {a.intensity_change_mph != null && <p>Wind change since the prior hourly assessment: {a.intensity_change_mph > 0 ? "+" : ""}{a.intensity_change_mph} mph.</p>}
+        {a.intensity_change_mph != null && <p>Wind change since the prior source check: {a.intensity_change_mph > 0 ? "+" : ""}{a.intensity_change_mph} mph.</p>}
+        {!!data.changes_since_previous?.model_cycle_changes?.length && <p>New model cycles: {data.changes_since_previous.model_cycle_changes.join(", ")}.</p>}
+        {!!data.changes_since_previous?.new_alerts?.length && <p>New point alerts: {data.changes_since_previous.new_alerts.join(", ")}.</p>}
         <p className="hurricane-watch__caution">{a.limitations}</p>
-        </div><div className="hurricane-watch__brief-side"><strong>{data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} NWS alerts at watch point` : "Alerts partially unavailable"}</strong><span>Full hazard check {time(data.alerts_checked_at)}</span><span>Rapid tornado/severe check {data.rapid_alerts_status === "ready" ? time(data.rapid_alerts_checked_at) : "unavailable"}</span><span>Hourly analysis {time(a.updated_at)}</span></div></section>
+        </div><div className="hurricane-watch__brief-side"><strong>{data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} NWS alerts at watch point` : "Alerts partially unavailable"}</strong><span>Source check {time(data.checked_at)}</span><span>Rapid tornado/severe check {data.rapid_alerts_status === "ready" ? time(data.rapid_alerts_checked_at) : "unavailable"}</span><span>Aegis analyzed {time(data.ai?.analyzed_at)}{data.ai?.reused ? " · no source change" : ""}</span></div></section>
       <section className="hurricane-watch__panel"><h2>Intensity: observed + projected</h2><Trend data={data} /></section>
       <section className="hurricane-watch__panel"><h2>Aegis findings</h2>
         {data.ai?.status === "ready" ? <div className="hurricane-watch__ai"><p>{data.ai.summary}</p>{data.ai.supporting_factors && <p><b>Evidence:</b> {narrative(data.ai.supporting_factors)}</p>}{data.ai.limiting_factors && <p><b>Limits:</b> {narrative(data.ai.limiting_factors)}</p>}{data.ai.uncertainties && <p><b>Uncertainty:</b> {narrative(data.ai.uncertainties)}</p>}{data.ai.recommended_attention && <p><b>Watch next:</b> {narrative(data.ai.recommended_attention)}</p>}<p className="hurricane-watch__caution">Aegis interpretation is not an official forecast or an evacuation instruction. Follow NHC, NWS, and local officials.</p></div>
@@ -353,7 +356,7 @@ export default function HurricaneWatch() {
       <section className="hurricane-watch__panel"><h2>Preliminary storm reports</h2><p>Mobile NWS office · last 36 hours · {data.reports_status === "ready" ? `${data.reports?.length ?? 0} products` : "Feed unavailable"}</p>
         {data.reports?.map((report) => <details key={report.url}><summary>{time(report.issued)} · {report.office}</summary><pre>{report.text}</pre><a href={report.url} target="_blank" rel="noreferrer">Official report ↗</a></details>)}
       </section>
-      <details className="hurricane-watch__panel"><summary>Hourly Aegis assessment history</summary>{data.history?.map((item, index) => <p key={item.checked_at ?? index}><b>{time(item.checked_at)}</b> · advisory {item.advisory} · {item.intensity_mph} mph<br />{item.summary}</p>)}</details>
+      <details className="hurricane-watch__panel"><summary>Assessment history</summary>{data.history?.map((item, index) => <p key={item.checked_at ?? index}><b>{time(item.checked_at)}</b> · advisory {item.advisory} · {item.intensity_mph} mph<br />{item.summary}</p>)}</details>
       <p className="hurricane-watch__sources"><a href={data.storm.publicAdvisory?.url} target="_blank" rel="noreferrer">NHC advisory ↗</a><a href={data.storm.forecastDiscussion?.url} target="_blank" rel="noreferrer">NHC model discussion ↗</a><a href={data.storm.forecastGraphics?.url} target="_blank" rel="noreferrer">NHC graphics ↗</a><a href="https://mesonet.agron.iastate.edu/docs/nexrad_mosaic/" target="_blank" rel="noreferrer">Radar source ↗</a></p>
     </>}
     {briefingImage && <div className="hurricane-watch__image-modal" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) closeImage(); }}><div className="hurricane-watch__image-dialog" role="dialog" aria-modal="true" aria-labelledby="hurricane-image-title"><div className="hurricane-watch__image-dialog-head"><div><h2 id="hurricane-image-title">One-page hurricane briefing</h2><p>Generated from the current OPS snapshot. Check the issue times before sharing.</p></div><button type="button" onClick={closeImage} aria-label="Close image preview">×</button></div><img src={briefingImage.url} alt={`${data?.storm?.name ?? "Storm"} one-page Grand Bay briefing with radar, official forecast, model guidance, warnings, and analysis`} /><div className="hurricane-watch__image-dialog-actions"><button type="button" onClick={() => void shareImage()}>Share image</button><a href={briefingImage.url} download={imageFilename}>Download PNG</a></div>{imageStatus && <p role="status">{imageStatus}</p>}</div></div>}
