@@ -4,6 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import type { PublicHurricane } from "./types";
 import type { WatchLocation } from "./watchLocation";
 import { distanceMiles } from "./watchLocation";
+import { activeWarnings } from "./nwsAlerts";
 
 const colors: Record<string, string> = { HFAI: "#e9b568", HFBI: "#bca9ef", AVNI: "#82aaff", CTCI: "#fa9372", CMCI: "#6db6ff", NVGI: "#9bbdd9", UKXI: "#f5cf75", AEMI: "#8bcfa5", GDMI: "#b5da7c", HWFI: "#f18cbb", HMNI: "#c48de8", HCCA: "#d8ddd8", TVCN: "#90b987" };
 const line = (points: { latitude: number; longitude: number }[]) => ({ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) } });
@@ -19,19 +20,6 @@ type SatelliteMode = keyof typeof SATELLITE_LAYERS;
 const wmsTiles = (layer: string, intervalMinutes: number) => [`${WMS}?service=WMS&version=1.1.1&request=GetMap&layers=${layer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&bbox={bbox-epsg-3857}&width=512&height=512&v=${Math.floor(Date.now() / (intervalMinutes * 60_000))}`];
 const compactTime = (value?: string) => value ? `${new Date(value).toISOString().slice(11, 16)}Z` : "—";
 
-type NwsAlert = { id: string; geometry: { type: string; coordinates: unknown } | null; properties: { event?: string; headline?: string; severity?: string; expires?: string; web?: string } };
-async function activeWarnings(): Promise<{ features: NwsAlert[]; total: number }> {
-  const areas = ["AL", "MS", "LA", "FL", "GM"];
-  const responses = await Promise.all(areas.map(async (area) => {
-    const response = await fetch(`https://api.weather.gov/alerts/active?area=${area}`, { headers: { Accept: "application/geo+json" }, cache: "no-store" });
-    if (!response.ok) throw new Error(`NWS ${area} alerts unavailable`);
-    return (await response.json() as { features?: NwsAlert[] }).features ?? [];
-  }));
-  const unique = new Map<string, NwsAlert>();
-  for (const feature of responses.flat()) if (/\b(watch|warning)\b/i.test(feature.properties?.event ?? "")) unique.set(feature.id, feature);
-  const alerts = [...unique.values()];
-  return { features: alerts.filter((alert) => alert.geometry), total: alerts.length };
-}
 
 async function sourceTimes(): Promise<Record<string, string>> {
   const response = await fetch(`${WMS}?service=WMS&request=GetCapabilities`, { cache: "no-store" });
