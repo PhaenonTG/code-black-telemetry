@@ -57,11 +57,13 @@ main{padding:14px 16px 30px;max-width:2200px;margin:0 auto}
 .stalebadge{color:#1a1200;background:var(--warn);border-color:var(--warn)}
 
 /* sections & cards */
-.sect{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin:0 0 14px;min-width:0}
+.sect{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin:0 0 14px;min-width:0;scroll-margin-top:72px}
 .sect>header{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
 .sect>header h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#cfcfd6}
 .sect>header .sub{color:var(--muted);font-size:11px}
 .sect>header .tog{margin-left:auto;background:none;color:var(--muted);border:1px solid var(--line2);border-radius:4px;width:24px;height:22px;cursor:pointer;line-height:1}
+.sect>header .tog:focus-visible,.tileview:focus-visible,.tile:focus-visible{outline:2px solid #9cc0ff;outline-offset:2px}
+.tileview{display:none;margin-left:auto;background:var(--panel2);color:var(--text);border:1px solid var(--line2);border-radius:5px;padding:4px 8px;font:inherit;font-size:11px;cursor:pointer}
 .sect>.body{padding:10px 12px}
 .sect.collapsed>.body{display:none}
 .searching .sect.collapsed>.body{display:block}
@@ -97,7 +99,8 @@ main{padding:14px 16px 30px;max-width:2200px;margin:0 auto}
 
 /* tiles */
 .tiles{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(128px,1fr))}
-.tile{padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--panel);border-left-width:4px;min-width:0}
+.tile{display:block;padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--panel);border-left-width:4px;min-width:0;color:inherit;text-decoration:none}
+.tile:hover{border-top-color:#62626e;border-right-color:#62626e;border-bottom-color:#62626e;text-decoration:none}
 .tile .tl{font-size:11px;letter-spacing:.12em;color:var(--muted)}
 .tile .ts{font-size:15px;font-weight:800;letter-spacing:.04em}
 .tile .td{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -107,6 +110,7 @@ main{padding:14px 16px 30px;max-width:2200px;margin:0 auto}
 .tile.info{border-left-color:var(--info)} .tile.info .ts{color:var(--info)}
 .tile.unk{border-left-color:var(--unk)} .tile.unk .ts{color:var(--unk)}
 .tile.dom{background:#101014}
+.focusempty{display:none;color:var(--muted);font-size:12px;padding:4px 2px}
 
 /* attention */
 #s-attention{border-color:#5a2225}
@@ -120,6 +124,10 @@ main{padding:14px 16px 30px;max-width:2200px;margin:0 auto}
 .att li.INFO .ad{font-size:11px}
 .att .am{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
 .attsum{display:flex;gap:8px;flex-wrap:wrap;margin-left:6px}
+.att-info{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
+.att-info summary{width:max-content;max-width:100%;cursor:pointer;color:var(--info);font-size:11px;font-weight:600;padding:3px 4px}
+.att-info summary:focus-visible{outline:2px solid #9cc0ff;outline-offset:2px}
+.att-info[open] summary{margin-bottom:6px}
 
 /* layout */
 .layout{display:grid;gap:14px;grid-template-columns:minmax(0,1fr);align-items:start}
@@ -176,6 +184,14 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
   #top{padding:8px 10px}
   .search{order:5;flex:1 1 100%;margin-left:0}
   main{padding:10px 10px 24px}
+  #app{display:flex;flex-direction:column}
+  #app>*{width:100%}
+  #s-attention{order:-1}
+  .sect{scroll-margin-top:136px}
+  .tileview{display:inline-block}
+  body.mobile-focus:not(.searching) #s-tiles .tile.ok,
+  body.mobile-focus:not(.searching) #s-tiles .tile.info{display:none}
+  body.mobile-focus:not(.searching) #s-tiles .focusempty{display:block}
   .svc-head{display:none}
   .srow{display:block}
   .srow .cell{display:flex;gap:8px;padding:2px 0}
@@ -199,7 +215,7 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 <div id="banner" class="banner bad" role="alert" hidden></div>
 <div id="agebanner" class="banner warn" hidden></div>
 <main id="app" class="">
-  <section class="sect" id="s-tiles"><header><h2>Global state</h2></header><div class="body"><div id="b-tiles" class="tiles"></div></div></section>
+  <section class="sect" id="s-tiles"><header><h2>Global state</h2><button id="tileview" class="tileview" type="button" aria-controls="b-tiles" aria-expanded="false">Show all states</button></header><div class="body"><div id="b-tiles" class="tiles"></div></div></section>
   <section class="sect" id="s-attention"><header><h2>Needs attention</h2><span id="attsum" class="attsum"></span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-attention"></div></section>
   <div class="layout">
     <div class="col-main">
@@ -230,7 +246,7 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 const POLL_MS = 5000;
 const params = new URLSearchParams(location.search);
 const FIXTURE = params.get('fixture') === '1';
-const S = { doc: null, lastOk: 0, lastGen: 0, failing: false, fallbackFixture: false, sig: {}, timer: null, fetching: false };
+const S = { doc: null, lastOk: 0, lastGen: 0, failing: false, fallbackFixture: false, sig: {}, timer: null, fetching: false, infoOpen: false };
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
@@ -290,14 +306,14 @@ function bytes(n) {
 
 /* ---------- state model ---------- */
 const OKS = new Set(['HEALTHY', 'FRESH', 'LIVE', 'OK', 'IDLE', 'VERIFYING', 'OPEN', 'DIRECT', 'COMPLETE', 'RUNNING', 'ONLINE', 'AVAILABLE']);
-const WARNS = new Set(['DEGRADED', 'AGING', 'WARNING', 'BUSY', 'STALE']);
+const WARNS = new Set(['DEGRADED', 'AGING', 'WARNING', 'STALE']);
 const BADS = new Set(['OFFLINE', 'CRITICAL', 'FAILED', 'UNREACHABLE', 'ERROR']);
 function sc(s) {
   s = String(s == null ? '' : s).toUpperCase();
   if (OKS.has(s)) return 'ok';
   if (WARNS.has(s)) return 'warn';
   if (BADS.has(s)) return 'bad';
-  if (s === 'INFO' || s === 'RELAYED') return 'info';
+  if (s === 'INFO' || s === 'RELAYED' || s === 'BUSY') return 'info';
   return 'unk';
 }
 const isStale = (t) => !!t && (t.stale === true || (t.stale === undefined && t.age_s != null && t.max_age_s != null && t.age_s > t.max_age_s));
@@ -331,12 +347,17 @@ const R = {};
 R.tiles = (d) => {
   const box = $('#b-tiles'); box.replaceChildren();
   const tiles = (d.summary && d.summary.tiles) || [];
+  const destinations = {core:'s-hosts',edge:'s-hosts',phaenon3:'s-hosts',hytetower:'s-hosts',radar:'s-radar',weather:'s-weather',dns:'s-dns',streaming:'s-streaming',ai:'s-ai',labs:'s-labs',storage:'s-storage',network:'s-network'};
+  let issueCount = 0;
   tiles.forEach((t) => {
     let cls = sc(t.state);
     let label = isNull(t.state) ? 'UNKNOWN' : String(t.state).toUpperCase().replace(/_/g, ' ');
     if (t.informational && String(t.state).toUpperCase() === 'OFFLINE') cls = 'info';
-    box.appendChild(h('div', 'tile f-item ' + cls + (t.group === 'domain' ? ' dom' : ''), [h('div', 'tl', t.label), h('div', 'ts', label), h('div', 'td', isNull(t.detail) ? '' : t.detail)], { title: t.detail || '' }));
+    if (cls !== 'ok' && cls !== 'info') issueCount++;
+    const target = destinations[t.id];
+    box.appendChild(h(target ? 'a' : 'div', 'tile f-item ' + cls + (t.group === 'domain' ? ' dom' : ''), [h('div', 'tl', t.label), h('div', 'ts', label), h('div', 'td', isNull(t.detail) ? '' : t.detail)], target ? { href: '#' + target, title: t.detail || 'Open ' + t.label } : { title: t.detail || '' }));
   });
+  if (tiles.length && !issueCount) box.appendChild(h('div', 'focusempty', 'No urgent states. Show all states to see every system.'));
   if (!tiles.length) box.appendChild(h('div', 'emptynote', 'No summary tiles reported.'));
 };
 R.attention = (d) => {
@@ -348,17 +369,24 @@ R.attention = (d) => {
   const sum = $('#attsum'); sum.replaceChildren();
   ['CRITICAL', 'WARNING', 'INFO'].forEach((k) => { if (counts[k]) sum.appendChild(h('span', 'chip ' + sc(k === 'INFO' ? 'INFO' : k), counts[k] + ' ' + k)); });
   if (!items.length) { box.appendChild(h('div', 'emptynote f-item', 'Nothing needs attention.')); return; }
-  const ul = h('ul', 'att');
-  items.forEach((i) => {
+  const makeNotice = (i) => {
     const l = normalizeLink(i.link);
-    ul.appendChild(h('li', 'f-item ' + i.severity, [
+    return h('li', 'f-item ' + i.severity, [
       h('span', 'chip ' + sc(i.severity), i.severity),
       h('div', 'at wrap', i.severity === 'INFO' && !isNull(i.detail) ? [i.title, h('span', 'muted small', '  -  ' + i.detail)] : i.title),
       h('div', 'am', [h('span', null, isNull(i.source) ? '' : i.source), i.since ? h('span', null, ' - since ' + ago(i.since)) : null, l ? [' ', lnk(l.name || 'Open', l.url)] : null]),
       isNull(i.detail) || i.severity === 'INFO' ? null : h('div', 'ad wrap', i.detail),
-    ]));
-  });
-  box.appendChild(ul);
+    ]);
+  };
+  const urgent = items.filter((i) => i.severity !== 'INFO');
+  const notes = items.filter((i) => i.severity === 'INFO');
+  if (urgent.length) box.appendChild(h('ul', 'att', urgent.map(makeNotice)));
+  if (notes.length) {
+    const info = h('details', 'att-info', [h('summary', null, notes.length + ' informational ' + (notes.length === 1 ? 'notice' : 'notices')), h('ul', 'att', notes.map(makeNotice))]);
+    info.open = S.infoOpen || document.body.classList.contains('searching');
+    info.addEventListener('toggle', () => { if (!document.body.classList.contains('searching')) S.infoOpen = info.open; });
+    box.appendChild(info);
+  }
 };
 R.hosts = (d) => {
   const box = $('#b-hosts'); box.replaceChildren();
@@ -668,6 +696,7 @@ function applyFilter() {
   const raw = $('#q').value.trim().toLowerCase();
   const tokens = raw.split(/\s+/).filter(Boolean).map((t) => t.replace(/[-_]+/g, ''));
   document.body.classList.toggle('searching', tokens.length > 0);
+  const info = $('#b-attention .att-info'); if (info) info.open = tokens.length > 0 || S.infoOpen;
   const empty = $('#empty');
   if (!tokens.length) { $$('[hidden].f-item,[hidden].grp,[hidden].sect').forEach((e) => { e.hidden = false; }); empty.hidden = true; return; }
   let any = false;
@@ -749,7 +778,21 @@ function chrome() {
 /* ---------- wiring ---------- */
 document.addEventListener('click', (e) => {
   const t = e.target.closest && e.target.closest('.tog'); if (!t) return;
-  const s = t.closest('.sect'); const c = s.classList.toggle('collapsed'); t.textContent = c ? '+' : '-';
+  const s = t.closest('.sect'); s.classList.toggle('collapsed'); syncToggle(s);
+});
+function syncToggle(s) {
+  const t = s.querySelector('.tog'); if (!t) return;
+  const collapsed = s.classList.contains('collapsed');
+  t.textContent = collapsed ? '+' : '-';
+  t.setAttribute('aria-expanded', String(!collapsed));
+  t.setAttribute('aria-label', (collapsed ? 'Expand ' : 'Collapse ') + s.querySelector('h2').textContent);
+  const body = s.querySelector(':scope > .body'); if (body && body.id) t.setAttribute('aria-controls', body.id);
+}
+$$('.sect').forEach(syncToggle);
+$('#tileview').addEventListener('click', () => {
+  const focused = document.body.classList.toggle('mobile-focus');
+  $('#tileview').textContent = focused ? 'Show all states' : 'Issues only';
+  $('#tileview').setAttribute('aria-expanded', String(!focused));
 });
 $('#q').addEventListener('input', applyFilter);
 $('#qclear').addEventListener('click', () => { $('#q').value = ''; applyFilter(); $('#q').focus(); });
@@ -759,7 +802,8 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(S.timer); else poll(); });
 if (window.matchMedia('(max-width:899px)').matches) {
-  ['s-services', 's-address'].forEach((id) => { const e = document.getElementById(id); e.classList.add('collapsed'); e.querySelector('.tog').textContent = '+'; });
+  document.body.classList.add('mobile-focus');
+  ['s-services', 's-address'].forEach((id) => { const e = document.getElementById(id); e.classList.add('collapsed'); syncToggle(e); });
 }
 setInterval(chrome, 1000);
 poll();

@@ -15,7 +15,7 @@
   "thresholds": {
     "disk": {
       "warn_pct": 85,
-      "crit_pct": 92,
+      "crit_pct": 97,
       "warn_free_gb": 25,
       "crit_free_gb": 10
     },
@@ -1505,6 +1505,7 @@
       "host": "edge",
       "kind": "edge_unit_run",
       "unit": "codeblack-weather-publication-watcher.service",
+      "timer": "codeblack-weather-publication-watcher.timer",
       "thresholds": "weather_watcher_s"
     },
     {

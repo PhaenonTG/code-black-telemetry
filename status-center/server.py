@@ -38,6 +38,7 @@ PORT = int(os.environ.get("STATUS_CENTER_PORT", "8795"))
 SECRET_KEY = collector.SECRET_KEY
 MIN_STALE_S = int(os.environ.get("STATUS_CENTER_MIN_STALE_S", "30"))
 START = time.time()
+STATE_DIR = os.environ.get("STATUS_CENTER_STATE_DIR", "/srv/codeblack/data/status-center")
 
 REG = json.load(open(REGISTRY_PATH, encoding="utf-8"))
 DEF = REG["defaults"]
@@ -774,10 +775,14 @@ def build_weather(services_by_id):
                 it["last_product_time"] = n.get("mtime"); age = n.get("age_s")
             else:
                 u = (doc.get("units") or {}).get(w["unit"]) or {}
-                ts = parse_ts(u.get("last_exit")); age = int(now() - ts) if ts else None
+                timer = (doc.get("units") or {}).get(w.get("timer")) or {}
+                ts = parse_ts(u.get("last_exit")) or parse_ts(timer.get("last_trigger"))
+                age = int(now() - ts) if ts else None
                 it["last_product_time"] = iso(ts)
             u2 = (doc.get("units") or {}).get(w.get("unit") or "") or {}
-            ts2 = parse_ts(u2.get("last_exit")); it["last_success"] = iso(ts2) if u2.get("result") == "success" and ts2 else None
+            timer2 = (doc.get("units") or {}).get(w.get("timer")) or {}
+            ts2 = parse_ts(u2.get("last_exit")) or parse_ts(timer2.get("last_trigger"))
+            it["last_success"] = iso(ts2) if u2.get("active") == "inactive" and u2.get("result") == "success" and ts2 else None
             it["age_s"], it["max_age_s"] = age, th["fresh"]
             it["state"] = fresh_state(age, th)
             if u2.get("result") not in (None, "success"):
@@ -1008,13 +1013,42 @@ def build_storage(hosts):
 
 
 # ------------------------------------------------------------------------------------------------ attention
-FIRST_SEEN = {}
+ATTENTION_FILE = os.path.join(STATE_DIR, "attention-first-seen.json")
+
+
+def load_attention_seen():
+    try:
+        with open(ATTENTION_FILE, encoding="utf-8") as fh:
+            data = json.load(fh)
+        if not isinstance(data, dict):
+            return {}
+        return {k: v for k, v in data.items() if isinstance(k, str) and len(k) <= 128
+                and isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v < now() + 60}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+FIRST_SEEN = load_attention_seen()
+
+
+def save_attention_seen():
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        tmp = ATTENTION_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(FIRST_SEEN, fh, separators=(",", ":"))
+        os.replace(tmp, ATTENTION_FILE)
+    except OSError:
+        pass  # Live status must remain available even if persistence fails.
 
 
 def build_attention(hosts, services, streaming, radar, weather, dns, storage, labs, network):
     items = []
+    active = set()
+    previous = set(FIRST_SEEN)
 
     def add(key, sev, title, detail, source, link=None):
+        active.add(key)
         FIRST_SEEN.setdefault(key, now())
         items.append({"id": key, "severity": sev, "title": title, "detail": detail, "source": source, "since": iso(FIRST_SEEN[key]), "link": link})
 
@@ -1074,6 +1108,14 @@ def build_attention(hosts, services, streaming, radar, weather, dns, storage, la
             add(f"backup:{bk['id']}", "CRITICAL" if bk["state"] == "OFFLINE" else "WARNING", f"{bk['name']} {bk['state']}", f"last backup {bk['last_backup']}", bk["host"])
     order = {"CRITICAL": 0, "WARNING": 1, "INFO": 2}
     items.sort(key=lambda x: (order[x["severity"]], x["since"] or ""))
+    if active != previous:
+        # Cold-start UNKNOWN states are not recoveries. Retain persisted alerts
+        # until every probe has had a chance to report.
+        if probes_warmed():
+            for key in list(FIRST_SEEN):
+                if key not in active:
+                    del FIRST_SEEN[key]
+        save_attention_seen()
     return items
 
 
@@ -1143,13 +1185,12 @@ def status_doc():
 
 
 # ------------------------------------------------------------------------------------------------ change log
-STATE_DIR = os.environ.get("STATUS_CENTER_STATE_DIR", "/srv/codeblack/data/status-center")
 CHANGE_MAX_EVENTS = int(os.environ.get("STATUS_CENTER_CHANGE_MAX_EVENTS", "300"))
 CHANGE_MAX_AGE_S = int(os.environ.get("STATUS_CENTER_CHANGE_MAX_AGE_S", str(7 * 86400)))
 CHANGE_CONFIRM_S = float(os.environ.get("STATUS_CENTER_CHANGE_CONFIRM_S", "12"))
 CHANGE_SCHEMA = "codeblack.status.changes.v1"
-_GOOD = {"HEALTHY", "FRESH", "LIVE", "IDLE", "AVAILABLE", "ONLINE"}
-_WARN = {"AGING", "DEGRADED", "WARNING", "BUSY"}
+_GOOD = {"HEALTHY", "FRESH", "LIVE", "IDLE", "AVAILABLE", "ONLINE", "BUSY"}
+_WARN = {"AGING", "DEGRADED", "WARNING"}
 _BAD = {"OFFLINE", "STALE", "CRITICAL", "UNAVAILABLE"}
 
 

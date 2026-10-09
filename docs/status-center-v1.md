@@ -46,8 +46,12 @@ intentional states (STRIKER/TESSA offline when nobody streams, raspberrypi offli
 requires a real publisher signal from MediaMTX/monitor, never merely a running service. A live process never makes stale data healthy
 (radar product, weather freshness, Edge status files).
 
-Disk thresholds: WARNING >= 85% used or < 25 GB free; CRITICAL >= 92% used or < 10 GB free. Backup age: WARN 36 h, CRIT 72 h. Weather ingest
+Disk thresholds: WARNING >= 85% used or < 25 GB free; CRITICAL >= 97% used or < 10 GB free. Backup age: WARN 36 h, CRIT 72 h. Weather ingest
 freshness: fresh 90 min, aging 3 h, stale 6 h.
+
+On narrow screens, actionable attention and problem tiles appear first. Healthy/informational tiles are available through **Show all states**;
+informational notices expand on demand. Tiles jump to their detailed section, and section controls expose their expanded state for keyboard and
+assistive-technology users. Normal `BUSY` GPU/compute activity is informational, not an incident.
 
 ## Stale telemetry and failure isolation
 
@@ -108,7 +112,7 @@ functional-probe snapshots stop refreshing for more than three minutes.
 Pi-hole stats/gravity (need an app password or an Edge helper); AI queue/active job/last request (AEGIS auth); HYTETOWER and OBS state (no telemetry
 source; reachability only); a second Pi-hole (only Edge runs one; raspberrypi is offline and undocumented); HRRR product time from Core (Core API exposes
 provider health only); Windows scheduled tasks registered with higher privilege (the weather worker tasks) are read through their health endpoint and
-watchdog file instead; `since` on attention items means first observed since the backend last restarted; the Edge dashboard/status files are stale
+watchdog file instead; `since` on attention items is persisted across backend restarts in `attention-first-seen.json` (after probe warm-up); the Edge dashboard/status files are stale
 (collectors stopped) and are deliberately not consumed.
 
 ## Change log and AEGIS integration (added)
