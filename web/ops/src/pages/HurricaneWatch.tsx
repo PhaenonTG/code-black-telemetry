@@ -39,7 +39,7 @@ const line = (points: { latitude: number; longitude: number }[]) => ({
   type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) },
 });
 
-function HurricaneMap({ data, registerCapture, onRadarStatus, printMap }: { data: HurricaneSnapshot; registerCapture: (capture: (() => string | null) | null) => void; onRadarStatus: (status: MosaicStatus) => void; printMap: string | null }) {
+function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisible, printMap }: { data: HurricaneSnapshot; registerCapture: (capture: (() => string | null) | null) => void; onRadarStatus: (status: MosaicStatus) => void; onRadarVisible: (visible: boolean) => void; printMap: string | null }) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<InstanceType<typeof mapboxgl.Map> | null>(null);
   const visible = useRef(true);
@@ -50,7 +50,7 @@ function HurricaneMap({ data, registerCapture, onRadarStatus, printMap }: { data
   const token = mapboxAccessToken();
   const models = useMemo(() => data.model_guidance?.models ?? [], [data.model_guidance]);
   const mapKey = JSON.stringify([data.storm?.id, data.assessment?.advisory, data.track, data.cone, data.observed_track, data.watch_point, data.model_guidance]);
-  useEffect(() => { visible.current = radarOn; }, [radarOn]);
+  useEffect(() => { visible.current = radarOn; onRadarVisible(radarOn); }, [radarOn, onRadarVisible]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -63,6 +63,8 @@ function HurricaneMap({ data, registerCapture, onRadarStatus, printMap }: { data
   }, [selectedModels, showPrior, mapKey, models]);
   useEffect(() => {
     if (!host.current || !data.storm || !data.watch_point || !data.track?.length || !token) return;
+    setRadarStatus("loading");
+    onRadarStatus("loading");
     mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({
       container: host.current, style: "mapbox://styles/mapbox/dark-v11", preserveDrawingBuffer: true,
@@ -216,6 +218,7 @@ export default function HurricaneWatch() {
   const [imageStatus, setImageStatus] = useState("");
   const [generatingImage, setGeneratingImage] = useState(false);
   const [exportRadarStatus, setExportRadarStatus] = useState<MosaicStatus>("loading");
+  const [radarVisible, setRadarVisible] = useState(true);
   const [briefingImage, setBriefingImage] = useState<{ url: string; blob: Blob } | null>(null);
   const imageUrl = useRef<string | null>(null);
   const [printMap, setPrintMap] = useState<string | null>(null);
@@ -270,10 +273,12 @@ export default function HurricaneWatch() {
     imageUrl.current = null;
   };
   const createImage = async () => {
-    if (!data?.storm || !a || generatingImage) return;
+    if (!data?.storm || !a || generatingImage || exportRadarStatus === "loading" || !radarVisible) return;
     setGeneratingImage(true);
     setImageStatus("");
     try {
+      // The mosaic can report ready before the browser paints the new map frame.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const blob = await createHurricaneBriefingImage(data, captureMap.current?.() ?? null, exportRadarStatus);
       if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
       const url = URL.createObjectURL(blob);
@@ -319,7 +324,7 @@ export default function HurricaneWatch() {
     {data?.freshness === "stale" && <p role="alert" className="hurricane-watch__error">Hourly assessment is stale. Last successful update: {time(data.checked_at)}.</p>}
     {data?.status === "inactive" && <p className="hurricane-watch__error">NHC no longer lists this storm as active. The last assessment remains below.</p>}
     {data?.storm && a && <>
-      <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button className="hurricane-watch__image-action" type="button" disabled={generatingImage} onClick={() => void createImage()}>{generatingImage ? "Creating image…" : "Create one-page image"}</button><button type="button" onClick={() => void share()}>Share text</button><button type="button" onClick={printBrief}>Print / PDF</button></div>
+      <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button className="hurricane-watch__image-action" type="button" disabled={generatingImage || exportRadarStatus === "loading" || !radarVisible} onClick={() => void createImage()}>{generatingImage ? "Creating image…" : !radarVisible ? "Show radar for image" : exportRadarStatus === "loading" ? "Waiting for radar…" : "Create one-page image"}</button><button type="button" onClick={() => void share()}>Share text</button><button type="button" onClick={printBrief}>Print / PDF</button></div>
       {shareStatus && <p role="status" className="hurricane-watch__share-status">{shareStatus}</p>}
       {imageStatus && <p role="status" className="hurricane-watch__share-status">{imageStatus}</p>}
       <section className="hurricane-watch__metrics" aria-label="Official storm status">
@@ -327,7 +332,7 @@ export default function HurricaneWatch() {
         <div><small>{data.status === "inactive" ? "LAST CENTER → WATCH POINT" : "CENTER → WATCH POINT"}</small><strong>{a.center_distance_miles} mi</strong><span>{data.status === "inactive" ? "Historical center distance" : "Current center distance"}</span></div>
         <div><small>{data.status === "inactive" ? "LAST FORECAST CENTER" : "CLOSEST FORECAST CENTER"}</small><strong>{a.forecast_point_distance_miles ?? "—"} mi</strong><span>{a.closest_forecast_hour != null ? `At NHC +${a.closest_forecast_hour}h point` : "Track unavailable"}</span></div>
       </section>
-      <section className="hurricane-watch__map-section" aria-label="Live radar and official track"><HurricaneMap data={data} registerCapture={(capture) => { captureMap.current = capture; }} onRadarStatus={setExportRadarStatus} printMap={printMap} /><p className="hurricane-watch__caption">Current IEM NEXRAD mosaic refreshes approximately every 3 minutes; radar coverage can be limited offshore. The NHC cone shows likely center positions, <b>not</b> the full area of wind, surge, rain, or tornado risk.</p></section>
+      <section className="hurricane-watch__map-section" aria-label="Live radar and official track"><HurricaneMap data={data} registerCapture={(capture) => { captureMap.current = capture; }} onRadarStatus={setExportRadarStatus} onRadarVisible={setRadarVisible} printMap={printMap} /><p className="hurricane-watch__caption">Current IEM NEXRAD mosaic refreshes approximately every 3 minutes; radar coverage can be limited offshore. The NHC cone shows likely center positions, <b>not</b> the full area of wind, surge, rain, or tornado risk.</p></section>
       <section className="hurricane-watch__panel hurricane-watch__warnings"><h2>Grand Bay warning watch</h2><p>{data.watch_point?.label} · {data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} NWS alerts` : "NWS alerts partially unavailable"}{data.alerts_checked_at ? ` · full hazard check ${time(data.alerts_checked_at)}` : ""}</p>
         {data.alerts?.map((alert) => <details key={alert.id}><summary>{alert.event} · {alert.severity}</summary><p>{alert.headline}</p><p>{alert.description}</p><small>Expires {time(alert.expires)}</small>{alert.url && <p><a href={alert.url} target="_blank" rel="noreferrer">Official warning ↗</a></p>}</details>)}
       </section>
