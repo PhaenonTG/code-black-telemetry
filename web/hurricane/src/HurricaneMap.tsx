@@ -7,6 +7,44 @@ import { distanceMiles } from "./watchLocation";
 
 const colors: Record<string, string> = { HFAI: "#e9b568", HFBI: "#bca9ef", AVNI: "#82aaff", CTCI: "#fa9372", CMCI: "#6db6ff", NVGI: "#9bbdd9", UKXI: "#f5cf75", AEMI: "#8bcfa5", GDMI: "#b5da7c", HWFI: "#f18cbb", HMNI: "#c48de8", HCCA: "#d8ddd8", TVCN: "#90b987" };
 const line = (points: { latitude: number; longitude: number }[]) => ({ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) } });
+const WMS = "https://nowcoast.noaa.gov/geoserver/ows";
+const RADAR_LAYER = "weather_radar:base_reflectivity_mosaic";
+const SATELLITE_LAYERS = {
+  ir: "satellite:goes_longwave_imagery",
+  visible: "satellite:goes_visible_imagery",
+  vapor: "satellite:goes_water_vapor_imagery",
+  shortwave: "satellite:goes_shortwave_imagery",
+} as const;
+type SatelliteMode = keyof typeof SATELLITE_LAYERS;
+const wmsTiles = (layer: string, intervalMinutes: number) => [`${WMS}?service=WMS&version=1.1.1&request=GetMap&layers=${layer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&bbox={bbox-epsg-3857}&width=512&height=512&v=${Math.floor(Date.now() / (intervalMinutes * 60_000))}`];
+const compactTime = (value?: string) => value ? `${new Date(value).toISOString().slice(11, 16)}Z` : "—";
+
+type NwsAlert = { id: string; geometry: { type: string; coordinates: unknown } | null; properties: { event?: string; headline?: string; severity?: string; expires?: string; web?: string } };
+async function activeWarnings(): Promise<{ features: NwsAlert[]; total: number }> {
+  const areas = ["AL", "MS", "LA", "FL", "GM"];
+  const responses = await Promise.all(areas.map(async (area) => {
+    const response = await fetch(`https://api.weather.gov/alerts/active?area=${area}`, { headers: { Accept: "application/geo+json" }, cache: "no-store" });
+    if (!response.ok) throw new Error(`NWS ${area} alerts unavailable`);
+    return (await response.json() as { features?: NwsAlert[] }).features ?? [];
+  }));
+  const unique = new Map<string, NwsAlert>();
+  for (const feature of responses.flat()) if (/\b(watch|warning)\b/i.test(feature.properties?.event ?? "")) unique.set(feature.id, feature);
+  const alerts = [...unique.values()];
+  return { features: alerts.filter((alert) => alert.geometry), total: alerts.length };
+}
+
+async function sourceTimes(): Promise<Record<string, string>> {
+  const response = await fetch(`${WMS}?service=WMS&request=GetCapabilities`, { cache: "no-store" });
+  if (!response.ok) throw new Error("NOAA source metadata unavailable");
+  const xml = new DOMParser().parseFromString(await response.text(), "application/xml");
+  const result: Record<string, string> = {};
+  for (const layer of Array.from(xml.getElementsByTagName("Layer"))) {
+    const name = Array.from(layer.children).find((node) => node.localName === "Name")?.textContent;
+    const time = Array.from(layer.children).find((node) => node.localName === "Dimension" && node.getAttribute("name") === "time")?.getAttribute("default");
+    if (name && time && !Number.isNaN(Date.parse(time))) result[name] = time;
+  }
+  return result;
+}
 
 type ViewMode = "impact" | "approach" | "basin";
 function focusBounds(data: PublicHurricane, watch: WatchLocation, view: ViewMode = "impact") {
@@ -18,6 +56,10 @@ function focusBounds(data: PublicHurricane, watch: WatchLocation, view: ViewMode
   }
   if (view !== "impact" && data.storm.center.latitude != null && data.storm.center.longitude != null) {
     bounds.extend([data.storm.center.longitude, data.storm.center.latitude]);
+    if (view === "approach") {
+      bounds.extend([data.storm.center.longitude - 4, data.storm.center.latitude - 3]);
+      bounds.extend([data.storm.center.longitude + 4, data.storm.center.latitude + 3]);
+    }
   }
   if (view === "basin") for (const point of data.observed.track) bounds.extend([point.longitude, point.latitude]);
   return bounds;
@@ -36,9 +78,23 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
   watchRef.current = watch;
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("approach");
-  const [radar, setRadar] = useState(false);
+  const [radar, setRadar] = useState(true);
+  const [clouds, setClouds] = useState(true);
+  const [satelliteMode, setSatelliteMode] = useState<SatelliteMode>("ir");
+  const [alerts, setAlerts] = useState(false);
+  const [layerTimes, setLayerTimes] = useState<Record<string, string>>({});
+  const [alertCount, setAlertCount] = useState<{ mapped: number; total: number } | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const layerState = useRef({ radar, clouds, alerts, satelliteMode });
+  layerState.current = { radar, clouds, alerts, satelliteMode };
   const models = data.guidance.models;
+  useEffect(() => {
+    let active = true;
+    const refresh = () => { void sourceTimes().then((times) => { if (active) setLayerTimes(times); }).catch(() => {}); };
+    refresh();
+    const timer = window.setInterval(refresh, 300_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
   useEffect(() => {
     const map = mapRef.current;
     if (!map?.isStyleLoaded()) return;
@@ -48,6 +104,18 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     const map = mapRef.current;
     if (map?.getLayer("radar")) map.setLayoutProperty("radar", "visibility", radar ? "visible" : "none");
   }, [radar]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map?.getLayer("satellite")) map.setLayoutProperty("satellite", "visibility", clouds ? "visible" : "none");
+  }, [clouds]);
+  useEffect(() => {
+    const source = mapRef.current?.getSource("satellite") as mapboxgl.RasterTileSource | undefined;
+    source?.setTiles(wmsTiles(SATELLITE_LAYERS[satelliteMode], 5));
+  }, [satelliteMode]);
+  useEffect(() => {
+    const map = mapRef.current;
+    for (const id of ["alert-fill", "alert-outline"]) if (map?.getLayer(id)) map.setLayoutProperty(id, "visibility", alerts ? "visible" : "none");
+  }, [alerts]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map?.isStyleLoaded()) return;
@@ -65,6 +133,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
   }, [watch, data, viewMode]);
   useEffect(() => {
     if (!token || !host.current || !data.storm.center.latitude || !data.storm.center.longitude) return;
+    let tileTimer: number | undefined, alertTimer: number | undefined;
     mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({ container: host.current, style: "mapbox://styles/mapbox/dark-v11", center: [data.storm.center.longitude, data.storm.center.latitude],
       zoom: 4.3, preserveDrawingBuffer: true, attributionControl: true });
@@ -77,12 +146,10 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       const originalStyle = container.getAttribute("style");
       const camera = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
       const originalProjection = map.getProjection().name;
-      const radarVisible = map.getLayer("radar") ? map.getLayoutProperty("radar", "visibility") : null;
       const modelVisibility = models.map((model) => [model.id, map.getLayer(`model-${model.id}`) ? map.getLayoutProperty(`model-${model.id}`, "visibility") : null] as const);
       try {
         Object.assign(container.style, { position: "fixed", left: "-2000px", top: "0", width: "1440px", height: "800px" });
         map.resize();
-        if (radarVisible === "visible") map.setLayoutProperty("radar", "visibility", "none");
         for (const [id, visibility] of modelVisibility) if (visibility === "visible") map.setLayoutProperty(`model-${id}`, "visibility", "none");
         map.setProjection("mercator");
         map.fitBounds(focusBounds(data, watchRef.current, "approach"), { padding: { top: 80, bottom: 75, left: 90, right: 90 }, maxZoom: 7.3, duration: 0 });
@@ -93,7 +160,6 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
         if (originalStyle === null) container.removeAttribute("style"); else container.setAttribute("style", originalStyle);
         map.resize();
         map.setProjection(originalProjection);
-        if (radarVisible === "visible" && map.getLayer("radar")) map.setLayoutProperty("radar", "visibility", "visible");
         for (const [id, visibility] of modelVisibility) if (visibility === "visible" && map.getLayer(`model-${id}`)) map.setLayoutProperty(`model-${id}`, "visibility", "visible");
         map.jumpTo(camera);
       }
@@ -101,8 +167,37 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
     map.on("error", () => setMapError("Map tiles are temporarily unavailable. Track details remain below."));
     map.on("load", () => {
-      map.addSource("radar", { type: "raster", tiles: [`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png?v=${Math.floor(Date.now() / 300000)}`], tileSize: 256 });
-      map.addLayer({ id: "radar", type: "raster", source: "radar", layout: { visibility: radar ? "visible" : "none" }, paint: { "raster-opacity": 0.48 } });
+      map.addSource("satellite", { type: "raster", tiles: wmsTiles(SATELLITE_LAYERS[layerState.current.satelliteMode], 5), tileSize: 512, attribution: "NOAA nowCOAST" });
+      map.addLayer({ id: "satellite", type: "raster", source: "satellite", layout: { visibility: layerState.current.clouds ? "visible" : "none" }, paint: { "raster-opacity": 0.8, "raster-fade-duration": 0 } });
+      map.addSource("radar", { type: "raster", tiles: wmsTiles(RADAR_LAYER, 2), tileSize: 512, attribution: "NOAA nowCOAST" });
+      map.addLayer({ id: "radar", type: "raster", source: "radar", layout: { visibility: layerState.current.radar ? "visible" : "none" }, paint: { "raster-opacity": 0.78, "raster-fade-duration": 0 } });
+      map.addSource("alerts", { type: "geojson", data: { type: "FeatureCollection", features: [] }, attribution: "NWS" });
+      map.addLayer({ id: "alert-fill", type: "fill", source: "alerts", layout: { visibility: layerState.current.alerts ? "visible" : "none" }, paint: { "fill-color": ["match", ["get", "severity"], "Extreme", "#ff4b46", "Severe", "#ff8746", "#ffc252"], "fill-opacity": 0.09 } });
+      map.addLayer({ id: "alert-outline", type: "line", source: "alerts", layout: { visibility: layerState.current.alerts ? "visible" : "none" }, paint: { "line-color": ["match", ["get", "severity"], "Extreme", "#ff4b46", "Severe", "#ff8746", "#ffc252"], "line-opacity": 0.85, "line-width": 1.8 } });
+      const refreshAlerts = () => { void activeWarnings().then(({ features, total }) => {
+        if (!map.getSource("alerts")) return;
+        const collection = { type: "FeatureCollection", features: features.map((feature) => ({ type: "Feature", id: feature.id, geometry: feature.geometry, properties: { event: feature.properties.event, headline: feature.properties.headline, severity: feature.properties.severity, expires: feature.properties.expires, web: feature.properties.web } })) };
+        (map.getSource("alerts") as mapboxgl.GeoJSONSource).setData(collection as Parameters<mapboxgl.GeoJSONSource["setData"]>[0]);
+        setAlertCount({ mapped: features.length, total });
+      }).catch(() => setAlertCount(null)); };
+      refreshAlerts();
+      alertTimer = window.setInterval(refreshAlerts, 300_000);
+      map.on("click", "alert-fill", (event) => {
+        const props = (event.features?.[0] as unknown as { properties?: { event?: string; headline?: string; expires?: string } } | undefined)?.properties;
+        if (props) new mapboxgl.Popup({ maxWidth: "260px" }).setLngLat(event.lngLat).setText(`${props.event ?? "NWS alert"}${props.headline ? ` · ${props.headline}` : ""}`).addTo(map);
+      });
+      let radarVersion = Math.floor(Date.now() / 120_000), satelliteVersion = Math.floor(Date.now() / 300_000);
+      tileTimer = window.setInterval(() => {
+        const nextRadar = Math.floor(Date.now() / 120_000), nextSatellite = Math.floor(Date.now() / 300_000);
+        if (nextRadar !== radarVersion) {
+          radarVersion = nextRadar;
+          (map.getSource("radar") as mapboxgl.RasterTileSource | undefined)?.setTiles(wmsTiles(RADAR_LAYER, 2));
+        }
+        if (nextSatellite !== satelliteVersion) {
+          satelliteVersion = nextSatellite;
+          (map.getSource("satellite") as mapboxgl.RasterTileSource | undefined)?.setTiles(wmsTiles(SATELLITE_LAYERS[layerState.current.satelliteMode], 5));
+        }
+      }, 30_000);
       if (data.official.cone.length >= 4) {
         map.addSource("cone", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [data.official.cone] } } });
         map.addLayer({ id: "cone-fill", type: "fill", source: "cone", paint: { "fill-color": "#e8f0ef", "fill-opacity": 0.1 } });
@@ -154,15 +249,15 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       map.on("click", "watch", () => new mapboxgl.Popup({ maxWidth: "220px" }).setLngLat([watchRef.current.longitude, watchRef.current.latitude]).setText(`Watch location: ${watchRef.current.label}`).addTo(map));
       map.fitBounds(focusBounds(data, watchRef.current, viewMode), { padding: 35, maxZoom: 7.5, duration: 0 });
     });
-    return () => { onCapture(null); mapRef.current = null; map.remove(); };
+    return () => { if (tileTimer) window.clearInterval(tileTimer); if (alertTimer) window.clearInterval(alertTimer); onCapture(null); mapRef.current = null; map.remove(); };
   }, [data, token, onCapture]);
   const toggle = (id: string) => setSelectedModels((selected) => selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]);
-  return <div className="map-block"><div className="map-heading"><h2>Storm track</h2><div className="map-actions"><button type="button" aria-pressed={radar} onClick={() => setRadar((on) => !on)}>Radar {radar ? "on" : "off"}</button></div></div>
+  return <div className="map-block"><div className="map-heading"><h2>Storm map</h2><div className="map-actions"><button type="button" aria-pressed={radar} onClick={() => setRadar((on) => !on)}>Radar</button><button type="button" aria-pressed={clouds} onClick={() => setClouds((on) => !on)}>Clouds</button><button type="button" aria-pressed={alerts} onClick={() => setAlerts((on) => !on)}>Watches & warnings</button></div></div>
+    <div className="map-products"><label htmlFor="goes-product">GOES</label><select id="goes-product" value={satelliteMode} onChange={(event) => { setSatelliteMode(event.target.value as SatelliteMode); setClouds(true); }}><option value="ir">Infrared clouds</option><option value="visible">Visible</option><option value="vapor">Water vapor</option><option value="shortwave">Shortwave IR</option></select><span>Radar {compactTime(layerTimes["weather_radar:conus_base_reflectivity_mosaic"])} · GOES {compactTime(layerTimes[SATELLITE_LAYERS[satelliteMode]])}{alerts && alertCount ? ` · NWS ${alertCount.mapped}/${alertCount.total} mapped` : ""}</span><a href="https://nowcoast.noaa.gov/" target="_blank" rel="noreferrer">NOAA ↗</a></div>
     <div className="map-view-switch" role="group" aria-label="Map view"><button type="button" aria-pressed={viewMode === "approach"} onClick={() => setViewMode("approach")}>Gulf approach</button><button type="button" aria-pressed={viewMode === "impact"} onClick={() => setViewMode("impact")}>Coast focus</button><button type="button" aria-pressed={viewMode === "basin"} onClick={() => setViewMode("basin")}>Basin</button></div>
     <div className="map-frame">{token ? <div ref={host} className="map-canvas" aria-label="Interactive Gulf hurricane map with watch location, Aegis, NHC, and model tracks" /> : <div className="map-fallback">Loading live map…</div>}
       {mapError && <div className="map-error" role="status">{mapError}</div>}</div>
     <div className="map-legend"><span><i className="key-aegis"/>Aegis · experimental</span><span><i className="key-nhc"/>NHC · official</span><span><i className="key-observed"/>Past track</span><span><i className="key-watch"/>Watch point</span></div>
     <details className="model-layers"><summary>Compare model tracks <span>{selectedModels.length} selected</span></summary><div className="model-switches">{models.map((model) => <button key={model.id} type="button" aria-pressed={selectedModels.includes(model.id)} onClick={() => toggle(model.id)} style={{ "--model-color": colors[model.id] ?? "#acbfd0" } as React.CSSProperties}>{model.name}</button>)}</div></details>
-    <p className="map-caption">Radar shows observed precipitation, not a forecast. Model tracks are optional comparison layers.</p>
   </div>;
 }
