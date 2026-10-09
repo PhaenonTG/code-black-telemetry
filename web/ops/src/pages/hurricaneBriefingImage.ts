@@ -8,6 +8,8 @@ export type BriefingImageData = {
   watch_point?: { label: string };
   alerts?: { event?: string; severity?: string; expires?: string; headline?: string }[];
   alerts_status?: string;
+  coastal_context_alerts?: { event?: string }[];
+  coastal_context_status?: string;
   alerts_checked_at?: string;
   rapid_alerts_status?: string;
   rapid_alerts_checked_at?: string;
@@ -187,7 +189,11 @@ export async function createHurricaneBriefingImage(data: BriefingImageData, mapD
     ctx.fillStyle = C.muted; ctx.font = "400 20px Inter, system-ui, sans-serif";
     ctx.fillText(alert.expires ? `Expires ${printTime(alert.expires)}` : "See NWS for details", x + 20, y + 27);
   });
-  label(ctx, alerts.length > 6 ? `+${alerts.length - 6} MORE ALERTS ON OPS` : `PRELIMINARY STORM REPORTS: ${data.reports_status === "ready" ? data.reports?.length ?? 0 : "UNAVAILABLE"}`, 72, 1378);
+  const regionalEvents = (data.coastal_context_alerts ?? []).map((alert) => alert.event).filter(Boolean);
+  const regional = data.coastal_context_status === "ready"
+    ? regionalEvents.slice(0, 2).join(", ") + (regionalEvents.length > 2 ? ` +${regionalEvents.length - 2} more` : "") || "No additional warnings"
+    : "Check NWS coastal-zone warnings";
+  label(ctx, `COASTAL ZONE (NOT ADDRESS-LEVEL): ${regional}  ·  LSR: ${data.reports_status === "ready" ? data.reports?.length ?? 0 : "UNAVAILABLE"}`, 72, 1378, C.gold);
   rule(ctx, 1400);
 
   label(ctx, "MODEL GUIDANCE · SECONDARY", 72, 1440, C.white);
