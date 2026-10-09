@@ -381,7 +381,7 @@ R.hosts = (d) => {
     if (g) {
       const vp = g.vram_total_mb ? (g.vram_used_mb / g.vram_total_mb) * 100 : null;
       kids.push(h('div', 'small muted', g.name || 'GPU'));
-      kids.push(metric('GPU VRAM', h('span', null, [mbToGb(g.vram_used_mb), ' / ', mbToGb(g.vram_total_mb)]), vp, usageCls(vp)));
+      kids.push(metric('GPU VRAM', h('span', null, [mbToGb(g.vram_used_mb), ' / ', mbToGb(g.vram_total_mb)]), vp, 'info'));
       kids.push(kv('GPU load', h('span', null, [pct(g.utilization), ' - ', nz(g.temperature_c, (t) => t + ' \u00B0C')])));
     } else kids.push(kv('GPU', h('span', 'muted', 'none reported')));
     if (x.links && x.links.length) kids.push(h('div', 'linkrow', x.links.map((l) => lnk(l.name, l.url))));
@@ -521,7 +521,7 @@ R.compute = (d) => {
   if (g) {
     const vp = g.vram_total_mb ? (g.vram_used_mb / g.vram_total_mb) * 100 : null;
     kids.push(h('div', 'small muted', g.name || 'GPU'));
-    kids.push(metric('VRAM', h('span', null, [mbToGb(g.vram_used_mb), ' used / ', mbToGb(g.vram_total_mb), ' - ', mbToGb(g.vram_free_mb), ' free']), vp, usageCls(vp)));
+    kids.push(metric('VRAM', h('span', null, [mbToGb(g.vram_used_mb), ' used / ', mbToGb(g.vram_total_mb), ' - ', mbToGb(g.vram_free_mb), ' free']), vp, 'info'));
     kids.push(kv('Utilization', pct(g.utilization))); kids.push(kv('Temperature', nz(g.temperature_c, (t) => t + ' \u00B0C')));
   } else kids.push(kv('GPU', unk()));
   ['image', 'media', 'ai'].forEach((k) => { const j = J[k]; kids.push(h('div', 'lane', [h('span', 'muted small', k.toUpperCase()), j ? laneChip(j.state) : h('span', 'chip unk', 'UNKNOWN'), h('span', 'small muted wrap', j && !isNull(j.detail) ? j.detail : '')])); });

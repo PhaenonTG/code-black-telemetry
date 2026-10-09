@@ -76,6 +76,12 @@ coordinates. Keep these entries current whenever Mesonet firmware, receiver or
 alerting architecture changes. An authorized release still needs separate OTA
 verification on the physical board.
 
+PHAENON3 VRAM occupancy is an informational capacity metric, even above 90%:
+the GPU is expected to run full. Edge Discord incidents exclude the
+`vram_above_90_percent` observation. GPU probe failures, orphaned runners,
+and blocked learning jobs remain actionable. Edge also alerts if status or
+functional-probe snapshots stop refreshing for more than three minutes.
+
 - **Add a host:** add to `hosts[]` (`id, name, role, lan_ip, tailscale_ip, tailscale_peer`, `collector: {mode: in-process|remote|none}` and `checks`).
   For a remote collector copy `collector.py` + `registry.json`, run `collector.py --host <id>` bound to the tailnet IP or localhost, add a `collector`
   probe (`kind: collector, host: <id>`) to `probes[]`.
