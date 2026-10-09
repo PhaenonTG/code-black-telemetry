@@ -126,6 +126,19 @@ footer{padding:24px 0 35px}.mapboxgl-popup-content{max-width:220px;overflow-wrap
 
 .storm-category{display:inline-flex;align-items:center;gap:7px;margin-top:9px;padding:5px 8px;border:1px solid #6b7b80;background:#111c22;color:#dce9ec;font:800 10px Inter,sans-serif;letter-spacing:.09em}.storm-category b{color:#fff;font:800 22px 'Barlow Condensed',sans-serif;line-height:1}.storm-category small{padding-left:8px;border-left:1px solid #53646b;color:#9bb7bf;font:700 9px Inter,sans-serif;letter-spacing:0;text-transform:none}
 @media(max-width:700px){.storm-category{margin-top:5px;font-size:9px}.storm-category small{font-size:8px}}
+
+/* NHC advisory deltas are compared with the most recent earlier best-track point. */
+.metrics>div{display:flex;flex-direction:column;align-items:flex-start;gap:1px}
+.metrics>div>span{min-height:14px;margin-bottom:5px}
+.metrics .metric-trend,.metrics .metric-detail{display:block;margin-top:6px;font:800 11px/1.3 'DM Sans',system-ui,sans-serif;letter-spacing:.01em;text-transform:none;white-space:normal}
+.metrics .metric-trend span{display:inline;color:inherit;font:inherit;letter-spacing:inherit;text-transform:none;margin:0}
+.metrics .metric-trend__period{opacity:.75;font-weight:600}
+.metric-trend--adverse{color:#ff806f}.metric-trend--improving{color:#71d3a1}.metric-trend--steady,.metric-trend--unknown,.metrics .metric-detail{color:#9da2ae}
+.metric-movement{display:flex;align-items:center;gap:10px;min-height:39px}
+.metric-compass{width:37px;height:37px;flex:none;border:1px solid #43515b;border-radius:50%;position:relative;display:grid!important;place-items:center;margin:0!important;background:#111c23}
+.metrics .metric-compass>span{position:absolute;top:1px;left:50%;transform:translateX(-50%);display:block;font:800 8px/1 'DM Sans',system-ui,sans-serif;color:#aeb5bf;margin:0}
+.metric-compass svg{width:27px;height:27px;fill:#ff806f;filter:drop-shadow(0 1px 2px #000)}
+@media(max-width:700px){.metrics .metric-trend,.metrics .metric-detail{font-size:9px;min-height:24px}.metric-movement{gap:5px;min-height:33px}.metric-compass{width:31px;height:31px}.metric-compass svg{width:24px;height:24px}.metrics .metric-movement strong{font-size:18px}}
 .site-header nav a[aria-current=page]{color:#fff;border-bottom:2px solid #ee3429}
 
 /* Reports: a restrained operations ledger with the map as a paired spatial index. */

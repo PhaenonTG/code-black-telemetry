@@ -4,6 +4,7 @@ import { watchSummary } from "./watchLocation";
 import type { PointAlert, WatchLocation } from "./watchLocation";
 import codeblackShield from "../../../src/assets/codeblack-shield.png";
 import { hurricaneCategory } from "../../shared/hurricaneCategory";
+import { compassDirection, currentAdvisoryTrend } from "./stormTelemetry";
 
 const W = 1600, H = 2550;
 const ink = "#f4f6fa", muted = "#a3a7b1", cyan = "#45d9d1", coral = "#ff2a0c";
@@ -35,11 +36,13 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   ctx.fillStyle = muted; ctx.font = "28px system-ui"; ctx.fillText(`Updated ${displayTime(data.checked_at)}  •  NHC ${displayTime(data.storm.last_update)}`, 80, 277);
   ctx.fillStyle = "#111216"; ctx.fillRect(80, 318, 1440, 138);
   const category = hurricaneCategory(data.storm.max_wind_mph, data.storm.classification);
+  const trend = currentAdvisoryTrend(data, watch);
   const metrics = [
-    [category === null ? "MAX WIND · NHC" : `MAX WIND · NHC CATEGORY ${category}`, data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`], ["PRESSURE", data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`],
-    [`OBSERVED WIND CHANGE · ${data.observed.trend.period_hours ?? "—"}H`, data.observed.trend.wind_change_mph == null ? "—" : `${data.observed.trend.wind_change_mph > 0 ? "+" : ""}${data.observed.trend.wind_change_mph} mph`],
+    [category === null ? "MAX WIND · NHC" : `MAX WIND · NHC CATEGORY ${category}`, data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`, trend.wind == null ? "" : `${trend.wind > 0 ? "↑ +" : trend.wind < 0 ? "↓ " : "→ "}${trend.wind} mph / ${trend.elapsedHours}h`, trend.wind != null && trend.wind > 0],
+    ["MINIMUM PRESSURE", data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`, trend.pressure == null ? "" : `${trend.pressure > 0 ? "↑ +" : trend.pressure < 0 ? "↓ " : "→ "}${trend.pressure} mb / ${trend.elapsedHours}h`, trend.pressure != null && trend.pressure < 0],
+    ["MOVEMENT · NHC", data.storm.movement_mph == null ? "—" : `${compassDirection(data.storm.movement_degrees) ?? "—"} · ${data.storm.movement_mph} mph`, data.storm.movement_degrees == null ? "" : `${data.storm.movement_degrees}° from north`, false],
   ];
-  metrics.forEach(([label, value], i) => { const x = 110 + i * 470; ctx.fillStyle = muted; ctx.font = "700 20px system-ui"; ctx.fillText(label, x, 360); ctx.fillStyle = ink; ctx.font = "700 39px system-ui"; ctx.fillText(value, x, 418); });
+  metrics.forEach(([label, value, detail, adverse], i) => { const x = 110 + i * 470; ctx.fillStyle = muted; ctx.font = "700 20px system-ui"; ctx.fillText(String(label), x, 356); ctx.fillStyle = ink; ctx.font = "700 36px system-ui"; ctx.fillText(String(value), x, 402); ctx.fillStyle = i === 2 ? muted : adverse ? "#ff806f" : detail ? "#71d3a1" : muted; ctx.font = "700 19px system-ui"; ctx.fillText(String(detail), x, 435); });
   ctx.fillStyle = ink; ctx.font = "700 32px system-ui"; ctx.fillText("Aegis model synthesis", 80, 530);
   ctx.fillStyle = muted; ctx.font = "25px system-ui"; ctx.fillText("Experimental center-track blend  /  Official NHC forecast shown separately", 80, 571);
   ctx.fillStyle = "#0d0e11"; ctx.fillRect(80, 610, 1440, 800);

@@ -5,6 +5,7 @@ import type { PublicHurricane } from "./types";
 import type { WatchLocation } from "./watchLocation";
 import { distanceMiles } from "./watchLocation";
 import { activeWarnings } from "./nwsAlerts";
+import { latestPriorObservation } from "./stormTelemetry";
 
 const colors: Record<string, string> = { HFAI: "#e9b568", HFBI: "#bca9ef", AVNI: "#82aaff", CTCI: "#fa9372", CMCI: "#6db6ff", NVGI: "#9bbdd9", UKXI: "#f5cf75", AEMI: "#8bcfa5", GDMI: "#b5da7c", HWFI: "#f18cbb", HMNI: "#c48de8", HCCA: "#d8ddd8", TVCN: "#90b987" };
 const line = (points: { latitude: number; longitude: number }[]) => ({ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) } });
@@ -195,6 +196,15 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
         map.addSource("observed", { type: "geojson", data: line(data.observed.track) });
         map.addLayer({ id: "observed", type: "line", source: "observed", paint: { "line-color": "#f16e65", "line-width": 3 } });
       }
+      // The preliminary best-track feed can lag the current advisory. Join its
+      // final point to the latest official center without calling that segment observed.
+      const lastObserved = latestPriorObservation(data);
+      const latestCenter = data.storm.center;
+      if (lastObserved && latestCenter.latitude != null && latestCenter.longitude != null &&
+          (lastObserved.latitude !== latestCenter.latitude || lastObserved.longitude !== latestCenter.longitude)) {
+        map.addSource("advisory-trail", { type: "geojson", data: line([lastObserved, { latitude: latestCenter.latitude, longitude: latestCenter.longitude }]) });
+        map.addLayer({ id: "advisory-trail", type: "line", source: "advisory-trail", paint: { "line-color": "#f16e65", "line-width": 3, "line-dasharray": [1.2, 1.2] } });
+      }
       if (data.official.track.length > 1) {
         map.addSource("official", { type: "geojson", data: line(data.official.track) });
         map.addLayer({ id: "official", type: "line", source: "official", paint: { "line-color": "#f2f4ef", "line-width": 3, "line-dasharray": [2, 1.5] } });
@@ -233,7 +243,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       map.addSource("watch", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [watchRef.current.longitude, watchRef.current.latitude] } } });
       map.addLayer({ id: "watch-halo", type: "circle", source: "watch", paint: { "circle-radius": 15, "circle-color": "#45d9d1", "circle-opacity": 0.16 } });
       map.addLayer({ id: "watch", type: "circle", source: "watch", paint: { "circle-radius": 7, "circle-color": "#45d9d1", "circle-stroke-color": "#06121c", "circle-stroke-width": 2 } });
-      map.addLayer({ id: "watch-label", type: "symbol", source: "watch", layout: { "text-field": "WATCH POINT", "text-size": 13, "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"], "text-anchor": "left", "text-offset": [1.2, -0.2], "text-allow-overlap": true }, paint: { "text-color": "#f3ffff", "text-halo-color": "#06121c", "text-halo-width": 2 } });
+      map.addLayer({ id: "watch-label", type: "symbol", source: "watch", layout: { "text-field": "WATCH POINT", "text-size": 13, "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"], "text-anchor": "right", "text-offset": [-1.2, -0.2], "text-allow-overlap": true }, paint: { "text-color": "#f3ffff", "text-halo-color": "#06121c", "text-halo-width": 2 } });
       map.on("click", "watch", () => new mapboxgl.Popup({ maxWidth: "220px" }).setLngLat([watchRef.current.longitude, watchRef.current.latitude]).setText(`Watch location: ${watchRef.current.label}`).addTo(map));
       map.fitBounds(focusBounds(data, watchRef.current, viewMode), { padding: 35, maxZoom: 7.5, duration: 0 });
     });
@@ -247,7 +257,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     <div className="map-frame">{token ? <div ref={host} className="map-canvas" aria-label="Interactive Gulf hurricane map with watch location, Aegis, NHC, and model tracks" /> : <div className="map-fallback">Loading live map…</div>}
       {clouds && <div className="satellite-map-tag">GOES · {satelliteMode === "ir" ? "Infrared" : satelliteMode === "vapor" ? "Water vapor" : satelliteMode === "shortwave" ? "Shortwave IR" : "Visible"} · {compactTime(layerTimes[SATELLITE_LAYERS[satelliteMode]])}</div>}
       {mapError && <div className="map-error" role="status">{mapError}</div>}</div>
-    <div className="map-legend"><span><i className="key-aegis"/>Model blend · experimental</span><span><i className="key-nhc"/>NHC · official</span><span><i className="key-observed"/>Past track</span><span><i className="key-watch"/>Watch point</span></div>
+    <div className="map-legend"><span><i className="key-aegis"/>Model blend · experimental</span><span><i className="key-nhc"/>NHC · official</span><span><i className="key-observed"/>Past NHC track · dashed to current</span><span><i className="key-watch"/>Watch point</span></div>
     <details className="model-layers"><summary>Compare model tracks <span>{selectedModels.length} selected</span></summary><div className="model-switches">{models.map((model) => <button key={model.id} type="button" aria-pressed={selectedModels.includes(model.id)} onClick={() => toggle(model.id)} style={{ "--model-color": colors[model.id] ?? "#acbfd0" } as React.CSSProperties}>{model.name}</button>)}</div></details>
   </div>;
 }
