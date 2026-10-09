@@ -57,6 +57,7 @@
         ],
         "units": [
           "codeblack-core-api",
+          "codeblack-mesonet-alerts",
           "mediamtx",
           "codeblack-monitor",
           "codeblack-radar-worker",
@@ -370,6 +371,12 @@
           "ok"
         ]
       }
+    },
+    {
+      "id": "mesonet_latest",
+      "kind": "mesonet_latest",
+      "url": "http://127.0.0.1:8000/api/mesonet/v1/latest",
+      "interval": "fast"
     },
     {
       "id": "core_api_storm",
@@ -722,6 +729,43 @@
         "health": "http://127.0.0.1:8000/health"
       },
       "docs": "/srv/codeblack/CORE_ROLLOUT_STATUS.md (Core host)"
+    },
+    {
+      "id": "nick-mesonet-wind",
+      "name": "Nick Mesonet · WIND",
+      "host": "core",
+      "category": "weather",
+      "role": "ESP32 anemometer uplink; status is Core report freshness, not sensor validity",
+      "mesonet_role": "wind",
+      "host_impact": false,
+      "probe": "mesonet_latest",
+      "deps": ["core-api"],
+      "urls": {},
+      "docs": "firmware/mesonet-idf/README.md (Nick Mesonet project)"
+    },
+    {
+      "id": "nick-mesonet-weather",
+      "name": "Nick Mesonet · WEATHER",
+      "host": "core",
+      "category": "weather",
+      "role": "ESP32 temperature/RH and optional GPS uplink; status is Core report freshness, not sensor validity",
+      "mesonet_role": "weather",
+      "host_impact": false,
+      "probe": "mesonet_latest",
+      "deps": ["core-api"],
+      "urls": {},
+      "docs": "firmware/mesonet-idf/README.md (Nick Mesonet project)"
+    },
+    {
+      "id": "nick-mesonet-alerts",
+      "name": "Nick Mesonet Alerts",
+      "host": "core",
+      "category": "weather",
+      "role": "Durable offline, reboot-loop and update-failure alert evaluator",
+      "unit": "codeblack-mesonet-alerts",
+      "deps": ["core-api"],
+      "urls": {},
+      "docs": "firmware/mesonet-idf/ARCHITECTURE.md (Nick Mesonet project)"
     },
     {
       "id": "mediamtx",

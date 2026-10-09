@@ -44,6 +44,7 @@ DEF = REG["defaults"]
 INTERVALS = {"fast": DEF["fast_s"], "host": DEF["host_s"], "slow": DEF["slow_s"]}
 HOSTS = {h["id"]: h for h in REG["hosts"]}
 SERVICES = REG["services"]
+SERVICE_CONFIG = {s["id"]: s for s in SERVICES}
 TH = REG["thresholds"]
 
 
@@ -165,6 +166,36 @@ def run_http_json(d):
     return ok, value, None if ok else f"HTTP {status}", ms
 
 
+def run_mesonet_latest(d):
+    """Read only report ages; never retain sensor values, GPS, IDs or the read token."""
+    token = os.environ.get("CODE_BLACK_MESONET_READ_TOKEN", "")
+    if not token:
+        return False, None, "Mesonet read credential unavailable", 0
+    t0 = now()
+    req = urllib.request.Request(d["url"], headers={
+        "User-Agent": "CodeBlack-StatusCenter/1.0",
+        "Authorization": "Bearer " + token,
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=d.get("timeout", DEF["probe_timeout_s"])) as response:
+            if response.status != 200:
+                return False, None, f"HTTP {response.status}", int((now() - t0) * 1000)
+            data = json.loads(response.read(64_000))
+    except urllib.error.HTTPError as exc:
+        return False, None, f"HTTP {exc.code}", int((now() - t0) * 1000)
+    if not isinstance(data, dict) or any(role not in data for role in ("wind", "weather")):
+        return False, None, "Mesonet response missing roles", int((now() - t0) * 1000)
+    ages = {}
+    for role in ("wind", "weather"):
+        item = data[role]
+        age = item.get("received_age_ms") if isinstance(item, dict) else None
+        if age is not None and (not isinstance(age, (int, float)) or isinstance(age, bool) or age < 0):
+            return False, None, "Invalid Mesonet report age", int((now() - t0) * 1000)
+        ages[role] = age
+    elapsed = int((now() - t0) * 1000)
+    return True, {"status": 200, "latency_ms": elapsed, "json": ages}, None, elapsed
+
+
 def run_tcp(d):
     t0 = time.time()
     with socket.create_connection((d["host"], d["port"]), timeout=d.get("timeout", DEF["probe_timeout_s"])):
@@ -270,7 +301,7 @@ def run_link(d):
     return ok, {"status": status}, None if ok else f"HTTP {status}", ms
 
 
-RUNNERS = {"http_json": run_http_json, "tcp": run_tcp, "dns": run_dns, "tailscale": run_tailscale, "collector": run_collector,
+RUNNERS = {"http_json": run_http_json, "mesonet_latest": run_mesonet_latest, "tcp": run_tcp, "dns": run_dns, "tailscale": run_tailscale, "collector": run_collector,
            "collector_local": run_collector_local, "link": run_link}
 PROBES = {}
 
@@ -403,6 +434,12 @@ def collector_http(host_id, name):
 
 def service_metrics(svc, sig):
     sid, m = svc["id"], []
+    if svc.get("mesonet_role"):
+        pid = svc.get("probe")
+        probe = PROBES.get(pid)
+        age = (pjson(pid) or {}).get(svc["mesonet_role"]) if probe and probe.ok and probe.observing else None
+        age = round((age / 1000) + (now() - probe.last_attempt), 1) if age is not None else None
+        m.append(("Core report age (s)", age))
     j = pjson(svc.get("probe")) if svc.get("probe") else None
     if sid == "mediamtx" and j:
         items = j.get("items", [])
@@ -488,7 +525,7 @@ def build_service(svc):
             stale = True
     # probe telemetry
     telem_pids = []
-    if svc.get("probe"):
+    if svc.get("probe") and not svc.get("mesonet_role"):
         pid = svc["probe"]; telem_pids.append(pid)
         p = PROBES.get(pid)
         if p and p.last_attempt is not None and p.observing:
@@ -498,6 +535,21 @@ def build_service(svc):
                 sigs.append("OFFLINE" if not svc.get("unit") else "DEGRADED"); reasons.append(f"probe failing: {p.last_error}")
         else:
             stale = True
+    if svc.get("mesonet_role"):
+        pid = svc["probe"]; telem_pids.append(pid)
+        p = PROBES.get(pid)
+        age = (pjson(pid) or {}).get(svc["mesonet_role"]) if p and p.ok and p.observing else None
+        if age is not None:
+            age += max(0, now() - p.last_attempt) * 1000
+            if age <= 5000:
+                sigs.append("HEALTHY")
+            elif age < 30000:
+                sigs.append("DEGRADED"); reasons.append(f"Core report {age / 1000:.0f}s old")
+            else:
+                sigs.append("OFFLINE"); reasons.append(f"Core report {age / 1000:.0f}s old")
+        else:
+            stale = not (p and p.ok and p.observing)
+            reasons.append("No Core report yet" if not stale else "Mesonet read telemetry unavailable")
     if svc.get("collector_http"):
         r, fresh = collector_http(svc["host"], svc["collector_http"])
         if r is not None and fresh:
@@ -588,7 +640,8 @@ def build_host(h, services):
         g = pjson("medialab_system")["gpu"]
         gpu = {"name": g.get("name"), "vram_used_mb": g.get("vram_used_mib"), "vram_total_mb": g.get("vram_total_mib"), "utilization": g.get("utilization_pct"), "temperature_c": g.get("temperature_c")}
     mine = [s for s in services if s["host"] == h["id"]]
-    bad = [s for s in mine if s["state"] in ("DEGRADED", "OFFLINE") and not s["informational"]]
+    bad = [s for s in mine if s["state"] in ("DEGRADED", "OFFLINE") and not s["informational"]
+           and SERVICE_CONFIG[s["id"]].get("host_impact", True)]
     crit_disk = [d for d in disks if d.get("state") == "CRITICAL"]
     if not online:
         state, why = "OFFLINE", "no telemetry and not reachable"

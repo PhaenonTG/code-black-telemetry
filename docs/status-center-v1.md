@@ -68,6 +68,14 @@ history is ever read.
 
 ## How to extend (all data-driven: `registry.json`)
 
+Nick Mesonet WIND/WEATHER uplink cards and the alerts daemon are included. The
+uplink probe uses only Core's Mesonet read token from the dedicated protected
+`/srv/codeblack/config/status-center/mesonet-read.env`; never reuse the device or
+admin token. The browser receives only per-role Core report ages, not readings or
+coordinates. Keep these entries current whenever Mesonet firmware, receiver or
+alerting architecture changes. An authorized release still needs separate OTA
+verification on the physical board.
+
 - **Add a host:** add to `hosts[]` (`id, name, role, lan_ip, tailscale_ip, tailscale_peer`, `collector: {mode: in-process|remote|none}` and `checks`).
   For a remote collector copy `collector.py` + `registry.json`, run `collector.py --host <id>` bound to the tailnet IP or localhost, add a `collector`
   probe (`kind: collector, host: <id>`) to `probes[]`.

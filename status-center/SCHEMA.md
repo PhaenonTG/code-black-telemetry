@@ -34,6 +34,13 @@ block whose `stale` is true must NOT be shown green (render `STALE TELEMETRY`). 
 `{id, name, host, category, role, state, state_reason, informational, version, release, uptime_s, last_success, last_error,
   dependencies:[service ids], urls:{local, tailscale, public, manage, health}, docs, metrics:[{label,value}], telemetry}`
 `docs` is a display string/path (metadata), not a link. `informational:true` = an intentional/expected state (not a fault).
+`host_impact:false` in a service registry entry keeps a remote/device fault from degrading the host that observes it; the service itself still raises dashboard attention.
+Nick Mesonet WIND and WEATHER are service cards under Core. Their state is based on
+Core's authenticated read-only `received_age_ms`: <=5 s HEALTHY, 5–30 s DEGRADED,
+>=30 s OFFLINE. If the read probe fails, state is UNKNOWN, never green from cached
+data. Only role and report age are retained; sensor values, GPS and credentials
+are not present in status-center responses. These states measure transport, not
+sensor calibration or physical wiring.
 
 ## streaming
 `{state:"LIVE"|"OFFLINE"|"DEGRADED"|"UNKNOWN", summary,
