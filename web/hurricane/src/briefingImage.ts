@@ -47,8 +47,8 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   const aegisLandfall = estimateNorthernGulfLandfall(data, "aegis"), nhcLandfall = estimateNorthernGulfLandfall(data, "nhc");
   if (aegisLandfall) {
     ctx.fillStyle = coral; ctx.font = "800 21px system-ui";
-    ctx.fillText(`AEGIS COAST CROSSING · ~${gulfTime(aegisLandfall.centerTime)} · ${aegisLandfall.region} · EXPERIMENTAL`, 80, 482, 1430);
-    if (nhcLandfall) { ctx.fillStyle = muted; ctx.font = "700 18px system-ui"; ctx.fillText(`NHC centerline comparison · ~${gulfTime(nhcLandfall.centerTime)} · ${nhcLandfall.region}`, 80, 508, 1430); }
+    ctx.fillText(`AEGIS COAST CROSSING · ~${gulfTime(aegisLandfall.centerTime)} · ${aegisLandfall.region} · cycle ${data.projection.cycle ? gulfTime(data.projection.cycle) : "unavailable"} · EXPERIMENTAL`, 80, 482, 1430);
+    if (nhcLandfall) { ctx.fillStyle = muted; ctx.font = "700 18px system-ui"; ctx.fillText(`NHC centerline comparison · ~${gulfTime(nhcLandfall.centerTime)} · ${nhcLandfall.region} · forecast ${data.official.issued_at ? gulfTime(data.official.issued_at) : "unavailable"}`, 80, 508, 1430); }
   }
   ctx.fillStyle = ink; ctx.font = "700 32px system-ui"; ctx.fillText("Aegis model synthesis", 80, 550);
   ctx.fillStyle = muted; ctx.font = "25px system-ui"; ctx.fillText("Experimental center-track blend  /  Official NHC forecast shown separately", 80, 585);

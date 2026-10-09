@@ -5,8 +5,8 @@ export type PublicHurricane = {
   status: string; checked_at: string | null; freshness: string | null;
   storm: { id: string | null; name: string | null; classification: string | null; max_wind_mph: number | null; pressure_mb: number | null;
     center: { latitude: number | null; longitude: number | null }; movement_degrees: number | null; movement_mph: number | null; last_update: string | null };
-  official: { track: TrackPoint[]; cone: number[][]; cone_status: string | null; advisory_url: string | null; discussion_url: string | null };
-  projection: { status: string; points: ProjectionPoint[]; cycle?: string; method: string; member_ids?: string[] };
+  official: { track: TrackPoint[]; issued_at?: string | null; cone: number[][]; cone_status: string | null; advisory_url: string | null; discussion_url: string | null };
+  projection: { status: string; points: ProjectionPoint[]; cycle?: string; cycle_lag_hours?: number | null; method: string; member_ids?: string[] };
   guidance: { status: string | null; latest_cycle: string | null; models: Model[]; spread_48h_miles: number | null; wind_48h_mph_range: number[] | null };
   observed: { track: { latitude: number; longitude: number; valid_time: string | null; wind_mph: number | null; pressure_mb: number | null }[];
     trend: { period_hours: number | null; wind_change_mph: number | null; pressure_change_mb: number | null } };

@@ -3,7 +3,7 @@ import { deriveProjection, handlePublicHurricane, toPublicHurricane } from "./pu
 
 const sample = {
   status: "active", checked_at: "2026-10-09T00:00:00Z", storm: { id: "al092026", name: "Isaias", pressure: "974", latitudeNumeric: 24.9,
-    longitudeNumeric: -88.8, publicAdvisory: { url: "https://www.nhc.noaa.gov/" } },
+    longitudeNumeric: -88.8, forecastTrack: { issuance: "2026-10-09T03:00:00Z" }, publicAdvisory: { url: "https://www.nhc.noaa.gov/" } },
   watch_point: { label: "12150 Rolling Meadows Ln", latitude: 30.447577800627, longitude: -88.329515563521 },
   assessment: { summary: "Private family watch at 12150 Rolling Meadows Ln", intensity_mph: 100 },
   ai: { status: "ready", summary: "Private family watch at 12150 Rolling Meadows Ln" },
@@ -83,6 +83,8 @@ describe("public hurricane boundary", () => {
     const stale = toPublicHurricane({ ...sample, projection: { ...blend, checked_at: "2026-10-08T23:55:00Z" } });
     expect(current.projection.status).toBe("ready");
     expect(current.projection.points[0].members).toBe(2);
+    expect(current.projection.cycle_lag_hours).toBe(3);
+    expect(current.official.issued_at).toBe("2026-10-09T03:00:00Z");
     expect(stale.projection.status).toBe("unavailable");
   });
 

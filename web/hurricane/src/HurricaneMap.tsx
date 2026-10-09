@@ -239,7 +239,10 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       }
       const center = data.storm.center;
       map.addSource("storm", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [center.longitude!, center.latitude!] } } });
-      map.addLayer({ id: "storm", type: "circle", source: "storm", paint: { "circle-radius": 9, "circle-color": "#fb716a", "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
+      // NHC cone graphics mark the current cyclone center with an X. Keep this
+      // distinct from forecast dots and the cyan watch point.
+      map.addLayer({ id: "storm-backdrop", type: "circle", source: "storm", paint: { "circle-radius": 13, "circle-color": "#080b11", "circle-stroke-color": "#fb716a", "circle-stroke-width": 2.5 } });
+      map.addLayer({ id: "storm", type: "symbol", source: "storm", layout: { "text-field": "X", "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"], "text-size": 21, "text-allow-overlap": true }, paint: { "text-color": "#fff", "text-halo-color": "#080b11", "text-halo-width": 1 } });
       map.addSource("watch", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [watchRef.current.longitude, watchRef.current.latitude] } } });
       map.addLayer({ id: "watch-halo", type: "circle", source: "watch", paint: { "circle-radius": 15, "circle-color": "#45d9d1", "circle-opacity": 0.16 } });
       map.addLayer({ id: "watch", type: "circle", source: "watch", paint: { "circle-radius": 7, "circle-color": "#45d9d1", "circle-stroke-color": "#06121c", "circle-stroke-width": 2 } });
@@ -257,7 +260,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     <div className="map-frame">{token ? <div ref={host} className="map-canvas" aria-label="Interactive Gulf hurricane map with watch location, Aegis, NHC, and model tracks" /> : <div className="map-fallback">Loading live map…</div>}
       {clouds && <div className="satellite-map-tag">GOES · {satelliteMode === "ir" ? "Infrared" : satelliteMode === "vapor" ? "Water vapor" : satelliteMode === "shortwave" ? "Shortwave IR" : "Visible"} · {compactTime(layerTimes[SATELLITE_LAYERS[satelliteMode]])}</div>}
       {mapError && <div className="map-error" role="status">{mapError}</div>}</div>
-    <div className="map-legend"><span><i className="key-aegis"/>Model blend · experimental</span><span><i className="key-nhc"/>NHC · official</span><span><i className="key-observed"/>Past NHC track · dashed to current</span><span><i className="key-watch"/>Watch point</span></div>
+    <div className="map-legend"><span><i className="key-center">X</i>NHC current center</span><span><i className="key-aegis"/>Model blend · experimental</span><span><i className="key-nhc"/>NHC · official</span><span><i className="key-observed"/>Past NHC track · dashed to current</span><span><i className="key-watch"/>Watch point</span></div>
     <details className="model-layers"><summary>Compare model tracks <span>{selectedModels.length} selected</span></summary><div className="model-switches">{models.map((model) => <button key={model.id} type="button" aria-pressed={selectedModels.includes(model.id)} onClick={() => toggle(model.id)} style={{ "--model-color": colors[model.id] ?? "#acbfd0" } as React.CSSProperties}>{model.name}</button>)}</div></details>
   </div>;
 }

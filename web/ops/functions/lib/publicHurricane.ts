@@ -109,8 +109,12 @@ export function toPublicHurricane(raw: unknown) {
       ? { ...base, valid_time: base.valid_time, spread_miles: spread, members } : null;
   }).filter(Boolean);
   const projectionCurrent = storedProjection.status === "ready" && string(storedProjection.checked_at) === string(data.checked_at) && projectionPoints.length >= 3;
+  const advisoryIssued = string(object(storm.forecastTrack).issuance);
+  const modelCycle = string(storedProjection.cycle);
+  const cycleLagHours = advisoryIssued && modelCycle && Number.isFinite(Date.parse(advisoryIssued)) && Number.isFinite(Date.parse(modelCycle))
+    ? Math.max(0, Math.round((Date.parse(advisoryIssued) - Date.parse(modelCycle)) / 3_600_000 * 10) / 10) : null;
   const projection = { status: projectionCurrent ? "ready" : "unavailable", points: projectionCurrent ? projectionPoints : [],
-    checked_at: projectionCurrent ? string(storedProjection.checked_at) : null, cycle: string(storedProjection.cycle),
+    checked_at: projectionCurrent ? string(storedProjection.checked_at) : null, cycle: modelCycle, cycle_lag_hours: cycleLagHours,
     method: string(storedProjection.method) ?? "Independent-model track blend unavailable",
     member_ids: array(storedProjection.member_ids).filter((id) => typeof id === "string" && MODEL_IDS.has(id)) };
   const officialTrack = array(data.track).map(trackPoint).filter(Boolean);
@@ -128,7 +132,7 @@ export function toPublicHurricane(raw: unknown) {
     storm: { id: string(storm.id), name: string(storm.name), classification: string(storm.classification), max_wind_mph: number(assessment.intensity_mph),
       pressure_mb: number(storm.pressure), center: { latitude: number(storm.latitudeNumeric), longitude: number(storm.longitudeNumeric) },
       movement_degrees: number(storm.movementDir), movement_mph: number(storm.movementSpeed), last_update: string(storm.lastUpdate) },
-    official: { track: officialTrack, cone: array(data.cone).filter((entry) => Array.isArray(entry) && entry.length >= 2 && number(entry[0]) !== null && number(entry[1]) !== null).map((entry) => [Number((entry as number[])[0]), Number((entry as number[])[1])]),
+    official: { track: officialTrack, issued_at: advisoryIssued, cone: array(data.cone).filter((entry) => Array.isArray(entry) && entry.length >= 2 && number(entry[0]) !== null && number(entry[1]) !== null).map((entry) => [Number((entry as number[])[0]), Number((entry as number[])[1])]),
       cone_status: string(data.cone_status), advisory_url: officialUrl(advisory.url), discussion_url: officialUrl(discussion.url) },
     projection, guidance: { status: string(guidance.status), latest_cycle: string(guidance.latest_cycle), models,
       spread_48h_miles: number(guidance.spread_48h_miles), wind_48h_mph_range: Array.isArray(guidance.wind_48h_mph_range) ? guidance.wind_48h_mph_range.map(number) : null },
@@ -158,7 +162,7 @@ export async function handlePublicHurricane(request: Request, env: GatewayEnv, c
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "GET, OPTIONS" } });
   if (request.method !== "GET") return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: { "Content-Type": "application/json", ...cors } });
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v7");
+  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v8");
   const cached = cache ? await cache.match(cacheKey) : null;
   if (cached) return new Response(cached.body, { status: 200, headers: { ...Object.fromEntries(cached.headers), ...cors } });
   const result = await forwardToCore(CORE_ROUTE, new URL(request.url), env);
