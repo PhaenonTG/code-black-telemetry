@@ -43,8 +43,23 @@ describe("public hurricane boundary", () => {
     expect(result.ai).toEqual({ status: "ready", analyzed_at: "2026-10-09T04:12:00Z",
       reviewed_at: "2026-10-09T04:13:00Z", review_model: "qwen3-coder:30b",
       summary: "Storm surge warning remains active along the northern Gulf coast.",
+      landfall: null,
       supporting_factors: ["Official warning remains active"], uncertainties: ["Local impacts may vary"],
       recommended_attention: ["Monitor National Weather Service updates"] });
+  });
+
+  it("publishes a paid reviewer choice only when it matches a source-derived crossing", () => {
+    const crossing = { id: "HFAI", center_time: "2026-10-10T01:00:00Z", window_start: "2026-10-09T22:00:00Z",
+      window_end: "2026-10-10T04:00:00Z", latitude: 30.25, longitude: -87.7,
+      region: "Alabama coast", nearest_city: "Gulf Shores, AL" };
+    const ai = { status: "ready", analyzed_at: "2026-10-09T04:12:00Z", reviewed_at: "2026-10-09T04:13:00Z",
+      review_model: "gpt-6.1-sol", review_verdict: "revise", input_fingerprint: "same",
+      summary: "The official forecast continues to favor the northern Gulf coast.", landfall: crossing };
+    const result = toPublicHurricane({ ...sample, input_fingerprint: "same", landfall_candidates: [crossing], ai });
+    expect(result.ai.landfall).toMatchObject({ source: "HFAI", nearest_city: "Gulf Shores, AL" });
+    expect(toPublicHurricane({ ...sample, input_fingerprint: "changed", landfall_candidates: [crossing], ai }).ai.landfall).toBeNull();
+    expect(toPublicHurricane({ ...sample, input_fingerprint: "same", landfall_candidates: [crossing],
+      ai: { ...ai, landfall: { ...crossing, latitude: 31.5 } } }).ai.landfall).toBeNull();
   });
 
   it("withholds old unreviewed drafts even when marked ready", () => {

@@ -3,7 +3,7 @@ import type { PublicHurricane, TrackPoint, ProjectionPoint } from "./types";
 export type WatchLocation = { label: string; latitude: number; longitude: number };
 export type PointAlert = { event: string; headline: string; severity: string | null; onset: string | null; ends: string | null; expires: string | null; url: string | null };
 export const DEFAULT_WATCH: WatchLocation = {
-  label: "Grand Bay, Alabama",
+  label: "Grand Bay, AL",
   latitude: 30.447577800627,
   longitude: -88.329515563521,
 };

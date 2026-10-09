@@ -4,9 +4,9 @@ import { watchSummary } from "./watchLocation";
 import type { PointAlert, WatchLocation } from "./watchLocation";
 import codeblackShield from "../../../src/assets/codeblack-shield.png";
 import { hurricaneCategory } from "../../shared/hurricaneCategory";
-import { compassDirection, currentAdvisoryTrend, estimateNorthernGulfLandfall } from "./stormTelemetry";
+import { compassDirection, currentAdvisoryTrend, estimateNorthernGulfLandfall, reviewedLandfall } from "./stormTelemetry";
 
-const W = 1600, H = 2220;
+const W = 1600;
 const black = "#050608", surface = "#11151a", white = "#f5f6f8", quiet = "#aeb7c2";
 const border = "#3d454e", red = "#ee3429", cyan = "#45d9d1";
 const localTime = (value: string) => new Intl.DateTimeFormat("en-US", {
@@ -47,7 +47,19 @@ function stat(ctx: CanvasRenderingContext2D, x: number, heading: string, value: 
 }
 
 export async function saveBriefingImage(data: PublicHurricane, mapPng: string | null, watch: WatchLocation, alerts: PointAlert[], alertsStatus: string) {
-  await Promise.all([document.fonts.load("800 82px 'Barlow Condensed'"), document.fonts.load("700 22px Inter")]);
+  await Promise.all([document.fonts.load("800 82px 'Barlow Condensed'"), document.fonts.load("700 22px Inter"), document.fonts.load("500 20px Inter")]);
+  const aiSummary = (data.ai?.status === "ready" || data.ai?.status === "stale") && data.ai.summary
+    ? data.ai.summary : "Aegis interpretation unavailable. Use the official NHC forecast and NWS warnings.";
+  const alertText = alertsStatus !== "ready" ? "Alert check unavailable — verify directly with NWS."
+    : alerts.length ? [...new Set(alerts.map((item) => item.event))].join("  ·  ") : "No active NWS alerts returned at this check.";
+  const measure = document.createElement("canvas").getContext("2d"); if (!measure) throw new Error("Canvas is unavailable");
+  measure.font = "500 20px Inter, system-ui";
+  const measuredSummaryHeight = wrap(measure, aiSummary, 0, 0, 1472, 31, 20);
+  measure.font = "500 21px Inter, system-ui";
+  const measuredAlertHeight = wrap(measure, alertText, 0, 0, 1472, 34, 6);
+  const analysisFootY = 1713 + measuredSummaryHeight + 18;
+  const alertsTitleY = analysisFootY + 67, alertsBodyY = alertsTitleY + 58;
+  const footerY = alertsBodyY + measuredAlertHeight + 64, H = footerY + 240;
   const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Canvas is unavailable");
   ctx.fillStyle = black; ctx.fillRect(0, 0, W, H);
@@ -83,18 +95,23 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
     data.storm.movement_degrees == null ? "Direction unavailable" : `${data.storm.movement_degrees}° from north`, false);
 
   // Comparable centerline estimates, with their distinct issuance times
-  const blend = estimateNorthernGulfLandfall(data, "aegis");
+  const reviewed = reviewedLandfall(data);
+  const modelBlend = estimateNorthernGulfLandfall(data, "aegis");
+  const blend = reviewed ?? modelBlend;
   const nhc = estimateNorthernGulfLandfall(data, "nhc");
-  label(ctx, blend ? "AEGIS MODEL BLEND · EXPERIMENTAL" : "CENTERLINE ESTIMATE", 64, 540, red);
-  type(ctx, blend ? `~${localTime(blend.centerTime)} · ${blend.region}` : "Unavailable",
+  const selectedNhc = Boolean(reviewed && data.ai?.landfall?.source === "NHC");
+  const comparison = selectedNhc ? modelBlend : nhc;
+  label(ctx, reviewed ? "AEGIS REVIEWED · EXPERIMENTAL" : blend ? "CODE BLACK EXPERIMENTAL" : "CENTERLINE ESTIMATE", 64, 540, red);
+  type(ctx, blend ? `~${localTime(blend.centerTime)} · ${blend.nearestCity ? `near ${blend.nearestCity}` : blend.region}` : "Unavailable",
     64, 581, "800 37px 'Barlow Condensed', system-ui", white, 696);
-  type(ctx, blend && data.projection.cycle ? `Model cycle ${localTime(data.projection.cycle)}` : "Experimental track unavailable",
+  type(ctx, reviewed ? `Aegis reviewed ${displayTime(data.ai?.reviewed_at)} · selected ${data.ai?.landfall?.source}` : blend && data.projection.cycle ? `Model cycle ${localTime(data.projection.cycle)}` : "Experimental track unavailable",
     64, 611, "500 18px Inter, system-ui", quiet);
   bar(ctx, 799, 520, 1, border, 109);
-  label(ctx, "NHC OFFICIAL CENTERLINE", 829, 540);
-  type(ctx, nhc ? `~${localTime(nhc.centerTime)} · ${nhc.region}` : "Unavailable",
+  label(ctx, selectedNhc ? "MODEL-BLEND COMPARISON" : "NHC OFFICIAL CENTERLINE", 829, 540);
+  type(ctx, comparison ? `~${localTime(comparison.centerTime)} · ${comparison.region}` : "Unavailable",
     829, 581, "800 37px 'Barlow Condensed', system-ui", white, 707);
-  type(ctx, `Forecast issued ${displayTime(data.official.issued_at)}`, 829, 611, "500 18px Inter, system-ui", quiet);
+  type(ctx, selectedNhc ? `Model cycle ${displayTime(data.projection.cycle)}` : `Forecast issued ${displayTime(data.official.issued_at)}`,
+    829, 611, "500 18px Inter, system-ui", quiet);
   bar(ctx, 64, 639, 1472, red, 3);
 
   // Supporting map; the live track map supplies the pixels at export time.
@@ -108,8 +125,8 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   }
   ctx.fillStyle = "#050608ee"; ctx.fillRect(64, mapY, 1472, 76);
   type(ctx, "GULF TRACK OVERVIEW", 90, mapY + 50, "800 37px 'Barlow Condensed', system-ui");
-  bar(ctx, 913, mapY + 39, 26, cyan, 3); label(ctx, "AEGIS EXPERIMENTAL", 950, mapY + 48, cyan);
-  bar(ctx, 1215, mapY + 39, 26, white, 3); label(ctx, "NHC OFFICIAL", 1252, mapY + 48, white);
+  bar(ctx, 877, mapY + 39, 24, red, 3); type(ctx, "CODE BLACK EXPERIMENTAL", 913, mapY + 47, "800 16px Inter, system-ui", red);
+  bar(ctx, 1235, mapY + 39, 24, white, 3); type(ctx, "NHC OFFICIAL", 1271, mapY + 47, "800 16px Inter, system-ui", white);
   ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.strokeRect(64, mapY, 1472, mapH);
 
   // Evidence and local watch in paired columns
@@ -126,7 +143,7 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
       x + 15, 1537, "800 37px 'Barlow Condensed', system-ui", white, 197);
     type(ctx, `Cycle ${displayTime(model?.cycle)}`, x + 15, 1570, "500 15px Inter, system-ui", quiet, 197);
   });
-  bar(ctx, 790, 1360, 1, border, 558);
+  bar(ctx, 790, 1360, 1, border, 252);
   type(ctx, "WATCH LOCATION", right, 1394, "800 37px 'Barlow Condensed', system-ui");
   bar(ctx, 1107, 1386, 429, red, 3);
   ctx.fillStyle = white; ctx.font = "800 38px 'Barlow Condensed', system-ui";
@@ -135,40 +152,29 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   const proximity = watchSummary(data, watch);
   const distances = [
     `Current center: ${proximity.currentMiles == null ? "unavailable" : `${proximity.currentMiles} mi away`}`,
-    `Closest NHC center: ${proximity.official ? `${proximity.official.miles} mi at +${proximity.official.point.hour}h` : "unavailable"}`,
-    `Closest blended center: ${proximity.aegis ? `${proximity.aegis.miles} mi at +${proximity.aegis.point.hour}h` : "unavailable"}`,
+    `Gulf radar: ${data.monitoring.radar_analysis === "ready" ? "MRMS current" : data.monitoring.radar_analysis === "partial" ? "partial" : "unavailable"}`,
   ];
   distances.forEach((value, index) => type(ctx, value, right, 1500 + shift + index * 32, "600 20px Inter, system-ui", quiet, rightWidth));
-  type(ctx, "Center distance does not predict local impacts.", right, 1617 + shift, "500 17px Inter, system-ui", quiet);
 
   type(ctx, "AEGIS ANALYSIS", left, 1653, "800 37px 'Barlow Condensed', system-ui"); bar(ctx, left, 1666, 83, red, 3);
-  const aiSummary = data.ai?.status === "ready" && data.ai.summary
-    ? data.ai.summary : "Aegis interpretation unavailable. Use the official NHC forecast and NWS warnings.";
   ctx.fillStyle = white; ctx.font = "500 20px Inter, system-ui";
-  const summaryHeight = wrap(ctx, aiSummary, left, 1713, 695, 30, 7);
-  if (data.ai?.status === "ready" && data.ai.supporting_factors.length && summaryHeight <= 72) {
-    type(ctx, "Supporting signal", left, 1733 + summaryHeight, "800 17px Inter, system-ui", cyan);
-    ctx.fillStyle = quiet; ctx.font = "500 18px Inter, system-ui";
-    wrap(ctx, data.ai.supporting_factors[0], left, 1766 + summaryHeight, 690, 28, 2);
-  }
-  type(ctx, `Aegis analyzed ${displayTime(data.ai?.analyzed_at)} · Sources ${displayTime(data.checked_at)}`,
-    left, 1932, "500 16px Inter, system-ui", quiet, 690);
-  type(ctx, "NWS ALERTS AT WATCH LOCATION", right, 1727, "800 34px 'Barlow Condensed', system-ui");
-  bar(ctx, right, 1740, 83, red, 3);
-  const alertText = alertsStatus !== "ready" ? "Alert check unavailable — verify directly with NWS."
-    : alerts.length ? alerts.map((item) => item.event).join("  ·  ") : "No active NWS alerts returned at this check.";
+  wrap(ctx, aiSummary, left, 1713, 1472, 31, 20);
+  type(ctx, `${data.ai?.analyzed_at ? `${data.ai.status === "stale" ? "Earlier review" : "Aegis analyzed"} ${displayTime(data.ai.analyzed_at)} · ` : ""}Sources ${displayTime(data.checked_at)}`,
+    left, analysisFootY, "500 16px Inter, system-ui", quiet, 1472);
+  type(ctx, "NWS ALERTS AT WATCH LOCATION", left, alertsTitleY, "800 34px 'Barlow Condensed', system-ui");
+  bar(ctx, left, alertsTitleY + 13, 83, red, 3);
   ctx.fillStyle = white; ctx.font = "500 21px Inter, system-ui";
-  wrap(ctx, alertText, right, 1785, rightWidth, 34, 4);
+  wrap(ctx, alertText, left, alertsBodyY, 1472, 34, 6);
 
   // Compact provenance footer, never mistaken for an official bulletin
-  bar(ctx, 64, 1980, 1472, red, 3);
-  type(ctx, "EXPERIMENTAL — NOT AN OFFICIAL FORECAST", 64, 2026, "800 23px Inter, system-ui", red);
+  bar(ctx, 64, footerY, 1472, red, 3);
+  type(ctx, "EXPERIMENTAL — NOT AN OFFICIAL FORECAST", 64, footerY + 46, "800 23px Inter, system-ui", red);
   ctx.fillStyle = quiet; ctx.font = "500 19px Inter, system-ui";
-  wrap(ctx, data.disclosure, 64, 2065, 1080, 30, 4);
-  bar(ctx, 1206, 2015, 1, border, 136);
-  type(ctx, "Official: nhc.noaa.gov", 1234, 2060, "600 18px Inter, system-ui", quiet);
-  type(ctx, "Alerts: weather.gov", 1234, 2096, "600 18px Inter, system-ui", quiet);
-  type(ctx, "tropics.codeblackwx.com", 1234, 2132, "700 18px Inter, system-ui", white);
+  wrap(ctx, data.disclosure, 64, footerY + 85, 1080, 30, 4);
+  bar(ctx, 1206, footerY + 35, 1, border, 136);
+  type(ctx, "Official: nhc.noaa.gov", 1234, footerY + 80, "600 18px Inter, system-ui", quiet);
+  type(ctx, "Alerts: weather.gov", 1234, footerY + 116, "600 18px Inter, system-ui", quiet);
+  type(ctx, "tropics.codeblackwx.com", 1234, footerY + 152, "700 18px Inter, system-ui", white);
 
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Image generation failed")), "image/png"));
   const url = URL.createObjectURL(blob), link = document.createElement("a");

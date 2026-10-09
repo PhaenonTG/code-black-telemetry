@@ -28,7 +28,7 @@ const lowValueNarrative = /\b(?:unsupported with no available fields|no availabl
 const publicNarrative = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
   const prose = value.trim();
-  return prose && prose.length <= 650 && !privateNarrative.test(prose) && !lowValueNarrative.test(prose) ? prose : null;
+  return prose && prose.length <= 1050 && !privateNarrative.test(prose) && !lowValueNarrative.test(prose) ? prose : null;
 };
 const publicNarrativeList = (value: unknown): string[] =>
   array(value).slice(0, 5).map(publicNarrative).filter((item): item is string => !!item);
@@ -95,10 +95,24 @@ export function deriveProjection(models: unknown[], latestCycle: unknown) {
 }
 
 export function toPublicHurricane(raw: unknown) {
-  const data = object(raw), storm = object(data.storm), guidance = object(data.model_guidance), trend = object(data.observed_trend), assessment = object(data.assessment), ai = object(data.ai), changes = object(data.changes_since_previous);
-  const reviewReady = ai.status === "ready" && ai.review_model === "qwen3-coder:30b"
+  const data = object(raw), storm = object(data.storm), guidance = object(data.model_guidance), trend = object(data.observed_trend), assessment = object(data.assessment), ai = object(data.ai), changes = object(data.changes_since_previous), radar = object(data.radar);
+  const reviewReady = (ai.status === "ready" || ai.status === "stale") && ["qwen3-coder:30b", "gpt-6.1-sol"].includes(String(ai.review_model))
     && (ai.review_verdict === "approve" || ai.review_verdict === "revise") && !!string(ai.reviewed_at);
   const aiSummary = reviewReady ? publicNarrative(ai.summary) : null;
+  const selectedLandfall = object(ai.landfall);
+  const candidate = array(data.landfall_candidates).map(object).find((row) =>
+    row.id === selectedLandfall.id && row.center_time === selectedLandfall.center_time &&
+    row.latitude === selectedLandfall.latitude && row.longitude === selectedLandfall.longitude);
+  const aiLandfall = aiSummary && ai.input_fingerprint === data.input_fingerprint && candidate &&
+    ["NHC", "BLEND", "HFAI", "HFBI", "AVNI"].includes(String(candidate.id)) &&
+    Number.isFinite(Date.parse(String(candidate.center_time))) &&
+    number(candidate.latitude) !== null && number(candidate.longitude) !== null &&
+    typeof candidate.region === "string" && /^[A-Za-z /]+$/.test(candidate.region) &&
+    (candidate.nearest_city === null || typeof candidate.nearest_city === "string" && /^[A-Za-z .,]+$/.test(candidate.nearest_city))
+    ? { source: String(candidate.id), center_time: String(candidate.center_time),
+        window_start: string(candidate.window_start), window_end: string(candidate.window_end),
+        latitude: Number(candidate.latitude), longitude: Number(candidate.longitude),
+        region: candidate.region, nearest_city: candidate.nearest_city } : null;
   const models = array(guidance.models).map(object).filter((model) => DISPLAY_MODEL_IDS.has(String(model.id)))
     .map((model) => ({ id: model.id, name: string(model.name), cycle: string(model.cycle),
       points: array(model.points).map(trackPoint).filter(Boolean), shift_48h_miles: number(model.shift_48h_miles) }));
@@ -143,16 +157,20 @@ export function toPublicHurricane(raw: unknown) {
       cleared_alerts: array(changes.cleared_alerts).slice(0, 8).map(publicNarrative).filter(Boolean),
       model_cycle_changes: array(changes.model_cycle_changes).slice(0, 13).map(publicNarrative).filter(Boolean),
       new_report_count: array(changes.new_reports).length },
-    monitoring: { radar_analysis: "not_ingested", source_check_minutes: 5,
+    monitoring: { radar_analysis: ["ready", "partial"].includes(String(radar.status)) ? radar.status : "unavailable",
+      radar_observed_at: string(object(object(radar.products).reflectivity).observed_at), source_check_minutes: 5,
       ai_mode: "every_completed_source_check", model_tracks: models.length },
     regional_alerts: alerts, regional_alerts_status: string(data.coastal_context_status),
-    ai: { status: aiSummary ? "ready" : ai.status === "ready" ? "withheld" : "unavailable",
+    ai: { status: aiSummary ? ai.status : ai.status === "ready" ? "withheld" : "unavailable",
       analyzed_at: aiSummary ? string(ai.analyzed_at) : null, summary: aiSummary,
-      reviewed_at: aiSummary ? string(ai.reviewed_at) : null, review_model: aiSummary ? "qwen3-coder:30b" : null,
+      landfall: aiLandfall,
+      reviewed_at: aiSummary ? string(ai.reviewed_at) : null, review_model: aiSummary ? string(ai.review_model) : null,
       supporting_factors: aiSummary ? publicNarrativeList(ai.supporting_factors) : [],
       uncertainties: aiSummary ? publicNarrativeList(ai.uncertainties) : [],
       recommended_attention: aiSummary ? publicNarrativeList(ai.recommended_attention) : [] },
-    disclosure: "The experimental track is a deterministic blend of model center tracks. Aegis reviews the evidence separately; the blend is not a free-form AI forecast, official NHC forecast, or impact prediction. Use NHC, NWS, and local officials for decisions.",
+    disclosure: aiLandfall
+      ? "Code Black Experimental follows guidance selected by a guarded Aegis review. It is not an official NHC forecast or local-impact prediction. Follow NHC, NWS, and local officials."
+      : "Code Black Experimental is a weighted blend of model center tracks, not an official NHC forecast or local-impact prediction. Follow NHC, NWS, and local officials.",
   };
 }
 
@@ -162,7 +180,7 @@ export async function handlePublicHurricane(request: Request, env: GatewayEnv, c
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "GET, OPTIONS" } });
   if (request.method !== "GET") return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: { "Content-Type": "application/json", ...cors } });
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v8");
+  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v9");
   const cached = cache ? await cache.match(cacheKey) : null;
   if (cached) return new Response(cached.body, { status: 200, headers: { ...Object.fromEntries(cached.headers), ...cors } });
   const result = await forwardToCore(CORE_ROUTE, new URL(request.url), env);

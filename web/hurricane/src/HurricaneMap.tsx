@@ -77,6 +77,11 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
   const layerState = useRef({ radar, clouds, alerts, satelliteMode });
   layerState.current = { radar, clouds, alerts, satelliteMode };
   const models = data.guidance.models;
+  const selectedTrackSource = data.ai?.landfall?.source;
+  const codeBlackTrack = selectedTrackSource === "NHC" ? data.official.track
+    : selectedTrackSource && selectedTrackSource !== "BLEND"
+      ? data.guidance.models.find((model) => model.id === selectedTrackSource)?.points ?? data.projection.points
+      : data.projection.points;
   useEffect(() => {
     let active = true;
     const refresh = () => { void sourceTimes().then((times) => { if (active) setLayerTimes(times); }).catch(() => {}); };
@@ -109,7 +114,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     const map = mapRef.current;
     if (!map?.isStyleLoaded()) return;
     const source = map.getSource("watch") as mapboxgl.GeoJSONSource | undefined;
-    source?.setData({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [watch.longitude, watch.latitude] } });
+    source?.setData({ type: "Feature", properties: { label: watch.label }, geometry: { type: "Point", coordinates: [watch.longitude, watch.latitude] } });
     map.setProjection(viewMode === "basin" ? "globe" : "mercator");
     if (viewMode === "basin") {
       map.easeTo({ center: [-89, 29], zoom: 3.15, duration: 500 });
@@ -224,17 +229,17 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
         map.addLayer({ id: `model-${model.id}`, type: "line", source: `model-${model.id}`, layout: { visibility: selectedModels.includes(model.id) ? "visible" : "none" },
           paint: { "line-color": colors[model.id] ?? "#acbfd0", "line-width": 2, "line-opacity": 0.9 } });
       }
-      if (data.projection.points.length > 1) {
-        map.addSource("aegis", { type: "geojson", data: line(data.projection.points) });
+      if (codeBlackTrack.length > 1) {
+        map.addSource("aegis", { type: "geojson", data: line(codeBlackTrack) });
         map.addLayer({ id: "aegis-halo", type: "line", source: "aegis", paint: { "line-color": "#06121c", "line-width": 8, "line-opacity": 0.8 } });
-        map.addLayer({ id: "aegis", type: "line", source: "aegis", paint: { "line-color": "#45d9d1", "line-width": 4 } });
-        map.addSource("aegis-points", { type: "geojson", data: { type: "FeatureCollection", features: data.projection.points.filter((p) => p.hour % 12 === 0).map((p) => ({ type: "Feature", properties: { hour: p.hour, spread: p.spread_miles, members: p.members }, geometry: { type: "Point", coordinates: [p.longitude, p.latitude] } })) } });
-        map.addLayer({ id: "aegis-dots", type: "circle", source: "aegis-points", paint: { "circle-radius": 4, "circle-color": "#45d9d1", "circle-stroke-color": "#06121c", "circle-stroke-width": 1.5 } });
+        map.addLayer({ id: "aegis", type: "line", source: "aegis", paint: { "line-color": "#ee3429", "line-width": 4 } });
+        map.addSource("aegis-points", { type: "geojson", data: { type: "FeatureCollection", features: codeBlackTrack.filter((p) => p.hour % 12 === 0).map((p) => ({ type: "Feature", properties: { hour: p.hour }, geometry: { type: "Point", coordinates: [p.longitude, p.latitude] } })) } });
+        map.addLayer({ id: "aegis-dots", type: "circle", source: "aegis-points", paint: { "circle-radius": 4, "circle-color": "#ee3429", "circle-stroke-color": "#06121c", "circle-stroke-width": 1.5 } });
         map.on("click", "aegis-dots", (event) => {
           const feature = event.features?.[0] as unknown as { geometry: { type: string; coordinates: number[] }; properties?: Record<string, number> } | undefined;
           if (!feature || feature.geometry.type !== "Point") return;
           new mapboxgl.Popup({ closeButton: false, maxWidth: "220px" }).setLngLat(feature.geometry.coordinates as [number, number])
-            .setText(`Experimental model blend +${feature.properties?.hour}h · model center spread ${feature.properties?.spread} mi · ${feature.properties?.members} members`).addTo(map);
+            .setText(`Code Black Experimental · ${selectedTrackSource ?? "model blend"} +${feature.properties?.hour}h`).addTo(map);
         });
       }
       const center = data.storm.center;
@@ -243,10 +248,10 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       // distinct from forecast dots and the cyan watch point.
       map.addLayer({ id: "storm-backdrop", type: "circle", source: "storm", paint: { "circle-radius": 13, "circle-color": "#080b11", "circle-stroke-color": "#fb716a", "circle-stroke-width": 2.5 } });
       map.addLayer({ id: "storm", type: "symbol", source: "storm", layout: { "text-field": "X", "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"], "text-size": 21, "text-allow-overlap": true }, paint: { "text-color": "#fff", "text-halo-color": "#080b11", "text-halo-width": 1 } });
-      map.addSource("watch", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [watchRef.current.longitude, watchRef.current.latitude] } } });
+      map.addSource("watch", { type: "geojson", data: { type: "Feature", properties: { label: watchRef.current.label }, geometry: { type: "Point", coordinates: [watchRef.current.longitude, watchRef.current.latitude] } } });
       map.addLayer({ id: "watch-halo", type: "circle", source: "watch", paint: { "circle-radius": 15, "circle-color": "#45d9d1", "circle-opacity": 0.16 } });
       map.addLayer({ id: "watch", type: "circle", source: "watch", paint: { "circle-radius": 7, "circle-color": "#45d9d1", "circle-stroke-color": "#06121c", "circle-stroke-width": 2 } });
-      map.addLayer({ id: "watch-label", type: "symbol", source: "watch", layout: { "text-field": "WATCH POINT", "text-size": 13, "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"], "text-anchor": "right", "text-offset": [-1.2, -0.2], "text-allow-overlap": true }, paint: { "text-color": "#f3ffff", "text-halo-color": "#06121c", "text-halo-width": 2 } });
+      map.addLayer({ id: "watch-label", type: "symbol", source: "watch", layout: { "text-field": ["get", "label"], "text-size": 13, "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"], "text-anchor": "right", "text-offset": [-1.2, -0.2], "text-allow-overlap": true }, paint: { "text-color": "#f3ffff", "text-halo-color": "#06121c", "text-halo-width": 2 } });
       map.on("click", "watch", () => new mapboxgl.Popup({ maxWidth: "220px" }).setLngLat([watchRef.current.longitude, watchRef.current.latitude]).setText(`Watch location: ${watchRef.current.label}`).addTo(map));
       map.fitBounds(focusBounds(data, watchRef.current, viewMode), { padding: 35, maxZoom: 7.5, duration: 0 });
     });
@@ -260,7 +265,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     <div className="map-frame">{token ? <div ref={host} className="map-canvas" aria-label="Interactive Gulf hurricane map with watch location, Aegis, NHC, and model tracks" /> : <div className="map-fallback">Loading live map…</div>}
       {clouds && <div className="satellite-map-tag">GOES · {satelliteMode === "ir" ? "Infrared" : satelliteMode === "vapor" ? "Water vapor" : satelliteMode === "shortwave" ? "Shortwave IR" : "Visible"} · {compactTime(layerTimes[SATELLITE_LAYERS[satelliteMode]])}</div>}
       {mapError && <div className="map-error" role="status">{mapError}</div>}</div>
-    <div className="map-legend"><span><i className="key-center">X</i>NHC current center</span><span><i className="key-aegis"/>Model blend · experimental</span><span><i className="key-nhc"/>NHC · official</span><span><i className="key-observed"/>Past NHC track · dashed to current</span><span><i className="key-watch"/>Watch point</span></div>
+    <div className="map-legend"><span><i className="key-center">X</i>NHC current center</span><span><i className="key-aegis"/>Code Black Experimental</span><span><i className="key-nhc"/>NHC official</span><span><i className="key-observed"/>Past NHC track</span><span><i className="key-watch"/>{watch.label}</span></div>
     <details className="model-layers"><summary>Compare model tracks <span>{selectedModels.length} selected</span></summary><div className="model-switches">{models.map((model) => <button key={model.id} type="button" aria-pressed={selectedModels.includes(model.id)} onClick={() => toggle(model.id)} style={{ "--model-color": colors[model.id] ?? "#acbfd0" } as React.CSSProperties}>{model.name}</button>)}</div></details>
   </div>;
 }

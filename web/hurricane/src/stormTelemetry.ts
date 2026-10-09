@@ -49,6 +49,21 @@ const northernGulfCoast = [
   { longitude: -85.5, latitude: 30.21 },
   { longitude: -84.5, latitude: 29.85 },
 ];
+const coastalCities = [
+  { name: "Waveland, MS", latitude: 30.286, longitude: -89.377 },
+  { name: "Gulfport, MS", latitude: 30.367, longitude: -89.092 },
+  { name: "Biloxi, MS", latitude: 30.396, longitude: -88.885 },
+  { name: "Pascagoula, MS", latitude: 30.365, longitude: -88.557 },
+  { name: "Dauphin Island, AL", latitude: 30.250, longitude: -88.110 },
+  { name: "Fort Morgan, AL", latitude: 30.228, longitude: -88.020 },
+  { name: "Gulf Shores, AL", latitude: 30.246, longitude: -87.695 },
+  { name: "Orange Beach, AL", latitude: 30.294, longitude: -87.573 },
+  { name: "Pensacola, FL", latitude: 30.421, longitude: -87.217 },
+  { name: "Navarre, FL", latitude: 30.401, longitude: -86.863 },
+  { name: "Destin, FL", latitude: 30.394, longitude: -86.495 },
+  { name: "Panama City Beach, FL", latitude: 30.176, longitude: -85.806 },
+  { name: "Apalachicola, FL", latitude: 29.725, longitude: -84.985 },
+];
 
 function coastLatitude(longitude: number): number | null {
   for (let index = 1; index < northernGulfCoast.length; index++) {
@@ -70,13 +85,21 @@ function coastRegion(longitude: number): string {
   return "Eastern Florida Panhandle coast";
 }
 
-export type LandfallEstimate = { centerTime: string; windowStart: string; windowEnd: string; region: string; latitude: number; longitude: number; members: number | null };
+export type LandfallEstimate = { centerTime: string; windowStart: string; windowEnd: string; region: string; nearestCity: string | null; latitude: number; longitude: number; members: number | null };
+
+export function reviewedLandfall(data: PublicHurricane): LandfallEstimate | null {
+  const value = data.ai?.landfall;
+  if (data.status !== "active" || !value || !["ready", "stale"].includes(data.ai?.status ?? "") ||
+      !value.window_start || !value.window_end || !Number.isFinite(Date.parse(value.center_time))) return null;
+  return { centerTime: value.center_time, windowStart: value.window_start, windowEnd: value.window_end,
+    region: value.region, nearestCity: value.nearest_city, latitude: value.latitude, longitude: value.longitude, members: null };
+}
 
 export function estimateNorthernGulfLandfall(data: PublicHurricane, source: "aegis" | "nhc"): LandfallEstimate | null {
   if (data.status !== "active") return null;
   if (source === "aegis" && data.projection.status !== "ready") return null;
   const track = source === "aegis" ? data.projection.points : data.official.track;
-  const issued = Date.parse(source === "aegis" ? track.find((point) => point.hour === 0)?.valid_time ?? "" : data.storm.last_update ?? "");
+  const issued = Date.parse(track.find((point) => point.hour === 0)?.valid_time ?? (source === "aegis" ? data.projection.cycle : data.official.issued_at) ?? "");
   if (!Number.isFinite(issued)) return null;
   const points = [...track].sort((a, b) => a.hour - b.hour);
   for (let index = 1; index < points.length; index++) {
@@ -88,11 +111,13 @@ export function estimateNorthernGulfLandfall(data: PublicHurricane, source: "aeg
     const hour = from.hour + share * (to.hour - from.hour);
     const longitude = from.longitude + share * (to.longitude - from.longitude);
     const latitude = from.latitude + share * (to.latitude - from.latitude);
+    const nearest = [...coastalCities].sort((a, b) => distanceMiles({ latitude, longitude }, a) - distanceMiles({ latitude, longitude }, b))[0];
     return {
-      centerTime: new Date(issued + Math.round(hour) * 3_600_000).toISOString(),
+      centerTime: new Date(issued + Math.round(hour * 4) * 900_000).toISOString(),
       windowStart: new Date(issued + from.hour * 3_600_000).toISOString(),
       windowEnd: new Date(issued + to.hour * 3_600_000).toISOString(),
-      region: coastRegion(longitude), latitude, longitude,
+      region: coastRegion(longitude), nearestCity: nearest && distanceMiles({ latitude, longitude }, nearest) <= 35 ? nearest.name : null,
+      latitude, longitude,
       members: source === "aegis" ? Math.min((from as typeof data.projection.points[number]).members ?? 0, (to as typeof data.projection.points[number]).members ?? 0) : null,
     };
   }

@@ -224,3 +224,13 @@ footer{padding:24px 0 35px}.mapboxgl-popup-content{max-width:220px;overflow-wrap
   .map-heading h2{font-size:23px}.projection-grid .map-frame{height:325px}.projection-grid .map-legend span{font-size:9px}
 }
 @media(max-width:360px){.brand{font-size:12px}.site-header nav a[href="#track"],.site-header nav a[href="/reports"]{padding:0 7px;font-size:10px}.storm-head h1{font-size:38px}.landfall-card__title{font-size:9px}.metrics .metric-movement strong{font-size:20px;white-space:nowrap}.metric-movement{gap:3px}.metric-compass{width:30px;height:30px}}
+
+/* Tropics: evidence-first layout and Code Black experimental track. */
+.update-info strong::before{display:none}
+.map-legend .key-aegis{border-top-color:#ee3429}
+.landfall-card__grid{grid-template-columns:1.1fr 1.2fr .8fr 1fr}
+.landfall-card__countdown strong{color:#f5f6f8;font-variant-numeric:tabular-nums}
+.aegis-facts small{display:block;color:#aeb7c2;font:600 10px Inter,system-ui;margin-top:5px}
+.dashboard-intel .aegis-briefing__summary{max-width:none;white-space:pre-line}
+@media(max-width:950px){.landfall-card__grid{grid-template-columns:1fr 1fr}.landfall-card__grid>div:nth-child(3){border-left:0;padding-left:0}.landfall-card__grid>.landfall-card__comparison{border-top:0;grid-column:auto;padding:4px 22px;border-left:1px solid #3c444e}}
+@media(max-width:700px){.landfall-card__grid{grid-template-columns:1fr 1fr}.landfall-card__grid>div:nth-child(3){border-top:1px solid #3c444e;padding-top:12px}.landfall-card__grid>.landfall-card__comparison{border-top:1px solid #3c444e;padding:12px 0 0 10px}.landfall-card__countdown strong{font-size:24px}}
