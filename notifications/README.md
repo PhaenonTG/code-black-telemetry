@@ -51,15 +51,23 @@ becomes an Edge incident for Discord fallback.
 ## iPhone enrollment
 
 1. Install the free **ntfy** iOS app and keep Tailscale connected.
-2. Set the app's custom/default server to exactly
-   `https://codeblack-core.tail1d0673.ts.net:8443` (including port 8443).
-3. Add user `glenn` for that server. On PHAENON3, privately view the password
-   in a local terminal with
+2. In the iOS app, tap **+** to add a subscription. Enter topic
+   `ops-monitoring`, enable **Use another server**, and enter exactly
+   `https://codeblack-core.tail1d0673.ts.net:8443` (including port 8443,
+   with no topic path). Tap **Subscribe**. This bypasses the optional
+   Settings → Default server screen.
+3. When **Login required** appears, enter user `glenn`. On PHAENON3,
+   privately view the password in a local terminal with
    `ssh codeblack-core 'cat /srv/codeblack/config/ntfy/reader-password.txt'`.
    Never paste the output into shared chat.
-4. Subscribe to both `silas-aegis` (full conversation text) and
-   `ops-monitoring` (system incidents and recovery) and allow iOS
+4. Repeat the same **+ → Use another server** flow for `silas-aegis` (full
+   conversation text). The saved `glenn` login should be reused. Allow iOS
    notifications. Harmless connection-test messages are cached on both topics.
+
+If the app refuses the URL, first open
+`https://codeblack-core.tail1d0673.ts.net:8443/v1/health` in iPhone Safari
+while Tailscale is connected; it should show `{"healthy":true}`. The iOS
+app's Save button requires a URL beginning with `https://` or `http://`.
 
 If iOS shows only "New message" instead of the text, check that Tailscale is
 connected and the server URL matches exactly. Disable lock-screen previews
