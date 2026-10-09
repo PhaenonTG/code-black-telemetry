@@ -20,6 +20,16 @@ const number = (value: unknown): number | null => {
   return value !== null && value !== undefined && value !== "" && Number.isFinite(result) ? result : null;
 };
 const string = (value: unknown): string | null => typeof value === "string" ? value : null;
+// The Core assessment may know a private watch point. Publish only guarded,
+// non-numeric narrative; never forward raw AI output or private identifiers.
+const privateNarrative = /\d|@|https?:|rolling\s+meadows|\b(?:street|st\.?|road|rd\.?|lane|ln\.?|drive|dr\.?|avenue|ave\.?|boulevard|blvd\.?)\b/i;
+const publicNarrative = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const prose = value.trim();
+  return prose && prose.length <= 650 && !privateNarrative.test(prose) ? prose : null;
+};
+const publicNarrativeList = (value: unknown): string[] =>
+  array(value).slice(0, 5).map(publicNarrative).filter((item): item is string => !!item);
 const officialUrl = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
   try {
@@ -83,7 +93,8 @@ export function deriveProjection(models: unknown[], latestCycle: unknown) {
 }
 
 export function toPublicHurricane(raw: unknown) {
-  const data = object(raw), storm = object(data.storm), guidance = object(data.model_guidance), trend = object(data.observed_trend), assessment = object(data.assessment);
+  const data = object(raw), storm = object(data.storm), guidance = object(data.model_guidance), trend = object(data.observed_trend), assessment = object(data.assessment), ai = object(data.ai);
+  const aiSummary = ai.status === "ready" ? publicNarrative(ai.summary) : null;
   const models = array(guidance.models).map(object).filter((model) => DISPLAY_MODEL_IDS.has(String(model.id)))
     .map((model) => ({ id: model.id, name: string(model.name), cycle: string(model.cycle),
       points: array(model.points).map(trackPoint).filter(Boolean), shift_48h_miles: number(model.shift_48h_miles) }));
@@ -109,6 +120,11 @@ export function toPublicHurricane(raw: unknown) {
       spread_48h_miles: number(guidance.spread_48h_miles), wind_48h_mph_range: Array.isArray(guidance.wind_48h_mph_range) ? guidance.wind_48h_mph_range.map(number) : null },
     observed: { track: observed, trend: { period_hours: number(trend.period_hours), wind_change_mph: number(trend.wind_change_mph), pressure_change_mb: number(trend.pressure_change_mb) } },
     regional_alerts: alerts, regional_alerts_status: string(data.coastal_context_status),
+    ai: { status: aiSummary ? "ready" : ai.status === "ready" ? "withheld" : "unavailable",
+      analyzed_at: aiSummary ? string(ai.analyzed_at) : null, summary: aiSummary,
+      supporting_factors: aiSummary ? publicNarrativeList(ai.supporting_factors) : [],
+      uncertainties: aiSummary ? publicNarrativeList(ai.uncertainties) : [],
+      recommended_attention: aiSummary ? publicNarrativeList(ai.recommended_attention) : [] },
     disclosure: "Aegis projection is an experimental blend of model center tracks, not an official NHC forecast or impact prediction. Use NHC, NWS, and local officials for decisions.",
   };
 }
@@ -125,7 +141,7 @@ export async function handlePublicHurricane(request: Request, env: GatewayEnv, c
   const result = await forwardToCore(CORE_ROUTE, new URL(request.url), env);
   if (result.status !== 200) return new Response(JSON.stringify({ error: "DATA_UNAVAILABLE" }), { status: 503, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...cors } });
   const safe = new Response(JSON.stringify(toPublicHurricane(result.body)), { status: 200,
-    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=60, s-maxage=300", "X-Content-Type-Options": "nosniff" } });
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=30, s-maxage=60", "X-Content-Type-Options": "nosniff" } });
   if (cache) ctx?.waitUntil(cache.put(cacheKey, safe.clone()));
   return new Response(safe.body, { status: 200, headers: { ...Object.fromEntries(safe.headers), ...cors } });
 }

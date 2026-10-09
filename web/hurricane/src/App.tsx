@@ -12,6 +12,21 @@ const tokenUrl = import.meta.env.DEV ? "/api/mapbox-token" : "https://ops.codebl
 const ageMinutes = (value: string | null | undefined) => value ? Math.round((Date.now() - Date.parse(value)) / 60000) : Infinity;
 const modelNames: Record<string, string> = { HFAI: "HAFS-A", HFBI: "HAFS-B", AVNI: "GFS" };
 
+function AegisBriefing({ data, watch }: { data: PublicHurricane; watch: WatchLocation }) {
+  const ai = data.ai;
+  const changedWatch = watch.latitude !== DEFAULT_WATCH.latitude || watch.longitude !== DEFAULT_WATCH.longitude;
+  return <section className="aegis-briefing" id="aegis" aria-label="Latest Aegis analysis">
+    <div className="aegis-briefing__head"><div><span className="eyebrow">LATEST AEGIS ANALYSIS</span><h2>What Aegis is finding</h2></div><span className={ai?.status === "ready" ? "aegis-briefing__state" : "aegis-briefing__state aegis-briefing__state--missing"}>{ai?.status === "ready" ? "ANALYSIS READY" : "ANALYSIS UNAVAILABLE"}</span></div>
+    {ai?.status === "ready" && ai.summary ? <><p className="aegis-briefing__summary">{ai.summary}</p>
+      <div className="aegis-briefing__details"><div><h3>Evidence considered</h3><ul>{ai.supporting_factors.map((item) => <li key={item}>{item}</li>)}</ul></div>
+        <div><h3>Uncertainty &amp; next watch</h3><ul>{[...ai.uncertainties, ...ai.recommended_attention].map((item) => <li key={item}>{item}</li>)}</ul></div></div>
+      <p className="aegis-briefing__meta">Aegis analyzed {displayTime(ai.analyzed_at)} · Sources checked {displayTime(data.checked_at)}. The model is rerun when the underlying official inputs change.</p></>
+      : <p className="aegis-briefing__summary">A guarded Aegis briefing is not available for this source cycle. The official storm data and alerts below remain visible; this is not an all-clear.</p>}
+    {changedWatch && <p className="aegis-briefing__scope">This narrative is anchored to the default Grand Bay watch area. Changing the location updates map distances and NWS alerts, but does not create a new address-specific AI analysis.</p>}
+    <p className="aegis-briefing__caution">Experimental interpretation, not an official forecast. Follow <a href={data.official.advisory_url ?? "https://www.nhc.noaa.gov/"} target="_blank" rel="noreferrer">NHC</a>, NWS, and local officials for decisions.</p>
+  </section>;
+}
+
 function AegisAssessment({ data, watch }: { data: PublicHurricane; watch: WatchLocation }) {
   const projection = data.projection;
   const at48 = projection.points.find((point) => point.hour === 48);
@@ -63,7 +78,7 @@ function App() {
     } catch { setError("The latest hurricane analysis could not be loaded. Please use the official NHC forecast linked below."); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { void refresh(); const interval = window.setInterval(() => void refresh(), 5 * 60_000); return () => clearInterval(interval); }, [refresh]);
+  useEffect(() => { void refresh(); const interval = window.setInterval(() => void refresh(), 60_000); return () => clearInterval(interval); }, [refresh]);
   useEffect(() => { let alive = true; fetch(tokenUrl).then((response) => response.json()).then((body) => { if (alive && typeof body.token === "string") setToken(body.token); }).catch(() => {}); return () => { alive = false; }; }, []);
   useEffect(() => {
     const controller = new AbortController();
@@ -96,11 +111,12 @@ function App() {
   const proximity = useMemo(() => data ? watchSummary(data, watch) : null, [data, watch]);
   const exportImage = async () => { if (!data) return; setExporting(true); try { await saveBriefingImage(data, await capture?.() ?? null, watch, pointAlerts, alertsStatus); } catch { setError("The image could not be created on this device. Try print / PDF instead."); } finally { setExporting(false); } };
   return <div className="site-shell"><header className="site-header"><a href="/" className="brand"><img className="brand-shield" src={codeblackShield} alt=""/><span>CODE BLACK <em>AEGIS</em><small>FROM WATCHING TO WARNING</small></span></a>
-    <nav aria-label="Primary"><a href="#projection">Projection</a><a href="#models">Models</a><a href="#history">History</a><a href="#alerts">Alerts</a></nav><a className="official-link" href="https://www.nhc.noaa.gov/" target="_blank" rel="noreferrer">Official NHC ↗</a></header>
+    <nav aria-label="Primary"><a href="#aegis">Aegis</a><a href="#projection">Projection</a><a href="#models">Models</a><a href="#history">History</a><a href="#alerts">Alerts</a></nav><a className="official-link" href="https://www.nhc.noaa.gov/" target="_blank" rel="noreferrer">Official NHC ↗</a></header>
     <main>{loading && !data ? <div className="loading">Loading current hurricane analysis…</div> : !data ? <div className="failure"><h1>Analysis unavailable</h1><p>{error}</p><a href="https://www.nhc.noaa.gov/">View the official NHC forecast ↗</a></div> : <>
       <section className="storm-head"><div><h1>{data.storm.classification === "HU" ? "Hurricane" : "Storm"} <em>{data.storm.name ?? "watch"}</em></h1><p>Public Aegis analysis of available hurricane guidance</p></div><div className="update-info"><strong>{data.status === "active" ? "LIVE ANALYSIS" : "LAST AVAILABLE ANALYSIS"}</strong><span>NHC update {displayTime(data.storm.last_update)}</span><span>Aegis checked {displayTime(data.checked_at)}</span><button onClick={() => void refresh()} type="button">Refresh ↻</button></div></section>
       {(error || stale || data.status !== "active") && <div className="status-warning" role="alert">{error ?? (data.status !== "active" ? "This storm is no longer listed as active. Showing the last available analysis." : "The analysis or model cycle is old. Consult the latest NHC advisory before making decisions.")}</div>}
       <div className="metrics"><div><span>Maximum sustained wind</span><strong>{data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`}</strong></div><div><span>Minimum pressure</span><strong>{data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`}</strong></div><div><span>Motion</span><strong>{data.storm.movement_degrees == null ? "—" : `${data.storm.movement_degrees}°`}{data.storm.movement_mph == null ? "" : ` · ${data.storm.movement_mph} mph`}</strong></div><div><span>Model cycle</span><strong>{displayTime(data.guidance.latest_cycle)}</strong></div></div>
+      <AegisBriefing data={data} watch={watch}/>
       <section className="watch-panel" aria-label="Watch location"><div className="watch-panel__intro"><span className="eyebrow">WATCH LOCATION</span><h2>{watch.label}</h2><p>Change this location to update the marker, center-track distances, nearby NWS alerts, Aegis context, and downloaded image. Storm-wide measurements above stay the same.</p></div><button type="button" className="watch-change" onClick={() => { setEditingWatch((open) => !open); setCandidates([]); setSearchError(null); }}>{editingWatch ? "Close" : "Change location"}</button>
         {editingWatch && <div className="watch-search"><form onSubmit={(event) => void searchAddress(event)}><label htmlFor="watch-address">Search US address or place</label><div><input id="watch-address" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Street address, city, state, ZIP" autoComplete="street-address" maxLength={256}/><button type="submit" disabled={searching}>{searching ? "Searching…" : "Find location"}</button></div></form>{searchError && <p role="alert">{searchError}</p>}{candidates.length > 0 && <div className="watch-results"><strong>Select the correct location</strong>{candidates.map((candidate, index) => <button type="button" key={`${candidate.latitude}-${candidate.longitude}-${index}`} onClick={() => selectWatch(candidate)}>{candidate.label}</button>)}</div>}<button type="button" className="watch-reset" onClick={() => selectWatch(DEFAULT_WATCH)}>Use default Grand Bay address</button></div>}
         <div className="watch-distances"><div><span>Current storm center</span><strong>{proximity?.currentMiles == null ? "Unavailable" : `${proximity.currentMiles} mi away`}</strong></div><div><span>Closest NHC forecast center</span><strong>{proximity?.official ? `${proximity.official.miles} mi · +${proximity.official.point.hour}h` : "Unavailable"}</strong></div><div><span>Closest Aegis blended center</span><strong>{proximity?.aegis ? `${proximity.aegis.miles} mi · +${proximity.aegis.point.hour}h` : "Unavailable"}</strong></div></div><p className="watch-caution">Track-center distance is not a forecast of wind, surge, rain, or tornado impacts at this location. Follow local NWS alerts and evacuation orders.</p></section>

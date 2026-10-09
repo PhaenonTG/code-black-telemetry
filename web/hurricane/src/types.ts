@@ -12,6 +12,8 @@ export type PublicHurricane = {
     trend: { period_hours: number | null; wind_change_mph: number | null; pressure_change_mb: number | null } };
   regional_alerts: { event: string | null; headline: string | null; severity: string | null; expires: string | null; url: string | null }[];
   regional_alerts_status: string | null; disclosure: string;
+  ai?: { status: "ready" | "withheld" | "unavailable"; analyzed_at: string | null; summary: string | null;
+    supporting_factors: string[]; uncertainties: string[]; recommended_attention: string[] };
 };
 
 export const displayTime = (value: string | null | undefined) => {

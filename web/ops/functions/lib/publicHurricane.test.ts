@@ -6,7 +6,7 @@ const sample = {
     longitudeNumeric: -88.8, publicAdvisory: { url: "https://www.nhc.noaa.gov/" } },
   watch_point: { label: "12150 Rolling Meadows Ln", latitude: 30.447577800627, longitude: -88.329515563521 },
   assessment: { summary: "Private family watch at 12150 Rolling Meadows Ln", intensity_mph: 100 },
-  ai: { summary: "Private family watch at 12150 Rolling Meadows Ln" },
+  ai: { status: "ready", summary: "Private family watch at 12150 Rolling Meadows Ln" },
   alerts: [{ description: "Private point alert" }], reports: [{ text: "Private local report" }],
   track: [{ hour: 0, latitude: 24.9, longitude: -88.8 }],
   model_guidance: { status: "ready", latest_cycle: "2026-10-09T00:00:00Z", models: [
@@ -19,7 +19,7 @@ const sample = {
 };
 
 describe("public hurricane boundary", () => {
-  it("excludes private point, private AI, point alerts and reports", () => {
+  it("excludes private point and private AI prose, point alerts and reports", () => {
     const publicData = toPublicHurricane(sample);
     const text = JSON.stringify(publicData);
     for (const secret of ["12150", "Rolling Meadows", "30.447577800627", "Private point alert", "Private local report"]) {
@@ -29,6 +29,20 @@ describe("public hurricane boundary", () => {
     expect(publicData.projection.points[0].members).toBe(2);
     expect(publicData.storm.max_wind_mph).toBe(100);
     expect(publicData.guidance.models.map((model) => model.id)).toEqual(["HFAI", "HFBI", "CTCI", "AEMI", "HCCA"]);
+    expect(publicData.ai.status).toBe("withheld");
+    expect(publicData.ai.summary).toBeNull();
+  });
+
+  it("publishes only safe guarded Aegis findings with their own analysis time", () => {
+    const safe = { ...sample, ai: { status: "ready", analyzed_at: "2026-10-09T04:12:00Z",
+      summary: "Storm surge warning remains active along the northern Gulf coast.",
+      supporting_factors: ["Official warning remains active", "Private detail at 12150 Rolling Meadows Ln"],
+      uncertainties: ["Local impacts may vary"], recommended_attention: ["Monitor National Weather Service updates"] } };
+    const result = toPublicHurricane(safe);
+    expect(result.ai).toEqual({ status: "ready", analyzed_at: "2026-10-09T04:12:00Z",
+      summary: "Storm surge warning remains active along the northern Gulf coast.",
+      supporting_factors: ["Official warning remains active"], uncertainties: ["Local impacts may vary"],
+      recommended_attention: ["Monitor National Weather Service updates"] });
   });
 
   it("keeps consensus aids out of the blend", () => {
