@@ -43,6 +43,7 @@ import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
 import { ODOT_PREFIX, handleOdotRequest, type OdotEnv } from "../functions/lib/odotRelay";
 import { CAMERA_HEALTH_PATH, handleCameraHealth } from "../functions/lib/cameraHealthRelay";
 import { KANDRIVE_PATH, handleKandriveRequest } from "../functions/lib/kandriveRelay";
+import { PUBLIC_HURRICANE_PATH, handlePublicHurricane } from "../functions/lib/publicHurricane";
 
 interface Env extends GatewayEnv, MapboxTokenEnv, OdotEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -80,6 +81,9 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith(GATEWAY_PREFIX)) {
       return handleGatewayRequest(request, env);
+    }
+    if (url.pathname === PUBLIC_HURRICANE_PATH) {
+      return handlePublicHurricane(request, env, ctx);
     }
     if (url.pathname === ARDOT_RELAY_PREFIX) {
       return handleArdotCameraStream(request);
