@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Link } from "react-router-dom";
@@ -9,6 +9,9 @@ import { useCoreOps } from "../core/useCoreOps";
 import "./HurricaneWatch.css";
 
 type TrackPoint = { hour: number; latitude: number; longitude: number; wind_mph: number | null };
+type ModelPoint = TrackPoint & { valid_time: string; pressure_mb: number | null };
+type ModelRun = { id: string; name: string; cycle: string; previous_cycle: string | null; points: ModelPoint[]; previous_points: ModelPoint[]; shift_48h_miles: number | null; closest_center_miles: number; closest_hour: number };
+type ModelGuidance = { status: string; latest_cycle?: string; comparison_valid_time?: string; spread_48h_miles?: number | null; wind_48h_mph_range?: number[] | null; models: ModelRun[]; caution?: string; notice?: string };
 type ObservedPoint = { valid_time: string; latitude: number; longitude: number; wind_mph: number | null; pressure_mb: number | null };
 type Alert = { id?: string; event?: string; headline?: string; severity?: string; expires?: string; description?: string; url?: string };
 type Report = { issued: string; office: string; text: string; url: string };
@@ -16,6 +19,7 @@ type HurricaneSnapshot = {
   status: "active" | "inactive" | "pending"; notice?: string; checked_at?: string; freshness?: "current" | "stale";
   storm?: { id: string; name: string; classification: string; intensity: string; pressure: string; latitudeNumeric: number; longitudeNumeric: number; movementDir: number; movementSpeed: number; lastUpdate: string; forecastTrack?: { issuance: string }; forecastGraphics?: { url: string }; publicAdvisory?: { url: string }; forecastDiscussion?: { url: string } };
   track?: TrackPoint[]; cone?: number[][]; cone_status?: string; observed_track?: ObservedPoint[]; observed_status?: string;
+  model_guidance?: ModelGuidance;
   watch_point?: { label: string; latitude: number; longitude: number };
   observed_trend?: { period_hours: number | null; wind_change_mph: number | null; pressure_change_mb: number | null; baseline_time?: string };
   assessment?: { updated_at: string; advisory: string; advisory_changed: boolean; intensity_mph: number; intensity_change_mph: number | null; center_distance_miles: number; forecast_point_distance_miles: number | null; closest_forecast_hour: number | null; summary: string; limitations: string };
@@ -28,18 +32,33 @@ const time = (value?: string) => value ? new Date(value).toLocaleString() : "Una
 const shortTime = (value?: string) => value ? new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric" }) : "—";
 const signed = (value: number | null | undefined, suffix: string) => value == null ? "Not available" : `${value > 0 ? "+" : ""}${value} ${suffix}`;
 const narrative = (value?: string | string[]) => Array.isArray(value) ? value.join("; ") : value;
+const modelColors: Record<string, string> = { HFAI: "#f6bf64", HFBI: "#be9df7", AVNI: "#82aeff", HCCA: "#c5d4e1", TVCN: "#91dcaa" };
 const line = (points: { latitude: number; longitude: number }[]) => ({
   type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) },
 });
 
 function HurricaneMap({ data, registerCapture, printMap }: { data: HurricaneSnapshot; registerCapture: (capture: (() => string | null) | null) => void; printMap: string | null }) {
   const host = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<InstanceType<typeof mapboxgl.Map> | null>(null);
   const visible = useRef(true);
   const [radarOn, setRadarOn] = useState(true);
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [showPrior, setShowPrior] = useState(false);
   const [radarStatus, setRadarStatus] = useState<MosaicStatus>("loading");
   const token = mapboxAccessToken();
-  const mapKey = JSON.stringify([data.storm?.id, data.assessment?.advisory, data.track, data.cone, data.observed_track, data.watch_point]);
+  const models = useMemo(() => data.model_guidance?.models ?? [], [data.model_guidance]);
+  const mapKey = JSON.stringify([data.storm?.id, data.assessment?.advisory, data.track, data.cone, data.observed_track, data.watch_point, data.model_guidance]);
   useEffect(() => { visible.current = radarOn; }, [radarOn]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    for (const model of models) {
+      for (const prior of [false, true]) {
+        const id = `model-${model.id}${prior ? "-prior" : ""}`;
+        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", selectedModels.includes(model.id) && (!prior || showPrior) ? "visible" : "none");
+      }
+    }
+  }, [selectedModels, showPrior, mapKey, models]);
   useEffect(() => {
     if (!host.current || !data.storm || !data.watch_point || !data.track?.length || !token) return;
     mapboxgl.accessToken = token;
@@ -48,6 +67,7 @@ function HurricaneMap({ data, registerCapture, printMap }: { data: HurricaneSnap
       center: [data.storm.longitudeNumeric, data.storm.latitudeNumeric], zoom: 4.6,
       attributionControl: false, interactive: true,
     });
+    mapRef.current = map;
     registerCapture(() => {
       try { return map.getCanvas().toDataURL("image/png"); }
       catch { return null; }
@@ -68,6 +88,18 @@ function HurricaneMap({ data, registerCapture, printMap }: { data: HurricaneSnap
       map.addSource("nhc-track", { type: "geojson", data: line(data.track!) });
       map.addLayer({ id: "nhc-track-line", type: "line", source: "nhc-track",
         paint: { "line-color": "#ff6b58", "line-width": 3, "line-dasharray": [2, 1] } });
+      for (const model of data.model_guidance?.models ?? []) {
+        for (const prior of [false, true]) {
+          const points = prior ? model.previous_points : model.points;
+          if (points.length < 2) continue;
+          const id = `model-${model.id}${prior ? "-prior" : ""}`;
+          map.addSource(id, { type: "geojson", data: line(points) });
+          map.addLayer({ id, type: "line", source: id,
+            layout: { visibility: selectedModels.includes(model.id) && (!prior || showPrior) ? "visible" : "none" },
+            paint: { "line-color": modelColors[model.id] ?? "#aaa", "line-width": prior ? 1.5 : 2.5,
+              "line-opacity": prior ? 0.5 : 0.9, "line-dasharray": prior ? [2, 3] : [1, 0] } });
+        }
+      }
       map.addSource("nhc-forecast-points", { type: "geojson", data: { type: "FeatureCollection", features: data.track!.map((point) => ({ type: "Feature", properties: { hour: point.hour }, geometry: { type: "Point", coordinates: [point.longitude, point.latitude] } })) } });
       map.addLayer({ id: "nhc-forecast-dots", type: "circle", source: "nhc-forecast-points", paint: { "circle-radius": 6, "circle-color": "#ff715f", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
       map.addSource("nhc-watch-point", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [data.watch_point!.longitude, data.watch_point!.latitude] } } });
@@ -91,7 +123,7 @@ function HurricaneMap({ data, registerCapture, printMap }: { data: HurricaneSnap
       bounds.extend([data.watch_point!.longitude, data.watch_point!.latitude]);
       map.fitBounds(bounds, { padding: 48, maxZoom: 6 });
     });
-    return () => { registerCapture(null); stopRadar?.(); map.remove(); };
+    return () => { registerCapture(null); stopRadar?.(); mapRef.current = null; map.remove(); };
   // Minute-by-minute warning polling must not reset the map camera.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapKey, token]);
@@ -119,6 +151,7 @@ function HurricaneMap({ data, registerCapture, printMap }: { data: HurricaneSnap
     {printMap && <img className="hurricane-watch__print-map" src={printMap} alt="Captured radar map for this briefing" />}
     <div className="hurricane-watch__radar"><span className={`hurricane-watch__radar-dot hurricane-watch__radar-dot--${radarStatus}`} /> Radar {radarOn ? radarStatus : "off"}<button type="button" aria-pressed={radarOn} onClick={() => setRadarOn((on) => !on)}>{radarOn ? "Hide" : "Show"}</button></div>
     <div className="hurricane-watch__legend"><span><i className="hurricane-watch__legend-observed" />Observed</span><span><i className="hurricane-watch__legend-forecast" />NHC forecast</span><span><i className="hurricane-watch__legend-watch" />Watch point</span></div>
+    {models.length > 0 && <div className="hurricane-watch__model-toggles" aria-label="Optional model track overlays"><strong>Model overlays</strong>{models.map((model) => <button key={model.id} type="button" aria-pressed={selectedModels.includes(model.id)} onClick={() => setSelectedModels((ids) => ids.includes(model.id) ? ids.filter((id) => id !== model.id) : [...ids, model.id])} style={{ "--model-color": modelColors[model.id] ?? "#aaa" } as React.CSSProperties}>{model.name}</button>)}<button type="button" aria-pressed={showPrior} onClick={() => setShowPrior((value) => !value)}>Prior runs</button></div>}
   </div>;
 }
 
@@ -126,7 +159,7 @@ function Trend({ data }: { data: HurricaneSnapshot }) {
   const observed = (data.observed_track ?? []).filter((point) => point.wind_mph != null);
   const forecast = (data.track ?? []).filter((point) => point.wind_mph != null);
   if (!observed.length && !forecast.length) return <p>Trend data is unavailable.</p>;
-  const issuance = new Date(data.storm?.forecastTrack?.issuance ?? data.storm?.lastUpdate ?? Date.now()).getTime();
+  const issuance = new Date(data.storm?.forecastTrack?.issuance ?? data.storm?.lastUpdate ?? data.checked_at ?? "1970-01-01T00:00:00Z").getTime();
   const values = [...observed.map((point) => ({ x: new Date(point.valid_time).getTime(), y: point.wind_mph! })),
     ...forecast.map((point) => ({ x: issuance + point.hour * 3_600_000, y: point.wind_mph! }))];
   const minX = Math.min(...values.map((point) => point.x));
@@ -146,13 +179,31 @@ function Trend({ data }: { data: HurricaneSnapshot }) {
     <p className="hurricane-watch__caution">The solid line is preliminary history. The dashed line is the official forecast, not a measured trend or an Aegis prediction. Both may change with new advisories.</p></>;
 }
 
+function Guidance({ guidance, checkedAt }: { guidance?: ModelGuidance; checkedAt?: string }) {
+  if (!guidance || guidance.status !== "ready" || !guidance.models.length) return <section className="hurricane-watch__panel"><h2>Model guidance</h2><p className="hurricane-watch__caution">{guidance?.notice ?? "Model guidance is not available yet. The official NHC forecast remains available above."}</p></section>;
+  const newest = new Date(guidance.latest_cycle ?? "").getTime();
+  const stale = Number.isFinite(newest) && checkedAt != null && new Date(checkedAt).getTime() - newest > 12 * 3_600_000;
+  return <section className="hurricane-watch__panel hurricane-watch__guidance"><div className="hurricane-watch__guidance-head"><div><h2>Model guidance</h2><p>Latest available cycles · optional map overlays above</p></div><span>{stale ? "OLDER GUIDANCE" : "SECONDARY GUIDANCE"}</span></div>
+    <p className="hurricane-watch__caution">These are independent model tracks, not additional NHC forecast paths. Cycles can arrive at different times. “Closest center” is not a wind, surge, rain, or tornado-risk estimate.</p>
+    {guidance.spread_48h_miles != null && <div className="hurricane-watch__guidance-comparison"><div><small>48h TRACK SPREAD</small><strong>{guidance.spread_48h_miles} mi</strong><span>Farthest separation among HAFS-A, HAFS-B, and GFS centers</span></div><div><small>48h MAX-WIND GUIDANCE</small><strong>{guidance.wind_48h_mph_range ? `${guidance.wind_48h_mph_range[0]}–${guidance.wind_48h_mph_range[1]} mph` : "Unavailable"}</strong><span>Same valid time · {time(guidance.comparison_valid_time)}</span></div></div>}
+    <div className="hurricane-watch__guidance-grid">{guidance.models.map((model) => <article key={model.id} style={{ "--model-color": modelColors[model.id] ?? "#aaa" } as React.CSSProperties}>
+      <div className="hurricane-watch__guidance-title"><i /><strong>{model.name}</strong><small>{time(model.cycle)}</small></div>
+      <div className="hurricane-watch__guidance-values"><div><span>Closest plotted center to Grand Bay</span><b>{model.closest_center_miles} mi <small>at +{model.closest_hour}h</small></b></div><div><span>48h position shift vs prior run</span><b>{model.shift_48h_miles == null ? "Not comparable" : `${model.shift_48h_miles} mi`}</b></div></div>
+      {model.previous_cycle && <small className="hurricane-watch__guidance-prior">Prior cycle: {time(model.previous_cycle)} · comparison uses the same forecast-valid time</small>}
+    </article>)}</div>
+    <p className="hurricane-watch__caution">A larger shift means lower run-to-run track stability at that time, not a measured change in storm motion. Use the NHC advisory and local NWS warnings for decisions.</p>
+    <a href="https://ftp.nhc.noaa.gov/atcf/aid_public/" target="_blank" rel="noreferrer">NHC public model-aid archive ↗</a>
+  </section>;
+}
+
 function shareText(data: HurricaneSnapshot) {
   const a = data.assessment!;
   const active = data.alerts_status === "ready" ? `${data.alerts?.length ?? 0} active NWS alert(s) at Grand Bay` : "NWS alert status unavailable";
   const warnings = data.alerts_status === "ready" ? (data.alerts ?? []).slice(0, 4).map((alert) => `• ${alert.event ?? "Warning"}: ${alert.headline ?? "See official NWS alert"} (expires ${time(alert.expires)})`).join("\n") : "";
   const trend = data.observed_trend?.wind_change_mph == null ? "Observed trend unavailable" : `Observed wind change: ${signed(data.observed_trend.wind_change_mph, "mph")} over ${data.observed_trend.period_hours}h`;
   const aiRead = data.ai?.status === "ready" && data.ai.summary ? `\nAegis interpretation (not official): ${data.ai.summary}` : "";
-  return `${data.storm!.name} · Grand Bay family watch\nNHC advisory ${a.advisory} · ${time(data.storm?.lastUpdate)}\nMax wind ${a.intensity_mph} mph · ${data.storm!.pressure} mb · center ${a.center_distance_miles} mi from watch point\n${trend}\n${active}${warnings ? `\n${warnings}` : ""}\n${a.summary}${aiRead}\nOfficial advisory: ${data.storm?.publicAdvisory?.url ?? "https://www.nhc.noaa.gov/"}\nOPS map: ${window.location.origin}/hurricane\nForecasts change. Follow NHC/NWS warnings and local emergency officials.`;
+  const models = data.model_guidance?.status === "ready" ? `\nModel guidance (secondary; latest ${time(data.model_guidance.latest_cycle)}): ${data.model_guidance.models.map((model) => `${model.name} ${time(model.cycle)} · closest plotted center ${model.closest_center_miles} mi`).join("; ")}` : "";
+  return `${data.storm!.name} · Grand Bay family watch\nNHC advisory ${a.advisory} · ${time(data.storm?.lastUpdate)}\nMax wind ${a.intensity_mph} mph · ${data.storm!.pressure} mb · center ${a.center_distance_miles} mi from watch point\n${trend}\n${active}${warnings ? `\n${warnings}` : ""}\n${a.summary}${models}${aiRead}\nOfficial advisory: ${data.storm?.publicAdvisory?.url ?? "https://www.nhc.noaa.gov/"}\nOPS map: ${window.location.origin}/hurricane\nForecasts change. Follow NHC/NWS warnings and local emergency officials.`;
 }
 
 export default function HurricaneWatch() {
@@ -222,6 +273,7 @@ export default function HurricaneWatch() {
         <div><small>{data.status === "inactive" ? "LAST CENTER → WATCH POINT" : "CENTER → WATCH POINT"}</small><strong>{a.center_distance_miles} mi</strong><span>{data.status === "inactive" ? "Historical center distance" : "Current center distance"}</span></div>
         <div><small>{data.status === "inactive" ? "LAST FORECAST CENTER" : "CLOSEST FORECAST CENTER"}</small><strong>{a.forecast_point_distance_miles ?? "—"} mi</strong><span>{a.closest_forecast_hour != null ? `At NHC +${a.closest_forecast_hour}h point` : "Track unavailable"}</span></div>
       </section>
+      <Guidance guidance={data.model_guidance} checkedAt={data.checked_at} />
       <section className="hurricane-watch__panel hurricane-watch__brief"><div><h2>Grand Bay briefing</h2><p>{a.summary}</p>
         {a.intensity_change_mph != null && <p>Wind change since the prior hourly assessment: {a.intensity_change_mph > 0 ? "+" : ""}{a.intensity_change_mph} mph.</p>}
         <p className="hurricane-watch__caution">{a.limitations}</p>
