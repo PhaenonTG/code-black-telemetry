@@ -26,6 +26,8 @@ android/.gradle/
 android/app/build/
 android/tmp-*/
 native/**/target/
+__pycache__/
+*.pyc
 .atlas-vite.*
 
 # Editor directories and files
