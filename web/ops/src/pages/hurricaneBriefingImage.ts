@@ -222,7 +222,7 @@ export async function createHurricaneBriefingImage(data: BriefingImageData, mapD
   const interpretation = data.ai?.status === "ready" && data.ai.summary ? data.ai.summary : "AI interpretation unavailable. Refer to the official NHC advisory and NWS warnings.";
   paragraph(ctx, interpretation, 72, 2045, 1110, 36, 3);
   ctx.fillStyle = C.coral; ctx.fillRect(1215, 1993, 4, 135);
-  paragraph(ctx, "Model tracks are guidance, not official forecasts. Follow NHC, NWS, and local emergency officials.", 1240, 2018, 280, 32, 4, C.muted);
+  paragraph(ctx, "For decisions, follow NHC, NWS and local officials.", 1240, 2018, 280, 32, 4, C.muted);
   rule(ctx, 2150);
   label(ctx, `ASSESSMENT ${printTime(data.assessment.updated_at)}  ·  ${data.freshness === "stale" ? "STALE" : "CURRENT"}`, 72, 2185);
   label(ctx, "SOURCES: NHC · NWS · NOAA ATCF · OPS.CODEBLACKWX.COM/HURRICANE", 680, 2185);
