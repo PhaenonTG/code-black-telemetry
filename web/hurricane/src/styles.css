@@ -173,3 +173,54 @@ footer{padding:24px 0 35px}.mapboxgl-popup-content{max-width:220px;overflow-wrap
 .reports-table-head{padding:8px 9px;color:#9baab4;border-top:1px solid #37414a;font:800 9px Inter,sans-serif;text-transform:uppercase;letter-spacing:.08em}.report-list{border-top:0}.report-row{padding:11px 9px;min-height:67px}.report-row__number{font-size:10px}.report-row__time,.report-row__location,.report-row__source{display:grid;gap:4px;min-width:0}.report-row__time b{font:800 10px Inter,sans-serif;color:#edf4f4}.report-row__time small{font:500 9px/1.35 Inter,sans-serif;color:#a8b5bd}.report-row__event{font:800 15px/1.1 'Barlow Condensed',sans-serif;text-transform:uppercase;color:#fa6351}.report-row__location b{font:700 10px/1.3 Inter,sans-serif;color:#e6edef}.report-row__location small,.report-row__source small{font:500 9px/1.3 Inter,sans-serif;color:#a8b5bd}.report-row__source{color:#dde7ea;font:600 10px/1.3 Inter,sans-serif;overflow-wrap:anywhere}.report-row__details{font:400 11px/1.4 Inter,sans-serif;color:#c2cdd2;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 @media(max-width:1150px) and (min-width:781px){.reports-table-head,.report-row{grid-template-columns:20px 77px 82px 116px 72px minmax(0,1fr);gap:6px}.report-row__event{font-size:14px}.report-row__details{font-size:10px}}
 @media(max-width:650px){.reports-table-head{display:none}.report-list{border-top:1px solid #37414a}.report-row{grid-template-columns:20px minmax(0,1fr) auto;gap:5px 8px;padding:11px 9px}.report-row__number{grid-column:1;grid-row:1}.report-row__event{grid-column:2;grid-row:1;font-size:17px}.report-row__time{grid-column:3;grid-row:1;text-align:right}.report-row__time small{display:none}.report-row__location{grid-column:2/-1;grid-row:2;display:flex;gap:5px;flex-wrap:wrap}.report-row__details{grid-column:2/-1;grid-row:3;font-size:11px;-webkit-line-clamp:2}.report-row__source{grid-column:2/-1;grid-row:4;display:flex;gap:7px;color:#a8b5bd;font-size:9px}.report-row__source small{font-size:9px}}
+
+/* Tropics brand refinement: editorial hierarchy, readable data, disciplined red. */
+.site-shell{max-width:1520px}
+.site-header{height:72px;background:#07090c;border-color:#343b43}
+.brand{font-size:16px;letter-spacing:.085em}.brand em{color:#f04a3b}
+.site-header nav a{font-size:12px;letter-spacing:.07em;transition:color .18s ease,background-color .18s ease}
+.site-header nav a:hover{color:#fff;background:#191e23}
+.storm-head{padding:29px 0 24px}.storm-head h1{font-size:clamp(46px,5vw,72px);letter-spacing:.025em}
+.storm-category{margin-top:12px;padding:7px 11px;background:#111b20;border-color:#596773;font-size:11px}
+.storm-category b{font-size:27px}.storm-category small{font-size:10px}
+.update-info{font-size:13px;gap:5px}.update-info strong{font-size:11px}.update-info button{font-size:12px;text-underline-offset:3px}
+.metrics{background:#101317;border:1px solid #38414a;border-left:3px solid var(--cb-red);margin-bottom:17px}
+.metrics>div{padding:22px 25px;min-height:136px}.metrics>div:first-child{padding-left:25px}
+.metrics span{font-size:11px;letter-spacing:.12em;color:#b6c4ce}.metrics strong{font-size:clamp(29px,2.8vw,43px);line-height:1}
+.metrics .metric-trend,.metrics .metric-detail{margin-top:auto;padding-top:7px;font-size:12px}
+.metric-movement{min-height:43px}.metric-compass{background:#151e25}
+.landfall-card{background:#10151b;border:1px solid #4b555e;border-top:4px solid var(--cb-red);padding:20px 23px;margin-bottom:17px}
+.landfall-card__title{font-size:12px;letter-spacing:.11em;color:#ff6d60}.landfall-card__title strong{font-size:10px;padding:7px 10px}
+.landfall-card__grid{margin-top:18px}.landfall-card__grid>div{padding:4px 22px}
+.landfall-card__grid span{font-size:11px}.landfall-card__grid strong{font-size:clamp(26px,2.8vw,39px)}
+.landfall-card__comparison strong{font-size:clamp(24px,2.4vw,34px)}.landfall-card__grid small{font-size:12px;line-height:1.45}
+.landfall-card__source-line{font-size:11px;margin-top:16px}.landfall-card>p{font-size:11px;line-height:1.55;padding-top:13px;margin-top:13px}
+.aegis-briefing{background:#101418;border-color:#444b54;border-top:3px solid var(--cb-red);padding:20px 23px}
+.aegis-briefing h2{font-size:31px}.aegis-briefing__summary{font-size:18px;line-height:1.48}
+.aegis-briefing__state--missing{color:#ff9488}.aegis-facts span{font-size:10px}.aegis-facts strong{font-size:22px}
+.projection-grid .map-block{background:#0d1115;border-color:#414a53}.map-heading h2{font-size:25px}
+.map-heading__status{font-size:10px}.projection-grid .map-frame{height:clamp(340px,30vw,470px)}
+.projection-grid .map-legend span{font-size:10px}.projection-grid .map-legend{gap:9px 17px}
+.snapshot-watch{background:#181314;border-color:#724036}.history-section{background:#0e1216}
+.share-actions button{font-size:12px;letter-spacing:.045em}
+@media(max-width:700px){
+  .site-header{height:60px;padding:0 14px}.brand{font-size:14px;letter-spacing:.035em}.brand-shield{height:38px;width:31px}
+  .site-header nav a[href="#track"],.site-header nav a[href="/reports"]{padding:0 10px;font-size:11px}
+  main{padding:0 14px}.storm-head{padding:22px 0 18px;gap:11px}.storm-head h1{font-size:clamp(40px,10.4vw,51px);white-space:normal}
+  .storm-category{margin-top:9px;font-size:10px;padding:6px 9px}.storm-category b{font-size:24px}.storm-category small{font-size:9px}
+  .update-info{font-size:11px;gap:5px 12px}.update-info strong{font-size:10px}.update-info button{font-size:11px}
+  .metrics{margin-bottom:13px}.metrics>div{padding:15px 13px;min-height:122px}.metrics>div:first-child,.metrics>div:nth-child(3){padding-left:13px}
+  .metrics span{font-size:10px;line-height:1.25;min-height:25px;margin-bottom:2px}.metrics strong{font-size:29px}
+  .metrics .metric-trend,.metrics .metric-detail{font-size:10px;min-height:17px;padding-top:3px}.metrics .metric-movement strong{font-size:24px}
+  .metric-compass{width:34px;height:34px}.metric-compass svg{width:26px;height:26px}
+  .landfall-card{padding:16px 15px;margin-bottom:11px}.landfall-card__title{font-size:10px;line-height:1.3}.landfall-card__title strong{font-size:9px;padding:6px 7px}
+  .landfall-card__grid{margin-top:15px;gap:11px 0}.landfall-card__grid>div{padding:2px 10px}
+  .landfall-card__grid span{font-size:9px;line-height:1.3}.landfall-card__grid strong{font-size:24px;line-height:1.1}
+  .landfall-card__comparison strong{font-size:23px}.landfall-card__grid small{font-size:10px;line-height:1.4}
+  .landfall-card__source-line{font-size:10px;margin-top:12px}.landfall-card>p{font-size:10px;line-height:1.5;padding-top:11px;margin-top:11px}
+  .projection-grid{gap:10px}.dashboard-intel .aegis-briefing{padding:18px 16px}.dashboard-intel .aegis-briefing h2{font-size:29px}
+  .dashboard-intel .aegis-briefing__summary,.dashboard-intel .aegis-briefing__summary--fallback{font-size:15px;line-height:1.48}
+  .aegis-briefing__state{font-size:10px}.aegis-facts span{font-size:9px}.aegis-facts strong{font-size:19px}
+  .map-heading h2{font-size:23px}.projection-grid .map-frame{height:325px}.projection-grid .map-legend span{font-size:9px}
+}
+@media(max-width:360px){.brand{font-size:12px}.site-header nav a[href="#track"],.site-header nav a[href="/reports"]{padding:0 7px;font-size:10px}.storm-head h1{font-size:38px}.landfall-card__title{font-size:9px}.metrics .metric-movement strong{font-size:20px;white-space:nowrap}.metric-movement{gap:3px}.metric-compass{width:30px;height:30px}}

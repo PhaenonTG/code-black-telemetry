@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import ModelGuidance from "./ModelGuidance";
 import LiveCameras from "./LiveCameras";
-import { saveBriefingImage } from "./briefingImage";
+import { saveBriefingImage } from "./briefingPoster";
 import type { PublicHurricane } from "./types";
 import { displayTime, signed } from "./types";
 import { DEFAULT_WATCH, fetchPointAlerts, watchSummary } from "./watchLocation";
