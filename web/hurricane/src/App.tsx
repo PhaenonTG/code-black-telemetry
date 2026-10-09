@@ -11,8 +11,14 @@ import codeblackShield from "../../../src/assets/codeblack-shield.png";
 
 const dataUrl = import.meta.env.DEV ? "/api/hurricane" : "https://ops.codeblackwx.com/api/public/hurricane";
 const tokenUrl = import.meta.env.DEV ? "/api/mapbox-token" : "https://ops.codeblackwx.com/overlay-core/mapbox-token";
-const ageMinutes = (value: string | null | undefined) => value ? Math.round((Date.now() - Date.parse(value)) / 60000) : Infinity;
+const ageMinutes = (value: string | null | undefined, now: number) => value ? Math.round((now - Date.parse(value)) / 60000) : Infinity;
 const alertPriority = (event: string) => /tornado warning/i.test(event) ? 0 : /hurricane warning/i.test(event) ? 1 : /storm surge warning/i.test(event) ? 2 : /tropical storm warning/i.test(event) ? 3 : /flood warning/i.test(event) ? 4 : /warning/i.test(event) ? 5 : /watch/i.test(event) ? 6 : 7;
+const alertTiming = (alert: PointAlert, now: number) => {
+  if (alert.onset && alert.ends && Date.parse(alert.onset) > now) return `Begins ${displayTime(alert.onset)} · through ${displayTime(alert.ends)}`;
+  if (alert.ends) return `Through ${displayTime(alert.ends)}`;
+  if (alert.onset && Date.parse(alert.onset) > now) return `Begins ${displayTime(alert.onset)}`;
+  return "Ongoing — check the latest NWS product";
+};
 
 function AegisBriefing({ data, watch }: { data: PublicHurricane; watch: WatchLocation }) {
   const ai = data.ai;
@@ -26,12 +32,12 @@ function AegisBriefing({ data, watch }: { data: PublicHurricane; watch: WatchLoc
     changes?.new_report_count ? `${changes.new_report_count} new report product${changes.new_report_count === 1 ? "" : "s"}` : null,
   ].filter(Boolean);
   return <section className="aegis-briefing" id="aegis" aria-label="Aegis analysis">
-    <div className="aegis-briefing__head"><h2>Aegis briefing</h2><span className="aegis-briefing__state">{ai?.status === "ready" ? "30B reviewed · experimental" : "30B review unavailable"}</span></div>
+    <div className="aegis-briefing__head"><h2>{ai?.status === "ready" ? "Aegis briefing" : "Storm briefing"}</h2><span className={`aegis-briefing__state${ai?.status === "ready" ? "" : " aegis-briefing__state--missing"}`}>{ai?.status === "ready" ? "30B reviewed · experimental" : "Aegis text unavailable"}</span></div>
     {changeItems.length > 0 && <div className="aegis-delta"><span>Changed since last check</span><strong>{changeItems.join(" · ")}</strong></div>}
     {ai?.status === "ready" && ai.summary ? <><p className="aegis-briefing__summary">{ai.summary}</p>
       <div className="aegis-briefing__details"><div><h3>Signals in view</h3><ul>{ai.supporting_factors.slice(0, 3).map((item) => <li key={item}>{item}</li>)}</ul></div>
         <div><h3>Uncertainty</h3><ul>{ai.uncertainties.slice(0, 2).map((item) => <li key={item}>{item}</li>)}</ul></div></div>
-      <p className="aegis-briefing__meta">Reviewed {displayTime(ai.reviewed_at)} · Sources {displayTime(data.checked_at)}</p></> : <p className="aegis-briefing__summary aegis-briefing__summary--fallback">The text review is unavailable. The experimental track and model guidance below remain available; use the official NHC forecast for decisions.</p>}
+      <p className="aegis-briefing__meta">Reviewed {displayTime(ai.reviewed_at)} · Sources {displayTime(data.checked_at)}</p></> : <p className="aegis-briefing__summary aegis-briefing__summary--fallback">NHC reports {data.storm.max_wind_mph == null ? "an unavailable wind estimate" : `${data.storm.max_wind_mph} mph maximum winds`}{data.storm.movement_mph == null ? "" : ` and movement at ${data.storm.movement_mph} mph`}. The nearest official forecast center to this watch point is {local.official ? `${local.official.miles} mi at +${local.official.point.hour}h` : "unavailable"}; center distance does not predict local impacts.</p>}
     <div className="aegis-facts"><div><span>Blended center closest to watch</span><strong>{local.aegis ? `${Math.round(local.aegis.miles)} mi · +${local.aegis.point.hour}h` : "Unavailable"}</strong></div><div><span>48h model spread</span><strong>{data.guidance.spread_48h_miles == null ? "Unavailable" : `${Math.round(data.guidance.spread_48h_miles)} mi`}</strong></div><div><span>Track guidance</span><strong>{data.guidance.models.length} models</strong></div></div>
     {changedWatch && <p className="aegis-briefing__scope">Briefing anchored to Grand Bay; selected-location distances and alerts update separately.</p>}
     {ai?.status === "ready" && <p className="aegis-briefing__caution">Experimental, not an official forecast. <a href={data.official.discussion_url ?? "https://www.nhc.noaa.gov/"} target="_blank" rel="noreferrer">NHC discussion ↗</a></p>}
@@ -55,6 +61,7 @@ function TrendChart({ data }: { data: PublicHurricane }) {
 
 function App() {
   const [data, setData] = useState<PublicHurricane | null>(null), [token, setToken] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null), [loading, setLoading] = useState(true), [exporting, setExporting] = useState(false);
   const [copyState, setCopyState] = useState<"copied" | "failed" | null>(null);
   const [capture, setCapture] = useState<(() => Promise<string | null>) | null>(null);
@@ -72,6 +79,7 @@ function App() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void refresh(); const interval = window.setInterval(() => void refresh(), 60_000); return () => clearInterval(interval); }, [refresh]);
+  useEffect(() => { const interval = window.setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(interval); }, []);
   useEffect(() => { let alive = true; fetch(tokenUrl).then((response) => response.json()).then((body) => { if (alive && typeof body.token === "string") setToken(body.token); }).catch(() => {}); return () => { alive = false; }; }, []);
   useEffect(() => {
     const controller = new AbortController();
@@ -103,7 +111,7 @@ function App() {
     finally { setSearching(false); }
   };
   const selectWatch = (candidate: WatchLocation) => { setWatch(candidate); setEditingWatch(false); setCandidates([]); setQuery(""); setSearchError(null); };
-  const stale = useMemo(() => data ? ageMinutes(data.checked_at) > 90 || (data.status === "active" && ageMinutes(data.guidance.latest_cycle) > 900) : false, [data]);
+  const stale = useMemo(() => data ? ageMinutes(data.checked_at, now) > 90 || (data.status === "active" && ageMinutes(data.guidance.latest_cycle, now) > 900) : false, [data, now]);
   const proximity = useMemo(() => data ? watchSummary(data, watch) : null, [data, watch]);
   const exportImage = async () => { if (!data) return; setExporting(true); try { await saveBriefingImage(data, await capture?.() ?? null, watch, [...pointAlerts].sort((a, b) => alertPriority(a.event) - alertPriority(b.event)), alertsStatus); } catch { setError("The image could not be created on this device. Try print / PDF instead."); } finally { setExporting(false); } };
   const copyLink = async () => { try { await navigator.clipboard.writeText("https://tropics.codeblackwx.com/"); setCopyState("copied"); } catch { setCopyState("failed"); } window.setTimeout(() => setCopyState(null), 3000); };
@@ -119,7 +127,7 @@ function App() {
         {editingWatch && <div className="watch-search"><form onSubmit={(event) => void searchAddress(event)}><label htmlFor="watch-address">Search US address or place</label><div><input id="watch-address" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Street address, city, state, ZIP" autoComplete="street-address" maxLength={256}/><button type="submit" disabled={searching}>{searching ? "Searching…" : "Find location"}</button></div></form>{searchError && <p role="alert">{searchError}</p>}{candidates.length > 0 && <div className="watch-results"><strong>Select the correct location</strong>{candidates.map((candidate, index) => <button type="button" key={`${candidate.latitude}-${candidate.longitude}-${index}`} onClick={() => selectWatch(candidate)}>{candidate.label}</button>)}</div>}<button type="button" className="watch-reset" onClick={() => selectWatch(DEFAULT_WATCH)}>Use Grand Bay watch point</button></div>}
         <div className="watch-distances"><div><span>Current center</span><strong>{proximity?.currentMiles == null ? "Unavailable" : `${proximity.currentMiles} mi away`}</strong></div><div><span>Closest NHC forecast center</span><strong>{proximity?.official ? `${proximity.official.miles} mi · +${proximity.official.point.hour}h` : "Unavailable"}</strong></div><div><span>Closest Aegis blended center</span><strong>{proximity?.aegis ? `${proximity.aegis.miles} mi · +${proximity.aegis.point.hour}h` : "Unavailable"}</strong></div></div><p className="watch-caution">Center distance is not a prediction of wind, surge, rain, or tornado impacts. Follow local NWS alerts and evacuation orders.</p></section>
       <section className="alerts-section" id="alerts"><div className="section-heading"><div><h2>NWS alerts</h2><p>Checked {displayTime(alertsCheckedAt)}</p></div><a href={`https://forecast.weather.gov/MapClick.php?lat=${watch.latitude}&lon=${watch.longitude}`} target="_blank" rel="noreferrer">Local NWS forecast ↗</a></div>
-        {alertsStatus === "loading" ? <p className="empty">Checking NWS alerts for this location…</p> : alertsStatus === "unavailable" ? <p className="empty">NWS alerts could not be checked right now. Verify directly with NWS; this is not an all-clear.</p> : pointAlerts.length ? <div className="alert-list">{[...pointAlerts].sort((a, b) => alertPriority(a.event) - alertPriority(b.event)).map((alert, index) => <a key={`${alert.event}-${index}`} href={alert.url ?? "https://www.weather.gov/"} target="_blank" rel="noreferrer"><strong>{alert.event}</strong><span>{alert.headline}</span><small>{alert.expires ? `Expires ${displayTime(alert.expires)}` : "Expiration unavailable"} ↗</small></a>)}</div> : <p className="empty">No active NWS alert was returned for this point at this check. Keep monitoring official sources.</p>}</section></div>
+        {alertsStatus === "loading" ? <p className="empty">Checking NWS alerts for this location…</p> : alertsStatus === "unavailable" ? <p className="empty">NWS alerts could not be checked right now. Verify directly with NWS; this is not an all-clear.</p> : pointAlerts.length ? <div className="alert-list">{[...pointAlerts].sort((a, b) => alertPriority(a.event) - alertPriority(b.event)).map((alert, index) => <a key={`${alert.event}-${index}`} href={alert.url ?? "https://www.weather.gov/"} target="_blank" rel="noreferrer"><strong>{alert.event}</strong><span>{alertTiming(alert, now)}</span><small>Official NWS alert ↗</small></a>)}</div> : <p className="empty">No active NWS alert was returned for this point at this check. Keep monitoring official sources.</p>}</section></div>
       <section className="lower-grid"><ModelGuidance data={data}/></section>
       <LiveCameras data={data}/>
       <section className="share-section"><h2>Share this briefing</h2><div className="share-actions"><button type="button" disabled={exporting} onClick={() => void exportImage()}>{exporting ? "Creating image…" : "Download one-page image"}</button><button type="button" onClick={() => void copyLink()}>{copyState === "copied" ? "Link copied" : copyState === "failed" ? "Copy unavailable" : "Copy public link"}</button></div></section>

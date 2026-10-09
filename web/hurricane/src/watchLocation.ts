@@ -1,7 +1,7 @@
 import type { PublicHurricane, TrackPoint, ProjectionPoint } from "./types";
 
 export type WatchLocation = { label: string; latitude: number; longitude: number };
-export type PointAlert = { event: string; headline: string; severity: string | null; expires: string | null; url: string | null };
+export type PointAlert = { event: string; headline: string; severity: string | null; onset: string | null; ends: string | null; expires: string | null; url: string | null };
 export const DEFAULT_WATCH: WatchLocation = {
   label: "Grand Bay, Alabama",
   latitude: 30.447577800627,
@@ -55,6 +55,8 @@ export async function fetchPointAlerts(watch: WatchLocation, signal: AbortSignal
       event: typeof value.event === "string" ? value.event : "Weather alert",
       headline: typeof value.headline === "string" ? value.headline : "Read the official alert for details.",
       severity: typeof value.severity === "string" ? value.severity : null,
+      onset: typeof value.onset === "string" ? value.onset : null,
+      ends: typeof value.ends === "string" ? value.ends : null,
       expires: typeof value.expires === "string" ? value.expires : null,
       url: typeof value.id === "string" && value.id.startsWith("https://api.weather.gov/") ? value.id :
         typeof feature.id === "string" && feature.id.startsWith("https://api.weather.gov/") ? feature.id : null,
