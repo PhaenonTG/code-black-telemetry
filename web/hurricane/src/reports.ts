@@ -58,8 +58,8 @@ const fetchJson = async <T,>(url: string, signal: AbortSignal): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
-export async function fetchStormReports(signal: AbortSignal): Promise<{ reports: StormReport[]; failedOffices: string[]; checkedAt: string }> {
-  const cutoff = Date.now() - 7 * 24 * 60 * 60_000;
+export async function fetchStormReports(signal: AbortSignal, hours: 24 | 72 | 168 = 72): Promise<{ reports: StormReport[]; failedOffices: string[]; checkedAt: string }> {
+  const cutoff = Date.now() - hours * 60 * 60_000;
   const results = await Promise.allSettled(offices.map(async (office) => {
     const listing = await fetchJson<ProductListing>(`${nws}/products/types/LSR/locations/${office}`, signal);
     const recent = (listing["@graph"] ?? []).filter((item) => item.id && item.issuanceTime && Date.parse(item.issuanceTime) >= cutoff);
