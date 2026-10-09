@@ -1145,6 +1145,27 @@ def link_state(l):
     return {"ok": bool(p.ok) and not p.stale, "status": (p.last_value or {}).get("status") if p.ok else None, "checked_at": iso(p.last_attempt)}
 
 
+def build_notifications(services_by_id):
+    """Expose non-secret configuration and live route health, not delivery claims."""
+    cfg = REG["notifications"]
+
+    def route(service_id):
+        service = services_by_id.get(service_id) or {}
+        return {"service": service_id, "state": service.get("state", "UNKNOWN"),
+                "last_success": service.get("last_success")}
+
+    return {
+        "server": {"url": cfg["server_url"], "access": cfg["access"],
+                   "authentication": cfg["authentication"], "retention_days": cfg["retention_days"],
+                   **route(cfg["server_service"])},
+        "channels": [{"topic": channel["topic"], "purpose": channel["purpose"],
+                      "cadence_s": channel["cadence_s"], **route(channel["service"])}
+                     for channel in cfg["channels"]],
+        "fallback": route(cfg["fallback_service"]),
+        "iphone": dict(cfg["iphone"]),
+    }
+
+
 def build_status():
     services = [build_service(s) for s in SERVICES if not s.get("labs") or True]
     sby = {s["id"]: s for s in services}
@@ -1183,7 +1204,8 @@ def build_status():
                         "refresh_hints": {"fast_s": DEF["fast_s"], "host_s": DEF["host_s"], "slow_s": DEF["slow_s"]}},
             "summary": {"overall": overall, "attention_count": sum(1 for a in attention if a["severity"] != "INFO"), "tiles": tiles}, "attention": attention, "hosts": hosts,
             "services": [s for s in services if True], "streaming": streaming, "radar": radar, "weather": weather, "dns": dns, "ai": ai, "labs": labs, "compute": compute,
-            "network": network, "storage": storage, "links": links, "address_book": book}
+            "network": network, "storage": storage, "notifications": build_notifications(sby),
+            "links": links, "address_book": book}
 
 
 def status_doc():

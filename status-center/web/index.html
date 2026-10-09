@@ -114,6 +114,12 @@ main{padding:14px 16px 30px;max-width:2200px;margin:0 auto}
 
 /* attention */
 #s-attention{border-color:#5a2225}
+.notify-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.notify-grid .card{height:100%}
+.notify-grid .card .hd{justify-content:space-between}
+.notify-grid .card .hd h3{margin-right:auto}
+.notify-note{margin-top:7px;color:var(--muted);font-size:11px}
+.notify-topic{font-family:var(--mono);color:#cfe1ff}
 .att{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .att li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:start;padding:7px 10px;border-radius:6px;border:1px solid var(--line);border-left-width:4px;background:var(--panel2)}
 .att li.CRITICAL{border-left-color:var(--bad);background:#231012}
@@ -217,6 +223,7 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 <main id="app" class="">
   <section class="sect" id="s-tiles"><header><h2>Global state</h2><button id="tileview" class="tileview" type="button" aria-controls="b-tiles" aria-expanded="false">Show all states</button></header><div class="body"><div id="b-tiles" class="tiles"></div></div></section>
   <section class="sect" id="s-attention"><header><h2>Needs attention</h2><span id="attsum" class="attsum"></span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-attention"></div></section>
+  <section class="sect" id="s-notifications"><header><h2>Notifications</h2><span class="sub">ntfy &amp; alert delivery</span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-notifications"></div></section>
   <div class="layout">
     <div class="col-main">
       <section class="sect" id="s-hosts"><header><h2>Hosts</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-hosts"></div></section>
@@ -387,6 +394,36 @@ R.attention = (d) => {
     info.addEventListener('toggle', () => { if (!document.body.classList.contains('searching')) S.infoOpen = info.open; });
     box.appendChild(info);
   }
+};
+R.notifications = (d) => {
+  const box = $('#b-notifications'); box.replaceChildren();
+  const n = d.notifications;
+  if (!n) { box.appendChild(h('div', 'emptynote', 'Notification status is not available from this backend.')); return; }
+  const grid = h('div', 'notify-grid');
+  const server = n.server || {};
+  grid.appendChild(card('', [
+    h('div', 'hd', [h('h3', null, 'Private ntfy server'), chip(server.state)]),
+    kv('Address', server.url ? lnk(server.url, server.url) : unk()),
+    kv('Access', accBadge(server.access)),
+    kv('Sign-in', nz(server.authentication)),
+    kv('Retention', isNull(server.retention_days) ? unk() : server.retention_days + ' days'),
+    kv('Last observed', tm(server.last_success)),
+  ]));
+  (n.channels || []).forEach((route) => grid.appendChild(card('', [
+    h('div', 'hd', [h('h3', null, route.purpose || 'Alert route'), chip(route.state)]),
+    kv('Topic', h('span', 'notify-topic', route.topic || 'UNKNOWN')),
+    kv('Check', isNull(route.cadence_s) ? unk() : 'every ' + durS(route.cadence_s)),
+    kv('Last observed', tm(route.last_success)),
+  ])));
+  const phone = n.iphone || {}, fallback = n.fallback || {};
+  grid.appendChild(card('', [
+    h('div', 'hd', [h('h3', null, 'iPhone delivery'), chip(phone.push)]),
+    kv('In-app inbox', chip(phone.inbox)),
+    kv('Lock-screen push', chip(phone.push)),
+    h('div', 'notify-note wrap', phone.note || 'Device delivery has not been verified.'),
+    h('div', 'notify-note', ['Discord fallback ', chip(fallback.state)]),
+  ]));
+  box.appendChild(grid);
 };
 R.hosts = (d) => {
   const box = $('#b-hosts'); box.replaceChildren();
@@ -676,10 +713,10 @@ R.footer = (d) => {
     'probes ' + (isNull(b.probes_total) ? '?' : b.probes_total) + ' total / ' + (isNull(b.probes_stale) ? '?' : b.probes_stale) + ' stale / ' + (isNull(b.probes_failing) ? '?' : b.probes_failing) + ' failing',
     'generated ' + (d.generated_at || '?'), 'read-only view'].join('  |  ')));
 };
-const SECTIONS = [['tiles', (d) => d.summary], ['attention', (d) => d.attention], ['hosts', (d) => d.hosts], ['services', (d) => d.services], ['streaming', (d) => d.streaming], ['radar', (d) => d.radar],
+const SECTIONS = [['tiles', (d) => d.summary], ['attention', (d) => d.attention], ['notifications', (d) => d.notifications], ['hosts', (d) => d.hosts], ['services', (d) => d.services], ['streaming', (d) => d.streaming], ['radar', (d) => d.radar],
   ['weather', (d) => d.weather], ['compute', (d) => d.compute], ['network', (d) => d.network], ['dns', (d) => d.dns], ['storage', (d) => d.storage], ['ai', (d) => d.ai], ['labs', (d) => d.labs],
   ['launchpad', (d) => d.links], ['address', (d) => d.address_book], ['inventory', (d) => [d.hosts, d.services]], ['footer', (d) => [d.backend, d.schema]]];
-const RELTIME = new Set(['hosts', 'services', 'streaming', 'radar', 'weather', 'compute', 'network', 'dns', 'storage', 'ai', 'labs', 'attention']);
+const RELTIME = new Set(['hosts', 'services', 'streaming', 'radar', 'weather', 'compute', 'network', 'dns', 'storage', 'ai', 'labs', 'attention', 'notifications']);
 function render(d) {
   let changed = false;
   SECTIONS.forEach(([k, pick]) => {

@@ -5,6 +5,24 @@
     "public_base": "https://codeblack-core.tail1d0673.ts.net/status/",
     "tailnet": "tail1d0673.ts.net"
   },
+  "notifications": {
+    "server_url": "https://codeblack-core.tail1d0673.ts.net:8443/",
+    "access": "TAILSCALE",
+    "authentication": "required",
+    "retention_days": 7,
+    "server_service": "ntfy-private",
+    "channels": [
+      {"topic": "ops-monitoring", "purpose": "Infrastructure and Status Center attention transitions", "service": "edge-ntfy-bridge", "cadence_s": 60},
+      {"topic": "ops-monitoring", "purpose": "Nick Mesonet sensor and update alerts", "service": "nick-mesonet-ntfy-bridge", "cadence_s": 15},
+      {"topic": "silas-aegis", "purpose": "Silas / AEGIS conversation message text", "service": "silas-aegis-notify", "cadence_s": 60}
+    ],
+    "fallback_service": "edge-notification-dispatch",
+    "iphone": {
+      "inbox": "CONFIRMED",
+      "push": "UNVERIFIED",
+      "note": "Messages were readable after refresh; lock-screen notification delivery has not been confirmed."
+    }
+  },
   "defaults": {
     "fast_s": 8,
     "host_s": 15,
