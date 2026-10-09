@@ -1,5 +1,5 @@
 import type { PublicHurricane } from "./types";
-import { displayTime, signed } from "./types";
+import { displayTime } from "./types";
 import { watchSummary } from "./watchLocation";
 import type { PointAlert, WatchLocation } from "./watchLocation";
 import codeblackShield from "../../../src/assets/codeblack-shield.png";
@@ -56,22 +56,23 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   ctx.fillStyle = muted; ctx.font = "25px system-ui";
   ctx.fillText(`Current center: ${proximity.currentMiles == null ? "unavailable" : `${proximity.currentMiles} mi away`}   •   Closest NHC center: ${proximity.official ? `${proximity.official.miles} mi at +${proximity.official.point.hour}h` : "unavailable"}`, 80, 1620);
   ctx.fillText(`Closest Aegis blended center: ${proximity.aegis ? `${proximity.aegis.miles} mi at +${proximity.aegis.point.hour}h` : "unavailable"}   •   Center distance does not predict local impacts.`, 80, 1662);
-  ctx.fillStyle = ink; ctx.font = "700 32px system-ui"; ctx.fillText("What the data says", 80, 1730);
+  ctx.fillStyle = ink; ctx.font = "700 32px system-ui"; ctx.fillText("Aegis analysis", 80, 1730);
   ctx.fillStyle = muted; ctx.font = "26px system-ui";
   let y = 1784;
-  const evidence = [
-    `Projection uses ${data.projection.member_ids?.length ?? 0} independent model aids: ${data.projection.member_ids?.join(", ") ?? "none available"}.`,
-    `48-hour center spread: ${data.guidance.spread_48h_miles == null ? "not available" : `${data.guidance.spread_48h_miles} mi`}; not a probability cone. Observed wind change: ${signed(data.observed.trend.wind_change_mph, "mph")}.`,
-  ];
-  for (const item of evidence) { ctx.fillStyle = coral; ctx.fillRect(80, y - 17, 10, 10); ctx.fillStyle = ink; y += wrap(ctx, item, 112, y, 1390, 39, 2) + 20; }
+  const aiSummary = data.ai?.status === "ready" && data.ai.summary
+    ? data.ai.summary : "Aegis interpretation unavailable. Use the official NHC forecast and NWS warnings.";
+  ctx.fillStyle = ink; y += wrap(ctx, aiSummary, 80, y, 1420, 39, 4);
+  ctx.fillStyle = muted; ctx.font = "20px system-ui";
+  ctx.fillText(`Aegis analyzed ${displayTime(data.ai?.analyzed_at)}  •  Sources checked ${displayTime(data.checked_at)}`, 80, y + 8);
+  y += 24;
   if (alertsStatus === "ready" && alerts.length) {
-    ctx.fillStyle = coral; ctx.font = "700 21px system-ui"; ctx.fillText("NWS ALERTS AT WATCH LOCATION", 80, y + 27);
+    ctx.fillStyle = coral; ctx.font = "700 21px system-ui"; ctx.fillText("NWS ALERTS AT WATCH LOCATION", 80, y + 20);
     ctx.fillStyle = ink; ctx.font = "26px system-ui";
-    wrap(ctx, alerts.map((item) => item.event).join("  •  "), 80, y + 72, 1400, 36, 2);
+    wrap(ctx, alerts.map((item) => item.event).join("  •  "), 80, y + 58, 1400, 36, 2);
   } else if (alertsStatus !== "ready") {
-    ctx.fillStyle = coral; ctx.font = "700 21px system-ui"; ctx.fillText("NWS ALERT CHECK UNAVAILABLE — VERIFY OFFICIAL SOURCES", 80, y + 27);
+    ctx.fillStyle = coral; ctx.font = "700 21px system-ui"; ctx.fillText("NWS ALERT CHECK UNAVAILABLE — VERIFY OFFICIAL SOURCES", 80, y + 20);
   } else {
-    ctx.fillStyle = muted; ctx.font = "700 21px system-ui"; ctx.fillText("NO ACTIVE NWS ALERT RETURNED AT THIS CHECK — KEEP MONITORING", 80, y + 27);
+    ctx.fillStyle = muted; ctx.font = "700 21px system-ui"; ctx.fillText("NO ACTIVE NWS ALERT RETURNED AT THIS CHECK — KEEP MONITORING", 80, y + 20);
   }
   ctx.fillStyle = coral; ctx.font = "700 26px system-ui"; ctx.fillText("EXPERIMENTAL — NOT AN OFFICIAL FORECAST", 80, 2090);
   ctx.fillStyle = muted; ctx.font = "24px system-ui";
