@@ -5,6 +5,7 @@ import type { PublicHurricane } from "./types";
 import { displayTime, signed } from "./types";
 import { DEFAULT_WATCH, fetchPointAlerts, watchSummary } from "./watchLocation";
 import type { PointAlert, WatchLocation } from "./watchLocation";
+import codeblackShield from "../../../src/assets/codeblack-shield.png";
 
 const dataUrl = import.meta.env.DEV ? "/api/hurricane" : "https://ops.codeblackwx.com/api/public/hurricane";
 const tokenUrl = import.meta.env.DEV ? "/api/mapbox-token" : "https://ops.codeblackwx.com/overlay-core/mapbox-token";
@@ -94,7 +95,7 @@ function App() {
   const stale = useMemo(() => data ? ageMinutes(data.checked_at) > 90 || ageMinutes(data.guidance.latest_cycle) > 900 : false, [data]);
   const proximity = useMemo(() => data ? watchSummary(data, watch) : null, [data, watch]);
   const exportImage = async () => { if (!data) return; setExporting(true); try { await saveBriefingImage(data, capture?.() ?? null, watch, pointAlerts, alertsStatus); } catch { setError("The image could not be created on this device. Try print / PDF instead."); } finally { setExporting(false); } };
-  return <div className="site-shell"><header className="site-header"><a href="/" className="brand"><span className="brand-mark">C<span>B</span></span><span>CODE BLACK <em>AEGIS</em></span></a>
+  return <div className="site-shell"><header className="site-header"><a href="/" className="brand"><img className="brand-shield" src={codeblackShield} alt=""/><span>CODE BLACK <em>AEGIS</em><small>FROM WATCHING TO WARNING</small></span></a>
     <nav aria-label="Primary"><a href="#projection">Projection</a><a href="#models">Models</a><a href="#history">History</a><a href="#alerts">Alerts</a></nav><a className="official-link" href="https://www.nhc.noaa.gov/" target="_blank" rel="noreferrer">Official NHC ↗</a></header>
     <main>{loading && !data ? <div className="loading">Loading current hurricane analysis…</div> : !data ? <div className="failure"><h1>Analysis unavailable</h1><p>{error}</p><a href="https://www.nhc.noaa.gov/">View the official NHC forecast ↗</a></div> : <>
       <section className="storm-head"><div><h1>{data.storm.classification === "HU" ? "Hurricane" : "Storm"} <em>{data.storm.name ?? "watch"}</em></h1><p>Public Aegis analysis of available hurricane guidance</p></div><div className="update-info"><strong>{data.status === "active" ? "LIVE ANALYSIS" : "LAST AVAILABLE ANALYSIS"}</strong><span>NHC update {displayTime(data.storm.last_update)}</span><span>Aegis checked {displayTime(data.checked_at)}</span><button onClick={() => void refresh()} type="button">Refresh ↻</button></div></section>

@@ -2,9 +2,10 @@ import type { PublicHurricane } from "./types";
 import { displayTime, signed } from "./types";
 import { watchSummary } from "./watchLocation";
 import type { PointAlert, WatchLocation } from "./watchLocation";
+import codeblackShield from "../../../src/assets/codeblack-shield.png";
 
 const W = 1600, H = 2300;
-const ink = "#eef5f5", muted = "#a3b8c1", cyan = "#45d9d1", coral = "#fb716a";
+const ink = "#f4f6fa", muted = "#a3a7b1", cyan = "#45d9d1", coral = "#ff2a0c";
 
 function wrap(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, width: number, lineHeight: number, maxLines: number) {
   const words = value.split(/\s+/).filter(Boolean);
@@ -24,12 +25,14 @@ function wrap(ctx: CanvasRenderingContext2D, value: string, x: number, y: number
 export async function saveBriefingImage(data: PublicHurricane, mapPng: string | null, watch: WatchLocation, alerts: PointAlert[], alertsStatus: string) {
   const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Canvas is unavailable");
-  ctx.fillStyle = "#06121c"; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = cyan; ctx.fillRect(80, 72, 72, 8);
-  ctx.fillStyle = ink; ctx.font = "700 30px system-ui"; ctx.fillText("CODE BLACK  /  AEGIS", 80, 128);
-  ctx.font = "800 70px system-ui"; ctx.fillText(`Hurricane ${data.storm.name ?? "watch"}`, 80, 225);
+  ctx.fillStyle = "#020203"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = coral; ctx.fillRect(80, 37, 72, 8);
+  const shield = new Image(); shield.src = codeblackShield; await shield.decode(); ctx.drawImage(shield, 80, 55, 42, 70);
+  ctx.fillStyle = ink; ctx.font = "800 30px system-ui"; ctx.fillText("CODE BLACK  /  AEGIS", 142, 87);
+  ctx.fillStyle = muted; ctx.font = "700 16px system-ui"; ctx.fillText("FROM WATCHING TO WARNING", 144, 115);
+  ctx.fillStyle = ink; ctx.font = "800 70px system-ui"; ctx.fillText(`Hurricane ${data.storm.name ?? "watch"}`, 80, 225);
   ctx.fillStyle = muted; ctx.font = "28px system-ui"; ctx.fillText(`Updated ${displayTime(data.checked_at)}  •  NHC ${displayTime(data.storm.last_update)}`, 80, 277);
-  ctx.fillStyle = "#102535"; ctx.fillRect(80, 318, 1440, 138);
+  ctx.fillStyle = "#111216"; ctx.fillRect(80, 318, 1440, 138);
   const metrics = [
     ["MAX WIND", data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`], ["PRESSURE", data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`],
     ["48H MODEL SPREAD", data.guidance.spread_48h_miles == null ? "—" : `${data.guidance.spread_48h_miles} mi`],
@@ -37,15 +40,15 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   metrics.forEach(([label, value], i) => { const x = 110 + i * 470; ctx.fillStyle = muted; ctx.font = "700 20px system-ui"; ctx.fillText(label, x, 360); ctx.fillStyle = ink; ctx.font = "700 39px system-ui"; ctx.fillText(value, x, 418); });
   ctx.fillStyle = ink; ctx.font = "700 32px system-ui"; ctx.fillText("Aegis model synthesis", 80, 530);
   ctx.fillStyle = muted; ctx.font = "25px system-ui"; ctx.fillText("Experimental center-track blend  /  Official NHC forecast shown separately", 80, 571);
-  ctx.fillStyle = "#0d2331"; ctx.fillRect(80, 610, 1440, 800);
+  ctx.fillStyle = "#0d0e11"; ctx.fillRect(80, 610, 1440, 800);
   if (mapPng) { const image = new Image(); image.src = mapPng; await image.decode(); ctx.drawImage(image, 80, 610, 1440, 800); }
   else { ctx.fillStyle = muted; ctx.font = "30px system-ui"; ctx.fillText("Map image unavailable — consult the live briefing for tracks.", 140, 1000); }
-  ctx.fillStyle = "#0b1c29"; ctx.fillRect(80, 1326, 650, 84);
+  ctx.fillStyle = "#0d0e11"; ctx.fillRect(80, 1326, 650, 84);
   ctx.fillStyle = cyan; ctx.font = "700 21px system-ui"; ctx.fillText("━━  AEGIS EXPERIMENTAL", 104, 1378);
-  ctx.fillStyle = "#0b1c29"; ctx.fillRect(750, 1326, 770, 84);
+  ctx.fillStyle = "#0d0e11"; ctx.fillRect(750, 1326, 770, 84);
   ctx.fillStyle = ink; ctx.fillText("┄┄  NHC OFFICIAL FORECAST", 775, 1378);
   const proximity = watchSummary(data, watch);
-  ctx.fillStyle = cyan; ctx.font = "700 21px system-ui"; ctx.fillText("WATCH LOCATION", 80, 1470);
+  ctx.fillStyle = coral; ctx.font = "700 21px system-ui"; ctx.fillText("WATCH LOCATION", 80, 1470);
   ctx.fillStyle = ink; ctx.font = "700 32px system-ui"; wrap(ctx, watch.label, 80, 1518, 1430, 42, 2);
   ctx.fillStyle = muted; ctx.font = "25px system-ui";
   ctx.fillText(`Current center: ${proximity.currentMiles == null ? "unavailable" : `${proximity.currentMiles} mi away`}   •   Closest NHC center: ${proximity.official ? `${proximity.official.miles} mi at +${proximity.official.point.hour}h` : "unavailable"}`, 80, 1620);
@@ -57,7 +60,7 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
     `Projection uses ${data.projection.member_ids?.length ?? 0} independent model aids: ${data.projection.member_ids?.join(", ") ?? "none available"}.`,
     `48-hour center spread: ${data.guidance.spread_48h_miles == null ? "not available" : `${data.guidance.spread_48h_miles} mi`}; not a probability cone. Observed wind change: ${signed(data.observed.trend.wind_change_mph, "mph")}.`,
   ];
-  for (const item of evidence) { ctx.fillStyle = cyan; ctx.fillRect(80, y - 17, 10, 10); ctx.fillStyle = ink; y += wrap(ctx, item, 112, y, 1390, 39, 2) + 20; }
+  for (const item of evidence) { ctx.fillStyle = coral; ctx.fillRect(80, y - 17, 10, 10); ctx.fillStyle = ink; y += wrap(ctx, item, 112, y, 1390, 39, 2) + 20; }
   if (alertsStatus === "ready" && alerts.length) {
     ctx.fillStyle = coral; ctx.font = "700 21px system-ui"; ctx.fillText("NWS ALERTS AT WATCH LOCATION", 80, y + 27);
     ctx.fillStyle = ink; ctx.font = "26px system-ui";
