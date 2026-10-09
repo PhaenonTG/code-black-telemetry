@@ -33,16 +33,25 @@ describe("public hurricane boundary", () => {
     expect(publicData.ai.summary).toBeNull();
   });
 
-  it("publishes only safe guarded Aegis findings with their own analysis time", () => {
+  it("publishes only safe second-pass reviewed Aegis findings", () => {
     const safe = { ...sample, ai: { status: "ready", analyzed_at: "2026-10-09T04:12:00Z",
+      reviewed_at: "2026-10-09T04:13:00Z", review_model: "qwen3-coder:30b", review_verdict: "revise",
       summary: "Storm surge warning remains active along the northern Gulf coast.",
       supporting_factors: ["Official warning remains active", "Private detail at 12150 Rolling Meadows Ln"],
       uncertainties: ["Local impacts may vary"], recommended_attention: ["Monitor National Weather Service updates"] } };
     const result = toPublicHurricane(safe);
     expect(result.ai).toEqual({ status: "ready", analyzed_at: "2026-10-09T04:12:00Z",
+      reviewed_at: "2026-10-09T04:13:00Z", review_model: "qwen3-coder:30b",
       summary: "Storm surge warning remains active along the northern Gulf coast.",
       supporting_factors: ["Official warning remains active"], uncertainties: ["Local impacts may vary"],
       recommended_attention: ["Monitor National Weather Service updates"] });
+  });
+
+  it("withholds old unreviewed drafts even when marked ready", () => {
+    const result = toPublicHurricane({ ...sample, ai: { status: "ready",
+      summary: "A plausible but unreviewed public briefing." } });
+    expect(result.ai.status).toBe("withheld");
+    expect(result.ai.summary).toBeNull();
   });
 
   it("exposes bounded change signals without private report or watch-point detail", () => {

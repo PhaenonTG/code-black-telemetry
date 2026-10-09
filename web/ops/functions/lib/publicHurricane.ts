@@ -96,7 +96,9 @@ export function deriveProjection(models: unknown[], latestCycle: unknown) {
 
 export function toPublicHurricane(raw: unknown) {
   const data = object(raw), storm = object(data.storm), guidance = object(data.model_guidance), trend = object(data.observed_trend), assessment = object(data.assessment), ai = object(data.ai), changes = object(data.changes_since_previous);
-  const aiSummary = ai.status === "ready" ? publicNarrative(ai.summary) : null;
+  const reviewReady = ai.status === "ready" && ai.review_model === "qwen3-coder:30b"
+    && (ai.review_verdict === "approve" || ai.review_verdict === "revise") && !!string(ai.reviewed_at);
+  const aiSummary = reviewReady ? publicNarrative(ai.summary) : null;
   const models = array(guidance.models).map(object).filter((model) => DISPLAY_MODEL_IDS.has(String(model.id)))
     .map((model) => ({ id: model.id, name: string(model.name), cycle: string(model.cycle),
       points: array(model.points).map(trackPoint).filter(Boolean), shift_48h_miles: number(model.shift_48h_miles) }));
@@ -132,6 +134,7 @@ export function toPublicHurricane(raw: unknown) {
     regional_alerts: alerts, regional_alerts_status: string(data.coastal_context_status),
     ai: { status: aiSummary ? "ready" : ai.status === "ready" ? "withheld" : "unavailable",
       analyzed_at: aiSummary ? string(ai.analyzed_at) : null, summary: aiSummary,
+      reviewed_at: aiSummary ? string(ai.reviewed_at) : null, review_model: aiSummary ? "qwen3-coder:30b" : null,
       supporting_factors: aiSummary ? publicNarrativeList(ai.supporting_factors) : [],
       uncertainties: aiSummary ? publicNarrativeList(ai.uncertainties) : [],
       recommended_attention: aiSummary ? publicNarrativeList(ai.recommended_attention) : [] },
@@ -145,7 +148,7 @@ export async function handlePublicHurricane(request: Request, env: GatewayEnv, c
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "GET, OPTIONS" } });
   if (request.method !== "GET") return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: { "Content-Type": "application/json", ...cors } });
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v5");
+  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v6");
   const cached = cache ? await cache.match(cacheKey) : null;
   if (cached) return new Response(cached.body, { status: 200, headers: { ...Object.fromEntries(cached.headers), ...cors } });
   const result = await forwardToCore(CORE_ROUTE, new URL(request.url), env);

@@ -15,7 +15,8 @@ export type PublicHurricane = {
   monitoring: { radar_analysis: string; source_check_minutes: number; ai_mode: string; model_tracks: number };
   regional_alerts: { event: string | null; headline: string | null; severity: string | null; expires: string | null; url: string | null }[];
   regional_alerts_status: string | null; disclosure: string;
-  ai?: { status: "ready" | "withheld" | "unavailable"; analyzed_at: string | null; summary: string | null;
+  ai?: { status: "ready" | "withheld" | "unavailable"; analyzed_at: string | null; reviewed_at: string | null;
+    review_model: string | null; summary: string | null;
     supporting_factors: string[]; uncertainties: string[]; recommended_attention: string[] };
 };
 

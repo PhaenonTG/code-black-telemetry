@@ -24,15 +24,15 @@ function AegisBriefing({ data, watch }: { data: PublicHurricane; watch: WatchLoc
     changes?.new_report_count ? `${changes.new_report_count} new report product${changes.new_report_count === 1 ? "" : "s"}` : null,
   ].filter(Boolean);
   return <section className="aegis-briefing" id="aegis" aria-label="Aegis analysis">
-    <div className="aegis-briefing__head"><div><h2>Aegis analysis</h2><span className="aegis-briefing__state">Experimental interpretation · source-change review</span></div></div>
+    <div className="aegis-briefing__head"><div><h2>Aegis analysis</h2><span className="aegis-briefing__state">Experimental interpretation · local second-pass review</span></div></div>
     <div className="aegis-delta"><span>Since previous source check</span><strong>{changeItems.length ? changeItems.join(" · ") : "No material source change detected"}</strong></div>
     {ai?.status === "ready" && ai.summary ? <><p className="aegis-briefing__summary">{ai.summary}</p>
       <div className="aegis-briefing__details"><div><h3>Signals in view</h3><ul>{ai.supporting_factors.slice(0, 3).map((item) => <li key={item}>{item}</li>)}</ul></div>
         <div><h3>Uncertainty</h3><ul>{ai.uncertainties.slice(0, 2).map((item) => <li key={item}>{item}</li>)}</ul></div></div>
-      <p className="aegis-briefing__meta">Aegis analyzed {displayTime(ai.analyzed_at)} · Sources checked {displayTime(data.checked_at)}</p></>
+      <p className="aegis-briefing__meta">Aegis reviewed {displayTime(ai.reviewed_at)} · Sources checked {displayTime(data.checked_at)} · Local model review, not official verification</p></>
       : <p className="aegis-briefing__summary">A guarded Aegis briefing is not available for this source cycle. The official storm data and alerts below remain visible; this is not an all-clear.</p>}
     {changedWatch && <p className="aegis-briefing__scope">This narrative is anchored to the default Grand Bay watch area. Changing the location updates map distances and NWS alerts, but does not create a new location-specific AI analysis.</p>}
-    <p className="aegis-briefing__caution">Aegis reviews official data when it changes; the cyan path is a deterministic model blend, not an AI-generated impact forecast. Radar imagery is shown on the map but is not yet analyzed by Aegis. <a href={data.official.discussion_url ?? "https://www.nhc.noaa.gov/"} target="_blank" rel="noreferrer">Read NHC discussion ↗</a></p>
+    <p className="aegis-briefing__caution">Aegis reviews official data when it changes, then a local model checks and rewrites the text against the same sources. This cannot confirm the forecast. The cyan path is a deterministic model blend, not an AI-generated impact forecast. Radar imagery is shown on the map but is not yet analyzed by Aegis. <a href={data.official.discussion_url ?? "https://www.nhc.noaa.gov/"} target="_blank" rel="noreferrer">Read NHC discussion ↗</a></p>
   </section>;
 }
 
