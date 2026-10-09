@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ModelGuidance from "./ModelGuidance";
 import LiveCameras from "./LiveCameras";
 import { saveBriefingImage } from "./briefingPoster";
@@ -109,12 +109,17 @@ function App() {
   const [candidates, setCandidates] = useState<WatchLocation[]>([]);
   const [pointAlerts, setPointAlerts] = useState<PointAlert[]>([]), [alertsStatus, setAlertsStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [alertsCheckedAt, setAlertsCheckedAt] = useState<string | null>(null);
+  const latestRefresh = useRef(0);
   const registerCapture = useCallback((value: (() => Promise<string | null>) | null) => setCapture(() => value), []);
   const refresh = useCallback(async () => {
+    const requestId = ++latestRefresh.current;
     try { const response = await fetch(dataUrl, { cache: "no-store" }); if (!response.ok) throw new Error(`Feed returned ${response.status}`);
-      const next = await response.json() as PublicHurricane; setData((current) => current && JSON.stringify(current) === JSON.stringify(next) ? current : next); setError(null);
-    } catch { setError("The latest hurricane analysis could not be loaded. Please use the official NHC forecast linked below."); }
-    finally { setLoading(false); }
+      const next = await response.json() as PublicHurricane;
+      if (requestId !== latestRefresh.current) return;
+      setData((current) => current && ((next.checked_at && current.checked_at && Date.parse(next.checked_at) < Date.parse(current.checked_at)) || JSON.stringify(current) === JSON.stringify(next)) ? current : next);
+      setError(null);
+    } catch { if (requestId === latestRefresh.current) setError("The latest hurricane analysis could not be loaded. Please use the official NHC forecast linked below."); }
+    finally { if (requestId === latestRefresh.current) setLoading(false); }
   }, []);
   useEffect(() => { void refresh(); const interval = window.setInterval(() => void refresh(), 60_000); return () => clearInterval(interval); }, [refresh]);
   useEffect(() => { const interval = window.setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(interval); }, []);

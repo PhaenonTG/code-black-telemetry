@@ -115,5 +115,6 @@ describe("public hurricane boundary", () => {
     const env = { CORE_GATEWAY_WORKER: { fetch: async () => new Response(JSON.stringify(sample), { status: 200, headers: { "Content-Type": "application/json" } }) } };
     const response = await handlePublicHurricane(new Request("https://ops.codeblackwx.com/api/public/hurricane", { headers: { Origin: "https://tropics.codeblackwx.com" } }), env);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("https://tropics.codeblackwx.com");
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=5, s-maxage=5");
   });
 });

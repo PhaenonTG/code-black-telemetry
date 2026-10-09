@@ -9,6 +9,17 @@ import { latestPriorObservation } from "./stormTelemetry";
 
 const colors: Record<string, string> = { HFAI: "#e9b568", HFBI: "#bca9ef", AVNI: "#82aaff", CTCI: "#fa9372", CMCI: "#6db6ff", NVGI: "#9bbdd9", UKXI: "#f5cf75", AEMI: "#8bcfa5", GDMI: "#b5da7c", HWFI: "#f18cbb", HMNI: "#c48de8", HCCA: "#d8ddd8", TVCN: "#90b987" };
 const line = (points: { latitude: number; longitude: number }[]) => ({ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) } });
+const empty = () => ({ type: "FeatureCollection" as const, features: [] });
+const track = (points: { latitude: number; longitude: number }[]) => points.length > 1 ? line(points) : empty();
+const cone = (points: number[][]) => points.length >= 4 ? { type: "Feature" as const, properties: {}, geometry: { type: "Polygon" as const, coordinates: [points] } } : empty();
+const point = (longitude: number, latitude: number) => ({ type: "Feature" as const, properties: {}, geometry: { type: "Point" as const, coordinates: [longitude, latitude] } });
+const forecastPoints = (points: PublicHurricane["official"]["track"]) => ({ type: "FeatureCollection" as const, features: points.filter((p) => p.hour > 0).map((p) => ({ ...point(p.longitude, p.latitude), properties: { hour: p.hour, wind_mph: p.wind_mph, valid_time: p.valid_time } })) });
+const aegisPoints = (points: { hour: number; latitude: number; longitude: number }[]) => ({ type: "FeatureCollection" as const, features: points.filter((p) => p.hour % 12 === 0).map((p) => ({ ...point(p.longitude, p.latitude), properties: { hour: p.hour } })) });
+function selectedTrack(data: PublicHurricane) {
+  const source = data.ai?.landfall?.source;
+  return source === "NHC" ? data.official.track : source && source !== "BLEND"
+    ? data.guidance.models.find((model) => model.id === source)?.points ?? data.projection.points : data.projection.points;
+}
 const WMS = "https://nowcoast.noaa.gov/geoserver/ows";
 const RADAR_LAYER = "weather_radar:base_reflectivity_mosaic";
 const SATELLITE_LAYERS = {
@@ -40,7 +51,7 @@ function focusBounds(data: PublicHurricane, watch: WatchLocation, view: ViewMode
   const bounds = new mapboxgl.LngLatBounds();
   bounds.extend([watch.longitude, watch.latitude]);
   const firstHour = view === "impact" ? 24 : 0, lastHour = view === "basin" ? 72 : view === "approach" ? 24 : 36;
-  for (const point of [...data.official.track, ...data.projection.points]) {
+  for (const point of [...data.official.track, ...data.projection.points, ...selectedTrack(data)]) {
     if (point.hour >= firstHour && point.hour <= lastHour) bounds.extend([point.longitude, point.latitude]);
   }
   if (view !== "impact" && data.storm.center.latitude != null && data.storm.center.longitude != null) {
@@ -63,6 +74,8 @@ const afterMapIdle = (map: mapboxgl.Map) => new Promise<void>((resolve) => {
 
 export default function HurricaneMap({ data, token, onCapture, watch }: { data: PublicHurricane; token: string | null; onCapture: (capture: (() => Promise<string | null>) | null) => void; watch: WatchLocation }) {
   const host = useRef<HTMLDivElement>(null), mapRef = useRef<mapboxgl.Map | null>(null);
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const watchRef = useRef(watch);
   watchRef.current = watch;
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
@@ -76,12 +89,14 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
   const [mapError, setMapError] = useState<string | null>(null);
   const layerState = useRef({ radar, clouds, alerts, satelliteMode });
   layerState.current = { radar, clouds, alerts, satelliteMode };
+  const selectedModelsRef = useRef(selectedModels);
+  selectedModelsRef.current = selectedModels;
   const models = data.guidance.models;
-  const selectedTrackSource = data.ai?.landfall?.source;
-  const codeBlackTrack = selectedTrackSource === "NHC" ? data.official.track
-    : selectedTrackSource && selectedTrackSource !== "BLEND"
-      ? data.guidance.models.find((model) => model.id === selectedTrackSource)?.points ?? data.projection.points
-      : data.projection.points;
+  const codeBlackTrack = selectedTrack(data);
+  const focusKey = JSON.stringify([data.storm.center.latitude, data.storm.center.longitude,
+    data.official.track.map((p) => [p.hour, p.longitude, p.latitude]),
+    data.projection.points.map((p) => [p.hour, p.longitude, p.latitude]),
+    codeBlackTrack.map((p) => [p.hour, p.longitude, p.latitude])]);
   useEffect(() => {
     let active = true;
     const refresh = () => { void sourceTimes().then((times) => { if (active) setLayerTimes(times); }).catch(() => {}); };
@@ -124,7 +139,42 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     if (center.latitude != null && center.longitude != null && distanceMiles({ latitude: center.latitude, longitude: center.longitude }, watch) < 700)
       map.fitBounds(focusBounds(data, watch, viewMode), { padding: 35, maxZoom: viewMode === "impact" ? 7.5 : 6.5, duration: 500 });
     else map.easeTo({ center: [watch.longitude, watch.latitude], zoom: 5, duration: 500 });
-  }, [watch, data, viewMode]);
+  }, [watch, viewMode, focusKey]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.isStyleLoaded()) return;
+    const set = (id: string, value: Parameters<mapboxgl.GeoJSONSource["setData"]>[0]) =>
+      (map.getSource(id) as mapboxgl.GeoJSONSource | undefined)?.setData(value);
+    const center = data.storm.center;
+    set("cone", cone(data.official.cone));
+    set("observed", track(data.observed.track));
+    const prior = latestPriorObservation(data);
+    set("advisory-trail", prior && center.latitude != null && center.longitude != null &&
+      (prior.latitude !== center.latitude || prior.longitude !== center.longitude)
+      ? track([prior, { latitude: center.latitude, longitude: center.longitude }]) : empty());
+    set("official", track(data.official.track));
+    set("official-points", forecastPoints(data.official.track));
+    set("aegis", track(codeBlackTrack));
+    set("aegis-points", aegisPoints(codeBlackTrack));
+    set("storm", center.longitude != null && center.latitude != null ? point(center.longitude, center.latitude) : empty());
+    const active = new Set(data.guidance.models.filter((model) => model.points.length > 1).map((model) => model.id));
+    for (const model of data.guidance.models) {
+      if (!active.has(model.id)) continue;
+      const id = `model-${model.id}`;
+      if (!map.getSource(id)) {
+        map.addSource(id, { type: "geojson", data: track(model.points) });
+        map.addLayer({ id, type: "line", source: id, layout: { visibility: selectedModelsRef.current.includes(model.id) ? "visible" : "none" },
+          paint: { "line-color": colors[model.id] ?? "#acbfd0", "line-width": 2, "line-opacity": 0.9 } }, "aegis-halo");
+      } else set(id, track(model.points));
+    }
+    for (const layer of map.getStyle().layers ?? []) {
+      if (!layer.id.startsWith("model-")) continue;
+      const id = layer.id.slice(6);
+      if (active.has(id)) continue;
+      map.removeLayer(layer.id);
+      if (map.getSource(layer.id)) map.removeSource(layer.id);
+    }
+  }, [data, codeBlackTrack]);
   useEffect(() => {
     if (!token || !host.current || !data.storm.center.latitude || !data.storm.center.longitude) return;
     let tileTimer: number | undefined, alertTimer: number | undefined;
@@ -133,6 +183,8 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       zoom: 4.3, preserveDrawingBuffer: true, attributionControl: true });
     mapRef.current = map;
     onCapture(async () => {
+      const data = dataRef.current;
+      const models = data.guidance.models;
       const container = host.current;
       if (!container) return null;
       await afterMapIdle(map);
@@ -161,6 +213,9 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
     map.on("error", () => setMapError("Map tiles are temporarily unavailable. Track details remain below."));
     map.on("load", () => {
+      const data = dataRef.current;
+      const models = data.guidance.models;
+      const codeBlackTrack = selectedTrack(data);
       map.addSource("satellite", { type: "raster", tiles: wmsTiles(SATELLITE_LAYERS[layerState.current.satelliteMode], 5), tileSize: 512, attribution: "NOAA nowCOAST" });
       map.addLayer({ id: "satellite", type: "raster", source: "satellite", layout: { visibility: layerState.current.clouds ? "visible" : "none" }, paint: { "raster-opacity": 0.8, "raster-fade-duration": 0 } });
       map.addSource("radar", { type: "raster", tiles: wmsTiles(RADAR_LAYER, 2), tileSize: 512, attribution: "NOAA nowCOAST" });
@@ -192,28 +247,29 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
           (map.getSource("satellite") as mapboxgl.RasterTileSource | undefined)?.setTiles(wmsTiles(SATELLITE_LAYERS[layerState.current.satelliteMode], 5));
         }
       }, 30_000);
-      if (data.official.cone.length >= 4) {
-        map.addSource("cone", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [data.official.cone] } } });
+      {
+        map.addSource("cone", { type: "geojson", data: cone(data.official.cone) });
         map.addLayer({ id: "cone-fill", type: "fill", source: "cone", paint: { "fill-color": "#e8f0ef", "fill-opacity": 0.1 } });
         map.addLayer({ id: "cone-edge", type: "line", source: "cone", paint: { "line-color": "#e8f0ef", "line-opacity": 0.55, "line-width": 1.5 } });
       }
-      if (data.observed.track.length > 1) {
-        map.addSource("observed", { type: "geojson", data: line(data.observed.track) });
+      {
+        map.addSource("observed", { type: "geojson", data: track(data.observed.track) });
         map.addLayer({ id: "observed", type: "line", source: "observed", paint: { "line-color": "#f16e65", "line-width": 3 } });
       }
       // The preliminary best-track feed can lag the current advisory. Join its
       // final point to the latest official center without calling that segment observed.
       const lastObserved = latestPriorObservation(data);
       const latestCenter = data.storm.center;
-      if (lastObserved && latestCenter.latitude != null && latestCenter.longitude != null &&
-          (lastObserved.latitude !== latestCenter.latitude || lastObserved.longitude !== latestCenter.longitude)) {
-        map.addSource("advisory-trail", { type: "geojson", data: line([lastObserved, { latitude: latestCenter.latitude, longitude: latestCenter.longitude }]) });
+      {
+        map.addSource("advisory-trail", { type: "geojson", data: lastObserved && latestCenter.latitude != null && latestCenter.longitude != null &&
+          (lastObserved.latitude !== latestCenter.latitude || lastObserved.longitude !== latestCenter.longitude)
+          ? track([lastObserved, { latitude: latestCenter.latitude, longitude: latestCenter.longitude }]) : empty() });
         map.addLayer({ id: "advisory-trail", type: "line", source: "advisory-trail", paint: { "line-color": "#f16e65", "line-width": 3, "line-dasharray": [1.2, 1.2] } });
       }
-      if (data.official.track.length > 1) {
-        map.addSource("official", { type: "geojson", data: line(data.official.track) });
+      {
+        map.addSource("official", { type: "geojson", data: track(data.official.track) });
         map.addLayer({ id: "official", type: "line", source: "official", paint: { "line-color": "#f2f4ef", "line-width": 3, "line-dasharray": [2, 1.5] } });
-        map.addSource("official-points", { type: "geojson", data: { type: "FeatureCollection", features: data.official.track.filter((point) => point.hour > 0).map((point) => ({ type: "Feature", properties: { hour: point.hour, wind_mph: point.wind_mph, valid_time: point.valid_time }, geometry: { type: "Point", coordinates: [point.longitude, point.latitude] } })) } });
+        map.addSource("official-points", { type: "geojson", data: forecastPoints(data.official.track) });
         map.addLayer({ id: "official-dots", type: "circle", source: "official-points", paint: { "circle-radius": 5, "circle-color": "#f2f4ef", "circle-stroke-color": "#071015", "circle-stroke-width": 1.5 } });
         map.on("click", "official-dots", (event) => {
           const feature = event.features?.[0] as unknown as { geometry: { type: string; coordinates: number[] }; properties?: Record<string, number | string | null> } | undefined;
@@ -229,17 +285,17 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
         map.addLayer({ id: `model-${model.id}`, type: "line", source: `model-${model.id}`, layout: { visibility: selectedModels.includes(model.id) ? "visible" : "none" },
           paint: { "line-color": colors[model.id] ?? "#acbfd0", "line-width": 2, "line-opacity": 0.9 } });
       }
-      if (codeBlackTrack.length > 1) {
-        map.addSource("aegis", { type: "geojson", data: line(codeBlackTrack) });
+      {
+        map.addSource("aegis", { type: "geojson", data: track(codeBlackTrack) });
         map.addLayer({ id: "aegis-halo", type: "line", source: "aegis", paint: { "line-color": "#06121c", "line-width": 8, "line-opacity": 0.8 } });
         map.addLayer({ id: "aegis", type: "line", source: "aegis", paint: { "line-color": "#ee3429", "line-width": 4 } });
-        map.addSource("aegis-points", { type: "geojson", data: { type: "FeatureCollection", features: codeBlackTrack.filter((p) => p.hour % 12 === 0).map((p) => ({ type: "Feature", properties: { hour: p.hour }, geometry: { type: "Point", coordinates: [p.longitude, p.latitude] } })) } });
+        map.addSource("aegis-points", { type: "geojson", data: aegisPoints(codeBlackTrack) });
         map.addLayer({ id: "aegis-dots", type: "circle", source: "aegis-points", paint: { "circle-radius": 4, "circle-color": "#ee3429", "circle-stroke-color": "#06121c", "circle-stroke-width": 1.5 } });
         map.on("click", "aegis-dots", (event) => {
           const feature = event.features?.[0] as unknown as { geometry: { type: string; coordinates: number[] }; properties?: Record<string, number> } | undefined;
           if (!feature || feature.geometry.type !== "Point") return;
           new mapboxgl.Popup({ closeButton: false, maxWidth: "220px" }).setLngLat(feature.geometry.coordinates as [number, number])
-            .setText(`Code Black Experimental · ${selectedTrackSource ?? "model blend"} +${feature.properties?.hour}h`).addTo(map);
+            .setText(`Code Black Experimental · ${dataRef.current.ai?.landfall?.source ?? "model blend"} +${feature.properties?.hour}h`).addTo(map);
         });
       }
       const center = data.storm.center;
@@ -256,7 +312,7 @@ export default function HurricaneMap({ data, token, onCapture, watch }: { data: 
       map.fitBounds(focusBounds(data, watchRef.current, viewMode), { padding: 35, maxZoom: 7.5, duration: 0 });
     });
     return () => { if (tileTimer) window.clearInterval(tileTimer); if (alertTimer) window.clearInterval(alertTimer); onCapture(null); mapRef.current = null; map.remove(); };
-  }, [data, token, onCapture]);
+  }, [token, onCapture]);
   const toggle = (id: string) => setSelectedModels((selected) => selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]);
   return <div className="map-block"><div className="map-heading"><h2>Forecast tracks</h2><span className="map-heading__status">Radar {radar ? "on" : "off"} · Satellite {clouds ? "on" : "off"}</span></div>
     <details className="map-controls"><summary>Map layers & views</summary><div className="map-actions"><button type="button" aria-pressed={radar} onClick={() => setRadar((on) => !on)}>Radar</button><button type="button" aria-pressed={clouds} onClick={() => setClouds((on) => !on)}>Satellite</button><button type="button" aria-pressed={alerts} onClick={() => setAlerts((on) => !on)}>Watches & warnings</button></div>

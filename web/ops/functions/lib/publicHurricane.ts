@@ -180,13 +180,15 @@ export async function handlePublicHurricane(request: Request, env: GatewayEnv, c
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "GET, OPTIONS" } });
   if (request.method !== "GET") return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: { "Content-Type": "application/json", ...cors } });
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v9");
+  // Keep the public endpoint shielded while allowing a refresh to pick up a
+  // completed Core check promptly. Browser no-store does not bypass Cache API.
+  const cacheKey = new Request("https://ops.codeblackwx.com/api/public/hurricane?feed=v10");
   const cached = cache ? await cache.match(cacheKey) : null;
   if (cached) return new Response(cached.body, { status: 200, headers: { ...Object.fromEntries(cached.headers), ...cors } });
   const result = await forwardToCore(CORE_ROUTE, new URL(request.url), env);
   if (result.status !== 200) return new Response(JSON.stringify({ error: "DATA_UNAVAILABLE" }), { status: 503, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...cors } });
   const safe = new Response(JSON.stringify(toPublicHurricane(result.body)), { status: 200,
-    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=30, s-maxage=60", "X-Content-Type-Options": "nosniff" } });
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=5, s-maxage=5", "X-Content-Type-Options": "nosniff" } });
   if (cache) ctx?.waitUntil(cache.put(cacheKey, safe.clone()));
   return new Response(safe.body, { status: 200, headers: { ...Object.fromEntries(safe.headers), ...cors } });
 }
