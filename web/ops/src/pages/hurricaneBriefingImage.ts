@@ -1,4 +1,5 @@
 /** One-page, source-attributed hurricane briefing rendered from live OPS data. */
+import { hurricaneCategory } from "../../../shared/hurricaneCategory";
 export type BriefingImageData = {
   status: string;
   freshness?: string;
@@ -145,8 +146,9 @@ export async function createHurricaneBriefingImage(data: BriefingImageData, mapD
   label(ctx, `NHC ADVISORY ${data.assessment.advisory}  •  ${printTime(data.storm.lastUpdate)}`, 790, 255);
   rule(ctx, 288);
 
+  const category = hurricaneCategory(data.assessment.intensity_mph, data.storm.classification);
   const metrics = [
-    ["MAX WIND · NHC", `${data.assessment.intensity_mph} mph`, `${data.storm.classification} · ${data.storm.pressure} mb`],
+    ["MAX WIND · NHC", `${data.assessment.intensity_mph} mph`, `${category === null ? data.storm.classification : `Category ${category}`} · ${data.storm.pressure} mb`],
     ["CENTER → WATCH", `${data.assessment.center_distance_miles} mi`, "Current center distance"],
     ["CLOSEST NHC POINT", data.assessment.forecast_point_distance_miles == null ? "—" : `${data.assessment.forecast_point_distance_miles} mi`, data.assessment.closest_forecast_hour == null ? "Forecast unavailable" : `At +${data.assessment.closest_forecast_hour}h`],
   ];

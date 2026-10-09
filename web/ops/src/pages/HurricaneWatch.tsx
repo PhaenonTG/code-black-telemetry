@@ -7,6 +7,7 @@ import { mapboxAccessToken } from "../../../../src/services/mapTiles";
 import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
 import { createHurricaneBriefingImage } from "./hurricaneBriefingImage";
+import { hurricaneCategory } from "../../../shared/hurricaneCategory";
 import "./HurricaneWatch.css";
 
 type TrackPoint = { hour: number; latitude: number; longitude: number; wind_mph: number | null };
@@ -269,6 +270,7 @@ export default function HurricaneWatch() {
     return () => { live = false; window.clearInterval(timer); };
   }, [config]);
   const a = data?.assessment;
+  const category = hurricaneCategory(a?.intensity_mph, data?.storm?.classification);
   const closeImage = () => {
     setBriefingImage(null);
     if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
@@ -319,7 +321,7 @@ export default function HurricaneWatch() {
     window.setTimeout(() => window.print(), 150);
   };
   return <main className="hurricane-watch">
-    <header className="hurricane-watch__header"><div><h1><span>{data?.storm?.classification === "HU" ? "Hurricane" : "Storm"}</span> <em>{data?.storm?.name ?? "Gulf"}</em></h1><p>Grand Bay watch · source checks about every five minutes</p></div><Link to="/weather">Weather →</Link></header>
+    <header className="hurricane-watch__header"><div><h1><span>{data?.storm?.classification === "HU" ? "Hurricane" : "Storm"}</span> <em>{data?.storm?.name ?? "Gulf"}</em></h1><p>{category === null ? "" : `${data?.status === "active" ? "NHC Category" : "Last NHC Category"} ${category} · `}Grand Bay watch · source checks about every five minutes</p></div><Link to="/weather">Weather →</Link></header>
     {error && <p role="alert" className="hurricane-watch__error">{error}</p>}
     {!data && !error && <p role="status">Loading the latest assessment…</p>}
     {data?.status === "pending" && <p role="status">{data.notice}</p>}
@@ -330,7 +332,7 @@ export default function HurricaneWatch() {
       {shareStatus && <p role="status" className="hurricane-watch__share-status">{shareStatus}</p>}
       {imageStatus && <p role="status" className="hurricane-watch__share-status">{imageStatus}</p>}
       <section className="hurricane-watch__metrics" aria-label="Official storm status">
-        <div><small>{data.status === "inactive" ? "LAST NHC WIND" : "MAX WIND · NHC"}</small><strong>{a.intensity_mph} mph</strong><span>{data.storm.classification} · {data.storm.pressure} mb</span></div>
+        <div><small>{data.status === "inactive" ? "LAST NHC WIND" : "MAX WIND · NHC"}</small><strong>{a.intensity_mph} mph</strong><span>{category === null ? data.storm.classification : `Category ${category}`} · {data.storm.pressure} mb</span></div>
         <div><small>{data.status === "inactive" ? "LAST CENTER → WATCH POINT" : "CENTER → WATCH POINT"}</small><strong>{a.center_distance_miles} mi</strong><span>{data.status === "inactive" ? "Historical center distance" : "Current center distance"}</span></div>
         <div><small>{data.status === "inactive" ? "LAST FORECAST CENTER" : "CLOSEST FORECAST CENTER"}</small><strong>{a.forecast_point_distance_miles ?? "—"} mi</strong><span>{a.closest_forecast_hour != null ? `At NHC +${a.closest_forecast_hour}h point` : "Track unavailable"}</span></div>
       </section>

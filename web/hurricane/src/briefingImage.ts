@@ -3,6 +3,7 @@ import { displayTime } from "./types";
 import { watchSummary } from "./watchLocation";
 import type { PointAlert, WatchLocation } from "./watchLocation";
 import codeblackShield from "../../../src/assets/codeblack-shield.png";
+import { hurricaneCategory } from "../../shared/hurricaneCategory";
 
 const W = 1600, H = 2550;
 const ink = "#f4f6fa", muted = "#a3a7b1", cyan = "#45d9d1", coral = "#ff2a0c";
@@ -33,8 +34,9 @@ export async function saveBriefingImage(data: PublicHurricane, mapPng: string | 
   ctx.fillStyle = ink; ctx.font = "800 62px system-ui"; ctx.fillText(`TROPICS  /  ${data.storm.classification === "HU" ? "HURRICANE" : "STORM"} ${data.storm.name?.toUpperCase() ?? "WATCH"}`, 80, 225);
   ctx.fillStyle = muted; ctx.font = "28px system-ui"; ctx.fillText(`Updated ${displayTime(data.checked_at)}  •  NHC ${displayTime(data.storm.last_update)}`, 80, 277);
   ctx.fillStyle = "#111216"; ctx.fillRect(80, 318, 1440, 138);
+  const category = hurricaneCategory(data.storm.max_wind_mph, data.storm.classification);
   const metrics = [
-    ["MAX WIND", data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`], ["PRESSURE", data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`],
+    [category === null ? "MAX WIND · NHC" : `MAX WIND · NHC CATEGORY ${category}`, data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`], ["PRESSURE", data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`],
     [`OBSERVED WIND CHANGE · ${data.observed.trend.period_hours ?? "—"}H`, data.observed.trend.wind_change_mph == null ? "—" : `${data.observed.trend.wind_change_mph > 0 ? "+" : ""}${data.observed.trend.wind_change_mph} mph`],
   ];
   metrics.forEach(([label, value], i) => { const x = 110 + i * 470; ctx.fillStyle = muted; ctx.font = "700 20px system-ui"; ctx.fillText(label, x, 360); ctx.fillStyle = ink; ctx.font = "700 39px system-ui"; ctx.fillText(value, x, 418); });
