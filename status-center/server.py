@@ -39,6 +39,8 @@ SECRET_KEY = collector.SECRET_KEY
 MIN_STALE_S = int(os.environ.get("STATUS_CENTER_MIN_STALE_S", "30"))
 START = time.time()
 STATE_DIR = os.environ.get("STATUS_CENTER_STATE_DIR", "/srv/codeblack/data/status-center")
+WEATHER_ALERT_CONTROL_URL = os.environ.get("WEATHER_ALERT_CONTROL_URL", "").rstrip("/")
+WEATHER_ALERT_CONTROL_TOKEN = os.environ.get("WEATHER_ALERT_CONTROL_TOKEN", "")
 
 REG = json.load(open(REGISTRY_PATH, encoding="utf-8"))
 DEF = REG["defaults"]
@@ -1483,6 +1485,21 @@ def changelog_loop():
 SECTIONS = {"hosts", "services", "network", "streaming", "radar", "weather", "ai", "labs", "dns", "storage", "links", "compute", "attention", "summary", "esp_fleet"}
 
 
+def weather_alert_control(method, body=None):
+    """Proxy only the validated alert-settings document to Edge over Tailscale."""
+    if not WEATHER_ALERT_CONTROL_URL or not WEATHER_ALERT_CONTROL_TOKEN:
+        raise RuntimeError("weather alert control is not configured")
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(WEATHER_ALERT_CONTROL_URL + "/v1/settings", data=data, method=method,
+                                     headers={"X-CodeBlack-Alert-Control": WEATHER_ALERT_CONTROL_TOKEN,
+                                              "Content-Type": "application/json", "User-Agent": "CodeBlack-StatusCenter/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            return response.status, json.loads(response.read(128_000))
+    except urllib.error.HTTPError as exc:
+        return exc.code, {"error": "upstream_rejected"}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "CodeBlackStatusCenter/" + VERSION
     protocol_version = "HTTP/1.1"
@@ -1511,6 +1528,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_bytes(200, json.dumps({"ok": True, "version": VERSION, "uptime_s": int(now() - START), "probes": len(PROBES)}).encode(), "application/json", "no-store")
             if path == "/api/status":
                 return self.send_bytes(200, json.dumps(status_doc()).encode(), "application/json", "no-store")
+            if path == "/api/weather-alert-settings":
+                status, payload = weather_alert_control("GET")
+                return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
             if path in ("/api/changes", "/api/status/changes"):
                 q = parse_qs(urlparse(self.path).query)
                 since = parse_ts(q["since"][0]) if q.get("since") else None
@@ -1525,6 +1545,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes(404, b'{"error":"not found"}', "application/json", "no-store")
         except Exception as exc:  # noqa: BLE001
             return self.send_bytes(500, json.dumps({"error": type(exc).__name__}).encode(), "application/json", "no-store")
+
+    def do_PUT(self):
+        if self.path.split("?", 1)[0] != "/api/weather-alert-settings":
+            return self.send_bytes(404, b'{"error":"not found"}', "application/json", "no-store")
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if not 2 <= size <= 64_000:
+                raise ValueError("invalid body size")
+            payload = json.loads(self.rfile.read(size))
+            status, response = weather_alert_control("PUT", payload)
+            return self.send_bytes(status, json.dumps(response).encode(), "application/json", "no-store")
+        except (ValueError, json.JSONDecodeError) as exc:
+            return self.send_bytes(400, json.dumps({"error": str(exc)[:120]}).encode(), "application/json", "no-store")
+        except Exception as exc:  # noqa: BLE001
+            return self.send_bytes(503, json.dumps({"error": type(exc).__name__}).encode(), "application/json", "no-store")
 
 
 def main():

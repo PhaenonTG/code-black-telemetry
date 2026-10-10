@@ -182,6 +182,7 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 .lane{display:grid;grid-template-columns:52px auto minmax(0,1fr);gap:8px;align-items:center;padding:2px 0}
 .contend{margin:8px 0;padding:8px 10px;border:1px solid var(--warn);background:#2c2208;color:#ffd98a;border-radius:6px;font-weight:700}
 .futurecard{border-style:dashed;color:var(--muted)}
+.alert-control{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.alert-control fieldset{margin:0;padding:10px;border:1px solid var(--line2);border-radius:6px;min-width:0}.alert-control legend{color:#cfcfd6;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}.alert-control label{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;font-size:12px}.alert-control input,.alert-control select{max-width:120px;background:#0d0d10;color:var(--text);border:1px solid var(--line2);border-radius:4px;padding:5px 6px;font:inherit}.alert-control .wide{display:grid;grid-template-columns:1fr 1fr;gap:8px}.alert-control .wide input{max-width:none;width:100%}.alert-save{display:flex;align-items:center;gap:10px;margin-top:10px}.alert-save button{background:var(--red);color:white;border:0;border-radius:4px;padding:7px 11px;font:700 12px var(--sans);cursor:pointer}.alert-save button:disabled{opacity:.5;cursor:wait}.alert-state{font-size:11px;color:var(--muted)}
 .foot{padding:12px 16px 24px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);max-width:2200px;margin:0 auto}
 #empty{padding:30px;text-align:center;color:var(--muted);font-size:14px}
 /* ESP fleet: status remains read-only; operator controls stay behind their own auth. */
@@ -253,6 +254,12 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
       <section class="sect" id="s-streaming"><header><h2>Streaming</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-streaming"></div></section>
       <section class="sect" id="s-radar"><header><h2>Radar</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-radar"></div></section>
       <section class="sect" id="s-weather"><header><h2>Weather intelligence</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-weather"></div></section>
+      <section class="sect" id="s-alert-controls"><header><h2>Weather alert controls</h2><span class="sub">Applies on the next bot poll</span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body"><form id="alert-control-form" class="alert-control" hidden>
+        <fieldset><legend>Alert types</legend><label>TOR warnings <input name="tor" type="checkbox"></label><label>NWWS real-time <input name="nwws" type="checkbox"></label><label>SPC mesoscale discussions <input name="md" type="checkbox"></label><label>SPC Day 1 outlook <input name="outlook" type="checkbox"></label><label>Significant local storm reports <input name="lsr" type="checkbox"></label></fieldset>
+        <fieldset><legend>Chase-area routing</legend><label>Use fresh live GPS <input name="live" type="checkbox"></label><label>Live radius, mi <input name="live-radius" type="number" min="5" max="150"></label><label>Manual radius, mi <input name="manual-radius" type="number" min="5" max="150"></label><label>Manual expiry, min <input name="manual-ttl" type="number" min="5" max="360"></label><div class="wide"><input name="manual-label" placeholder="Manual area label"><input name="manual-lat" placeholder="Latitude" type="number" step="0.0001"><input name="manual-lon" placeholder="Longitude" type="number" step="0.0001"></div></fieldset>
+        <fieldset><legend>Signal thresholds</legend><label>Minimum hail, in <input name="hail" type="number" min="0.75" max="6" step="0.25"></label><label>Minimum wind, mph <input name="wind" type="number" min="40" max="150"></label><label>Day 1 tornado language <input name="outlook-tor" type="checkbox"></label><label>Enhanced risk <input name="enh" type="checkbox"></label><label>Moderate risk <input name="mdt" type="checkbox"></label><label>High risk <input name="high" type="checkbox"></label></fieldset>
+        <fieldset><legend>Fallback areas</legend><p class="note">One area per line: <span class="mono">label | lat | lon | radius mi</span></p><textarea name="fallbacks" rows="5" style="width:100%;background:#0d0d10;color:var(--text);border:1px solid var(--line2);border-radius:4px;padding:6px;font:11px var(--mono)"></textarea></fieldset>
+        <div class="alert-save"><button type="submit">Save weather alert settings</button><span id="alert-control-state" class="alert-state">Loading settings…</span></div></form><div id="alert-control-error" class="emptynote">Loading controls…</div></div></section>
     </div>
     <div class="col-side">
       <section class="sect" id="s-compute"><header><h2>Compute / GPU</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-compute"></div></section>
@@ -964,6 +971,28 @@ $('#tileview').addEventListener('click', () => {
 });
 $('#q').addEventListener('input', applyFilter);
 $('#qclear').addEventListener('click', () => { $('#q').value = ''; applyFilter(); $('#q').focus(); });
+const alertForm = $('#alert-control-form'), alertState = $('#alert-control-state'), alertError = $('#alert-control-error');
+let alertSettings = null;
+function af(name) { return alertForm.elements.namedItem(name); }
+function setAlertSettings(d) {
+  alertSettings = d; const e = d.enabled, r = d.routing, f = d.filters;
+  af('tor').checked=e.tornado_warnings; af('nwws').checked=e.nwws_realtime; af('md').checked=e.spc_md; af('outlook').checked=e.spc_day1; af('lsr').checked=e.significant_lsr;
+  af('live').checked=r.use_live_location; af('live-radius').value=r.live_radius_miles; af('manual-radius').value=r.manual_radius_miles; af('manual-ttl').value=r.manual_ttl_minutes;
+  const m=d.manual_area||{}; af('manual-label').value=m.label||''; af('manual-lat').value=m.lat||''; af('manual-lon').value=m.lon||'';
+  af('hail').value=f.lsr_min_hail_inches; af('wind').value=f.lsr_min_wind_mph; af('outlook-tor').checked=f.outlook_tornado;
+  ['enh','mdt','high'].forEach((x)=>af(x).checked=f.outlook_risks.includes({enh:'enhanced',mdt:'moderate',high:'high'}[x]));
+  af('fallbacks').value=r.fallback_areas.map((a)=>[a.label,a.lat,a.lon,a.radius_miles].join(' | ')).join('\n');
+  alertForm.hidden=false; alertError.hidden=true; alertState.textContent=d.updated_at ? 'Saved ' + new Date(d.updated_at).toLocaleString() : 'Using defaults until first save';
+}
+async function loadAlertSettings() { try { const r=await fetch('api/weather-alert-settings',{cache:'no-store'}); if(!r.ok) throw new Error('control service unavailable'); setAlertSettings(await r.json()); } catch(e) { alertError.textContent='Weather alert controls unavailable: '+e.message; } }
+alertForm.addEventListener('submit', async (ev) => { ev.preventDefault(); if(!alertSettings) return; try {
+  const fallbacks=af('fallbacks').value.split('\n').filter(Boolean).map((line)=>{const p=line.split('|').map((x)=>x.trim()); if(p.length!==4) throw new Error('each fallback area needs label | lat | lon | radius'); return {label:p[0],lat:Number(p[1]),lon:Number(p[2]),radius_miles:Number(p[3])};});
+  const label=af('manual-label').value.trim(), lat=af('manual-lat').value, lon=af('manual-lon').value;
+  if((label||lat||lon) && !(label&&lat&&lon)) throw new Error('manual area needs label, latitude, and longitude');
+  const d={enabled:{tornado_warnings:af('tor').checked,nwws_realtime:af('nwws').checked,spc_md:af('md').checked,spc_day1:af('outlook').checked,significant_lsr:af('lsr').checked},routing:{use_live_location:af('live').checked,live_radius_miles:Number(af('live-radius').value),manual_radius_miles:Number(af('manual-radius').value),manual_ttl_minutes:Number(af('manual-ttl').value),fallback_areas:fallbacks},filters:{lsr_min_hail_inches:Number(af('hail').value),lsr_min_wind_mph:Number(af('wind').value),outlook_tornado:af('outlook-tor').checked,outlook_risks:[af('enh').checked&&'enhanced',af('mdt').checked&&'moderate',af('high').checked&&'high'].filter(Boolean)},manual_area:label?{label,lat:Number(lat),lon:Number(lon),radius_miles:Number(af('manual-radius').value)}:null};
+  alertState.textContent='Saving…'; const r=await fetch('api/weather-alert-settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}); const saved=await r.json(); if(!r.ok) throw new Error(saved.detail||saved.error||'save rejected'); setAlertSettings(saved);
+ } catch(e) { alertState.textContent='Not saved: '+e.message; } });
+loadAlertSettings();
 document.addEventListener('keydown', (e) => {
   if (e.key === '/' && document.activeElement !== $('#q') && !/input|textarea/i.test(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); }
   else if (e.key === 'Escape' && document.activeElement === $('#q')) { $('#q').value = ''; applyFilter(); $('#q').blur(); }
