@@ -94,33 +94,54 @@ class MesonetStatusTests(unittest.TestCase):
         self.assertNotIn("longitude", serialized)
         self.assertNotIn("secret", serialized)
 
-    def test_esp_command_bridge_requires_token_and_inventory_role(self):
-        self.assertEqual(server.esp_management_request("striker-weather", None)[0], 401)
-        self.assertEqual(server.esp_management_request("invented-board", "Bearer " + "x" * 32)[0], 404)
-        with patch.object(server.urllib.request, "urlopen") as fetch:
-            self.assertEqual(server.esp_management_request("striker-weather", "Bearer " + "x" * 32,
+    def test_esp_command_bridge_requires_server_credential_and_inventory_role(self):
+        with patch.object(server, "esp_admin_token", return_value=None):
+            self.assertEqual(server.esp_management_request("striker-weather")[0], 503)
+        self.assertEqual(server.esp_management_request("invented-board")[0], 404)
+        with patch.object(server, "esp_admin_token", return_value="x" * 32), \
+             patch.object(server.urllib.request, "urlopen") as fetch:
+            self.assertEqual(server.esp_management_request("striker-weather",
                                                             {"action": "shell", "payload": {}})[0], 400)
             fetch.assert_not_called()
 
-    def test_esp_command_bridge_requires_fresh_report(self):
-        report = {"received_age_s": 44, "diagnostics": {"config_revision": 3}}
-        with patch.object(server.urllib.request, "urlopen", return_value=Response(report)) as fetch:
-            status, result = server.esp_management_request("striker-weather", "Bearer " + "x" * 32,
-                                                          {"action": "reboot", "payload": {}})
+    def test_esp_configuration_requires_prior_report(self):
+        report = {"received_age_s": None, "diagnostics": None}
+        with patch.object(server, "esp_admin_token", return_value="x" * 32), \
+             patch.object(server.urllib.request, "urlopen", return_value=Response(report)) as fetch:
+            status, result = server.esp_management_request("striker-weather",
+                                                          {"action": "sensors", "payload": {}})
         self.assertEqual(status, 409)
-        self.assertIn("fresh", result["error"])
+        self.assertIn("prior management report", result["error"])
         self.assertEqual(fetch.call_count, 1)
 
     def test_esp_command_bridge_forwards_only_to_core(self):
         report = {"received_age_s": 2, "diagnostics": {"config_revision": 3}}
         queued = {"sequence": 33, "role": "striker-weather", "action": "diagnostics", "status": "queued"}
-        with patch.object(server.urllib.request, "urlopen", side_effect=[Response(report), Response(queued)]) as fetch:
-            status, result = server.esp_management_request("striker-weather", "Bearer " + "x" * 32,
+        with patch.object(server, "esp_admin_token", return_value="x" * 32), \
+             patch.object(server.urllib.request, "urlopen", side_effect=[Response(report), Response(queued)]) as fetch:
+            status, result = server.esp_management_request("striker-weather",
                                                           {"action": "diagnostics", "payload": {}})
         self.assertEqual(status, 200)
         self.assertEqual(result["sequence"], 33)
         self.assertEqual(fetch.call_args.args[0].full_url,
                          server.ESP_MANAGEMENT_URL + "/striker-weather/commands")
+        self.assertEqual(fetch.call_args.args[0].get_header("Authorization"), "Bearer " + "x" * 32)
+
+    def test_status_session_is_signed_and_expires(self):
+        with patch.object(server, "esp_admin_token", return_value="x" * 32):
+            cookie = server.status_session("glenn", at=1000)
+            self.assertEqual(server.status_session_actor("cb_status_session=" + cookie, at=1001), "glenn")
+            self.assertIsNone(server.status_session_actor("cb_status_session=" + cookie + "bad", at=1001))
+            self.assertIsNone(server.status_session_actor("cb_status_session=" + cookie,
+                                                            at=1000 + server.STATUS_SESSION_SECONDS + 1))
+
+    def test_status_sign_in_delegates_to_existing_operator_account(self):
+        with patch.object(server.urllib.request, "urlopen", return_value=Response({})) as fetch:
+            self.assertTrue(server.status_verify_operator("glenn", "test-password"))
+        request = fetch.call_args.args[0]
+        self.assertEqual(request.full_url, "http://127.0.0.1:8796/services")
+        self.assertTrue(request.get_header("Authorization").startswith("Basic "))
+        self.assertFalse(server.status_verify_operator("", "test-password"))
 
 
 if __name__ == "__main__":

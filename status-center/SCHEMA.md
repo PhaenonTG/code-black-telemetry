@@ -32,10 +32,22 @@ or `core-private-pending` for a board awaiting its signed update. The fleet list
 registry-driven; another ESP can be added without changing dashboard layout, but
 Core and firmware still need a unique managed role before it can receive commands.
 The ESP command pane uses separate `GET /api/esp-management/{role}` and
-`POST /api/esp-management/{role}/commands` endpoints. Both require the Core ESP
-operator bearer token, which remains in browser-tab memory and is forwarded to
-Core without storage. POST also requires same-origin JSON and a fresh board
-management report. The public status document remains read-only and secret-free.
+`POST /api/esp-management/{role}/commands` endpoints. The dashboard page and
+these endpoints require a signed, 30-day status session established with the
+existing operations account. Core's ESP credential stays in a server-only file;
+it is never sent to the browser. POST also requires same-origin JSON. Core
+validates the role, action, release version, and configuration revision. A
+command queued while a board is offline expires after one hour. The public
+`/api/status` document remains read-only and secret-free.
+
+On Core, `ops/provision_esp_admin.py` copies only the ESP admin token from the
+Core API environment into `/srv/codeblack/config/status-esp/admin.token`
+(root:codeblack, 0640). Re-run it after rotating that Core token; rotation also
+invalidates existing dashboard sessions. The login checks the existing local
+alert-actions account, so no second password file is created. The signed
+status-session cookie is Secure, HttpOnly, SameSite=Strict, scoped to `/status`,
+and expires after 30 days. The read-only status API remains available to
+existing Tailnet consumers without a login.
 
 ## notifications
 `{server:{url, access, authentication, retention_days, service, state, last_success},

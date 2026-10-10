@@ -8,15 +8,22 @@ The ordinary status document is read-only. The separate ESP bridge forwards only
 authenticated, role-bound management requests to Core; it never stores a token.
 """
 import argparse
+import base64
+import binascii
+import hashlib
+import hmac
+import html
 import json
 import mimetypes
 import os
 import posixpath
 import re
+import secrets
 import socket
 import struct
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -25,11 +32,12 @@ from urllib.parse import parse_qs, urlparse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import SimpleCookie
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import collector  # noqa: E402
 
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 SCHEMA = "codeblack.status.v1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 REGISTRY_PATH = os.environ.get("STATUS_CENTER_REGISTRY", os.path.join(HERE, "registry.json"))
@@ -44,6 +52,10 @@ WEATHER_ALERT_CONTROL_URL = os.environ.get("WEATHER_ALERT_CONTROL_URL", "").rstr
 WEATHER_ALERT_CONTROL_TOKEN = os.environ.get("WEATHER_ALERT_CONTROL_TOKEN", "")
 ESP_MANAGEMENT_URL = os.environ.get("ESP_MANAGEMENT_URL", "http://127.0.0.1:8000/api/mesonet/v1/manage").rstrip("/")
 ESP_COMMAND_ORIGIN = os.environ.get("ESP_COMMAND_ORIGIN", "https://codeblack-core.tail1d0673.ts.net")
+ESP_ADMIN_TOKEN_FILE = os.environ.get("ESP_ADMIN_TOKEN_FILE", "/srv/codeblack/config/status-esp/admin.token")
+STATUS_SESSION_SECONDS = 30 * 24 * 60 * 60
+RADAR_CONTROL_CONFIG_PATH = os.environ.get("RADAR_CONTROL_CONFIG_PATH", "/srv/codeblack/data/radar-worker/radar-control.json")
+RADAR_CONTROL_INTERVALS = (300, 600, 900, 1800)
 
 REG = json.load(open(REGISTRY_PATH, encoding="utf-8"))
 DEF = REG["defaults"]
@@ -778,6 +790,7 @@ def radar_control_view(document, telemetry):
             "fabric": {"state": "UNKNOWN", "snapshot_age_s": None, "eligible_chasers": None, "skipped_chasers": None},
             "selection": {"primary": [], "secondary": []},
             "work": {"active_site": None, "queued_sites": 0, "last_success_at": None, "last_error": None},
+            "configuration": {"primary_prewarm_enabled": None, "primary_interval_seconds": None, "secondary_prewarm_enabled": False},
             "capabilities": {"closest_site_selection": "NOT_DEPLOYED", "secondary_prewarm": "NOT_DEPLOYED", "configuration_ui": "NOT_DEPLOYED"},
             "telemetry": telemetry,
         }
@@ -785,6 +798,7 @@ def radar_control_view(document, telemetry):
     selection = document.get("selection") if isinstance(document.get("selection"), dict) else {}
     work = document.get("work") if isinstance(document.get("work"), dict) else {}
     caps = document.get("capabilities") if isinstance(document.get("capabilities"), dict) else {}
+    config = document.get("configuration") if isinstance(document.get("configuration"), dict) else {}
     def sites(value):
         return [{"site_id": item.get("site_id"), "distance_km": item.get("distance_km")}
                 for item in value if isinstance(item, dict)] if isinstance(value, list) else []
@@ -798,6 +812,9 @@ def radar_control_view(document, telemetry):
         "selection": {"primary": sites(selection.get("primary")), "secondary": sites(selection.get("secondary"))},
         "work": {"active_site": work.get("active_site"), "queued_sites": work.get("queued_sites"),
                  "last_success_at": work.get("last_success_at"), "last_error": work.get("last_error")},
+        "configuration": {"primary_prewarm_enabled": config.get("primary_prewarm_enabled"),
+                          "primary_interval_seconds": config.get("primary_interval_seconds"),
+                          "secondary_prewarm_enabled": False},
         "capabilities": {key: str(caps.get(key) or "UNKNOWN").upper() for key in
                          ("closest_site_selection", "secondary_prewarm", "configuration_ui")},
         "telemetry": telemetry,
@@ -1504,41 +1521,148 @@ def weather_alert_control(method, body=None):
         return exc.code, {"error": "upstream_rejected"}
 
 
+def radar_control_settings():
+    """Read only the small, non-sensitive primary-prewarm policy document."""
+    defaults = {"primary_prewarm_enabled": True, "primary_interval_seconds": 300, "secondary_prewarm_enabled": False}
+    try:
+        with open(RADAR_CONTROL_CONFIG_PATH, encoding="utf-8") as handle:
+            value = json.load(handle)
+        if not isinstance(value, dict):
+            return defaults
+        enabled = value.get("primary_prewarm_enabled") is not False
+        interval = value.get("primary_interval_seconds")
+        if interval not in RADAR_CONTROL_INTERVALS:
+            interval = defaults["primary_interval_seconds"]
+        return {"primary_prewarm_enabled": enabled, "primary_interval_seconds": interval, "secondary_prewarm_enabled": False}
+    except (OSError, ValueError, TypeError):
+        return defaults
+
+
+def update_radar_control_settings(payload):
+    """Validate and atomically replace the allowlisted primary-only policy."""
+    if not isinstance(payload, dict) or set(payload) != {"primary_prewarm_enabled", "primary_interval_seconds"}:
+        raise ValueError("unsupported settings document")
+    enabled = payload["primary_prewarm_enabled"]
+    interval = payload["primary_interval_seconds"]
+    if not isinstance(enabled, bool) or isinstance(interval, bool) or interval not in RADAR_CONTROL_INTERVALS:
+        raise ValueError("invalid radar control settings")
+    value = {"primary_prewarm_enabled": enabled, "primary_interval_seconds": interval, "secondary_prewarm_enabled": False}
+    directory = os.path.dirname(RADAR_CONTROL_CONFIG_PATH)
+    fd, temp_name = tempfile.mkstemp(prefix=".radar-control-", dir=directory, text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(value, handle, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp_name, 0o640)
+        os.replace(temp_name, RADAR_CONTROL_CONFIG_PATH)
+    except Exception:
+        try:
+            os.unlink(temp_name)
+        except OSError:
+            pass
+        raise
+    return value
+
+
+def radar_control_origin_ok(headers):
+    return headers.get("Origin") == ESP_COMMAND_ORIGIN and headers.get("Sec-Fetch-Site") != "cross-site" and headers.get("X-CodeBlack-Radar-Control") == "1"
+
+
 def esp_managed_roles():
     """Inventory drives the bridge; Core remains the authority on valid roles."""
     return {item["role"] for item in REG["esp_fleet"]["devices"]
             if item.get("management") in ("core-private", "core-private-pending")}
 
 
-def esp_operator_token(header):
-    if not isinstance(header, str) or not header.startswith("Bearer "):
+def esp_admin_token():
+    try:
+        token = open(ESP_ADMIN_TOKEN_FILE, encoding="ascii").read().strip()
+    except OSError:
         return None
-    token = header[7:]
-    return header if 16 <= len(token) <= 512 and all(33 <= ord(char) <= 126 for char in token) else None
+    return token if 16 <= len(token) <= 512 and all(33 <= ord(char) <= 126 for char in token) else None
 
 
-def esp_management_request(role, authorization, command=None):
+def status_session(actor, at=None):
+    token = esp_admin_token()
+    if not token:
+        raise RuntimeError("ESP operator credential unavailable")
+    expiry = int((now() if at is None else at) + STATUS_SESSION_SECONDS)
+    raw = f"{actor}|{expiry}|{secrets.token_hex(12)}".encode()
+    encoded = base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+    signature = hmac.new(token.encode(), b"status-session-v1:" + raw, hashlib.sha256).hexdigest()
+    return encoded + "." + signature
+
+
+def status_session_actor(header, at=None):
+    token = esp_admin_token()
+    if not token:
+        return None
+    try:
+        cookie = SimpleCookie(); cookie.load(header or "")
+        value = cookie["cb_status_session"].value
+        encoded, signature = value.rsplit(".", 1)
+        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+        expected = hmac.new(token.encode(), b"status-session-v1:" + raw, hashlib.sha256).hexdigest()
+        actor, expiry, _nonce = raw.decode().split("|", 2)
+        if hmac.compare_digest(signature, expected) and actor and int(expiry) > (now() if at is None else at):
+            return actor
+    except (KeyError, ValueError, UnicodeError, TypeError, binascii.Error):
+        pass
+    return None
+
+
+def status_login_page(error=""):
+    message = '<p role="alert">' + html.escape(error) + '</p>' if error else ""
+    return ("<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+            "<title>Code Black · Status sign-in</title><style>:root{color-scheme:dark;font-family:system-ui}"
+            "body{margin:0;min-height:100vh;display:grid;place-items:center;background:#09090b;color:#e9e9ec}"
+            "main{width:min(440px,92vw);padding:30px;border:1px solid #33333c;border-radius:14px;background:#17171b}"
+            "h1{margin:0 0 10px}p{color:#abb5c3}label{display:block;margin:16px 0 5px}"
+            "input{width:100%;box-sizing:border-box;padding:12px;background:#0d0d10;color:white;border:1px solid #555;border-radius:6px}"
+            "button{margin-top:20px;padding:12px 16px;border:0;border-radius:6px;background:#e5252a;color:white;font:inherit;font-weight:700}"
+            "</style><main><h1>Code Black Status</h1><p>Sign in once with your existing operations account."
+            " Your session stays active for 30 days unless the Core credential changes.</p>" + message
+            + "<form method=post action='/status/login'><label>Username<input name=username autocomplete=username required></label>"
+            "<label>Password<input name=password type=password autocomplete=current-password required></label>"
+            "<button type=submit>Sign in</button></form></main></html>").encode()
+
+
+def status_verify_operator(username, password):
+    if not username or not password or len(username) > 128 or len(password) > 512:
+        return False
+    encoded = base64.b64encode((username + ":" + password).encode()).decode()
+    request = urllib.request.Request("http://127.0.0.1:8796/services", headers={"Authorization": "Basic " + encoded})
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status == 200
+    except (urllib.error.HTTPError, OSError, ValueError):
+        return False
+
+
+def esp_management_request(role, command=None):
     """Forward one allowlisted request; never persist, echo, or log a credential."""
     if role not in esp_managed_roles():
         return 404, {"error": "unknown managed board"}
-    if not esp_operator_token(authorization):
-        return 401, {"error": "Core operator token required"}
+    token = esp_admin_token()
+    if not token:
+        return 503, {"error": "Core ESP command credential unavailable"}
     if command is not None:
         if not isinstance(command, dict) or command.get("action") not in {"diagnostics", "sensors", "networks", "reboot", "update"}:
             return 400, {"error": "unsupported command"}
         if set(command) - {"action", "payload", "ttl_s", "expected_revision", "request_id"}:
             return 400, {"error": "unsupported command fields"}
-        status, current = esp_management_request(role, authorization)
+        status, current = esp_management_request(role)
         if status != 200:
             return status, current
-        age = current.get("received_age_s") if isinstance(current, dict) else None
-        if not isinstance(age, int) or age > 30 or not isinstance(current.get("diagnostics"), dict):
-            return 409, {"error": "Board must have a fresh management report before a command can be sent"}
+        if command["action"] in {"sensors", "networks"} and not isinstance(current.get("diagnostics"), dict):
+            return 409, {"error": "Configuration requires a prior management report"}
     body = json.dumps(command, separators=(",", ":")).encode() if command is not None else None
     request = urllib.request.Request(
         ESP_MANAGEMENT_URL + "/" + role + ("/commands" if command is not None else ""),
         data=body, method="POST" if command is not None else "GET",
-        headers={"Authorization": authorization, "Content-Type": "application/json", "User-Agent": "CodeBlack-StatusCenter/1.0"})
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json", "User-Agent": "CodeBlack-StatusCenter/1.0"})
     try:
         response = urllib.request.urlopen(request, timeout=8)
     except urllib.error.HTTPError as exc:
@@ -1564,13 +1688,15 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def send_bytes(self, status, body, ctype, cache):
+    def send_bytes(self, status, body, ctype, cache, extra_headers=None):
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", cache)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
+        for name, value in (extra_headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)
@@ -1581,10 +1707,19 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         try:
+            if path == "/login":
+                return self.send_bytes(200, status_login_page(), "text/html; charset=utf-8", "no-store")
+            if path == "/logout":
+                return self.send_bytes(303, b"", "text/plain", "no-store", {
+                    "Location": "/status/login", "Set-Cookie": "cb_status_session=; Path=/status; Secure; HttpOnly; SameSite=Strict; Max-Age=0"})
             match = re.fullmatch(r"/api/esp-management/([a-z][a-z0-9-]{0,31})", path)
             if match:
-                status, payload = esp_management_request(match.group(1), self.headers.get("Authorization"))
+                if not status_session_actor(self.headers.get("Cookie")):
+                    return self.send_bytes(401, b'{"error":"status sign-in required"}', "application/json", "no-store")
+                status, payload = esp_management_request(match.group(1))
                 return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
+            if path in ("/", "/index.html") and not status_session_actor(self.headers.get("Cookie")):
+                return self.send_bytes(303, b"", "text/plain", "no-store", {"Location": "/status/login"})
             if path == "/api/health":
                 return self.send_bytes(200, json.dumps({"ok": True, "version": VERSION, "uptime_s": int(now() - START), "probes": len(PROBES)}).encode(), "application/json", "no-store")
             if path == "/api/status":
@@ -1592,6 +1727,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/weather-alert-settings":
                 status, payload = weather_alert_control("GET")
                 return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
+            if path == "/api/radar-control-settings":
+                return self.send_bytes(200, json.dumps(radar_control_settings()).encode(), "application/json", "no-store")
             if path in ("/api/changes", "/api/status/changes"):
                 q = parse_qs(urlparse(self.path).query)
                 since = parse_ts(q["since"][0]) if q.get("since") else None
@@ -1609,9 +1746,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
+        if path == "/login":
+            return self.status_login()
         match = re.fullmatch(r"/api/esp-management/([a-z][a-z0-9-]{0,31})/commands", path)
         if not match:
             return self.send_bytes(404, b'{"error":"not found"}', "application/json", "no-store")
+        if not status_session_actor(self.headers.get("Cookie")):
+            return self.send_bytes(401, b'{"error":"status sign-in required"}', "application/json", "no-store")
         if self.headers.get("Origin") != ESP_COMMAND_ORIGIN or self.headers.get("Sec-Fetch-Site") == "cross-site" or self.headers.get("X-Mesonet-UI") != "1":
             return self.send_bytes(403, b'{"error":"origin check failed"}', "application/json", "no-store")
         if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
@@ -1621,22 +1762,53 @@ class Handler(BaseHTTPRequestHandler):
             if not 2 <= size <= 5000:
                 raise ValueError("invalid command size")
             command = json.loads(self.rfile.read(size))
-            status, payload = esp_management_request(match.group(1), self.headers.get("Authorization"), command)
+            status, payload = esp_management_request(match.group(1), command)
             return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
         except (ValueError, UnicodeError):
             return self.send_bytes(400, b'{"error":"invalid command JSON"}', "application/json", "no-store")
         except Exception:
             return self.send_bytes(503, b'{"error":"Core management unavailable"}', "application/json", "no-store")
 
-    def do_PUT(self):
-        if self.path.split("?", 1)[0] != "/api/weather-alert-settings":
-            return self.send_bytes(404, b'{"error":"not found"}', "application/json", "no-store")
+    def status_login(self):
+        if self.headers.get("Sec-Fetch-Site") == "cross-site" or (self.headers.get("Origin") and self.headers.get("Origin") != ESP_COMMAND_ORIGIN):
+            return self.send_bytes(403, status_login_page("Origin check failed."), "text/html; charset=utf-8", "no-store")
+        referer = self.headers.get("Referer", "")
+        if referer and not referer.startswith(ESP_COMMAND_ORIGIN + "/status/"):
+            return self.send_bytes(403, status_login_page("Origin check failed."), "text/html; charset=utf-8", "no-store")
+        if not self.headers.get("Content-Type", "").startswith("application/x-www-form-urlencoded"):
+            return self.send_bytes(415, status_login_page("Form required."), "text/html; charset=utf-8", "no-store")
         try:
             size = int(self.headers.get("Content-Length", "0"))
-            if not 2 <= size <= 64_000:
+            if not 1 <= size <= 2048:
+                raise ValueError("invalid form")
+            form = parse_qs(self.rfile.read(size).decode("utf-8"), keep_blank_values=True)
+            username = form.get("username", [""])[0]
+            password = form.get("password", [""])[0]
+            if not status_verify_operator(username, password):
+                return self.send_bytes(401, status_login_page("Incorrect username or password."), "text/html; charset=utf-8", "no-store")
+            cookie = status_session(username)
+            return self.send_bytes(303, b"", "text/plain", "no-store", {
+                "Location": "/status/", "Set-Cookie": f"cb_status_session={cookie}; Path=/status; Secure; HttpOnly; SameSite=Strict; Max-Age={STATUS_SESSION_SECONDS}"})
+        except (ValueError, UnicodeError, RuntimeError):
+            return self.send_bytes(400, status_login_page("Sign-in unavailable."), "text/html; charset=utf-8", "no-store")
+
+    def do_PUT(self):
+        path = self.path.split("?", 1)[0]
+        if path not in ("/api/weather-alert-settings", "/api/radar-control-settings"):
+            return self.send_bytes(404, b'{"error":"not found"}', "application/json", "no-store")
+        if not status_session_actor(self.headers.get("Cookie")):
+            return self.send_bytes(401, b'{"error":"status sign-in required"}', "application/json", "no-store")
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if not 2 <= size <= (1_024 if path == "/api/radar-control-settings" else 64_000):
                 raise ValueError("invalid body size")
             payload = json.loads(self.rfile.read(size))
-            status, response = weather_alert_control("PUT", payload)
+            if path == "/api/radar-control-settings":
+                if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json" or not radar_control_origin_ok(self.headers):
+                    return self.send_bytes(403, b'{"error":"private UI origin check failed"}', "application/json", "no-store")
+                status, response = 200, update_radar_control_settings(payload)
+            else:
+                status, response = weather_alert_control("PUT", payload)
             return self.send_bytes(status, json.dumps(response).encode(), "application/json", "no-store")
         except (ValueError, json.JSONDecodeError) as exc:
             return self.send_bytes(400, json.dumps({"error": str(exc)[:120]}).encode(), "application/json", "no-store")
