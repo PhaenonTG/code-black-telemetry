@@ -45,6 +45,11 @@ class WeatherAndDiskStatusTests(unittest.TestCase):
         self.assertEqual(server.disk_state({"percent": 97.5, "free_gb": 25}), "CRITICAL")
         self.assertEqual(server.disk_state({"percent": 50, "free_gb": 9}), "CRITICAL")
 
+    def test_phaenon3_disk_alert_begins_at_97_percent(self):
+        self.assertEqual(server.disk_state({"percent": 95.4, "free_gb": 43.1}, "phaenon3"), "HEALTHY")
+        self.assertEqual(server.disk_state({"percent": 97, "free_gb": 27.9}, "phaenon3"), "WARNING")
+        self.assertEqual(server.disk_state({"percent": 99, "free_gb": 9.3}, "phaenon3"), "CRITICAL")
+
     def test_busy_compute_is_not_an_incident_transition(self):
         self.assertEqual(server.state_rank("BUSY"), server.state_rank("HEALTHY"))
 

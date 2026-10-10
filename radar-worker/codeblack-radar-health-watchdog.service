@@ -1,0 +1,15 @@
+[Unit]
+Description=Code Black radar worker HTTP recovery check
+After=codeblack-radar-worker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /srv/codeblack/services/radar-health-watchdog/health_watchdog.py
+User=root
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/codeblack/data/radar-worker
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=

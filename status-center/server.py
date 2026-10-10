@@ -376,8 +376,8 @@ def tel(*pids):
             "age_s": int(now() - min(succ)) if succ else None, "max_age_s": max(p.stale_after for p in ps), "stale": any(p.stale for p in ps)}
 
 
-def disk_state(d):
-    t = TH["disk"]
+def disk_state(d, host_id=None):
+    t = TH.get(f"{host_id}_disk", TH["disk"])
     if d["percent"] >= t["crit_pct"] or d["free_gb"] < t["crit_free_gb"]:
         return "CRITICAL"
     if d["percent"] >= t["warn_pct"] or d["free_gb"] < t["warn_free_gb"]:
@@ -467,7 +467,16 @@ def service_metrics(svc, sig):
         if rj:
             m += [("freshness", rj.get("freshness_state")), ("age_s", rj.get("age_seconds")), ("frames", len(rj.get("frames", [])))]
     elif sid == "radar-worker":
-        m += [("health meaning", "process liveness only")]
+        m += [("health meaning", "process and HTTP responsiveness; not data freshness")]
+    elif sid == "radar-health-watchdog":
+        doc, _t, fresh = coll("core")
+        watchdog = (((doc or {}).get("files") or {}).get("radar-health-watchdog") or {}).get("json") if fresh else None
+        if watchdog:
+            m += [("last check", iso(watchdog.get("last_check")) if watchdog.get("last_check") else None),
+                  ("HTTP healthy", watchdog.get("healthy")), ("consecutive failures", watchdog.get("failures")),
+                  ("restarts", watchdog.get("restart_count")),
+                  ("last restart", iso(watchdog.get("last_restart")) if watchdog.get("last_restart") else None),
+                  ("last restart exit", watchdog.get("restart_result"))]
     elif sid == "ai-router" and j:
         m += [("build", j.get("build")), ("ollama reachable", j.get("ollama_reachable")), ("models", ", ".join(j.get("models_available") or []) or None), ("started", j.get("started_at"))]
     elif sid == "media-lab" and j:
@@ -647,7 +656,7 @@ def build_host(h, services):
             hm = {"memory": {"total_mb": (ms.get("memory") or {}).get("total_mib"), "used_mb": None, "percent": (ms.get("memory") or {}).get("load_pct")}, "disks": [
                 {"mount": "C:\\", "used_gb": None, "total_gb": None, "free_gb": None, "percent": None}]}
     for dsk in hm.get("disks", []) or []:
-        e = dict(dsk); e["state"] = disk_state(dsk) if dsk.get("percent") is not None else "UNKNOWN"; disks.append(e)
+        e = dict(dsk); e["state"] = disk_state(dsk, h["id"]) if dsk.get("percent") is not None else "UNKNOWN"; disks.append(e)
     g = (doc or {}).get("gpu")
     if g:
         gpu = {"name": g["name"], "vram_used_mb": g["vram_used_mb"], "vram_total_mb": g["vram_total_mb"], "utilization": g["utilization"], "temperature_c": g["temperature_c"]}
@@ -752,7 +761,7 @@ def build_radar(services_by_id):
     if not rj or not rj.get("latest"):
         return {"state": "NOT_AVAILABLE", "product": None, "latest": None, "manifest_health": {"ok": False, "observed_at": iso(PROBES["radar_product"].last_attempt), "age_s": None},
                 "worker": {"state": services_by_id["radar-product"]["state"], "version": None, "consecutive_failures": None, "last_error": PROBES["radar_product"].last_error},
-                "legacy_worker": {"state": services_by_id["radar-worker"]["state"], "note": "KSGF single-site worker: health is process liveness only"}, "link": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json", "telemetry": tel("radar_product")}
+                "legacy_worker": {"state": services_by_id["radar-worker"]["state"], "note": "KSGF single-site worker: health checks process and HTTP, not data freshness"}, "link": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json", "telemetry": tel("radar_product")}
     L, w = rj["latest"], rj.get("worker", {})
     age = int(now() - parse_ts(rj["generated_time"]) + rj["age_seconds"]) if rj.get("generated_time") and PROBES["radar_product"].last_success else rj["age_seconds"]
     state = rj["freshness_state"]
@@ -763,7 +772,7 @@ def build_radar(services_by_id):
             "latest": {"frame_id": L["frame_id"], "observation_time": L["observation_time"], "source_received_time": L["source_received_time"], "published_time": L["published_time"], "age_s": age, "pipeline_delay_s": L["pipeline_delay_seconds"]},
             "manifest_health": {"ok": bool(PROBES["radar_product"].ok), "observed_at": iso(PROBES["radar_product"].last_attempt), "age_s": int(now() - PROBES["radar_product"].last_attempt) if PROBES["radar_product"].last_attempt else None},
             "worker": {"state": services_by_id["radar-product"]["state"], "version": (pjson("radar_product_health") or {}).get("version"), "consecutive_failures": w.get("consecutive_failures"), "last_error": w.get("last_error")},
-            "legacy_worker": {"state": services_by_id["radar-worker"]["state"], "note": "KSGF single-site worker (VEL/SRV/CC): health is process liveness only, not data freshness"},
+            "legacy_worker": {"state": services_by_id["radar-worker"]["state"], "note": "KSGF single-site worker (VEL/SRV/CC): health checks process and HTTP, not data freshness"},
             "link": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json", "telemetry": tel("radar_product")}
 
 

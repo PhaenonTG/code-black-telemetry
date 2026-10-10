@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Code Black radar worker HTTP each minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=codeblack-radar-health-watchdog.service
+
+[Install]
+WantedBy=timers.target

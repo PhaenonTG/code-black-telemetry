@@ -102,7 +102,7 @@ No client query history is ever included.
 verification report. A newer dated directory alone cannot advance them or make the
 backup healthy. `detail` distinguishes the newest directory from the verified
 snapshot; a mismatch is degraded until that exact snapshot is verified.
-Disk state thresholds: HEALTHY, WARNING (>=85% used or <25 GB free), CRITICAL (>=92% used or <10 GB free) - rendered via `state`
+Disk state thresholds: Core/Edge WARNING (>=85% used or <25 GB free), CRITICAL (>=97% used or <10 GB free). PHAENON3 WARNING (>=97% used or <10 GB free), CRITICAL (>=99% used or <5 GB free). Rendered via `state`
 values `HEALTHY | WARNING | CRITICAL | UNKNOWN`.
 
 ## links[] and address_book[]

@@ -38,6 +38,12 @@
       "warn_free_gb": 25,
       "crit_free_gb": 10
     },
+    "phaenon3_disk": {
+      "warn_pct": 97,
+      "crit_pct": 99,
+      "warn_free_gb": 10,
+      "crit_free_gb": 5
+    },
     "weather_ingest_s": {
       "fresh": 5400,
       "aging": 10800,
@@ -81,6 +87,7 @@
           "mediamtx",
           "codeblack-monitor",
           "codeblack-radar-worker",
+          "codeblack-radar-health-watchdog.timer",
           "codeblack-radar-product",
           "codeblack-overlay",
           "codeblack-overlay-dev",
@@ -107,6 +114,11 @@
               "error",
               "coverage"
             ]
+          },
+          {
+            "name": "radar-health-watchdog",
+            "path": "/srv/codeblack/data/radar-worker/health-watchdog.json",
+            "pick": ["last_check", "healthy", "failures", "last_restart", "restart_count", "restart_result"]
           }
         ],
         "symlinks": [
@@ -921,7 +933,7 @@
       "name": "Radar Worker (KSGF single-site)",
       "host": "core",
       "category": "radar",
-      "role": "Client-demand single-site NEXRAD (VEL/SRV/CC); health is process liveness only",
+      "role": "Client-demand single-site NEXRAD (VEL/SRV/CC); health checks process and HTTP, not data freshness",
       "unit": "codeblack-radar-worker",
       "probe": "radar_worker",
       "deps": [],
@@ -931,6 +943,18 @@
         "health": "http://127.0.0.1:8787/api/v1/radar/health"
       },
       "docs": "radar-worker/worker.cjs (Chase repo)"
+    },
+    {
+      "id": "radar-health-watchdog",
+      "name": "Radar HTTP Recovery Watchdog",
+      "host": "core",
+      "category": "radar",
+      "role": "Restarts an HTTP-stuck radar worker after four failed checks; 15-minute cooldown",
+      "unit": "codeblack-radar-health-watchdog.timer",
+      "informational": true,
+      "host_impact": false,
+      "deps": ["radar-worker"],
+      "docs": "radar-worker/HEALTH-WATCHDOG.md"
     },
     {
       "id": "overlay",
