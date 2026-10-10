@@ -504,14 +504,14 @@ R.esp = (d) => {
     h('p', 'note', 'SSID/priority handoff snapshot only. Passwords are never shown; live board configuration may differ.')
   ]));
   const controls = [h('h3', null, 'Management & recovery')];
-  if (selected.management === 'core-private') {
-    controls.push(h('p', 'esp-control-note', 'Nick boards support Core-queued diagnostics, sensor settings, Wi-Fi changes, reboot, and explicitly versioned signed OTA. A separate operator session is required.'));
+  if (selected.management === 'core-private' || selected.management === 'core-private-pending') {
+    controls.push(h('p', 'esp-control-note', selected.management === 'core-private-pending' ? 'Core remote commands are staged for this board. They become available after its signed update installs and a fresh management report arrives.' : 'Core-queued diagnostics, sensor settings, Wi-Fi changes, reboot, and explicitly versioned signed OTA are available through a separate operator session.'));
     const copy = h('button', 'esp-action', 'Copy Phaenon3 launch command', {type:'button'});
     copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText("& 'C:\\CodeBlack\\Projects\\SpencerEsp\\firmware\\mesonet-idf\\tools\\Start-MesonetManagement.ps1'"); copy.textContent = 'Copied'; } catch (_) { copy.textContent = 'Clipboard unavailable'; } });
     controls.push(h('div', 'esp-controls', copy));
     controls.push(h('p', 'esp-control-note', 'Run the copied script in PowerShell on Phaenon3. It opens a private, 30-minute local session. This dashboard does not hold the admin credential or send commands.'));
   } else {
-    controls.push(h('p', 'esp-control-note', 'This Spencer board supports signed automatic OTA and its authenticated local HTTPS page. Core remote commands are not enrolled for this role yet.'));
+    controls.push(h('p', 'esp-control-note', 'This board supports signed automatic OTA and its authenticated local HTTPS page. Core remote commands are not enrolled for this role yet.'));
   }
   const localInput = h('input', null, null, {type:'text', placeholder:'Board IPv4 address on your Wi-Fi', 'aria-label':'Board local IPv4 address', inputmode:'decimal'});
   localInput.value = S.espLocal;
@@ -665,6 +665,23 @@ R.radar = (d) => {
     kv('Last error', isNull(W.last_error) ? h('span', 'muted', 'none') : h('span', 'err', W.last_error)),
     LG ? kv('Legacy worker', h('span', null, [chip(LG.state), ' ', h('span', 'muted small', LG.note || '')])) : null,
   ], r.telemetry));
+  const C = r.control || {};
+  const F = C.fabric || {}, S = C.selection || {}, Q = C.work || {}, caps = C.capabilities || {};
+  const siteList = (items) => !items || !items.length ? h('span', 'muted', 'none') : h('span', 'mono', items.map((x) => x.site_id + (isNull(x.distance_km) ? '' : ' (' + x.distance_km + ' km)')).join(', '));
+  box.appendChild(card(C.state === 'NOT_DEPLOYED' ? 'futurecard' : '', [
+    h('div', 'hd', [h('h3', null, 'Chase-aware radar control'), chip(C.state || 'UNKNOWN', C.telemetry), ' ', h('span', 'muted small', C.reason || '')]),
+    kv('Operating mode', chip(C.mode || 'UNKNOWN')),
+    kv('Fabric location feed', h('span', null, [chip(F.state || 'UNKNOWN'), ' ', h('span', 'muted small', isNull(F.snapshot_age_s) ? 'age unknown' : 'age ' + durS(F.snapshot_age_s))])),
+    kv('Eligible / skipped chasers', nz(F.eligible_chasers) + ' / ' + nz(F.skipped_chasers)),
+    kv('Primary sites', siteList(S.primary)), kv('Secondary queue', siteList(S.secondary)),
+    kv('Active / queued work', nz(Q.active_site) + ' / ' + nz(Q.queued_sites)),
+    kv('Last selection success', tm(Q.last_success_at)),
+    isNull(Q.last_error) ? null : kv('Last control error', h('span', 'err', Q.last_error)),
+    kv('Closest-site selection', chip(caps.closest_site_selection || 'UNKNOWN')),
+    kv('Secondary prewarm', chip(caps.secondary_prewarm || 'UNKNOWN')),
+    kv('Private configuration UI', chip(caps.configuration_ui || 'UNKNOWN')),
+    h('div', 'small muted wrap', 'Locations are intentionally not shown here. This read-only panel reports only operational selection telemetry.'),
+  ], C.telemetry));
 };
 R.weather = (d) => {
   const box = $('#b-weather'); box.replaceChildren();

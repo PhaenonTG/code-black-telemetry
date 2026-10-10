@@ -28,7 +28,7 @@ block whose `stale` is true must NOT be shown green (render `STALE TELEMETRY`). 
 Only `state` and `report_age_s` are live Core observations. Firmware, pins, and SSID
 priorities are documented handoff snapshots. No sensor values, coordinates, network
 passwords, or operator credentials appear. `management` is `core-private` for Nick
-or `local-only` for Spencer; it is not an executable browser API.
+or `core-private-pending` for a board awaiting its signed update; it is not an executable browser API.
 
 ## notifications
 `{server:{url, access, authentication, retention_days, service, state, last_success},

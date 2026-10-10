@@ -764,12 +764,47 @@ def build_streaming(services_by_id):
             "monitor": {"state": services_by_id["stream-monitor"]["state"], "url": REG["streaming"]["monitor_url"]}, "broadcast": broadcast, "telemetry": tel("mtx_paths", "monitor_health")}
 
 
+def radar_control_view(document, telemetry):
+    """Expose operational radar selection without Fabric payloads or positions."""
+    if not isinstance(document, dict):
+        return {
+            "state": "NOT_DEPLOYED", "reason": "The chase-aware worker telemetry endpoint is not deployed.",
+            "mode": "NOT_CONFIGURED",
+            "fabric": {"state": "UNKNOWN", "snapshot_age_s": None, "eligible_chasers": None, "skipped_chasers": None},
+            "selection": {"primary": [], "secondary": []},
+            "work": {"active_site": None, "queued_sites": 0, "last_success_at": None, "last_error": None},
+            "capabilities": {"closest_site_selection": "NOT_DEPLOYED", "secondary_prewarm": "NOT_DEPLOYED", "configuration_ui": "NOT_DEPLOYED"},
+            "telemetry": telemetry,
+        }
+    fabric = document.get("fabric") if isinstance(document.get("fabric"), dict) else {}
+    selection = document.get("selection") if isinstance(document.get("selection"), dict) else {}
+    work = document.get("work") if isinstance(document.get("work"), dict) else {}
+    caps = document.get("capabilities") if isinstance(document.get("capabilities"), dict) else {}
+    def sites(value):
+        return [{"site_id": item.get("site_id"), "distance_km": item.get("distance_km")}
+                for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+    return {
+        "state": str(document.get("state") or "UNKNOWN").upper(),
+        "reason": document.get("reason"),
+        "mode": str(document.get("mode") or "UNKNOWN").upper(),
+        "fabric": {"state": str(fabric.get("state") or "UNKNOWN").upper(), "snapshot_age_s": fabric.get("snapshot_age_s"),
+                   "eligible_chasers": fabric.get("eligible_chasers"), "skipped_chasers": fabric.get("skipped_chasers")},
+        "selection": {"primary": sites(selection.get("primary")), "secondary": sites(selection.get("secondary"))},
+        "work": {"active_site": work.get("active_site"), "queued_sites": work.get("queued_sites"),
+                 "last_success_at": work.get("last_success_at"), "last_error": work.get("last_error")},
+        "capabilities": {key: str(caps.get(key) or "UNKNOWN").upper() for key in
+                         ("closest_site_selection", "secondary_prewarm", "configuration_ui")},
+        "telemetry": telemetry,
+    }
+
+
 def build_radar(services_by_id):
     rj = pjson("radar_product")
+    control = radar_control_view(pjson("radar_control"), tel("radar_control"))
     if not rj or not rj.get("latest"):
         return {"state": "NOT_AVAILABLE", "product": None, "latest": None, "manifest_health": {"ok": False, "observed_at": iso(PROBES["radar_product"].last_attempt), "age_s": None},
                 "worker": {"state": services_by_id["radar-product"]["state"], "version": None, "consecutive_failures": None, "last_error": PROBES["radar_product"].last_error},
-                "legacy_worker": {"state": services_by_id["radar-worker"]["state"], "note": "KSGF single-site worker: health checks process and HTTP, not data freshness"}, "link": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json", "telemetry": tel("radar_product")}
+                "legacy_worker": {"state": services_by_id["radar-worker"]["state"], "note": "KSGF single-site worker: health checks process and HTTP, not data freshness"}, "control": control, "link": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json", "telemetry": tel("radar_product")}
     L, w = rj["latest"], rj.get("worker", {})
     age = int(now() - parse_ts(rj["generated_time"]) + rj["age_seconds"]) if rj.get("generated_time") and PROBES["radar_product"].last_success else rj["age_seconds"]
     state = rj["freshness_state"]
@@ -781,6 +816,7 @@ def build_radar(services_by_id):
             "manifest_health": {"ok": bool(PROBES["radar_product"].ok), "observed_at": iso(PROBES["radar_product"].last_attempt), "age_s": int(now() - PROBES["radar_product"].last_attempt) if PROBES["radar_product"].last_attempt else None},
             "worker": {"state": services_by_id["radar-product"]["state"], "version": (pjson("radar_product_health") or {}).get("version"), "consecutive_failures": w.get("consecutive_failures"), "last_error": w.get("last_error")},
             "legacy_worker": {"state": services_by_id["radar-worker"]["state"], "note": "KSGF single-site worker (VEL/SRV/CC): health checks process and HTTP, not data freshness"},
+            "control": control,
             "link": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json", "telemetry": tel("radar_product")}
 
 

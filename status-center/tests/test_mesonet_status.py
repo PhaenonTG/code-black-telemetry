@@ -78,10 +78,21 @@ class MesonetStatusTests(unittest.TestCase):
         fleet = server.build_status()["esp_fleet"]
         self.assertEqual([d["role"] for d in fleet["devices"]],
                          ["wind", "weather", "striker-weather", "striker-nav"])
-        self.assertEqual({d["management"] for d in fleet["devices"]}, {"core-private", "local-only"})
+        self.assertEqual({d["management"] for d in fleet["devices"]}, {"core-private", "core-private-pending"})
         self.assertTrue(all(d["service"] in {s["id"] for s in server.SERVICES} for d in fleet["devices"]))
         self.assertFalse(any(k in json.dumps(fleet).lower() for k in ('"password"', '"token"', '"latitude"', '"longitude"')))
         self.assertTrue(all(d["report_age_s"] is None or d["report_age_s"] >= 0 for d in fleet["devices"]))
+
+    def test_radar_control_view_drops_locations_and_payloads(self):
+        raw = {"state": "healthy", "latitude": 38.0,
+               "fabric": {"state": "live", "eligible_chasers": 1, "payload": {"secret": "x"}},
+               "selection": {"primary": [{"site_id": "KTWX", "distance_km": 12, "longitude": -95.0}]}}
+        view = server.radar_control_view(raw, {})
+        serialized = json.dumps(view)
+        self.assertEqual(view["state"], "HEALTHY")
+        self.assertNotIn("latitude", serialized)
+        self.assertNotIn("longitude", serialized)
+        self.assertNotIn("secret", serialized)
 
 
 if __name__ == "__main__":

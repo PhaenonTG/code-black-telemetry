@@ -11,8 +11,8 @@
     "devices": [
       {"id":"nick-wind","name":"Nick WIND","owner":"Nick","role":"wind","service":"nick-mesonet-wind","mac_suffix":"35cab0","last_verified_firmware":"0.5.4","target_firmware":"0.5.5","ota":"Signed auto-install queued for next connection","management":"core-private","sensors":["Pulse anemometer: GPIO27; electrical type and calibration unverified"],"networks":[["Starpower",100],["Nicks24ultra",90],["Pretty fly for a wifi",60],["CodeBlackHQ",40],["CodeBlackTest",20]]},
       {"id":"nick-weather","name":"Nick WEATHER","owner":"Nick","role":"weather","service":"nick-mesonet-weather","mac_suffix":"358218","last_verified_firmware":"0.5.4","target_firmware":"0.5.5","ota":"Signed auto-install queued for next connection","management":"core-private","sensors":["RS485 probe: RX16 / TX17 / DE4; model and register map unverified","Optional GPS: RX34; wiring unverified"],"networks":[["Starpower",100],["Nicks24ultra",90],["Pretty fly for a wifi",60],["CodeBlackHQ",40],["CodeBlackTest",20]]},
-      {"id":"spencer-weather","name":"Spencer WEATHER","owner":"Spencer","role":"striker-weather","service":"spencer-striker-weather","mac_suffix":"35caa4","last_verified_firmware":"0.1.4","target_firmware":"0.1.4","ota":"Signed auto-install; last physical update verified","management":"local-only","sensors":["RS485 probe: disabled pending wiring and model confirmation","GPS: disabled; RX27","Legacy vane ADC: GPIO34, raw only; no calibrated direction"],"networks":[["CodeBlackLinkOfStars",100],["CodeBlackHQ",80],["CodeBlackTest",80],["iPad(2)",50],["Starpower",10]]},
-      {"id":"spencer-nav","name":"Spencer Vane/Nav","owner":"Spencer","role":"striker-nav","service":"spencer-striker-nav","mac_suffix":"35be80","last_verified_firmware":"0.1.3","target_firmware":"0.1.3","ota":"Signed auto-install; no newer release queued","management":"local-only","sensors":["RS485 vane: RX16 / TX17 / DE4; slave 2, function 3, register 0, 9600 baud","BME280: SDA21 / SCL22, address 0x76 or 0x77","GPS: RX27 / TX26; NMEA"],"networks":[["CodeBlackLinkOfStars",100],["CodeBlackHQ",80],["CodeBlackTest",80],["iPad(2)",50],["Starpower",10]]}
+      {"id":"spencer-weather","name":"Spencer WEATHER","owner":"Spencer","role":"striker-weather","service":"spencer-striker-weather","mac_suffix":"35caa4","last_verified_firmware":"0.1.5","target_firmware":"0.1.5","ota":"Signed auto-install; physical install and private command acknowledgments verified","management":"core-private","sensors":["RS485 probe: disabled pending wiring and model confirmation","GPS: disabled; RX27","Legacy vane ADC: GPIO34, raw only; no calibrated direction"],"networks":[["CodeBlackLinkOfStars",100],["CodeBlackHQ",80],["CodeBlackTest",80],["iPad(2)",50],["Starpower",10]]},
+      {"id":"spencer-nav","name":"Spencer Vane/Nav","owner":"Spencer","role":"striker-nav","service":"spencer-striker-nav","mac_suffix":"35be80","last_verified_firmware":"0.1.3","target_firmware":"0.1.4","ota":"Signed auto-install queued for next connection; physical install unverified","management":"core-private-pending","sensors":["RS485 vane: RX16 / TX17 / DE4; slave 2, function 3, register 0, 9600 baud","BME280: SDA21 / SCL22, address 0x76 or 0x77","GPS: RX27 / TX26; NMEA"],"networks":[["CodeBlackLinkOfStars",100],["CodeBlackHQ",80],["CodeBlackTest",80],["iPad(2)",50],["Starpower",10]]}
     ]
   },
   "notifications": {
@@ -553,6 +553,12 @@
       "kind": "http_json",
       "url": "http://127.0.0.1:8791/v1/composite/latest.json",
       "interval": "fast"
+    },
+    {
+      "id": "radar_control",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8787/api/v1/radar/control/status",
+      "interval": "host"
     },
     {
       "id": "radar_product_health",
