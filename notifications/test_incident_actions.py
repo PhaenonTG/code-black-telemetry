@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 import tempfile
 import time
@@ -55,6 +56,25 @@ class IncidentActionsTests(unittest.TestCase):
         self.assertFalse(actions.request_origin_ok("https://evil.example", base + "/alert-actions/incident", None))
         self.assertFalse(actions.request_origin_ok(None, "https://evil.example/", None))
         self.assertFalse(actions.request_origin_ok(base, None, "cross-site"))
+
+    def test_mobile_sign_in_session_and_redirect_target(self):
+        auth = actions.ROOT / "auth.json"
+        salt = b"test-salt"
+        digest = hashlib.pbkdf2_hmac("sha256", b"example-password", salt, 600000)
+        auth.write_text(json.dumps({"username": "glenn", "salt": salt.hex(), "hash": digest.hex()}))
+        with patch.object(actions, "AUTH", auth):
+            self.assertTrue(actions.verify_password("glenn", "example-password"))
+            self.assertFalse(actions.verify_password("glenn", "wrong"))
+        token = actions.create_session("glenn")
+        self.assertEqual(actions.session_actor(f"other=1; cb_actions_session={token}"), "glenn")
+        self.assertIsNone(actions.session_actor("cb_actions_session=invalid"))
+        self.assertEqual(actions.safe_next("/alert-actions/incident?id=svc:test"), "/alert-actions/incident?id=svc%3Atest")
+        for unsafe in ("https://evil.example/", "//evil.example/", "/alert-actions//evil.example",
+                       "/status/", "/alert-actions/incident?id=bad%0d%0aHeader:evil"):
+            self.assertEqual(actions.safe_next(unsafe), "/alert-actions/services")
+        rendered = actions.login_page("/alert-actions/incident?id=svc:test").decode()
+        self.assertIn('name=password type=password', rendered)
+        self.assertIn('name=next value="/alert-actions/incident?id=svc%3Atest"', rendered)
 
     def test_read_only_state_has_no_credentials(self):
         actions.apply_action("edge:incident", "snooze", minutes=15)

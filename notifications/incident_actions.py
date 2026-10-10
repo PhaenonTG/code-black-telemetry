@@ -30,6 +30,8 @@ UNITS = {"codeblack-ntfy.service": "Private ntfy server",
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._/\\-]{0,127}$")
 LOCK = threading.RLock()
 NONCES = {}
+SESSIONS = {}
+SESSION_TTL = 12 * 60 * 60
 
 
 def utc(epoch=None):
@@ -112,13 +114,65 @@ def verify_basic(header):
     try:
         supplied = base64.b64decode(header[6:], validate=True).decode("utf-8")
         username, password = supplied.split(":", 1)
-        cfg = json.loads(AUTH.read_text(encoding="utf-8"))
-        digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(cfg["salt"]), 600000)
-        if hmac.compare_digest(username, cfg["username"]) and hmac.compare_digest(digest, bytes.fromhex(cfg["hash"])):
+        if verify_password(username, password):
             return username
     except (ValueError, OSError, KeyError, UnicodeError):
         pass
     return None
+
+
+def verify_password(username, password):
+    try:
+        cfg = json.loads(AUTH.read_text(encoding="utf-8"))
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(cfg["salt"]), 600000)
+        return (hmac.compare_digest(username, cfg["username"])
+                and hmac.compare_digest(digest, bytes.fromhex(cfg["hash"])))
+    except (ValueError, OSError, KeyError, UnicodeError):
+        return False
+
+
+def create_session(actor):
+    with LOCK:
+        now = time.time()
+        for key, (_, expiry) in list(SESSIONS.items()):
+            if expiry < now:
+                SESSIONS.pop(key, None)
+        token = secrets.token_urlsafe(32)
+        SESSIONS[token] = (actor, now + SESSION_TTL)
+        return token
+
+
+def session_actor(cookie):
+    for part in (cookie or "").split(";"):
+        name, _, value = part.strip().partition("=")
+        if name == "cb_actions_session":
+            with LOCK:
+                actor, expiry = SESSIONS.get(value, (None, 0))
+                return actor if expiry > time.time() else None
+    return None
+
+
+def safe_next(value):
+    parsed = urllib.parse.urlsplit(value)
+    if not parsed.scheme and not parsed.netloc and not parsed.fragment:
+        if parsed.path == "/alert-actions/services" and not parsed.query:
+            return "/alert-actions/services"
+        if parsed.path == "/alert-actions/incident":
+            alert_id = urllib.parse.parse_qs(parsed.query).get("id", [""])[0]
+            if ID.fullmatch(alert_id):
+                return "/alert-actions/incident?id=" + urllib.parse.quote(alert_id, safe="")
+    return "/alert-actions/services"
+
+
+def login_page(next_url, error=""):
+    destination = html.escape(safe_next(next_url), quote=True)
+    message = f'<p role=alert>{html.escape(error)}</p>' if error else ""
+    return page("Sign in", '<h1>Operator sign-in</h1>' + message
+                + '<form method=post action="/alert-actions/login">'
+                + f'<input type=hidden name=csrf value="{nonce()}"><input type=hidden name=next value="{destination}">'
+                + '<label>Username<br><input name=username autocomplete=username required></label><br>'
+                + '<label>Password<br><input name=password type=password autocomplete=current-password required></label><br>'
+                + '<button type=submit>Sign in</button></form>')
 
 
 def same_origin(url):
@@ -180,7 +234,7 @@ class Handler(BaseHTTPRequestHandler):
         # No URL query strings, Basic headers, or message bodies in logs.
         pass
 
-    def respond(self, code, body, ctype="text/html; charset=utf-8", challenge=False):
+    def respond(self, code, body, ctype="text/html; charset=utf-8", extra_headers=None):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
@@ -189,15 +243,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'")
-        if challenge:
-            self.send_header("WWW-Authenticate", 'Basic realm="Code Black operator actions", charset="UTF-8"')
+        for name, value in (extra_headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
-    def actor(self):
-        actor = verify_basic(self.headers.get("Authorization"))
+    def actor(self, next_url):
+        actor = session_actor(self.headers.get("Cookie")) or verify_basic(self.headers.get("Authorization"))
         if not actor:
-            self.respond(401, page("Sign in", "<h1>Operator sign-in required</h1>"), challenge=True)
+            self.respond(401, login_page(next_url))
         return actor
 
     def do_GET(self):
@@ -206,7 +260,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, b'{"ok":true}', "application/json")
         if parsed.path == "/api/state":
             return self.respond(200, json.dumps(public_state()).encode(), "application/json")
-        if not self.actor():
+        if parsed.path == "/login":
+            return self.respond(200, login_page(urllib.parse.parse_qs(parsed.query).get("next", [""])[0]))
+        if not self.actor("/alert-actions" + self.path):
             return
         if parsed.path in ("/", "/incident"):
             alert_id = urllib.parse.parse_qs(parsed.query).get("id", [""])[0]
@@ -244,7 +300,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
-        actor = self.actor()
+        if parsed.path == "/login":
+            return self.handle_login()
+        actor = self.actor("/alert-actions/services")
         if not actor:
             return
         if parsed.path not in ("/action", "/restart"):
@@ -281,6 +339,29 @@ class Handler(BaseHTTPRequestHandler):
         except subprocess.TimeoutExpired:
             audit(actor, "restart", value("unit"), "timeout")
             return self.respond(504, page("Timeout", "<h1>Restart timed out; check Status Center before retrying.</h1>"))
+
+    def handle_login(self):
+        if not request_origin_ok(self.headers.get("Origin"), self.headers.get("Referer"), self.headers.get("Sec-Fetch-Site")):
+            return self.respond(403, page("Forbidden", "<h1>Origin check failed</h1>"))
+        if not self.headers.get("Content-Type", "").startswith("application/x-www-form-urlencoded"):
+            return self.respond(415, page("Unsupported", "<h1>Form required</h1>"))
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if size < 1 or size > 2048:
+                raise ValueError("invalid form size")
+            form = urllib.parse.parse_qs(self.rfile.read(size).decode("utf-8"), keep_blank_values=True)
+            value = lambda key: form.get(key, [""])[0]
+            destination = safe_next(value("next"))
+            if not consume_nonce(value("csrf")):
+                return self.respond(403, login_page(destination, "Page expired. Please sign in again."))
+            if not verify_password(value("username"), value("password")):
+                return self.respond(401, login_page(destination, "Incorrect username or password."))
+            token = create_session(value("username"))
+            return self.respond(303, b"", extra_headers={
+                "Location": destination,
+                "Set-Cookie": f"cb_actions_session={token}; Path=/alert-actions; Secure; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL}"})
+        except (ValueError, UnicodeError):
+            return self.respond(400, login_page("/alert-actions/services", "Invalid sign-in form."))
 
 
 def main():

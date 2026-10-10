@@ -17,6 +17,10 @@ contain no operator password, bearer token, or privileged action URL.
 The console supports **Acknowledge**, **Snooze** (15 minutes, 1 hour, 4 hours,
 or 24 hours), **Unsnooze**, and **Clear operator mark**. Acknowledgment is
 visible beside active Status Center attention and does not conceal a fault.
+The console now presents its own mobile-friendly operator sign-in form and keeps
+the operator signed in with a Secure, HttpOnly, SameSite session cookie for up
+to 12 hours. The existing operator password is unchanged. Sessions are held in
+memory, so a console restart requires signing in again.
 On iPhone, reopen **View Incident** before retrying a form submitted before a
 console restart: its single-use form token is kept in server memory. Same-origin
 mobile browsers that omit the `Origin` header are accepted only with a valid
