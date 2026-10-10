@@ -187,7 +187,7 @@ def run_mesonet_latest(d):
     if not isinstance(data, dict) or any(role not in data for role in ("wind", "weather")):
         return False, None, "Mesonet response missing roles", int((now() - t0) * 1000)
     ages = {}
-    for role in ("wind", "weather", "striker-weather"):
+    for role in ("wind", "weather", "striker-weather", "striker-nav"):
         item = data.get(role)
         age = item.get("received_age_ms") if isinstance(item, dict) else None
         if age is not None and (not isinstance(age, (int, float)) or isinstance(age, bool) or age < 0):

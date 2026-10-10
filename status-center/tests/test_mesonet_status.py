@@ -41,7 +41,7 @@ class MesonetStatusTests(unittest.TestCase):
              patch.object(server.urllib.request, "urlopen", return_value=Response(private)) as fetch:
             ok, value, error, _ = server.run_mesonet_latest({"url": "http://127.0.0.1:8000/api/mesonet/v1/latest"})
         self.assertTrue(ok, error)
-        self.assertEqual(value["json"], {"wind": 1200, "weather": 40000, "striker-weather": None})
+        self.assertEqual(value["json"], {"wind": 1200, "weather": 40000, "striker-weather": None, "striker-nav": None})
         self.assertNotIn("latitude", str(value))
         self.assertNotIn("test-read-only", str(value))
         self.assertEqual(fetch.call_args.args[0].get_header("Authorization"), "Bearer test-read-only")

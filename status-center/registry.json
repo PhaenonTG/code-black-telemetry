@@ -876,6 +876,21 @@
       "docs": "docs/hardware/spencer-esp-bootstrap.md (Spencer ESP worktree)"
     },
     {
+      "id": "spencer-striker-nav",
+      "name": "Spencer · STRIKER Vane/Nav ESP",
+      "host": "core",
+      "category": "weather",
+      "role": "ESP32 direct Core uplink; status is report freshness, not sensor validity",
+      "mesonet_role": "striker-nav",
+      "informational": true,
+      "offline_status_only": true,
+      "host_impact": false,
+      "probe": "mesonet_latest",
+      "deps": ["core-api"],
+      "urls": {},
+      "docs": "docs/hardware/spencer-esp-bootstrap.md (Spencer ESP worktree)"
+    },
+    {
       "id": "nick-mesonet-alerts",
       "name": "Nick Mesonet Alerts",
       "host": "core",
