@@ -91,10 +91,11 @@ Core Status Center remains the inventory and dashboard for the broader fleet.
 `edge_ntfy_bridge.py` runs once per minute from the existing Edge notification
 dispatcher and forwards every new Edge incident/event type and every Status
 Center attention transition (Info, Warning, Critical, and severity/state
-changes) to the private `ops-monitoring` topic, except status-only HYTETOWER
-and Nick WIND/WEATHER offline notices. Future ESP services marked
-`offline_status_only` follow the same policy. These remain visible in the dashboard
-without push or recovery notifications. A new condition must appear in three
+changes) to the private `ops-monitoring` topic. HYTETOWER reachability and
+Nick WIND/WEATHER report freshness are not attention items at all: they remain
+visible in host/service status, without alert-list entries, push messages, or
+recovery notifications. Future power-cycled devices marked `offline_status_only`
+follow the same Status Center policy. A new condition must appear in three
 Status Center polls to page and clear in two to recover. Numeric incident updates with the
 same underlying issue are suppressed, as is normal GPU occupancy over 90% per
 operator preference. Unchanged conditions never generate repeated pushes.

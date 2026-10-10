@@ -12,7 +12,7 @@ import server  # noqa: E402
 
 
 class WeatherAndDiskStatusTests(unittest.TestCase):
-    def test_hytetower_and_esps_are_informational_when_offline(self):
+    def test_hytetower_and_esps_are_status_only_not_attention_when_offline(self):
         tower = next(h for h in server.REG["hosts"] if h["id"] == "hytetower")
         self.assertFalse(tower["expected_online"])
         self.assertTrue(tower["offline_status_only"])
@@ -23,9 +23,13 @@ class WeatherAndDiskStatusTests(unittest.TestCase):
         with patch.object(server, "FIRST_SEEN", {}):
             attention = server.build_attention([host], items, {"sources": []}, {"state": "FRESH"},
                                                {"items": []}, {"instances": []}, {"backups": []}, {}, {})
-        self.assertEqual({item["id"]: item["severity"] for item in attention},
-                         {"host:hytetower": "INFO", "svc:nick-mesonet-wind": "INFO", "svc:nick-mesonet-weather": "INFO"})
-        self.assertTrue(all(item["status_only"] for item in attention))
+        self.assertEqual(attention, [])
+        host["state"] = "UNKNOWN"
+        items[0]["state"] = "DEGRADED"
+        items[1]["state"] = "UNKNOWN"
+        with patch.object(server, "FIRST_SEEN", {}):
+            self.assertEqual(server.build_attention([host], items, {"sources": []}, {"state": "FRESH"},
+                                                    {"items": []}, {"instances": []}, {"backups": []}, {}, {}), [])
 
     def test_watcher_uses_timer_trigger_when_oneshot_has_no_exit_timestamp(self):
         watcher = next(w for w in server.REG["weather"] if w["id"] == "hrrr-edge-watcher")
@@ -84,7 +88,7 @@ class WeatherAndDiskStatusTests(unittest.TestCase):
             self.assertEqual(items[0]["severity"], "WARNING")
 
     def test_attention_since_survives_restart_and_resets_after_recovery(self):
-        host = {"id": "hytetower", "name": "HYTETOWER", "state": "OFFLINE",
+        host = {"id": "optional-workstation", "name": "Optional workstation", "state": "OFFLINE",
                 "state_reason": "peer offline", "expected_online": True, "disks": []}
         def attention():
             return server.build_attention([host], [], {"sources": []}, {"state": "FRESH"},
@@ -108,7 +112,7 @@ class WeatherAndDiskStatusTests(unittest.TestCase):
                 self.assertNotEqual(attention()[0]["since"], first)
 
     def test_attention_survives_cold_start_unknown(self):
-        host = {"id": "hytetower", "name": "HYTETOWER", "state": "OFFLINE",
+        host = {"id": "optional-workstation", "name": "Optional workstation", "state": "OFFLINE",
                 "state_reason": "peer offline", "expected_online": True, "disks": []}
         def attention():
             return server.build_attention([host], [], {"sources": []}, {"state": "FRESH"},
@@ -122,8 +126,8 @@ class WeatherAndDiskStatusTests(unittest.TestCase):
                 first = attention()[0]["since"]
             host["state"] = "UNKNOWN"
             with patch.object(server, "probes_warmed", return_value=False):
-                self.assertEqual(attention()[0]["id"], "hostunk:hytetower")
-                self.assertIn("host:hytetower", server.load_attention_seen())
+                self.assertEqual(attention()[0]["id"], "hostunk:optional-workstation")
+                self.assertIn("host:optional-workstation", server.load_attention_seen())
             host["state"] = "OFFLINE"
             with patch.object(server, "now", return_value=1_700_000_120.0), \
                  patch.object(server, "probes_warmed", return_value=True):

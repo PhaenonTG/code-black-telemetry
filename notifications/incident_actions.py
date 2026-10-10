@@ -35,6 +35,8 @@ UNIT_NOTE = {"codeblack-ntfy.service": "Notification delivery pauses briefly.",
              "codeblack-core-api.service": "Fabric and Mesonet ingest pause briefly; buffered devices should reconnect.",
              "codeblack-mqtt-bridge.service": "MQTT-to-Fabric messages pause while the bridge restarts.",
              "codeblack-radar-worker.service": "Radar tiles may be stale until the worker catches up."}
+STATUS_ONLY_DEVICE_IDS = {"host:hytetower", "hostunk:hytetower",
+                          "svc:nick-mesonet-wind", "svc:nick-mesonet-weather"}
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._/\\-]{0,127}$")
 LOCK = threading.RLock()
 NONCES = {}
@@ -101,7 +103,7 @@ def recent_audit(limit=12):
 def recent_history(limit=12):
     try:
         obj = json.loads((ROOT / "attention_history.json").read_text(encoding="utf-8"))
-        return list(reversed(obj[-limit:])) if isinstance(obj, list) else []
+        return list(reversed([entry for entry in obj if entry.get("id") not in STATUS_ONLY_DEVICE_IDS][-limit:])) if isinstance(obj, list) else []
     except (OSError, ValueError):
         return []
 
@@ -112,7 +114,8 @@ def record_attention(items, at=None):
     current = {item["id"]: {"title": str(item.get("title") or item["id"]),
                             "severity": str(item.get("severity") or "UNKNOWN"),
                             "status_only": bool(item.get("status_only"))}
-               for item in items if isinstance(item, dict) and ID.fullmatch(str(item.get("id") or ""))}
+               for item in items if isinstance(item, dict) and ID.fullmatch(str(item.get("id") or ""))
+               and item["id"] not in STATUS_ONLY_DEVICE_IDS}
     with LOCK:
         try:
             previous = json.loads((ROOT / "attention_snapshot.json").read_text(encoding="utf-8"))
@@ -120,6 +123,7 @@ def record_attention(items, at=None):
                 previous = {}
         except (OSError, ValueError):
             previous = {}
+        previous = {key: value for key, value in previous.items() if key not in STATUS_ONLY_DEVICE_IDS}
         changes = []
         for alert_id, item in current.items():
             old = previous.get(alert_id)
@@ -329,7 +333,8 @@ def render_dashboard(snapshot):
     esc = lambda value: html.escape(str(value if value is not None else "—"))
     summary = snapshot.get("summary", {})
     hosts = snapshot.get("hosts", [])
-    attention = snapshot.get("attention", [])
+    attention = [item for item in snapshot.get("attention", [])
+                 if isinstance(item, dict) and item.get("id") not in STATUS_ONLY_DEVICE_IDS]
     services = snapshot.get("services", [])
     notices = snapshot.get("notifications", {})
     title = ('<p class=eyebrow>Live command view</p><h1>System operations.</h1>'

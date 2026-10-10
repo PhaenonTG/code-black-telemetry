@@ -104,6 +104,16 @@ class IncidentActionsTests(unittest.TestCase):
         self.assertIn("&lt;script&gt;bad&lt;/script&gt;", body)
         self.assertNotIn("<script>bad</script>", body)
 
+    def test_power_cycled_devices_do_not_appear_in_operations_alerts_or_history(self):
+        snapshot = {"summary": {"overall": "HEALTHY"}, "hosts": [], "services": [],
+                    "notifications": {}, "attention": [{"id": "host:hytetower", "title": "HYTETOWER offline",
+                    "severity": "INFO", "status_only": True}, {"id": "svc:nick-mesonet-wind",
+                    "title": "Nick Mesonet · WIND OFFLINE", "severity": "INFO", "status_only": True}]}
+        self.assertNotIn("HYTETOWER offline", actions.render_dashboard(snapshot).decode())
+        self.assertNotIn("WIND OFFLINE", actions.render_dashboard(snapshot).decode())
+        actions.record_attention(snapshot["attention"])
+        self.assertEqual(actions.recent_history(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

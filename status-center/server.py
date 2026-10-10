@@ -1077,9 +1077,9 @@ def build_attention(hosts, services, streaming, radar, weather, dns, storage, la
                       "status_only": status_only})
 
     for h in hosts:
-        if h["state"] == "OFFLINE":
+        if h["state"] == "OFFLINE" and not h.get("offline_status_only"):
             add(f"host:{h['id']}", "INFO" if not h.get("expected_online", True) or h.get("offline_status_only") else ("CRITICAL" if h["id"] in ("core", "edge") else "WARNING"), f"{h['name']} offline", h["state_reason"], h["id"], status_only=h.get("offline_status_only", False))
-        elif h["state"] == "UNKNOWN":
+        elif h["state"] == "UNKNOWN" and not h.get("offline_status_only"):
             add(f"hostunk:{h['id']}", "WARNING", f"{h['name']} telemetry unavailable", h["state_reason"], h["id"])
         for d in h["disks"]:
             if d.get("state") in ("WARNING", "CRITICAL"):
@@ -1095,6 +1095,9 @@ def build_attention(hosts, services, streaming, radar, weather, dns, storage, la
     grouped = {s["id"] for lst in elapsed.values() if len(lst) >= 2 for s in lst}
     for s in services:
         if s["id"] in grouped:
+            continue
+        if s.get("offline_status_only"):
+            # Power-cycled ESPs remain visible in service status, never in attention.
             continue
         host_state = next((h["state"] for h in hosts if h["id"] == s["host"]), None)
         if s["state"] in ("DEGRADED", "OFFLINE", "UNKNOWN") and host_state != "OFFLINE":
