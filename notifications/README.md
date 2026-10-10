@@ -5,8 +5,13 @@
 Operational ntfy messages now include **Open Status** and **View Incident**
 actions. The latter opens a separate Tailnet-only Core console at
 `https://codeblack-core.tail1d0673.ts.net/alert-actions/incident?id=...`.
-It requires the `glenn` operator login (same password as ntfy, verified against
-a separately stored password hash). Alert URLs and ntfy's seven-day cache
+It requires the `glenn` operator login. The action console has its own
+password, separate from the ntfy app login; Core verifies it against a
+separately stored password hash. On PHAENON3, privately display the current
+console password with
+`ssh codeblack-core 'sudo cat /srv/codeblack/config/alert-actions/operator-password.txt'`.
+Never paste the output into a shared chat. The iPhone browser can ask for this
+login separately from the ntfy app. Alert URLs and ntfy's seven-day cache
 contain no operator password, bearer token, or privileged action URL.
 
 The console supports **Acknowledge**, **Snooze** (15 minutes, 1 hour, 4 hours,
@@ -27,8 +32,9 @@ execute arbitrary unit names or shell commands. Do not treat the restart page
 as a general remediation interface.
 
 Deploy on Core using `install-alert-actions.sh` from a staged copy of this
-directory. It provisions a password hash from the existing private ntfy reader
-password without printing it, installs the isolated service and narrowly
+directory. On first install it provisions a password hash from the existing
+private ntfy reader password without printing it; the deployed console has
+since been rotated to a separate password. It installs the isolated service and narrowly
 scoped sudoers rule, and mounts the console with Tailscale Serve. State and
 audit live under `/srv/codeblack/data/alert-actions`; credentials remain
 outside Git. Removing the Serve mount and stopping the service disables all
