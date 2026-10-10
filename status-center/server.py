@@ -1071,6 +1071,10 @@ def build_attention(hosts, services, streaming, radar, weather, dns, storage, la
     previous = set(FIRST_SEEN)
 
     def add(key, sev, title, detail, source, link=None, status_only=False):
+        # Attention is for actionable failures. Informational states stay on
+        # their service/host cards without looking like unacknowledged alerts.
+        if sev == "INFO" or status_only:
+            return
         active.add(key)
         FIRST_SEEN.setdefault(key, now())
         items.append({"id": key, "severity": sev, "title": title, "detail": detail, "source": source, "since": iso(FIRST_SEEN[key]), "link": link,

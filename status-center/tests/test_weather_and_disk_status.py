@@ -72,7 +72,7 @@ class WeatherAndDiskStatusTests(unittest.TestCase):
     def test_busy_compute_is_not_an_incident_transition(self):
         self.assertEqual(server.state_rank("BUSY"), server.state_rank("HEALTHY"))
 
-    def test_attention_includes_informational_and_unknown_services(self):
+    def test_attention_omits_informational_but_includes_unknown_services(self):
         host = {"id": "edge", "name": "EDGE", "state": "HEALTHY", "state_reason": None,
                 "expected_online": True, "disks": []}
         service = {"id": "optional", "name": "Optional feed", "host": "edge", "state": "OFFLINE",
@@ -80,8 +80,7 @@ class WeatherAndDiskStatusTests(unittest.TestCase):
         with patch.object(server, "FIRST_SEEN", {}), patch.object(server, "probes_warmed", return_value=False):
             items = server.build_attention([host], [service], {"sources": []}, {"state": "FRESH"},
                                            {"items": []}, {"instances": []}, {"backups": []}, {}, {})
-            self.assertEqual(items[0]["id"], "svc:optional")
-            self.assertEqual(items[0]["severity"], "INFO")
+            self.assertEqual(items, [])
             service.update(state="UNKNOWN", informational=False)
             items = server.build_attention([host], [service], {"sources": []}, {"state": "FRESH"},
                                            {"items": []}, {"instances": []}, {"backups": []}, {}, {})
