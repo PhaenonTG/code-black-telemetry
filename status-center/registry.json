@@ -260,6 +260,7 @@
               "ok",
               "reason",
               "area",
+              "area_mode",
               "channel",
               "sources"
             ]

@@ -11,7 +11,8 @@ REGISTRY = Path("/srv/codeblack/services/status-collector/registry.json")
 NAME = "weather-alert-health"
 ENTRY = {"name": NAME,
          "path": "/srv/codeblack/shared/discord-bot/weather-alert-health.json",
-         "pick": ["checked_at", "ok", "reason", "area", "channel", "sources"]}
+         "pick": ["checked_at", "ok", "reason", "area", "area_mode", "channel", "sources"]}
+PREVIOUS_ENTRY = {**ENTRY, "pick": ["checked_at", "ok", "reason", "area", "channel", "sources"]}
 
 
 def transform(document):
@@ -21,6 +22,9 @@ def transform(document):
     if matches:
         if len(matches) == 1 and matches[0] == ENTRY:
             return document, False
+        if len(matches) == 1 and matches[0] == PREVIOUS_ENTRY:
+            files[files.index(matches[0])] = ENTRY
+            return document, True
         raise ValueError("weather alert collector entry differs; refusing overwrite")
     files.append(ENTRY)
     return document, True
@@ -40,7 +44,7 @@ def main():
     temporary.write_text(json.dumps(updated, indent=2) + "\n", encoding="utf-8")
     os.chmod(temporary, REGISTRY.stat().st_mode)
     os.replace(temporary, REGISTRY)
-    print("weather alert health file added to Edge collector registry")
+    print("weather alert health file configured in Edge collector registry")
 
 
 if __name__ == "__main__":
