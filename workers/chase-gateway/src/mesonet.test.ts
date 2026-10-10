@@ -13,6 +13,20 @@ describe("mesonet gateway", () => {
     expect(fetch.mock.calls[0][0]).toBe("http://127.0.0.1:8000/api/mesonet/v1/ota/image/wind/0.2.1");
     expect(new Headers(fetch.mock.calls[0][1]?.headers).get("Authorization")).toBe("Bearer wind-only");
   });
+  it("streams only a versioned STRIKER OTA image through the fixed Core path", async () => {
+    const fetch = vi.fn(async (_url: string | URL) => new Response("striker-signed-image", { headers: { "Content-Length": "20" } }));
+    const env = { CORE_VPC: { fetch } };
+    const response = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/mesonet/ota/image/striker-weather/0.1.1", {
+      headers: { Authorization: "Bearer striker-only" },
+    }), env);
+    expect(response.status).toBe(200);
+    expect(fetch.mock.calls[0][0]).toBe("http://127.0.0.1:8000/api/mesonet/v1/ota/image/striker-weather/0.1.1");
+    expect((await response.text())).toBe("striker-signed-image");
+    const denied = await handleRequest(new Request("https://ops.codeblackwx.com/api/chase/mesonet/ota/image/striker-weather/latest", {
+      headers: { Authorization: "Bearer striker-only" },
+    }), env);
+    expect(denied.status).toBe(401);
+  });
   it("requires bearer authentication for update checks", async () => {
     const fetch = vi.fn(async () => Response.json({ available: false }));
     const response = await handleRequest(new Request("https://x/api/chase/mesonet/ota/check?role=wind&version=0.2.0"), {

@@ -45,11 +45,12 @@ credentials, tokens, or message text appear in this object.
   dependencies:[service ids], urls:{local, tailscale, public, manage, health}, docs, metrics:[{label,value}], telemetry}`
 `docs` is a display string/path (metadata), not a link. `informational:true` = an intentional/expected state (not a fault).
 `host_impact:false` in a service registry entry keeps a remote/device fault from degrading the host that observes it; the service itself still raises dashboard attention.
-Nick Mesonet WIND and WEATHER are service cards under Core. Their state is based on
+Nick Mesonet WIND and WEATHER and Spencer STRIKER WEATHER are service cards under Core. Their state is based on
 Core's authenticated read-only `received_age_ms`: <=5 s HEALTHY, 5–30 s DEGRADED,
 >=30 s OFFLINE. If the read probe fails, state is UNKNOWN, never green from cached
 data. Only role and report age are retained; sensor values, GPS and credentials
-are not present in status-center responses. These states measure transport, not
+are not present in status-center responses. All three ESP cards are status-only
+when offline; these states measure transport, not
 sensor calibration or physical wiring.
 
 ## streaming

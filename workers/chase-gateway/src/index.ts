@@ -566,7 +566,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   if (!env.CORE_VPC) return json(503, { error: "CORE_UNAVAILABLE" });
 
   if (url.pathname === "/api/chase/mesonet/ota/check" ||
-      /^\/api\/chase\/mesonet\/ota\/image\/(wind|weather)\/\d{1,5}\.\d{1,5}\.\d{1,5}$/.test(url.pathname)) {
+      /^\/api\/chase\/mesonet\/ota\/image\/(wind|weather|striker-weather)\/\d{1,5}\.\d{1,5}\.\d{1,5}$/.test(url.pathname)) {
     if (request.method !== "GET") return json(405, { error: "METHOD_NOT_ALLOWED" });
     const authorization = request.headers.get("Authorization");
     if (!authorization?.startsWith("Bearer ")) return json(401, { error: "AUTH_REQUIRED" });
