@@ -45,6 +45,17 @@ class IncidentActionsTests(unittest.TestCase):
         self.assertTrue(actions.consume_nonce(value))
         self.assertFalse(actions.consume_nonce(value))
 
+    def test_mobile_form_origin_policy_keeps_nonce_as_primary_csrf_check(self):
+        base = "https://codeblack-core.tail1d0673.ts.net"
+        self.assertTrue(actions.request_origin_ok(base, None, "same-origin"))
+        self.assertTrue(actions.request_origin_ok(base + ":443", None, "same-origin"))
+        self.assertTrue(actions.request_origin_ok(None, base + "/alert-actions/incident?id=test", None))
+        self.assertTrue(actions.request_origin_ok(None, None, None))
+        self.assertTrue(actions.request_origin_ok("null", None, None))
+        self.assertFalse(actions.request_origin_ok("https://evil.example", base + "/alert-actions/incident", None))
+        self.assertFalse(actions.request_origin_ok(None, "https://evil.example/", None))
+        self.assertFalse(actions.request_origin_ok(base, None, "cross-site"))
+
     def test_read_only_state_has_no_credentials(self):
         actions.apply_action("edge:incident", "snooze", minutes=15)
         state = actions.public_state()

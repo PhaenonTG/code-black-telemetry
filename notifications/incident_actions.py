@@ -121,6 +121,30 @@ def verify_basic(header):
     return None
 
 
+def same_origin(url):
+    """Compare a request Origin/Referer with the Tailnet console origin."""
+    try:
+        candidate = urllib.parse.urlsplit(url)
+        expected = urllib.parse.urlsplit(BASE)
+        return (candidate.scheme == expected.scheme and candidate.hostname == expected.hostname
+                and candidate.port in (None, 443) and not candidate.username and not candidate.password)
+    except ValueError:
+        return False
+
+
+def request_origin_ok(origin, referer, fetch_site):
+    # Some iOS notification browsers omit Origin on a normal same-origin form
+    # submission. A valid, single-use nonce below is still mandatory. Reject
+    # explicit foreign origins and cross-site browser submissions.
+    if fetch_site == "cross-site":
+        return False
+    if origin and origin != "null":
+        return same_origin(origin)
+    if referer:
+        return same_origin(referer)
+    return True
+
+
 def nonce():
     with LOCK:
         now = time.time()
@@ -200,7 +224,7 @@ class Handler(BaseHTTPRequestHandler):
                       f'Snoozed until: {html.escape(state.get("snoozed_until") or "not snoozed")}</p>'
                       f'<p><a href="{STATUS}#s-attention">Open Status Center</a> · <a href="{BASE}/services">Review service actions</a></p>'
                       '<small>Acknowledge records that you saw it. Snooze mutes future notifications until expiry; neither hides the issue from Status Center.</small>')
-            forms = (f'<form method=post action="{BASE}/action">{hidden}<button name=action value=ack>Acknowledge</button>'
+            forms = (f'<form method=post action="/alert-actions/action">{hidden}<button name=action value=ack>Acknowledge</button>'
                      '<select name=minutes><option value=15>15 minutes</option><option value=60>1 hour</option>'
                      '<option value=240>4 hours</option><option value=1440>24 hours</option></select>'
                      '<button name=action value=snooze>Snooze</button><button name=action value=unsnooze>Unsnooze</button>'
@@ -211,7 +235,7 @@ class Handler(BaseHTTPRequestHandler):
             for unit, label in UNITS.items():
                 safe = html.escape(unit)
                 cards.append(f'<article><h2>{html.escape(label)}</h2><p><code>{safe}</code></p>'
-                             f'<form method=post action="{BASE}/restart"><input type=hidden name=csrf value="{nonce()}">'
+                             f'<form method=post action="/alert-actions/restart"><input type=hidden name=csrf value="{nonce()}">'
                              f'<input type=hidden name=unit value="{safe}"><label>Type <code>RESTART {safe}</code> to confirm:<br>'
                              '<input name=confirmation autocomplete=off required></label><br>'
                              '<button class=danger>Confirm restart</button></form></article>')
@@ -225,7 +249,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path not in ("/action", "/restart"):
             return self.respond(404, page("Not found", "<h1>Not found</h1>"))
-        if self.headers.get("Origin") != BASE.split("/alert-actions")[0]:
+        if not request_origin_ok(self.headers.get("Origin"), self.headers.get("Referer"), self.headers.get("Sec-Fetch-Site")):
             return self.respond(403, page("Forbidden", "<h1>Origin check failed</h1>"))
         if not self.headers.get("Content-Type", "").startswith("application/x-www-form-urlencoded"):
             return self.respond(415, page("Unsupported", "<h1>Form required</h1>"))

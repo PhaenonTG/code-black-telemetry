@@ -17,6 +17,10 @@ contain no operator password, bearer token, or privileged action URL.
 The console supports **Acknowledge**, **Snooze** (15 minutes, 1 hour, 4 hours,
 or 24 hours), **Unsnooze**, and **Clear operator mark**. Acknowledgment is
 visible beside active Status Center attention and does not conceal a fault.
+On iPhone, reopen **View Incident** before retrying a form submitted before a
+console restart: its single-use form token is kept in server memory. Same-origin
+mobile browsers that omit the `Origin` header are accepted only with a valid
+token; explicit foreign origins and cross-site submissions are rejected.
 Snooze suppresses new ntfy sends for the matching alert ID, never Discord or
 the Status Center itself. An active Status Center issue held during snooze is
 sent when the snooze expires. Edge incident and Mesonet event transitions
