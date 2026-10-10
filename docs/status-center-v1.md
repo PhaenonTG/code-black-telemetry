@@ -70,6 +70,25 @@ scrubbed; errors and paths are sanitized. The Core `/api/chase/v1/config` endpoi
 The Spencer Labs section shows infrastructure status only. Pi-hole stats/gravity are UNKNOWN by decision (the v6 API needs auth); no client query
 history is ever read.
 
+### ESP32 fleet console
+
+The `/status/` page includes four identified ESPs (Nick WIND/WEATHER, Spencer
+WEATHER/Vane-Nav). It joins the existing per-role Core report-age probe to a
+secret-free handoff inventory in `registry.json`: owner, MAC suffix, last
+physically verified firmware, release target, OTA handoff note, sensor/pin
+expectations, Wi-Fi SSID priorities, and RGB indicator legend. An offline board
+is informational; transport freshness is never represented as sensor validity.
+Firmware and Wi-Fi entries are labelled handoff snapshots, not live diagnostics.
+
+The panel can open a board's authenticated local HTTPS page when the operator
+enters its current same-network IPv4 address. Nick's remote actions remain in
+the existing private, 30-minute PHAENON3 management session, which holds the
+admin token server-side and offers diagnostics, validated network/sensor
+changes, reboot, and explicitly versioned signed OTA. The panel copies its
+PowerShell launch command; it never stores a token or calls the command API.
+Spencer remote commands are not enrolled yet and are deliberately not shown as
+working controls. The status service remains GET-only and read-only.
+
 ## How to extend (all data-driven: `registry.json`)
 
 Nick Mesonet WIND/WEATHER uplink cards and the alerts daemon are included. The

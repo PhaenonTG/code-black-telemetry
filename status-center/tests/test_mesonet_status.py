@@ -73,6 +73,16 @@ class MesonetStatusTests(unittest.TestCase):
         self.assertEqual(observed["state"], "HEALTHY")
         self.assertTrue(observed["offline_status_only"])
 
+    def test_fleet_console_keeps_management_read_only_and_secret_free(self):
+        server.build_probes()
+        fleet = server.build_status()["esp_fleet"]
+        self.assertEqual([d["role"] for d in fleet["devices"]],
+                         ["wind", "weather", "striker-weather", "striker-nav"])
+        self.assertEqual({d["management"] for d in fleet["devices"]}, {"core-private", "local-only"})
+        self.assertTrue(all(d["service"] in {s["id"] for s in server.SERVICES} for d in fleet["devices"]))
+        self.assertFalse(any(k in json.dumps(fleet).lower() for k in ('"password"', '"token"', '"latitude"', '"longitude"')))
+        self.assertTrue(all(d["report_age_s"] is None or d["report_age_s"] >= 0 for d in fleet["devices"]))
+
 
 if __name__ == "__main__":
     unittest.main()

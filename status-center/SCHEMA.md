@@ -15,13 +15,20 @@ block whose `stale` is true must NOT be shown green (render `STALE TELEMETRY`). 
 ## Top level
 ```
 { schema, generated_at, backend, summary, attention[], hosts[], services[], streaming, radar, weather, dns, ai, labs,
-  compute, network, storage, notifications, links[], address_book[] }
+  compute, network, storage, notifications, esp_fleet, links[], address_book[] }
 ```
 - `backend`: `{version, host, uptime_s, probes_total, probes_stale, probes_failing, refresh_hints:{fast_s, host_s, slow_s}}`
 - `summary`: `{overall: state, attention_count, tiles:[{id, label, state, detail, group:"host"|"domain", informational}]}` (`informational:true` = intentional idle state, e.g. nobody is streaming)
   Tiles include one per host (group host) and domain tiles: RADAR (freshness), WEATHER, DNS, STREAMING, AI, LABS, STORAGE, NETWORK.
 - `attention[]`: `{id, severity, title, detail, source, since, link|null, status_only:boolean, operator:{acknowledged_at?, snoozed_until?}}` sorted CRITICAL, WARNING, INFO. Intentional states
   (e.g. TESSA/STRIKER offline when nobody streams) are INFO only. Status-only entries (`offline_status_only` in the registry: HYTETOWER and Nick ESP offline) have no Actions link or push notification.
+
+## esp_fleet
+`{cadence_s, operator_note, core_ingest:state, devices:[{id,name,owner,role,service,mac_suffix,last_verified_firmware,target_firmware,ota,management,sensors[],networks:[[ssid,priority]],state,state_reason,telemetry,report_age_s}]}`.
+Only `state` and `report_age_s` are live Core observations. Firmware, pins, and SSID
+priorities are documented handoff snapshots. No sensor values, coordinates, network
+passwords, or operator credentials appear. `management` is `core-private` for Nick
+or `local-only` for Spencer; it is not an executable browser API.
 
 ## notifications
 `{server:{url, access, authentication, retention_days, service, state, last_success},

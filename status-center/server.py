@@ -28,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import collector  # noqa: E402
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 SCHEMA = "codeblack.status.v1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 REGISTRY_PATH = os.environ.get("STATUS_CENTER_REGISTRY", os.path.join(HERE, "registry.json"))
@@ -1236,6 +1236,13 @@ def build_status():
     overall = "OFFLINE" if hby["core"]["state"] == "OFFLINE" else "UNKNOWN" if hby["core"]["state"] == "UNKNOWN" else ("DEGRADED" if crit or any(s in ("DEGRADED", "OFFLINE") for s in host_states) or any(a["severity"] == "WARNING" for a in attention) else "HEALTHY")
     probes = list(PROBES.values())
     links = [{"id": l["id"], "name": l["name"], "purpose": l["purpose"], "host": l["host"], "access": l["access"], "url": l["url"], "group": l["group"], "verified": link_state(l)} for l in REG["links"]]
+    esp_fleet = {"cadence_s": REG["esp_fleet"]["cadence_s"], "operator_note": REG["esp_fleet"]["operator_note"],
+                 "core_ingest": sby["core-api"]["state"],
+                 "devices": [{**device, "state": sby[device["service"]]["state"],
+                              "state_reason": sby[device["service"]]["state_reason"],
+                              "telemetry": sby[device["service"]]["telemetry"],
+                              "report_age_s": next((m["value"] for m in sby[device["service"]]["metrics"] if m["label"] == "Core report age (s)"), None)}
+                             for device in REG["esp_fleet"]["devices"]]}
     book = []
     for h in hosts:
         book.append({"name": h["name"] + " (host)", "host": h["name"], "lan": h["lan_ip"], "tailscale": h["tailscale_ip"], "url": None, "purpose": h["role"], "access": "TAILSCALE" if h["tailscale_ip"] else "LAN"})
@@ -1247,7 +1254,7 @@ def build_status():
                         "refresh_hints": {"fast_s": DEF["fast_s"], "host_s": DEF["host_s"], "slow_s": DEF["slow_s"]}},
             "summary": {"overall": overall, "attention_count": sum(1 for a in attention if a["severity"] != "INFO"), "tiles": tiles}, "attention": attention, "hosts": hosts,
             "services": [s for s in services if True], "streaming": streaming, "radar": radar, "weather": weather, "dns": dns, "ai": ai, "labs": labs, "compute": compute,
-            "network": network, "storage": storage, "notifications": build_notifications(sby),
+            "network": network, "storage": storage, "notifications": build_notifications(sby), "esp_fleet": esp_fleet,
             "links": links, "address_book": book}
 
 
@@ -1437,7 +1444,7 @@ def changelog_loop():
 
 
 # ------------------------------------------------------------------------------------------------ http
-SECTIONS = {"hosts", "services", "network", "streaming", "radar", "weather", "ai", "labs", "dns", "storage", "links", "compute", "attention", "summary"}
+SECTIONS = {"hosts", "services", "network", "streaming", "radar", "weather", "ai", "labs", "dns", "storage", "links", "compute", "attention", "summary", "esp_fleet"}
 
 
 class Handler(BaseHTTPRequestHandler):

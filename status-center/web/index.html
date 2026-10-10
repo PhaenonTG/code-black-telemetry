@@ -184,6 +184,27 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 .futurecard{border-style:dashed;color:var(--muted)}
 .foot{padding:12px 16px 24px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);max-width:2200px;margin:0 auto}
 #empty{padding:30px;text-align:center;color:var(--muted);font-size:14px}
+/* ESP fleet: status remains read-only; operator controls stay behind their own auth. */
+#s-esp{border-color:#34343f}
+.esp-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.esp-stat{padding:10px 12px;border:1px solid var(--line2);border-radius:6px;background:#101014}
+.esp-stat b{display:block;font-size:19px;line-height:1.1}.esp-stat span{font-size:11px;color:var(--muted)}
+.esp-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.esp-device{width:100%;text-align:left;padding:11px;border:1px solid var(--line2);border-radius:7px;background:var(--panel2);color:var(--text);font:inherit;cursor:pointer}
+.esp-device:hover,.esp-device:focus-visible{border-color:#8eaee2;outline:none}.esp-device.selected{border-color:#7d9bc4;background:#141c29}
+.esp-device .topline{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:5px}.esp-device b{font-size:13px}.esp-device .subline{font-size:11px;color:var(--muted)}
+.esp-detail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.esp-detail .card{padding:11px}
+.esp-detail .card h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:7px}
+.esp-list{margin:3px 0 0;padding:0;list-style:none}.esp-list li{padding:4px 0;border-top:1px solid var(--line);font-size:12px}
+.esp-list li:first-child{border-top:0}.esp-priority{float:right;color:var(--info);font-family:var(--mono)}
+.esp-action{border:1px solid #4a6688;border-radius:5px;background:#152032;color:#bfdaff;padding:6px 9px;font:inherit;font-size:11px;cursor:pointer}
+.esp-action:hover{background:#1e304b}.esp-action:focus-visible{outline:2px solid #9cc0ff;outline-offset:2px}
+.esp-action:disabled{opacity:.45;cursor:not-allowed}
+.esp-controls{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.esp-control-note{font-size:11px;color:var(--muted);line-height:1.55}
+.esp-local{display:flex;gap:6px;margin:7px 0}.esp-local input{width:100%;min-width:0;background:#0d0d10;color:var(--text);border:1px solid var(--line2);border-radius:5px;padding:6px 8px;font:inherit}
+.esp-local input:focus{outline:2px solid #9cc0ff}.esp-error{color:var(--bad);font-size:11px}
+@media(max-width:1100px){.esp-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.esp-detail{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.esp-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.esp-grid,.esp-detail{grid-template-columns:minmax(0,1fr)}}
 
 /* narrow */
 @media(max-width:899px){
@@ -224,6 +245,7 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
   <section class="sect" id="s-tiles"><header><h2>Global state</h2><button id="tileview" class="tileview" type="button" aria-controls="b-tiles" aria-expanded="false">Show all states</button></header><div class="body"><div id="b-tiles" class="tiles"></div></div></section>
   <section class="sect" id="s-attention"><header><h2>Needs attention</h2><span id="attsum" class="attsum"></span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-attention"></div></section>
   <section class="sect" id="s-notifications"><header><h2>Notifications</h2><span class="sub">ntfy &amp; alert delivery</span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-notifications"></div></section>
+  <section class="sect" id="s-esp"><header><h2>ESP32 fleet console</h2><span class="sub">Live Core freshness, handoff, and safe management paths</span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-esp"></div></section>
   <div class="layout">
     <div class="col-main">
       <section class="sect" id="s-hosts"><header><h2>Hosts</h2><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-hosts"></div></section>
@@ -253,7 +275,7 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 const POLL_MS = 5000;
 const params = new URLSearchParams(location.search);
 const FIXTURE = params.get('fixture') === '1';
-const S = { doc: null, lastOk: 0, lastGen: 0, failing: false, fallbackFixture: false, sig: {}, timer: null, fetching: false, infoOpen: false };
+const S = { doc: null, lastOk: 0, lastGen: 0, failing: false, fallbackFixture: false, sig: {}, timer: null, fetching: false, infoOpen: false, espSelected: 'spencer-weather', espLocal: '' };
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
@@ -431,6 +453,91 @@ R.notifications = (d) => {
   ]));
   box.appendChild(grid);
   box.appendChild(h('p', 'notify-note wrap', 'Routing: actionable infrastructure failures to private ntfy; normal device power-off and idle streams to status only; Discord reserved for weather alerts and one emergency fallback if ntfy delivery fails.'));
+};
+R.esp = (d) => {
+  if (document.activeElement && document.activeElement.matches('#b-esp .esp-local input')) return;
+  const box = $('#b-esp'); box.replaceChildren();
+  const fleet = d.esp_fleet;
+  if (!fleet || !Array.isArray(fleet.devices)) { box.appendChild(h('div', 'emptynote', 'Fleet inventory is unavailable from this backend.')); return; }
+  const devices = fleet.devices, reporting = devices.filter((x) => x.state === 'HEALTHY').length;
+  if (!devices.some((x) => x.id === S.espSelected)) S.espSelected = devices[0] && devices[0].id;
+  const selected = devices.find((x) => x.id === S.espSelected);
+  const stat = (value, label, color) => h('div', 'esp-stat', [h('b', color || '', value), h('span', null, label)]);
+  box.appendChild(h('div', 'esp-summary', [
+    stat(devices.length, 'Identified boards'), stat(reporting, 'Reporting to Core now', reporting ? 'mono' : ''),
+    stat(devices.length - reporting, 'Not currently reporting · status only'),
+    stat(fleet.core_ingest || 'UNKNOWN', 'Core API service', sc(fleet.core_ingest))]));
+  const grid = h('div', 'esp-grid');
+  devices.forEach((x) => {
+    const button = h('button', 'esp-device f-item' + (x.id === S.espSelected ? ' selected' : ''), [
+      h('div', 'topline', [h('b', null, x.name), chip(x.state, x.telemetry, {informational:true})]),
+      h('div', 'subline mono', x.role + ' · …' + x.mac_suffix),
+      h('div', 'subline', 'Core report: ' + (isNull(x.report_age_s) ? 'never / unknown' : durS(x.report_age_s) + ' ago')),
+      h('div', 'subline', 'Last verified firmware: ' + x.last_verified_firmware),
+    ], {type:'button', 'aria-pressed':String(x.id === S.espSelected)});
+    button.addEventListener('click', () => { S.espSelected = x.id; R.esp(S.doc); applyFilter(); });
+    grid.appendChild(button);
+  });
+  box.appendChild(grid);
+  if (!selected) return;
+  const details = h('div', 'esp-detail');
+  details.appendChild(card('', [h('h3', null, 'Device & reporting'),
+    kv('Owner', selected.owner), kv('Role', h('span', 'mono', selected.role)), kv('MAC suffix', h('span', 'mono', '…' + selected.mac_suffix)),
+    kv('Core report', isNull(selected.report_age_s) ? unk() : durS(selected.report_age_s) + ' ago'),
+    kv('Live state', chip(selected.state, selected.telemetry, {informational:true})),
+    kv('Expected cadence', durS(fleet.cadence_s)),
+    h('p', 'note wrap', selected.state_reason || 'Core reports are current.'),
+    h('p', 'note', 'Status proves an accepted Core report, not that a physical sensor is wired or calibrated.')
+  ], selected.telemetry));
+  details.appendChild(card('', [h('h3', null, 'Firmware & OTA'),
+    kv('Last verified', h('span', 'mono', selected.last_verified_firmware)),
+    kv('Release target', h('span', 'mono', selected.target_firmware)),
+    kv('Release state', selected.ota),
+    h('p', 'note', 'Installed firmware and OTA result must be checked on the board or authenticated management report; this status feed does not expose them.')
+  ]));
+  details.appendChild(card('', [h('h3', null, 'Sensor wiring · verify before power'),
+    h('ul', 'esp-list', selected.sensors.map((s) => h('li', 'wrap', s))),
+    h('p', 'note', 'These are firmware expectations or recovered legacy settings—not proof of actual wiring. Never attach an unknown powered output directly to a GPIO.')
+  ]));
+  details.appendChild(card('', [h('h3', null, 'Saved Wi-Fi priority'),
+    h('ul', 'esp-list', selected.networks.map((n) => h('li', null, [h('span', 'wrap', n[0]), h('span', 'esp-priority', n[1])]))),
+    h('p', 'note', 'SSID/priority handoff snapshot only. Passwords are never shown; live board configuration may differ.')
+  ]));
+  const controls = [h('h3', null, 'Management & recovery')];
+  if (selected.management === 'core-private') {
+    controls.push(h('p', 'esp-control-note', 'Nick boards support Core-queued diagnostics, sensor settings, Wi-Fi changes, reboot, and explicitly versioned signed OTA. A separate operator session is required.'));
+    const copy = h('button', 'esp-action', 'Copy Phaenon3 launch command', {type:'button'});
+    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText("& 'C:\\CodeBlack\\Projects\\SpencerEsp\\firmware\\mesonet-idf\\tools\\Start-MesonetManagement.ps1'"); copy.textContent = 'Copied'; } catch (_) { copy.textContent = 'Clipboard unavailable'; } });
+    controls.push(h('div', 'esp-controls', copy));
+    controls.push(h('p', 'esp-control-note', 'Run the copied script in PowerShell on Phaenon3. It opens a private, 30-minute local session. This dashboard does not hold the admin credential or send commands.'));
+  } else {
+    controls.push(h('p', 'esp-control-note', 'This Spencer board supports signed automatic OTA and its authenticated local HTTPS page. Core remote commands are not enrolled for this role yet.'));
+  }
+  const localInput = h('input', null, null, {type:'text', placeholder:'Board IPv4 address on your Wi-Fi', 'aria-label':'Board local IPv4 address', inputmode:'decimal'});
+  localInput.value = S.espLocal;
+  localInput.addEventListener('input', () => { S.espLocal = localInput.value; });
+  const openLocal = h('button', 'esp-action', 'Open local page', {type:'button'});
+  const localError = h('div', 'esp-error');
+  openLocal.addEventListener('click', () => {
+    const value = localInput.value.trim();
+    const parts = value.split('.');
+    if (parts.length !== 4 || !parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255)) { localError.textContent = 'Enter a valid IPv4 address from the same Wi-Fi network.'; return; }
+    localError.textContent = '';
+    window.open('https://' + value + '/', '_blank', 'noopener');
+  });
+  controls.push(h('div', 'esp-local', [localInput, openLocal]), localError,
+    h('p', 'esp-control-note', 'Local page requires the board’s own sign-in. Your device must share its Wi-Fi or fallback hotspot; a certificate warning may appear for the self-signed local certificate.'));
+  details.appendChild(card('', controls));
+  details.appendChild(card('', [h('h3', null, 'Indicator & handoff'),
+    h('ul', 'esp-list', [
+      ['Solid green', 'recent accepted Core report'], ['Blue breathing', 'Wi-Fi up, awaiting Core'],
+      ['Amber breathing', 'Wi-Fi disconnected'], ['Red double flash', 'Core rejected report'],
+      ['Purple breathing', 'OTA in progress'], ['White flash', 'setup / unenrolled']
+    ].map(([color, meaning]) => h('li', null, [h('b', null, color + ' · '), meaning]))),
+    h('p', 'note', 'Photo-based pin corrections and sensor validation remain pending for the unplugged hubs.')
+  ]));
+  box.appendChild(details);
+  box.appendChild(h('p', 'notify-note', fleet.operator_note));
 };
 R.hosts = (d) => {
   const box = $('#b-hosts'); box.replaceChildren();
@@ -720,10 +827,10 @@ R.footer = (d) => {
     'probes ' + (isNull(b.probes_total) ? '?' : b.probes_total) + ' total / ' + (isNull(b.probes_stale) ? '?' : b.probes_stale) + ' stale / ' + (isNull(b.probes_failing) ? '?' : b.probes_failing) + ' failing',
     'generated ' + (d.generated_at || '?'), 'read-only view'].join('  |  ')));
 };
-const SECTIONS = [['tiles', (d) => d.summary], ['attention', (d) => d.attention], ['notifications', (d) => d.notifications], ['hosts', (d) => d.hosts], ['services', (d) => d.services], ['streaming', (d) => d.streaming], ['radar', (d) => d.radar],
+const SECTIONS = [['tiles', (d) => d.summary], ['attention', (d) => d.attention], ['notifications', (d) => d.notifications], ['esp', (d) => d.esp_fleet], ['hosts', (d) => d.hosts], ['services', (d) => d.services], ['streaming', (d) => d.streaming], ['radar', (d) => d.radar],
   ['weather', (d) => d.weather], ['compute', (d) => d.compute], ['network', (d) => d.network], ['dns', (d) => d.dns], ['storage', (d) => d.storage], ['ai', (d) => d.ai], ['labs', (d) => d.labs],
   ['launchpad', (d) => d.links], ['address', (d) => d.address_book], ['inventory', (d) => [d.hosts, d.services]], ['footer', (d) => [d.backend, d.schema]]];
-const RELTIME = new Set(['hosts', 'services', 'streaming', 'radar', 'weather', 'compute', 'network', 'dns', 'storage', 'ai', 'labs', 'attention', 'notifications']);
+const RELTIME = new Set(['hosts', 'services', 'esp', 'streaming', 'radar', 'weather', 'compute', 'network', 'dns', 'storage', 'ai', 'labs', 'attention', 'notifications']);
 function render(d) {
   let changed = false;
   SECTIONS.forEach(([k, pick]) => {
