@@ -567,6 +567,12 @@
       }
     },
     {
+      "id": "radar_control",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8787/api/v1/radar/control/status",
+      "interval": "host"
+    },
+    {
       "id": "overlay_http",
       "kind": "http_json",
       "url": "http://127.0.0.1:8899/",

@@ -558,6 +558,23 @@ R.radar = (d) => {
     kv('Last error', isNull(W.last_error) ? h('span', 'muted', 'none') : h('span', 'err', W.last_error)),
     LG ? kv('Legacy worker', h('span', null, [chip(LG.state), ' ', h('span', 'muted small', LG.note || '')])) : null,
   ], r.telemetry));
+  const C = r.control || {};
+  const F = C.fabric || {}, S = C.selection || {}, Q = C.work || {}, caps = C.capabilities || {};
+  const siteList = (items) => !items || !items.length ? h('span', 'muted', 'none') : h('span', 'mono', items.map((x) => x.site_id + (isNull(x.distance_km) ? '' : ' (' + x.distance_km + ' km)')).join(', '));
+  box.appendChild(card(C.state === 'NOT_DEPLOYED' ? 'futurecard' : '', [
+    h('div', 'hd', [h('h3', null, 'Chase-aware radar control'), chip(C.state || 'UNKNOWN', C.telemetry), ' ', h('span', 'muted small', C.reason || '')]),
+    kv('Operating mode', chip(C.mode || 'UNKNOWN')),
+    kv('Fabric location feed', h('span', null, [chip(F.state || 'UNKNOWN'), ' ', h('span', 'muted small', isNull(F.snapshot_age_s) ? 'age unknown' : 'age ' + durS(F.snapshot_age_s))])),
+    kv('Eligible / skipped chasers', nz(F.eligible_chasers) + ' / ' + nz(F.skipped_chasers)),
+    kv('Primary sites', siteList(S.primary)), kv('Secondary queue', siteList(S.secondary)),
+    kv('Active / queued work', nz(Q.active_site) + ' / ' + nz(Q.queued_sites)),
+    kv('Last selection success', tm(Q.last_success_at)),
+    isNull(Q.last_error) ? null : kv('Last control error', h('span', 'err', Q.last_error)),
+    kv('Closest-site selection', chip(caps.closest_site_selection || 'UNKNOWN')),
+    kv('Secondary prewarm', chip(caps.secondary_prewarm || 'UNKNOWN')),
+    kv('Private configuration UI', chip(caps.configuration_ui || 'UNKNOWN')),
+    h('div', 'small muted wrap', 'Locations are intentionally not shown here. This read-only panel reports only operational selection telemetry.'),
+  ], C.telemetry));
 };
 R.weather = (d) => {
   const box = $('#b-weather'); box.replaceChildren();
