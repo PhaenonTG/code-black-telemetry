@@ -1122,10 +1122,8 @@ def build_attention(hosts, services, streaming, radar, weather, dns, storage, la
     for src in streaming["sources"]:
         if src["state"] == "DEGRADED":
             add(f"stream:{src['id']}", "WARNING", f"{src['name']} degraded", src["reason"], "streaming")
-        elif src["state"] == "OFFLINE":
-            add(f"stream:{src['id']}", "INFO", f"{src['name']} offline", "no publisher (normal when nobody is streaming)", "streaming")
     b = streaming.get("broadcast")
-    if b and b["state"] not in ("AVAILABLE", "LIVE", "ONLINE"):
+    if b and any(src["state"] == "LIVE" for src in streaming["sources"]) and b["state"] not in ("AVAILABLE", "LIVE", "ONLINE"):
         add("broadcast", "WARNING", f"Facebook live state {b['state']}", b["detail"], "streaming")
     d = labs.get("download")
     if d:

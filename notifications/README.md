@@ -88,10 +88,10 @@ has read-only access to `silas-aegis`; the publisher has write-only access.
 The existing Edge alert evaluator remains the authority for host reachability,
 Core API, MQTT, backups, PHAENON3 functional health, and failed services. The
 Core Status Center remains the inventory and dashboard for the broader fleet.
-`edge_ntfy_bridge.py` runs once per minute from the existing Edge notification
-dispatcher and forwards every new Edge incident/event type and every Status
-Center attention transition (Info, Warning, Critical, and severity/state
-changes) to the private `ops-monitoring` topic. HYTETOWER reachability and
+`edge_ntfy_bridge.py` runs once per minute from the Edge notification
+dispatcher and forwards actionable Edge incidents and Warning-or-higher Status
+Center attention transitions to the private `ops-monitoring` topic. Informational
+events, stream announcements, and connection tests stay status-only. HYTETOWER reachability and
 Nick WIND/WEATHER report freshness are not attention items at all: they remain
 visible in host/service status, without alert-list entries, push messages, or
 recovery notifications. Future power-cycled devices marked `offline_status_only`
@@ -99,7 +99,11 @@ follow the same Status Center policy. A new condition must appear in three
 Status Center polls to page and clear in two to recover. Numeric incident updates with the
 same underlying issue are suppressed, as is normal GPU occupancy over 90% per
 operator preference. Unchanged conditions never generate repeated pushes.
-Discord remains the fallback when Core/ntfy itself is down.
+The dispatcher sends no routine infrastructure events to Discord. It checks
+ntfy health each run; after two failed bridge runs it sends one deduplicated
+emergency Discord notice, leaving the incident outbox queued for ntfy retry.
+Recovery resets the fallback latch. This emergency route does not carry every
+queued alert, so the Status Center remains the incident detail source.
 
 Nick's dedicated Core mesonet evaluator also has a private 15-second ntfy
 mirror, `codeblack-mesonet-ntfy-bridge.timer`. It reads its durable alert rows
@@ -110,19 +114,26 @@ opens and clears between checks is reported as a short event. Existing rows
 were baselined at install;
 failed publishes remain pending for the next run. Its write-only token and
 cursor stay under Core's private mesonet management directory. Status Center
-shows this separately as **Nick Mesonet iPhone Alerts**. The Mesonet Discord
-evaluator follows the same status-only offline/stale policy.
-Its Core source currently lives outside this checkout; after replacing that
-source, rerun `mesonet_status_only_policy.py` as root on Core before enabling
-Discord delivery. The patch is guarded and leaves durable alert history intact.
+shows this separately as **Nick Mesonet iPhone Alerts**. The Mesonet evaluator
+retains durable alert history but direct Discord delivery is disabled by the
+guarded `mesonet_ntfy_only_policy.py` patch. Its health field now reflects the
+dedicated ntfy bridge. The evaluator source lives outside this checkout on
+Core; after replacing it, reapply both guarded policy patches as root before
+re-enabling the service.
 
 The dedicated `ops-watcher` account has write-only access to `ops-monitoring`;
 `glenn` has read-only access. The Edge token is stored outside Git at
 `/srv/codeblack/private/ntfy/ops-publisher-token.txt`. The bridge writes health
 to `/srv/codeblack/data/status/ntfy-bridge-status.json`; its health and freshness
 are visible as **iPhone Ops Alerts** in Status Center, along with coverage and
-tracked-alert counts. A bridge failure also
-becomes an Edge incident for Discord fallback.
+tracked-alert counts. A bridge failure also becomes an Edge incident; Discord
+receives only the deduplicated delivery-outage fallback notice.
+
+The Discord bot's persistent infrastructure status-board updater is disabled.
+Its existing weather commands remain available; an automatic geographic
+weather-warning feed is not yet configured and needs an operator-selected
+coverage area and channel. Manual operations commands remain registered until
+the operator confirms whether those should be removed.
 
 ## iPhone enrollment
 

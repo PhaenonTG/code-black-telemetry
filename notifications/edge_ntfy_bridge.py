@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Forward all monitored Edge and Status Center alert transitions to ntfy.
+"""Forward actionable Edge and Status Center alert transitions to ntfy.
 
 The existing Edge evaluator owns infrastructure incidents. Status Center owns
 service-level attention. This bridge only delivers transitions; it does not
@@ -32,6 +32,7 @@ INCIDENT_TYPES = {"incident_start", "incident_update", "recovery"}
 STATE_WORDS = re.compile(r"\b(OFFLINE|DEGRADED|UNKNOWN|STALE|AGING|CRITICAL|ERROR|UNAVAILABLE|VERIFYING)\b", re.I)
 BAD_POLLS = 3
 GOOD_POLLS = 2
+DELIVERY_FAILED = False
 
 
 def utcnow():
@@ -71,25 +72,30 @@ def snoozed(alert_id):
 
 
 def publish(title, body, priority="default", tags="warning", alert_id="edge:incident"):
-    token = TOKEN.read_text(encoding="utf-8").strip()
-    if not token:
-        raise RuntimeError("ops publisher token is empty")
-    req = urllib.request.Request(
-        NTFY_URL,
-        data=body.encode("utf-8"),
-        headers={
-            "Authorization": "Bearer " + token,
-            "Title": title,
-            "Priority": priority,
-            "Tags": tags,
-            **action_headers(alert_id),
-            "User-Agent": "CodeBlack-Edge-OpsBridge/1.0",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=8) as response:
-        if response.status != 200:
-            raise RuntimeError(f"ntfy HTTP {response.status}")
+    global DELIVERY_FAILED
+    try:
+        token = TOKEN.read_text(encoding="utf-8").strip()
+        if not token:
+            raise RuntimeError("ops publisher token is empty")
+        req = urllib.request.Request(
+            NTFY_URL,
+            data=body.encode("utf-8"),
+            headers={
+                "Authorization": "Bearer " + token,
+                "Title": title,
+                "Priority": priority,
+                "Tags": tags,
+                **action_headers(alert_id),
+                "User-Agent": "CodeBlack-Edge-OpsBridge/1.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=8) as response:
+            if response.status != 200:
+                raise RuntimeError(f"ntfy HTTP {response.status}")
+    except Exception:
+        DELIVERY_FAILED = True
+        raise
 
 
 def issue_keys(event):
@@ -151,7 +157,7 @@ def send_edge_events(state):
 
 
 def send_other_edge_events(state):
-    """Deliver non-incident events from the shared Discord outbox as well."""
+    """Record non-incident events as status-only, never phone pages."""
     files = {}
     for folder in ("outbox", "sent", "failed"):
         for path in (NOTIFICATION_DIR / folder).glob("*.json"):
@@ -169,22 +175,8 @@ def send_other_edge_events(state):
             continue  # Discord may have moved an outbox file during this scan.
         event = load(path, {})
         kind = str(event.get("type", "unknown"))
-        if kind not in INCIDENT_TYPES:
-            stream = event.get("stream") or {}
-            if kind == "stream_live" and isinstance(stream, dict):
-                body = f"{stream.get('owner', 'Code Black')} live on {stream.get('provider', 'stream provider')}"
-                if str(stream.get("url", "")).startswith("https://"):
-                    body += f"\n{stream['url']}"
-                title = "Code Black stream live"
-            elif kind == "test":
-                title, body = "Code Black notification test", "Test event from Edge."
-            else:
-                title = f"Code Black event: {kind[:80]}"
-                body = "\n".join(str(issue) for issue in event.get("issues", [])[:12]) or "See Status Center for details."
-            alert_id = "edge:event:" + hashlib.sha256(name.encode()).hexdigest()[:16]
-            if not snoozed(alert_id):
-                publish(title, body, "default", "information_source", alert_id)
-                sent += 1
+        # Stream announcements and diagnostic tests are not operational failures.
+        # The durable incident log, not this shared queue, owns incident paging.
         seen.add(name)
         state["other_edge_seen"] = sorted(seen)
         save(STATE, state)
@@ -201,7 +193,7 @@ def get_attention():
             raise RuntimeError(f"Status Center snapshot stale ({age:.0f}s)")
     return {
         item["id"]: item for item in payload.get("attention", [])
-        if item.get("severity") in {"INFO", "WARNING", "ERROR", "CRITICAL"}
+        if item.get("severity") in {"WARNING", "ERROR", "CRITICAL"}
         and item.get("id") not in STATUS_ONLY_ATTENTION
         and not item.get("status_only")
         and "vram_above_90_percent" not in item.get("id", "").lower()
@@ -226,6 +218,9 @@ def send_status_transitions(state):
     # misleading "issue cleared" notifications.
     for key in STATUS_ONLY_ATTENTION:
         tracked.pop(key, None)
+    for key in list(tracked):
+        if tracked[key].get("severity") == "INFO":
+            tracked.pop(key, None)
     if not state.get("attention_baselined") or state.get("coverage_version", 0) < 2:
         for key, item in current.items():
             tracked[key] = {"active": True, "bad": BAD_POLLS, "good": 0, "title": item.get("title", key),
@@ -288,9 +283,21 @@ def send_status_transitions(state):
 
 
 def main():
+    global DELIVERY_FAILED
+    DELIVERY_FAILED = False
     state = load(STATE, {})
     sent = 0
     errors = []
+    ntfy_healthy = True
+    try:
+        health_url = urllib.parse.urlsplit(NTFY_URL)
+        health_url = urllib.parse.urlunsplit((health_url.scheme, health_url.netloc, "/v1/health", "", ""))
+        with urllib.request.urlopen(health_url, timeout=5) as response:
+            if response.status != 200 or not json.load(response).get("healthy"):
+                raise RuntimeError("ntfy health check failed")
+    except Exception as exc:
+        ntfy_healthy = False
+        errors.append(f"ntfy-health: {exc}")
     try:
         sent += send_edge_events(state)
     except Exception as exc:
@@ -305,8 +312,9 @@ def main():
         errors.append(f"status-center: {exc}")
     save(STATE, state)
     save(HEALTH, {"generated_at": utcnow(), "ok": not errors, "sent": sent, "errors": errors,
+                  "ntfy_delivery_ok": ntfy_healthy and not DELIVERY_FAILED,
                   "event_offset": state.get("event_offset"), "attention_tracked": len(state.get("attention", {})),
-                  "coverage": "all-status-attention-and-edge-events", "coverage_version": 2})
+                  "coverage": "actionable-status-attention-and-edge-incidents", "coverage_version": 3})
     print(f"ntfy bridge: sent={sent}, errors={len(errors)}")
     for error in errors:
         print(error)

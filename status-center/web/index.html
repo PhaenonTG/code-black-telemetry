@@ -426,10 +426,11 @@ R.notifications = (d) => {
     kv('Lock-screen push', chip(phone.push)),
     h('div', 'notify-note wrap', phone.note || 'Device delivery has not been verified.'),
     h('div', 'notify-note', ['Action console ', chip(actions.state)]),
-    h('div', 'notify-note', ['Discord fallback ', chip(fallback.state)]),
+    h('div', 'notify-note', ['Emergency Discord fallback (ntfy outage only) ', chip(fallback.state)]),
     h('div', 'linkrow', lnk('Open operations console', 'https://codeblack-core.tail1d0673.ts.net/alert-actions/')),
   ]));
   box.appendChild(grid);
+  box.appendChild(h('p', 'notify-note wrap', 'Routing: actionable infrastructure failures to private ntfy; normal device power-off and idle streams to status only; Discord reserved for weather alerts and one emergency fallback if ntfy delivery fails.'));
 };
 R.hosts = (d) => {
   const box = $('#b-hosts'); box.replaceChildren();

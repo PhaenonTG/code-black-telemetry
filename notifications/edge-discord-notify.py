@@ -1,620 +1,144 @@
 #!/usr/bin/env python3
+"""Route operational alerts to ntfy, with one Discord outage fallback.
 
-import datetime
+The Edge evaluator's JSONL log and the ntfy bridge own incident delivery.
+This dispatcher retains the historical outbox as an audit trail, and uses the
+Discord webhook only when private push is unavailable for two runs.
+"""
+
+import datetime as dt
 import json
-import subprocess
+import os
+from pathlib import Path
 import shutil
+import subprocess
 import sys
 import time
-import urllib.error
 import urllib.request
-from pathlib import Path
 
-
-BASE = Path("/srv/codeblack/data/notifications")
-OUTBOX = BASE / "outbox"
-SENT = BASE / "sent"
-FAILED = BASE / "failed"
-
-STATUS_FILE = Path(
-    "/srv/codeblack/data/status/notification-status.json"
-)
-
-CONFIG_FILE = Path(
-    "/etc/codeblack-notifications.json"
-)
-
-SECRET_FILE = Path(
-    "/etc/codeblack-discord-webhook"
-)
-
-
-for directory in (OUTBOX, SENT, FAILED):
-    directory.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-# The private iPhone channel is additive. A Core/ntfy outage must never block
-# the existing Discord fallback or consume its outbox.
-bridge = Path(__file__).with_name("edge_ntfy_bridge.py")
-if bridge.exists():
-    try:
-        subprocess.run([sys.executable, str(bridge)], timeout=25, check=False)
-    except Exception as exc:
-        print(f"ntfy bridge unavailable: {exc}")
+BASE = Path(os.environ.get("CODEBLACK_NOTIFICATION_DIR", "/srv/codeblack/data/notifications"))
+OUTBOX, SENT = BASE / "outbox", BASE / "sent"
+STATUS = Path(os.environ.get("CODEBLACK_NOTIFICATION_STATUS", "/srv/codeblack/data/status/notification-status.json"))
+SECRET = Path(os.environ.get("CODEBLACK_DISCORD_WEBHOOK_FILE", "/etc/codeblack-discord-webhook"))
+STATE = BASE / "emergency-fallback-state.json"
+BRIDGE = Path(__file__).with_name("edge_ntfy_bridge.py")
+BRIDGE_HEALTH = Path(os.environ.get("CODEBLACK_NTFY_BRIDGE_HEALTH", "/srv/codeblack/data/status/ntfy-bridge-status.json"))
 
 
 def utcnow():
-    return datetime.datetime.now(
-        datetime.timezone.utc
-    ).isoformat()
+    return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
-def load_json(path, default=None):
+def load(path, default):
     try:
-        return json.loads(
-            path.read_text()
-        )
-    except Exception:
-        return default if default is not None else {}
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return default
 
 
-def save_json(path, payload):
-    tmp = path.with_suffix(
-        path.suffix + ".tmp"
-    )
-
-    tmp.write_text(
-        json.dumps(
-            payload,
-            indent=2
-        ) + "\n"
-    )
-
-    tmp.replace(path)
+def save(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
 
 
-def queue_counts():
-    return {
-        "outbox": len(
-            list(
-                OUTBOX.glob("*.json")
-            )
-        ),
-        "sent": len(
-            list(
-                SENT.glob("*.json")
-            )
-        ),
-        "failed": len(
-            list(
-                FAILED.glob("*.json")
-            )
-        ),
-    }
-
-
-def write_status(
-    *,
-    enabled,
-    configured,
-    provider,
-    last_result=None,
-    last_error=None,
-):
-    payload = {
-        "generated_at": utcnow(),
-        "provider": provider,
-        "enabled": enabled,
-        "configured": configured,
-        "queue": queue_counts(),
-        "last_result": last_result,
-        "last_error": last_error,
-    }
-
-    save_json(
-        STATUS_FILE,
-        payload
-    )
-
-
-def read_secret():
+def valid_webhook():
     try:
-        value = SECRET_FILE.read_text().strip()
-    except Exception:
+        url = SECRET.read_text(encoding="utf-8").strip()
+    except OSError:
         return ""
-
-    if not value.startswith(
-        "https://discord.com/api/webhooks/"
-    ) and not value.startswith(
-        "https://discordapp.com/api/webhooks/"
-    ):
-        return ""
-
-    return value
-
-
-def event_title(event):
-    kind = event.get(
-        "type",
-        "event"
-    )
-
-    if kind == "incident_start":
-        return "🚨 Code Black Infrastructure Incident"
-
-    if kind == "incident_update":
-        return "⚠️ Code Black Incident Update"
-
-    if kind == "recovery":
-        return "✅ Code Black Infrastructure Recovered"
-
-    if kind == "test":
-        return "🧪 Code Black Notification Test"
-
-    if kind == "stream_live":
-        stream = event.get("stream", {})
-        owner = stream.get("owner", "Code Black") if isinstance(stream, dict) else "Code Black"
-        return f"🔴 {owner} is LIVE"
-
-    return "Code Black Infrastructure Event"
-
-
-def event_color(event):
-    kind = event.get(
-        "type",
-        ""
-    )
-
-    if kind == "recovery":
-        return 0x57F287
-
-    if kind == "test":
-        return 0x5865F2
-
-    if kind == "stream_live":
-        return 0xED4245
-
-    if kind == "incident_update":
-        return 0xFEE75C
-
-    return 0xED4245
-
-
-def summarize(event):
-    if event.get("type") == "stream_live":
-        stream = event.get("stream", {})
-        provider = stream.get("provider", "the stream provider") if isinstance(stream, dict) else "the stream provider"
-        return f"Live on {provider}."
-
-    issues = event.get(
-        "issues",
-        []
-    )
-
-    if issues:
-        issue_text = "\n".join(
-            f"• {issue}"
-            for issue in issues[:20]
-        )
-    else:
-        issue_text = (
-            "No active infrastructure issues."
-        )
-
-    return issue_text
-
-
-def discord_payload(
-    event,
-    username,
-):
-    status_snapshot = event.get(
-        "status_snapshot",
-        {}
-    )
-
-    functional = event.get(
-        "functional_snapshot",
-        {}
-    )
-
-    core = status_snapshot.get(
-        "core",
-        {}
-    )
-
-    backup = status_snapshot.get(
-        "backup",
-        {}
-    )
-
-    api = functional.get(
-        "core_api",
-        {}
-    )
-
-    mqtt = functional.get(
-        "mqtt",
-        {}
-    )
-
-    fields = []
-
-    fields.append({
-        "name": "Event",
-        "value": event.get(
-            "type",
-            "unknown"
-        ),
-        "inline": True,
-    })
-
-    fields.append({
-        "name": "Severity",
-        "value": event.get(
-            "severity",
-            "unknown"
-        ),
-        "inline": True,
-    })
-
-    if event.get("type") == "stream_live":
-        stream = event.get("stream", {})
-        if isinstance(stream, dict):
-            fields.append({
-                "name": "Stream",
-                "value": stream.get("provider", "Unknown provider"),
-                "inline": True,
-            })
-            url = stream.get("url")
-            if isinstance(url, str) and url.startswith("https://"):
-                fields.append({
-                    "name": "Watch",
-                    "value": url,
-                    "inline": False,
-                })
-
-    if core:
-        fields.append({
-            "name": "Core",
-            "value": (
-                f"SSH: "
-                f"{'OK' if core.get('ssh_reachable') else 'DOWN'}\n"
-                f"Tailscale: "
-                f"{'OK' if core.get('tailscale_reachable') else 'DOWN'}\n"
-                f"Failed services: "
-                f"{core.get('failed_services', 'unknown')}"
-            ),
-            "inline": True,
-        })
-
-    if api:
-        fields.append({
-            "name": "Core API",
-            "value": (
-                f"{'OK' if api.get('ok') else 'FAILED'}"
-                f" • HTTP "
-                f"{api.get('http_code', 'unknown')}"
-            ),
-            "inline": True,
-        })
-
-    if mqtt:
-        fields.append({
-            "name": "MQTT",
-            "value": (
-                f"{'Reachable' if mqtt.get('tcp_reachable') else 'FAILED'}"
-            ),
-            "inline": True,
-        })
-
-    if backup:
-        fields.append({
-            "name": "Backup",
-            "value": (
-                f"Age: "
-                f"{backup.get('age_minutes', 'unknown')} min\n"
-                f"Repos: "
-                f"{backup.get('repository_count', 'unknown')}"
-            ),
-            "inline": True,
-        })
-
-    embed = {
-        "title": event_title(event),
-        "description": summarize(event),
-        "color": event_color(event),
-        "timestamp": event.get(
-            "time",
-            utcnow()
-        ),
-        "fields": fields,
-        "footer": {
-            "text": "CodeBlack-Edge • Stream Watch" if event.get("type") == "stream_live" else "CodeBlack-Edge • Infrastructure Watchdog"
-        },
-    }
-
-    return {
-        "username": username,
-        "allowed_mentions": {
-            "parse": []
-        },
-        "embeds": [
-            embed
-        ],
-    }
-
-
-def post_discord(
-    webhook,
-    payload,
-    timeout,
-):
-    body = json.dumps(
-        payload
-    ).encode("utf-8")
-
-    request = urllib.request.Request(
-        webhook + "?wait=true",
-        data=body,
-        headers={
-            "Content-Type": "application/json",
-            "User-Agent": "CodeBlack-Edge/1.0",
-        },
-        method="POST",
-    )
-
-    with urllib.request.urlopen(
-        request,
-        timeout=timeout
-    ) as response:
-        code = response.getcode()
-
-        if code < 200 or code >= 300:
-            raise RuntimeError(
-                f"Discord HTTP {code}"
-            )
-
-        return code
-
-
-config = load_json(
-    CONFIG_FILE,
-    {}
-)
-
-provider = config.get(
-    "provider",
-    "discord"
-)
-
-enabled = bool(
-    config.get(
-        "enabled",
-        False
-    )
-)
-
-username = config.get(
-    "username",
-    "Code Black Edge"
-)
-
-max_attempts = int(
-    config.get(
-        "max_attempts",
-        3
-    )
-)
-
-timeout = int(
-    config.get(
-        "request_timeout_seconds",
-        10
-    )
-)
-
-webhook = read_secret()
-configured = bool(webhook)
-
-queued_files = sorted(
-    OUTBOX.glob("*.json")
-)
-
-
-if not enabled:
-    write_status(
-        enabled=False,
-        configured=configured,
-        provider=provider,
-        last_result=(
-            "delivery_disabled"
-        ),
-    )
-
-    print(
-        "Notification delivery disabled; queue preserved."
-    )
-
-    raise SystemExit(0)
-
-
-if provider != "discord":
-    write_status(
-        enabled=enabled,
-        configured=False,
-        provider=provider,
-        last_result="unsupported_provider",
-        last_error=(
-            f"Unsupported provider: {provider}"
-        ),
-    )
-
-    raise SystemExit(1)
-
-
-if not configured:
-    write_status(
-        enabled=True,
-        configured=False,
-        provider=provider,
-        last_result="missing_webhook",
-        last_error=(
-            "Discord webhook is not configured."
-        ),
-    )
-
-    print(
-        "Discord delivery enabled but webhook is missing."
-    )
-
-    raise SystemExit(1)
-
-
-if not queued_files:
-    write_status(
-        enabled=True,
-        configured=True,
-        provider=provider,
-        last_result="queue_empty",
-    )
-
-    print(
-        "Notification queue empty."
-    )
-
-    raise SystemExit(0)
-
-
-overall_failure = False
-
-
-for path in queued_files:
-    event = load_json(
-        path,
-        {}
-    )
-
-    if not event:
-        target = FAILED / path.name
-
-        shutil.move(
-            str(path),
-            str(target)
-        )
-
-        overall_failure = True
-
-        continue
-
-    payload = discord_payload(
-        event,
-        username
-    )
-
-    delivered = False
-    error_text = None
-
-    for attempt in range(
-        1,
-        max_attempts + 1
-    ):
-        try:
-            code = post_discord(
-                webhook,
-                payload,
-                timeout
-            )
-
-            delivered = True
-
-            event[
-                "notification_delivery"
-            ] = {
-                "provider": "discord",
-                "delivered_at": utcnow(),
-                "http_status": code,
-                "attempt": attempt,
-            }
-
-            save_json(
-                path,
-                event
-            )
-
-            break
-
-        except Exception as exc:
-            error_text = str(exc)
-
-            if attempt < max_attempts:
-                time.sleep(
-                    min(
-                        2 ** attempt,
-                        8
-                    )
-                )
-
-    if delivered:
-        target = SENT / path.name
-
-        shutil.move(
-            str(path),
-            str(target)
-        )
-
-        print(
-            f"SENT: {path.name}"
-        )
-
-    else:
-        event[
-            "notification_delivery"
-        ] = {
-            "provider": "discord",
-            "failed_at": utcnow(),
-            "error": error_text,
-            "attempts": max_attempts,
+    return url if url.startswith(("https://discord.com/api/webhooks/", "https://discordapp.com/api/webhooks/")) else ""
+
+
+def send_emergency(url, reason):
+    payload = {"content": "🚨 Code Black emergency delivery fallback: private ntfy alerts are unavailable. "
+                          "Check Core/ntfy and the Edge notification dispatcher. Operational alerts remain queued for retry. "
+                          f"Reason: {reason[:250]}",
+               "allowed_mentions": {"parse": []}}
+    request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
+                                     headers={"Content-Type": "application/json", "User-Agent": "CodeBlack-EmergencyFallback/1.0"},
+                                     method="POST")
+    with urllib.request.urlopen(request, timeout=10) as response:
+        if response.status < 200 or response.status >= 300:
+            raise RuntimeError(f"Discord HTTP {response.status}")
+
+
+def archive_outbox():
+    """Archive the queue after the bridge succeeds, preserving audit history."""
+    SENT.mkdir(parents=True, exist_ok=True)
+    archived = 0
+    for path in sorted(OUTBOX.glob("*.json")):
+        if not path.is_file():
+            continue
+        event = load(path, {})
+        kind = event.get("type")
+        event["notification_delivery"] = {
+            "provider": "ntfy" if kind in {"incident_start", "incident_update", "recovery"} else "status_only",
+            "archived_at": utcnow(),
+            "note": "Incident JSONL cursor owns ntfy delivery; informational queue events do not page.",
         }
-
-        save_json(
-            path,
-            event
-        )
-
-        target = FAILED / path.name
-
-        shutil.move(
-            str(path),
-            str(target)
-        )
-
-        print(
-            f"FAILED: {path.name}: {error_text}"
-        )
-
-        overall_failure = True
+        save(path, event)
+        destination = SENT / path.name
+        if destination.exists():
+            destination = SENT / f"{path.stem}-{int(dt.datetime.now().timestamp())}{path.suffix}"
+        shutil.move(str(path), str(destination))
+        archived += 1
+    return archived
 
 
-write_status(
-    enabled=True,
-    configured=True,
-    provider=provider,
-    last_result=(
-        "delivery_failure"
-        if overall_failure
-        else "delivery_success"
-    ),
-    last_error=(
-        "One or more notifications failed."
-        if overall_failure
-        else None
-    ),
-)
+def dispatch(run_bridge=None, send=send_emergency):
+    OUTBOX.mkdir(parents=True, exist_ok=True)
+    fallback = load(STATE, {"failures": 0, "announced": False})
+    if run_bridge is None:
+        def run_bridge():
+            return subprocess.run([sys.executable, str(BRIDGE)], timeout=45,
+                                  capture_output=True, text=True, check=False)
+    error = None
+    started = time.time()
+    try:
+        result = run_bridge()
+        if result.returncode:
+            error = (result.stdout or result.stderr or f"bridge exit {result.returncode}").strip()[-500:]
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+    webhook = valid_webhook()
+    if error is None:
+        archived = archive_outbox()
+        fallback = {"failures": 0, "announced": False, "last_ok": utcnow()}
+        outcome = "ntfy_healthy"
+    else:
+        archived = 0
+        health = load(BRIDGE_HEALTH, {})
+        try:
+            fresh_health = BRIDGE_HEALTH.stat().st_mtime >= started - 1
+        except OSError:
+            fresh_health = False
+        ntfy_unavailable = not (fresh_health and health.get("ntfy_delivery_ok") is True)
+        if ntfy_unavailable:
+            fallback["failures"] = int(fallback.get("failures", 0)) + 1
+        else:
+            fallback["failures"] = 0
+            fallback["announced"] = False
+        outcome = "ntfy_unavailable" if ntfy_unavailable else "bridge_degraded"
+        if ntfy_unavailable and fallback["failures"] >= 2 and not fallback.get("announced") and webhook:
+            try:
+                send(webhook, error)
+                fallback["announced"] = True
+                fallback["announced_at"] = utcnow()
+                outcome = "emergency_discord_sent"
+            except Exception as exc:
+                outcome = "emergency_discord_failed"
+                error += f"; fallback: {type(exc).__name__}: {exc}"
+    save(STATE, fallback)
+    save(STATUS, {"generated_at": utcnow(), "provider": "ntfy", "enabled": True,
+                  "configured": bool(webhook), "fallback": "discord-emergency-only",
+                  "queue": {"outbox": len(list(OUTBOX.glob('*.json'))), "sent": len(list(SENT.glob('*.json')))},
+                  "archived": archived, "last_result": outcome, "last_error": error,
+                  "fallback_failures": fallback["failures"], "fallback_announced": fallback.get("announced", False)})
+    print(f"notification dispatch: {outcome}; archived={archived}; queued={len(list(OUTBOX.glob('*.json')))}")
+    return 0 if error is None or outcome == "emergency_discord_sent" else 1
 
 
-raise SystemExit(
-    1 if overall_failure else 0
-)
+if __name__ == "__main__":
+    raise SystemExit(dispatch())
