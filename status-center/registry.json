@@ -253,6 +253,18 @@
             ]
           },
           {
+            "name": "weather-alert-health",
+            "path": "/srv/codeblack/shared/discord-bot/weather-alert-health.json",
+            "pick": [
+              "checked_at",
+              "ok",
+              "reason",
+              "area",
+              "channel",
+              "sources"
+            ]
+          },
+          {
             "name": "edge-status-json",
             "path": "/srv/codeblack/data/status/status.json"
           },
@@ -1161,9 +1173,24 @@
       "name": "Discord Bot",
       "host": "edge",
       "category": "edge",
-      "role": "Notifications / weather intelligence bot",
+      "role": "Official weather commands and live alert delivery; infrastructure routes through ntfy",
       "unit": "codeblack-discord-bot",
       "deps": [],
+      "urls": {}
+    },
+    {
+      "id": "weather-alert-feed",
+      "name": "Official Weather Alerts",
+      "host": "edge",
+      "category": "weather",
+      "role": "NWS tornado warnings, SPC discussions/outlooks, and significant NWS reports",
+      "fresh_file": {
+        "name": "weather-alert-health",
+        "max_age_s": 180,
+        "require_json_ok": true
+      },
+      "informational": true,
+      "deps": ["discord-bot"],
       "urls": {}
     },
     {
@@ -1337,7 +1364,7 @@
       "name": "iPhone Ops Alerts",
       "host": "edge",
       "category": "edge",
-      "role": "Forwards all Edge-generated events and all Status Center attention transitions, including Info and severity changes, to private ntfy",
+      "role": "Forwards actionable Edge incidents and Warning-or-higher Status Center changes to private ntfy",
       "fresh_file": {
         "name": "ntfy-bridge-status",
         "max_age_s": 180,

@@ -454,6 +454,13 @@ def service_metrics(svc, sig):
         if bridge:
             m += [("coverage", bridge.get("coverage")), ("active alerts", bridge.get("attention_tracked")),
                   ("sent last run", bridge.get("sent"))]
+    elif sid == "weather-alert-feed":
+        doc, _t, fresh = coll("edge")
+        alert_feed = (((doc or {}).get("files") or {}).get("weather-alert-health") or {}).get("json") if fresh else None
+        if alert_feed:
+            m += [("Discord channel", alert_feed.get("channel") or "not configured"),
+                  ("chase area", alert_feed.get("area") or "not set"),
+                  ("feed status", alert_feed.get("reason") or ("healthy" if alert_feed.get("ok") else "check source status"))]
     elif sid == "nick-mesonet-ntfy-bridge":
         doc, _t, fresh = coll("core")
         bridge = (((doc or {}).get("files") or {}).get("mesonet-ntfy-health") or {}).get("json") if fresh else None
@@ -587,7 +594,7 @@ def build_service(svc):
             if f["age_s"] > svc["fresh_file"]["max_age_s"]:
                 sigs.append("DEGRADED"); reasons.append(f"output file {f['age_s']}s old (max {svc['fresh_file']['max_age_s']}s)")
             elif svc["fresh_file"].get("require_json_ok") and (f.get("json") or {}).get("ok") is not True:
-                sigs.append("DEGRADED"); reasons.append("last notification bridge run failed")
+                sigs.append("DEGRADED"); reasons.append("last health check failed")
             else:
                 sigs.append("HEALTHY")
         elif fresh:
