@@ -81,6 +81,29 @@ class IncidentActionsTests(unittest.TestCase):
         state = actions.public_state()
         self.assertEqual(set(state["edge:incident"]), {"acknowledged_at", "snoozed_until"})
 
+    def test_alert_history_tracks_open_change_and_resolution(self):
+        original = {"id": "svc:radar", "title": "Radar worker", "severity": "WARNING", "status_only": False}
+        self.assertEqual(actions.record_attention([original], at="2026-10-10T00:00:00Z")[0]["event"], "observed")
+        self.assertEqual(actions.record_attention([original], at="2026-10-10T00:01:00Z"), [])
+        changed = {**original, "severity": "CRITICAL"}
+        self.assertEqual(actions.record_attention([changed], at="2026-10-10T00:02:00Z")[0]["event"], "changed")
+        self.assertEqual(actions.record_attention([], at="2026-10-10T00:03:00Z")[0]["event"], "resolved")
+        self.assertEqual([item["event"] for item in actions.recent_history()], ["resolved", "changed", "observed"])
+
+    def test_operations_page_escapes_status_content(self):
+        snapshot = {"summary": {"overall": "DEGRADED"}, "generated_at": "now",
+                    "hosts": [{"name": "Core", "state": "HEALTHY", "state_reason": "up"}],
+                    "attention": [{"id": "svc:test", "title": "<script>bad</script>", "detail": "needs help",
+                                   "severity": "WARNING", "status_only": False}],
+                    "services": [], "notifications": {"server": {"state": "HEALTHY"}, "channels": []}}
+        body = actions.render_dashboard(snapshot).decode()
+        self.assertIn("System operations.", body)
+        self.assertIn("Send test notification", body)
+        self.assertIn("MQTT ingest bridge", body)
+        self.assertIn("/alert-actions/incident?id=svc%3Atest", body)
+        self.assertIn("&lt;script&gt;bad&lt;/script&gt;", body)
+        self.assertNotIn("<script>bad</script>", body)
+
 
 if __name__ == "__main__":
     unittest.main()

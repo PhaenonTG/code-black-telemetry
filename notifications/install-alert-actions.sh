@@ -19,6 +19,7 @@ for parent in /srv/codeblack /srv/codeblack/services /srv/codeblack/data /srv/co
 done
 install -d -o root -g codeblack-actions -m 0750 /srv/codeblack/services/alert-actions
 install -o root -g codeblack-actions -m 0750 "$script_dir/incident_actions.py" /srv/codeblack/services/alert-actions/incident_actions.py
+install -o root -g codeblack-actions -m 0750 "$script_dir/send_ntfy_test.py" /srv/codeblack/services/alert-actions/send_ntfy_test.py
 install -d -o codeblack-actions -g codeblack-actions -m 0750 /srv/codeblack/data/alert-actions
 install -d -o codeblack-actions -g codeblack-actions -m 0750 /srv/codeblack/config/alert-actions
 for record in /srv/codeblack/data/alert-actions/state.json /srv/codeblack/data/alert-actions/audit.jsonl; do

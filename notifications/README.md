@@ -31,13 +31,21 @@ sent when the snooze expires. Edge incident and Mesonet event transitions
 occurring during snooze are skipped rather than replayed. If the action
 service is unavailable, alert delivery fails open.
 
-The **Review service actions** page requires a second typed confirmation
-before a restart. Only `codeblack-ntfy.service` and
-`codeblack-status-center.service` are allowlisted. Requests and results are
-appended to a local audit log. The dedicated `codeblack-actions` account can
-run only those exact `systemctl restart` commands through sudoers; it cannot
-execute arbitrary unit names or shell commands. Do not treat the restart page
-as a general remediation interface.
+The mobile-friendly **operations console** at `/alert-actions/` shows the
+current Status Center host, notification, and active-alert state, plus recent
+alert transitions observed by its once-per-minute watcher and the operator
+action audit trail. It provides a fixed-message ntfy delivery test, limited to
+one attempt per five minutes, and links back to Status Center. A successful
+publish confirms Core sent to ntfy; it does not prove iOS displayed a push.
+The Status Center Notifications section links to this console.
+
+Service restarts require the exact typed confirmation. Only the private ntfy
+server, Status Center, Core API, MQTT ingest bridge, and radar worker units are
+allowlisted. A dedicated no-argument test helper can publish only a fixed
+message to `ops-monitoring`. Requests and results are appended to a local audit
+log. The dedicated `codeblack-actions` account can run only those exact
+commands through sudoers; it cannot execute arbitrary unit names or shell
+commands. Edge control remains read-only here.
 
 Deploy on Core using `install-alert-actions.sh` from a staged copy of this
 directory. On first install it provisions a password hash from the existing

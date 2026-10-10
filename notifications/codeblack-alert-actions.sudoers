@@ -1,1 +1,1 @@
-codeblack-actions ALL=(root) NOPASSWD: /usr/bin/systemctl restart codeblack-ntfy.service, /usr/bin/systemctl restart codeblack-status-center.service
+codeblack-actions ALL=(root) NOPASSWD: /usr/bin/systemctl restart codeblack-ntfy.service, /usr/bin/systemctl restart codeblack-status-center.service, /usr/bin/systemctl restart codeblack-core-api.service, /usr/bin/systemctl restart codeblack-mqtt-bridge.service, /usr/bin/systemctl restart codeblack-radar-worker.service, /usr/bin/python3 /srv/codeblack/services/alert-actions/send_ntfy_test.py
