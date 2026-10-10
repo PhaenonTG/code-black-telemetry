@@ -459,7 +459,8 @@ def service_metrics(svc, sig):
         alert_feed = (((doc or {}).get("files") or {}).get("weather-alert-health") or {}).get("json") if fresh else None
         if alert_feed:
             m += [("Discord channel", alert_feed.get("channel") or "not configured"),
-                  ("chase area", alert_feed.get("area") or "not set"),
+                  ("alert geography", alert_feed.get("area") or "not available"),
+                  ("location mode", alert_feed.get("area_mode") or "unknown"),
                   ("feed status", alert_feed.get("reason") or ("healthy" if alert_feed.get("ok") else "check source status"))]
     elif sid == "nick-mesonet-ntfy-bridge":
         doc, _t, fresh = coll("core")
