@@ -75,23 +75,29 @@ Core Status Center remains the inventory and dashboard for the broader fleet.
 `edge_ntfy_bridge.py` runs once per minute from the existing Edge notification
 dispatcher and forwards every new Edge incident/event type and every Status
 Center attention transition (Info, Warning, Critical, and severity/state
-changes) to the private `ops-monitoring` topic. This includes expected-offline
-hosts and unpowered ESPs; they are baselined at rollout and alert on later
-recovery or re-failure. A new condition must appear in three Status Center
-polls to page and clear in two to recover. Numeric incident updates with the
+changes) to the private `ops-monitoring` topic, except status-only HYTETOWER
+and Nick WIND/WEATHER offline notices. Future ESP services marked
+`offline_status_only` follow the same policy. These remain visible in the dashboard
+without push or recovery notifications. A new condition must appear in three
+Status Center polls to page and clear in two to recover. Numeric incident updates with the
 same underlying issue are suppressed, as is normal GPU occupancy over 90% per
 operator preference. Unchanged conditions never generate repeated pushes.
 Discord remains the fallback when Core/ntfy itself is down.
 
 Nick's dedicated Core mesonet evaluator also has a private 15-second ntfy
 mirror, `codeblack-mesonet-ntfy-bridge.timer`. It reads its durable alert rows
-for offline, short-stale telemetry, reboot loops, and OTA update failures,
-including open and resolution transitions. A row that opens and clears between
-checks is reported as a short event. Existing rows were baselined at install;
+but publishes only reboot loops and OTA update failures, including open and
+resolution transitions. Offline and short-stale ESP telemetry remain in the
+Mesonet history and Status Center, without ntfy or Discord pages. A row that
+opens and clears between checks is reported as a short event. Existing rows
+were baselined at install;
 failed publishes remain pending for the next run. Its write-only token and
 cursor stay under Core's private mesonet management directory. Status Center
-shows this separately as **Nick Mesonet iPhone Alerts**. The original mesonet
-Discord delivery is unchanged.
+shows this separately as **Nick Mesonet iPhone Alerts**. The Mesonet Discord
+evaluator follows the same status-only offline/stale policy.
+Its Core source currently lives outside this checkout; after replacing that
+source, rerun `mesonet_status_only_policy.py` as root on Core before enabling
+Discord delivery. The patch is guarded and leaves durable alert history intact.
 
 The dedicated `ops-watcher` account has write-only access to `ops-monitoring`;
 `glenn` has read-only access. The Edge token is stored outside Git at

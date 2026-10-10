@@ -26,6 +26,7 @@ DASHBOARD_URL = "https://codeblack-core.tail1d0673.ts.net/status/"
 ACTION_URL = "https://codeblack-core.tail1d0673.ts.net/alert-actions"
 ACTION_STATE_URL = ACTION_URL + "/api/state"
 ACTION_CACHE = {"at": 0, "value": {}}
+STATUS_ONLY_ATTENTION = {"host:hytetower", "svc:nick-mesonet-wind", "svc:nick-mesonet-weather"}
 NOTIFICATION_DIR = Path(os.environ.get("CODEBLACK_NOTIFICATION_DIR", "/srv/codeblack/data/notifications"))
 INCIDENT_TYPES = {"incident_start", "incident_update", "recovery"}
 STATE_WORDS = re.compile(r"\b(OFFLINE|DEGRADED|UNKNOWN|STALE|AGING|CRITICAL|ERROR|UNAVAILABLE|VERIFYING)\b", re.I)
@@ -201,6 +202,8 @@ def get_attention():
     return {
         item["id"]: item for item in payload.get("attention", [])
         if item.get("severity") in {"INFO", "WARNING", "ERROR", "CRITICAL"}
+        and item.get("id") not in STATUS_ONLY_ATTENTION
+        and not item.get("status_only")
         and "vram_above_90_percent" not in item.get("id", "").lower()
     }
 
@@ -219,6 +222,10 @@ def attention_priority(item):
 def send_status_transitions(state):
     current = get_attention()
     tracked = state.setdefault("attention", {})
+    # Policy changes must not turn formerly paged, now status-only devices into
+    # misleading "issue cleared" notifications.
+    for key in STATUS_ONLY_ATTENTION:
+        tracked.pop(key, None)
     if not state.get("attention_baselined") or state.get("coverage_version", 0) < 2:
         for key, item in current.items():
             tracked[key] = {"active": True, "bad": BAD_POLLS, "good": 0, "title": item.get("title", key),

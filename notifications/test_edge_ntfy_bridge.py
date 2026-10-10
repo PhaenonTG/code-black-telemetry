@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
@@ -57,7 +58,7 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(send.call_count, 1)
 
     def test_new_info_alert_and_severity_change(self):
-        item = {"id": "host:hytetower", "title": "HYTETOWER offline", "detail": "Tailscale peer offline", "severity": "INFO"}
+        item = {"id": "wx:optional", "title": "Optional weather offline", "detail": "weather paused", "severity": "INFO"}
         state = {"attention_baselined": True, "coverage_version": 2, "attention": {}}
         with patch.object(bridge, "publish") as send, patch.object(bridge, "get_attention", return_value={item["id"]: item}):
             for _ in range(3):
@@ -77,6 +78,19 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(bridge.send_status_transitions(state), 0)
             send.assert_not_called()
         self.assertEqual(state["coverage_version"], 2)
+
+    def test_status_only_devices_are_not_pushed_or_recovered(self):
+        item = {"id": "host:hytetower", "title": "HYTETOWER offline", "severity": "INFO"}
+        payload = json.dumps({"attention": [item, {"id": "svc:nick-mesonet-wind", "severity": "INFO"},
+                                            {"id": "svc:future-esp", "severity": "INFO", "status_only": True}]}).encode()
+        with patch.object(bridge.urllib.request, "urlopen", return_value=io.BytesIO(payload)):
+            self.assertEqual(bridge.get_attention(), {})
+        state = {"attention_baselined": True, "coverage_version": 2, "attention": {
+            item["id"]: {"active": True, "notified": True, "title": item["title"]}}}
+        with patch.object(bridge, "get_attention", return_value={}), patch.object(bridge, "publish") as send:
+            bridge.send_status_transitions(state)
+            send.assert_not_called()
+        self.assertNotIn(item["id"], state["attention"])
 
     def test_unannounced_cold_start_unknown_recovery_is_silent(self):
         item = {"id": "svc:api", "title": "API UNKNOWN", "detail": "probe warming", "severity": "WARNING"}

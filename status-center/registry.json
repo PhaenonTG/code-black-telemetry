@@ -14,7 +14,7 @@
     "action_service": "alert-actions",
     "channels": [
       {"topic": "ops-monitoring", "purpose": "Infrastructure and Status Center attention transitions", "service": "edge-ntfy-bridge", "cadence_s": 60},
-      {"topic": "ops-monitoring", "purpose": "Nick Mesonet sensor and update alerts", "service": "nick-mesonet-ntfy-bridge", "cadence_s": 15},
+      {"topic": "ops-monitoring", "purpose": "Nick Mesonet reboot-loop and OTA-failure alerts; offline/stale status only", "service": "nick-mesonet-ntfy-bridge", "cadence_s": 15},
       {"topic": "silas-aegis", "purpose": "Silas / AEGIS conversation message text", "service": "silas-aegis-notify", "cadence_s": 60}
     ],
     "fallback_service": "edge-notification-dispatch",
@@ -392,7 +392,8 @@
       "lan_ip": "192.168.0.27",
       "tailscale_ip": "100.103.139.120",
       "tailscale_peer": "hytetower",
-      "expected_online": true,
+      "expected_online": false,
+      "offline_status_only": true,
       "critical": false,
       "collector": {
         "mode": "none"
@@ -823,6 +824,8 @@
       "category": "weather",
       "role": "ESP32 anemometer uplink; status is Core report freshness, not sensor validity",
       "mesonet_role": "wind",
+      "informational": true,
+      "offline_status_only": true,
       "host_impact": false,
       "probe": "mesonet_latest",
       "deps": ["core-api"],
@@ -836,6 +839,8 @@
       "category": "weather",
       "role": "ESP32 temperature/RH and optional GPS uplink; status is Core report freshness, not sensor validity",
       "mesonet_role": "weather",
+      "informational": true,
+      "offline_status_only": true,
       "host_impact": false,
       "probe": "mesonet_latest",
       "deps": ["core-api"],
@@ -847,7 +852,7 @@
       "name": "Nick Mesonet Alerts",
       "host": "core",
       "category": "weather",
-      "role": "Durable offline, reboot-loop and update-failure alert evaluator",
+      "role": "Durable Mesonet health history; reboot-loop and update-failure notifications, offline/stale status only",
       "unit": "codeblack-mesonet-alerts",
       "deps": ["core-api"],
       "urls": {},
@@ -858,7 +863,7 @@
       "name": "Nick Mesonet iPhone Alerts",
       "host": "core",
       "category": "weather",
-      "role": "Mirrors all durable ESP32 offline, stale, reboot-loop and OTA-failure alert transitions to private ntfy",
+      "role": "Mirrors ESP32 reboot-loop and OTA-failure alert transitions to private ntfy; offline/stale status only",
       "unit": "codeblack-mesonet-ntfy-bridge.timer",
       "fresh_file": {
         "name": "mesonet-ntfy-health",

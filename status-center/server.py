@@ -630,7 +630,7 @@ def build_service(svc):
     if not last_ok and ctel and ctel.get("last_success"):
         last_ok = parse_ts(ctel["last_success"])
     out = {"id": svc["id"], "name": svc["name"], "host": svc["host"], "category": svc.get("category"), "role": svc.get("role"), "state": state,
-           "state_reason": "; ".join(reasons) if reasons else None, "informational": bool(svc.get("informational")), "critical": bool(svc.get("critical")), "labs": bool(svc.get("labs")),
+           "state_reason": "; ".join(reasons) if reasons else None, "informational": bool(svc.get("informational")), "offline_status_only": bool(svc.get("offline_status_only")), "critical": bool(svc.get("critical")), "labs": bool(svc.get("labs")),
            "version": service_version(svc), "release": release, "uptime_s": unit_uptime(svc["host"], svc["unit"]) if svc.get("unit") else None,
            "last_success": iso(last_ok), "last_error": (p0.last_error if p0 and p0.ok is False else None),
            "dependencies": svc.get("deps", []), "urls": {k: svc.get("urls", {}).get(k) for k in ("local", "tailscale", "public", "manage", "health")},
@@ -695,7 +695,7 @@ def build_host(h, services):
             "os": hm.get("os"), "uptime_s": hm.get("uptime_s"), "cpu": {"model": (hm.get("cpu") or {}).get("model"), "cores": (hm.get("cpu") or {}).get("cores"), "load1": (hm.get("cpu") or {}).get("load1"), "percent": (hm.get("cpu") or {}).get("percent")},
             "memory": {"used_mb": (hm.get("memory") or {}).get("used_mb"), "total_mb": (hm.get("memory") or {}).get("total_mb"), "percent": (hm.get("memory") or {}).get("percent")},
             "disks": disks, "temperature_c": hm.get("temperature_c"), "gpu": gpu, "last_contact": last_contact, "path": path,
-            "collector": h["collector"]["mode"], "expected_online": h.get("expected_online", True), "telemetry": ctel or (tel(*[r["probe"] for r in h.get("reach", [])]) if h.get("reach") else tel()),
+            "collector": h["collector"]["mode"], "expected_online": h.get("expected_online", True), "offline_status_only": bool(h.get("offline_status_only")), "telemetry": ctel or (tel(*[r["probe"] for r in h.get("reach", [])]) if h.get("reach") else tel()),
             "links": [{"name": l["name"], "url": l["url"]} for l in REG["links"] if l["host"] == h["id"]][:3]}
 
 
@@ -1070,14 +1070,15 @@ def build_attention(hosts, services, streaming, radar, weather, dns, storage, la
     active = set()
     previous = set(FIRST_SEEN)
 
-    def add(key, sev, title, detail, source, link=None):
+    def add(key, sev, title, detail, source, link=None, status_only=False):
         active.add(key)
         FIRST_SEEN.setdefault(key, now())
-        items.append({"id": key, "severity": sev, "title": title, "detail": detail, "source": source, "since": iso(FIRST_SEEN[key]), "link": link})
+        items.append({"id": key, "severity": sev, "title": title, "detail": detail, "source": source, "since": iso(FIRST_SEEN[key]), "link": link,
+                      "status_only": status_only})
 
     for h in hosts:
         if h["state"] == "OFFLINE":
-            add(f"host:{h['id']}", "INFO" if not h.get("expected_online", True) else ("CRITICAL" if h["id"] in ("core", "edge") else "WARNING"), f"{h['name']} offline", h["state_reason"], h["id"])
+            add(f"host:{h['id']}", "INFO" if not h.get("expected_online", True) or h.get("offline_status_only") else ("CRITICAL" if h["id"] in ("core", "edge") else "WARNING"), f"{h['name']} offline", h["state_reason"], h["id"], status_only=h.get("offline_status_only", False))
         elif h["state"] == "UNKNOWN":
             add(f"hostunk:{h['id']}", "WARNING", f"{h['name']} telemetry unavailable", h["state_reason"], h["id"])
         for d in h["disks"]:
@@ -1097,8 +1098,11 @@ def build_attention(hosts, services, streaming, radar, weather, dns, storage, la
             continue
         host_state = next((h["state"] for h in hosts if h["id"] == s["host"]), None)
         if s["state"] in ("DEGRADED", "OFFLINE", "UNKNOWN") and host_state != "OFFLINE":
-            sev = "INFO" if s["informational"] else ("CRITICAL" if (s["critical"] and s["state"] == "OFFLINE") else "WARNING")
-            add(f"svc:{s['id']}", sev, f"{s['name']} {s['state']}", s["state_reason"], s["host"], (s["urls"].get("manage") or s["urls"].get("tailscale")))
+            # These service states report ESP telemetry age, including the short
+            # degraded/stale period before the device is classified offline.
+            status_only = s.get("offline_status_only", False)
+            sev = "INFO" if s["informational"] or status_only else ("CRITICAL" if (s["critical"] and s["state"] == "OFFLINE") else "WARNING")
+            add(f"svc:{s['id']}", sev, f"{s['name']} {s['state']}", s["state_reason"], s["host"], (s["urls"].get("manage") or s["urls"].get("tailscale")), status_only=status_only)
     rs = radar["state"]
     if rs in ("STALE", "CRITICAL"):
         add("radar", "CRITICAL" if rs == "CRITICAL" else "WARNING", f"RADAR {rs} - {int((radar['latest'] or {}).get('age_s', 0)) // 60}m", "server-side radar product is not current", "radar", radar["link"])
@@ -1208,7 +1212,7 @@ def build_status():
         if h["id"] == "raspberrypi":
             continue
         st = "BUSY" if (h["id"] == "phaenon3" and compute["state"] == "BUSY" and h["state"] == "HEALTHY") else h["state"]
-        tiles.append({"id": h["id"], "label": h["name"], "state": st, "detail": h["state_reason"], "group": "host", "informational": False})
+        tiles.append({"id": h["id"], "label": h["name"], "state": st, "detail": h["state_reason"], "group": "host", "informational": not h["expected_online"]})
     dom = [("radar", "RADAR", radar["state"], f"{(radar['latest'] or {}).get('age_s', '?')}s old" if radar["latest"] else "no data"), ("weather", "WEATHER", weather["state"], None), ("dns", "DNS", dns["state"], None),
            ("streaming", "STREAMING", streaming["state"], streaming["summary"]), ("ai", "AI", ai["state"], None), ("labs", "SPENCER LABS", labs["state"], None), ("storage", "STORAGE", "HEALTHY" if storage["state"] == "HEALTHY" else "DEGRADED" if storage["state"] in ("WARNING", "CRITICAL") else "UNKNOWN", storage["state"]), ("network", "NETWORK", network["tailscale"]["state"], None)]
     # STREAMING offline is intentional when every source is simply idle (informational, not a fault)

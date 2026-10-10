@@ -19,6 +19,7 @@ DASHBOARD_URL = "https://codeblack-core.tail1d0673.ts.net/status/"
 ACTION_URL = "https://codeblack-core.tail1d0673.ts.net/alert-actions"
 ACTION_STATE_URL = "http://127.0.0.1:8796/api/state"
 LABELS = {"offline": "offline", "stale": "short-stale telemetry", "reboot_loop": "reboot loop", "update_failed": "OTA update failure"}
+STATUS_ONLY_KINDS = {"offline", "stale"}
 
 
 def save(path, payload):
@@ -101,21 +102,22 @@ def main():
                 new_state = "open" if resolved is None else "resolved"
                 old_state = seen.get(key)
                 if old_state != new_state:
-                    if not snoozed(alert_id):
+                    if kind not in STATUS_ONLY_KINDS and not snoozed(alert_id):
                         publish(alert_id, role, kind, resolved, old_state == "open")
                         sent += 1
                     seen[key] = new_state
                     save(STATE, state)
             state["seen"] = {key: value for key, value in seen.items() if key in present}
             save(STATE, state)
-        active = sum(resolved is None for _id, _role, _kind, resolved in current)
+        active = sum(resolved is None and kind not in STATUS_ONLY_KINDS
+                     for _id, _role, kind, resolved in current)
         tracked = len(current)
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         active = tracked = None
     save(HEALTH, {"generated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "ok": error is None,
                   "sent": sent, "active": active, "tracked": tracked, "error": error,
-                  "coverage": "offline,stale,reboot_loop,update_failed"})
+                  "coverage": "reboot_loop,update_failed; offline/stale status-only"})
     print(f"mesonet ntfy bridge: sent={sent}, ok={error is None}")
     if error:
         print(error)

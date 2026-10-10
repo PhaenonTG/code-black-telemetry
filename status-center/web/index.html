@@ -385,7 +385,7 @@ R.attention = (d) => {
       h('div', 'at wrap', [i.title, control.acknowledged_at ? [' ', h('span', 'chip ok', 'ACKNOWLEDGED')] : null,
         control.snoozed_until ? [' ', h('span', 'chip warn', 'SNOOZED')] : null,
         i.severity === 'INFO' && !isNull(i.detail) ? h('span', 'muted small', '  -  ' + i.detail) : null]),
-      h('div', 'am', [h('span', null, isNull(i.source) ? '' : i.source), i.since ? h('span', null, ' - since ' + ago(i.since)) : null, l ? [' ', lnk(l.name || 'Open', l.url)] : null, ' ', lnk('Actions', incident)]),
+      h('div', 'am', [h('span', null, isNull(i.source) ? '' : i.source), i.since ? h('span', null, ' - since ' + ago(i.since)) : null, l ? [' ', lnk(l.name || 'Open', l.url)] : null, i.status_only ? null : [' ', lnk('Actions', incident)]]),
       isNull(i.detail) || i.severity === 'INFO' ? null : h('div', 'ad wrap', i.detail),
     ]);
   };

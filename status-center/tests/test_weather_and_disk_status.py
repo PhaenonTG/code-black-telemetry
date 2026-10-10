@@ -12,6 +12,21 @@ import server  # noqa: E402
 
 
 class WeatherAndDiskStatusTests(unittest.TestCase):
+    def test_hytetower_and_esps_are_informational_when_offline(self):
+        tower = next(h for h in server.REG["hosts"] if h["id"] == "hytetower")
+        self.assertFalse(tower["expected_online"])
+        self.assertTrue(tower["offline_status_only"])
+        services = [s for s in server.REG["services"] if s["id"] in ("nick-mesonet-wind", "nick-mesonet-weather")]
+        self.assertTrue(all(s["informational"] and s["offline_status_only"] for s in services))
+        host = {"id": "hytetower", "name": "HYTETOWER", "state": "OFFLINE", "state_reason": "peer offline", "expected_online": False, "offline_status_only": True, "disks": []}
+        items = [{"id": s["id"], "name": s["name"], "state": "OFFLINE", "state_reason": "last report old", "host": "core", "informational": s["informational"], "offline_status_only": s["offline_status_only"], "critical": False, "urls": {}} for s in services]
+        with patch.object(server, "FIRST_SEEN", {}):
+            attention = server.build_attention([host], items, {"sources": []}, {"state": "FRESH"},
+                                               {"items": []}, {"instances": []}, {"backups": []}, {}, {})
+        self.assertEqual({item["id"]: item["severity"] for item in attention},
+                         {"host:hytetower": "INFO", "svc:nick-mesonet-wind": "INFO", "svc:nick-mesonet-weather": "INFO"})
+        self.assertTrue(all(item["status_only"] for item in attention))
+
     def test_watcher_uses_timer_trigger_when_oneshot_has_no_exit_timestamp(self):
         watcher = next(w for w in server.REG["weather"] if w["id"] == "hrrr-edge-watcher")
         units = {
