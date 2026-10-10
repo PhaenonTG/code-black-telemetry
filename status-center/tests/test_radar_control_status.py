@@ -28,6 +28,7 @@ class RadarControlStatusTests(unittest.TestCase):
         }
         view = server.radar_control_view(raw, {"stale": False})
         self.assertEqual(view["selection"]["primary"], [{"site_id": "KSGF", "distance_km": 32.1}])
+        self.assertEqual(view["source"], "UNKNOWN")
         self.assertNotIn("37.215", json.dumps(view))
         self.assertNotIn("-93.298", json.dumps(view))
 

@@ -793,6 +793,7 @@ def radar_control_view(document, telemetry):
         "state": str(document.get("state") or "UNKNOWN").upper(),
         "reason": document.get("reason"),
         "mode": str(document.get("mode") or "UNKNOWN").upper(),
+        "source": str(document.get("source") or "UNKNOWN").upper(),
         "fabric": {"state": str(fabric.get("state") or "UNKNOWN").upper(), "snapshot_age_s": fabric.get("snapshot_age_s"),
                    "eligible_chasers": fabric.get("eligible_chasers"), "skipped_chasers": fabric.get("skipped_chasers")},
         "selection": {"primary": sites(selection.get("primary")), "secondary": sites(selection.get("secondary"))},

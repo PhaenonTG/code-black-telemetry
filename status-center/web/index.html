@@ -564,6 +564,7 @@ R.radar = (d) => {
   box.appendChild(card(C.state === 'NOT_DEPLOYED' ? 'futurecard' : '', [
     h('div', 'hd', [h('h3', null, 'Chase-aware radar control'), chip(C.state || 'UNKNOWN', C.telemetry), ' ', h('span', 'muted small', C.reason || '')]),
     kv('Operating mode', chip(C.mode || 'UNKNOWN')),
+    kv('Selection source', h('span', 'mono', C.source || 'UNKNOWN')),
     kv('Fabric location feed', h('span', null, [chip(F.state || 'UNKNOWN'), ' ', h('span', 'muted small', isNull(F.snapshot_age_s) ? 'age unknown' : 'age ' + durS(F.snapshot_age_s))])),
     kv('Eligible / skipped chasers', nz(F.eligible_chasers) + ' / ' + nz(F.skipped_chasers)),
     kv('Primary sites', siteList(S.primary)), kv('Secondary queue', siteList(S.secondary)),
