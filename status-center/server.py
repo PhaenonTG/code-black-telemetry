@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Code Black System Status Center - read-only aggregator backend (stdlib only).
+"""Code Black System Status Center - read-only aggregator and narrow ESP operator bridge.
 
 Probes run on their own schedule in a bounded thread pool; the browser only ever reads the cached, normalized
 document from GET /api/status. Every probe has a timeout, keeps its last-known value and last-success time, and a
 result that has not been refreshed within `stale_factor` intervals is flagged STALE TELEMETRY instead of staying green.
-Nothing here can change any system: there are no write endpoints and no actions.
+The ordinary status document is read-only. The separate ESP bridge forwards only
+authenticated, role-bound management requests to Core; it never stores a token.
 """
 import argparse
 import json
@@ -28,7 +29,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import collector  # noqa: E402
 
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 SCHEMA = "codeblack.status.v1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 REGISTRY_PATH = os.environ.get("STATUS_CENTER_REGISTRY", os.path.join(HERE, "registry.json"))
@@ -41,6 +42,8 @@ START = time.time()
 STATE_DIR = os.environ.get("STATUS_CENTER_STATE_DIR", "/srv/codeblack/data/status-center")
 WEATHER_ALERT_CONTROL_URL = os.environ.get("WEATHER_ALERT_CONTROL_URL", "").rstrip("/")
 WEATHER_ALERT_CONTROL_TOKEN = os.environ.get("WEATHER_ALERT_CONTROL_TOKEN", "")
+ESP_MANAGEMENT_URL = os.environ.get("ESP_MANAGEMENT_URL", "http://127.0.0.1:8000/api/mesonet/v1/manage").rstrip("/")
+ESP_COMMAND_ORIGIN = os.environ.get("ESP_COMMAND_ORIGIN", "https://codeblack-core.tail1d0673.ts.net")
 
 REG = json.load(open(REGISTRY_PATH, encoding="utf-8"))
 DEF = REG["defaults"]
@@ -771,7 +774,7 @@ def radar_control_view(document, telemetry):
     if not isinstance(document, dict):
         return {
             "state": "NOT_DEPLOYED", "reason": "The chase-aware worker telemetry endpoint is not deployed.",
-            "mode": "NOT_CONFIGURED",
+            "mode": "NOT_CONFIGURED", "source": "UNKNOWN",
             "fabric": {"state": "UNKNOWN", "snapshot_age_s": None, "eligible_chasers": None, "skipped_chasers": None},
             "selection": {"primary": [], "secondary": []},
             "work": {"active_site": None, "queued_sites": 0, "last_success_at": None, "last_error": None},
@@ -789,6 +792,7 @@ def radar_control_view(document, telemetry):
         "state": str(document.get("state") or "UNKNOWN").upper(),
         "reason": document.get("reason"),
         "mode": str(document.get("mode") or "UNKNOWN").upper(),
+        "source": str(document.get("source") or "UNKNOWN").upper(),
         "fabric": {"state": str(fabric.get("state") or "UNKNOWN").upper(), "snapshot_age_s": fabric.get("snapshot_age_s"),
                    "eligible_chasers": fabric.get("eligible_chasers"), "skipped_chasers": fabric.get("skipped_chasers")},
         "selection": {"primary": sites(selection.get("primary")), "secondary": sites(selection.get("secondary"))},
@@ -1500,6 +1504,59 @@ def weather_alert_control(method, body=None):
         return exc.code, {"error": "upstream_rejected"}
 
 
+def esp_managed_roles():
+    """Inventory drives the bridge; Core remains the authority on valid roles."""
+    return {item["role"] for item in REG["esp_fleet"]["devices"]
+            if item.get("management") in ("core-private", "core-private-pending")}
+
+
+def esp_operator_token(header):
+    if not isinstance(header, str) or not header.startswith("Bearer "):
+        return None
+    token = header[7:]
+    return header if 16 <= len(token) <= 512 and all(33 <= ord(char) <= 126 for char in token) else None
+
+
+def esp_management_request(role, authorization, command=None):
+    """Forward one allowlisted request; never persist, echo, or log a credential."""
+    if role not in esp_managed_roles():
+        return 404, {"error": "unknown managed board"}
+    if not esp_operator_token(authorization):
+        return 401, {"error": "Core operator token required"}
+    if command is not None:
+        if not isinstance(command, dict) or command.get("action") not in {"diagnostics", "sensors", "networks", "reboot", "update"}:
+            return 400, {"error": "unsupported command"}
+        if set(command) - {"action", "payload", "ttl_s", "expected_revision", "request_id"}:
+            return 400, {"error": "unsupported command fields"}
+        status, current = esp_management_request(role, authorization)
+        if status != 200:
+            return status, current
+        age = current.get("received_age_s") if isinstance(current, dict) else None
+        if not isinstance(age, int) or age > 30 or not isinstance(current.get("diagnostics"), dict):
+            return 409, {"error": "Board must have a fresh management report before a command can be sent"}
+    body = json.dumps(command, separators=(",", ":")).encode() if command is not None else None
+    request = urllib.request.Request(
+        ESP_MANAGEMENT_URL + "/" + role + ("/commands" if command is not None else ""),
+        data=body, method="POST" if command is not None else "GET",
+        headers={"Authorization": authorization, "Content-Type": "application/json", "User-Agent": "CodeBlack-StatusCenter/1.0"})
+    try:
+        response = urllib.request.urlopen(request, timeout=8)
+    except urllib.error.HTTPError as exc:
+        response = exc
+    except (OSError, ValueError):
+        return 503, {"error": "Core management is unavailable"}
+    with response:
+        try:
+            data = json.loads(response.read(100_001))
+            if not isinstance(data, dict):
+                raise ValueError("invalid response")
+        except (ValueError, UnicodeError):
+            return 502, {"error": "Core management returned an invalid response"}
+        if response.status >= 400:
+            return response.status, {"error": str(data.get("detail") or "Core rejected the request")[:180]}
+        return response.status, data
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "CodeBlackStatusCenter/" + VERSION
     protocol_version = "HTTP/1.1"
@@ -1524,6 +1581,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         try:
+            match = re.fullmatch(r"/api/esp-management/([a-z][a-z0-9-]{0,31})", path)
+            if match:
+                status, payload = esp_management_request(match.group(1), self.headers.get("Authorization"))
+                return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
             if path == "/api/health":
                 return self.send_bytes(200, json.dumps({"ok": True, "version": VERSION, "uptime_s": int(now() - START), "probes": len(PROBES)}).encode(), "application/json", "no-store")
             if path == "/api/status":
@@ -1545,6 +1606,27 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes(404, b'{"error":"not found"}', "application/json", "no-store")
         except Exception as exc:  # noqa: BLE001
             return self.send_bytes(500, json.dumps({"error": type(exc).__name__}).encode(), "application/json", "no-store")
+
+    def do_POST(self):
+        path = self.path.split("?", 1)[0]
+        match = re.fullmatch(r"/api/esp-management/([a-z][a-z0-9-]{0,31})/commands", path)
+        if not match:
+            return self.send_bytes(404, b'{"error":"not found"}', "application/json", "no-store")
+        if self.headers.get("Origin") != ESP_COMMAND_ORIGIN or self.headers.get("Sec-Fetch-Site") == "cross-site" or self.headers.get("X-Mesonet-UI") != "1":
+            return self.send_bytes(403, b'{"error":"origin check failed"}', "application/json", "no-store")
+        if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+            return self.send_bytes(415, b'{"error":"JSON required"}', "application/json", "no-store")
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if not 2 <= size <= 5000:
+                raise ValueError("invalid command size")
+            command = json.loads(self.rfile.read(size))
+            status, payload = esp_management_request(match.group(1), self.headers.get("Authorization"), command)
+            return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
+        except (ValueError, UnicodeError):
+            return self.send_bytes(400, b'{"error":"invalid command JSON"}', "application/json", "no-store")
+        except Exception:
+            return self.send_bytes(503, b'{"error":"Core management unavailable"}', "application/json", "no-store")
 
     def do_PUT(self):
         if self.path.split("?", 1)[0] != "/api/weather-alert-settings":

@@ -190,7 +190,7 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 .esp-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
 .esp-stat{padding:10px 12px;border:1px solid var(--line2);border-radius:6px;background:#101014}
 .esp-stat b{display:block;font-size:19px;line-height:1.1}.esp-stat span{font-size:11px;color:var(--muted)}
-.esp-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.esp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-bottom:12px}
 .esp-device{width:100%;text-align:left;padding:11px;border:1px solid var(--line2);border-radius:7px;background:var(--panel2);color:var(--text);font:inherit;cursor:pointer}
 .esp-device:hover,.esp-device:focus-visible{border-color:#8eaee2;outline:none}.esp-device.selected{border-color:#7d9bc4;background:#141c29}
 .esp-device .topline{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:5px}.esp-device b{font-size:13px}.esp-device .subline{font-size:11px;color:var(--muted)}
@@ -202,6 +202,9 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 .esp-action:hover{background:#1e304b}.esp-action:focus-visible{outline:2px solid #9cc0ff;outline-offset:2px}
 .esp-action:disabled{opacity:.45;cursor:not-allowed}
 .esp-controls{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.esp-control-note{font-size:11px;color:var(--muted);line-height:1.55}
+.esp-command{border-top:1px solid var(--line2);padding-top:10px;margin-top:10px}.esp-command textarea{width:100%;min-height:120px;resize:vertical;background:#0d0d10;color:var(--text);border:1px solid var(--line2);border-radius:5px;padding:8px;font:11px/1.45 var(--mono)}
+.esp-command details{margin-top:8px}.esp-command summary{cursor:pointer;color:#bfdaff}.esp-command label{display:block;margin:8px 0 4px;color:var(--muted);font-size:11px}.esp-command .esp-response{min-height:18px;margin:6px 0;font-size:11px}.esp-command .esp-response.error{color:var(--bad)}
+.esp-command .esp-history{margin:7px 0 0;padding:0;list-style:none;max-height:100px;overflow:auto}.esp-command .esp-history li{font:11px/1.5 var(--mono);border-top:1px solid var(--line);padding:3px 0}
 .esp-local{display:flex;gap:6px;margin:7px 0}.esp-local input{width:100%;min-width:0;background:#0d0d10;color:var(--text);border:1px solid var(--line2);border-radius:5px;padding:6px 8px;font:inherit}
 .esp-local input:focus{outline:2px solid #9cc0ff}.esp-error{color:var(--bad);font-size:11px}
 @media(max-width:1100px){.esp-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.esp-detail{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -283,7 +286,7 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 const POLL_MS = 5000;
 const params = new URLSearchParams(location.search);
 const FIXTURE = params.get('fixture') === '1';
-const S = { doc: null, lastOk: 0, lastGen: 0, failing: false, fallbackFixture: false, sig: {}, timer: null, fetching: false, infoOpen: false, espSelected: 'spencer-weather', espLocal: '' };
+const S = { doc: null, lastOk: 0, lastGen: 0, failing: false, fallbackFixture: false, sig: {}, timer: null, fetching: false, infoOpen: false, espSelected: 'spencer-weather', espLocal: '', espToken: '', espMgmt: {}, espDraft: {}, espMgmtAt: {}, espMgmtBusy: false, espMsg: '' };
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
@@ -462,8 +465,96 @@ R.notifications = (d) => {
   box.appendChild(grid);
   box.appendChild(h('p', 'notify-note wrap', 'Routing: actionable infrastructure failures to private ntfy; normal device power-off and idle streams to status only; Discord reserved for weather alerts and one emergency fallback if ntfy delivery fails.'));
 };
+async function espPrivate(role, command) {
+  const response = await fetch('api/esp-management/' + encodeURIComponent(role) + (command ? '/commands' : ''), {
+    method: command ? 'POST' : 'GET', cache: 'no-store',
+    headers: {'Authorization':'Bearer ' + S.espToken, 'Content-Type':'application/json', 'X-Mesonet-UI':'1'},
+    ...(command ? {body:JSON.stringify(command)} : {})
+  });
+  const body = await response.json();
+  if (!response.ok) { if (response.status === 401) S.espToken = ''; throw new Error(body.error || 'Core rejected the request'); }
+  return body;
+}
+async function espRefreshPrivate(role, quiet=false) {
+  if (!S.espToken || S.espMgmtBusy) return;
+  S.espMgmtBusy = true;
+  try {
+    const report = await espPrivate(role);
+    S.espMgmt[role] = report; S.espMgmtAt[role] = Date.now();
+    const diagnostic = report.diagnostics;
+    if (diagnostic && (!S.espDraft[role] || (!S.espDraft[role].dirty && S.espDraft[role].revision !== diagnostic.config_revision))) {
+      S.espDraft[role] = {revision:diagnostic.config_revision, dirty:false,
+        sensors:JSON.stringify(diagnostic.sensors, null, 2),
+        networks:JSON.stringify({networks:diagnostic.networks.map(({ssid,priority,enabled}) => ({ssid,password:'',priority,enabled}))}, null, 2)};
+    }
+    if (!quiet) S.espMsg = 'Private status refreshed.';
+  } catch (error) { S.espMsg = error.message; }
+  finally { S.espMgmtBusy = false; if (S.doc) R.esp(S.doc); }
+}
+async function espSend(role, action, payload, revision) {
+  if (S.espMgmtBusy) return;
+  const current = S.espMgmt[role];
+  if (!current || current.received_age_s === null || current.received_age_s > 30) { S.espMsg = 'A fresh board report is required.'; R.esp(S.doc); return; }
+  const label = action === 'update' ? 'signed update' : action;
+  if (action !== 'diagnostics' && !confirm('Send ' + label + ' to ' + role + '? This may interrupt reporting.')) return;
+  const command = {action, payload, ttl_s:600, request_id:crypto.randomUUID().replaceAll('-','')};
+  if (revision !== undefined) command.expected_revision = revision;
+  S.espMgmtBusy = true;
+  try {
+    const result = await espPrivate(role, command);
+    S.espMsg = 'Command ' + result.sequence + ' queued. Watch for an applied or rejected acknowledgment.';
+    if (action === 'sensors' || action === 'networks') delete S.espDraft[role];
+  } catch (error) { S.espMsg = error.message + ' Check history before retrying.'; }
+  finally { S.espMgmtBusy = false; await espRefreshPrivate(role, true); }
+}
+function espControl(selected) {
+  const role = selected.role, wrap = h('div', 'esp-command');
+  if (!S.espToken) {
+    const token = h('input', null, null, {type:'password', placeholder:'Core ESP operator token', autocomplete:'off', autocapitalize:'off', spellcheck:'false', 'aria-label':'Core ESP operator token'});
+    const unlock = h('button', 'esp-action', 'Unlock commands', {type:'button'});
+    unlock.addEventListener('click', () => { S.espToken = token.value.trim(); token.value = ''; espRefreshPrivate(role); });
+    wrap.append(h('p', 'esp-control-note', 'Enter the Core ESP operator token to use commands here. It stays in this browser tab only, is sent over Tailnet HTTPS, and is never added to the status feed.'), token, unlock);
+    return wrap;
+  }
+  const current = S.espMgmt[role], age = current && current.received_age_s, fresh = Number.isInteger(age) && age <= 30;
+  const line = h('div', 'esp-response' + (S.espMsg && /reject|fail|invalid|required|unavailable|error/i.test(S.espMsg) ? ' error' : ''), S.espMsg || 'Commands require a fresh report from this board.');
+  wrap.append(line);
+  const buttons = h('div', 'esp-controls');
+  const refresh = h('button', 'esp-action', 'Refresh private status', {type:'button'});
+  refresh.addEventListener('click', () => espRefreshPrivate(role)); buttons.append(refresh);
+  const lock = h('button', 'esp-action', 'Lock', {type:'button'});
+  lock.addEventListener('click', () => { S.espToken = ''; S.espMgmt = {}; S.espDraft = {}; S.espMsg = ''; R.esp(S.doc); }); buttons.append(lock);
+  const actionButton = (label, action, handler) => { const button = h('button', 'esp-action', label, {type:'button'}); button.disabled = !fresh || S.espMgmtBusy; button.addEventListener('click', handler); buttons.append(button); };
+  actionButton('Request diagnostics', 'diagnostics', () => espSend(role, 'diagnostics', {}));
+  actionButton('Reboot board', 'reboot', () => espSend(role, 'reboot', {}));
+  actionButton('Install signed OTA', 'update', () => { const version = prompt('Exact signed firmware version:', selected.target_firmware); if (version !== null) espSend(role, 'update', {version:version.trim()}); });
+  wrap.append(buttons);
+  if (!current) { wrap.append(h('p', 'esp-control-note', 'Loading private board report…')); return wrap; }
+  wrap.append(h('p', 'esp-control-note', 'Installed firmware: ' + (current.firmware || 'not reported') + ' · last management report: ' + (age === null ? 'never' : durS(age) + ' ago') + ' · configuration revision: ' + (current.diagnostics?.config_revision ?? 'unknown')));
+  if (!fresh) wrap.append(h('p', 'esp-control-note', 'Commands are disabled while this board is offline or has not reported management status. It may install its signed auto-update when it next connects.'));
+  const diagnostic = current.diagnostics, draft = S.espDraft[role];
+  if (diagnostic && draft) {
+    const editor = h('details'); editor.append(h('summary', null, 'Sensor pins and Wi-Fi profiles · advanced'));
+    editor.append(h('p', 'esp-control-note', 'Edit full JSON from the board’s reported settings. Blank Wi-Fi passwords retain saved credentials. Changes may briefly disconnect the board; the firmware rolls back failed trials.'));
+    for (const action of ['sensors','networks']) {
+      const area = h('textarea', null, null, {spellcheck:'false', 'aria-label':action + ' JSON'});
+      area.value = draft[action];
+      area.addEventListener('input', () => { draft[action] = area.value; draft.dirty = true; });
+      const button = h('button', 'esp-action', 'Apply ' + action, {type:'button'});
+      button.disabled = !fresh || S.espMgmtBusy || draft.revision !== diagnostic.config_revision;
+      button.addEventListener('click', () => { try { const payload = JSON.parse(area.value); espSend(role, action, payload, draft.revision); } catch (_) { S.espMsg = 'Invalid ' + action + ' JSON.'; R.esp(S.doc); } });
+      editor.append(h('label', null, action === 'sensors' ? 'Sensor settings' : 'Wi-Fi priorities'), area, button);
+    }
+    if (draft.revision !== diagnostic.config_revision) editor.append(h('p', 'esp-control-note', 'Settings changed on the board. Refresh private status before editing.'));
+    wrap.append(editor);
+  }
+  const history = h('ul', 'esp-history');
+  for (const command of (current.commands || []).slice(0, 6)) history.append(h('li', null, '#' + command.sequence + ' ' + command.action + ' · ' + command.status));
+  wrap.append(h('p', 'esp-control-note', 'Recent command acknowledgments'), history);
+  return wrap;
+}
 R.esp = (d) => {
-  if (document.activeElement && document.activeElement.matches('#b-esp .esp-local input')) return;
+  if (document.activeElement && document.activeElement.matches('#b-esp .esp-local input, #b-esp .esp-command input, #b-esp .esp-command textarea')) return;
   const box = $('#b-esp'); box.replaceChildren();
   const fleet = d.esp_fleet;
   if (!fleet || !Array.isArray(fleet.devices)) { box.appendChild(h('div', 'emptynote', 'Fleet inventory is unavailable from this backend.')); return; }
@@ -513,11 +604,12 @@ R.esp = (d) => {
   ]));
   const controls = [h('h3', null, 'Management & recovery')];
   if (selected.management === 'core-private' || selected.management === 'core-private-pending') {
-    controls.push(h('p', 'esp-control-note', selected.management === 'core-private-pending' ? 'Core remote commands are staged for this board. They become available after its signed update installs and a fresh management report arrives.' : 'Core-queued diagnostics, sensor settings, Wi-Fi changes, reboot, and explicitly versioned signed OTA are available through a separate operator session.'));
+    controls.push(h('p', 'esp-control-note', selected.management === 'core-private-pending' ? 'Core remote commands are staged for this board. They become available after its signed update installs and a fresh management report arrives.' : 'Core-queued diagnostics, sensor settings, Wi-Fi changes, reboot, and signed OTA are available below with operator authentication.'));
     const copy = h('button', 'esp-action', 'Copy Phaenon3 launch command', {type:'button'});
     copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText("& 'C:\\CodeBlack\\Projects\\SpencerEsp\\firmware\\mesonet-idf\\tools\\Start-MesonetManagement.ps1'"); copy.textContent = 'Copied'; } catch (_) { copy.textContent = 'Clipboard unavailable'; } });
     controls.push(h('div', 'esp-controls', copy));
-    controls.push(h('p', 'esp-control-note', 'Run the copied script in PowerShell on Phaenon3. It opens a private, 30-minute local session. This dashboard does not hold the admin credential or send commands.'));
+    controls.push(h('p', 'esp-control-note', 'Phaenon3 can also open a 30-minute private operator session using this script. The dashboard accepts the Core token only in the current tab; no token is stored in Core status data.'));
+    controls.push(espControl(selected));
   } else {
     controls.push(h('p', 'esp-control-note', 'This board supports signed automatic OTA and its authenticated local HTTPS page. Core remote commands are not enrolled for this role yet.'));
   }
@@ -679,6 +771,7 @@ R.radar = (d) => {
   box.appendChild(card(C.state === 'NOT_DEPLOYED' ? 'futurecard' : '', [
     h('div', 'hd', [h('h3', null, 'Chase-aware radar control'), chip(C.state || 'UNKNOWN', C.telemetry), ' ', h('span', 'muted small', C.reason || '')]),
     kv('Operating mode', chip(C.mode || 'UNKNOWN')),
+    kv('Selection source', h('span', 'mono', C.source || 'UNKNOWN')),
     kv('Fabric location feed', h('span', null, [chip(F.state || 'UNKNOWN'), ' ', h('span', 'muted small', isNull(F.snapshot_age_s) ? 'age unknown' : 'age ' + durS(F.snapshot_age_s))])),
     kv('Eligible / skipped chasers', nz(F.eligible_chasers) + ' / ' + nz(F.skipped_chasers)),
     kv('Primary sites', siteList(S.primary)), kv('Secondary queue', siteList(S.secondary)),
@@ -1007,6 +1100,10 @@ if (window.matchMedia('(max-width:899px)').matches) {
   ['s-services', 's-address'].forEach((id) => { const e = document.getElementById(id); e.classList.add('collapsed'); syncToggle(e); });
 }
 setInterval(chrome, 1000);
+setInterval(() => { if (!document.hidden && S.espToken && !S.espMgmtBusy && S.doc) {
+  const selected = (S.doc.esp_fleet?.devices || []).find((item) => item.id === S.espSelected);
+  if (selected && Date.now() - (S.espMgmtAt[selected.role] || 0) > 6000) espRefreshPrivate(selected.role, true);
+}}, 6000);
 poll();
 </script>
 </body>

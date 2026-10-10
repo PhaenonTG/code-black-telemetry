@@ -94,6 +94,34 @@ class MesonetStatusTests(unittest.TestCase):
         self.assertNotIn("longitude", serialized)
         self.assertNotIn("secret", serialized)
 
+    def test_esp_command_bridge_requires_token_and_inventory_role(self):
+        self.assertEqual(server.esp_management_request("striker-weather", None)[0], 401)
+        self.assertEqual(server.esp_management_request("invented-board", "Bearer " + "x" * 32)[0], 404)
+        with patch.object(server.urllib.request, "urlopen") as fetch:
+            self.assertEqual(server.esp_management_request("striker-weather", "Bearer " + "x" * 32,
+                                                            {"action": "shell", "payload": {}})[0], 400)
+            fetch.assert_not_called()
+
+    def test_esp_command_bridge_requires_fresh_report(self):
+        report = {"received_age_s": 44, "diagnostics": {"config_revision": 3}}
+        with patch.object(server.urllib.request, "urlopen", return_value=Response(report)) as fetch:
+            status, result = server.esp_management_request("striker-weather", "Bearer " + "x" * 32,
+                                                          {"action": "reboot", "payload": {}})
+        self.assertEqual(status, 409)
+        self.assertIn("fresh", result["error"])
+        self.assertEqual(fetch.call_count, 1)
+
+    def test_esp_command_bridge_forwards_only_to_core(self):
+        report = {"received_age_s": 2, "diagnostics": {"config_revision": 3}}
+        queued = {"sequence": 33, "role": "striker-weather", "action": "diagnostics", "status": "queued"}
+        with patch.object(server.urllib.request, "urlopen", side_effect=[Response(report), Response(queued)]) as fetch:
+            status, result = server.esp_management_request("striker-weather", "Bearer " + "x" * 32,
+                                                          {"action": "diagnostics", "payload": {}})
+        self.assertEqual(status, 200)
+        self.assertEqual(result["sequence"], 33)
+        self.assertEqual(fetch.call_args.args[0].full_url,
+                         server.ESP_MANAGEMENT_URL + "/striker-weather/commands")
+
 
 if __name__ == "__main__":
     unittest.main()

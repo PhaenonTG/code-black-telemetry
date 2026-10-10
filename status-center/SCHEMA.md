@@ -28,7 +28,14 @@ block whose `stale` is true must NOT be shown green (render `STALE TELEMETRY`). 
 Only `state` and `report_age_s` are live Core observations. Firmware, pins, and SSID
 priorities are documented handoff snapshots. No sensor values, coordinates, network
 passwords, or operator credentials appear. `management` is `core-private` for Nick
-or `core-private-pending` for a board awaiting its signed update; it is not an executable browser API.
+or `core-private-pending` for a board awaiting its signed update. The fleet list is
+registry-driven; another ESP can be added without changing dashboard layout, but
+Core and firmware still need a unique managed role before it can receive commands.
+The ESP command pane uses separate `GET /api/esp-management/{role}` and
+`POST /api/esp-management/{role}/commands` endpoints. Both require the Core ESP
+operator bearer token, which remains in browser-tab memory and is forwarded to
+Core without storage. POST also requires same-origin JSON and a fresh board
+management report. The public status document remains read-only and secret-free.
 
 ## notifications
 `{server:{url, access, authentication, retention_days, service, state, last_success},
