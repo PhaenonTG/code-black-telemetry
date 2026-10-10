@@ -103,6 +103,17 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(bridge.send_other_edge_events(state), 0)
             self.assertEqual(send.call_count, 1)
 
+    def test_snoozed_attention_pages_when_snooze_expires(self):
+        item = {"id": "svc:api", "title": "API offline", "detail": "unreachable", "severity": "WARNING"}
+        state = {"attention_baselined": True, "coverage_version": 2, "attention": {}}
+        with patch.object(bridge, "get_attention", return_value={item["id"]: item}), \
+             patch.object(bridge, "snoozed", side_effect=[True, False]), \
+             patch.object(bridge, "publish") as send:
+            for _ in range(4):
+                bridge.send_status_transitions(state)
+            self.assertEqual(send.call_count, 1)
+            self.assertEqual(send.call_args.args[-1], "svc:api")
+
 
 if __name__ == "__main__":
     unittest.main()

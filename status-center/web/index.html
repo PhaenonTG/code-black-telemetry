@@ -312,7 +312,7 @@ function bytes(n) {
 }
 
 /* ---------- state model ---------- */
-const OKS = new Set(['HEALTHY', 'FRESH', 'LIVE', 'OK', 'IDLE', 'VERIFYING', 'OPEN', 'DIRECT', 'COMPLETE', 'RUNNING', 'ONLINE', 'AVAILABLE']);
+const OKS = new Set(['HEALTHY', 'FRESH', 'LIVE', 'OK', 'IDLE', 'VERIFYING', 'OPEN', 'DIRECT', 'COMPLETE', 'RUNNING', 'ONLINE', 'AVAILABLE', 'CONFIRMED']);
 const WARNS = new Set(['DEGRADED', 'AGING', 'WARNING', 'STALE']);
 const BADS = new Set(['OFFLINE', 'CRITICAL', 'FAILED', 'UNREACHABLE', 'ERROR']);
 function sc(s) {
@@ -378,10 +378,14 @@ R.attention = (d) => {
   if (!items.length) { box.appendChild(h('div', 'emptynote f-item', 'Nothing needs attention.')); return; }
   const makeNotice = (i) => {
     const l = normalizeLink(i.link);
+    const control = i.operator || {};
+    const incident = 'https://codeblack-core.tail1d0673.ts.net/alert-actions/incident?id=' + encodeURIComponent(i.id);
     return h('li', 'f-item ' + i.severity, [
       h('span', 'chip ' + sc(i.severity), i.severity),
-      h('div', 'at wrap', i.severity === 'INFO' && !isNull(i.detail) ? [i.title, h('span', 'muted small', '  -  ' + i.detail)] : i.title),
-      h('div', 'am', [h('span', null, isNull(i.source) ? '' : i.source), i.since ? h('span', null, ' - since ' + ago(i.since)) : null, l ? [' ', lnk(l.name || 'Open', l.url)] : null]),
+      h('div', 'at wrap', [i.title, control.acknowledged_at ? [' ', h('span', 'chip ok', 'ACKNOWLEDGED')] : null,
+        control.snoozed_until ? [' ', h('span', 'chip warn', 'SNOOZED')] : null,
+        i.severity === 'INFO' && !isNull(i.detail) ? h('span', 'muted small', '  -  ' + i.detail) : null]),
+      h('div', 'am', [h('span', null, isNull(i.source) ? '' : i.source), i.since ? h('span', null, ' - since ' + ago(i.since)) : null, l ? [' ', lnk(l.name || 'Open', l.url)] : null, ' ', lnk('Actions', incident)]),
       isNull(i.detail) || i.severity === 'INFO' ? null : h('div', 'ad wrap', i.detail),
     ]);
   };
@@ -415,13 +419,15 @@ R.notifications = (d) => {
     kv('Check', isNull(route.cadence_s) ? unk() : 'every ' + durS(route.cadence_s)),
     kv('Last observed', tm(route.last_success)),
   ])));
-  const phone = n.iphone || {}, fallback = n.fallback || {};
+  const phone = n.iphone || {}, fallback = n.fallback || {}, actions = n.actions || {};
   grid.appendChild(card('', [
     h('div', 'hd', [h('h3', null, 'iPhone delivery'), chip(phone.push)]),
     kv('In-app inbox', chip(phone.inbox)),
     kv('Lock-screen push', chip(phone.push)),
     h('div', 'notify-note wrap', phone.note || 'Device delivery has not been verified.'),
+    h('div', 'notify-note', ['Action console ', chip(actions.state)]),
     h('div', 'notify-note', ['Discord fallback ', chip(fallback.state)]),
+    h('div', 'linkrow', lnk('Review service actions', 'https://codeblack-core.tail1d0673.ts.net/alert-actions/services')),
   ]));
   box.appendChild(grid);
 };

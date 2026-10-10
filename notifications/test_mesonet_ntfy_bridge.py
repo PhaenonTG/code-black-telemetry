@@ -58,6 +58,16 @@ class MesonetBridgeTests(unittest.TestCase):
             self.assertEqual(bridge.main(), 0)
             self.assertEqual(send.call_count, 1)
 
+    def test_snooze_skips_transition_without_failing_bridge(self):
+        self.assertEqual(bridge.main(), 0)
+        with closing(sqlite3.connect(self.db)) as connection:
+            connection.execute("INSERT INTO mesonet_alerts VALUES (3, 'wind', 'offline', NULL)")
+            connection.commit()
+        with patch.object(bridge, "snoozed", return_value=True), patch.object(bridge, "publish") as send:
+            self.assertEqual(bridge.main(), 0)
+            send.assert_not_called()
+        self.assertEqual(json.loads(self.state.read_text())["seen"]["3"], "open")
+
 
 if __name__ == "__main__":
     unittest.main()

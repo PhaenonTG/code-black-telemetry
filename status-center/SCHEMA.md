@@ -20,17 +20,17 @@ block whose `stale` is true must NOT be shown green (render `STALE TELEMETRY`). 
 - `backend`: `{version, host, uptime_s, probes_total, probes_stale, probes_failing, refresh_hints:{fast_s, host_s, slow_s}}`
 - `summary`: `{overall: state, attention_count, tiles:[{id, label, state, detail, group:"host"|"domain", informational}]}` (`informational:true` = intentional idle state, e.g. nobody is streaming)
   Tiles include one per host (group host) and domain tiles: RADAR (freshness), WEATHER, DNS, STREAMING, AI, LABS, STORAGE, NETWORK.
-- `attention[]`: `{id, severity, title, detail, source, since, link|null}` sorted CRITICAL, WARNING, INFO. Intentional states
+- `attention[]`: `{id, severity, title, detail, source, since, link|null, operator:{acknowledged_at?, snoozed_until?}}` sorted CRITICAL, WARNING, INFO. Intentional states
   (e.g. TESSA/STRIKER offline when nobody streams) are INFO only.
 
 ## notifications
 `{server:{url, access, authentication, retention_days, service, state, last_success},
   channels:[{topic, purpose, cadence_s, service, state, last_success}],
+  actions:{service, state, last_success},
   fallback:{service, state, last_success},
-  iphone:{inbox:"CONFIRMED", push:"UNVERIFIED", note}}`
+  iphone:{inbox:"CONFIRMED", push:"CONFIRMED", note}}`
 Server/channel/fallback states come from the corresponding live service cards. The iPhone
-fields record a manual observation, not a live device probe: an ntfy message appearing
-after refresh must never be represented as verified lock-screen push delivery. No
+fields record a manual operator observation, not a live device probe. No
 credentials, tokens, or message text appear in this object.
 
 ## hosts[]

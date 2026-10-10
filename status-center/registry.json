@@ -11,6 +11,7 @@
     "authentication": "required",
     "retention_days": 7,
     "server_service": "ntfy-private",
+    "action_service": "alert-actions",
     "channels": [
       {"topic": "ops-monitoring", "purpose": "Infrastructure and Status Center attention transitions", "service": "edge-ntfy-bridge", "cadence_s": 60},
       {"topic": "ops-monitoring", "purpose": "Nick Mesonet sensor and update alerts", "service": "nick-mesonet-ntfy-bridge", "cadence_s": 15},
@@ -19,8 +20,8 @@
     "fallback_service": "edge-notification-dispatch",
     "iphone": {
       "inbox": "CONFIRMED",
-      "push": "UNVERIFIED",
-      "note": "Messages were readable after refresh; lock-screen notification delivery has not been confirmed."
+      "push": "CONFIRMED",
+      "note": "Operator confirmed iPhone push delivery on 2026-10-09. This is a manual observation, not a live device probe."
     }
   },
   "defaults": {
@@ -419,6 +420,16 @@
       "interval": "host",
       "ok_json": {
         "path": "healthy",
+        "in": [true]
+      }
+    },
+    {
+      "id": "alert_actions_health",
+      "kind": "http_json",
+      "url": "http://127.0.0.1:8796/health",
+      "interval": "host",
+      "ok_json": {
+        "path": "ok",
         "in": [true]
       }
     },
@@ -1060,6 +1071,19 @@
       "deps": [],
       "urls": {
         "tailscale": "https://codeblack-core.tail1d0673.ts.net:8443/"
+      },
+      "docs": "notifications/README.md"
+    },
+    {
+      "id": "alert-actions",
+      "name": "Alert Action Console",
+      "host": "core",
+      "category": "core",
+      "role": "Authenticated operator acknowledgments, snoozes and confirmed allowlisted service restarts",
+      "probe": "alert_actions_health",
+      "deps": ["ntfy-private", "status-center"],
+      "urls": {
+        "tailscale": "https://codeblack-core.tail1d0673.ts.net/alert-actions/services"
       },
       "docs": "notifications/README.md"
     },

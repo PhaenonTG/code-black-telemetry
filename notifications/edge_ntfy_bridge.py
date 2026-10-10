@@ -7,11 +7,13 @@ create a second monitoring authority or re-page existing conditions on install.
 """
 
 import datetime as dt
+import hashlib
 import json
 import os
 import re
 import time
 import urllib.request
+import urllib.parse
 from pathlib import Path
 
 EVENTS = Path(os.environ.get("CODEBLACK_ALERT_EVENTS", "/srv/codeblack/data/alerts/events.jsonl"))
@@ -21,6 +23,9 @@ TOKEN = Path(os.environ.get("CODEBLACK_NTFY_OPS_TOKEN", "/srv/codeblack/private/
 STATUS_URL = os.environ.get("CODEBLACK_STATUS_URL", "https://codeblack-core.tail1d0673.ts.net/status/api/status")
 NTFY_URL = os.environ.get("CODEBLACK_NTFY_URL", "https://codeblack-core.tail1d0673.ts.net:8443/ops-monitoring")
 DASHBOARD_URL = "https://codeblack-core.tail1d0673.ts.net/status/"
+ACTION_URL = "https://codeblack-core.tail1d0673.ts.net/alert-actions"
+ACTION_STATE_URL = ACTION_URL + "/api/state"
+ACTION_CACHE = {"at": 0, "value": {}}
 NOTIFICATION_DIR = Path(os.environ.get("CODEBLACK_NOTIFICATION_DIR", "/srv/codeblack/data/notifications"))
 INCIDENT_TYPES = {"incident_start", "incident_update", "recovery"}
 STATE_WORDS = re.compile(r"\b(OFFLINE|DEGRADED|UNKNOWN|STALE|AGING|CRITICAL|ERROR|UNAVAILABLE|VERIFYING)\b", re.I)
@@ -46,7 +51,25 @@ def load(path, default):
         return default
 
 
-def publish(title, body, priority="default", tags="warning"):
+def action_headers(alert_id):
+    incident = ACTION_URL + "/incident?id=" + urllib.parse.quote(alert_id, safe="")
+    return {"Click": incident, "Actions": f"view, Open Status, {DASHBOARD_URL}; view, View Incident, {incident}"}
+
+
+def snoozed(alert_id):
+    try:
+        if time.time() - ACTION_CACHE["at"] > 10:
+            ACTION_CACHE["at"] = time.time()
+            with urllib.request.urlopen(ACTION_STATE_URL, timeout=2) as response:
+                ACTION_CACHE["value"] = json.load(response)
+        state = ACTION_CACHE["value"].get(alert_id, {})
+        until = state.get("snoozed_until")
+        return bool(until and dt.datetime.fromisoformat(until.replace("Z", "+00:00")) > dt.datetime.now(dt.timezone.utc))
+    except (OSError, ValueError, TypeError):
+        return False  # Alert delivery fails open if the action console is unavailable.
+
+
+def publish(title, body, priority="default", tags="warning", alert_id="edge:incident"):
     token = TOKEN.read_text(encoding="utf-8").strip()
     if not token:
         raise RuntimeError("ops publisher token is empty")
@@ -58,7 +81,7 @@ def publish(title, body, priority="default", tags="warning"):
             "Title": title,
             "Priority": priority,
             "Tags": tags,
-            "Click": DASHBOARD_URL,
+            **action_headers(alert_id),
             "User-Agent": "CodeBlack-Edge-OpsBridge/1.0",
         },
         method="POST",
@@ -111,10 +134,17 @@ def send_edge_events(state):
                 continue
             title = {"incident_start": "Code Black incident", "incident_update": "Code Black incident changed", "recovery": "Code Black recovered"}[kind]
             body = "\n".join(str(x) for x in event.get("issues", [])[:12]) or "Infrastructure recovered."
-            publish(title, body, "high" if kind != "recovery" else "default", "rotating_light" if kind != "recovery" else "white_check_mark")
+            if kind == "incident_start":
+                started = str(event.get("time") or next_offset)
+                state["edge_incident_id"] = "edge:incident:" + hashlib.sha256(started.encode()).hexdigest()[:16]
+            alert_id = state.get("edge_incident_id") or "edge:incident"
+            if not snoozed(alert_id):
+                publish(title, body, "high" if kind != "recovery" else "default", "rotating_light" if kind != "recovery" else "white_check_mark", alert_id)
+                sent += 1
             state["event_offset"] = next_offset
             state["last_edge_issue_keys"] = keys if kind != "recovery" else []
-            sent += 1
+            if kind == "recovery":
+                state.pop("edge_incident_id", None)
             save(STATE, state)  # restart-safe delivery cursor
     return sent
 
@@ -150,8 +180,10 @@ def send_other_edge_events(state):
             else:
                 title = f"Code Black event: {kind[:80]}"
                 body = "\n".join(str(issue) for issue in event.get("issues", [])[:12]) or "See Status Center for details."
-            publish(title, body, "default", "information_source")
-            sent += 1
+            alert_id = "edge:event:" + hashlib.sha256(name.encode()).hexdigest()[:16]
+            if not snoozed(alert_id):
+                publish(title, body, "default", "information_source", alert_id)
+                sent += 1
         seen.add(name)
         state["other_edge_seen"] = sorted(seen)
         save(STATE, state)
@@ -208,12 +240,22 @@ def send_status_transitions(state):
             )
             old["title"] = item.get("title", key)
             if not old.get("active") and old["bad"] >= BAD_POLLS:
-                publish("Code Black alert", f"{old['title']}\n{item.get('detail', '')}", attention_priority(item), "warning")
+                if not snoozed(key):
+                    publish("Code Black alert", f"{old['title']}\n{item.get('detail', '')}", attention_priority(item), "warning", key)
+                    old["notified"] = True
+                    sent += 1
+                else:
+                    old["notified"] = False
                 old["active"] = True
-                old["notified"] = True
-                sent += 1
             elif changed:
-                publish("Code Black alert changed", f"{old['title']}\n{item.get('detail', '')}", attention_priority(item), "warning")
+                if not snoozed(key):
+                    publish("Code Black alert changed", f"{old['title']}\n{item.get('detail', '')}", attention_priority(item), "warning", key)
+                    old["notified"] = True
+                    sent += 1
+                else:
+                    old["notified"] = False
+            elif old.get("active") and old.get("notified") is False and not snoozed(key):
+                publish("Code Black alert", f"{old['title']}\n{item.get('detail', '')}", attention_priority(item), "warning", key)
                 old["notified"] = True
                 sent += 1
             old["severity"] = item.get("severity")
@@ -226,8 +268,9 @@ def send_status_transitions(state):
                 # while probes warm. If it was merely baselined, never page a
                 # recovery for an issue we did not actually announce.
                 if old.get("marker") != "UNKNOWN" or old.get("notified"):
-                    publish("Code Black issue cleared", old.get("title", key), "default", "white_check_mark")
-                    sent += 1
+                    if not snoozed(key):
+                        publish("Code Black issue cleared", old.get("title", key), "default", "white_check_mark", key)
+                        sent += 1
                 old["active"] = False
         if old.get("active") or old.get("bad") or old.get("good", 0) < GOOD_POLLS:
             tracked[key] = old

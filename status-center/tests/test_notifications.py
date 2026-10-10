@@ -1,4 +1,4 @@
-"""Notification overview must distinguish pipeline health from iPhone delivery."""
+"""Notification overview must distinguish pipeline health from phone observations."""
 
 import os
 import sys
@@ -19,6 +19,7 @@ class NotificationOverviewTests(unittest.TestCase):
                 ("edge-ntfy-bridge", "DEGRADED"),
                 ("nick-mesonet-ntfy-bridge", "HEALTHY"),
                 ("silas-aegis-notify", "UNKNOWN"),
+                ("alert-actions", "HEALTHY"),
                 ("edge-notification-dispatch", "HEALTHY"),
             )
         }
@@ -27,7 +28,8 @@ class NotificationOverviewTests(unittest.TestCase):
         self.assertEqual([route["state"] for route in overview["channels"]],
                          ["DEGRADED", "HEALTHY", "UNKNOWN"])
         self.assertEqual(overview["fallback"]["state"], "HEALTHY")
-        self.assertEqual(overview["iphone"]["push"], "UNVERIFIED")
+        self.assertEqual(overview["actions"]["state"], "HEALTHY")
+        self.assertEqual(overview["iphone"]["push"], "CONFIRMED")
         self.assertEqual(overview["iphone"]["inbox"], "CONFIRMED")
 
     def test_missing_service_is_unknown_and_configuration_is_secret_free(self):

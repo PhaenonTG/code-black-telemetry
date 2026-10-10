@@ -1161,9 +1161,20 @@ def build_notifications(services_by_id):
         "channels": [{"topic": channel["topic"], "purpose": channel["purpose"],
                       "cadence_s": channel["cadence_s"], **route(channel["service"])}
                      for channel in cfg["channels"]],
+        "actions": route(cfg["action_service"]),
         "fallback": route(cfg["fallback_service"]),
         "iphone": dict(cfg["iphone"]),
     }
+
+
+def alert_action_state():
+    """Read-only overlay; action-service outages never break fleet status."""
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8796/api/state", timeout=0.3) as response:
+            value = json.load(response)
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
 
 
 def build_status():
@@ -1177,6 +1188,12 @@ def build_status():
     if compute["state"] == "BUSY" and "phaenon3" in hby and hby["phaenon3"]["state"] == "HEALTHY":
         pass
     attention = build_attention(hosts, services, streaming, radar, weather, dns, storage, labs, network)
+    controls = alert_action_state()
+    for item in attention:
+        control = dict(controls.get(item["id"], {}))
+        if parse_ts(control.get("acknowledged_at")) and parse_ts(item.get("since")) and parse_ts(control["acknowledged_at"]) < parse_ts(item["since"]):
+            control["acknowledged_at"] = None  # A new occurrence is not covered by an old acknowledgment.
+        item["operator"] = control
     tiles = []
     for h in hosts:
         if h["id"] == "raspberrypi":

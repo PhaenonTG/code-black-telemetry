@@ -1,5 +1,39 @@
 # Private iPhone notifications
 
+## Actionable alerts
+
+Operational ntfy messages now include **Open Status** and **View Incident**
+actions. The latter opens a separate Tailnet-only Core console at
+`https://codeblack-core.tail1d0673.ts.net/alert-actions/incident?id=...`.
+It requires the `glenn` operator login (same password as ntfy, verified against
+a separately stored password hash). Alert URLs and ntfy's seven-day cache
+contain no operator password, bearer token, or privileged action URL.
+
+The console supports **Acknowledge**, **Snooze** (15 minutes, 1 hour, 4 hours,
+or 24 hours), **Unsnooze**, and **Clear operator mark**. Acknowledgment is
+visible beside active Status Center attention and does not conceal a fault.
+Snooze suppresses new ntfy sends for the matching alert ID, never Discord or
+the Status Center itself. An active Status Center issue held during snooze is
+sent when the snooze expires. Edge incident and Mesonet event transitions
+occurring during snooze are skipped rather than replayed. If the action
+service is unavailable, alert delivery fails open.
+
+The **Review service actions** page requires a second typed confirmation
+before a restart. Only `codeblack-ntfy.service` and
+`codeblack-status-center.service` are allowlisted. Requests and results are
+appended to a local audit log. The dedicated `codeblack-actions` account can
+run only those exact `systemctl restart` commands through sudoers; it cannot
+execute arbitrary unit names or shell commands. Do not treat the restart page
+as a general remediation interface.
+
+Deploy on Core using `install-alert-actions.sh` from a staged copy of this
+directory. It provisions a password hash from the existing private ntfy reader
+password without printing it, installs the isolated service and narrowly
+scoped sudoers rule, and mounts the console with Tailscale Serve. State and
+audit live under `/srv/codeblack/data/alert-actions`; credentials remain
+outside Git. Removing the Serve mount and stopping the service disables all
+remote actions without affecting alert publication.
+
 The Core host serves a private ntfy instance at
 `https://codeblack-core.tail1d0673.ts.net:8443` using Tailscale Serve. It is
 not exposed via Funnel or Cloudflare. Anonymous access is denied. The server

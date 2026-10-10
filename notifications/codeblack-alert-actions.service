@@ -1,0 +1,24 @@
+[Unit]
+Description=Code Black authenticated alert actions
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=codeblack-actions
+Group=codeblack-actions
+ExecStart=/usr/bin/python3 /srv/codeblack/services/alert-actions/incident_actions.py
+Restart=always
+RestartSec=5
+UMask=0027
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/codeblack/data/alert-actions
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=128M
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

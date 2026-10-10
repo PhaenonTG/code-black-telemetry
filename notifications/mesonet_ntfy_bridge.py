@@ -6,6 +6,7 @@ import json
 import os
 import sqlite3
 import urllib.request
+import urllib.parse
 from contextlib import closing
 from pathlib import Path
 
@@ -15,6 +16,8 @@ HEALTH = Path(os.environ.get("CODEBLACK_MESONET_NTFY_HEALTH", "/srv/codeblack/da
 TOKEN = Path(os.environ.get("CODEBLACK_MESONET_NTFY_TOKEN", "/srv/codeblack/data/mesonet/management/ops-publisher-token.txt"))
 NTFY_URL = os.environ.get("CODEBLACK_MESONET_NTFY_URL", "http://127.0.0.1:2586/ops-monitoring")
 DASHBOARD_URL = "https://codeblack-core.tail1d0673.ts.net/status/"
+ACTION_URL = "https://codeblack-core.tail1d0673.ts.net/alert-actions"
+ACTION_STATE_URL = "http://127.0.0.1:8796/api/state"
 LABELS = {"offline": "offline", "stale": "short-stale telemetry", "reboot_loop": "reboot loop", "update_failed": "OTA update failure"}
 
 
@@ -52,16 +55,30 @@ def publish(alert_id, role, kind, resolved, was_open):
     token = TOKEN.read_text(encoding="utf-8").strip()
     if not token:
         raise RuntimeError("mesonet publisher token empty")
+    incident_id = f"mesonet:{alert_id}"
+    incident_url = ACTION_URL + "/incident?id=" + urllib.parse.quote(incident_id, safe="")
     request = urllib.request.Request(
         NTFY_URL,
         data=body.encode("utf-8"),
         headers={"Authorization": "Bearer " + token, "Title": title, "Priority": priority,
-                 "Tags": tags, "Click": DASHBOARD_URL, "User-Agent": "CodeBlack-Mesonet-OpsBridge/1.0"},
+                 "Tags": tags, "Click": incident_url,
+                 "Actions": f"view, Open Status, {DASHBOARD_URL}; view, View Incident, {incident_url}",
+                 "User-Agent": "CodeBlack-Mesonet-OpsBridge/1.0"},
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=8) as response:
         if response.status != 200:
             raise RuntimeError(f"ntfy HTTP {response.status}")
+
+
+def snoozed(alert_id):
+    try:
+        with urllib.request.urlopen(ACTION_STATE_URL, timeout=2) as response:
+            state = json.load(response).get(f"mesonet:{alert_id}", {})
+        until = state.get("snoozed_until")
+        return bool(until and dt.datetime.fromisoformat(until.replace("Z", "+00:00")) > dt.datetime.now(dt.timezone.utc))
+    except (OSError, ValueError, TypeError):
+        return False
 
 
 def main():
@@ -84,10 +101,11 @@ def main():
                 new_state = "open" if resolved is None else "resolved"
                 old_state = seen.get(key)
                 if old_state != new_state:
-                    publish(alert_id, role, kind, resolved, old_state == "open")
+                    if not snoozed(alert_id):
+                        publish(alert_id, role, kind, resolved, old_state == "open")
+                        sent += 1
                     seen[key] = new_state
                     save(STATE, state)
-                    sent += 1
             state["seen"] = {key: value for key, value in seen.items() if key in present}
             save(STATE, state)
         active = sum(resolved is None for _id, _role, _kind, resolved in current)
