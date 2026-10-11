@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { PageHeader } from "../components/PageHeader"
 import { StatusBadge } from "../components/StatusBadge"
 import { useCoreOps } from "../core/useCoreOps"
+import { getAegisStatus, type AegisStatus } from "../core/aegisFeed"
 import {
   fetchRadarControlSettings,
   fetchStatusCenter,
@@ -33,6 +34,7 @@ export default function StatusCenter() {
   const { config } = useCoreOps()
   const [document, setDocument] = useState<StatusCenterDocument | null>(null)
   const [settings, setSettings] = useState<RadarControlSettings | null>(null)
+  const [aegis, setAegis] = useState<AegisStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -45,6 +47,7 @@ export default function StatusCenter() {
       setDocument(nextDocument)
       setSettings(nextSettings)
       setError(null)
+      try { setAegis(await getAegisStatus(config)) } catch { setAegis(null) }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Status Center is unavailable")
     }
@@ -115,6 +118,12 @@ export default function StatusCenter() {
             <div><span>PIPELINE</span><b>{toText(radar.state)}</b></div>
             <div><span>TELEMETRY</span><b>{toText((radar.telemetry as Record<string, unknown> | undefined)?.stale) === "true" ? "STALE" : "CURRENT"}</b></div>
           </div>
+          <div className="status-center__facts">
+            <div><span>AEGIS SCREEN</span><b>{aegis?.screen.enabled ? "RUNNING" : "UNAVAILABLE"}</b></div>
+            <div><span>ALERT DELIVERY</span><b>{aegis?.delivery_enabled ? "LIVE" : "SHADOW / OFF"}</b></div>
+            <div><span>EVIDENCE CUTOFF</span><b>{aegis?.screen.cutoff ?? "—"}/100</b></div>
+          </div>
+          <p className="status-center__muted"><a href="/aegis-alerts">Open Aegis radar alert feed and evidence map</a> · Supplemental, not an official warning.</p>
           {settings ? <div className="status-center__controls">
             <label className="settings-toggle-row">
               <span className="settings-toggle-row__text"><b className="settings-toggle-row__label">Primary-site prewarm</b><small className="settings-toggle-row__description">Prewarm the closest active radar site before acquisition.</small></span>
