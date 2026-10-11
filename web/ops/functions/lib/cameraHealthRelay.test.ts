@@ -18,4 +18,19 @@ describe("camera health relay", () => {
     const secondBody = await second.json() as { fingerprint: string };
     expect(first.status).toBe(200); expect(firstBody.fingerprint).toBe(secondBody.fingerprint); expect(firstBody.fingerprint).toHaveLength(24);
   });
+
+  it("checks only NationCam's image host for the verified public embed", async () => {
+    const upstream = vi.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "Content-Type": "image/jpeg", "Last-Modified": "Sun, 11 Oct 2026 16:21:25 GMT" } }));
+    vi.stubGlobal("fetch", upstream);
+    const response = await handleCameraHealth(new Request("https://ops.test/api/camera-health?url=https%3A%2F%2Fstreamer.nationcam.com%2Fmemfs%2F6d99ba5e-d0a6-4329-8383-858004604263.jpg"));
+    expect(response.status).toBe(200);
+    expect((await response.json() as { lastModified: string }).lastModified).toBe("Sun, 11 Oct 2026 16:21:25 GMT");
+  });
+
+  it("rejects an oversized image before buffering the body", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200, headers: { "Content-Type": "image/jpeg", "Content-Length": "3000001" } })));
+    const response = await handleCameraHealth(new Request("https://ops.test/api/camera-health?url=https%3A%2F%2Fstreamer.nationcam.com%2Fmemfs%2F6d99ba5e-d0a6-4329-8383-858004604263.jpg"));
+    expect(response.status).toBe(413);
+    expect((await response.json() as { error: string }).error).toBe("MEDIA_TOO_LARGE");
+  });
 });

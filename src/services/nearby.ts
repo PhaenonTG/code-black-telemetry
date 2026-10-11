@@ -10,6 +10,8 @@ export interface NearbyPlace {
   lat: number;
   lon: number;
   address: string;
+  city?: string;
+  state?: string;
   phone: string;
   hoursStatus: "open" | "closed" | "unknown" | "typical-open";
   hoursText: string;
@@ -299,6 +301,8 @@ function elementsToCandidates(category: NearbyCategory, pos: Position, elements:
       lat: point.lat,
       lon: point.lon,
       address: formatAddress(tags),
+      city: tags["addr:city"] || undefined,
+      state: tags["addr:state"] || undefined,
       phone: tags.phone || tags["contact:phone"] || "",
       hoursStatus: hours.status,
       hoursText: hours.text,
@@ -384,7 +388,7 @@ const POI_LIST_LIMIT_PER_CATEGORY = 20;
 // Feeds the map's Gas/Food POI layer (distinct from getNearbyPlaces above, which only returns the
 // single best pick per category for the Nearby card) -- every candidate within range, for the map
 // to render as its own pin.
-export async function getNearbyPoiList(pos: Position, categories: NearbyCategory[] = ["gas", "food", "hospital"]): Promise<{ places: NearbyPlace[]; error: string }> {
+export async function getNearbyPoiList(pos: Position, categories: NearbyCategory[] = ["gas", "food", "hospital", "lodging"]): Promise<{ places: NearbyPlace[]; error: string }> {
   const pending = categories.map((category, index) =>
     new Promise<NearbyPlace[]>((resolve, reject) => {
       window.setTimeout(() => {

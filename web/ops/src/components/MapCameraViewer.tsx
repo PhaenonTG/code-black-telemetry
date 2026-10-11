@@ -3,13 +3,14 @@ import Hls from "hls.js"
 import type { TrafficCamera } from "../../../../src/services/mapLayerModels"
 import { fetchKandriveLiveCameraSource } from "../../../../src/services/mapLayerModels"
 
-type CameraMediaKind = "hls" | "mjpeg" | "video" | "image" | "unavailable"
+type CameraMediaKind = "hls" | "mjpeg" | "video" | "iframe" | "image" | "unavailable"
 
 function mediaFor(camera: TrafficCamera): { kind: CameraMediaKind; url: string | null } {
   const stream = camera.streamUrl?.trim() || null
   const image = camera.previewUrl?.trim() || camera.imageUrl?.trim() || camera.thumbnailUrl?.trim() || null
 
   if (stream) {
+    if (/^https:\/\/(?:nationcam\.com\/embed\/|www\.youtube\.com\/embed\/Q3UhCgsWDw8(?:\?|$))/i.test(stream)) return { kind: "iframe", url: stream }
     // The ARDOT relay's own URL is /api/ardot-camera-stream?url=<encoded upstream m3u8> -- the
     // literal ".m3u8" only shows up percent-encoded inside that query value, not as this URL's own
     // suffix, so it needs its own check rather than relying on the plain suffix match below.
@@ -170,6 +171,10 @@ export function MapCameraViewer({
           />
         )}
 
+        {media.kind === "iframe" && media.url && (
+          <iframe src={media.url} title={`${camera.name} live camera`} loading="lazy" allow="autoplay; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
+        )}
+
         {media.kind === "image" && media.url && (
           <img
             key={`${camera.id}-${imageTick}`}
@@ -197,7 +202,7 @@ export function MapCameraViewer({
         )}
 
         <span className={`map-camera-viewer__media-badge ${camera.freshness === "stale" ? "stale" : ""}`}>
-          {media.kind === "hls" || media.kind === "video" || media.kind === "mjpeg" ? "LIVE" : "CAMERA"}
+          {media.kind === "hls" || media.kind === "video" || media.kind === "mjpeg" || media.kind === "iframe" ? "LIVE" : "CAMERA"}
         </span>
       </div>
 

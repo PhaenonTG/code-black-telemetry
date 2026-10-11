@@ -117,6 +117,7 @@ export default function Settings() {
         <h2>Data & diagnostics</h2>
         <p>Provider health, radar availability, camera totals, and Core connectivity are tracked on the System page.</p>
         <Link className="page-action-link" to="/system">VIEW PROVIDER STATUS</Link>
+        <Link className="page-action-link" to="/map-registry">REVIEW MAP SOURCES</Link>
       </section>
 
       <section className="settings-group settings-group--alerts">

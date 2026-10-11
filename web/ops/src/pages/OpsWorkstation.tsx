@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AtlasMap, type AtlasSelectedPoint } from "../../../../src/map/AtlasMap";
 import { browserLocationAdapter, ipLocationAdapter, type LocationState } from "../adapters";
 import type { AtlasGpsPoint } from "../../../../src/map/types";
@@ -20,6 +20,8 @@ import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/
 import { mapWorkspaceVisibility, PHONE_RADAR_LAYERS, type MapWorkspace } from "../mapWorkspace";
 import { useViewport } from "../hooks/useViewport";
 import { PhoneSheet } from "../../../../src/components/PhoneSheet";
+import { placeToMapSource, type MapPinStatus, type MapSourceRecord } from "../../../../src/services/mapSourceRegistry";
+import { listLandmarks, loadCurrentReviews, registerMapSources } from "../lib/mapRegistry";
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null;
@@ -64,6 +66,10 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [operationalItems, setOperationalItems] = useState<{ roads: RoadConditionEvent[]; reports: StormReport[] }>({ roads: [], reports: [] });
   const [nearbyUnitId, setNearbyUnitId] = useState<string>("");
+  const [registryStatuses, setRegistryStatuses] = useState<Record<string, MapPinStatus>>({});
+  const [registryReadyIds, setRegistryReadyIds] = useState<Record<string, true>>({});
+  const [registryLandmarks, setRegistryLandmarks] = useState<MapSourceRecord[]>([]);
+  const [registryError, setRegistryError] = useState("");
   const { state: coreState, selectedPoint, selectPoint, updateDeviceLocation, refreshPoint, followDeviceLocation, locationMode } = useCoreOps();
 
   useEffect(() => { localStorage.setItem(CAMERA_WALL_KEY, JSON.stringify(pinnedCameras)); }, [pinnedCameras]);
@@ -158,6 +164,51 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   const nearby = useNearbyPlaces(gpsPoint);
   const alertProducts = useAlertProducts(gpsPoint);
 
+  const observeSources = useCallback((sources: MapSourceRecord[]) => {
+    if (!sources.length) return;
+    void (async () => {
+      try {
+        await registerMapSources(sources);
+        const reviews = await loadCurrentReviews(sources.map((source) => source.id));
+        setRegistryStatuses((current) => {
+          const next = { ...current };
+          let changed = false;
+          for (const [id, review] of Object.entries(reviews)) {
+            if (next[id] !== review.status) { next[id] = review.status; changed = true; }
+          }
+          return changed ? next : current;
+        });
+        setRegistryReadyIds((current) => {
+          const unseen = sources.filter((source) => !current[source.id]);
+          return unseen.length ? { ...current, ...Object.fromEntries(unseen.map((source) => [source.id, true as const])) } : current;
+        });
+        setRegistryError("");
+      } catch (error) {
+        setRegistryError(error instanceof Error ? error.message : "Map registry unavailable");
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const sources = [...poi.places, ...Object.values(nearby.places).filter((place): place is NonNullable<typeof place> => !!place)].map(placeToMapSource);
+    observeSources(sources);
+  }, [poi.places, nearby.places, observeSources]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => void listLandmarks().then(async (landmarks) => {
+      if (cancelled) return;
+      const reviews = await loadCurrentReviews(landmarks.map((source) => source.id));
+      if (cancelled) return;
+      setRegistryStatuses((current) => ({ ...current, ...Object.fromEntries(Object.entries(reviews).map(([id, review]) => [id, review.status])) }));
+      setRegistryReadyIds((current) => ({ ...current, ...Object.fromEntries(landmarks.map((source) => [source.id, true as const])) }));
+      setRegistryLandmarks(landmarks);
+    }).catch((error) => { if (!cancelled) setRegistryError(error instanceof Error ? error.message : "Map registry unavailable"); });
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+
   useEffect(() => {
     if (!voiceAlerts || !("speechSynthesis" in window)) return;
     for (const alert of alertProducts.products) {
@@ -196,6 +247,10 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
           showAllActiveSpotters
           poiPlaces={poi.places}
           nearbyBest={nearby.places}
+          registryStatuses={registryStatuses}
+          registryReadyIds={registryReadyIds}
+          registryLandmarks={registryLandmarks}
+          onMapSourcesObserved={observeSources}
           alerts={alertProducts.products}
           selectedPoint={selectedPoint}
           onPointSelect={(point: AtlasSelectedPoint) => selectPoint(point)}
@@ -218,6 +273,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
             </select>
           </label>
           <OpsStatusPill state={coreState.stormIntel.state} label="STORM INTEL" />
+          {registryError && <span title={registryError} className="ops-registry-warning">SOURCE PINS PAUSED · REGISTRY OFFLINE</span>}
           <button type="button" className={voiceAlerts ? "ops-voice-toggle active" : "ops-voice-toggle"} onClick={() => setVoiceAlerts((value) => !value)} title="Speak new tornado and flash-flood warnings">VOICE {voiceAlerts ? "ON" : "OFF"}</button>
         </div>}
         {camera && <MapCameraViewer camera={camera} onClose={() => setCamera(null)} pinned={pinnedCameras.some((item) => item.id === camera.id)} onTogglePin={() => togglePinnedCamera(camera)} lowBandwidth={lowBandwidth} onLowBandwidthChange={setLowBandwidth} />}

@@ -905,7 +905,7 @@ interface CarsCameraRecord {
   name?: string;
   lastUpdated?: number;
   location?: { latitude?: number; longitude?: number; routeId?: string; cityReference?: string };
-  views?: Array<{ type?: string; url?: string; imageTimestamp?: number }>;
+  views?: Array<{ name?: string; type?: string; url?: string; imageTimestamp?: number }>;
 }
 
 function normalizeCarsCameraRecords(records: CarsCameraRecord[], context: LayerQueryContext, provider: {
@@ -931,11 +931,15 @@ function normalizeCarsCameraRecords(records: CarsCameraRecord[], context: LayerQ
     // (also 5min) -- so a stream opened late in that cache window can hand back an already-expired
     // token. That's an accepted, honest degradation: the viewer's HLS error handler surfaces "Live
     // stream unavailable" rather than failing silently, and the next viewport refresh fixes it.
-    const stillView = record.views?.find((candidate) => candidate.type === "STILL_IMAGE" && safeHttpUrl(candidate.url));
-    const streamView = record.views?.find((candidate) => candidate.type !== "STILL_IMAGE" && safeHttpUrl(candidate.url));
+    // RWIS records may put a pavement-only Surface view first. Prefer sky-capable
+    // still/video views while retaining surface-only records for audit.
+    const stillView = record.views?.find((candidate) => candidate.type === "STILL_IMAGE" && safeHttpUrl(candidate.url) && !/surface|pavement/i.test(candidate.name ?? ""))
+      ?? record.views?.find((candidate) => candidate.type === "STILL_IMAGE" && safeHttpUrl(candidate.url));
+    const streamView = record.views?.find((candidate) => candidate.type !== "STILL_IMAGE" && safeHttpUrl(candidate.url) && !/surface|pavement/i.test(candidate.name ?? ""))
+      ?? record.views?.find((candidate) => candidate.type !== "STILL_IMAGE" && safeHttpUrl(candidate.url));
     const imageUrl = safeHttpUrl(stillView?.url);
     const streamUrl = safeHttpUrl(streamView?.url);
-    const activeView = stillView ?? streamView;
+    const activeView = [stillView, streamView].find((candidate) => candidate && !/surface|pavement/i.test(candidate.name ?? "")) ?? stillView ?? streamView;
     const updatedAt = Number.isFinite(activeView?.imageTimestamp) ? Number(activeView?.imageTimestamp) : Number.isFinite(record.lastUpdated) ? Number(record.lastUpdated) : null;
     const recordId = sanitizeProviderText(String(record.id ?? `${lat},${lon}`), 80);
     const availability: TrafficCameraAvailability = imageUrl || streamUrl ? "available" : "unknown";
@@ -959,6 +963,7 @@ function normalizeCarsCameraRecords(records: CarsCameraRecord[], context: LayerQ
       freshness: availability === "available" ? freshnessForTimestamp(updatedAt) : "unavailable",
       sourceUrl: provider.sourceUrl,
       attribution: provider.sourceName,
+      mapDisabledReason: activeView && /surface|pavement/i.test(activeView.name ?? "") ? "Pavement-only view" : undefined,
     }];
   }).slice(0, MAX_CAMERA_RESULTS));
 }
@@ -1613,6 +1618,28 @@ export const ROAD_CONDITION_PROVIDERS: RoadConditionProvider[] = [
 ];
 
 export const TRAFFIC_CAMERA_PROVIDERS: TrafficCameraProvider[] = [
+  {
+    id: "cfht-verified-sky",
+    name: "CFHT verified live sky",
+    coverage: { north: 19.9, south: 19.75, east: -155.4, west: -155.55, label: "Maunakea, Hawaii" },
+    enabled: true,
+    priority: 5,
+    minRefreshMs: 60_000,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "CFHT / Asahi",
+    fetchViewport: async (context, signal) => (await import("./verifiedSkyCameras")).fetchVerifiedCfhtSkyCameraForViewport(context, signal),
+  },
+  {
+    id: "nationcam-verified-sky",
+    name: "NationCam verified sky cameras",
+    coverage: { north: 29.2, south: 29.08, east: -89.14, west: -89.3, label: "Venice, Louisiana" },
+    enabled: true,
+    priority: 5,
+    minRefreshMs: 60_000,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "NationCam / Venice Marina",
+    fetchViewport: async (context, signal) => (await import("./verifiedSkyCameras")).fetchVerifiedSkyCamerasForViewport(context, signal),
+  },
   {
     id: "ardot-idrive",
     name: "Arkansas DOT IDrive",

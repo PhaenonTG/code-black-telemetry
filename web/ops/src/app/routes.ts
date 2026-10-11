@@ -31,6 +31,7 @@ export const ROUTES: RouteDef[] = [
   { path: "/stream", label: "LIVE STREAM", icon: "stream", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/system", label: "SYSTEM", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
   { path: "/status-center", label: "STATUS CENTER", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
+  { path: "/map-registry", label: "MAP SOURCES", icon: "map", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
   { path: "/settings", label: "SETTINGS", icon: "settings", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
 ]
 

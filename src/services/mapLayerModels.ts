@@ -98,6 +98,8 @@ export interface TrafficCamera {
   freshness: LayerFreshnessState;
   sourceUrl: string | null;
   attribution: string;
+  /** Preserve the provider record but do not publish a map pin until reviewed. */
+  mapDisabledReason?: string;
 }
 
 // Nearby real METAR/ASOS station readings -- ground truth from outside the vehicle's own onboard
