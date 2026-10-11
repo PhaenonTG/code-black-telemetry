@@ -74,6 +74,15 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   },
   "api/weather-alert/v1/settings": { upstreamPath: "/api/weather-alert/v1/settings", allowedQueryParams: [], methods: ["GET", "PUT"] },
   "api/weather-alert/v1/status": { upstreamPath: "/api/weather-alert/v1/status", allowedQueryParams: [], methods: ["GET"] },
+  // These routes terminate at Core's fixed loopback Status Center bridge. They are deliberately
+  // separate from the Status Center's private browser server: OPS authentication is verified
+  // above, then both Cloudflare allowlists and Core restrict the only reachable operations.
+  "api/ops/status-center/v1/status": { upstreamPath: "/api/ops/status-center/v1/status", allowedQueryParams: [] },
+  "api/ops/status-center/v1/radar-control-settings": {
+    upstreamPath: "/api/ops/status-center/v1/radar-control-settings",
+    allowedQueryParams: [],
+    methods: ["GET", "PUT"],
+  },
 };
 
 export function normalizeRouteKey(path: string | string[] | undefined): string {

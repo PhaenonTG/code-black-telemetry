@@ -46,6 +46,12 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
   },
   "/api/weather-alert/v1/settings": { upstreamPath: "/api/weather-alert/v1/settings", allowedQueryParams: [], methods: ["GET", "PUT"] },
   "/api/weather-alert/v1/status": { upstreamPath: "/api/weather-alert/v1/status", allowedQueryParams: [], methods: ["GET"] },
+  "/api/ops/status-center/v1/status": { upstreamPath: "/api/ops/status-center/v1/status", allowedQueryParams: [] },
+  "/api/ops/status-center/v1/radar-control-settings": {
+    upstreamPath: "/api/ops/status-center/v1/radar-control-settings",
+    allowedQueryParams: [],
+    methods: ["GET", "PUT"],
+  },
 };
 
 export function resolveRoute(pathname: string): AllowlistRoute | null {
