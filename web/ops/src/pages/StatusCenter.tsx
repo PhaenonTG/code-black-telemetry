@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { PageHeader } from "../components/PageHeader"
 import { StatusBadge } from "../components/StatusBadge"
 import { useCoreOps } from "../core/useCoreOps"
-import { getAegisStatus, type AegisStatus } from "../core/aegisFeed"
+import { getAegisPolicy, getAegisStatus, type AegisPolicyStatus, type AegisStatus } from "../core/aegisFeed"
 import {
   fetchRadarControlSettings,
   fetchStatusCenter,
@@ -35,6 +35,7 @@ export default function StatusCenter() {
   const [document, setDocument] = useState<StatusCenterDocument | null>(null)
   const [settings, setSettings] = useState<RadarControlSettings | null>(null)
   const [aegis, setAegis] = useState<AegisStatus | null>(null)
+  const [aegisPolicy, setAegisPolicy] = useState<AegisPolicyStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -48,6 +49,7 @@ export default function StatusCenter() {
       setSettings(nextSettings)
       setError(null)
       try { setAegis(await getAegisStatus(config)) } catch { setAegis(null) }
+      try { setAegisPolicy(await getAegisPolicy(config)) } catch { setAegisPolicy(null) }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Status Center is unavailable")
     }
@@ -122,6 +124,11 @@ export default function StatusCenter() {
             <div><span>AEGIS SCREEN</span><b>{aegis?.screen.enabled ? "RUNNING" : "UNAVAILABLE"}</b></div>
             <div><span>ALERT DELIVERY</span><b>{aegis?.delivery_enabled ? "LIVE" : "SHADOW / OFF"}</b></div>
             <div><span>EVIDENCE CUTOFF</span><b>{aegis?.screen.cutoff ?? "—"}/100</b></div>
+          </div>
+          <div className="status-center__facts">
+            <div><span>POLICY DRAFT</span><b>{aegisPolicy?.current_draft ? `REV ${aegisPolicy.current_draft.revision}` : "UNAVAILABLE"}</b></div>
+            <div><span>ACTIVATION</span><b>{aegisPolicy?.activation_locked ? "LOCKED" : "UNKNOWN"}</b></div>
+            <div><span>DRAFT EFFECT</span><b>{aegisPolicy?.drafts_affect_live_scanner === false ? "NONE" : "UNKNOWN"}</b></div>
           </div>
           <p className="status-center__muted"><a href="/aegis-alerts">Open Aegis radar alert feed and evidence map</a> · <a href="/automation-lab">Rehearse alert workflow</a> · Supplemental, not an official warning.</p>
           {settings ? <div className="status-center__controls">
