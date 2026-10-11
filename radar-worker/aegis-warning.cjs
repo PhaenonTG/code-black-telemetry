@@ -78,18 +78,30 @@ function allPoints(geometry) {
     Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]));
 }
 
-function km(a, b) {
-  const lat = (a[1] + b[1]) * Math.PI / 360;
-  return Math.hypot((a[0] - b[0]) * 111.32 * Math.cos(lat), (a[1] - b[1]) * 111.32);
+function distanceToWarningKm(site, geometry) {
+  const point = [site.lon, site.lat];
+  if (inPolygon(point, geometry)) return 0;
+  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+  const scaleX = 111.32 * Math.cos(site.lat * Math.PI / 180);
+  let closest = Infinity;
+  for (const rings of polygons) {
+    const ring = rings[0] || [];
+    for (let i = 1; i < ring.length; i++) {
+      const a = [(ring[i - 1][0] - site.lon) * scaleX, (ring[i - 1][1] - site.lat) * 111.32];
+      const b = [(ring[i][0] - site.lon) * scaleX, (ring[i][1] - site.lat) * 111.32];
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const t = Math.max(0, Math.min(1, -(a[0] * dx + a[1] * dy) / (dx * dx + dy * dy || 1)));
+      closest = Math.min(closest, Math.hypot(a[0] + t * dx, a[1] + t * dy));
+    }
+  }
+  return closest;
 }
 
 function siteFor(w, sites, excluded = new Set()) {
   const points = allPoints(w.geometry);
   if (!points.length) return null;
-  const center = [points.reduce((n, p) => n + p[0], 0) / points.length,
-    points.reduce((n, p) => n + p[1], 0) / points.length];
   return sites.filter((site) => !excluded.has(site.id)).map((site) => ({ site,
-    distance: inPolygon([site.lon, site.lat], w.geometry) ? 0 : km(center, [site.lon, site.lat]) }))
+    distance: distanceToWarningKm(site, w.geometry) }))
     .sort((a, b) => a.distance - b.distance)[0] || null;
 }
 

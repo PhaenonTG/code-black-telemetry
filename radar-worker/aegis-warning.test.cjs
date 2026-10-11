@@ -37,6 +37,17 @@ test("official active polygon is required; TDWR sites are excluded", () => {
   assert.equal(siteFor(warning(feature, nowMs), sites).site.id, "KRAX");
 });
 
+test("radar selection uses nearest warning edge, not polygon vertex average", () => {
+  const longWarning = { geometry: { type: "Polygon", coordinates: [[
+    [-100, 35], [-90, 35], [-90, 35.2], [-100, 35.2], [-100, 35],
+  ]] } };
+  const chosen = siteFor(longWarning, [
+    { id: "WEST", lon: -95, lat: 34.5 },
+    { id: "EAST", lon: -90.1, lat: 35.3 },
+  ]);
+  assert.equal(chosen.site.id, "EAST");
+});
+
 test("rating is supplemental, gated by freshness, persistence, and configurable cutoff", () => {
   const w = warning(feature, nowMs);
   assert.equal(evidence(scan("x", false).candidates[0], scan("x", false), w, config({ enabled: true }), nowMs), null);
