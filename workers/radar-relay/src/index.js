@@ -24,9 +24,42 @@ const PREFIX = "/api/v1/radar/";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
+
+const LEGACY_MOTION_COOKIE = "cbwx_radar_motion";
+
+function validMotion(direction, speed) {
+  return Number.isInteger(direction) && direction >= 0 && direction <= 359 &&
+    Number.isInteger(speed) && speed >= 0 && speed <= 80;
+}
+
+function legacyMotion(request) {
+  const cookie = request.headers.get("Cookie") ?? "";
+  const match = cookie.match(/(?:^|;\s*)cbwx_radar_motion=(\d{1,3})\.(\d{1,2})(?:;|$)/);
+  if (!match) return null;
+  const direction = Number(match[1]), speed = Number(match[2]);
+  return validMotion(direction, speed) ? { direction, speed } : null;
+}
+
+async function boundedJson(request, maxBytes = 512) {
+  if (Number(request.headers.get("Content-Length")) > maxBytes) return null;
+  if (!request.body) return null;
+  const reader = request.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) { await reader.cancel(); return null; }
+      chunks.push(value);
+    }
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(chunks.flatMap((chunk) => [...chunk]))));
+  } catch { return null; }
+}
 
 // Tiles are content-addressed by frameId -- a given tile's bytes never change once radar-worker
 // has rendered them, so caching them is a pure win, not a freshness tradeoff. A new NEXRAD
@@ -54,11 +87,43 @@ export async function handleRequest(request, env, ctx) {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
+  if (url.pathname === `${PREFIX}storm-motion` && request.method === "POST") {
+    if (!env.RADAR_COMPUTE_LIMITER) return new Response(JSON.stringify({ error: "RADAR_RATE_LIMIT_UNAVAILABLE" }), {
+      status: 503, headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
+    const { success } = await env.RADAR_COMPUTE_LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "unknown-client" });
+    if (!success) return new Response(JSON.stringify({ error: "RADAR_RATE_LIMITED" }), {
+      status: 429, headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
+    const body = await boundedJson(request);
+    if (!body) return new Response(JSON.stringify({ error: "INVALID_OR_OVERSIZE_MOTION" }), {
+      status: 413, headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
+    const direction = Number(body.directionDegrees), speed = Number(body.speedKnots);
+    if (!validMotion(direction, speed)) return new Response(JSON.stringify({ error: "INVALID_MOTION" }), {
+      status: 400, headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
+    return new Response(JSON.stringify({ directionDegrees: direction, speedKnots: speed, source: "MANUAL", updatedAt: Date.now() }), {
+      status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store",
+        "Set-Cookie": `${LEGACY_MOTION_COOKIE}=${direction}.${speed}; Path=/api/v1/radar; Max-Age=86400; HttpOnly; Secure; SameSite=Lax`, ...CORS_HEADERS },
+    });
+  }
   if (request.method !== "GET") {
     return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), {
       status: 405,
       headers: { "Content-Type": "application/json", Allow: "GET", ...CORS_HEADERS },
     });
+  }
+  // Older deployed browsers POST once, then request SRV frames without motion parameters.
+  // A scoped cookie preserves that UI until the stateless client is released, without ever
+  // writing one viewer's settings into another viewer's worker state.
+  if ([`${PREFIX}frames`, `${PREFIX}status`].includes(url.pathname) && url.searchParams.get("product") === "SRV" &&
+      !url.searchParams.has("directionDegrees") && !url.searchParams.has("speedKnots")) {
+    const motion = legacyMotion(request);
+    if (motion) {
+      url.searchParams.set("directionDegrees", String(motion.direction));
+      url.searchParams.set("speedKnots", String(motion.speed));
+    }
   }
   if ([`${PREFIX}frames`, `${PREFIX}status`, `${PREFIX}storm-motion/estimate`].includes(url.pathname)) {
     if (!env.RADAR_COMPUTE_LIMITER) {

@@ -26,17 +26,38 @@ test("forwards GET requests to the fixed radar-worker origin, preserving path an
   assert.equal(received.init.method, "GET");
 });
 
-test("rejects shared radar mutations before reaching the private worker", async () => {
+test("rejects shared radar selection mutations before reaching the private worker", async () => {
   let forwarded = false;
   const binding = env(async () => { forwarded = true; return new Response("{}", { status: 200 }); });
-  for (const path of ["selection", "storm-motion"]) {
-    const response = await handleRequest(new Request(`https://ops.codeblackwx.com/api/v1/radar/${path}`, {
-      method: "POST",
-      headers: { "x-radar-mutation-key": "previous-client-value" },
-      body: JSON.stringify({ directionDegrees: 90, speedKnots: 25 }),
-    }), binding);
-    assert.equal(response.status, 405);
-  }
+  const response = await handleRequest(new Request("https://ops.codeblackwx.com/api/v1/radar/selection", {
+    method: "POST", body: JSON.stringify({ site: "KTLX" }),
+  }), binding);
+  assert.equal(response.status, 405);
+  assert.equal(forwarded, false);
+});
+
+test("legacy storm motion remains private to its browser and never reaches shared worker state", async () => {
+  const urls = [];
+  const binding = env(async (url) => { urls.push(String(url)); return new Response("[]", { status: 200 }); });
+  const set = await handleRequest(new Request("https://ops.codeblackwx.com/api/v1/radar/storm-motion", {
+    method: "POST", body: JSON.stringify({ directionDegrees: 90, speedKnots: 25 }),
+  }), binding);
+  assert.equal(set.status, 200);
+  assert.equal(urls.length, 0);
+  const cookie = set.headers.get("Set-Cookie").split(";")[0];
+  const frames = "https://ops.codeblackwx.com/api/v1/radar/frames?site=KTLX&product=SRV";
+  await handleRequest(new Request(frames, { headers: { Cookie: cookie } }), binding);
+  await handleRequest(new Request(frames), binding);
+  assert.match(urls[0], /directionDegrees=90&speedKnots=25/);
+  assert.equal(new URL(urls[1]).searchParams.has("directionDegrees"), false);
+});
+
+test("legacy motion rejects oversize and out-of-range input without forwarding", async () => {
+  let forwarded = false;
+  const binding = env(async () => { forwarded = true; return new Response("[]"); });
+  const endpoint = "https://ops.codeblackwx.com/api/v1/radar/storm-motion";
+  assert.equal((await handleRequest(new Request(endpoint, { method: "POST", body: "x".repeat(1024) }), binding)).status, 413);
+  assert.equal((await handleRequest(new Request(endpoint, { method: "POST", body: JSON.stringify({ directionDegrees: 999, speedKnots: 25 }) }), binding)).status, 400);
   assert.equal(forwarded, false);
 });
 
