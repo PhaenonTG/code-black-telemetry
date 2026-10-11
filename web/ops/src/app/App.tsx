@@ -21,6 +21,7 @@ const Stream = lazy(() => import("../pages/Stream"))
 const AiHandoff = lazy(() => import("../pages/AiHandoff"))
 const MobileHome = lazy(() => import("../pages/MobileHome"))
 const HurricaneWatch = lazy(() => import("../pages/HurricaneWatch"))
+const ChaseSetups = lazy(() => import("../pages/ChaseSetups"))
 
 // /update-password is reachable regardless of auth state -- it's the landing page for a
 // Supabase password-recovery email link, which itself establishes a temporary session (see
@@ -44,6 +45,8 @@ export default function App() {
                         <Route path="/radar" element={<OpsWorkstation focus="RADAR LAB" />} />
                         <Route path="/weather" element={<StormIntelWorkspace />} />
                         <Route path="/hurricane" element={<HurricaneWatch />} />
+                        <Route path="/chase-setups" element={<ChaseSetups />} />
+                        <Route path="/chase-setups/:setupId" element={<ChaseSetups />} />
                         <Route path="/field" element={<OpsWorkstation focus="FIELD INTELLIGENCE" />} />
                         <Route path="/storm-intel" element={<Navigate to="/weather" replace />} />
                         <Route path="/models" element={<DevelopmentPage title="MODELS" />} />
