@@ -22,7 +22,7 @@ export const ROUTES: RouteDef[] = [
   { path: "/models", label: "MODELS", icon: "models", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/soundings", label: "SOUNDINGS", icon: "sounding", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/consensus", label: "CONSENSUS", icon: "consensus", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
-  { path: "/targets", label: "TARGETS", icon: "target", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
+  { path: "/targets", label: "CHASE TARGETS", icon: "target", state: "LIVE", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/chase", label: "CHASE OPERATIONS", icon: "fleet", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "FIELD" },
   { path: "/field", label: "FIELD INTELLIGENCE", icon: "radio", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/stream", label: "LIVE STREAM", icon: "stream", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },

@@ -53,6 +53,8 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
   "api/storm-intel/v1/health": { upstreamPath: "/api/storm-intel/v1/health", allowedQueryParams: [] },
   "api/storm-intel/v1/point": { upstreamPath: "/api/storm-intel/v1/point", allowedQueryParams: ["latitude", "longitude"] },
+  "api/ai/v1/assessment": { upstreamPath: "/api/ai/v1/assessment", allowedQueryParams: [] },
+  "api/ai/v1/assessment/refresh": { upstreamPath: "/api/ai/v1/assessment/refresh", allowedQueryParams: [], methods: ["POST"] },
   "api/weather-alert/v1/settings": { upstreamPath: "/api/weather-alert/v1/settings", allowedQueryParams: [], methods: ["GET", "PUT"] },
   "api/weather-alert/v1/status": { upstreamPath: "/api/weather-alert/v1/status", allowedQueryParams: [], methods: ["GET"] },
   "api/gpu/v1/status": { upstreamPath: "/api/gpu/v1/status", allowedQueryParams: [], methods: ["GET"] },

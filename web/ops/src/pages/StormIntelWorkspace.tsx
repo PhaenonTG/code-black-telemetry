@@ -10,6 +10,7 @@ import { OpsStatusPill } from "../components/OpsStatusPill";
 import { PointHistory } from "../components/PointHistory";
 import { PointInspector } from "../components/PointInspector";
 import { StormIntelMetricBoard } from "../components/StormIntelMetricBoard";
+import { StormIntelActions } from "../components/StormIntelActions";
 import { useCoreOps } from "../core/useCoreOps";
 import { firstAvailableSource, stormIntelSummary } from "../stormIntel/format";
 import { getReverseLocality, type LocalityResult } from "../../../../src/services/situational";
@@ -170,6 +171,7 @@ export default function StormIntelWorkspace() {
         </aside>
       </main>
 
+      <StormIntelActions coreState={coreState} />
       <StormIntelMetricBoard coreState={coreState} />
       <PointInspector selectedPoint={selectedPoint} coreState={coreState} />
     </div>

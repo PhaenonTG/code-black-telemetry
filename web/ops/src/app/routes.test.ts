@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MORE_PAGE_LINKS, MORE_ROUTE, ROUTES } from "./routes";
 
 describe("OPS workstation routes", () => {
-  it("exposes the approved major navigation families without marking future sections live", () => {
+  it("exposes the approved major navigation families with only implemented sections live", () => {
     expect(ROUTES.map((route) => route.label)).toEqual([
       "OPERATIONS MAP",
       "WEATHER ANALYSIS",
@@ -10,7 +10,7 @@ describe("OPS workstation routes", () => {
       "MODELS",
       "SOUNDINGS",
       "CONSENSUS",
-      "TARGETS",
+      "CHASE TARGETS",
       "CHASE OPERATIONS",
       "FIELD INTELLIGENCE",
       "LIVE STREAM",
@@ -21,7 +21,6 @@ describe("OPS workstation routes", () => {
       "MODELS",
       "SOUNDINGS",
       "CONSENSUS",
-      "TARGETS",
     ]);
   });
 
@@ -33,6 +32,6 @@ describe("OPS workstation routes", () => {
       "CHASE OPERATIONS",
       "MORE",
     ]);
-    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "SETTINGS"]);
+    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["CHASE TARGETS", "FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "SETTINGS"]);
   });
 });

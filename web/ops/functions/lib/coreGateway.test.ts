@@ -25,6 +25,15 @@ describe("route allowlist", () => {
       upstreamPath: "/api/storm-intel/v1/point",
       allowedQueryParams: ["latitude", "longitude"],
     });
+    expect(resolveAllowlistRoute("api/ai/v1/assessment")).toEqual({
+      upstreamPath: "/api/ai/v1/assessment",
+      allowedQueryParams: [],
+    });
+    expect(resolveAllowlistRoute("api/ai/v1/assessment/refresh")).toEqual({
+      upstreamPath: "/api/ai/v1/assessment/refresh",
+      allowedQueryParams: [],
+      methods: ["POST"],
+    });
   });
 
   it("rejects any non-allowlisted path -- no passthrough", () => {

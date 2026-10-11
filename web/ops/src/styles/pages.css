@@ -305,6 +305,23 @@
 .ops-more-grid__item{display:flex;align-items:center;gap:12px;border:1px solid var(--cb-line);background:var(--cb-panel);border-radius:var(--cb-radius);padding:14px 16px;color:var(--cb-text);font-size:14px;font-weight:700}
 .ops-more-grid__chevron{margin-left:auto;color:var(--cb-dim)}
 
+/* ---- Chase targets ---- */
+.page-targets{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:14px;align-items:start}
+.page-targets>.page-header,.page-targets>.targets-stage,.page-targets>.targets-ai,.page-targets>.storm-workspace__metrics,.page-targets>.targets-error{grid-column:1/-1}
+.targets-stage{display:grid;grid-template-columns:minmax(0,1fr) 350px;min-height:520px;border:1px solid var(--cb-line);background:#030303}
+.targets-map{min-width:0;min-height:0}.targets-map>.atlas-map-shell{height:100%;min-height:520px;width:100%}
+.targets-command,.targets-ai{border-left:1px solid var(--cb-line);background:var(--cb-panel);padding:16px}
+.targets-command header,.targets-ai header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--cb-line)}
+.targets-command header span,.targets-ai header span{display:block;color:var(--cb-red);font-size:9px;font-weight:900;letter-spacing:.15em}
+.targets-command header b,.targets-ai header b{font-size:10px;font-weight:900;letter-spacing:.1em;color:var(--cb-text)}
+.targets-ai header h2{margin:4px 0 0;font-size:14px;letter-spacing:.06em}.targets-ai header b[data-state="available"]{color:var(--cb-green)}.targets-ai header b[data-state="degraded"]{color:var(--cb-amber)}
+.targets-command__location{padding:14px 0;border-bottom:1px solid var(--cb-line)}.targets-command__location strong,.targets-command__location span{display:block}.targets-command__location strong{font-size:15px;letter-spacing:.05em}.targets-command__location span{margin-top:4px;color:var(--cb-muted);font-size:11px;font-variant-numeric:tabular-nums}
+.targets-field{display:block;padding:13px 0;border-bottom:1px solid var(--cb-line)}.targets-field span{display:block;margin-bottom:6px;color:var(--cb-dim);font-size:8px;font-weight:900;letter-spacing:.12em}.targets-field input{box-sizing:border-box;width:100%;border:1px solid var(--cb-line);background:#090b0d;color:var(--cb-text);padding:9px;font:inherit;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.targets-readout,.targets-ai dl{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin:14px 0;background:var(--cb-line)}.targets-readout>div,.targets-ai dl>div{min-width:0;background:#08090a;padding:9px}.targets-readout dt,.targets-ai dt{color:var(--cb-dim);font-size:8px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}.targets-readout dd,.targets-ai dd{margin:4px 0 0;color:var(--cb-text);font-size:10px;font-weight:800;overflow-wrap:anywhere}
+.targets-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.targets-action{border:1px solid var(--cb-line);background:#08090a;color:var(--cb-text);min-height:38px;padding:8px 10px;font-size:9px;font-weight:900;letter-spacing:.09em;cursor:pointer}.targets-action--primary{border-color:var(--cb-red);background:rgba(255,42,12,.12)}.targets-action:disabled{opacity:.48;cursor:wait}.targets-note,.targets-ai>p{color:var(--cb-muted);font-size:11px;line-height:1.55}.targets-note{margin:14px 0 0}.targets-ai{border:1px solid var(--cb-line);border-top:2px solid var(--cb-red)}.targets-ai>p{margin:14px 0}.targets-ai>.targets-action{width:100%}.targets-error{margin:0;border:1px solid rgba(255,79,61,.55);background:rgba(255,79,61,.08);padding:10px 12px;color:#ffb4a8;font-size:12px;font-weight:700}
+@media(max-width:900px){.page-targets{grid-template-columns:1fr}.targets-stage{grid-template-columns:1fr}.targets-command{border-left:0;border-top:1px solid var(--cb-line)}.targets-map>.atlas-map-shell{min-height:420px}}
+@media(max-width:767px){.page-targets{padding:12px}.targets-map>.atlas-map-shell{min-height:390px}.targets-readout,.targets-ai dl{grid-template-columns:1fr}.targets-actions{grid-template-columns:1fr}}
+
 /* ---- Map camera viewer: map-first camera workflow, no route change. ---- */
 .map-camera-viewer__backdrop{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.16);display:flex;align-items:flex-start;justify-content:flex-end;padding:88px 18px 18px;pointer-events:auto}
 .map-camera-viewer{
