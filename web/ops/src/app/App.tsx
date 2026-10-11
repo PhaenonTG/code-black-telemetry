@@ -24,6 +24,7 @@ const MobileHome = lazy(() => import("../pages/MobileHome"))
 const HurricaneWatch = lazy(() => import("../pages/HurricaneWatch"))
 const ChaseSetups = lazy(() => import("../pages/ChaseSetups"))
 const AegisAlerts = lazy(() => import("../pages/AegisAlerts"))
+const AutomationLab = lazy(() => import("../pages/AutomationLab"))
 
 // /update-password is reachable regardless of auth state -- it's the landing page for a
 // Supabase password-recovery email link, which itself establishes a temporary session (see
@@ -50,6 +51,7 @@ export default function App() {
                         <Route path="/chase-setups" element={<ChaseSetups />} />
                         <Route path="/chase-setups/:setupId" element={<ChaseSetups />} />
                         <Route path="/aegis-alerts" element={<AegisAlerts />} />
+                        <Route path="/automation-lab" element={<AutomationLab />} />
                         <Route path="/field" element={<OpsWorkstation focus="FIELD INTELLIGENCE" />} />
                         <Route path="/storm-intel" element={<Navigate to="/weather" replace />} />
                         <Route path="/models" element={<DevelopmentPage title="MODELS" />} />

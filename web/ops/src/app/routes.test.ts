@@ -20,6 +20,7 @@ describe("OPS workstation routes", () => {
       "LIVE STREAM",
       "SYSTEM",
       "STATUS CENTER",
+      "AUTOMATION LAB",
       "SETTINGS",
     ]);
     expect(ROUTES.filter((route) => route.state === "DEVELOPMENT").map((route) => route.label)).toEqual([
@@ -35,7 +36,7 @@ describe("OPS workstation routes", () => {
       "OPERATIONS MAP", "RADAR LAB", "MORE",
     ]);
     expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual([
-      "WEATHER ANALYSIS", "HURRICANE WATCH", "CHASE SETUP DRAFTS", "AEGIS RADAR ALERTS", "SOUNDINGS", "CHASE OPERATIONS", "FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "STATUS CENTER", "SETTINGS",
+      "WEATHER ANALYSIS", "HURRICANE WATCH", "CHASE SETUP DRAFTS", "AEGIS RADAR ALERTS", "SOUNDINGS", "CHASE OPERATIONS", "FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "STATUS CENTER", "AUTOMATION LAB", "SETTINGS",
     ]);
   });
 });

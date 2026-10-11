@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { PageHeader } from "../components/PageHeader";
@@ -74,6 +75,7 @@ export default function AegisAlerts() {
       <span>Evidence cutoff <b>{status?.screen.cutoff ?? "—"}/100</b></span>
       <span>Last screen <b>{utc(status?.screen.checked_at)}</b></span>
       <span>Sites <b>{status?.screen.sites?.join(", ") || "none"}</b></span>
+      <Link to="/automation-lab">Rehearse alert routing →</Link>
     </div>
     {error && <p className="aegis-error" role="status">Feed unavailable: {error}. This is not an all-clear.</p>}
     {status?.screen.errors?.length ? <p className="aegis-error" role="status">
