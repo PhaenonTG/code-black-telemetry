@@ -3,6 +3,7 @@ import { useAuth } from "../auth/AuthProvider"
 import Login from "../pages/Login"
 import Unauthorized from "../pages/Unauthorized"
 import { LoadingScreen } from "./LoadingScreen"
+import { AuthUnavailable } from "./AuthUnavailable"
 
 // Production auth for ops.codeblackwx.com is Supabase Auth (email + password), enforced here --
 // protected content only ever renders in the "authorized" branch. Nothing protected mounts
@@ -18,6 +19,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (localPreview) return <>{children}</>
 
   switch (auth.status) {
+    case "unconfigured":
+      return <AuthUnavailable configured={false} />
+    case "error":
+      return <AuthUnavailable onRetry={auth.retry} />
     case "loading":
       return <LoadingScreen />
     case "signed-out":

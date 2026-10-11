@@ -501,6 +501,19 @@ export class HybridTelemetryProvider implements TelemetryProvider {
 
   private offlineSnapshot(snapshot: TelemetrySnapshot, message = "Pi API offline"): TelemetrySnapshot {
     const now = Date.now();
+    // The simulator seeds the UI shape, but its timestamps are not observations from a
+    // vehicle. Discard that contact history when entering real standalone/offline mode.
+    const connection = snapshot.status.mode === "simulator"
+      ? createConnectionStatus({
+          ...snapshot.status.connection,
+          lastAttemptAt: null,
+          lastConnectedAt: null,
+          lastSuccessfulResponseAt: null,
+          lastDataAt: null,
+          dataAgeMs: null,
+          latencyMs: null,
+        })
+      : snapshot.status.connection;
     const existingEvents = snapshot.events.filter((event) => !/sensor|sync|uptime|online/i.test(event.message));
     const lastSameEvent = existingEvents.find((event) => event.message === message);
     const shouldAddEvent = !lastSameEvent || now - lastSameEvent.timestamp > 60_000;
@@ -519,7 +532,7 @@ export class HybridTelemetryProvider implements TelemetryProvider {
         piOnline: false,
         mode: "tablet",
         updatedAt: now,
-        connection: this.offlineConnectionStatus(snapshot.status.connection, message, now),
+        connection: this.offlineConnectionStatus(connection, message, now),
       },
       events: [
         ...(shouldAddEvent ? [{ id: `evt-${now}-${Math.random().toString(36).slice(2, 8)}`, timestamp: now, level: "warn" as const, message }] : []),

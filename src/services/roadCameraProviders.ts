@@ -796,42 +796,6 @@ function normalizeKandriveEvent(item: KandriveMapItem, providerId: string, kindH
   };
 }
 
-function normalizeKandriveCamera(item: KandriveMapItem, providerId: string): TrafficCamera | null {
-  if (item.__typename !== "Camera" || !item.title) return null;
-  const point = kandriveFirstPoint(item);
-  if (!point) return null;
-  const recordId = sanitizeProviderText((item.uri ?? "").replace(/^camera\//, "") || `${point.lat},${point.lon}`, 80);
-  const primaryView = (item.views ?? [])[0];
-  const previewUrl = safeHttpUrl(primaryView?.url);
-  const availability: TrafficCameraAvailability = item.active === false ? "offline" : item.active === true ? "available" : "unknown";
-  const updatedAt = availability === "offline" ? null : nowMs();
-  return {
-    id: `${providerId}:camera:${recordId}`,
-    providerId,
-    providerRecordId: recordId,
-    name: sanitizeProviderText(item.title, 120),
-    lat: point.lat,
-    lon: point.lon,
-    roadway: kandriveParseTitle(item.title).roadway,
-    direction: null,
-    source: "KDOT KanDrive",
-    provider: { ...KANDRIVE_PROVENANCE, provider: "PUBLIC/TRAFFIC" },
-    lastUpdateAt: updatedAt,
-    imageUrl: previewUrl,
-    // KanDrive's dashboard-only camera query exposes short-lived signed HLS tokens (~5 min expiry)
-    // for VIDEO-category cameras; caching that URL here would very likely hand back an already-
-    // expired stream by the time it's opened. Snapshot image + link back to KanDrive instead,
-    // matching the "protected/unembeddable streams stay source-link/snapshot fallback" pattern.
-    streamUrl: null,
-    thumbnailUrl: previewUrl,
-    previewUrl,
-    availability,
-    freshness: availability === "offline" ? "unavailable" : freshnessForTimestamp(updatedAt),
-    sourceUrl: `${KANDRIVE_APP_URL}${item.uri ?? ""}`,
-    attribution: "Kansas DOT KanDrive",
-  };
-}
-
 export async function fetchKandriveRoadConditions(context: LayerQueryContext, signal?: AbortSignal, fetcher: Fetcher = providerFetchWithTimeout): Promise<RoadConditionEvent[]> {
   const items = await fetchKandriveMapFeatures(context, KANDRIVE_ROAD_LAYER_SLUGS, signal, fetcher);
   const kindHintForSlug = (item: KandriveMapItem) => {

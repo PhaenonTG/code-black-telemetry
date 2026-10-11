@@ -6,6 +6,7 @@ import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/
 import { Sidebar } from "./Sidebar"
 import { BottomNav } from "./BottomNav"
 import { StatusBar } from "./StatusBar"
+import { useShellTheme } from "../hooks/useShellTheme"
 
 const SIDEBAR_COLLAPSED_KEY = "codeblack.ops.sidebarCollapsed"
 const POI_DEFAULT_SEEDED_KEY = "codeblack.ops.poiDefaultSeeded"
@@ -29,6 +30,7 @@ function locationLabel(state: LocationState): string {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const viewport = useViewport()
+  const theme = useShellTheme()
   const { pathname } = useLocation()
   const contentRef = useRef<HTMLElement>(null)
   const [location, setLocation] = useState<LocationState>({ status: "requesting" })
@@ -70,7 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (viewport === "phone") {
     return (
-      <div className="shell shell--phone">
+      <div className="shell shell--phone" data-theme={theme}>
         <main ref={contentRef} className="shell__content">{children}</main>
         <BottomNav />
       </div>
@@ -87,7 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     })
   }
   return (
-    <div className={rail ? "shell shell--tablet" : "shell shell--desktop"}>
+    <div className={rail ? "shell shell--tablet" : "shell shell--desktop"} data-theme={theme}>
       <Sidebar rail={rail} collapsible={collapsible} onToggleCollapse={collapsible ? toggleCollapsed : undefined} />
       <div className="shell__main">
         <StatusBar locationLabel={locationLabel(location)} />

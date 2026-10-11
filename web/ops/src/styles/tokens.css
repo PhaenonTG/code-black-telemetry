@@ -37,3 +37,55 @@
   --statusbar-h: 48px;
   --bottomnav-h: 64px;
 }
+
+/* Apply the saved display mode to both OPS chrome and the reused map surfaces. */
+.shell {
+  background: var(--cb-black);
+  color: var(--cb-text);
+  color-scheme: dark;
+}
+.shell[data-theme="light"] {
+  color-scheme: light;
+  --cb-black: #f4f6f8;
+  --cb-void: #edf1f5;
+  --cb-shell: #ffffff;
+  --cb-panel: #ffffff;
+  --cb-panel-hi: #e4e9ef;
+  --cb-panel-low: #f4f6f8;
+  --cb-tile: #edf1f5;
+  --cb-line: #c6ccd5;
+  --cb-line-strong: #a60e17;
+  --cb-text: #101317;
+  --cb-muted: #4e5866;
+  --cb-dim: #5d6570;
+  --cb-red: #b51a09;
+  --cb-green: #16773b;
+  --cb-blue: #006fae;
+  --cb-amber: #8c6200;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --panel-2: #edf1f5;
+  --border: #c6ccd5;
+  --text: #101317;
+  --muted: #4e5866;
+  --secondary: #303742;
+}
+.shell[data-theme="night"] {
+  --cb-black: #020202;
+  --cb-void: #020202;
+  --cb-shell: #050505;
+  --cb-panel: #080808;
+  --cb-panel-hi: #111111;
+  --cb-tile: #080808;
+  --cb-line: rgba(255, 45, 53, 0.28);
+  --cb-text: #f2f2f2;
+  --cb-muted: #a19499;
+  --cb-dim: #978a8f;
+  --bg: #020202;
+  --panel: #080808;
+  --panel-2: #111111;
+  --border: rgba(255, 45, 53, 0.28);
+}
+
+.shell[data-theme="light"] .segmented button.active { color: #ffffff; }
+.shell[data-theme="light"] .settings-number input { background: var(--cb-void); }

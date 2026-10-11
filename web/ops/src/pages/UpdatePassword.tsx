@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import shield from "../../../../src/assets/codeblack-shield.png"
 import { Icon } from "../components/Icon"
 import { supabase } from "../lib/supabase"
+import { AuthUnavailable } from "../components/AuthUnavailable"
 
 type Phase = "checking" | "ready" | "submitting" | "done" | "invalid-link" | "error"
 
@@ -17,15 +18,19 @@ export default function UpdatePassword() {
   const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
+    if (!supabase) return
     let cancelled = false
+    let eventReceived = false
 
     void supabase.auth.getSession().then(({ data }) => {
-      if (!cancelled) setPhase(data.session ? "ready" : "invalid-link")
-    })
+      if (!cancelled && !eventReceived) setPhase(data.session ? "ready" : "invalid-link")
+    }).catch(() => { if (!cancelled && !eventReceived) setPhase("invalid-link") })
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return
-      if (event === "PASSWORD_RECOVERY" || session) setPhase("ready")
+      eventReceived = true
+      if (event === "SIGNED_OUT" || (event === "INITIAL_SESSION" && !session)) setPhase("invalid-link")
+      else if (session) setPhase(current => current === "checking" || current === "invalid-link" ? "ready" : current)
     })
 
     return () => {
@@ -36,14 +41,21 @@ export default function UpdatePassword() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    if (!supabase) return
     if (password !== confirm) {
       setPhase("error")
       return
     }
     setPhase("submitting")
-    const { error } = await supabase.auth.updateUser({ password })
-    setPhase(error ? "error" : "done")
+    try {
+      const { error } = await supabase.auth.updateUser({ password })
+      setPhase(error ? "error" : "done")
+    } catch {
+      setPhase("error")
+    }
   }
+
+  if (!supabase) return <AuthUnavailable configured={false} />
 
   return (
     <div className="auth-screen">

@@ -21,6 +21,8 @@ const ignoredConsolePatterns = [
   /Failed to load resource: net::ERR_FAILED/i,
   /Access to fetch at 'https:\/\/overpass\.kumi\.systems\/api\/interpreter'/i,
   /request failed: https:\/\/overpass\.kumi\.systems\/api\/interpreter/i,
+  /Access to fetch at 'https:\/\/overpass-api\.de\/api\/interpreter'/i,
+  /request failed: https:\/\/overpass-api\.de\/api\/interpreter/i,
   /GL Driver Message .*GPU stall due to ReadPixels/i,
   /net::ERR_BLOCKED_BY_CLIENT/i,
   /favicon/i,
@@ -29,11 +31,11 @@ const ignoredConsolePatterns = [
 const runtimeProblems = new WeakMap<Page, { consoleProblems: string[]; pageErrors: string[] }>();
 
 function isKnownExternalProviderUrl(url: string) {
-  return /api\.mapbox\.com|events\.mapbox\.com|spotternetwork|weather\.gov|spc\.noaa\.gov|overpass\.kumi\.systems/i.test(url);
+  return /api\.mapbox\.com|events\.mapbox\.com|spotternetwork|weather\.gov|spc\.noaa\.gov|overpass\.kumi\.systems|overpass-api\.de/i.test(url);
 }
 
 function isIgnoredConsoleMessage(message: string, sourceUrl = "") {
-  if (/Failed to load resource: the server responded with a status of 429 \(Too Many Requests\)/i.test(message) && isKnownExternalProviderUrl(sourceUrl)) {
+  if (/Failed to load resource: the server responded with a status of 429\b/i.test(message) && isKnownExternalProviderUrl(sourceUrl)) {
     return true;
   }
   return ignoredConsolePatterns.some((pattern) => pattern.test(message));
@@ -280,8 +282,9 @@ test("layers page exposes provider-backed and deferred layer states honestly", a
   await expect(section).toContainText(/Wide-Area Mosaic/i);
   await expect(section).toContainText(/Road Conditions/i);
   await expect(section).toContainText(/Public Cameras/i);
-  await expect(section).toContainText(/Arkansas DOT IDrive/i);
-  await expect(section.getByTestId("layer-row-trafficCameras")).toContainText(/Arkansas public/i);
+  await expect(section.getByTestId("layer-row-roadConditions")).toContainText(/State DOT \/ 511/i);
+  await expect(section.getByTestId("layer-row-roadConditions")).toContainText(/Arkansas, Iowa, Kansas, Missouri, Oklahoma, and Tennessee/i);
+  await expect(section.getByTestId("layer-row-trafficCameras")).toContainText(/Arkansas, Iowa, Kansas, Missouri, Nebraska, and Tennessee/i);
   await expect(section).toContainText(/Code Black Probes/i);
   await expect(section).toContainText(/unavailable/i);
   await expect(section).toContainText(/backend is not configured/i);
@@ -300,6 +303,13 @@ test("settings controls expose secure credential and overlay state without showi
   await section.getByRole("button", { name: /^Off$/ }).first().click();
   await expect(page.getByTestId("map-action-mark")).toHaveCount(0);
   await expect(page.getByTestId("map-action-escape")).toHaveCount(0);
+});
+
+test("standalone startup does not report simulated telemetry as live", async ({ page }) => {
+  const operations = await goToRoute(page, "operations");
+  await expect(operations).toContainText(/PI TRANSPORT · NOT CONFIGURED/i);
+  await expect(operations).toContainText(/TELEMETRY · NO DATA/i);
+  await expect(operations).not.toContainText(/TELEMETRY · LIVE/i);
 });
 
 test("operations diagnostics separate transport health from telemetry freshness", async ({ page }) => {

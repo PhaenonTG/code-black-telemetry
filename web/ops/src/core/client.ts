@@ -40,6 +40,7 @@ export interface FabricEvent {
 // alike; both cases correctly fall through to the gateway's own 401, which each caller below
 // already surfaces as an honest UNAVAILABLE detail rather than fabricating a different failure.
 export async function currentAccessToken(): Promise<string | null> {
+  if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
 }

@@ -3,8 +3,9 @@ import shield from "../../../../src/assets/codeblack-shield.png"
 import { Icon } from "../components/Icon"
 import { supabase } from "../lib/supabase"
 import { requestPasswordReset } from "../auth/reset"
+import { classifyLoginFailure, type LoginFailure } from "../auth/loginFailure"
 
-type LoginPhase = "idle" | "submitting" | "invalid" | "network-error"
+type LoginPhase = "idle" | "submitting" | LoginFailure
 type ResetPhase = "idle" | "submitting" | "sent" | "error"
 
 function ForgotPassword({ onBack }: { onBack: () => void }) {
@@ -16,6 +17,11 @@ function ForgotPassword({ onBack }: { onBack: () => void }) {
     e.preventDefault()
     setPhase("submitting")
     setError("")
+    if (!supabase) {
+      setError("Sign-in is not configured for this installation.")
+      setPhase("error")
+      return
+    }
     const result = await requestPasswordReset(supabase, email, window.location.origin)
     if (result.ok) {
       setPhase("sent")
@@ -79,10 +85,14 @@ export default function Login() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setPhase("submitting")
+    if (!supabase) {
+      setPhase("network-error")
+      return
+    }
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
       if (error) {
-        setPhase("invalid")
+        setPhase(classifyLoginFailure(error))
         return
       }
       // On success, onAuthStateChange in AuthProvider takes over -- no local "authenticated"
@@ -142,17 +152,25 @@ export default function Login() {
             </label>
 
             {phase === "invalid" && (
-              <p className="auth-card__status auth-card__status--error">
+              <p className="auth-card__status auth-card__status--error" role="alert">
                 AUTHENTICATION FAILED
                 <br />
                 Check credentials and try again.
               </p>
             )}
             {phase === "network-error" && (
-              <p className="auth-card__status auth-card__status--error">
+              <p className="auth-card__status auth-card__status--error" role="alert">
                 CONNECTION FAILED
                 <br />
                 Check your network and try again.
+              </p>
+            )}
+
+            {phase === "rate-limited" && (
+              <p className="auth-card__status auth-card__status--error" role="alert">
+                TOO MANY ATTEMPTS
+                <br />
+                Wait a few minutes before trying again.
               </p>
             )}
 
