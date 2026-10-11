@@ -9,6 +9,7 @@
 export interface AllowlistRoute {
   upstreamPath: string;
   allowedQueryParams: string[];
+  methods?: readonly string[];
 }
 
 // Keys are exact Core-facing pathnames (matching Core's real REST paths 1:1), since this
@@ -23,6 +24,7 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
     upstreamPath: "/api/storm-intel/v1/point",
     allowedQueryParams: ["latitude", "longitude"],
   },
+  "/api/weather-alert/v1/settings": { upstreamPath: "/api/weather-alert/v1/settings", allowedQueryParams: [], methods: ["GET", "PUT"] },
 };
 
 export function resolveRoute(pathname: string): AllowlistRoute | null {

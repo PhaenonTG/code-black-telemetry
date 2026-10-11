@@ -42,15 +42,12 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
-  if (request.method !== "GET") {
-    return jsonResponse(405, { error: "METHOD_NOT_ALLOWED" });
-  }
-
   const url = new URL(request.url);
   const route = resolveRoute(url.pathname);
   if (!route) {
     return jsonResponse(404, { error: "NOT_FOUND" });
   }
+  if (!(route.methods ?? ["GET"]).includes(request.method)) return jsonResponse(405, { error: "METHOD_NOT_ALLOWED" });
 
   const validation = validateQueryParams(route, url);
   if (!validation.ok) {
@@ -66,7 +63,12 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     // Deliberately no CF-Access-Client-Id / CF-Access-Client-Secret headers here -- the VPC
     // Service binding authenticates this request at the Cloudflare network layer via the
     // tunnel binding itself, not via a header Core or Access would otherwise need to check.
-    return await env.CORE_VPC.fetch(targetUrl, { headers: { Accept: "application/json" } });
+    const body = request.method === "PUT" ? await request.text() : undefined;
+    return await env.CORE_VPC.fetch(targetUrl, {
+      method: request.method,
+      body,
+      headers: { Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+    });
   } catch {
     // Never surface the underlying exception (which could contain internal network detail) to
     // the caller -- map every VPC transport failure to one generic, safe reason.

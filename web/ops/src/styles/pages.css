@@ -245,6 +245,10 @@
 .settings-group--deferred{border-top-color:var(--cb-line)}
 .settings-group--deferred p{font-size:12px;line-height:1.7;color:var(--cb-dim);margin:0}
 .settings-group--data p{font-size:12px;line-height:1.6;color:var(--cb-muted);margin:0 0 14px}
+.settings-group--alerts{grid-column:1/-1;border-top-color:var(--cb-red)}
+.settings-alert-copy{font-size:12px;line-height:1.6;color:var(--cb-muted);margin:0 0 14px}
+.settings-number input{width:92px;background:#090b0d;border:1px solid var(--cb-line-strong);color:var(--cb-text);padding:6px 8px;font:inherit;text-align:right}
+.settings-save{margin-top:16px}.settings-save:disabled{opacity:.55;cursor:wait}
 .settings-layer-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 24px}
 .settings-toggle-list h3{margin:0;padding:0 0 7px;border-bottom:1px solid var(--cb-line);font-size:9px;color:var(--cb-red);letter-spacing:.12em}
 

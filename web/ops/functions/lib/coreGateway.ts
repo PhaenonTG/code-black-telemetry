@@ -34,6 +34,7 @@ export interface GatewayEnv {
 export interface AllowlistRoute {
   upstreamPath: string;
   allowedQueryParams: string[];
+  methods?: readonly string[];
 }
 
 // Hardcoded allowlist. This is the entire set of paths this gateway will ever forward --
@@ -52,6 +53,7 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
   "api/storm-intel/v1/health": { upstreamPath: "/api/storm-intel/v1/health", allowedQueryParams: [] },
   "api/storm-intel/v1/point": { upstreamPath: "/api/storm-intel/v1/point", allowedQueryParams: ["latitude", "longitude"] },
+  "api/weather-alert/v1/settings": { upstreamPath: "/api/weather-alert/v1/settings", allowedQueryParams: [], methods: ["GET", "PUT"] },
 };
 
 export function normalizeRouteKey(path: string | string[] | undefined): string {
@@ -163,12 +165,13 @@ export async function forwardToCore(
   incomingUrl: URL,
   env: GatewayEnv,
   fetchImpl: typeof fetch = fetch,
+  init: RequestInit = {},
 ): Promise<UpstreamResult> {
   // Opt-in VPC transport path -- see the CORE_GATEWAY_WORKER doc comment on GatewayEnv above.
   // Only taken when something has actually bound CORE_GATEWAY_WORKER; every existing
   // deployment and every existing test that does not set it is completely unaffected.
   if (env.CORE_GATEWAY_WORKER) {
-    return forwardToCoreViaServiceBinding(route, incomingUrl, env.CORE_GATEWAY_WORKER);
+    return forwardToCoreViaServiceBinding(route, incomingUrl, env.CORE_GATEWAY_WORKER, init);
   }
 
   if (!env.CORE_GATEWAY_UPSTREAM_BASE) {
@@ -192,7 +195,7 @@ export async function forwardToCore(
       headers["X-Core-Gateway-Secret"] = env.CORE_GATEWAY_SHARED_SECRET;
     }
 
-    const upstreamResponse = await fetchImpl(upstreamUrl.toString(), { signal: controller.signal, headers });
+    const upstreamResponse = await fetchImpl(upstreamUrl.toString(), { ...init, signal: controller.signal, headers: { ...headers, ...init.headers } });
 
     const contentLength = upstreamResponse.headers.get("Content-Length");
     if (contentLength && Number(contentLength) > MAX_UPSTREAM_BODY_BYTES) {
@@ -233,6 +236,7 @@ async function forwardToCoreViaServiceBinding(
   route: AllowlistRoute,
   incomingUrl: URL,
   worker: { fetch(input: string | URL, init?: RequestInit): Promise<Response> },
+  init: RequestInit,
 ): Promise<UpstreamResult> {
   const targetUrl = new URL(route.upstreamPath, "https://internal-core-gateway-worker");
   for (const key of route.allowedQueryParams) {
@@ -241,7 +245,7 @@ async function forwardToCoreViaServiceBinding(
   }
 
   try {
-    const response = await worker.fetch(targetUrl.toString(), { headers: { Accept: "application/json" } });
+    const response = await worker.fetch(targetUrl.toString(), { ...init, headers: { Accept: "application/json", ...init.headers } });
 
     const text = await response.text();
     if (text.length > MAX_UPSTREAM_BODY_BYTES) {

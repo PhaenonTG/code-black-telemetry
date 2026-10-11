@@ -5,6 +5,7 @@ import { PageHeader } from "../components/PageHeader"
 import { Icon } from "../components/Icon"
 import { useAuth } from "../auth/AuthProvider"
 import { Link } from "react-router-dom"
+import { loadWeatherAlertSettings, saveWeatherAlertSettings, type WeatherAlertSettings } from "../weatherAlertSettings"
 
 const THEME_OPTIONS: AppThemeMode[] = ["dark", "night", "system", "light"]
 
@@ -45,12 +46,26 @@ export default function Settings() {
   const auth = useAuth()
   const [theme, setTheme] = useState<AppThemeMode>("dark")
   const [layers, setLayers] = useState<MapLayerVisibility | null>(null)
+  const [alertSettings, setAlertSettings] = useState<WeatherAlertSettings | null>(null)
+  const [alertError, setAlertError] = useState<string | null>(null)
+  const [alertSaving, setAlertSaving] = useState(false)
 
   useEffect(() => {
     const unsub = subscribeAppTheme(setTheme)
     void loadAppTheme()
     return unsub
   }, [])
+  useEffect(() => {
+    void loadWeatherAlertSettings().then(setAlertSettings).catch(() => setAlertError("Weather alert controls are unavailable."))
+  }, [])
+
+  const saveAlerts = async () => {
+    if (!alertSettings) return
+    setAlertSaving(true); setAlertError(null)
+    try { setAlertSettings(await saveWeatherAlertSettings(alertSettings)) }
+    catch { setAlertError("Could not save weather alert controls. No change was confirmed.") }
+    finally { setAlertSaving(false) }
+  }
   useEffect(() => {
     const unsub = subscribeMapLayerVisibility(setLayers)
     void loadMapLayerVisibility()
@@ -102,6 +117,34 @@ export default function Settings() {
         <Link className="page-action-link" to="/system">VIEW PROVIDER STATUS</Link>
       </section>
 
+      <section className="settings-group settings-group--alerts">
+        <h2>Weather alert controls</h2>
+        <p className="settings-alert-copy">These settings control Discord alert intake and routing. Changes apply to the live alert pipeline after saving.</p>
+        {alertSettings ? <>
+          <div className="settings-layer-grid">
+            <div className="settings-toggle-list"><h3>ALERT TYPES</h3>
+              {([ ["tornado_warnings", "Tornado warnings"], ["nwws_realtime", "NWWS realtime"], ["spc_md", "SPC mesoscale discussions"], ["spc_day1", "SPC Day 1 outlook"], ["significant_lsr", "Significant local storm reports"] ] as const).map(([key, label]) => <label key={key} className="settings-toggle-row"><span className="settings-toggle-row__text"><span className="settings-toggle-row__label">{label}</span></span><span className={alertSettings.enabled[key] ? "switch switch--on" : "switch"}><input type="checkbox" checked={alertSettings.enabled[key]} onChange={(e) => setAlertSettings({ ...alertSettings, enabled: { ...alertSettings.enabled, [key]: e.target.checked } })} /><i /></span></label>)}
+            </div>
+            <div className="settings-toggle-list"><h3>CHASE TARGET</h3>
+              <label className="settings-toggle-row"><span className="settings-toggle-row__text"><span className="settings-toggle-row__label">Track official warning motion</span></span><span className={alertSettings.target.enabled ? "switch switch--on" : "switch"}><input type="checkbox" checked={alertSettings.target.enabled} onChange={(e) => setAlertSettings({ ...alertSettings, target: { ...alertSettings.target, enabled: e.target.checked } })} /><i /></span></label>
+              <AlertNumber label="Match radius (mi)" value={alertSettings.target.match_radius_miles} onChange={(value) => setAlertSettings({ ...alertSettings, target: { ...alertSettings.target, match_radius_miles: value } })} />
+              <AlertNumber label="Target latitude" value={alertSettings.target.lat ?? 0} onChange={(value) => setAlertSettings({ ...alertSettings, target: { ...alertSettings.target, lat: value } })} />
+              <AlertNumber label="Target longitude" value={alertSettings.target.lon ?? 0} onChange={(value) => setAlertSettings({ ...alertSettings, target: { ...alertSettings.target, lon: value } })} />
+            </div>
+          </div>
+          <div className="settings-layer-grid"><div className="settings-toggle-list"><h3>ROUTING</h3>
+            <label className="settings-toggle-row"><span className="settings-toggle-row__text"><span className="settings-toggle-row__label">Use live chase location</span></span><span className={alertSettings.routing.use_live_location ? "switch switch--on" : "switch"}><input type="checkbox" checked={alertSettings.routing.use_live_location} onChange={(e) => setAlertSettings({ ...alertSettings, routing: { ...alertSettings.routing, use_live_location: e.target.checked } })} /><i /></span></label>
+            <AlertNumber label="Live radius (mi)" value={alertSettings.routing.live_radius_miles} onChange={(value) => setAlertSettings({ ...alertSettings, routing: { ...alertSettings.routing, live_radius_miles: value } })} />
+            <AlertNumber label="Manual radius (mi)" value={alertSettings.routing.manual_radius_miles} onChange={(value) => setAlertSettings({ ...alertSettings, routing: { ...alertSettings.routing, manual_radius_miles: value } })} />
+          </div><div className="settings-toggle-list"><h3>FILTERS</h3>
+            <AlertNumber label="Minimum hail (in)" value={alertSettings.filters.lsr_min_hail_inches} step="0.25" onChange={(value) => setAlertSettings({ ...alertSettings, filters: { ...alertSettings.filters, lsr_min_hail_inches: value } })} />
+            <AlertNumber label="Minimum wind (mph)" value={alertSettings.filters.lsr_min_wind_mph} onChange={(value) => setAlertSettings({ ...alertSettings, filters: { ...alertSettings.filters, lsr_min_wind_mph: value } })} />
+          </div></div>
+          {alertError && <p className="page-empty">{alertError}</p>}
+          <button type="button" className="page-action-link settings-save" disabled={alertSaving} onClick={() => void saveAlerts()}>{alertSaving ? "SAVING…" : "SAVE WEATHER ALERT CONTROLS"}</button>
+        </> : <p className="page-empty">{alertError ?? "Loading…"}</p>}
+      </section>
+
       {auth.status === "authorized" && (
         <section className="settings-group">
           <h2>Session</h2>
@@ -117,4 +160,8 @@ export default function Settings() {
       )}
     </div>
   )
+}
+
+function AlertNumber({ label, value, onChange, step = "1" }: { label: string; value: number; step?: string; onChange: (value: number) => void }) {
+  return <label className="settings-row settings-number"><span>{label}</span><input type="number" step={step} value={value} onChange={(event) => { const next = Number(event.target.value); if (Number.isFinite(next)) onChange(next) }} /></label>
 }
