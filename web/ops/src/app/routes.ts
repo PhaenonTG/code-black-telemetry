@@ -20,6 +20,7 @@ export const ROUTES: RouteDef[] = [
   { path: "/", label: "OPERATIONS MAP", icon: "map", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
   { path: "/weather", label: "WEATHER ANALYSIS", icon: "cloud", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
   { path: "/hurricane", label: "HURRICANE WATCH", icon: "cloud", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
+  { path: "/chase-setups", label: "CHASE SETUP DRAFTS", icon: "target", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
   { path: "/radar", label: "RADAR LAB", icon: "radar", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
   { path: "/models", label: "MODELS", icon: "models", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/soundings", label: "SOUNDINGS", icon: "sounding", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },

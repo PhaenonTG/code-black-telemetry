@@ -8,6 +8,8 @@ describe("resolveRoute", () => {
     expect(resolveRoute("/api/fabric/v1/units")).toEqual(ALLOWLIST["/api/fabric/v1/units"]);
     expect(resolveRoute("/api/storm-intel/v1/health")).toEqual(ALLOWLIST["/api/storm-intel/v1/health"]);
     expect(resolveRoute("/api/storm-intel/v1/point")).toEqual(ALLOWLIST["/api/storm-intel/v1/point"]);
+    expect(resolveRoute("/api/forecast/v1/chase-setups")).toEqual(ALLOWLIST["/api/forecast/v1/chase-setups"]);
+    expect(resolveRoute("/api/forecast/v1/chase-setup")).toEqual(ALLOWLIST["/api/forecast/v1/chase-setup"]);
   });
 
   it("rejects any non-allowlisted path -- no open proxy", () => {
@@ -23,6 +25,13 @@ describe("resolveRoute", () => {
 describe("validateQueryParams", () => {
   const pointRoute = ALLOWLIST["/api/storm-intel/v1/point"];
   const noParamRoute = ALLOWLIST["/health"];
+  const chaseRoute = ALLOWLIST["/api/forecast/v1/chase-setup"];
+
+  it("requires an exact chase setup ID before any private draft lookup", () => {
+    expect(validateQueryParams(chaseRoute, new URL("https://internal/api/forecast/v1/chase-setup?setup_id=setup-20261011-123456789a"))).toEqual({ ok: true });
+    expect(validateQueryParams(chaseRoute, new URL("https://internal/api/forecast/v1/chase-setup?setup_id=..%2Fsecret"))).toEqual({ ok: false, reason: "INVALID_SETUP_ID" });
+    expect(validateQueryParams(chaseRoute, new URL("https://internal/api/forecast/v1/chase-setup"))).toEqual({ ok: false, reason: "INVALID_SETUP_ID" });
+  });
 
   it("passes routes with no query params regardless of what is on the URL", () => {
     const url = new URL("https://internal/health?anything=1&admin=true");

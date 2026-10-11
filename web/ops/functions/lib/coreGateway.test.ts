@@ -27,6 +27,12 @@ describe("route allowlist", () => {
       upstreamPath: "/api/storm-intel/v1/point",
       allowedQueryParams: ["latitude", "longitude"],
     });
+    expect(resolveAllowlistRoute("api/forecast/v1/chase-setups")).toEqual({
+      upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [],
+    });
+    expect(resolveAllowlistRoute("api/forecast/v1/chase-setup")).toEqual({
+      upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id"],
+    });
   });
 
   it("rejects any non-allowlisted path -- no passthrough", () => {
