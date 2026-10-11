@@ -52,10 +52,6 @@ interface Env extends GatewayEnv, MapboxTokenEnv, OdotEnv {
 const GATEWAY_PREFIX = "/api/core/";
 
 async function handleGatewayRequest(request: Request, env: Env): Promise<Response> {
-  if (request.method !== "GET") {
-    return gatewayErrorResponse(405, "METHOD_NOT_ALLOWED");
-  }
-
   const auth = await verifyOpsAuth(request.headers.get("Authorization"), env);
   if (!auth.ok) return gatewayErrorResponse(auth.status, auth.reason);
 
@@ -63,12 +59,18 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
   const routeKey = normalizeRouteKey(url.pathname.slice(GATEWAY_PREFIX.length).split("/"));
   const route = resolveAllowlistRoute(routeKey);
   if (!route) return gatewayErrorResponse(404, "ROUTE_NOT_ALLOWED");
+  if (!(route.methods ?? ["GET"]).includes(request.method)) return gatewayErrorResponse(405, "METHOD_NOT_ALLOWED");
 
   if (route.upstreamPath === "/api/fabric/v1/stream") {
     return forwardFabricStream(env, request.signal);
   }
 
-  const result = await forwardToCore(route, url, env);
+  const body = request.method === "PUT" ? await request.text() : undefined;
+  const result = await forwardToCore(route, url, env, fetch, {
+    method: request.method,
+    body,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+  });
   if (result.status !== 200) return gatewayErrorResponse(result.status, result.reason ?? "CORE_UNAVAILABLE");
   return new Response(JSON.stringify(result.body), {
     status: 200,
