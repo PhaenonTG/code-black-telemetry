@@ -1,0 +1,21 @@
+{
+  "dataset_id": "krax-watch-2026-10-11",
+  "status": "unlabeled_evidence_for_aegis_review",
+  "site": "KRAX",
+  "source": "Unidata NEXRAD Level II completed volumes and NWS active Tornado Warning polygons",
+  "scan_count": 14,
+  "unique_volume_keys": 14,
+  "first_scan_utc": "2026-10-11T16:07:01.978Z",
+  "last_scan_utc": "2026-10-11T17:43:55.430Z",
+  "screened_candidate_count": 9,
+  "temporally_persistent_candidate_count": 0,
+  "potential_tds_candidate_count": 0,
+  "confirmed_tds_count": 0,
+  "warning_feed_unavailable_scans": 0,
+  "sha256_scans_jsonl": "858ea578a3ebc0d2a728963e2fda431127edc3b52b9532f419a637e188ad99e3",
+  "core_archive": "/srv/codeblack/data/radar-worker/krax-watch-archive-20261011",
+  "core_original": "/srv/codeblack/data/radar-worker/krax-watch",
+  "analysis_code_commit": "cdf6f1f99430e24d7f3819d771f2d93e5efb970d",
+  "label_policy": "Heuristic couplets are not tornado or debris ground truth. A qualified human must review raw moments, beam geometry, warning evolution, and independent reports before assigning training labels.",
+  "retention_note": "The recorded JSONL includes source volume keys but not the raw Level II bytes or full warning-polygon GeoJSON. Preserve the JSONL and deduplication state; retrieve source volumes and warning records by their keys/IDs for future review."
+}
