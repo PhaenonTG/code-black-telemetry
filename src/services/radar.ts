@@ -308,7 +308,7 @@ export async function getRadarStatus(site: string, product: RadarProduct, tilt?:
   }
 }
 
-export async function getRadarFrames(site: string, product: RadarProduct, tilt?: number | null, limit = 6) {
+export async function getRadarFrames(site: string, product: RadarProduct, tilt?: number | null, limit = 6, motion?: StormMotion | null) {
   await ensureInitialized();
   if (atlasFixtureEnabled()) {
     const frame = fixtureFrame(site === "AUTO" ? "KSRX" : site, product);
@@ -320,6 +320,11 @@ export async function getRadarFrames(site: string, product: RadarProduct, tilt?:
       const params = new URLSearchParams({ product, limit: String(limit) });
       if (site !== "AUTO") params.set("site", site);
       if (tilt != null) params.set("tilt", String(tilt));
+      if (product === "SRV") {
+        if (!motion) return [];
+        params.set("directionDegrees", String(Math.round(motion.directionDegrees)));
+        params.set("speedKnots", String(Math.round(motion.speedKnots)));
+      }
       const list = await workerFetch<RadarFrame[]>(`/api/v1/radar/frames?${params}`);
       const withTiles = list.map(attachTileTemplate);
       withTiles.forEach((frame) => lastFrameById.set(frame.frameId, frame));
@@ -363,25 +368,34 @@ export async function getNearestRadarSites(lat: number, lon: number) {
     .sort((a, b) => (a.distanceMi ?? 0) - (b.distanceMi ?? 0));
 }
 
-// radar-relay gates POST /api/v1/radar/storm-motion (and /selection) with this same value -- see
-// the comment in workers/radar-relay/src/index.js for the full reasoning. It's deliberately a
-// plain constant rather than pulled from a build-time env var: it ends up embedded in the public
-// client bundle either way once built, so routing it through Cloudflare Pages' separate build-env
-// pipeline would add real deploy-coordination complexity for zero actual security gain. This is
-// not a cryptographic secret -- it exists to stop the endpoint being bare-curlable by anyone who
-// finds the URL, not to withstand a determined attacker willing to read the bundle.
-const RADAR_MUTATION_KEY = "d481a23868768b337acd43108cb782b7e6efcc79d3fa9e91";
+const WEB_MOTION_KEY = "codeblack.radar.stormMotion.v1";
+let memoryWebMotion: StormMotion | null = null;
+
+export function getSavedWebStormMotion(): StormMotion | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const value = JSON.parse(window.localStorage.getItem(WEB_MOTION_KEY) ?? "null") as StormMotion | null;
+    if (!value) return memoryWebMotion;
+    if (!Number.isInteger(value.directionDegrees) || value.directionDegrees < 0 || value.directionDegrees > 359 ||
+        !Number.isInteger(value.speedKnots) || value.speedKnots < 0 || value.speedKnots > 80) return memoryWebMotion;
+    return value;
+  } catch {
+    return memoryWebMotion;
+  }
+}
 
 export async function setRadarStormMotion(motion: { directionDegrees: number; speedKnots: number; source?: string }) {
   await ensureInitialized();
   if (webRadarEnabled()) {
-    const response = await fetch(`${radarWorkerBase()}/api/v1/radar/storm-motion`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-radar-mutation-key": RADAR_MUTATION_KEY },
-      body: JSON.stringify(motion),
-    });
-    if (!response.ok) throw new Error(`radar worker ${response.status}`);
-    return response.json() as Promise<StormMotion>;
+    const directionDegrees = Math.round(motion.directionDegrees);
+    const speedKnots = Math.round(motion.speedKnots);
+    if (!Number.isFinite(directionDegrees) || directionDegrees < 0 || directionDegrees > 359 ||
+        !Number.isFinite(speedKnots) || speedKnots < 0 || speedKnots > 80) throw new Error("Invalid storm motion");
+    const selected: StormMotion = { directionDegrees, speedKnots, source: motion.source ?? "MANUAL", updatedAt: Date.now() };
+    memoryWebMotion = selected;
+    try { window.localStorage.setItem(WEB_MOTION_KEY, JSON.stringify(selected)); } catch { /* Private-mode storage may be unavailable. */ }
+    window.dispatchEvent(new Event("codeblack:radar-storm-motion"));
+    return selected;
   }
   if (!Capacitor.isNativePlatform()) return { ...motion, source: motion.source ?? "MANUAL", updatedAt: Date.now() };
   return RadarNative.setStormMotion(motion);

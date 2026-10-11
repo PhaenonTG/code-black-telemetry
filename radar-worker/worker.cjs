@@ -1,5 +1,8 @@
 const http = require("http");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const { Worker } = require("worker_threads");
 const { PNG } = require("pngjs");
 const { Level2Radar } = require("nexrad-level-2-data");
 const parseLevel3 = require("nexrad-level-3-data");
@@ -11,6 +14,9 @@ const { parse: productDescription } = require("nexrad-level-3-data/src/headers/p
 const symbologyHeader = require("nexrad-level-3-data/src/headers/symbology");
 const radialPackets = require("nexrad-level-3-data/src/headers/radialpackets");
 const sites = require("./sites.cjs");
+const { ChaseRadarController } = require("./chaseControl.cjs");
+const { resolveChaserLocations } = require("./chaseLocationPolicy.cjs");
+const locationStore = require("./chaseLocationStore.cjs");
 
 const PORT = Number(process.env.CODEBLACK_RADAR_PORT || 8787);
 const LEVEL2_BUCKET = "https://unidata-nexrad-level2.s3.amazonaws.com";
@@ -31,15 +37,26 @@ const FRAME_LIMIT = 8;
 const GLOBAL_FRAME_LIMIT = 8;
 const SITE_LIMIT = 3;
 const TILE_SIZE = 256;
+// Rendering a complete 256x256 PNG is CPU-bound. Yield between small row batches so the
+// single Node event loop can accept the lightweight health request while tiles are busy.
+const TILE_RENDER_YIELD_ROWS = 8;
 const CACHE_TTL_MS = 30 * 60_000;
 const STALE_MS = 18 * 60_000;
 const DELAYED_MS = 8 * 60_000;
+const FABRIC_UNITS_URL = process.env.CODEBLACK_FABRIC_UNITS_URL || "http://127.0.0.1:8000/api/fabric/v1/units";
+const FABRIC_STATUS_TIMEOUT_MS = 1_500;
+const CHASE_LOCATION_STATE_PATH = process.env.CODEBLACK_CHASE_LOCATION_STATE || "/srv/codeblack/data/radar-worker/chase-locations.json";
+const CONTROL_CONFIG_PATH = process.env.CODEBLACK_RADAR_CONTROL_CONFIG || "/srv/codeblack/data/radar-worker/radar-control.json";
+const DEFAULT_CONTROL_CONFIG = Object.freeze({ primary_prewarm_enabled: true, primary_interval_seconds: 300, secondary_prewarm_enabled: false });
+// Operator-approved continuity location. This is deliberately identified in every status response
+// and is replaced immediately by any fresh active Fabric chaser location. Pea Ridge city reference:
+// Arkansas DEQ GIS, NAD83, 36.460583 / -94.113000 (retrieved 2026-10-10).
+const DEFAULT_FALLBACK_CHASER = Object.freeze({ id: "default-pea-ridge-ar", health: "LIVE", location: { lat: 36.460583, lon: -94.113000, observedAtMs: Number.MAX_SAFE_INTEGER } });
 
-let selectedSite = process.env.CODEBLACK_RADAR_SITE || "AUTO";
-let selectedProduct = "REF";
-let selectedTilt = 1;
+const selectedSite = process.env.CODEBLACK_RADAR_SITE || "AUTO";
+const selectedProduct = "REF";
+const selectedTilt = 1;
 let latestError = "";
-let stormMotion = null;
 const frames = new Map();
 const tiles = new Map();
 const siteUse = new Map();
@@ -49,27 +66,39 @@ const frameLoads = new Map();
 const backfillJobs = new Set();
 const backfillQueue = [];
 let backfillRunning = false;
+const chaseControl = new ChaseRadarController({ radarSites: sites });
+let lastKnownChasers = locationStore.load(CHASE_LOCATION_STATE_PATH);
+let chaseControlCached = null;
+let chaseControlCachedAt = 0;
+let controlWork = { active_site: null, queued_sites: 0, last_success_at: null, last_error: null, running: false };
+
+function normalizeControlConfig(value) {
+  const requestedInterval = Number(value && value.primary_interval_seconds);
+  const primary_interval_seconds = Number.isInteger(requestedInterval) && requestedInterval >= 300 && requestedInterval <= 1800 ? requestedInterval : DEFAULT_CONTROL_CONFIG.primary_interval_seconds;
+  return {
+    primary_prewarm_enabled: !value || value.primary_prewarm_enabled !== false,
+    primary_interval_seconds,
+    // Secondaries are deliberately not an operator switch in this release: one writer and
+    // two sequential primary sites are the tested capacity boundary.
+    secondary_prewarm_enabled: false,
+  };
+}
+
+function readControlConfig() {
+  try { return normalizeControlConfig(JSON.parse(fs.readFileSync(CONTROL_CONFIG_PATH, "utf8"))); }
+  catch { return { ...DEFAULT_CONTROL_CONFIG }; }
+}
 
 function send(res, status, body, type = "application/json") {
   const data = Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body));
   res.writeHead(status, {
     "content-type": type,
     "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-methods": "GET,OPTIONS",
     "access-control-allow-headers": "content-type",
     "cache-control": type === "application/json" ? "no-store" : "public, max-age=120",
   });
   res.end(data);
-}
-
-function jsonBody(req) {
-  return new Promise((resolve) => {
-    let body = "";
-    req.on("data", (chunk) => { body += chunk; });
-    req.on("end", () => {
-      try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); }
-    });
-  });
 }
 
 function distanceMiles(a, b) {
@@ -105,6 +134,12 @@ function stormCentroid(frame) {
   let sumEast = 0;
   let sumNorth = 0;
   let sumWeight = 0;
+  // Real, literal reflectivity-core reading, not a derived/blended value: the single highest
+  // finite REF gate found while doing the SAME threshold/range-bounded scan the weighted
+  // centroid above already performs -- adds one comparison per in-range gate, no second pass.
+  let maxDbz = null;
+  let maxDbzEastKm = 0;
+  let maxDbzNorthKm = 0;
   const siteLatRad = (frame.site.lat * Math.PI) / 180;
   for (let i = 0; i < frame.data.length; i += 1) {
     const radial = frame.data[i];
@@ -121,6 +156,11 @@ function stormCentroid(frame) {
       sumEast += eastPerKm * rangeKm * weight;
       sumNorth += northPerKm * rangeKm * weight;
       sumWeight += weight;
+      if (maxDbz === null || value > maxDbz) {
+        maxDbz = value;
+        maxDbzEastKm = eastPerKm * rangeKm;
+        maxDbzNorthKm = northPerKm * rangeKm;
+      }
     }
   }
   if (sumWeight <= 0) return null;
@@ -131,6 +171,9 @@ function stormCentroid(frame) {
     lon: frame.site.lon + meanEastKm / (111.32 * Math.cos(siteLatRad)),
     weight: sumWeight,
     time: frame.time,
+    maxDbz,
+    maxDbzLat: frame.site.lat + maxDbzNorthKm / 111.32,
+    maxDbzLon: frame.site.lon + maxDbzEastKm / (111.32 * Math.cos(siteLatRad)),
   };
 }
 
@@ -142,6 +185,33 @@ function compactMomentData(radials) {
     // contain while representing missing gates as NaN, cutting the dominant retained allocation.
     moment_data: Float32Array.from(radial.moment_data, (value) => value == null ? Number.NaN : value),
   } : radial);
+}
+
+// Level-II parsing and moment extraction are CPU-bound (and can take seconds for CC). Keep
+// that work out of the HTTP event loop; the returned structure is plain cloneable data.
+function decodeLevel2OffThread(raw, product, tilt, motion, options = {}) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(path.join(__dirname, "level2-decode-worker.cjs"), {
+      workerData: { raw, product, tilt, motion, testBusyMs: options.testBusyMs },
+      // fetchBuffer() creates this Buffer from a standalone ArrayBuffer. Ownership transfers
+      // after the checksum is calculated, avoiding a second full-volume copy in the parent.
+      transferList: [raw.buffer],
+    });
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    worker.once("error", fail);
+    worker.once("message", (message) => {
+      if (message.error) return fail(new Error(message.error));
+      if (!settled) { settled = true; resolve(message); }
+    });
+    worker.once("exit", (code) => {
+      if (code !== 0) fail(new Error(`Level-II decode worker exited ${code}`));
+    });
+  });
 }
 
 function estimateStormMotion(site) {
@@ -168,12 +238,25 @@ function estimateStormMotion(site) {
   const confidence = distanceKm < 1.5 ? "LOW" : distanceKm < 4 ? "MEDIUM" : "HIGH";
   return {
     ok: true,
+    // Honest identity for what this actually is (see the header comment above stormCentroid:
+    // single dominant-cell tracking, not multi-cell SCIT) -- a consumer must never read this as
+    // "the only storm in range," only "the current tracked dominant cell for this site."
+    id: `${site}-primary`,
     directionDegrees,
     speedKnots,
     confidence,
     sampleSpanMinutes: Math.round(elapsedHours * 60),
     baselineFrameId: baseline.id,
     newestFrameId: newest.id,
+    // Additive location/core fields (V1 radar-intelligence pass) -- the newest frame's own
+    // centroid and literal max-dBZ core reading, both real values already computed above, never
+    // fabricated to fill out a schema. observedAt is the NEWEST frame's real scan time, matching
+    // the freshness contract every other radar-worker response already uses (see metadata()'s
+    // `time` field) -- never "now," so a stalled estimate still ages honestly downstream.
+    location: { lat: c2.lat, lon: c2.lon },
+    maxDbz: c2.maxDbz,
+    maxDbzLocation: c2.maxDbz == null ? null : { lat: c2.maxDbzLat, lon: c2.maxDbzLon },
+    observedAt: new Date(newest.time).toISOString(),
   };
 }
 
@@ -221,6 +304,79 @@ async function fetchText(url) {
   return response.text();
 }
 
+function chaseStatusSite(item) { return { site_id: item.siteId, distance_km: Number((item.distanceMi * 1.609344).toFixed(1)) }; }
+
+function fallbackSelection(snapshot = {}) {
+  // A fixed default never impersonates a unit. It exists only to keep the operator-facing
+  // radar centered on a known continuity area while Fabric is unavailable. The response stays
+  // DEGRADED and OBSERVER, and no code path here invokes a fetch/decode/prewarm operation.
+  const resolved = resolveChaserLocations(snapshot, lastKnownChasers, Date.now());
+  lastKnownChasers = resolved.next;
+  try { fs.mkdirSync(path.dirname(CHASE_LOCATION_STATE_PATH), { recursive: true, mode: 0o750 }); locationStore.save(CHASE_LOCATION_STATE_PATH, lastKnownChasers); } catch { /* read-only dev/test environment: keep in-memory state */ }
+  const selected = chaseControl.observeFabric({ units: resolved.units.map((unit) => ({ unit_id: unit.id, role: "chase-platform", overall_health: unit.health, last_seen: unit.location.observedAtMs, location: unit.location })) });
+  const sourceKinds = new Set(resolved.sources.map((item) => item.source));
+  const source = sourceKinds.size === 1 ? [...sourceKinds][0] : "MIXED";
+  return { ...selected, secondary: [], locationSources: resolved.sources, source };
+}
+
+function formatChaseControlStatus(selection, source = "FABRIC") {
+  const configuration = readControlConfig();
+  const ages = selection.eligibleChasers.map((item) => item.locationAgeMs).filter(Number.isFinite);
+  const fallback = source !== "FABRIC";
+  const reason = source === "DEFAULT_FALLBACK" ? "DEFAULT_PEA_RIDGE_FALLBACK" : source === "LAST_KNOWN" ? "LAST_KNOWN_CHASE_LOCATIONS" : source === "MIXED" ? "MIXED_CHASE_LOCATION_SOURCES" : "FABRIC_PRIMARY_SITES_SELECTED";
+  return { state: selection.primary.length ? "READY" : "DEGRADED", mode: configuration.primary_prewarm_enabled ? "ACTIVE" : "OBSERVER", source,
+    reason: selection.primary.length ? reason : "NO_FRESH_ACTIVE_CHASE_LOCATIONS",
+    fabric: { state: fallback ? "AVAILABLE" : selection.primary.length ? "FRESH" : "DEGRADED", snapshot_age_s: fallback ? null : ages.length ? Math.round(Math.max(...ages) / 1000) : null, eligible_chasers: selection.eligibleChasers.length, skipped_chasers: selection.skippedChasers.length },
+    selection: { primary: selection.primary.map(chaseStatusSite), secondary: selection.secondary.map(chaseStatusSite) }, work: { ...controlWork }, configuration,
+    capabilities: { closest_site_selection: "AVAILABLE", secondary_prewarm: "NOT_CONFIGURED", configuration_ui: "AVAILABLE" } };
+}
+
+async function currentChaseControlStatus() {
+  if (chaseControlCached && Date.now() - chaseControlCachedAt < 8_000) return { ...chaseControlCached, work: { ...controlWork } };
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), FABRIC_STATUS_TIMEOUT_MS);
+  try {
+    const response = await fetch(FABRIC_UNITS_URL, { signal: controller.signal });
+    if (!response.ok) throw new Error("Fabric snapshot unavailable");
+    const snapshot = await response.json();
+    const selection = chaseControl.observeFabric(snapshot);
+    const fallback = fallbackSelection(snapshot);
+    chaseControlCached = selection.primary.length ? formatChaseControlStatus(selection) : formatChaseControlStatus({ ...fallback, skippedChasers: selection.skippedChasers }, fallback.source);
+  } catch {
+    const fallback = fallbackSelection();
+    chaseControlCached = formatChaseControlStatus(fallback, fallback.source);
+  }
+  finally { clearTimeout(timer); chaseControlCachedAt = Date.now(); }
+  return { ...chaseControlCached, work: { ...controlWork } };
+}
+
+async function prewarmPrimarySites(statusProvider = currentChaseControlStatus, prewarm = ensureFrame, configProvider = readControlConfig) {
+  if (controlWork.running) return false;
+  if (!configProvider().primary_prewarm_enabled) return false;
+  controlWork.running = true;
+  try {
+    const status = await statusProvider();
+    const sitesToWarm = (status.selection?.primary || []).map((item) => item.site_id).filter(Boolean).slice(0, 2);
+    controlWork.queued_sites = sitesToWarm.length;
+    controlWork.last_error = null;
+    for (const siteId of sitesToWarm) {
+      controlWork.active_site = siteId;
+      controlWork.queued_sites -= 1;
+      try {
+        await prewarm(siteId, "REF", 1);
+        controlWork.last_success_at = new Date().toISOString();
+      } catch (error) {
+        controlWork.last_error = `PREWARM_${String(error?.name || "ERROR").replace(/[^A-Z0-9_]/gi, "_").toUpperCase()}`;
+      }
+    }
+  } finally {
+    controlWork.active_site = null;
+    controlWork.queued_sites = 0;
+    controlWork.running = false;
+    chaseControlCached = null;
+  }
+  return true;
+}
+
 async function fetchBuffer(url) {
   const response = await timedFetch(url);
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
@@ -265,21 +421,21 @@ function volumeTimeFromHeader(radar) {
   return base + (radar.header?.milliseconds ?? 0);
 }
 
-function getMoment(radar, product) {
+function getMoment(radar, product, motion) {
   if (product === "SRV") {
     const velocity = radar.getHighresVelocity();
     const azimuth = radar.getAzimuth();
-    return deriveSrv(velocity, azimuth);
+    return deriveSrv(velocity, azimuth, motion);
   }
   return radar[PRODUCT_TO_ACCESSOR[product]]();
 }
 
-function deriveSrv(velocity, azimuths) {
-  if (!stormMotion) throw new Error("SRV UNAVAILABLE - SET STORM MOTION");
+function deriveSrv(velocity, azimuths, motion) {
+  if (!motion) throw new Error("SRV UNAVAILABLE - SET STORM MOTION");
   return velocity.map((radial, index) => {
     if (!radial) return radial;
     const radarBearing = Number(azimuths[index] ?? 0);
-    const projection = stormMotion.speedKnots * Math.cos((stormMotion.directionDegrees - radarBearing) * Math.PI / 180);
+    const projection = motion.speedKnots * Math.cos((motion.directionDegrees - radarBearing) * Math.PI / 180);
     return {
       ...radial,
       name: "SRV",
@@ -291,9 +447,18 @@ function deriveSrv(velocity, azimuths) {
 function palette(product, value) {
   if (value == null || Number.isNaN(value)) return [0, 0, 0, 0];
   if (product === "REF") {
+    // Alpha raised across the board (colors/dBZ thresholds unchanged -- this is a rendering
+    // decision, never a falsification of the data). Root cause of a real "radar looks weak/soft"
+    // broadcast complaint: at the old alphas, moderate rain (35 dBZ, the yellow stop) was only
+    // 170/255 (~67%) opaque before the client's own 0.92 raster-opacity multiplier, and light
+    // returns (5-20 dBZ) were 85-130/255 (33-51%) -- washed out against the dark basemap even
+    // for real, meaningful precipitation. Weak returns (5 dBZ) stay noticeably lighter than
+    // moderate-and-up on purpose, so stratiform drizzle doesn't visually dominate the panel the
+    // same way a real storm core does -- but everything 45 dBZ and up (heavy rain/hail-capable
+    // cores) is now solidly opaque, matching how a real broadcast radar display reads at a glance.
     const stops = [
-      [-10, [0, 0, 0, 0]], [5, [42, 92, 120, 85]], [20, [23, 170, 80, 130]], [35, [235, 210, 33, 170]],
-      [45, [255, 122, 20, 200]], [55, [230, 36, 45, 225]], [65, [205, 65, 210, 235]], [80, [255, 255, 255, 245]],
+      [-10, [0, 0, 0, 0]], [5, [42, 92, 120, 140]], [20, [23, 170, 80, 190]], [35, [235, 210, 33, 225]],
+      [45, [255, 122, 20, 245]], [55, [230, 36, 45, 255]], [65, [205, 65, 210, 255]], [80, [255, 255, 255, 255]],
     ];
     return interpolateStops(stops, value);
   }
@@ -339,15 +504,16 @@ async function recentLevel2Keys(site, count) {
   return keys.slice(-count);
 }
 
-async function ensureLevel2Frame(siteId, product, tilt = 1, explicitKey = null) {
+async function ensureLevel2Frame(siteId, product, tilt = 1, explicitKey = null, motion = null) {
   const site = sites.find((item) => item.id === siteId);
   if (!site) throw new Error(`Unknown radar site ${siteId}`);
   if (!LEVEL2_PRODUCTS.has(product)) throw new Error(`${product} is not Level II`);
-  if (product === "SRV" && !stormMotion) throw new Error("SRV UNAVAILABLE - SET STORM MOTION");
+  if (product === "SRV" && !motion) throw new Error("SRV UNAVAILABLE - SET STORM MOTION");
 
   const key = explicitKey ?? await latestLevel2Key(site.id);
   if (!key) throw new Error(`No Level II volume found for ${site.id}`);
-  const id = frameId(site.id, product, tilt, key, product === "SRV" ? JSON.stringify(stormMotion) : "");
+  const motionKey = product === "SRV" ? `${motion.directionDegrees}:${motion.speedKnots}` : "";
+  const id = frameId(site.id, product, tilt, key, motionKey);
   const existing = frames.get(id);
   if (existing && Date.now() - existing.processedAt < CACHE_TTL_MS) return existing;
 
@@ -358,25 +524,16 @@ async function ensureLevel2Frame(siteId, product, tilt = 1, explicitKey = null) 
     const started = Date.now();
     const raw = await fetchBuffer(`${LEVEL2_BUCKET}/${key}`);
     const checksum = crypto.createHash("sha1").update(raw).digest("hex").slice(0, 12);
-    const radar = new Level2Radar(raw, { logger: false });
-    const elevations = radar.listElevations();
-    const chosenTilt = elevations.includes(Number(tilt)) ? Number(tilt) : elevations[0];
-    radar.setElevation(chosenTilt);
-    const data = compactMomentData(getMoment(radar, product));
-    const azimuths = radar.getAzimuth();
-    const headers = radar.getHeader();
-    const firstHeader = Array.isArray(headers) ? headers[0] : headers;
-    const volumeTime = volumeTimeFromHeader(radar);
+    const decoded = await decodeLevel2OffThread(raw, product, tilt, motion);
     const frame = {
       id, site, product, sourceLevel: "LEVEL II", sourceBucket: "unidata-nexrad-level2",
       sourceChunkBucket: "unidata-nexrad-level2-chunks",
       sourceNotification: "arn:aws:sns:us-east-1:684042711724:NewNEXRADLevel2ObjectFilterable",
-      key, checksum, tilt: chosenTilt, elevationAngle: firstHeader?.elevation_angle ?? null,
-      availableTilts: elevations, time: volumeTime, processedAt: Date.now(),
+      key, checksum, tilt: decoded.chosenTilt, motionKey, elevationAngle: decoded.elevationAngle,
+      availableTilts: decoded.elevations, time: decoded.volumeTime, processedAt: Date.now(),
       processingDurationMs: Date.now() - started,
-      vcp: radar.vcp?.record?.pattern_number ?? firstHeader?.volume?.volume_coverage_pattern ?? null,
-      nyquistVelocity: firstHeader?.radial?.nyquist_velocity ?? null,
-      quality: radar.isTruncated ? "INCOMPLETE" : radar.hasGaps ? "GAPS" : "OK", data, azimuths,
+      vcp: decoded.vcp, nyquistVelocity: decoded.nyquistVelocity,
+      quality: decoded.quality, data: decoded.data, azimuths: decoded.azimuths,
     };
     cacheFrame(frame);
     // Pre-warm the matching CC scan in the background as soon as this REF/VEL/SRV frame is
@@ -394,16 +551,33 @@ async function drainHistoryBackfill() {
   if (backfillRunning) return;
   backfillRunning = true;
   while (backfillQueue.length) {
-    const { jobKey, site, product, tilt, limit } = backfillQueue.shift();
+    const { jobKey, site, product, tilt, limit, motion } = backfillQueue.shift();
     try {
-    const keys = await recentLevel2Keys(site, limit);
-    // Keep this deliberately sequential. It runs after the live frame has been returned and avoids
-    // a burst of large Level II downloads/decodes exhausting the worker host.
-    for (const key of keys.reverse()) {
-      const count = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === tilt).length;
-      if (count >= limit) break;
-      try { await ensureLevel2Frame(site, product, tilt, key); } catch { /* skip corrupt archive objects */ }
-    }
+      let keys;
+      try {
+        // Called through module.exports (not the bare local name) so tests can substitute a
+        // failing implementation without touching real S3 -- the only reason this indirection
+        // exists is to make the crash this function used to cause reproducible in a test.
+        keys = await module.exports.recentLevel2Keys(site, limit);
+      } catch (error) {
+        // Root cause of a real production incident: an uncaught rejection here (a transient S3
+        // listing failure -- e.g. "SocketError: other side closed", an ordinary, expected
+        // condition against a public bucket) propagated out of this best-effort background job
+        // and crashed the entire live radar process 33 times in one session. Historical backfill
+        // is optional; live tile serving is not -- this job must never be able to take the
+        // process down. Log with enough context to actually debug a real outage, then abandon
+        // just this one backfill attempt and move on to the next queued job.
+        console.warn(`[backfill] recentLevel2Keys failed for ${jobKey}: ${error && error.message ? error.message : error}`);
+        continue;
+      }
+      // Keep this deliberately sequential. It runs after the live frame has been returned and avoids
+      // a burst of large Level II downloads/decodes exhausting the worker host.
+      for (const key of keys.reverse()) {
+        const motionKey = motion ? `${motion.directionDegrees}:${motion.speedKnots}` : "";
+        const count = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === tilt && item.motionKey === motionKey).length;
+        if (count >= limit) break;
+        try { await ensureLevel2Frame(site, product, tilt, key, motion); } catch { /* skip corrupt archive objects */ }
+      }
     } finally {
       backfillJobs.delete(jobKey);
     }
@@ -411,12 +585,295 @@ async function drainHistoryBackfill() {
   backfillRunning = false;
 }
 
-function startHistoryBackfill(site, product, tilt, limit) {
-  const jobKey = `${site}:${product}:${tilt}`;
+function startHistoryBackfill(site, product, tilt, limit, motion = null) {
+  const jobKey = `${site}:${product}:${tilt}:${motion ? `${motion.directionDegrees}:${motion.speedKnots}` : ""}`;
   if (backfillJobs.has(jobKey)) return;
   backfillJobs.add(jobKey);
-  backfillQueue.push({ jobKey, site, product, tilt, limit });
-  void drainHistoryBackfill();
+  backfillQueue.push({ jobKey, site, product, tilt, limit, motion });
+  // Defense-in-depth: drainHistoryBackfill() already catches the known failure mode internally,
+  // but this terminal .catch() is the last line of defense against any future/unexpected error
+  // escaping that implementation -- a fire-and-forget async call with no rejection handler is
+  // exactly the shape that crashed the process before. Never let a bug here become the second
+  // way a background job can kill live radar serving.
+  drainHistoryBackfill().catch((error) => {
+    console.warn(`[backfill] drainHistoryBackfill terminated unexpectedly: ${error && error.message ? error.message : error}`);
+    backfillRunning = false;
+  });
+}
+
+// ============================================================================================
+// Real-time Level II CHUNK assembler (V1) -- a shared Code Black radar capability, not an
+// overlay-specific feature. Feeds the exact same `frames` Map / cacheFrame() / renderTile()
+// pipeline the completed-volume path already uses, so classic-v2, OPS, and any future client
+// automatically get chunk-derived frames through the SAME /frames, /tiles, /status API they
+// already call -- no new endpoints, no parallel visual system.
+//
+// Evidence backing every constant/decision below comes from a real live KTWX volume 895
+// observation (2026-09-16), not assumption -- see the prototype run this was built from:
+//   - first chunk to trustworthy lowest-tilt REF: 30.6s (10/82 chunks)
+//   - completed volume for the same scan: 307s after the same first chunk (~10x slower)
+//   - REF agreement between the chunk-assembled and eventual complete-volume decode of the
+//     SAME scan: 22,745 samples compared, 0 mismatches, 0 median/max dBZ difference
+//   - isTruncated stayed false throughout the partial scan (chunks split on compressed-record
+//     boundaries) and hasGaps was true throughout -- neither is a usable completeness signal;
+//     explicit azimuth-coverage of the lowest tilt is what actually gates trustworthiness
+//   - dropping one real chunk out of a trustworthy 10-chunk set: radial count 720->600, max
+//     azimuth gap 0.6deg->60.5deg -- proves the gate below actually catches real degradation
+// ============================================================================================
+
+// V1 scope: lowest trustworthy tilt for REF and VEL only (the high-value live chase/broadcast
+// products) -- not every tilt/product. Complete-volume Level II remains the only source for
+// SRV/CC/ET and for any tilt beyond the lowest.
+const CHUNK_PRODUCTS = new Set(["REF", "VEL"]);
+// Event-driven decode cadence (Part 4): re-attempt roughly every 5 NEW chunks, not every
+// chunk (~4-5s) -- matches the prototype's own cadence, which was already sufficient to catch
+// the exact moment trustworthiness was reached without wasting CPU on every single arrival.
+const CHUNK_DECODE_EVERY_N = 5;
+// Trustworthy-sweep gate (Part 5) -- the SAME two numbers proven against real data above.
+// Deliberately NOT isTruncated/hasGaps (see the header comment): both were uninformative in
+// the real observation this is built from.
+const CHUNK_TRUSTWORTHY_MIN_RADIALS = 300;
+const CHUNK_TRUSTWORTHY_MAX_GAP_DEG = 10;
+// Bounded lookback/history: only the CURRENT (and, briefly during handoff, the immediately
+// previous) volume's chunk metadata+bytes are ever held per site -- no unbounded chunk
+// archive, matching the "no uncontrolled storage" hard invariant. A site with no chunk
+// activity for this long is dropped from chunkVolumeState entirely (bounded memory).
+const CHUNK_SITE_IDLE_EVICT_MS = 20 * 60_000;
+// Rate-limit how often a single site's chunk state is even considered for advancement --
+// this is what keeps a burst of concurrent viewer requests from turning into a burst of S3
+// listings; the real per-chunk cadence (~4-5s) means checking more often than this buys
+// nothing.
+const CHUNK_ADVANCE_MIN_INTERVAL_MS = 3_000;
+// When a site's chunk prefix is unavailable, do not repeat the bounded but expensive discovery
+// search on every frame request. The completed-volume renderer remains live during this backoff.
+const CHUNK_DISCOVERY_RETRY_MS = 5 * 60_000;
+
+// site -> { volumeNum, chunks: Map<"S-1"|"I-2"|"E-999", {key,lastModified,size,seq,flag}>,
+//           firstChunkTime, newestChunkTime, sawE, lastDecodedChunkCount,
+//           trustworthyEmitted: Set<"REF"|"VEL">, lastAdvanceAt, lastDiscoveryAt }
+const chunkVolumeState = new Map();
+const chunkDiscoveryBackoffUntil = new Map();
+// Per-site in-flight dedup, mirroring frameLoads' existing pattern -- concurrent requests for
+// the same site never trigger overlapping chunk-advancement work.
+const chunkAdvanceInFlight = new Map();
+
+// Same shape as listS3() but also carries LastModified/Size -- listS3 intentionally only ever
+// returned bare keys (every existing caller only needed sort order), so this is a new function
+// rather than an expanded contract change to a function three other call sites already rely on.
+async function listChunkBucketXml(prefix) {
+  const xml = await fetchText(`${LEVEL2_CHUNKS_BUCKET}/?list-type=2&prefix=${encodeURIComponent(prefix)}&max-keys=1000`);
+  return [...xml.matchAll(/<Contents><Key>(.*?)<\/Key><LastModified>(.*?)<\/LastModified>.*?<Size>(\d+)<\/Size>/gs)]
+    .map((m) => ({ key: m[1].replace(/&amp;/g, "&"), lastModified: m[2], size: Number(m[3]) }));
+}
+
+async function chunkFolderHasKeys(site, volumeNum) {
+  const xml = await fetchText(`${LEVEL2_CHUNKS_BUCKET}/?list-type=2&prefix=${encodeURIComponent(`${site}/${volumeNum}/`)}&max-keys=1`);
+  return /<KeyCount>0<\/KeyCount>/.test(xml) === false;
+}
+
+// Search actual timestamps, not numeric continuity: live retention leaves gaps.
+// Bounded pagination fails closed; callers retain the completed-volume fallback.
+async function discoverLatestChunkVolume(site) {
+  return require('./chunkDiscovery.cjs').discoverLatestChunkVolume(site, fetchText, LEVEL2_CHUNKS_BUCKET);
+}
+
+const CHUNK_KEY_RE = /\/(\d{8}-\d{6})-(\d+)-([SIE])$/;
+const CHUNK_ORDER_RANK = { S: -1, I: 0, E: 1_000_000 };
+function orderChunkEntries(entries) {
+  return [...entries].sort((a, b) => (CHUNK_ORDER_RANK[a.flag] + a.seq) - (CHUNK_ORDER_RANK[b.flag] + b.seq));
+}
+
+function azimuthCoverageOf(azimuths) {
+  const sorted = [...new Set(azimuths.map((a) => Math.round(Number(a) * 10) / 10))].sort((a, b) => a - b);
+  if (sorted.length < 2) return { uniqueCount: sorted.length, maxGapDeg: 360 };
+  let maxGap = (sorted[0] + 360) - sorted[sorted.length - 1];
+  for (let i = 1; i < sorted.length; i++) maxGap = Math.max(maxGap, sorted[i] - sorted[i - 1]);
+  return { uniqueCount: sorted.length, maxGapDeg: Math.round(maxGap * 100) / 100 };
+}
+
+function isTrustworthySweep(radialCount, maxGapDeg) {
+  return radialCount >= CHUNK_TRUSTWORTHY_MIN_RADIALS && maxGapDeg <= CHUNK_TRUSTWORTHY_MAX_GAP_DEG;
+}
+
+// Builds a frame object in the EXACT shape ensureLevel2Frame() produces (same fields the
+// existing renderTile()/metadata()/frames-route sort already consume), plus additive
+// provenance fields (Part 8) -- never a parallel/incompatible frame shape. `key` is a
+// chunk-specific synthetic string (never collides with a real S3 volume key) so frameId()
+// naturally produces a distinct id from the eventual complete-volume frame for the same scan.
+function buildChunkFrame(site, product, radar, volumeNum, chunkState, coverage) {
+  radar.setElevation(Math.min(...radar.listElevations()));
+  const data = compactMomentData(radar[PRODUCT_TO_ACCESSOR[product]]());
+  const azimuths = radar.getAzimuth();
+  const headers = radar.getHeader();
+  const firstHeader = Array.isArray(headers) ? headers[0] : headers;
+  const volumeTime = volumeTimeFromHeader(radar);
+  const key = `chunk:${site.id}:${volumeNum}`;
+  const id = frameId(site.id, product, radar.listElevations()[0], key);
+  return {
+    id, site, product, sourceLevel: "LEVEL II (chunk)", sourceBucket: "unidata-nexrad-level2-chunks",
+    sourceChunkBucket: "unidata-nexrad-level2-chunks",
+    sourceNotification: "arn:aws:sns:us-east-1:684042711724:NewNEXRADLevel2ObjectFilterable",
+    key, checksum: crypto.createHash("sha1").update(`${key}:${chunkState.chunks.size}`).digest("hex").slice(0, 12),
+    tilt: radar.listElevations()[0], elevationAngle: firstHeader?.elevation_angle ?? null,
+    availableTilts: radar.listElevations(), time: volumeTime, processedAt: Date.now(),
+    processingDurationMs: 0, // set by the caller after decode timing is known
+    vcp: radar.vcp?.record?.pattern_number ?? firstHeader?.volume?.volume_coverage_pattern ?? null,
+    nyquistVelocity: firstHeader?.radial?.nyquist_velocity ?? null,
+    quality: radar.isTruncated ? "INCOMPLETE" : radar.hasGaps ? "GAPS" : "OK", data, azimuths,
+    // Additive provenance (Part 8) -- never breaks existing clients, since metadata() only
+    // forwards named fields today and this adds new ones rather than changing any existing one.
+    chunkVolume: volumeNum, chunkComplete: chunkState.sawE, trustworthy: true,
+    radialCount: data.length, maxAzimuthGapDeg: coverage.maxGapDeg, chunkCount: chunkState.chunks.size,
+  };
+}
+
+// Core per-site advancement step (Part 3/4). Never throws past its own try/catch (Part 7 --
+// any exception here must leave the existing completed-volume path completely unaffected);
+// callers invoke this fire-and-forget, exactly like the existing ensureMatchingCcFrame
+// pre-warm pattern, never awaited from inside a client-facing request.
+async function advanceChunkAssembly(siteId) {
+  const site = sites.find((item) => item.id === siteId);
+  if (!site) return;
+  const now = Date.now();
+  if ((chunkDiscoveryBackoffUntil.get(siteId) || 0) > now) return;
+  let state = chunkVolumeState.get(siteId);
+  if (state && now - state.lastAdvanceAt < CHUNK_ADVANCE_MIN_INTERVAL_MS) return;
+  if (chunkAdvanceInFlight.has(siteId)) return;
+  const work = (async () => {
+    try {
+      if (!state) {
+        // Through module.exports (not the bare local name) -- same test-seam indirection
+        // already established for recentLevel2Keys, so a test can substitute a failing
+        // discovery/listing without touching real S3 (Part 7/9-I: proves the fallback path).
+        let volumeNum;
+        try {
+          volumeNum = await module.exports.discoverLatestChunkVolume(siteId);
+        } catch (error) {
+          chunkDiscoveryBackoffUntil.set(siteId, Date.now() + CHUNK_DISCOVERY_RETRY_MS);
+          throw error;
+        }
+        state = { volumeNum, chunks: new Map(), firstChunkTime: null, newestChunkTime: null, sawE: false,
+          lastDecodedChunkCount: 0, trustworthyEmitted: new Set(), lastAdvanceAt: now, lastDiscoveryAt: now };
+        chunkVolumeState.set(siteId, state);
+      }
+      state.lastAdvanceAt = now;
+
+      // If the currently-tracked volume already completed (sawE) last time we looked, check
+      // whether a NEWER volume has started before doing anything else -- a completed volume's
+      // chunk set never gains new data, so re-listing it forever would be wasted work.
+      const stalled = now - Date.parse(state.newestChunkTime || new Date(state.lastDiscoveryAt).toISOString()) > 90_000;
+      if (state.sawE || stalled) {
+        let nextVolume = state.volumeNum;
+        // Normal handoff costs one small listing; confirm its timestamp so an old
+        // folder cannot be mistaken for the next scan after a numbering reset.
+        if (state.sawE) {
+          const nextEntries = await listChunkBucketXml(`${siteId}/${state.volumeNum + 1}/`);
+          if (nextEntries.some(entry => Date.parse(entry.lastModified) > Date.parse(state.newestChunkTime || 0))) nextVolume++;
+        }
+        // Full chronological recovery is only needed for missing/stalled scans.
+        if (nextVolume === state.volumeNum && now - state.lastDiscoveryAt > 60_000) {
+          state.lastDiscoveryAt = now;
+          nextVolume = await module.exports.discoverLatestChunkVolume(siteId);
+        }
+        if (nextVolume !== state.volumeNum) {
+          // Bounded volume history: drop the completed volume's chunk bytes entirely before
+          // starting to track the new one -- never accumulate more than one volume's chunk
+          // state per site.
+          state = { volumeNum: nextVolume, chunks: new Map(), firstChunkTime: null, newestChunkTime: null,
+            sawE: false, lastDecodedChunkCount: 0, trustworthyEmitted: new Set(), lastAdvanceAt: now, lastDiscoveryAt: now };
+          chunkVolumeState.set(siteId, state);
+        }
+      }
+      // A completed scan may still need decoding after a transient download failure.
+
+      const entries = await listChunkBucketXml(`${siteId}/${state.volumeNum}/`);
+      if (!entries.length) return;
+      for (const e of entries) {
+        const m = e.key.match(CHUNK_KEY_RE);
+        if (!m) continue;
+        const seq = Number(m[2]);
+        const flag = m[3];
+        const dedupeKey = `${flag}-${seq}`;
+        // De-duplicate by (volume, sequence, flag) -- Part 3/9-A -- listing the same folder
+        // repeatedly must never double-count or double-concatenate a chunk already seen.
+        if (!state.chunks.has(dedupeKey)) state.chunks.set(dedupeKey, { ...e, seq, flag });
+      }
+      if (!state.firstChunkTime) {
+        const first = orderChunkEntries([...state.chunks.values()])[0];
+        state.firstChunkTime = first ? first.lastModified : null;
+      }
+      const ordered = orderChunkEntries([...state.chunks.values()]);
+      state.newestChunkTime = ordered.length ? ordered[ordered.length - 1].lastModified : state.newestChunkTime;
+      state.sawE = ordered.some((c) => c.flag === "E");
+
+      const progressed = state.chunks.size - state.lastDecodedChunkCount;
+      if (progressed <= 0 && state.lastDecodedChunkCount > 0) return;
+      if (progressed < CHUNK_DECODE_EVERY_N && !state.sawE) return;
+      if (CHUNK_PRODUCTS.size === [...state.trustworthyEmitted].filter((p) => CHUNK_PRODUCTS.has(p)).length) return; // already trustworthy for everything this volume can offer
+
+      // Fetch + concatenate RAW bytes, S through the current newest, in NUMERIC sequence
+      // order, with NO reformatting -- verified byte-for-byte against the eventual complete
+      // volume (0 mismatches across 22,745 real samples).
+      const buffers = [];
+      for (const c of ordered) buffers.push(await fetchBuffer(`${LEVEL2_CHUNKS_BUCKET}/${c.key}`));
+      const assembled = Buffer.concat(buffers);
+      // Only consume this batch after every byte arrived; network errors must be retryable.
+      state.lastDecodedChunkCount = state.chunks.size;
+
+      const decodeStarted = Date.now();
+      let radar;
+      try {
+        radar = new Level2Radar(assembled, { logger: false });
+      } catch {
+        return; // malformed/incomplete partial buffer -- not an error state, just not decodable yet
+      }
+      const elevations = radar.listElevations();
+      if (!elevations.length) return;
+      const lowestTilt = Math.min(...elevations);
+      radar.setElevation(lowestTilt);
+
+      for (const product of CHUNK_PRODUCTS) {
+        if (state.trustworthyEmitted.has(product)) continue;
+        let moments;
+        try { moments = radar[PRODUCT_TO_ACCESSOR[product]](); } catch { continue; }
+        const azimuths = radar.getAzimuth();
+        const coverage = azimuthCoverageOf(azimuths || []);
+        if (!isTrustworthySweep(moments.length, coverage.maxGapDeg)) continue; // Part 5 gate -- REF
+        // trustworthy does not imply VEL trustworthy or vice versa; each product is gated
+        // independently and only the ones that actually pass are ever surfaced (Part 5).
+        const frame = buildChunkFrame(site, product, radar, state.volumeNum, state, coverage);
+        frame.processingDurationMs = Date.now() - decodeStarted;
+        cacheFrame(frame);
+        state.trustworthyEmitted.add(product);
+      }
+    } catch (error) {
+      // Part 7 hard invariant: ANY failure in the chunk path (listing, fetch, decode, malformed
+      // data, state inconsistency) is swallowed here -- the existing completed-volume path
+      // (ensureLevel2Frame, called independently by every /frames and /status request) is
+      // completely unaffected, and no frame is ever published from insufficient/corrupt data.
+      // Logged (not silent), matching the existing [backfill] warning convention, purely for
+      // operational visibility -- this is a best-effort background job, not a request failure.
+      console.warn(`[chunk] advanceChunkAssembly(${siteId}) failed: ${error && error.message ? error.message : error}`);
+    } finally {
+      chunkAdvanceInFlight.delete(siteId);
+    }
+  })();
+  chunkAdvanceInFlight.set(siteId, work);
+  await work;
+}
+
+// Bounded memory (Part 3): drop chunk-tracking state entirely for any site nobody has viewed
+// in a while, mirroring the existing siteUse/SITE_LIMIT eviction already applied to decoded
+// frames. Called opportunistically from the request path, not on a standalone timer, so it
+// costs nothing when the service is idle.
+function evictIdleChunkSites() {
+  const now = Date.now();
+  for (const [siteId, state] of chunkVolumeState) {
+    if (now - state.lastAdvanceAt > CHUNK_SITE_IDLE_EVICT_MS) chunkVolumeState.delete(siteId);
+  }
+  for (const [siteId, retryAt] of chunkDiscoveryBackoffUntil) {
+    if (retryAt <= now) chunkDiscoveryBackoffUntil.delete(siteId);
+  }
 }
 
 async function ensureEtFrame(siteId) {
@@ -692,6 +1149,10 @@ async function renderTile(frame, z, x, y) {
       png.data[idx + 2] = color[2];
       png.data[idx + 3] = color[3];
     }
+    // setImmediate yields to I/O and queued HTTP callbacks without changing the rendered
+    // pixels. A timer/microtask yield is insufficient here because it can keep CPU-bound work
+    // ahead of socket handling in the same event-loop turn.
+    if ((py + 1) % TILE_RENDER_YIELD_ROWS === 0) await new Promise((resolve) => setImmediate(resolve));
   }
   const buf = PNG.sync.write(png);
   // Don't permanently cache a tile that was rendered unfiltered only because the matching CC
@@ -707,9 +1168,9 @@ async function renderTile(frame, z, x, y) {
   return buf;
 }
 
-async function ensureFrame(siteId, product, tilt) {
+async function ensureFrame(siteId, product, tilt, motion = null) {
   if (product === "ET") return ensureEtFrame(siteId);
-  return ensureLevel2Frame(siteId, product, tilt);
+  return ensureLevel2Frame(siteId, product, tilt, null, motion);
 }
 
 function metadata(frame) {
@@ -733,6 +1194,14 @@ function metadata(frame) {
     checksum: frame.checksum,
     processingDurationMs: frame.processingDurationMs,
     legend: legend(frame.product),
+    // Additive chunk-assembler provenance (Part 8) -- undefined/omitted for every existing
+    // completed-volume frame, so no existing client's parsing of this response changes.
+    trustworthy: frame.trustworthy,
+    chunkVolume: frame.chunkVolume,
+    chunkComplete: frame.chunkComplete,
+    chunkCount: frame.chunkCount,
+    radialCount: frame.radialCount,
+    maxAzimuthGapDeg: frame.maxAzimuthGapDeg,
   };
 }
 
@@ -747,11 +1216,23 @@ function currentSiteForUrl(url) {
   return url.searchParams.get("site") || (selectedSite === "AUTO" ? "KSRX" : selectedSite);
 }
 
+function motionForUrl(url) {
+  const direction = url.searchParams.get("directionDegrees");
+  const speed = url.searchParams.get("speedKnots");
+  if (!direction || !speed || !/^\d{1,3}$/.test(direction) || !/^\d{1,2}$/.test(speed)) return null;
+  const directionDegrees = Number(direction);
+  const speedKnots = Number(speed);
+  if (directionDegrees > 359 || speedKnots > 80) return null;
+  return { directionDegrees, speedKnots, source: "REQUEST" };
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "OPTIONS") return send(res, 204, {});
+    if (req.method !== "GET") return send(res, 405, { error: "METHOD_NOT_ALLOWED" });
     const url = new URL(req.url, `http://${req.headers.host}`);
     if (url.pathname === "/api/v1/radar/health") return send(res, 200, { ok: true, backend: "Code Black Radar Worker", version: VERSION });
+    if (url.pathname === "/api/v1/radar/control/status") return send(res, 200, await currentChaseControlStatus());
     if (url.pathname === "/api/v1/radar/products") return send(res, 200, PRODUCTS.map((id) => ({ id, level: id === "ET" ? "LEVEL III" : "LEVEL II", label: { REF: "Base Reflectivity", VEL: "Base Velocity", SRV: "Storm-Relative Velocity", CC: "Correlation Coefficient", ET: "Echo Tops" }[id] })));
     if (url.pathname === "/api/v1/radar/sites") return send(res, 200, sites);
     if (url.pathname === "/api/v1/radar/sites/nearest") {
@@ -762,9 +1243,22 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/v1/radar/status") {
       const site = currentSiteForUrl(url);
       const product = url.searchParams.get("product") || selectedProduct;
+      const motion = product === "SRV" ? motionForUrl(url) : null;
+      if (product === "SRV" && !motion) return send(res, 400, { error: "VALID_STORM_MOTION_REQUIRED" });
+      // Fire-and-forget chunk-assembly advancement (Part 3/4/7) -- same pre-warm pattern as
+      // ensureMatchingCcFrame: never awaited from a client-facing request, never allowed to
+      // affect this response even on failure. Only progresses for sites actually being viewed.
+      if (CHUNK_PRODUCTS.has(product)) { evictIdleChunkSites(); advanceChunkAssembly(site).catch(() => {}); }
       let frame = null;
-      try { frame = await ensureFrame(site, product, Number(url.searchParams.get("tilt") || selectedTilt)); latestError = ""; } catch (error) { latestError = error.message; }
-      const matchingFrameCount = [...frames.values()].filter((item) => item.site.id === site && item.product === product).length;
+      try { frame = await ensureFrame(site, product, Number(url.searchParams.get("tilt") || selectedTilt), motion); latestError = ""; } catch (error) { latestError = error.message; }
+      // Same freshness-by-real-timestamp fix as /frames: ensureFrame() only ever resolves the
+      // completed-volume path, but a chunk-derived frame already cached for this site/product
+      // can be genuinely newer. "Current" status must reflect the actual freshest frame, not
+      // whichever code path this particular request happened to await.
+      const matching = [...frames.values()].filter((item) => item.site.id === site && item.product === product && (product !== "SRV" || item.motionKey === `${motion.directionDegrees}:${motion.speedKnots}`));
+      const matchingFrameCount = matching.length;
+      const freshest = matching.sort((a, b) => b.time - a.time)[0];
+      if (freshest && (!frame || freshest.time > frame.time)) frame = freshest;
       return send(res, 200, {
         backendState: frame ? "READY" : "DEGRADED",
         backendVersion: VERSION,
@@ -782,27 +1276,37 @@ const server = http.createServer(async (req, res) => {
         cacheState: frame || frames.size ? "AVAILABLE" : "EMPTY",
         processingState: frame ? "IDLE" : "ERROR",
         latestError,
-        stormMotion,
+        stormMotion: motion,
         reconnectState: latestError ? "BACKOFF" : "CONNECTED",
       });
     }
     if (url.pathname === "/api/v1/radar/frames") {
       const site = currentSiteForUrl(url);
       const product = url.searchParams.get("product") || selectedProduct;
+      const motion = product === "SRV" ? motionForUrl(url) : null;
+      if (product === "SRV" && !motion) return send(res, 400, { error: "VALID_STORM_MOTION_REQUIRED" });
       const tilt = Number(url.searchParams.get("tilt") || selectedTilt);
       const limit = Math.max(1, Math.min(FRAME_LIMIT, Number(url.searchParams.get("limit") || 6)));
-      const frame = await ensureFrame(site, product, tilt);
+      if (CHUNK_PRODUCTS.has(product)) { evictIdleChunkSites(); advanceChunkAssembly(site).catch(() => {}); }
+      const frame = await ensureFrame(site, product, tilt, motion);
       // Must also filter by tilt (chosenTilt, since that's what's actually cached under -- the raw
       // request tilt can differ if the volume didn't have that exact cut) -- otherwise switching
       // tilts on an already-populated site/product returns a list still dominated by the PREVIOUS
       // tilt's cached frames, silently showing the wrong elevation while labeled as the new one.
       const resolvedTilt = frame.tilt;
-      let list = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === resolvedTilt).sort((a, b) => b.time - a.time).slice(0, limit);
-      if (!list.find((item) => item.id === frame.id)) list.unshift(frame);
+      let list = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === resolvedTilt && (product !== "SRV" || item.motionKey === frame.motionKey)).sort((a, b) => b.time - a.time).slice(0, limit);
+      // ensureFrame() above only ever resolves the completed-volume path -- it guarantees at
+      // least one real frame exists/gets fetched, but its result must NOT be forced to the
+      // front of the list unconditionally: a chunk-derived frame already in the cache can be
+      // genuinely NEWER (real volume observation time), and freshness must be decided by that
+      // real timestamp, never by which code path happened to produce a given entry. Re-sort
+      // (and re-slice back to `limit`) after guaranteeing inclusion, rather than unshift.
+      if (!list.find((item) => item.id === frame.id)) list.push(frame);
+      list = list.sort((a, b) => b.time - a.time).slice(0, limit);
       // First request for a site/product this process has seen: backfill a real short history
       // instead of returning a single frame -- otherwise the client's "last N frames" loop has
       // nothing to animate until enough real time has passed for new volumes to arrive on their own.
-      if (product !== "ET" && list.length < limit) startHistoryBackfill(site, product, resolvedTilt, limit);
+      if (product !== "ET" && list.length < limit) startHistoryBackfill(site, product, resolvedTilt, limit, motion);
       return send(res, 200, list.map(metadata));
     }
     const metaMatch = url.pathname.match(/^\/api\/v1\/radar\/frame\/([^/]+)\/metadata$/);
@@ -816,24 +1320,9 @@ const server = http.createServer(async (req, res) => {
       if (!frame) return send(res, 404, { error: "frame not found" });
       return send(res, 200, await renderTile(frame, Number(tileMatch[2]), Number(tileMatch[3]), Number(tileMatch[4])), "image/png");
     }
-    if (url.pathname === "/api/v1/radar/selection" && req.method === "POST") {
-      const body = await jsonBody(req);
-      if (body.site) selectedSite = String(body.site);
-      if (PRODUCTS.includes(body.product)) selectedProduct = body.product;
-      if (body.tilt) selectedTilt = Number(body.tilt);
-      return send(res, 200, { selectedSite, selectedProduct, selectedTilt });
-    }
     if (url.pathname === "/api/v1/radar/storm-motion/estimate") {
       const site = currentSiteForUrl(url);
       return send(res, 200, estimateStormMotion(site));
-    }
-    if (url.pathname === "/api/v1/radar/storm-motion" && req.method === "POST") {
-      const body = await jsonBody(req);
-      const directionDegrees = Number(body.directionDegrees);
-      const speedKnots = Number(body.speedKnots);
-      if (!Number.isFinite(directionDegrees) || !Number.isFinite(speedKnots)) return send(res, 400, { error: "directionDegrees and speedKnots are required" });
-      stormMotion = { directionDegrees: ((directionDegrees % 360) + 360) % 360, speedKnots, source: body.source || "MANUAL", updatedAt: new Date().toISOString() };
-      return send(res, 200, stormMotion);
     }
     return send(res, 404, { error: "not found" });
   } catch (error) {
@@ -842,9 +1331,63 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Code Black Radar Worker listening on http://0.0.0.0:${PORT}`);
-  console.log(`Level II archive: ${LEVEL2_BUCKET}`);
-  console.log(`Level II chunks: ${LEVEL2_CHUNKS_BUCKET}`);
-  console.log(`Level III archive: ${LEVEL3_BUCKET}`);
-});
+// Test seam: importing this module for tests (node:test via require()) must never bind the real
+// port or start the real S3-backed server. Only the actual entrypoint (`node worker.cjs` /
+// `npm start`) does that.
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Code Black Radar Worker listening on http://0.0.0.0:${PORT}`);
+    console.log(`Level II archive: ${LEVEL2_BUCKET}`);
+    console.log(`Level II chunks: ${LEVEL2_CHUNKS_BUCKET}`);
+    console.log(`Level III archive: ${LEVEL3_BUCKET}`);
+    const schedulePrimaryPrewarm = () => {
+      const delay = readControlConfig().primary_interval_seconds * 1_000;
+      setTimeout(() => {
+        prewarmPrimarySites().catch(() => {}).finally(schedulePrimaryPrewarm);
+      }, delay).unref();
+    };
+    prewarmPrimarySites().catch(() => {}).finally(schedulePrimaryPrewarm);
+  });
+}
+
+module.exports = {
+  server,
+  frameId,
+  motionForUrl,
+  drainHistoryBackfill,
+  startHistoryBackfill,
+  recentLevel2Keys,
+  backfillJobs,
+  backfillQueue,
+  // Test-only reset -- backfillRunning is module-private state with no other mutator; tests need
+  // to restore it to a known idle value between cases.
+  _resetBackfillRunning: () => {
+    backfillRunning = false;
+  },
+  // Chunk-assembler exports (V1) -- pure/small functions tested directly, plus the module-level
+  // state maps reset between test cases the same way backfillJobs/backfillQueue already are.
+  orderChunkEntries,
+  azimuthCoverageOf,
+  isTrustworthySweep,
+  discoverLatestChunkVolume,
+  chunkFolderHasKeys,
+  advanceChunkAssembly,
+  chunkVolumeState,
+  CHUNK_TRUSTWORTHY_MIN_RADIALS,
+  CHUNK_TRUSTWORTHY_MAX_GAP_DEG,
+  CHUNK_DECODE_EVERY_N,
+  frames,
+  cacheFrame,
+  decodeLevel2OffThread,
+  formatChaseControlStatus,
+  fallbackSelection,
+  prewarmPrimarySites,
+  // V1 radar-intelligence exports -- pure functions, tested directly against synthetic frames
+  // (see worker.storm-intel.test.cjs). No new state, no new route logic exported here.
+  stormCentroid,
+  estimateStormMotion,
+  _resetChunkState: () => {
+    chunkVolumeState.clear();
+    chunkAdvanceInFlight.clear();
+  },
+};

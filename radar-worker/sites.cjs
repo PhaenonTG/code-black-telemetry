@@ -18,4 +18,5 @@ module.exports = [
   { id: "KHTX", name: "HUNTSVILLE", state: "AL", lat: 34.9306, lon: -86.0836 },
   { id: "KMRX", name: "KNOXVILLE", state: "TN", lat: 36.1686, lon: -83.4017 },
   { id: "KGSP", name: "GREENVILLE/SPARTANBURG", state: "SC", lat: 34.8833, lon: -82.2201 },
+  { id: "KRAX", name: "RALEIGH/DURHAM", state: "NC", lat: 35.6656, lon: -78.4897 },
 ];

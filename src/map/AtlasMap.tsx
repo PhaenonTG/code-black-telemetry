@@ -45,7 +45,7 @@ import { getRoadConditionsForViewport, getTrafficCamerasForViewport, getSurfaceS
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
 import { cameraMapEligibility } from "../services/cameraMapEligibility";
 import { cameraRegistryId, stationRegistryId, placeRegistryId, shouldShowMapSource, cameraToMapSource, stationToMapSource, type MapPinStatus, type MapSourceRecord } from "../services/mapSourceRegistry";
-import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, radarWorkerMissingOnWeb, recommendedRadarRefreshMs, setRadarStormMotion, type RadarFrame, type RadarProduct, type RadarSite, type StormMotion } from "../services/radar";
+import { ageText, getNearestRadarSites, getRadarFrames, getSavedWebStormMotion, getStormMotionEstimate, radarWorkerMissingOnWeb, recommendedRadarRefreshMs, setRadarStormMotion, type RadarFrame, type RadarProduct, type RadarSite, type StormMotion } from "../services/radar";
 import { useWind } from "../hooks/useTelemetry";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
 import { normalizeRadarFrames, nextPlaybackIndex, playbackDelayMs } from "../services/radarLoop";
@@ -925,7 +925,7 @@ export function AtlasMap({
   // off the loaded frame once one exists, not this index.
   const [radarTilt, setRadarTilt] = useState(1);
   const [radarAvailableTilts, setRadarAvailableTilts] = useState<number[]>([1]);
-  const [stormMotion, setStormMotionState] = useState<StormMotion | null>(null);
+  const [stormMotion, setStormMotionState] = useState<StormMotion | null>(getSavedWebStormMotion);
   const [stormMotionOpen, setStormMotionOpen] = useState(false);
   // A Level II frame request can take several seconds. Key site selection to a roughly six-mile
   // location cell so ordinary GPS jitter does not cancel and restart the request forever.
@@ -960,7 +960,7 @@ export function AtlasMap({
       const currentSite = radarSelectedSiteRef.current;
       const loaded = new Map<string, RadarFrame[]>();
       const loadSite = async (site: string) => {
-        if (!loaded.has(site)) loaded.set(site, normalizeRadarFrames(await getRadarFrames(site, radarProduct, radarTilt, RADAR_LOOP_FRAME_COUNT), RADAR_LOOP_FRAME_COUNT));
+        if (!loaded.has(site)) loaded.set(site, normalizeRadarFrames(await getRadarFrames(site, radarProduct, radarTilt, RADAR_LOOP_FRAME_COUNT, stormMotion), RADAR_LOOP_FRAME_COUNT));
         return loaded.get(site) ?? [];
       };
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { getRadarStatus, type StormMotion } from "../services/radar";
+import { Capacitor } from "@capacitor/core";
+import { getRadarStatus, getSavedWebStormMotion, type StormMotion } from "../services/radar";
 
 // 30s poll interval on getRadarStatus (services/radar.ts) -- independent polling rather than a
 // shared store, matching this codebase's existing per-page-hook convention (useNearbyStormThreats,
@@ -7,11 +8,15 @@ import { getRadarStatus, type StormMotion } from "../services/radar";
 const POLL_MS = 30_000;
 
 export function useStormMotion(): StormMotion | null {
-  const [motion, setMotion] = useState<StormMotion | null>(null);
+  const [motion, setMotion] = useState<StormMotion | null>(getSavedWebStormMotion);
 
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
+      if (!Capacitor.isNativePlatform()) {
+        if (!cancelled) setMotion(getSavedWebStormMotion());
+        return;
+      }
       try {
         const status = await getRadarStatus("AUTO", "REF", 0.5);
         if (!cancelled) setMotion(status.stormMotion);
@@ -21,9 +26,12 @@ export function useStormMotion(): StormMotion | null {
       }
     };
     void refresh();
+    const onLocalMotion = () => setMotion(getSavedWebStormMotion());
+    window.addEventListener("codeblack:radar-storm-motion", onLocalMotion);
     const timer = window.setInterval(() => void refresh(), POLL_MS);
     return () => {
       cancelled = true;
+      window.removeEventListener("codeblack:radar-storm-motion", onLocalMotion);
       window.clearInterval(timer);
     };
   }, []);

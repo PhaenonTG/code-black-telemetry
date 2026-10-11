@@ -4,7 +4,7 @@ import test from "node:test";
 import { cacheTtlSeconds, handleRequest } from "./index.js";
 
 function env(handler = async () => new Response("{}", { status: 200 })) {
-  return { RADAR_VPC: { fetch: handler } };
+  return { RADAR_VPC: { fetch: handler }, RADAR_COMPUTE_LIMITER: { limit: async () => ({ success: true }) } };
 }
 
 test("rejects paths outside the radar API prefix", async () => {
@@ -26,22 +26,30 @@ test("forwards GET requests to the fixed radar-worker origin, preserving path an
   assert.equal(received.init.method, "GET");
 });
 
-test("forwards POST body and content-type for selection/storm-motion routes", async () => {
-  let received;
-  const response = await handleRequest(
-    new Request("https://ops.codeblackwx.com/api/v1/radar/selection", {
+test("rejects shared radar mutations before reaching the private worker", async () => {
+  let forwarded = false;
+  const binding = env(async () => { forwarded = true; return new Response("{}", { status: 200 }); });
+  for (const path of ["selection", "storm-motion"]) {
+    const response = await handleRequest(new Request(`https://ops.codeblackwx.com/api/v1/radar/${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site: "KTLX" }),
-    }),
-    env(async (url, init) => {
-      received = { url: String(url), init };
-      return new Response("{}", { status: 200 });
-    }),
-  );
-  assert.equal(response.status, 200);
-  assert.equal(received.init.method, "POST");
-  assert.equal(received.init.body, JSON.stringify({ site: "KTLX" }));
+      headers: { "x-radar-mutation-key": "previous-client-value" },
+      body: JSON.stringify({ directionDegrees: 90, speedKnots: 25 }),
+    }), binding);
+    assert.equal(response.status, 405);
+  }
+  assert.equal(forwarded, false);
+});
+
+test("rate-limits compute-heavy reads and fails closed without the binding", async () => {
+  let forwarded = false;
+  const binding = env(async () => { forwarded = true; return new Response("[]"); });
+  binding.RADAR_COMPUTE_LIMITER.limit = async () => ({ success: false });
+  const request = new Request("https://ops.codeblackwx.com/api/v1/radar/frames?site=KTLX&product=REF");
+  assert.equal((await handleRequest(request, binding)).status, 429);
+  assert.equal(forwarded, false);
+  delete binding.RADAR_COMPUTE_LIMITER;
+  assert.equal((await handleRequest(request, binding)).status, 503);
+  assert.equal(forwarded, false);
 });
 
 test("adds CORS headers to every response, including error paths", async () => {

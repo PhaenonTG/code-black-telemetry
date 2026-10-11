@@ -796,7 +796,7 @@ function normalizeKandriveEvent(item: KandriveMapItem, providerId: string, kindH
   };
 }
 
-function normalizeKandriveCamera(item: KandriveMapItem, providerId: string): TrafficCamera | null {
+export function normalizeKandriveCamera(item: KandriveMapItem, providerId: string): TrafficCamera | null {
   if (item.__typename !== "Camera" || !item.title) return null;
   const point = kandriveFirstPoint(item);
   if (!point) return null;

@@ -14,6 +14,13 @@
       "zone_name": "codeblackwx.com"
     }
   ],
+  "ratelimits": [
+    {
+      "name": "RADAR_COMPUTE_LIMITER",
+      "namespace_id": "2026101101",
+      "simple": { "limit": 60, "period": 60 }
+    }
+  ],
   // Points at the "codeblack-radar-worker" VPC Service, bound to the codeblack-core-gateway
   // Tunnel (35a17aa9-2532-4583-98ca-00f5b7a20c85) targeting 127.0.0.1:8787 HTTP, where the
   // radar-worker systemd service (radar-worker/worker.cjs) runs on the same host as Core.

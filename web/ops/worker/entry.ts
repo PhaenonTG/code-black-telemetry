@@ -107,7 +107,7 @@ export default {
       return handleMapboxTokenRequest(request, env, ctx);
     }
     if (url.pathname.startsWith(OVERLAY_CORE_PREFIX)) {
-      return handlePublicStormIntelRequest(request, env);
+      return handlePublicStormIntelRequest(request, env, ctx);
     }
     if (url.pathname === CAMERA_HEALTH_PATH) {
       return handleCameraHealth(request);

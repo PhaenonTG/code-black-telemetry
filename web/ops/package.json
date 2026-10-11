@@ -12,7 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@capacitor/core": "8.5.0",
+    "@capacitor/core": "8.5.3",
     "@capacitor/geolocation": "^8.2.0",
     "@capacitor/preferences": "^8.0.1",
     "@supabase/supabase-js": "^2.112.3",
