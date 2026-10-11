@@ -29,6 +29,8 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
   "/health": { upstreamPath: "/health", allowedQueryParams: [] },
   "/api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "/api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
+  "/api/fabric/v1/aegis-status": { upstreamPath: "/api/fabric/v1/aegis-status", allowedQueryParams: [], methods: ["GET"] },
+  "/api/fabric/v1/aegis-alerts": { upstreamPath: "/api/fabric/v1/aegis-alerts", allowedQueryParams: ["after", "limit"], methods: ["GET"] },
   "/api/fabric/v1/stream": { upstreamPath: "/api/fabric/v1/stream", allowedQueryParams: [] },
   "/api/storm-intel/v1/health": { upstreamPath: "/api/storm-intel/v1/health", allowedQueryParams: [] },
   "/api/storm-intel/v1/point": {
