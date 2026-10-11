@@ -1,0 +1,17 @@
+[Unit]
+Description=Temporary KRAX completed-volume evidence watch
+After=network-online.target codeblack-radar-worker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cbwx-core
+Group=cbwx-core
+WorkingDirectory=/srv/codeblack/releases/radar-worker/v1
+ExecStart=/usr/bin/node --max-old-space-size=1536 /srv/codeblack/releases/radar-worker/v1/krax-watch.cjs
+TimeoutStartSec=180
+MemoryMax=1792M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/codeblack/data/radar-worker

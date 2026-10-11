@@ -1,0 +1,10 @@
+[Unit]
+Description=Check KRAX complete volumes every 15 seconds
+
+[Timer]
+OnBootSec=5s
+OnUnitInactiveSec=15s
+Unit=codeblack-krax-watch.service
+
+[Install]
+WantedBy=timers.target
