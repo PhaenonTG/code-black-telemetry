@@ -1,0 +1,25 @@
+[Unit]
+Description=Code Black private read-only Aegis radar alert feed
+After=network.target
+
+[Service]
+Type=simple
+User=cbwx-core
+Group=cbwx-core
+WorkingDirectory=/srv/codeblack/releases/aegis-warning/v3
+Environment=CODEBLACK_AEGIS_RADAR_DATA=/srv/codeblack/data/radar-worker/aegis-warning
+ExecStart=/usr/bin/node /srv/codeblack/releases/aegis-warning/v3/aegis-feed.cjs
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

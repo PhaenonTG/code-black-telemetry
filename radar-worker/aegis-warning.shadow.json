@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "delivery_enabled": false,
+  "evidence_cutoff": 85,
+  "max_sites": 2,
+  "max_warnings": 8,
+  "max_volume_age_seconds": 600,
+  "max_range_km": 140
+}

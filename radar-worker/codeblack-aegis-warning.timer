@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll official warnings and completed radar volumes for Aegis screening
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=20s
+AccuracySec=2s
+Unit=codeblack-aegis-warning.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -20,24 +20,32 @@ const MOMENTS = {
 };
 
 async function fetchBounded(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT);
-  try {
-    const response = await fetch(url, { signal: controller.signal, headers: { "User-Agent": "CodeBlack-KRAX-watch/1.0 (ops@codeblackwx.com)" } });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response;
-  } finally { clearTimeout(timeout); }
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT);
+    try {
+      const response = await fetch(url, { signal: controller.signal, headers: { "User-Agent": "CodeBlack-KRAX-watch/1.0 (ops@codeblackwx.com)" } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt || /^HTTP 4\d\d$/.test(String(error.message))) break;
+      await new Promise((resolve) => setTimeout(resolve, 750));
+    } finally { clearTimeout(timeout); }
+  }
+  throw new Error(`${lastError?.message || lastError}; cause=${lastError?.cause?.code || "unavailable"}`);
 }
 
-function prefix(date) {
-  return `${date.getUTCFullYear()}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${String(date.getUTCDate()).padStart(2, "0")}/${SITE}/`;
+function prefix(date, siteId = SITE) {
+  return `${date.getUTCFullYear()}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${String(date.getUTCDate()).padStart(2, "0")}/${siteId}/`;
 }
 
-async function listKeys() {
+async function listKeys(siteId = SITE) {
   const days = [new Date(Date.now() - 86400000), new Date()];
   const keys = [];
   for (const date of days) {
-    const response = await fetchBounded(`${BUCKET}/?list-type=2&prefix=${encodeURIComponent(prefix(date))}&max-keys=1000`);
+    const response = await fetchBounded(`${BUCKET}/?list-type=2&prefix=${encodeURIComponent(prefix(date, siteId))}&max-keys=1000`);
     const xml = await response.text();
     if (/<IsTruncated>true<\/IsTruncated>/.test(xml)) throw new Error("S3 listing truncated; cannot guarantee every volume");
     for (const match of xml.matchAll(/<Key>(.*?)<\/Key>/g)) {
@@ -102,15 +110,15 @@ function nearIndex(azimuths, target) {
   return gap <= 1.5 ? best : -1;
 }
 
-function locate(bearing, rangeKm) {
+function locate(bearing, rangeKm, site = { lat: LAT, lon: LON }) {
   const rad = bearing * Math.PI / 180;
-  return [LON + rangeKm * Math.sin(rad) / (111.32 * Math.cos(LAT * Math.PI / 180)),
-    LAT + rangeKm * Math.cos(rad) / 111.32];
+  return [site.lon + rangeKm * Math.sin(rad) / (111.32 * Math.cos(site.lat * Math.PI / 180)),
+    site.lat + rangeKm * Math.cos(rad) / 111.32];
 }
 
-function distanceKm(a, b) {
+function distanceKm(a, b, site = { lat: LAT }) {
   const y = (a[1] - b[1]) * 111.32;
-  const x = (a[0] - b[0]) * 111.32 * Math.cos(LAT * Math.PI / 180);
+  const x = (a[0] - b[0]) * 111.32 * Math.cos(site.lat * Math.PI / 180);
   return Math.hypot(x, y);
 }
 
@@ -142,7 +150,7 @@ async function warningPolygons() {
   }
 }
 
-function candidatesFrom(radar, products, azimuths, previous, scanTime, warnings) {
+function candidatesFrom(radar, products, azimuths, previous, scanTime, warnings, site = { lat: LAT, lon: LON }) {
   const rows = products.VEL;
   if (!rows || !products.REF || !products.CC) return [];
   const velAzimuths = Array.isArray(azimuths) ? azimuths : azimuths.velocity;
@@ -165,9 +173,9 @@ function candidatesFrom(radar, products, azimuths, previous, scanTime, warnings)
       const ref = gate(products.REF[refIndex], km);
       const cc = gate(products.CC[refIndex], km);
       if (!Number.isFinite(ref) || ref < 30 || !Number.isFinite(cc)) continue;
-      const point = locate(bearing, km);
+      const point = locate(bearing, km, site);
       const matchingPrevious = previous.find((p) => Math.abs(Date.parse(scanTime) - Date.parse(p.scanTime)) <= 12 * 60000 &&
-        distanceKm(point, p.coordinates) <= 10);
+        distanceKm(point, p.coordinates, site) <= 10);
       const prev = Boolean(matchingPrevious);
       const warning = warnings.features.find((f) => inPolygon(point, f.geometry));
       const zdr = products.ZDR ? gate(products.ZDR[refIndex], km) : NaN;
@@ -184,18 +192,27 @@ function candidatesFrom(radar, products, azimuths, previous, scanTime, warnings)
           ? "candidate_only_requires_human_review" : null,
         confidence: prev && warning ? "moderate" : "low",
       };
-      if (!out.some((p) => distanceKm(p.coordinates, point) < 8)) out.push(candidate);
+      if (!out.some((p) => distanceKm(p.coordinates, point, site) < 8)) out.push(candidate);
       if (out.length >= 30) return out;
     }
   }
   return out;
 }
 
-async function analyze(key, previous) {
+async function analyze(key, previous, site = { id: SITE, lat: LAT, lon: LON }, warningSnapshot = null) {
   const { Level2Radar } = require("nexrad-level-2-data");
   const started = Date.now();
-  const response = await fetchBounded(`${BUCKET}/${key}`);
-  const raw = Buffer.from(await response.arrayBuffer());
+  let raw;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetchBounded(`${BUCKET}/${key}`);
+      raw = Buffer.from(await response.arrayBuffer());
+      break;
+    } catch (error) {
+      if (attempt) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
   if (raw.length > 50 * 1024 * 1024) throw new Error("Volume exceeds 50 MiB safety limit");
   const radar = new Level2Radar(raw, { logger: false });
   const elevations = radar.listElevations();
@@ -226,10 +243,10 @@ async function analyze(key, previous) {
   const azimuths = { reflectivity: reflectCut.azimuths, velocity: velocityCut?.azimuths || [] };
   const scanTime = new Date(Date.UTC(1970, 0, 1) + ((radar.header?.modified_julian_date ?? 0) - 1) * 86400000 +
     (radar.header?.milliseconds ?? 0)).toISOString();
-  const warnings = await warningPolygons();
-  const candidates = candidatesFrom(radar, products, azimuths, previous, scanTime, warnings);
+  const warnings = warningSnapshot || await warningPolygons();
+  const candidates = candidatesFrom(radar, products, azimuths, previous, scanTime, warnings, site);
   const record = {
-    site: SITE, key, scanTime, processedAt: new Date().toISOString(),
+    site: site.id, key, scanTime, processedAt: new Date().toISOString(),
     processingMs: Date.now() - started, lowestTilt: elevations[0], analyzedTilt,
     pairedVelocityTilt: velocityCut?.tilt || null,
     elevationSeparationDeg: velocityCut ? Number(Math.abs(velocityCut.angle - reflectCut.angle).toFixed(2)) : null,
@@ -239,7 +256,7 @@ async function analyze(key, previous) {
     warnings: { available: warnings.available, fetchedAt: warnings.fetchedAt || null,
       count: warnings.features.length, error: warnings.error || null },
     radarLimitations: ["Lowest five tilts checked; split moments paired only within 0.2 degree elevation",
-      "Candidate screening limited to 5-150 km from KRAX", "Beam height/range may miss low-level circulation",
+      `Candidate screening limited to 5-150 km from ${site.id}`, "Beam height/range may miss low-level circulation",
       "Velocity aliasing and nonmeteorological echoes not dealiased", "Candidate screen is not a tornado diagnosis",
       "TDS cannot be confirmed automatically from this screen"],
     candidates, confidence: candidates.some((c) => c.confidence === "moderate") ? "moderate" : "low",
@@ -278,4 +295,4 @@ if (require.main === module) {
     checkedAt: new Date().toISOString() })); process.exitCode = 1; });
 }
 
-module.exports = { gate, nearIndex, inPolygon, candidatesFrom, analyze };
+module.exports = { gate, nearIndex, inPolygon, candidatesFrom, analyze, listKeys, distanceKm };

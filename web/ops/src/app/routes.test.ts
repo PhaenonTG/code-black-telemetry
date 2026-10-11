@@ -6,6 +6,7 @@ describe("OPS workstation routes", () => {
     expect(ROUTES.map((route) => route.label)).toEqual([
       "OPERATIONS MAP",
       "WEATHER ANALYSIS",
+      "AEGIS ALERT FEED",
       "RADAR LAB",
       "MODELS",
       "SOUNDINGS",
@@ -33,6 +34,6 @@ describe("OPS workstation routes", () => {
       "CHASE OPERATIONS",
       "MORE",
     ]);
-    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "SETTINGS"]);
+    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["AEGIS ALERT FEED", "FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "SETTINGS"]);
   });
 });

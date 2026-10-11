@@ -18,6 +18,7 @@ export interface RouteDef {
 export const ROUTES: RouteDef[] = [
   { path: "/", label: "OPERATIONS MAP", icon: "map", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
   { path: "/weather", label: "WEATHER ANALYSIS", icon: "cloud", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
+  { path: "/aegis-alerts", label: "AEGIS ALERT FEED", icon: "target", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
   { path: "/radar", label: "RADAR LAB", icon: "radar", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
   { path: "/models", label: "MODELS", icon: "models", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/soundings", label: "SOUNDINGS", icon: "sounding", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
