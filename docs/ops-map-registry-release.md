@@ -4,6 +4,13 @@ Status: **release candidate only; not deployed**. The production branch is `mast
 Cloudflare Pages Git integration deploys that branch to `ops.codeblackwx.com`. Do not push the
 unrelated-history `feature/chase-public-config-v1` branch to `master`.
 
+The candidate branch is pushed and has a Pages preview at
+`https://d7675f12.codeblack-ops.pages.dev` (initial deployment of `df04ae7`; subsequent
+branch commits may have a newer preview URL). Public route and anonymous gateway smoke
+checks passed, but authenticated map-registry QA remains pending. See
+`docs/security-hardening-2026-10-11.md` for the independent radar and usage-monitor
+production hotfixes; those do not imply this OPS candidate was promoted to production.
+
 The candidate branch `release/ops-map-registry-20261011` starts at production commit `cdd9d70`
 and ports only the requested camera audit and source-registry changes. The five additive
 Supabase migrations are already applied to `codeblack-ops`; do not re-run them manually.
