@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { DEFAULT_DRAFT, simulatePolicy, type PolicyDraft, type PolicyResult } from "../automation/policyLab";
+import { DEFAULT_DRAFT, type PolicyDraft } from "../automation/policyLab";
 import { PageHeader } from "../components/PageHeader";
-import { getAegisStatus, type AegisStatus } from "../core/aegisFeed";
+import { getAegisPolicy, getAegisStatus, replayAegisPolicy, type AegisPolicyStatus,
+  type AegisRecordedReplay, type AegisScenarioReplay, type AegisStatus } from "../core/aegisFeed";
 import { useCoreOps } from "../core/useCoreOps";
 import "../styles/automation-lab.css";
 
@@ -17,17 +18,23 @@ export default function AutomationLab() {
   const { config } = useCoreOps();
   const [live, setLive] = useState<AegisStatus | null>(null);
   const [liveError, setLiveError] = useState(false);
+  const [policy, setPolicy] = useState<AegisPolicyStatus | null>(null);
   const [draft, setDraft] = useState<PolicyDraft>(DEFAULT_DRAFT);
-  const [result, setResult] = useState<PolicyResult | null>(null);
+  const [result, setResult] = useState<AegisScenarioReplay | null>(null);
+  const [recorded, setRecorded] = useState<AegisRecordedReplay | null>(null);
+  const [running, setRunning] = useState(false);
+  const [replayError, setReplayError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
     const refresh = async () => {
       try {
-        const next = await getAegisStatus(config, controller.signal);
-        if (!controller.signal.aborted) { setLive(next); setLiveError(false); }
+        const [next, nextPolicy] = await Promise.all([
+          getAegisStatus(config, controller.signal), getAegisPolicy(config, controller.signal),
+        ]);
+        if (!controller.signal.aborted) { setLive(next); setPolicy(nextPolicy); setLiveError(false); }
       } catch {
-        if (!controller.signal.aborted) { setLive(null); setLiveError(true); }
+        if (!controller.signal.aborted) { setLive(null); setPolicy(null); setLiveError(true); }
       }
     };
     void refresh();
@@ -43,16 +50,39 @@ export default function AutomationLab() {
     setDraft({ ...DEFAULT_DRAFT, ...values });
     setResult(null);
   };
+  const replay = async (mode: "scenario" | "recorded") => {
+    setRunning(true); setReplayError("");
+    try {
+      if (mode === "scenario") {
+        const next = await replayAegisPolicy<AegisScenarioReplay>(config, { mode, scenario: draft });
+        if (next.mode !== "scenario") throw new Error("Unexpected Core replay mode");
+        setResult(next);
+      } else {
+        const next = await replayAegisPolicy<AegisRecordedReplay>(config,
+          { mode, evidenceCutoff: draft.evidenceCutoff, limit: 10 });
+        if (next.mode !== "recorded") throw new Error("Unexpected Core replay mode");
+        setRecorded(next);
+      }
+    } catch (error) { setReplayError(error instanceof Error ? error.message : "Core replay failed"); }
+    finally { setRunning(false); }
+  };
 
   return <div className="page automation-lab">
     <PageHeader kicker="OPS / WORKFLOW DESIGN" title="Automation Lab"
-      description="Design and rehearse the Aegis warning-to-alert path. Every control here is a local draft; Run dry-run sends nothing and changes no live settings." />
+      description="Rehearse Aegis policy on Core without publishing alerts or changing live settings. Activation remains locked while radar scoring is validated." />
 
     <section className="automation-lab__live" aria-label="Current Core state">
       <div><small>CORE SCREEN</small><b>{liveError ? "UNAVAILABLE" : live?.screen.enabled ? "RUNNING" : "CHECKING"}</b></div>
       <div><small>REAL DELIVERY</small><b>{live?.delivery_enabled ? "ON" : "OFF / SHADOW"}</b></div>
       <div><small>REAL CUTOFF</small><b>{live?.screen.cutoff ?? "—"}</b></div>
       <div><small>RADAR SITES</small><b>{live?.screen.sites?.join(", ") || "—"}</b></div>
+    </section>
+
+    <section className="automation-lab__policy" aria-label="Core policy revision">
+      <div><small>CORE POLICY JOURNAL</small><strong>{policy?.current_draft ? `Revision ${policy.current_draft.revision}` : "Unavailable"}</strong>
+        <span>{policy?.current_draft ? `Draft cutoff ${policy.current_draft.evidence_cutoff} · ${policy.current_draft.action}` : "Core policy state could not be loaded"}</span></div>
+      <div><small>ACTIVATION</small><strong>{policy?.activation_locked ? "LOCKED / SHADOW" : "UNKNOWN"}</strong>
+        <span>Draft revisions never change the live scanner. Audit and rollback are Core-local operations.</span></div>
     </section>
 
     <div className="automation-lab__columns">
@@ -85,7 +115,9 @@ export default function AutomationLab() {
           <label className="automation-lab__check"><input type="checkbox" checked={draft.deliveryEnabled}
             onChange={(event) => change("deliveryEnabled", event.target.checked)} /> Pretend delivery is enabled</label>
         </div>
-        <button className="automation-lab__run" type="button" onClick={() => setResult(simulatePolicy(draft))}>Run dry-run</button>
+        <button className="automation-lab__run" type="button" disabled={running} onClick={() => void replay("scenario")}>{running ? "Running on Core…" : "Run Core dry-run"}</button>
+        <button className="automation-lab__secondary" type="button" disabled={running} onClick={() => void replay("recorded")}>Replay 10 recorded scans</button>
+        {replayError && <p className="automation-lab__error" role="alert">{replayError}</p>}
         <p className="automation-lab__note">The live cutoff and delivery gate above never change when you run this test.</p>
       </section>
 
@@ -106,5 +138,15 @@ export default function AutomationLab() {
         <Link className="automation-lab__feed-link" to="/aegis-alerts">Open live Aegis feed and evidence map →</Link>
       </section>
     </div>
+    <section className="automation-lab__recorded automation-lab__panel" aria-label="Recorded radar replay">
+      <div className="automation-lab__panel-heading"><span>03 / RECORDED EVIDENCE</span><strong>{recorded ? `${recorded.scans_reviewed} scans · ${recorded.candidates_reviewed} candidates` : "Awaiting replay"}</strong></div>
+      <p className="automation-lab__note">{recorded?.limitation || "Replay checks saved radar screening evidence against the selected draft cutoff. No messages are sent."}</p>
+      {recorded?.scans.map((scan) => <div className="automation-lab__scan" key={`${scan.site}:${scan.volume_key}`}>
+        <b>{scan.site} · {scan.scan_time}</b><span>{scan.candidates.length} captured candidate{scan.candidates.length === 1 ? "" : "s"}</span>
+        {scan.candidates.map((candidate, index) => <span key={`${candidate.warning_id}:${index}`}>
+          {candidate.decision.replaceAll("_", " ")} · score {candidate.evidence_score ?? "unavailable"}
+        </span>)}
+      </div>)}
+    </section>
   </div>;
 }

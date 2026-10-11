@@ -58,7 +58,11 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     // Deliberately no CF-Access-Client-Id / CF-Access-Client-Secret headers here -- the VPC
     // Service binding authenticates this request at the Cloudflare network layer via the
     // tunnel binding itself, not via a header Core or Access would otherwise need to check.
-    const body = request.method === "PUT" ? await request.text() : undefined;
+    if (request.method === "POST" && Number(request.headers.get("content-length") || 0) > 4096)
+      return jsonResponse(413, { error: "REQUEST_TOO_LARGE" });
+    const body = request.method === "PUT" || request.method === "POST" ? await request.text() : undefined;
+    if (request.method === "POST" && body && new TextEncoder().encode(body).length > 4096)
+      return jsonResponse(413, { error: "REQUEST_TOO_LARGE" });
     return await env.CORE_VPC.fetch(targetUrl, {
       method: request.method,
       body,

@@ -14,6 +14,24 @@ function req(path: string, init?: RequestInit): Request {
 }
 
 describe("handleRequest -- allowlisted routes forward correctly", () => {
+  it("forwards only bounded Aegis replay POST bodies to Core", async () => {
+    let sentUrl = "";
+    let sentBody = "";
+    const env: Env = { CORE_VPC: fakeVpc(async (url, init) => {
+      sentUrl = String(url); sentBody = String(init?.body); return jsonResponse(200, { dry_run: true });
+    }) };
+    const body = JSON.stringify({ mode: "recorded", evidenceCutoff: 85, limit: 10 });
+    const response = await handleRequest(req("/api/fabric/v1/aegis-policy/replay", {
+      method: "POST", body, headers: { "Content-Type": "application/json" },
+    }), env);
+    expect(response.status).toBe(200);
+    expect(sentUrl).toBe("http://127.0.0.1:8000/api/fabric/v1/aegis-policy/replay");
+    expect(sentBody).toBe(body);
+    const oversized = await handleRequest(req("/api/fabric/v1/aegis-policy/replay", { method: "POST", body: "x".repeat(4097) }), env);
+    expect(oversized.status).toBe(413);
+    const forbidden = await handleRequest(req("/api/fabric/v1/aegis-policy", { method: "POST", body }), env);
+    expect(forbidden.status).toBe(405);
+  });
   it("GET /health forwards to the fixed Core origin", async () => {
     let calledUrl = "";
     const env: Env = { CORE_VPC: fakeVpc(async (url) => { calledUrl = String(url); return jsonResponse(200, { ok: true }); }) };

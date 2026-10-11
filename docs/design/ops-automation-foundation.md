@@ -1,8 +1,8 @@
 # OPS automation foundation
 
 The Automation Lab at `/automation-lab` is the first operator-facing design and
-test surface for Code Black workflows. It is intentionally **read-only**:
-changing a draft or running a test never changes Core, Fabric, Edge, Discord,
+test surface for Code Black workflows. It is intentionally **non-activating**:
+changing a scenario or running a replay never changes Core's live configuration, Fabric, Edge, Discord,
 or an official NWS warning. It uses the existing Core and Edge machines; no
 additional cloud computer is required. OPS hosting and its authenticated Core
 gateway remain on the existing Cloudflare setup.
@@ -21,17 +21,28 @@ gateway remain on the existing Cloudflare setup.
 5. Each event has a stable ID and sequence so delivery can replay without
    posting duplicate candidates.
 
-The lab simulates **step 4 only** with hypothetical inputs. Its `WOULD_ROUTE`
+The lab asks Core to dry-run **step 4 only** with hypothetical inputs. Its `WOULD_ROUTE`
 result means the draft policy's downstream gates pass, not that a live radar
 candidate exists or that any real message was sent. The live status strip reads
-Core but cannot edit its configuration.
+Core but cannot edit its configuration. It can also replay the last ten saved
+scan-screening records at a selected cutoff. That replay never refetches historical
+warning polygons or establishes tornado ground truth; scans with no captured
+candidates correctly report zero. Both Core responses assert `dry_run`,
+`no_messages_sent`, and `no_config_changed`.
+
+Core keeps an append-only, Core-local policy draft journal with baseline, draft,
+and rollback revisions. The journal is **not** wired to the live scanner; its
+local operator actor label is not cryptographic identity. The OPS gateway exposes
+only authenticated GET policy state and bounded POST replay. It does not expose
+draft writes, rollback, or activation. Live delivery remains off until labeled
+score calibration and operator-controlled activation are built and reviewed.
 
 ## Next contracts before operator-controlled automation
 
-- Add a versioned policy record on Core: immutable policy revision, validated
-  threshold, delivery gate, actor, creation time, and rollback revision.
-- Add an authenticated, allowlisted `POST /dry-run` that invokes the same Core
-  dispatch policy as production against recorded fixtures and returns a trace.
+- Harden the local draft journal with verified operator identity, locking for
+  concurrent writers, and retention/rotation before making edits web-accessible.
+- Add a durable event/job ledger and labeled calibration corpus; recorded
+  screening replay alone is not retrospective ground truth.
 - Separate "save draft", "request activation", and "activate" operations.
   Activation must require operator identity, explicit confirmation, an audit
   entry, and a rollback path. No generic command execution.

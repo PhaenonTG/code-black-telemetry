@@ -37,4 +37,16 @@
 .automation-lab__destinations span { display: flex; justify-content: space-between; gap: 8px; color: #aebdd0; font-size: 12px; }
 .automation-lab__destinations b { color: #ffcf76; }
 .automation-lab__feed-link { display: inline-block; color: #92bdff; margin-top: 15px; }
+.automation-lab__policy { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+.automation-lab__policy > div { display: grid; gap: 6px; padding: 17px; border: 1px solid #43506a; border-radius: 13px; background: #172235; }
+.automation-lab__policy small { color: #9cb5d2; font-size: 11px; font-weight: 800; letter-spacing: .1em; }
+.automation-lab__policy strong { color: #fbd38d; font-size: 17px; }
+.automation-lab__policy span { color: #afc0d4; font-size: 13px; }
+.automation-lab__secondary { margin: 12px; padding: 10px 14px; border: 1px solid #6f8baa; border-radius: 9px; background: #1b3045; color: #e3f0ff; font-weight: 700; cursor: pointer; }
+.automation-lab__run:disabled, .automation-lab__secondary:disabled { opacity: .5; cursor: wait; }
+.automation-lab__error { color: #ffd0d0; background: #4c2025; padding: 10px; border-radius: 8px; }
+.automation-lab__recorded { margin-top: 18px; }
+.automation-lab__scan { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 0; border-top: 1px solid #354559; color: #b5c7dd; font-size: 13px; }
+.automation-lab__scan b { color: #e6eef8; }
+@media (max-width: 650px) { .automation-lab__policy { grid-template-columns: 1fr; } .automation-lab__secondary { margin-left: 0; } }
 @media (max-width: 850px) { .automation-lab__columns { grid-template-columns: 1fr; } .automation-lab__live { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
