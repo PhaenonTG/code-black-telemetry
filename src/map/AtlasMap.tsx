@@ -21,6 +21,7 @@ import { updateAtlasBreadcrumbLayer } from "./AtlasBreadcrumbLayer";
 import { chaserNetReportToMapPoint, updateAtlasChaserNetLayer, updateAtlasChaserNetReportLayer } from "./AtlasChaserNetLayer";
 import { startAtlasMosaicLayer, type MosaicStatus } from "./AtlasMosaicLayer";
 import { updateAtlasPoiLayer } from "./AtlasPoiLayer";
+import { updateAtlasRegistryLandmarkLayer } from "./AtlasRegistryLandmarkLayer";
 import { atlasRadarLayerId, removeAtlasRadarLayer, updateAtlasRadarLayer } from "./AtlasRadarLayer";
 import { updateAtlasRangeRings } from "./AtlasRangeRingLayer";
 import { updateAtlasRoadConditionLayer } from "./AtlasRoadLayer";
@@ -40,6 +41,8 @@ import { clusterViewportPoints, filterViewportPoints, viewportFromMap, zoomDetai
 import { getActiveWatchPolygons, type WatchPolygon } from "../services/watches";
 import { getRoadConditionsForViewport, getTrafficCamerasForViewport, getSurfaceStationsForViewport, type RoadConditionEvent, type TrafficCamera, type SurfaceStationObservation, type ViewportLayerResult } from "../services/mapLayerModels";
 import { roadProvidersForViewport, trafficCameraProvidersForViewport } from "../services/roadCameraProviders";
+import { cameraMapEligibility } from "../services/cameraMapEligibility";
+import { cameraRegistryId, stationRegistryId, placeRegistryId, shouldShowMapSource, cameraToMapSource, stationToMapSource, type MapPinStatus, type MapSourceRecord } from "../services/mapSourceRegistry";
 import { ageText, getNearestRadarSites, getRadarFrames, getStormMotionEstimate, radarWorkerMissingOnWeb, setRadarStormMotion, type RadarFrame, type RadarProduct, type RadarSite, type StormMotion } from "../services/radar";
 import { useWind } from "../hooks/useTelemetry";
 import { AtlasRadarLegend, radarSwatchCss } from "./AtlasRadarLegend";
@@ -131,6 +134,10 @@ type AtlasMapProps = {
   escapeControl?: ReactNode;
   selectedPoint?: AtlasSelectedPoint | null;
   onPointSelect?: (point: AtlasSelectedPoint) => void;
+  registryStatuses?: Record<string, MapPinStatus>;
+  registryReadyIds?: Record<string, true>;
+  registryLandmarks?: MapSourceRecord[];
+  onMapSourcesObserved?: (sources: MapSourceRecord[]) => void;
 };
 
 export interface AtlasSelectedPoint {
@@ -149,6 +156,8 @@ const EMPTY_ALERTS: AlertProduct[] = [];
 const EMPTY_SPOTTERS: Spotter[] = [];
 const EMPTY_POI: NearbyPlace[] = [];
 const EMPTY_NEARBY_BEST: Partial<Record<NearbyCategory, NearbyPlace>> = {};
+const EMPTY_REGISTRY_STATUSES: Record<string, MapPinStatus> = {};
+const EMPTY_REGISTRY_LANDMARKS: MapSourceRecord[] = [];
 const ATLAS_STYLE_TUNING_DISABLED = import.meta.env.VITE_ATLAS_DISABLE_STYLE_TUNE === "1";
 const ATLAS_DIAGNOSTICS_ENABLED = import.meta.env.VITE_ATLAS_DIAGNOSTICS === "1";
 const GPS_REFRESH_MAX_AGE_MS = 5_000;
@@ -244,6 +253,10 @@ export function AtlasMap({
   escapeControl,
   selectedPoint = null,
   onPointSelect,
+  registryStatuses = EMPTY_REGISTRY_STATUSES,
+  registryReadyIds,
+  registryLandmarks = EMPTY_REGISTRY_LANDMARKS,
+  onMapSourcesObserved,
 }: AtlasMapProps) {
   const compact = controlsVariant === "compact";
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -332,6 +345,12 @@ export function AtlasMap({
   const [roadConditions, setRoadConditions] = useState<RoadConditionEvent[]>([]);
   const [trafficCameras, setTrafficCameras] = useState<TrafficCamera[]>([]);
   const [surfaceStations, setSurfaceStations] = useState<SurfaceStationObservation[]>([]);
+  useEffect(() => {
+    if (trafficCameras.length) onMapSourcesObserved?.(trafficCameras.map(cameraToMapSource));
+  }, [trafficCameras, onMapSourcesObserved]);
+  useEffect(() => {
+    if (surfaceStations.length) onMapSourcesObserved?.(surfaceStations.map(stationToMapSource));
+  }, [surfaceStations, onMapSourcesObserved]);
   const [stormReports, setStormReports] = useState<StormReport[]>([]);
   const [riverGauges, setRiverGauges] = useState<RiverGaugeObservation[]>([]);
   const [roadLayerStatus, setRoadLayerStatus] = useState<ViewportLayerResult<RoadConditionEvent>["status"]>("not-configured");
@@ -372,7 +391,10 @@ export function AtlasMap({
   }, [spotters, teamPositions, chaserRadiusMiles, showAllActiveSpotters]);
   const visibleTeamPositions = useMemo(() => (viewport ? filterViewportPoints(teamPositions, viewport) : teamPositions), [teamPositions, viewport]);
   const visibleChaserSpotters = useMemo(() => (viewport ? filterViewportPoints(chaserSpotters, viewport) : chaserSpotters), [chaserSpotters, viewport]);
-  const visiblePoiPlaces = useMemo(() => (viewport ? filterViewportPoints(poiPlaces, viewport) : poiPlaces), [poiPlaces, viewport]);
+  const sourceAllowed = useCallback((id: string) => (!registryReadyIds || registryReadyIds[id] === true) && shouldShowMapSource(registryStatuses[id]), [registryReadyIds, registryStatuses]);
+  const visiblePoiPlaces = useMemo(() => (viewport ? filterViewportPoints(poiPlaces, viewport) : poiPlaces).filter((place) => sourceAllowed(placeRegistryId(place))), [poiPlaces, viewport, sourceAllowed]);
+  const visibleNearbyBest = useMemo(() => Object.fromEntries(Object.entries(nearbyBest).filter(([, place]) => place && sourceAllowed(placeRegistryId(place)))) as Partial<Record<NearbyCategory, NearbyPlace>>, [nearbyBest, sourceAllowed]);
+  const visibleRegistryLandmarks = useMemo(() => registryLandmarks.filter((source) => source.kind === "landmark" && sourceAllowed(source.id) && (!viewport || (source.latitude <= viewport.north && source.latitude >= viewport.south && source.longitude >= viewport.west && source.longitude <= viewport.east))), [registryLandmarks, sourceAllowed, viewport]);
   const chaserNetReportPoints = useMemo(() => chaserNetReports.map(chaserNetReportToMapPoint), [chaserNetReports]);
   const clusteredTeamPositions = visibleTeamPositions;
   // Active Spotter Network positions remain individually visible at regional/chase zoom, while a
@@ -386,7 +408,10 @@ export function AtlasMap({
   // road via AtlasRoadLineLayer.ts. Only the point-only remainder (ARDOT has no line source at all;
   // other providers' events without a usable line) goes through the point-pin path.
   const operationalRoadConditions = useMemo(() => routeAheadOnly ? roadConditions.filter((event) => navigationRoute.length > 1 ? distanceToRouteMiles(event, navigationRoute) <= 10 : inRouteAheadCorridor(event, gps)) : roadConditions, [roadConditions, routeAheadOnly, navigationRoute, gps]);
-  const operationalTrafficCameras = useMemo(() => routeAheadOnly ? trafficCameras.filter((camera) => navigationRoute.length > 1 ? distanceToRouteMiles(camera, navigationRoute) <= 10 : inRouteAheadCorridor(camera, gps)) : trafficCameras, [trafficCameras, routeAheadOnly, navigationRoute, gps]);
+  const operationalTrafficCameras = useMemo(() => {
+    const publishable = trafficCameras.filter((camera) => sourceAllowed(cameraRegistryId(camera)) && cameraMapEligibility(camera, registryStatuses[cameraRegistryId(camera)]).eligible);
+    return routeAheadOnly ? publishable.filter((camera) => navigationRoute.length > 1 ? distanceToRouteMiles(camera, navigationRoute) <= 10 : inRouteAheadCorridor(camera, gps)) : publishable;
+  }, [trafficCameras, routeAheadOnly, navigationRoute, gps, registryStatuses, sourceAllowed]);
   const lineRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type === "line"), [operationalRoadConditions]);
   const pointOnlyRoadConditions = useMemo(() => operationalRoadConditions.filter((event) => event.geometry.type !== "line"), [operationalRoadConditions]);
   const clusteredRoadConditions = useMemo(() => (viewport ? filterViewportPoints(pointOnlyRoadConditions, viewport) : pointOnlyRoadConditions), [pointOnlyRoadConditions, viewport]);
@@ -394,7 +419,7 @@ export function AtlasMap({
   const clusteredTrafficCameras = useMemo(() => viewport
     ? clusterViewportPoints(filterViewportPoints(operationalTrafficCameras, viewport), viewport, { individualAtZoom: 6, mediumAtZoom: 4.5, mediumCellDegrees: 0.28, farCellDegrees: 1.1 })
     : operationalTrafficCameras, [operationalTrafficCameras, viewport]);
-  const clusteredSurfaceStations = useMemo(() => (viewport ? filterViewportPoints(surfaceStations, viewport) : surfaceStations), [surfaceStations, viewport]);
+  const clusteredSurfaceStations = useMemo(() => (viewport ? filterViewportPoints(surfaceStations, viewport) : surfaceStations).filter((station) => sourceAllowed(stationRegistryId(station))), [surfaceStations, viewport, sourceAllowed]);
   const visibleStormReports = useMemo(() => viewport ? filterViewportPoints(stormReports, viewport) : stormReports, [stormReports, viewport]);
   const visibleRiverGauges = useMemo(() => viewport ? filterViewportPoints(riverGauges, viewport) : riverGauges, [riverGauges, viewport]);
   useEffect(() => {
@@ -824,8 +849,9 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    updateAtlasPoiLayer(map, visiblePoiPlaces, nearbyBest, customPoiPins, poiVisible);
-  }, [visiblePoiPlaces, nearbyBest, customPoiPins, poiVisible, loaded]);
+    updateAtlasPoiLayer(map, visiblePoiPlaces, visibleNearbyBest, customPoiPins, poiVisible);
+    updateAtlasRegistryLandmarkLayer(map, visibleRegistryLandmarks, poiVisible);
+  }, [visiblePoiPlaces, visibleNearbyBest, visibleRegistryLandmarks, customPoiPins, poiVisible, loaded]);
 
   // Loops the last RADAR_LOOP_FRAME_COUNT scans (newest-first from the worker) rather than showing
   // a single static frame -- radarPlaybackIndex 0 is always the newest/live frame; the interval
@@ -1047,7 +1073,7 @@ export function AtlasMap({
     const controller = new AbortController();
     const context = { viewport, detail: zoomDetailLevel(viewport.zoom), sessionId: null };
     setCameraLayerStatus("ready");
-    void getTrafficCamerasForViewport(context, controller.signal).then((result) => {
+    const load = () => void getTrafficCamerasForViewport(context, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
       setTrafficCameras(result.data);
       setCameraLayerStatus(result.status);
@@ -1056,7 +1082,11 @@ export function AtlasMap({
       setTrafficCameras([]);
       setCameraLayerStatus("error");
     });
-    return () => controller.abort();
+    load();
+    // Revalidate while the layer stays open. This removes a verified live pin after
+    // its source image stops advancing, even when the user leaves the map stationary.
+    const timer = window.setInterval(load, 60_000);
+    return () => { controller.abort(); window.clearInterval(timer); };
   }, [viewport, trafficCamerasVisible]);
 
   useEffect(() => {

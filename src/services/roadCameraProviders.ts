@@ -861,7 +861,7 @@ interface CarsCameraRecord {
   name?: string;
   lastUpdated?: number;
   location?: { latitude?: number; longitude?: number; routeId?: string; cityReference?: string };
-  views?: Array<{ type?: string; url?: string; imageTimestamp?: number }>;
+  views?: Array<{ name?: string; type?: string; url?: string; imageTimestamp?: number }>;
 }
 
 function normalizeCarsCameraRecords(records: CarsCameraRecord[], context: LayerQueryContext, provider: {
@@ -877,7 +877,10 @@ function normalizeCarsCameraRecords(records: CarsCameraRecord[], context: LayerQ
     if (record.public !== true || !isValidCoordinate(lat, lon)) return [];
     const point = { lat, lon };
     if (!pointInViewport(point, context.viewport) || !coordinateWithinCoverage(point, provider.coverage)) return [];
-    const view = record.views?.find((candidate) => safeHttpUrl(candidate.url)) ?? record.views?.[0];
+    // RWIS records often put a pavement-only "Surface" view first. Prefer a sky-capable
+    // direction when one exists; retain a surface-only record for audit, but not map display.
+    const view = record.views?.find((candidate) => safeHttpUrl(candidate.url) && !/surface|pavement/i.test(candidate.name ?? ""))
+      ?? record.views?.find((candidate) => safeHttpUrl(candidate.url));
     const imageUrl = safeHttpUrl(view?.url);
     const updatedAt = Number.isFinite(view?.imageTimestamp) ? Number(view?.imageTimestamp) : Number.isFinite(record.lastUpdated) ? Number(record.lastUpdated) : null;
     const recordId = sanitizeProviderText(String(record.id ?? `${lat},${lon}`), 80);
@@ -902,6 +905,7 @@ function normalizeCarsCameraRecords(records: CarsCameraRecord[], context: LayerQ
       freshness: availability === "available" ? freshnessForTimestamp(updatedAt) : "unavailable",
       sourceUrl: provider.sourceUrl,
       attribution: provider.sourceName,
+      mapDisabledReason: view && /surface|pavement/i.test(view.name ?? "") ? "Pavement-only view" : undefined,
     }];
   }).slice(0, MAX_CAMERA_RESULTS));
 }
@@ -1519,6 +1523,28 @@ export const ROAD_CONDITION_PROVIDERS: RoadConditionProvider[] = [
 
 export const TRAFFIC_CAMERA_PROVIDERS: TrafficCameraProvider[] = [
   {
+    id: "cfht-verified-sky",
+    name: "CFHT verified live sky",
+    coverage: { north: 19.9, south: 19.75, east: -155.4, west: -155.55, label: "Maunakea, Hawaii" },
+    enabled: true,
+    priority: 5,
+    minRefreshMs: 60_000,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "CFHT / Asahi",
+    fetchViewport: async (context, signal) => (await import("./verifiedSkyCameras")).fetchVerifiedCfhtSkyCameraForViewport(context, signal),
+  },
+  {
+    id: "nationcam-verified-sky",
+    name: "NationCam verified sky cameras",
+    coverage: { north: 29.2, south: 29.08, east: -89.14, west: -89.3, label: "Venice, Louisiana" },
+    enabled: true,
+    priority: 5,
+    minRefreshMs: 60_000,
+    timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    attribution: "NationCam / Venice Marina",
+    fetchViewport: async (context, signal) => (await import("./verifiedSkyCameras")).fetchVerifiedSkyCamerasForViewport(context, signal),
+  },
+  {
     id: "ardot-idrive",
     name: "Arkansas DOT IDrive",
     coverage: ARKANSAS_COVERAGE,
@@ -1686,7 +1712,7 @@ export async function getTrafficCamerasForViewport(context: LayerQueryContext, s
   const providers = trafficCameraProvidersForViewport(context.viewport);
   const fetchedAt = nowMs();
   if (providers.length === 0) {
-    return { data: [], status: "outside-coverage", message: "Outside current public-camera provider coverage. Supports Arkansas, Iowa, Kansas, Missouri, Nebraska, and Tennessee DOT coverage.", simulated: false, fetchedAt };
+    return { data: [], status: "outside-coverage", message: "Outside current public-camera coverage (six state DOT networks plus verified Louisiana and Hawaii sky feeds).", simulated: false, fetchedAt };
   }
   const settled = await Promise.allSettled(providers.map((provider) => fetchProviderWithCache("camera", cameraCache, provider, context, signal)));
   const data = settled.flatMap((result) => result.status === "fulfilled" ? result.value.data : []);

@@ -15,6 +15,7 @@ describe("OPS workstation routes", () => {
       "FIELD INTELLIGENCE",
       "LIVE STREAM",
       "SYSTEM",
+      "MAP SOURCES",
       "SETTINGS",
     ]);
     expect(ROUTES.filter((route) => route.state === "DEVELOPMENT").map((route) => route.label)).toEqual([
@@ -33,6 +34,6 @@ describe("OPS workstation routes", () => {
       "CHASE OPERATIONS",
       "MORE",
     ]);
-    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "SETTINGS"]);
+    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "MAP SOURCES", "SETTINGS"]);
   });
 });

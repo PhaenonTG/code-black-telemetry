@@ -15,6 +15,7 @@ const DevelopmentPage = lazy(() => import("../pages/DevelopmentPage"))
 const Fleet = lazy(() => import("../pages/Fleet"))
 const Operations = lazy(() => import("../pages/Operations"))
 const Settings = lazy(() => import("../pages/Settings"))
+const MapRegistry = lazy(() => import("../pages/MapRegistry"))
 const More = lazy(() => import("../pages/More"))
 const Stream = lazy(() => import("../pages/Stream"))
 
@@ -50,6 +51,7 @@ export default function App() {
                         <Route path="/stream" element={<Stream />} />
                         <Route path="/system" element={<Operations />} />
                         <Route path="/settings" element={<Settings />} />
+                        <Route path="/map-registry" element={<MapRegistry />} />
                         <Route path="/more" element={<More />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                       </Routes>

@@ -1,4 +1,4 @@
-const ALLOWED_CAMERA_HOSTS = [/(^|\.)idrivearkansas\.com$/i, /(^|\.)iowadot\.gov$/i, /(^|\.)modot\.org$/i, /(^|\.)kandrive\.gov$/i, /(^|\.)carsprogram\.org$/i, /(^|\.)tn\.gov$/i, /(^|\.)smartway\.tn\.gov$/i];
+const ALLOWED_CAMERA_HOSTS = [/(^|\.)idrivearkansas\.com$/i, /(^|\.)iowadot\.gov$/i, /(^|\.)modot\.org$/i, /(^|\.)kandrive\.gov$/i, /(^|\.)carsprogram\.org$/i, /(^|\.)tn\.gov$/i, /(^|\.)smartway\.tn\.gov$/i, /^streamer\.nationcam\.com$/i];
 const MAX_IMAGE_BYTES = 3_000_000;
 export const CAMERA_HEALTH_PATH = "/api/camera-health";
 
@@ -10,8 +10,9 @@ export async function handleCameraHealth(request: Request) {
   let target: URL;
   try { target = new URL(raw ?? ""); } catch { return json({ ok: false, error: "INVALID_URL" }, 400); }
   if (target.protocol !== "https:" || !ALLOWED_CAMERA_HOSTS.some((pattern) => pattern.test(target.hostname))) return json({ ok: false, error: "HOST_NOT_ALLOWED" }, 400);
+  if (target.hostname === "streamer.nationcam.com" && !/^\/memfs\/[a-f0-9-]+\.jpg$/i.test(target.pathname)) return json({ ok: false, error: "PATH_NOT_ALLOWED" }, 400);
   try {
-    const response = await fetch(target.toString(), { headers: { Accept: "image/*", "User-Agent": "CodeBlackOPS-CameraHealth/1.0" }, redirect: "follow" });
+    const response = await fetch(target.toString(), { headers: { Accept: "image/*", "User-Agent": "CodeBlackOPS-CameraHealth/1.0" }, redirect: "error" });
     const contentType = response.headers.get("Content-Type") ?? "";
     if (!response.ok || !contentType.toLowerCase().startsWith("image/")) return json({ ok: false, status: response.status, error: "MEDIA_UNAVAILABLE", checkedAt: Date.now() }, 502);
     const bytes = await response.arrayBuffer();

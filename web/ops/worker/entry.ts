@@ -41,6 +41,7 @@ import { MODOT_PREFIX, handleModotRequest } from "../functions/lib/modotRelay";
 import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
 import { ODOT_PREFIX, handleOdotRequest, type OdotEnv } from "../functions/lib/odotRelay";
 import { CAMERA_HEALTH_PATH, handleCameraHealth } from "../functions/lib/cameraHealthRelay";
+import { VERIFIED_SKY_LIVE_PATH, handleVerifiedSkyLive } from "../functions/lib/verifiedSkyLiveRelay";
 import { KANDRIVE_PATH, handleKandriveRequest } from "../functions/lib/kandriveRelay";
 
 interface Env extends GatewayEnv, MapboxTokenEnv, OdotEnv {
@@ -99,6 +100,9 @@ export default {
     }
     if (url.pathname === CAMERA_HEALTH_PATH) {
       return handleCameraHealth(request);
+    }
+    if (url.pathname === VERIFIED_SKY_LIVE_PATH) {
+      return handleVerifiedSkyLive(request);
     }
     // Every other path: identical behavior to before this file existed -- static assets, with
     // the project's usual SPA not-found fallback for client-side routes.
