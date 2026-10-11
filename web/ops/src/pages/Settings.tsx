@@ -6,6 +6,7 @@ import { Icon } from "../components/Icon"
 import { useAuth } from "../auth/AuthProvider"
 import { Link } from "react-router-dom"
 import { loadWeatherAlertRuntimeStatus, loadWeatherAlertSettings, saveWeatherAlertSettings, type WeatherAlertRuntimeStatus, type WeatherAlertSettings } from "../weatherAlertSettings"
+import { loadGpuOperations, setGpuMode, type GpuMode, type GpuOperationsStatus } from "../gpuOperations"
 
 const THEME_OPTIONS: AppThemeMode[] = ["dark", "night", "system", "light"]
 
@@ -50,11 +51,17 @@ export default function Settings() {
   const [alertRuntime, setAlertRuntime] = useState<WeatherAlertRuntimeStatus | null>(null)
   const [alertError, setAlertError] = useState<string | null>(null)
   const [alertSaving, setAlertSaving] = useState(false)
+  const [gpu, setGpu] = useState<GpuOperationsStatus | null>(null)
+  const [gpuError, setGpuError] = useState<string | null>(null)
+  const [gpuSaving, setGpuSaving] = useState(false)
 
   useEffect(() => {
     const unsub = subscribeAppTheme(setTheme)
     void loadAppTheme()
     return unsub
+  }, [])
+  useEffect(() => {
+    void loadGpuOperations().then(setGpu).catch(() => setGpuError("GPU operations are unavailable."))
   }, [])
   useEffect(() => {
     void loadWeatherAlertSettings().then(setAlertSettings).catch(() => setAlertError("Weather alert controls are unavailable."))
@@ -67,6 +74,12 @@ export default function Settings() {
     try { setAlertSettings(await saveWeatherAlertSettings(alertSettings)) }
     catch { setAlertError("Could not save weather alert controls. No change was confirmed.") }
     finally { setAlertSaving(false) }
+  }
+  const chooseGpuMode = async (mode: GpuMode) => {
+    setGpuSaving(true); setGpuError(null)
+    try { setGpu(await setGpuMode(mode)) }
+    catch { setGpuError("Could not confirm the GPU focus change. No change is assumed.") }
+    finally { setGpuSaving(false) }
   }
   useEffect(() => {
     const unsub = subscribeMapLayerVisibility(setLayers)
@@ -117,6 +130,31 @@ export default function Settings() {
         <h2>Data & diagnostics</h2>
         <p>Provider health, radar availability, camera totals, and Core connectivity are tracked on the System page.</p>
         <Link className="page-action-link" to="/system">VIEW PROVIDER STATUS</Link>
+      </section>
+
+      <section className="settings-group settings-group--alerts">
+        <h2>GPU operations</h2>
+        <p className="settings-alert-copy">Choose what gets first claim on new GPU work. This never stops a running model, generation, or training job.</p>
+        {gpu ? <>
+          <div className="settings-layer-grid settings-alert-telemetry">
+            <div className="settings-toggle-list"><h3>LIVE HARDWARE</h3>
+              <div className="settings-row"><span>VRAM</span><strong>{gpu.gpu.ok ? `${gpu.gpu.used_mb ?? "?"} / ${gpu.gpu.total_mb ?? "?"} MB (${gpu.gpu.percent ?? "?"}%)` : "UNAVAILABLE"}</strong></div>
+              <div className="settings-row"><span>Loaded models</span><strong>{gpu.gpu.ollama_loaded_model_count ?? "—"}</strong></div>
+              <div className="settings-row"><span>GPU runners</span><strong>{gpu.gpu.llama_server_process_count ?? "—"}</strong></div>
+              <div className="settings-row"><span>Health</span><strong>{gpu.health.toUpperCase()}</strong></div>
+            </div>
+            <div className="settings-toggle-list"><h3>ACTIVE FOCUS</h3>
+              <div className="settings-row"><span>Mode</span><strong>{gpu.governor.ops_mode.replaceAll("_", " ")}</strong></div>
+              <div className="settings-row"><span>Priority holder</span><strong>{gpu.governor.focus_app ? `${gpu.governor.focus_app} · ${gpu.governor.focus_level}` : "NONE"}</strong></div>
+              <div className="settings-row"><span>Learning queue</span><strong>{gpu.learning.currently_running || "IDLE"}</strong></div>
+              <div className="settings-row"><span>Last learning result</span><strong>{gpu.learning.last_result || "—"}</strong></div>
+            </div>
+          </div>
+          <div className="settings-toggle-list"><h3>WORKLOAD MODE</h3>
+            {GPU_MODE_OPTIONS.map((option) => <label key={option.mode} className="settings-toggle-row"><span className="settings-toggle-row__text"><span className="settings-toggle-row__label">{option.label}</span><span className="settings-toggle-row__description">{option.description}</span></span><button type="button" className="page-action-link" disabled={gpuSaving || gpu.governor.ops_mode === option.mode} onClick={() => void chooseGpuMode(option.mode)}>{gpu.governor.ops_mode === option.mode ? "ACTIVE" : "SELECT"}</button></label>)}
+          </div>
+        </> : <p className="page-empty">{gpuError ?? "Loading GPU operations…"}</p>}
+        {gpuError && gpu && <p className="page-empty">{gpuError}</p>}
       </section>
 
       <section className="settings-group settings-group--alerts">
@@ -179,3 +217,11 @@ function AlertNumber({ label, value, onChange, step = "1" }: { label: string; va
 }
 
 function formatLatency(value: number | null): string { return value == null ? "—" : `${(value / 1000).toFixed(1)}s` }
+
+const GPU_MODE_OPTIONS: Array<{ mode: GpuMode; label: string; description: string }> = [
+  { mode: "BALANCED", label: "Balanced", description: "Normal cooperative access for all local workloads." },
+  { mode: "ANALYSIS", label: "Storm analysis", description: "Prioritizes AEGIS analysis and asks idle peers to yield capacity." },
+  { mode: "PASSIVE_LEARNING", label: "Passive learning", description: "Keeps AEGIS in the background so approved learning automation can run without taking focus." },
+  { mode: "MEDIA", label: "Media generation", description: "Prioritizes image and media work for new GPU admissions." },
+  { mode: "LIVE_AGENT", label: "Live agent", description: "Prioritizes interactive local-agent response work." },
+]
