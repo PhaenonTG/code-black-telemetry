@@ -6,6 +6,8 @@ describe("resolveRoute", () => {
     expect(resolveRoute("/health")).toEqual(ALLOWLIST["/health"]);
     expect(resolveRoute("/api/fabric/v1/health")).toEqual(ALLOWLIST["/api/fabric/v1/health"]);
     expect(resolveRoute("/api/fabric/v1/units")).toEqual(ALLOWLIST["/api/fabric/v1/units"]);
+    expect(resolveRoute("/api/fabric/v1/aegis-status")).toEqual(ALLOWLIST["/api/fabric/v1/aegis-status"]);
+    expect(resolveRoute("/api/fabric/v1/aegis-alerts")).toEqual(ALLOWLIST["/api/fabric/v1/aegis-alerts"]);
     expect(resolveRoute("/api/storm-intel/v1/health")).toEqual(ALLOWLIST["/api/storm-intel/v1/health"]);
     expect(resolveRoute("/api/storm-intel/v1/point")).toEqual(ALLOWLIST["/api/storm-intel/v1/point"]);
   });
