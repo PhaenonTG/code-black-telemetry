@@ -40,6 +40,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   // the scroll position of the previous long page (e.g. Settings -> Home).
   useLayoutEffect(() => {
     contentRef.current?.scrollTo({ top: 0, left: 0, behavior: "instant" })
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    // Fade the existing surface without remounting map canvases or changing their geometry.
+    const animation = contentRef.current?.animate([{ opacity: 0.45 }, { opacity: 1 }], {
+      duration: 220, easing: "cubic-bezier(.2,.8,.2,1)",
+    })
+    return () => animation?.cancel()
   }, [pathname])
 
   useEffect(() => {
@@ -73,7 +79,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (viewport === "phone") {
     return (
       <div className="shell shell--phone" data-theme={theme}>
-        <main ref={contentRef} className="shell__content">{children}</main>
+        <a className="ops-skip-link" href="#ops-main">Skip to content</a>
+        <main id="ops-main" tabIndex={-1} ref={contentRef} className="shell__content">{children}</main>
         <BottomNav />
       </div>
     )
@@ -90,10 +97,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
   return (
     <div className={rail ? "shell shell--tablet" : "shell shell--desktop"} data-theme={theme}>
+      <a className="ops-skip-link" href="#ops-main">Skip to content</a>
       <Sidebar rail={rail} collapsible={collapsible} onToggleCollapse={collapsible ? toggleCollapsed : undefined} />
       <div className="shell__main">
         <StatusBar locationLabel={locationLabel(location)} />
-        <main ref={contentRef} className="shell__content">{children}</main>
+        <main id="ops-main" tabIndex={-1} ref={contentRef} className="shell__content">{children}</main>
       </div>
     </div>
   )
