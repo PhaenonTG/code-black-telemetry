@@ -1288,10 +1288,16 @@ export function AtlasMap({
   }, [bearing, cameraMode, gps, idleCount, loaded, mapError, mapState, mosaicVisible, pitch, pixelSample, radarFrame, radarVisible, renderCount, styleUri]);
 
   const visibleError = mapError && mapState !== "READY" ? mapError : "";
-  const visibleErrorTitle = visibleError === "WEBGL_CONTEXT_LOST" ? "Map Renderer Unavailable" : visibleError;
-  const visibleErrorDetail = visibleError === "WEBGL_CONTEXT_LOST"
-    ? "WebGL rendering is unavailable in this browser session. Live data panels and point workflow remain isolated from the renderer."
-    : "Atlas could not initialize the map renderer for this session.";
+  const visibleErrorTitle = visibleError === "MAPBOX_TOKEN_MISSING"
+    ? "Map temporarily unavailable"
+    : visibleError === "WEBGL_CONTEXT_LOST"
+      ? "Map renderer unavailable"
+      : "Map temporarily unavailable";
+  const visibleErrorDetail = visibleError === "MAPBOX_TOKEN_MISSING"
+    ? "The map service is not configured for this session. Storm intelligence and alert activity remain available below."
+    : visibleError === "WEBGL_CONTEXT_LOST"
+      ? "This browser session cannot render the map. Storm intelligence and alert activity remain available below."
+      : "The map could not initialize for this session. Storm intelligence and alert activity remain available below.";
   const canvasCount = containerRef.current?.querySelectorAll("canvas").length ?? 0;
   const atlasStateLabel = ATLAS_DIAGNOSTICS_ENABLED
     ? `${mapState}${loaded ? "" : " LOADING"} c${canvasCount} r${renderCount} i${idleCount} ${pixelSample}`

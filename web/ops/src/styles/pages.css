@@ -176,15 +176,22 @@
 @media (max-width:767px){
   .ops-workstation{position:absolute;inset:0;display:flex;flex-direction:column;height:auto;overflow-y:auto;overscroll-behavior:contain}
   .ops-side-rail{overflow:visible;border-left:0}
-  .ops-map-stage{height:64vh;min-height:420px;flex:0 0 auto}
+  /* The map is a fast situational check on a phone, not a shrunken desktop workstation.
+     Keep enough canvas to work with while exposing the useful incident and point panels without
+     forcing a long scroll past a mostly-empty map. */
+  .ops-map-stage{height:clamp(330px,48dvh,460px);min-height:330px;flex:0 0 auto}
   .ops-inspector{border-left:0;border-top:1px solid var(--cb-line);overflow:visible}
-  .ops-map-overlay{left:10px;right:10px;top:10px;flex-wrap:wrap}
-  .ops-map-overlay>div{min-width:145px}
-  .ops-map-overlay .ops-pill{display:none}
-  .ops-nearby-reference{min-width:132px}
+  /* One quiet title is enough on a phone. The desktop selector/status/voice controls compete
+     with native map controls and were producing the stacked boxes in the mobile viewport. */
+  .ops-map-overlay{left:12px;right:88px;top:12px;display:block;max-width:none;pointer-events:none}
+  .ops-map-overlay>div{min-width:0;width:max-content;max-width:100%;padding:7px 10px;border-top-width:2px}
+  .ops-map-overlay>div>span{display:none}
+  .ops-map-overlay h1{margin:0;font-size:13px;line-height:1.2;letter-spacing:.07em}
+  .ops-map-overlay .ops-pill,.ops-nearby-reference,.ops-voice-toggle{display:none}
   /* Same clearance reasoning as the desktop rule above -- AtlasMap's own control stack is
      bottom-right anchored here too. */
-  .ops-timeline{left:10px;right:70px;bottom:10px;display:block}
+  .ops-timeline{left:12px;right:88px;bottom:12px;padding:8px 10px;display:block}
+  .ops-timeline b{font-size:10px;letter-spacing:.06em}
   .ops-timeline__ticks{min-width:0;width:100%;grid-template-columns:repeat(3,1fr);margin-top:8px}
   .ops-system-grid{grid-template-columns:1fr}
   .storm-workspace{position:relative;display:flex;flex-direction:column;height:100%;overflow:auto;padding:8px}
@@ -198,6 +205,17 @@
   .storm-map-command>div{padding:7px 9px}
   .storm-workspace__metrics{grid-template-columns:1fr}
   .storm-provenance dl{grid-template-columns:1fr}
+}
+
+/* A map setup/rendering issue should be legible and calm on a small screen, not a raw internal
+   code floating over dimmed controls. The controls are intentionally unavailable until the canvas
+   exists, while the lower operational panels remain reachable. */
+@media (max-width:767px){
+  .ops-map-stage .atlas-map-error{inset:54px 16px 76px;padding:20px 18px;background:rgba(10,12,14,.94);border:1px solid rgba(255,255,255,.14);border-top:2px solid var(--cb-red);place-items:center}
+  .ops-map-stage .atlas-map-error strong{font-size:12px;letter-spacing:.09em}
+  .ops-map-stage .atlas-map-error span{max-width:260px;font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:12px;font-weight:650;line-height:1.45;letter-spacing:0;text-transform:none}
+  .ops-map-stage .atlas-map-shell--error .atlas-map-controls,.ops-map-stage .atlas-map-shell--error .atlas-radar-strip{display:none!important}
+  .ops-map-stage .atlas-map-shell--error .atlas-map-status{display:none!important}
 }
 
 @media (prefers-reduced-motion: reduce){
