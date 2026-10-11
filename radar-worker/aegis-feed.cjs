@@ -1,8 +1,9 @@
-// Read-only Core-local Fabric companion feed. Delivery is independently gated
-// from scan collection; a file-only canary cannot leak experimental alerts.
+// Core-local Fabric companion feed and side-effect-free policy replay. Delivery
+// is independently gated from scan collection; replay never publishes alerts.
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const { policyStatus, replayScenario, replayRecorded } = require("./aegis-policy.cjs");
 const DATA = process.env.CODEBLACK_AEGIS_RADAR_DATA || "/srv/codeblack/data/radar-worker/aegis-warning";
 
 function readJson(file, fallback) {
@@ -24,13 +25,41 @@ function respond(res, code, body) {
     "X-Content-Type-Options": "nosniff", "Content-Length": Buffer.byteLength(json) });
   res.end(json);
 }
+async function readBody(req) {
+  const parts = [];
+  let bytes = 0;
+  for await (const chunk of req) {
+    bytes += chunk.length;
+    if (bytes > 4096) throw new Error("request body exceeds 4 KiB");
+    parts.push(chunk);
+  }
+  return JSON.parse(Buffer.concat(parts).toString("utf8"));
+}
 function handler(dir = DATA) {
-  return (req, res) => {
-    if (req.method !== "GET") return respond(res, 405, { error: "method_not_allowed" });
+  return async (req, res) => {
     const url = new URL(req.url, "http://localhost");
-    if (url.pathname === "/health") return respond(res, 200, { status: "ok", service: "aegis-radar-feed" });
+    if (url.pathname === "/health" && req.method === "GET")
+      return respond(res, 200, { status: "ok", service: "aegis-radar-feed" });
     const cfg = readJson(path.join(dir, "config.json"), {});
     const status = readJson(path.join(dir, "status.json"), { state: "not_run" });
+    if (url.pathname === "/api/fabric/v1/aegis-policy") {
+      if (req.method !== "GET") return respond(res, 405, { error: "method_not_allowed" });
+      try { return respond(res, 200, policyStatus(dir, cfg)); }
+      catch { return respond(res, 503, { error: "policy_journal_unavailable" }); }
+    }
+    if (url.pathname === "/api/fabric/v1/aegis-policy/replay") {
+      if (req.method !== "POST") return respond(res, 405, { error: "method_not_allowed" });
+      if (!String(req.headers["content-type"] || "").startsWith("application/json"))
+        return respond(res, 415, { error: "json_required" });
+      try {
+        const input = await readBody(req);
+        if (input.mode === "scenario") return respond(res, 200, replayScenario(input.scenario));
+        if (input.mode === "recorded") return respond(res, 200, replayRecorded(dir, cfg,
+          { evidenceCutoff: input.evidenceCutoff, limit: input.limit }));
+        return respond(res, 400, { error: "invalid_replay_mode" });
+      } catch (error) { return respond(res, 400, { error: "invalid_replay_request", detail: error.message }); }
+    }
+    if (req.method !== "GET") return respond(res, 405, { error: "method_not_allowed" });
     if (url.pathname === "/api/fabric/v1/aegis-status") return respond(res, 200, {
       schema: "codeblack.fabric.aegis-status.v1", delivery_enabled: cfg.delivery_enabled === true,
       screen: status });
@@ -51,7 +80,8 @@ function handler(dir = DATA) {
 
 if (require.main === module) {
   const port = Number(process.env.CODEBLACK_AEGIS_FEED_PORT || 8789);
-  http.createServer(handler()).listen(port, "127.0.0.1", () =>
+  http.createServer((req, res) => { handler()(req, res).catch(() =>
+    respond(res, 500, { error: "internal_error" })); }).listen(port, "127.0.0.1", () =>
     console.log(`Aegis radar feed on 127.0.0.1:${port}`));
 }
 module.exports = { readEvents, handler };

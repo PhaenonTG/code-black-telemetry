@@ -1,14 +1,14 @@
 [Unit]
-Description=Code Black private read-only Aegis radar alert feed
+Description=Code Black private Aegis radar feed and dry-run replay
 After=network.target
 
 [Service]
 Type=simple
 User=cbwx-core
 Group=cbwx-core
-WorkingDirectory=/srv/codeblack/releases/aegis-warning/v3
+WorkingDirectory=/srv/codeblack/releases/aegis-warning/v5
 Environment=CODEBLACK_AEGIS_RADAR_DATA=/srv/codeblack/data/radar-worker/aegis-warning
-ExecStart=/usr/bin/node /srv/codeblack/releases/aegis-warning/v3/aegis-feed.cjs
+ExecStart=/usr/bin/node /srv/codeblack/releases/aegis-warning/v5/aegis-feed.cjs
 Restart=on-failure
 RestartSec=5
 UMask=0027

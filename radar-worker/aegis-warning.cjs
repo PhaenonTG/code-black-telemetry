@@ -105,8 +105,8 @@ function siteFor(w, sites, excluded = new Set()) {
     .sort((a, b) => a.distance - b.distance)[0] || null;
 }
 
-function evidence(candidate, record, w, cfg, nowMs = Date.now()) {
-  if (!candidate || candidate.warningId !== w.id || !inPolygon(candidate.coordinates, w.geometry)) return null;
+function scoreRecordedEvidence(candidate, record, cfg, nowMs = Date.now()) {
+  if (!candidate || !candidate.warningId) return null;
   const scanAge = (nowMs - Date.parse(record.scanTime)) / 1000;
   if (!Number.isFinite(scanAge) || scanAge < -60 || scanAge > cfg.max_volume_age_seconds ||
       !candidate.temporallyPersistent || candidate.rangeKm > cfg.max_range_km ||
@@ -123,6 +123,11 @@ function evidence(candidate, record, w, cfg, nowMs = Date.now()) {
   if (candidate.zdrDb !== null && candidate.zdrDb <= 1) { score += 5; factors.push("low differential reflectivity"); }
   return { score: Math.min(100, score), factors, scanAgeSeconds: Math.round(scanAge),
     aboveCutoff: score >= cfg.evidence_cutoff };
+}
+
+function evidence(candidate, record, w, cfg, nowMs = Date.now()) {
+  if (!candidate || candidate.warningId !== w.id || !inPolygon(candidate.coordinates, w.geometry)) return null;
+  return scoreRecordedEvidence(candidate, record, cfg, nowMs);
 }
 
 function alert(w, site, record, candidate, rating, cfg) {
@@ -272,4 +277,4 @@ if (require.main === module) {
     console.error(String(error.message || error)); process.exitCode = 1; });
 }
 
-module.exports = { config, warning, radarSites, siteFor, evidence, alert, run };
+module.exports = { config, warning, radarSites, siteFor, scoreRecordedEvidence, evidence, alert, run };
