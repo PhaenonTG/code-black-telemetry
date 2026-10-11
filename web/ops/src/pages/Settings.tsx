@@ -5,7 +5,7 @@ import { PageHeader } from "../components/PageHeader"
 import { Icon } from "../components/Icon"
 import { useAuth } from "../auth/AuthProvider"
 import { Link } from "react-router-dom"
-import { loadWeatherAlertSettings, saveWeatherAlertSettings, type WeatherAlertSettings } from "../weatherAlertSettings"
+import { loadWeatherAlertRuntimeStatus, loadWeatherAlertSettings, saveWeatherAlertSettings, type WeatherAlertRuntimeStatus, type WeatherAlertSettings } from "../weatherAlertSettings"
 
 const THEME_OPTIONS: AppThemeMode[] = ["dark", "night", "system", "light"]
 
@@ -47,6 +47,7 @@ export default function Settings() {
   const [theme, setTheme] = useState<AppThemeMode>("dark")
   const [layers, setLayers] = useState<MapLayerVisibility | null>(null)
   const [alertSettings, setAlertSettings] = useState<WeatherAlertSettings | null>(null)
+  const [alertRuntime, setAlertRuntime] = useState<WeatherAlertRuntimeStatus | null>(null)
   const [alertError, setAlertError] = useState<string | null>(null)
   const [alertSaving, setAlertSaving] = useState(false)
 
@@ -57,6 +58,7 @@ export default function Settings() {
   }, [])
   useEffect(() => {
     void loadWeatherAlertSettings().then(setAlertSettings).catch(() => setAlertError("Weather alert controls are unavailable."))
+    void loadWeatherAlertRuntimeStatus().then(setAlertRuntime).catch(() => undefined)
   }, [])
 
   const saveAlerts = async () => {
@@ -120,6 +122,16 @@ export default function Settings() {
       <section className="settings-group settings-group--alerts">
         <h2>Weather alert controls</h2>
         <p className="settings-alert-copy">These settings control Discord alert intake and routing. Changes apply to the live alert pipeline after saving.</p>
+        {alertRuntime && <div className="settings-layer-grid settings-alert-telemetry">
+          <div className="settings-toggle-list"><h3>DELIVERY TELEMETRY</h3>
+            <div className="settings-row"><span>Transport</span><strong>{alertRuntime.transport === "nwws" ? "NWWS REALTIME" : "NWS API · 15 SEC"}</strong></div>
+            <div className="settings-row"><span>Latest latency</span><strong>{formatLatency(alertRuntime.latency.latest_issue_to_discord_ms)}</strong></div>
+            <div className="settings-row"><span>P50 / P95</span><strong>{formatLatency(alertRuntime.latency.p50_issue_to_discord_ms)} / {formatLatency(alertRuntime.latency.p95_issue_to_discord_ms)}</strong></div>
+          </div>
+          <div className="settings-toggle-list"><h3>CHASE TARGET</h3>
+            {alertRuntime.target ? <><div className="settings-row"><span>{alertRuntime.target.target.label}</span><strong>{alertRuntime.target.warning.title}</strong></div><div className="settings-row"><span>Motion</span><strong>{alertRuntime.target.motion.heading_deg}° · {alertRuntime.target.motion.speed_mph} mph</strong></div><div className="settings-row"><span>Projected</span><strong>{alertRuntime.target.projected.map((point) => `${point.minutes}m ${point.lat.toFixed(2)}, ${point.lon.toFixed(2)}`).join(" · ")}</strong></div></> : <p className="page-empty">No active warning matched to the selected target.</p>}
+          </div>
+        </div>}
         {alertSettings ? <>
           <div className="settings-layer-grid">
             <div className="settings-toggle-list"><h3>ALERT TYPES</h3>
@@ -165,3 +177,5 @@ export default function Settings() {
 function AlertNumber({ label, value, onChange, step = "1" }: { label: string; value: number; step?: string; onChange: (value: number) => void }) {
   return <label className="settings-row settings-number"><span>{label}</span><input type="number" step={step} value={value} onChange={(event) => { const next = Number(event.target.value); if (Number.isFinite(next)) onChange(next) }} /></label>
 }
+
+function formatLatency(value: number | null): string { return value == null ? "—" : `${(value / 1000).toFixed(1)}s` }

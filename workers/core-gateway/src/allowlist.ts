@@ -25,6 +25,7 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
     allowedQueryParams: ["latitude", "longitude"],
   },
   "/api/weather-alert/v1/settings": { upstreamPath: "/api/weather-alert/v1/settings", allowedQueryParams: [], methods: ["GET", "PUT"] },
+  "/api/weather-alert/v1/status": { upstreamPath: "/api/weather-alert/v1/status", allowedQueryParams: [], methods: ["GET"] },
 };
 
 export function resolveRoute(pathname: string): AllowlistRoute | null {

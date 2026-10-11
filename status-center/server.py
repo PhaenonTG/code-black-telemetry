@@ -1506,12 +1506,12 @@ def changelog_loop():
 SECTIONS = {"hosts", "services", "network", "streaming", "radar", "weather", "ai", "labs", "dns", "storage", "links", "compute", "attention", "summary", "esp_fleet"}
 
 
-def weather_alert_control(method, body=None):
-    """Proxy only the validated alert-settings document to Edge over Tailscale."""
+def weather_alert_control(method, body=None, resource="settings"):
+    """Proxy the allowlisted alert settings or read-only runtime status to Edge."""
     if not WEATHER_ALERT_CONTROL_URL or not WEATHER_ALERT_CONTROL_TOKEN:
         raise RuntimeError("weather alert control is not configured")
     data = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(WEATHER_ALERT_CONTROL_URL + "/v1/settings", data=data, method=method,
+    request = urllib.request.Request(WEATHER_ALERT_CONTROL_URL + "/v1/" + resource, data=data, method=method,
                                      headers={"X-CodeBlack-Alert-Control": WEATHER_ALERT_CONTROL_TOKEN,
                                               "Content-Type": "application/json", "User-Agent": "CodeBlack-StatusCenter/1.0"})
     try:
@@ -1726,6 +1726,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_bytes(200, json.dumps(status_doc()).encode(), "application/json", "no-store")
             if path == "/api/weather-alert-settings":
                 status, payload = weather_alert_control("GET")
+                return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
+            if path == "/api/weather-alert-status":
+                status, payload = weather_alert_control("GET", resource="status")
                 return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
             if path == "/api/radar-control-settings":
                 return self.send_bytes(200, json.dumps(radar_control_settings()).encode(), "application/json", "no-store")

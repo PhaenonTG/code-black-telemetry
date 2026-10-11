@@ -9,6 +9,14 @@ export type WeatherAlertSettings = {
   target: { enabled: boolean; label: string; lat: number | null; lon: number | null; match_radius_miles: number }
 }
 
+export type WeatherAlertRuntimeStatus = {
+  transport: "nwws" | "nws-api-poll"
+  nwws_configured: boolean
+  health: { ok?: boolean; checked_at?: string; sources?: Record<string, string> }
+  target: null | { updated_at: string; target: { label: string }; warning: { title: string; issued_at?: string }; motion: { heading_deg: number; speed_mph: number }; projected: Array<{ minutes: number; lat: number; lon: number }> }
+  latency: { sample_count: number; p50_issue_to_discord_ms: number | null; p95_issue_to_discord_ms: number | null; latest_issue_to_discord_ms: number | null }
+}
+
 const PATH = "/api/core/api/weather-alert/v1/settings"
 
 async function request(method: "GET" | "PUT", body?: WeatherAlertSettings): Promise<WeatherAlertSettings> {
@@ -24,3 +32,10 @@ async function request(method: "GET" | "PUT", body?: WeatherAlertSettings): Prom
 
 export const loadWeatherAlertSettings = () => request("GET")
 export const saveWeatherAlertSettings = (settings: WeatherAlertSettings) => request("PUT", settings)
+
+export async function loadWeatherAlertRuntimeStatus(): Promise<WeatherAlertRuntimeStatus> {
+  const token = await currentAccessToken()
+  const response = await fetch("/api/core/api/weather-alert/v1/status", { headers: buildCoreRequestHeaders(token) })
+  if (!response.ok) throw new OpsCoreClientError(`HTTP ${response.status}`)
+  return response.json() as Promise<WeatherAlertRuntimeStatus>
+}
