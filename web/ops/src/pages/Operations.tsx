@@ -87,7 +87,7 @@ export default function Operations() {
 
   return (
     <div className="page page-operations">
-      <PageHeader title="SYSTEM" kicker="HEALTH · PROVIDERS · CONFIGURATION" description={`Independent checks for Core, Fabric, radar, weather, alerts, and map providers${health.checkedAt ? ` · last checked ${new Date(health.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}.`} actions={<button type="button" className="page-action-link" onClick={() => { setHealth(initialHealth()); setRefreshNonce((value) => value + 1) }}>REFRESH CHECKS</button>} />
+      <PageHeader title="SYSTEM" kicker="HEALTH · PROVIDERS · CONFIGURATION" description={`Independent checks for Core, Fabric, radar, weather, alerts, and map providers${health.checkedAt ? ` · last checked ${new Date(health.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}.`} actions={<><Link className="page-action-link" to="/status-center">STATUS CENTER</Link><button type="button" className="page-action-link" onClick={() => { setHealth(initialHealth()); setRefreshNonce((value) => value + 1) }}>REFRESH CHECKS</button></>} />
       <nav className="section-tabs" aria-label="System sections"><span className="active">HEALTH</span><Link to="/settings">SETTINGS</Link></nav>
       <div className="ops-system-grid">
         <section>
