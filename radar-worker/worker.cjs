@@ -29,6 +29,10 @@ const ET_CODES = ["EET", "NET"];
 // from the raster imagery products so an absent product never becomes a synthetic detection.
 const STORM_INTEL_CODES = ["NST", "NMD"];
 const STORM_INTEL_CACHE_TTL_MS = 120_000;
+// Official Level III files can remain in the public bucket long after their
+// valid scan. Keep them available for historical inspection, but never let a
+// delayed product drive a live chase target or motion estimate.
+const OFFICIAL_OBJECT_STALE_MS = 20 * 60_000;
 // A decoded Level II volume is large even after compacting gate values. Eight scans covers roughly
 // 35-45 minutes at normal cadence while leaving safe headroom under the service's 2 GB hard limit.
 const FRAME_LIMIT = 8;
@@ -542,6 +546,12 @@ function normalizeOfficialStormIntel(site, parsedByCode) {
   return { storms, mesocyclones: mesos };
 }
 
+function officialProductFreshness(productTime, now = Date.now()) {
+  if (!Number.isFinite(productTime)) return { state: "UNKNOWN", ageSeconds: null };
+  const ageMs = Math.max(0, now - productTime);
+  return { state: ageMs <= OFFICIAL_OBJECT_STALE_MS ? "LIVE" : "STALE", ageSeconds: Math.round(ageMs / 1000) };
+}
+
 async function latestOfficialLevel3Product(site, code) {
   const site3 = site.id.replace(/^K/, "");
   const keys = [];
@@ -552,7 +562,7 @@ async function latestOfficialLevel3Product(site, code) {
   const raw = await fetchBuffer(`${LEVEL3_BUCKET}/${key}`);
   const parsed = parseLevel3(raw, { logger: false });
   const productTime = parsed.productDescription?.productDate ? level3ProductTime(parsed.productDescription.productDate, parsed.productDescription.productTime) : null;
-  return { code, status: "AVAILABLE", key, productTime, parsed };
+  return { code, status: "AVAILABLE", key, productTime, freshness: officialProductFreshness(productTime), parsed };
 }
 
 async function officialStormIntel(siteId) {
@@ -569,13 +579,22 @@ async function officialStormIntel(siteId) {
       const code = STORM_INTEL_CODES[index];
       if (result.status === "fulfilled") {
         const value = result.value;
-        sources[code] = { status: value.status, key: value.key, time: value.productTime ? new Date(value.productTime).toISOString() : null };
+        sources[code] = { status: value.status, key: value.key, time: value.productTime ? new Date(value.productTime).toISOString() : null,
+          freshness: value.freshness?.state || "UNKNOWN", ageSeconds: value.freshness?.ageSeconds ?? null };
         if (value.parsed) parsedByCode[code] = value.parsed;
       } else sources[code] = { status: "UNAVAILABLE", error: result.reason?.message || "fetch failed" };
     });
     const objects = normalizeOfficialStormIntel(site, parsedByCode);
+    const sourceValues = Object.values(sources);
+    const hasCurrentProduct = sourceValues.some((item) => item.status === "AVAILABLE" && item.freshness === "LIVE");
+    const hasHistoricalProduct = sourceValues.some((item) => item.status === "AVAILABLE");
+    const state = hasCurrentProduct ? "available" : hasHistoricalProduct ? "stale" : "unavailable";
     const value = { site: { id: site.id, name: site.name, lat: site.lat, lon: site.lon }, generatedAt: new Date().toISOString(),
-      source: "NEXRAD_LEVEL3_OFFICIAL", sources, stormTracking: objects.storms, mesocyclones: objects.mesocyclones,
+      source: "NEXRAD_LEVEL3_OFFICIAL", state,
+      notice: state === "available" ? "Official NWS algorithm objects are current."
+        : state === "stale" ? "Official NWS algorithm products are historical only and are excluded from current motion and target logic."
+          : "Official NWS algorithm products are unavailable; no storm object is inferred.",
+      sources, stormTracking: objects.storms, mesocyclones: objects.mesocyclones,
       objectCount: objects.storms.length + objects.mesocyclones.length };
     stormIntelCache.set(siteId, { fetchedAt: Date.now(), value });
     return value;
@@ -586,7 +605,9 @@ async function officialStormIntel(siteId) {
 
 async function estimateStormMotionWithOfficial(siteId) {
   const official = await officialStormIntel(siteId);
-  const candidate = official.stormTracking.find((storm) => storm.current?.position && storm.movement && Number.isFinite(Number(storm.movement.kts)));
+  const candidate = official.state === "available"
+    ? official.stormTracking.find((storm) => storm.current?.position && storm.movement && Number.isFinite(Number(storm.movement.kts)))
+    : null;
   if (candidate) return { ok: true, id: candidate.id, directionDegrees: Number(candidate.movement.deg), speedKnots: Number(candidate.movement.kts), confidence: "HIGH", source: "NEXRAD_LEVEL3_NST", official: true, observedPosition: candidate.current.position, forecasts: candidate.forecast };
   const fallback = estimateStormMotion(siteId);
   return { ...fallback, source: fallback.ok ? "LEVEL2_REFLECTIVITY_CENTROID" : "UNAVAILABLE", official: false, officialSources: official.sources };
