@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react"
 import { Link } from "react-router-dom"
+import { useAuth } from "../auth/AuthProvider"
 import { Icon } from "../components/Icon"
 import { useCoreOps } from "../core/useCoreOps"
 import { useViewport } from "../hooks/useViewport"
@@ -15,12 +16,18 @@ const PRIMARY_ACTIONS = [
 export default function MobileHome() {
   const viewport = useViewport()
   const { state, selectPoint } = useCoreOps()
+  const auth = useAuth()
 
   // Desktop keeps the map-first workstation it was designed for.  The phone gets
   // an intentionally different command surface rather than a compressed map rail.
   if (viewport !== "phone") return <Suspense fallback={<div className="page-empty" role="status">Loading map…</div>}><OpsWorkstation focus="OPERATIONS MAP" /></Suspense>
 
   const online = state.core.state === "LIVE"
+  // This is an ordinary anchor click, so mobile Safari treats it as a user-initiated
+  // navigation instead of a delayed cross-origin redirect from the handoff screen.
+  const aegisConsoleHref = auth.status === "authorized"
+    ? `https://phaenon3.tail1d0673.ts.net/ai#access_token=${encodeURIComponent(auth.session.access_token)}`
+    : "/ai"
   return (
     <div className="mobile-home mobile-home--compact">
       <header className="mobile-home__header">
@@ -47,7 +54,7 @@ export default function MobileHome() {
         ))}
       </section>
 
-      <Link to="/ai" className="mobile-action mobile-action--aegis"><Icon name="ops" /><span><b>Aegis</b><small>Open console</small></span><Icon name="chevron" className="mobile-action__chevron" /></Link>
+      <a href={aegisConsoleHref} className="mobile-action mobile-action--aegis"><Icon name="ops" /><span><b>Aegis</b><small>Open console</small></span><Icon name="chevron" className="mobile-action__chevron" /></a>
       <Link to="/hurricane" className="mobile-action mobile-action--aegis"><Icon name="cloud" /><span><b>Hurricane watch</b><small>Isaias · Grand Bay · hourly assessment</small></span><Icon name="chevron" className="mobile-action__chevron" /></Link>
 
       <section className="mobile-home__watch" aria-label="Watch locations">

@@ -6,6 +6,7 @@ import MobileHome from "./MobileHome"
 
 const fixture = vi.hoisted(() => ({ state: "OFFLINE" as OpsConnectionState }))
 vi.mock("../hooks/useViewport", () => ({ useViewport: () => "phone" }))
+vi.mock("../auth/AuthProvider", () => ({ useAuth: () => ({ status: "authorized", session: { access_token: "test-access-token" } }) }))
 vi.mock("../core/useCoreOps", () => ({ useCoreOps: () => ({ state: {
   core: { state: fixture.state, detail: "Core test detail" },
   stormIntel: { state: "LIVE", detail: "Unrelated weather detail" },
@@ -20,6 +21,7 @@ describe("phone readiness", () => {
     expect(html).not.toContain("Core test detail")
     expect(html).not.toContain("OPS READY")
     expect(html).not.toContain("Unrelated weather detail")
+    expect(html).toContain("https://phaenon3.tail1d0673.ts.net/ai#access_token=test-access-token")
   })
   it("labels a live Core narrowly, without claiming all services are ready", () => {
     fixture.state = "LIVE"
