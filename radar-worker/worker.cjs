@@ -25,6 +25,10 @@ const PRODUCT_TO_ACCESSOR = {
   CC: "getHighresCorrelationCoefficient",
 };
 const ET_CODES = ["EET", "NET"];
+// Official NWS algorithm products. These are discrete storm-object products, kept separate
+// from the raster imagery products so an absent product never becomes a synthetic detection.
+const STORM_INTEL_CODES = ["NST", "NMD"];
+const STORM_INTEL_CACHE_TTL_MS = 120_000;
 // A decoded Level II volume is large even after compacting gate values. Eight scans covers roughly
 // 35-45 minutes at normal cadence while leaving safe headroom under the service's 2 GB hard limit.
 const FRAME_LIMIT = 8;
@@ -43,6 +47,8 @@ let stormMotion = null;
 const frames = new Map();
 const tiles = new Map();
 const siteUse = new Map();
+const stormIntelCache = new Map();
+const stormIntelLoads = new Map();
 // Multiple browsers commonly request the same new scan at once. Share one download/decode per
 // frame instead of multiplying the heaviest operation in this process.
 const frameLoads = new Map();
@@ -504,6 +510,88 @@ function level3ProductTime(julianDate, seconds) {
   return Date.UTC(1970, 0, 1) + (julianDate - 1) * 86400_000 + seconds * 1000;
 }
 
+function pointFromRadarPolar(site, polar) {
+  if (!site || !polar || !Number.isFinite(Number(polar.deg)) || !Number.isFinite(Number(polar.nm))) return null;
+  const bearing = Number(polar.deg) * Math.PI / 180;
+  const angularDistance = (Number(polar.nm) * 1.852) / 6371.0088;
+  const lat1 = site.lat * Math.PI / 180;
+  const lon1 = site.lon * Math.PI / 180;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(angularDistance) + Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(bearing));
+  const lon2 = lon1 + Math.atan2(Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(lat1), Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2));
+  return { lat: Number((lat2 * 180 / Math.PI).toFixed(5)), lon: Number((((lon2 * 180 / Math.PI + 540) % 360) - 180).toFixed(5)) };
+}
+
+function normalizeOfficialStormIntel(site, parsedByCode) {
+  const tracking = parsedByCode.NST?.formatted?.storms || {};
+  const mesocyclones = parsedByCode.NMD?.formatted?.mesocyclone || {};
+  const storms = Object.entries(tracking).map(([id, storm]) => ({
+    id, kind: "NWS_STORM_TRACK", source: "NEXRAD_LEVEL3_NST",
+    current: storm.current ? { ...storm.current, position: pointFromRadarPolar(site, storm.current) } : null,
+    movement: storm.movement || null,
+    forecast: (storm.forecast || []).map((position, index) => position && typeof position === "object"
+      ? { leadMinutes: (index + 1) * 15, ...position, position: pointFromRadarPolar(site, position) }
+      : { leadMinutes: (index + 1) * 15, status: position ?? null }),
+  }));
+  const mesos = Object.entries(mesocyclones).map(([id, meso]) => ({
+    id, kind: "NWS_MESOCYCLONE", source: "NEXRAD_LEVEL3_NMD", stormId: meso.stmId || null,
+    position: pointFromRadarPolar(site, { deg: meso.az, nm: meso.ran }), azimuthDegrees: meso.az, rangeNm: meso.ran,
+    stormRelative: meso.sr, lowLevel: meso.lowLevel || null, depth: meso.depth || null,
+    maxRadialVelocity: meso.maxRv || null, tornadicVortexSignature: Boolean(meso.tvs),
+    motion: meso.motion || null, mesocycloneStrengthIndex: meso.msi ?? null,
+  }));
+  return { storms, mesocyclones: mesos };
+}
+
+async function latestOfficialLevel3Product(site, code) {
+  const site3 = site.id.replace(/^K/, "");
+  const keys = [];
+  for (const prefix of level3DatePrefixes(site3, code)) keys.push(...await listS3(prefix, LEVEL3_BUCKET));
+  keys.sort();
+  const key = keys.at(-1);
+  if (!key) return { code, status: "NOT_PUBLISHED", key: null, parsed: null };
+  const raw = await fetchBuffer(`${LEVEL3_BUCKET}/${key}`);
+  const parsed = parseLevel3(raw, { logger: false });
+  const productTime = parsed.productDescription?.productDate ? level3ProductTime(parsed.productDescription.productDate, parsed.productDescription.productTime) : null;
+  return { code, status: "AVAILABLE", key, productTime, parsed };
+}
+
+async function officialStormIntel(siteId) {
+  const site = sites.find((item) => item.id === siteId);
+  if (!site) throw new Error(`Unknown radar site ${siteId}`);
+  const cached = stormIntelCache.get(siteId);
+  if (cached && Date.now() - cached.fetchedAt < STORM_INTEL_CACHE_TTL_MS) return cached.value;
+  if (stormIntelLoads.has(siteId)) return stormIntelLoads.get(siteId);
+  const load = (async () => {
+    const settled = await Promise.allSettled(STORM_INTEL_CODES.map((code) => latestOfficialLevel3Product(site, code)));
+    const sources = {};
+    const parsedByCode = {};
+    settled.forEach((result, index) => {
+      const code = STORM_INTEL_CODES[index];
+      if (result.status === "fulfilled") {
+        const value = result.value;
+        sources[code] = { status: value.status, key: value.key, time: value.productTime ? new Date(value.productTime).toISOString() : null };
+        if (value.parsed) parsedByCode[code] = value.parsed;
+      } else sources[code] = { status: "UNAVAILABLE", error: result.reason?.message || "fetch failed" };
+    });
+    const objects = normalizeOfficialStormIntel(site, parsedByCode);
+    const value = { site: { id: site.id, name: site.name, lat: site.lat, lon: site.lon }, generatedAt: new Date().toISOString(),
+      source: "NEXRAD_LEVEL3_OFFICIAL", sources, stormTracking: objects.storms, mesocyclones: objects.mesocyclones,
+      objectCount: objects.storms.length + objects.mesocyclones.length };
+    stormIntelCache.set(siteId, { fetchedAt: Date.now(), value });
+    return value;
+  })();
+  stormIntelLoads.set(siteId, load);
+  try { return await load; } finally { stormIntelLoads.delete(siteId); }
+}
+
+async function estimateStormMotionWithOfficial(siteId) {
+  const official = await officialStormIntel(siteId);
+  const candidate = official.stormTracking.find((storm) => storm.current?.position && storm.movement && Number.isFinite(Number(storm.movement.kts)));
+  if (candidate) return { ok: true, id: candidate.id, directionDegrees: Number(candidate.movement.deg), speedKnots: Number(candidate.movement.kts), confidence: "HIGH", source: "NEXRAD_LEVEL3_NST", official: true, observedPosition: candidate.current.position, forecasts: candidate.forecast };
+  const fallback = estimateStormMotion(siteId);
+  return { ...fallback, source: fallback.ok ? "LEVEL2_REFLECTIVITY_CENTROID" : "UNAVAILABLE", official: false, officialSources: official.sources };
+}
+
 function cacheFrame(frame) {
   frames.set(frame.id, frame);
   siteUse.set(frame.site.id, Date.now());
@@ -741,6 +829,9 @@ const server = http.createServer(async (req, res) => {
       const ranked = sites.map((site) => ({ ...site, distanceMi: distanceMiles(pos, site) })).sort((a, b) => a.distanceMi - b.distanceMi);
       return send(res, 200, ranked.slice(0, 8));
     }
+    if (url.pathname === "/api/v1/radar/storm-objects") {
+      return send(res, 200, await officialStormIntel(currentSiteForUrl(url)));
+    }
     if (url.pathname === "/api/v1/radar/status") {
       const site = currentSiteForUrl(url);
       const product = url.searchParams.get("product") || selectedProduct;
@@ -807,7 +898,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === "/api/v1/radar/storm-motion/estimate") {
       const site = currentSiteForUrl(url);
-      return send(res, 200, estimateStormMotion(site));
+      return send(res, 200, await estimateStormMotionWithOfficial(site));
     }
     if (url.pathname === "/api/v1/radar/storm-motion" && req.method === "POST") {
       const body = await jsonBody(req);
