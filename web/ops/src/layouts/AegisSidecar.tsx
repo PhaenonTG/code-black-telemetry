@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react"
 import { useDesk } from "../desk/DeskProvider"
 import { Icon } from "../components/Icon"
+import { useAuth } from "../auth/AuthProvider"
 
-const AEGIS_CONSOLE_URL = "https://phaenon3.tail1d0673.ts.net/ai/"
 const SIDECAR_KEY = "codeblack.ops.aegis-sidecar.open"
 
 function readable(value: string | null | undefined, fallback = "Unavailable") {
@@ -15,6 +15,7 @@ function initialOpen() {
 
 export function AegisSidecar() {
   const [open, setOpen] = useState(initialOpen)
+  const auth = useAuth()
   const { observation, errors, activeUnit, referenceLabel } = useDesk()
   const official = observation?.radar?.official_storm_objects
   const radarProducts = Object.entries(observation?.radar?.products ?? {})
@@ -24,6 +25,12 @@ export function AegisSidecar() {
   useEffect(() => {
     try { localStorage.setItem(SIDECAR_KEY, open ? "open" : "closed") } catch { /* visual preference only */ }
   }, [open])
+
+  // The token lives only in the fragment: it never reaches OPS/Core request logs.
+  // AEGIS exchanges it once for its own HTTP-only, same-origin console session.
+  const consoleUrl = auth.status === "authorized"
+    ? `/ai/#${new URLSearchParams({ access_token: auth.session.access_token }).toString()}`
+    : "/ai/"
 
   return <aside className={`aegis-sidecar ${open ? "is-open" : "is-collapsed"}`} aria-label="Aegis evidence and chat">
     <button className="aegis-sidecar__toggle" type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
@@ -44,9 +51,9 @@ export function AegisSidecar() {
       </section>
 
       <section className="aegis-sidecar__conversation" aria-label="Aegis conversation">
-        <div className="aegis-sidecar__conversation-head"><div><span>CONVERSATION</span><p>Discuss evidence, uncertainty, and next checks.</p></div><a href={AEGIS_CONSOLE_URL} target="_blank" rel="noreferrer">OPEN ↗</a></div>
-        <iframe className="aegis-sidecar__frame" title="Aegis chat" src={AEGIS_CONSOLE_URL} />
-        <p className="aegis-sidecar__hint">If the private console cannot load in this pane, use Open. It remains Tailnet-only.</p>
+        <div className="aegis-sidecar__conversation-head"><div><span>CONVERSATION</span><p>Discuss evidence, uncertainty, and next checks.</p></div><a href={consoleUrl} target="_blank" rel="noreferrer">OPEN ↗</a></div>
+        <iframe className="aegis-sidecar__frame" title="Aegis chat" src={consoleUrl} />
+        <p className="aegis-sidecar__hint">AEGIS is served through OPS after the existing account handoff; PHAENON3 remains private.</p>
       </section>
     </div>}
   </aside>

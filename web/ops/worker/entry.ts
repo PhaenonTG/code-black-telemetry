@@ -43,6 +43,7 @@ import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
 import { ODOT_PREFIX, handleOdotRequest, type OdotEnv } from "../functions/lib/odotRelay";
 import { CAMERA_HEALTH_PATH, handleCameraHealth } from "../functions/lib/cameraHealthRelay";
 import { KANDRIVE_PATH, handleKandriveRequest } from "../functions/lib/kandriveRelay";
+import { AEGIS_CONSOLE_PREFIX, handleAegisConsoleRequest } from "../functions/lib/aegisConsoleRelay";
 
 interface Env extends GatewayEnv, MapboxTokenEnv, OdotEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -96,6 +97,9 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === AUTH_CONFIG_PATH) return authConfigResponse(env);
+    if (url.pathname === AEGIS_CONSOLE_PREFIX || url.pathname.startsWith(`${AEGIS_CONSOLE_PREFIX}/`)) {
+      return handleAegisConsoleRequest(request, env);
+    }
     if (url.pathname.startsWith(GATEWAY_PREFIX)) {
       return handleGatewayRequest(request, env);
     }

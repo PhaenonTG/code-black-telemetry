@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "include": ["/api/auth/config", "/api/core/*", "/api/ardot-camera-stream", "/api/camera-health", "/api/kandrive/*", "/api/modot/*", "/api/odot/*", "/api/tdot/*", "/overlay-core/*"],
+  "include": ["/ai", "/ai/*", "/api/auth/config", "/api/core/*", "/api/ardot-camera-stream", "/api/camera-health", "/api/kandrive/*", "/api/modot/*", "/api/odot/*", "/api/tdot/*", "/overlay-core/*"],
   "exclude": []
 }
