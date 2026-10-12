@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagnostics } from "../services/mapTiles";
+import { atlasStyleUri, ensureMapboxAccessToken, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagnostics } from "../services/mapTiles";
 import type { AlertProduct } from "../services/situational";
 import type { Spotter } from "../services/spotters";
 import type { NearbyCategory, NearbyPlace } from "../services/nearby";
@@ -289,6 +289,7 @@ export function AtlasMap({
   zoomLockedRef.current = zoomLocked;
   const [mapError, setMapError] = useState("");
   const [mapState, setMapState] = useState<AtlasMapState>("INITIALIZING");
+  const [mapTokenReady, setMapTokenReady] = useState<boolean | null>(hasMapboxToken() ? true : null);
   const [renderCount, setRenderCount] = useState(0);
   const [idleCount, setIdleCount] = useState(0);
   const [pixelSample, setPixelSample] = useState("pending");
@@ -458,7 +459,22 @@ export function AtlasMap({
   }, [cameraMode]);
 
   useEffect(() => {
+    let active = true;
+    if (hasMapboxToken()) {
+      setMapTokenReady(true);
+      return;
+    }
+    void ensureMapboxAccessToken().then((available) => {
+      if (active) setMapTokenReady(available);
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    // The OPS Pages worker supplies the public token at runtime. Do not show a
+    // false "not configured" state during that short refresh-time handshake.
+    if (mapTokenReady === null) return;
     if (!hasMapboxToken()) {
       setMapError("MAPBOX_TOKEN_MISSING");
       setMapState("TOKEN_MISSING");
@@ -668,7 +684,7 @@ export function AtlasMap({
       }
       mapRef.current = null;
     };
-  }, [styleUri]);
+  }, [mapTokenReady, styleUri]);
 
   // The one-time cinematic wide-to-operating-zoom intro, decoupled from the map-construction effect
   // above so it fires whenever GPS actually becomes available -- not just if GPS happened to already

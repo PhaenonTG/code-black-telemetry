@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../services/mapTiles";
+import { atlasStyleUri, ensureMapboxAccessToken, hasMapboxToken, mapboxAccessToken } from "../services/mapTiles";
 
 type ReconStyle = "night" | "bright";
 
@@ -89,9 +89,23 @@ export function AtlasReconGlPage() {
     layerCount: 0,
     sourceCount: 0,
   }));
+  const [mapTokenReady, setMapTokenReady] = useState<boolean | null>(hasMapboxToken() ? true : null);
+
+  useEffect(() => {
+    let active = true;
+    if (hasMapboxToken()) {
+      setMapTokenReady(true);
+      return;
+    }
+    void ensureMapboxAccessToken().then((available) => {
+      if (active) setMapTokenReady(available);
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
+    if (mapTokenReady === null) return;
     if (!hasMapboxToken()) {
       setDiagnostics((current) => ({ ...current, status: "missing-token", error: "MAPBOX_TOKEN_MISSING" }));
       return;
@@ -179,7 +193,7 @@ export function AtlasReconGlPage() {
       map.remove();
       mapRef.current = null;
     };
-  }, [style]);
+  }, [mapTokenReady, style]);
 
   return (
     <main className="atlas-recon-page">

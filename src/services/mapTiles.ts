@@ -1,13 +1,40 @@
-const MAPBOX_PUBLIC_TOKEN = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined)?.trim() ?? "";
+const compiledMapboxToken = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined)?.trim() ?? "";
+const runtimeTokenPath = "/overlay-core/mapbox-token";
+let resolvedMapboxToken = compiledMapboxToken;
+let runtimeTokenRequest: Promise<boolean> | null = null;
 
 export type BasemapProvider = "mapbox" | "osm";
 
 export function hasMapboxToken() {
-  return MAPBOX_PUBLIC_TOKEN.startsWith("pk.") && MAPBOX_PUBLIC_TOKEN.length > 20;
+  return resolvedMapboxToken.startsWith("pk.") && resolvedMapboxToken.length > 20;
 }
 
 export function mapboxAccessToken() {
-  return MAPBOX_PUBLIC_TOKEN;
+  return resolvedMapboxToken;
+}
+
+/**
+ * OPS keeps its public Mapbox token in the Pages runtime rather than baking it
+ * into the browser bundle.  The shared map package still supports native/local
+ * builds through VITE_MAPBOX_ACCESS_TOKEN, but an OPS refresh must wait for this
+ * one small runtime bootstrap before constructing Mapbox GL.
+ */
+export async function ensureMapboxAccessToken(): Promise<boolean> {
+  if (hasMapboxToken()) return true;
+  if (typeof window === "undefined" || typeof fetch !== "function") return false;
+  if (!runtimeTokenRequest) {
+    runtimeTokenRequest = fetch(runtimeTokenPath, { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return false;
+        const body = await response.json() as { token?: unknown };
+        const token = typeof body.token === "string" ? body.token.trim() : "";
+        if (!token.startsWith("pk.") || token.length <= 20) return false;
+        resolvedMapboxToken = token;
+        return true;
+      })
+      .catch(() => false);
+  }
+  return runtimeTokenRequest;
 }
 
 export function atlasStyleUri() {
@@ -18,7 +45,7 @@ export function atlasStyleUri() {
 
 export function mapboxReverseGeocodeUrl(lat: number, lon: number) {
   if (!hasMapboxToken()) return "";
-  const token = encodeURIComponent(MAPBOX_PUBLIC_TOKEN);
+  const token = encodeURIComponent(resolvedMapboxToken);
   return `https://api.mapbox.com/search/geocode/v6/reverse?longitude=${lon.toFixed(6)}&latitude=${lat.toFixed(6)}&types=place,locality,neighborhood,district,region&access_token=${token}`;
 }
 
