@@ -11,6 +11,21 @@ export type OpsIncident = {
 
 export function newTraceId(): string { return `ops-${crypto.randomUUID()}`; }
 
+/**
+ * Browser error text is untrusted: URLs, rejected requests, and SDK messages
+ * can include credentials or a precise location. Incident records are meant
+ * to explain a failure, not preserve the sensitive value that triggered it.
+ */
+export function redactDiagnosticMessage(value: unknown, limit = 320): string {
+  const raw = value instanceof Error ? value.message : String(value ?? "");
+  return raw
+    .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [REDACTED]")
+    .replace(/([?&#][^\s=&#]*(?:token|secret|password|authorization|api[_-]?key)[^\s=&#]*=)[^\s&#]+/gi, "$1[REDACTED]")
+    .replace(/\b((?:lat(?:itude)?|lon(?:gitude)?|lng)\s*[=:]\s*)-?\d{1,3}(?:\.\d+)?/gi, "$1[REDACTED]")
+    .replace(/\b-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}\b/g, "[COORDINATES_REDACTED]")
+    .slice(0, limit);
+}
+
 async function request<T>(config: OpsCoreConfig, path: string, init: RequestInit = {}): Promise<T> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token ?? null;
@@ -27,7 +42,8 @@ export async function loadOpsIncidents(config: OpsCoreConfig, severity?: OpsInci
 }
 
 export async function recordOpsIncident(config: OpsCoreConfig, incident: Omit<OpsIncident, "id" | "created_at" | "verified_at" | "verification_note">): Promise<void> {
-  await request(config, "/api/ops/v1/incidents", { method: "POST", headers: { "Content-Type": "application/json", "X-CodeBlack-Trace-Id": incident.trace_id }, body: JSON.stringify(incident) });
+  const safeIncident = { ...incident, message: redactDiagnosticMessage(incident.message) };
+  await request(config, "/api/ops/v1/incidents", { method: "POST", headers: { "Content-Type": "application/json", "X-CodeBlack-Trace-Id": incident.trace_id }, body: JSON.stringify(safeIncident) });
 }
 
 export async function verifyOpsIncident(config: OpsCoreConfig, incidentId: string): Promise<void> {
@@ -39,7 +55,7 @@ export function installBrowserDiagnostics(config: OpsCoreConfig): void {
   sessionStorage.setItem("cbwx-diagnostics-installed", "1");
   const sent = new Set<string>();
   const capture = (action: string, message: string) => {
-    const key = `${action}:${message}`.slice(0, 320); if (sent.has(key)) return; sent.add(key);
+    const key = `${action}:${redactDiagnosticMessage(message)}`.slice(0, 320); if (sent.has(key)) return; sent.add(key);
     void recordOpsIncident(config, { source: "BROWSER", severity: "ERROR", subsystem: "OPS_UI", action, result: "FAILED", trace_id: newTraceId(), message: key, release: import.meta.env.VITE_CF_PAGES_COMMIT_SHA as string | undefined, latency_ms: null }).catch(() => undefined);
   };
   window.addEventListener("error", (event) => capture("WINDOW_ERROR", event.message || "Unhandled browser error"));
@@ -51,7 +67,7 @@ export function reportCoreRequestFailure(action: string, message: string, latenc
   if (!config.coreBaseUrl) return;
   void recordOpsIncident(config, {
     source: "BROWSER", severity: "ERROR", subsystem: "CORE_REQUEST", action,
-    result: "FAILED", trace_id: traceId, message, latency_ms: Math.max(0, Math.round(latencyMs)),
+    result: "FAILED", trace_id: traceId, message: redactDiagnosticMessage(message), latency_ms: Math.max(0, Math.round(latencyMs)),
     release: import.meta.env.VITE_CF_PAGES_COMMIT_SHA as string | undefined,
   }).catch(() => undefined);
 }
