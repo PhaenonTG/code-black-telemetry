@@ -34,6 +34,7 @@ import {
   resolveAllowlistRoute,
   verifyOpsAuth,
 } from "../functions/lib/coreGateway";
+import { normalizeLocalReviewRequest } from "../functions/lib/localReviewRequest";
 import { ARDOT_RELAY_PREFIX, handleArdotCameraStream } from "../functions/lib/ardotCameraRelay";
 import { OVERLAY_CORE_PREFIX, handlePublicStormIntelRequest } from "../functions/lib/publicStormIntelRelay";
 import { MAPBOX_TOKEN_PATH, handleMapboxTokenRequest, type MapboxTokenEnv } from "../functions/lib/publicMapboxToken";
@@ -48,6 +49,19 @@ interface Env extends GatewayEnv, MapboxTokenEnv, OdotEnv {
 }
 
 const GATEWAY_PREFIX = "/api/core/";
+const AUTH_CONFIG_PATH = "/api/auth/config";
+
+function authConfigResponse(env: GatewayEnv): Response {
+  // These are Supabase's public browser bootstrap values, not service-role credentials. The
+  // Worker still verifies every protected gateway call and active OPS profile server-side.
+  if (!env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_PUBLISHABLE_KEY) {
+    return Response.json({ error: "AUTH_BOOTSTRAP_UNAVAILABLE" }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+  return Response.json(
+    { url: env.VITE_SUPABASE_URL, publishableKey: env.VITE_SUPABASE_PUBLISHABLE_KEY },
+    { headers: { "Cache-Control": "no-store" } },
+  );
+}
 
 async function handleGatewayRequest(request: Request, env: Env): Promise<Response> {
   const auth = await verifyOpsAuth(request.headers.get("Authorization"), env);
@@ -59,7 +73,13 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
   if (!route) return gatewayErrorResponse(404, "ROUTE_NOT_ALLOWED");
   if (!(route.methods ?? ["GET"]).includes(request.method)) return gatewayErrorResponse(405, "METHOD_NOT_ALLOWED");
 
-  const body = request.method === "PUT" ? await request.text() : undefined;
+  let body = request.method === "PUT" || request.method === "POST" ? await request.text() : undefined;
+  if (request.method === "POST" && body !== undefined) {
+    if (new TextEncoder().encode(body).length > 16_000) return gatewayErrorResponse(413, "INVALID_REVIEW_BODY");
+    const review = normalizeLocalReviewRequest(route.upstreamPath, body);
+    if (review && !review.ok) return gatewayErrorResponse(review.status, "INVALID_REVIEW_BODY");
+    if (review?.ok) body = review.body;
+  }
   const result = await forwardToCore(route, url, env, fetch, {
     method: request.method,
     body,
@@ -75,6 +95,7 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === AUTH_CONFIG_PATH) return authConfigResponse(env);
     if (url.pathname.startsWith(GATEWAY_PREFIX)) {
       return handleGatewayRequest(request, env);
     }

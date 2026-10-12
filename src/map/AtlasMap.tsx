@@ -5,7 +5,7 @@ import { atlasStyleUri, hasMapboxToken, mapboxAccessToken, writeMapRuntimeDiagno
 import type { AlertProduct } from "../services/situational";
 import type { Spotter } from "../services/spotters";
 import type { NearbyCategory, NearbyPlace } from "../services/nearby";
-import { resolveTeamPositions } from "../services/teamPositions";
+import { resolveTeamPositions, type TeamPosition } from "../services/teamPositions";
 import { clearBreadcrumbTrail } from "../services/breadcrumbTrail";
 import { downloadBreadcrumbExport } from "../services/breadcrumbExport";
 import { DEFAULT_CHASER_RADIUS_MILES, getMapLayerVisibility, loadChaserRadiusMiles, loadMapLayerVisibility, subscribeChaserRadiusMiles, subscribeMapLayerVisibility, saveMapLayerVisibility } from "../services/settings";
@@ -121,6 +121,7 @@ type AtlasMapProps = {
   statusLines: string[];
   alerts?: AlertProduct[];
   spotters?: Spotter[];
+  teamPositions?: TeamPosition[];
   showAllActiveSpotters?: boolean;
   poiPlaces?: NearbyPlace[];
   nearbyBest?: Partial<Record<NearbyCategory, NearbyPlace>>;
@@ -128,6 +129,15 @@ type AtlasMapProps = {
   // north-up/rings/clear-trail/mosaic-toggle buttons and no single-site radar UI at all -- that
   // full toolbar only exists on the "full" Locate page, which has the room for it.
   controlsVariant?: "full" | "compact";
+  // OPS embeds independent situation/radar screens. Native and legacy maps keep the shared store.
+  layerScope?: "shared" | "situation" | "radar";
+  deskControls?: boolean;
+  contextTargets?: Array<{ lat: number; lon: number }>;
+  contextBounds?: [number, number, number, number] | null;
+  contextFocus?: { lat: number; lon: number } | null;
+  // Optional published dominant-echo observation. Never a tornado or forecast marker.
+  contextEcho?: { lat: number; lon: number; label: string; trusted: boolean } | null;
+  onRadarFrame?: (frame: RadarFrame | null) => void;
   escapeControl?: ReactNode;
   selectedPoint?: AtlasSelectedPoint | null;
   onPointSelect?: (point: AtlasSelectedPoint) => void;
@@ -241,6 +251,14 @@ export function AtlasMap({
   poiPlaces = EMPTY_POI,
   nearbyBest = EMPTY_NEARBY_BEST,
   controlsVariant = "full",
+  layerScope = "shared",
+  deskControls = false,
+  teamPositions: suppliedTeamPositions,
+  contextTargets,
+  contextBounds,
+  contextFocus,
+  contextEcho,
+  onRadarFrame,
   escapeControl,
   selectedPoint = null,
   onPointSelect,
@@ -255,7 +273,8 @@ export function AtlasMap({
   // arriving conditions (map style loaded vs. first real GPS fix) -- see the dedicated intro effect
   // below for why they can't share one gate.
   const introAppliedRef = useRef(false);
-  const latestRef = useRef({ gps, rangeRings, expanded });
+  const contextView = Boolean(contextFocus || (contextBounds && contextBounds.every(Number.isFinite) && contextBounds[0] < contextBounds[2] && contextBounds[1] < contextBounds[3] && contextBounds[0] >= -180 && contextBounds[2] <= 180 && contextBounds[1] >= -85 && contextBounds[3] <= 85));
+  const latestRef = useRef({ gps, rangeRings, expanded, contextView });
   const onPointSelectRef = useRef(onPointSelect);
   onPointSelectRef.current = onPointSelect;
   const [cameraMode, setCameraMode] = useState<AtlasCameraMode>("FOLLOW_NORTH");
@@ -292,12 +311,13 @@ export function AtlasMap({
   // shared get/save/subscribe store in services/settings.ts so the Weather page's compact map, the
   // Locate page's full map, and the new config screen all read/write the exact same state instead
   // of each map instance keeping its own independent (and previously non-persisted) copy.
-  const [layerVisibility, setLayerVisibility] = useState({ warnings: true, watches: true, mesoscaleDiscussions: true, specialStatements: true, team: true, chasers: true, poi: true, mosaic: true, radar: false, roadConditions: false, trafficCameras: false, surfaceStations: false, stormReports: true, riverGauges: false, probes: false, chaserNet: false, breadcrumbs: true });
+  const [layerVisibility, setLayerVisibility] = useState({ warnings: true, watches: true, mesoscaleDiscussions: true, specialStatements: true, team: true, chasers: true, poi: layerScope === "shared", mosaic: layerScope !== "radar", radar: layerScope === "radar", roadConditions: layerScope === "situation", trafficCameras: layerScope === "situation", surfaceStations: false, stormReports: true, riverGauges: false, probes: false, chaserNet: false, breadcrumbs: true });
   useEffect(() => {
+    if (layerScope !== "shared") return;
     const unsubscribe = subscribeMapLayerVisibility(setLayerVisibility);
     void loadMapLayerVisibility();
     return () => { unsubscribe(); };
-  }, []);
+  }, [layerScope]);
   useEffect(() => {
     const close = () => setLayersPopoverOpen(false);
     window.addEventListener("codeblack:close-map-popovers", close);
@@ -307,11 +327,12 @@ export function AtlasMap({
   const mosaicVisible = CHASE_RADAR_ENABLED && mosaicRequested;
   const radarVisible = CHASE_RADAR_ENABLED && radarRequested;
   const toggleLayer = (key: keyof typeof layerVisibility) => {
+    if (layerScope !== "shared") { setLayerVisibility((current) => ({ ...current, [key]: !current[key] })); return; }
     const current = getMapLayerVisibility();
     void saveMapLayerVisibility({ ...current, [key]: !current[key] });
   };
   const applyLayerPreset = (preset: "intercept" | "travel" | "flood" | "night" | "low-bandwidth") => {
-    const current = getMapLayerVisibility();
+    const current = layerScope === "shared" ? getMapLayerVisibility() : layerVisibility;
     const common = { ...current, warnings: true, watches: true, mosaic: true, poi: false };
     const next = preset === "intercept"
       ? { ...common, mesoscaleDiscussions: true, specialStatements: true, chasers: true, roadConditions: true, trafficCameras: true, surfaceStations: true, stormReports: true }
@@ -322,7 +343,8 @@ export function AtlasMap({
           : preset === "night"
             ? { ...common, mesoscaleDiscussions: true, specialStatements: true, chasers: true, roadConditions: true, trafficCameras: true, surfaceStations: true }
             : { ...common, mesoscaleDiscussions: false, specialStatements: false, chasers: true, roadConditions: true, trafficCameras: false, surfaceStations: false, radar: false };
-    void saveMapLayerVisibility(next);
+    if (layerScope === "shared") void saveMapLayerVisibility(next);
+    else setLayerVisibility(next);
   };
   const mosaicVisibleRef = useRef(mosaicVisible);
   mosaicVisibleRef.current = mosaicVisible;
@@ -361,7 +383,7 @@ export function AtlasMap({
     return () => { unsubscribe(); };
   }, []);
   const customPoiPins = useCustomPoiPins();
-  const teamPositions = useMemo(() => resolveTeamPositions(spotters, roster), [spotters, roster]);
+  const teamPositions = useMemo(() => suppliedTeamPositions ?? resolveTeamPositions(spotters, roster), [suppliedTeamPositions, spotters, roster]);
   const chaserSpotters = useMemo(() => {
     const teamIds = new Set(teamPositions.map((member) => member.id));
     // Team is a small, deliberately-curated roster -- always shown regardless of distance. Chasers
@@ -402,7 +424,7 @@ export function AtlasMap({
     window.dispatchEvent(new CustomEvent("codeblack:map-operational-update", { detail: { roads: operationalRoadConditions, reports: stormReports } }));
   }, [compact, operationalRoadConditions, stormReports]);
 
-  latestRef.current = { gps, rangeRings, expanded };
+  latestRef.current = { gps, rangeRings, expanded, contextView };
 
   useEffect(() => {
     incrementAtlasCounter("reactMounts");
@@ -443,7 +465,11 @@ export function AtlasMap({
       return;
     }
     mapboxgl.accessToken = mapboxAccessToken();
+    let disposed = false;
     try {
+      styleInitializedRef.current = false;
+      setLoaded(false);
+      setMapError("");
       setMapState("INITIALIZING");
       const initial = latestRef.current;
       const map = new mapboxgl.Map({
@@ -501,6 +527,9 @@ export function AtlasMap({
         interactionResumeTimerRef.current = window.setTimeout(() => {
           interactionResumeAtRef.current = 0;
           interactionResumeTimerRef.current = null;
+          // Setup maps retain their published area/selected target rather than jumping back to
+          // the vehicle after a manual inspection. Native follow maps keep their existing timer.
+          if (latestRef.current.contextView) return;
           recenterRef.current(autoModeRef.current);
         }, INTERACTION_PAUSE_MS);
       };
@@ -570,10 +599,14 @@ export function AtlasMap({
         });
       });
       map.getCanvas().addEventListener("webglcontextlost", () => {
+        // Mapbox deliberately loses the retired canvas context during remove(). A delayed event
+        // from that canvas must not cover its replacement (StrictMode, style changes) with an error.
+        if (disposed || mapRef.current !== map) return;
         setMapState("WEBGL_ERROR");
         setMapError("WEBGL_CONTEXT_LOST");
       });
       map.on("error", (event) => {
+        if (disposed || mapRef.current !== map) return;
         // A missing provider tile is recoverable. Mapbox emits it through the same global error
         // channel as a failed base-style initialization; treating every tile 404 as STYLE_ERROR
         // covered the working map with a fatal-session overlay.
@@ -620,6 +653,7 @@ export function AtlasMap({
     }
 
     return () => {
+      disposed = true;
       stopMosaicRef.current?.();
       stopMosaicRef.current = null;
       if (interactionResumeTimerRef.current != null) {
@@ -648,6 +682,10 @@ export function AtlasMap({
     // flyTo -- two competing camera animations at once looks janky, not premium.
     lastGpsAppliedRef.current = { gps, at: Date.now() };
     updateAtlasVehicleLayer(map, gps, vehicleMarkerStyleRef.current);
+    if (contextView) {
+      setCameraMode("FREE");
+      return;
+    }
     const introZoom = zoomForSpeed(gps.speedMph, expanded, compact);
     map.flyTo({
       center: [gps.lon, gps.lat],
@@ -659,7 +697,7 @@ export function AtlasMap({
     setBearing(0);
     setPitch(0);
     setCameraMode("FOLLOW_NORTH");
-  }, [loaded, gps, expanded, compact]);
+  }, [loaded, gps, expanded, compact, contextView]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -678,7 +716,7 @@ export function AtlasMap({
       if (mapRef.current !== map) return;
       map.resize();
       const currentGps = latestRef.current.gps;
-      if (currentGps) {
+      if (currentGps && !latestRef.current.contextView) {
         map.jumpTo({
           center: [currentGps.lon, currentGps.lat],
           zoom: zoomLockedRef.current ? map.getZoom() : zoomForSpeed(currentGps.speedMph, latestRef.current.expanded, compact),
@@ -717,7 +755,7 @@ export function AtlasMap({
   // the cost of), so animating it is effectively free.
   useEffect(() => {
     const map = mapRef.current;
-    if (!active || !map || !loaded || !gps) return;
+    if (!active || !map || !loaded || !gps || latestRef.current.contextView) return;
     if (cameraMode !== "FOLLOW_NORTH" && cameraMode !== "FOLLOW_HEADING" && cameraMode !== "RECENTERING") return;
     map.easeTo({
       center: [gps.lon, gps.lat],
@@ -736,6 +774,44 @@ export function AtlasMap({
   // invisible. Poll for the target changing (not a fixed-interval easeTo every tick, which would
   // restart the same animation mid-flight and look stuttery) and only ease when it actually does.
   const compactZoomRef = useRef(-1);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || !contextTargets) return;
+    const data = { type: "FeatureCollection" as const, features: contextTargets.filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon) && Math.abs(point.lat) <= 90 && Math.abs(point.lon) <= 180).map((point) => ({ type: "Feature" as const, properties: {}, geometry: { type: "Point" as const, coordinates: [point.lon, point.lat] } })) };
+    const source = map.getSource("atlas-context-targets") as mapboxgl.GeoJSONSource | undefined;
+    if (source) source.setData(data);
+    else {
+      map.addSource("atlas-context-targets", { type: "geojson", data });
+      map.addLayer({ id: "atlas-context-targets", type: "circle", source: "atlas-context-targets", paint: { "circle-radius": 7, "circle-color": "#15171b", "circle-stroke-color": "#e62429", "circle-stroke-width": 2 } });
+    }
+  }, [contextTargets, loaded]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    const valid = contextEcho && Number.isFinite(contextEcho.lat) && Number.isFinite(contextEcho.lon) && Math.abs(contextEcho.lat) <= 90 && Math.abs(contextEcho.lon) <= 180;
+    const data = { type: "FeatureCollection" as const, features: valid ? [{ type: "Feature" as const, properties: { label: contextEcho.label, trusted: contextEcho.trusted }, geometry: { type: "Point" as const, coordinates: [contextEcho.lon, contextEcho.lat] } }] : [] };
+    const source = map.getSource("atlas-context-echo") as mapboxgl.GeoJSONSource | undefined;
+    if (source) source.setData(data);
+    else if (valid) {
+      map.addSource("atlas-context-echo", { type: "geojson", data });
+      map.addLayer({ id: "atlas-context-echo", type: "circle", source: "atlas-context-echo", paint: { "circle-radius": 8, "circle-color": "#101216", "circle-stroke-color": ["case", ["==", ["get", "trusted"], true], "#f2f3f5", "#9aa0aa"], "circle-stroke-width": 2 } });
+      if (map.getStyle().glyphs) map.addLayer({ id: "atlas-context-echo-label", type: "symbol", source: "atlas-context-echo", layout: { "text-field": ["get", "label"], "text-size": 11, "text-anchor": "bottom", "text-offset": [0, -1.3] }, paint: { "text-color": "#f2f3f5", "text-halo-color": "#101216", "text-halo-width": 2 } });
+    }
+  }, [contextEcho?.lat, contextEcho?.lon, contextEcho?.label, contextEcho?.trusted, loaded]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || !contextBounds || !contextBounds.every(Number.isFinite)) return;
+    const [west, south, east, north] = contextBounds;
+    if (west >= east || south >= north || west < -180 || east > 180 || south < -85 || north > 85) return;
+    setCameraMode("FREE");
+    map.fitBounds([[west, south], [east, north]], { padding: 35, duration: 0 });
+  }, [contextBounds?.[0], contextBounds?.[1], contextBounds?.[2], contextBounds?.[3], loaded]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || !contextFocus) return;
+    setCameraMode("FREE");
+    map.easeTo({ center: [contextFocus.lon, contextFocus.lat], zoom: Math.max(8, map.getZoom()), duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 300 });
+  }, [contextFocus?.lat, contextFocus?.lon, loaded]);
   useEffect(() => {
     if (!compact) return;
     // Deliberately NOT depending on gps/expanded/active here (read via latestRef/activeRef
@@ -854,6 +930,7 @@ export function AtlasMap({
     } catch { /* preference remains active for this session */ }
   };
   const radarFrame = radarFrames[radarPlaybackIndex] ?? null;
+  useEffect(() => { onRadarFrame?.(radarFrame); }, [onRadarFrame, radarFrame]);
   // Reflectivity alone doesn't show rotation -- a chaser needs VEL/SRV to spot a mesocyclone and CC
   // to catch a debris-ball tornado confirmation. SRV additionally requires a storm motion vector set
   // (the worker 400s without one), so the product switcher and storm-motion control are paired.
@@ -1564,11 +1641,13 @@ export function AtlasMap({
             <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => mapRef.current?.zoomOut({ duration: 250 })}>−</button>
           </div>
           <button type="button" aria-label="Toggle follow mode" title="Cycles between north-up follow, heading-up follow, and recenter from free pan" className={cameraMode === "FREE" ? "" : "active"} onClick={() => recenter(cameraMode === "FOLLOW_HEADING" ? "FOLLOW_NORTH" : "FOLLOW_HEADING")}>{followLabel}</button>
-          <button type="button" aria-label="Export position trail as GPX" title="Downloads your recorded breadcrumb trail as a GPX file" disabled={trail.length === 0} onClick={() => downloadBreadcrumbExport(trail, "gpx")}>EXPORT TRAIL</button>
-          <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
-          <button type="button" aria-label="Toggle zoom lock" title="Stops the camera from re-zooming automatically as your speed changes" className={zoomLocked ? "active" : ""} onClick={() => setZoomLocked((value) => !value)}>ZOOM LOCK</button>
-          <button type="button" aria-label="Toggle route ahead hazards" title="Uses the route to the selected map point; falls back to a 20-mile heading corridor" className={routeAheadOnly ? "active" : ""} onClick={() => setRouteAheadOnly((value) => !value)}>AHEAD{routeAheadOnly && navigationRoute.length > 1 ? " · ROUTE" : ""}</button>
-          {CHASE_RADAR_ENABLED && <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>}
+          {!deskControls && <>
+            <button type="button" aria-label="Export position trail as GPX" title="Downloads your recorded breadcrumb trail as a GPX file" disabled={trail.length === 0} onClick={() => downloadBreadcrumbExport(trail, "gpx")}>EXPORT TRAIL</button>
+            <button type="button" aria-label="Clear position trail" title="Clears your recorded breadcrumb trail" disabled={trail.length === 0} onClick={() => clearBreadcrumbTrail()}>CLEAR TRAIL</button>
+            <button type="button" aria-label="Toggle zoom lock" title="Stops the camera from re-zooming automatically as your speed changes" className={zoomLocked ? "active" : ""} onClick={() => setZoomLocked((value) => !value)}>ZOOM LOCK</button>
+            <button type="button" aria-label="Toggle route ahead hazards" title="Uses the route to the selected map point; falls back to a 20-mile heading corridor" className={routeAheadOnly ? "active" : ""} onClick={() => setRouteAheadOnly((value) => !value)}>AHEAD{routeAheadOnly && navigationRoute.length > 1 ? " · ROUTE" : ""}</button>
+            {CHASE_RADAR_ENABLED && <button type="button" aria-label="Toggle wide-area mosaic layer" title="Wide-area national radar mosaic, auto-refreshing" className={mosaicVisible ? "active" : ""} onClick={() => toggleLayer("mosaic")}>MOSAIC</button>}
+          </>}
           <button type="button" aria-label="Map layers" data-testid="atlas-map-layers-primary" title="Toggle alerts, team, chaser, and gas/food POI pins" className={layersPopoverOpen ? "active" : ""} onClick={() => setLayersPopoverOpen((value) => !value)}>LAYERS</button>
         </div>
       )}

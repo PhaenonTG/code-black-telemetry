@@ -18,6 +18,7 @@
 // ALLOWLIST exactly, and only the allowlisted query params for that route are forwarded --
 // see src/allowlist.ts.
 import { buildCoreUrl, resolveRoute, validateQueryParams } from "./allowlist";
+import { normalizeLocalReviewRequest } from "../../../web/ops/functions/lib/localReviewRequest";
 
 // The future Workers VPC Service binding. Not created yet -- see README.md. Modeled after the
 // documented VPC binding fetch() surface (developers.cloudflare.com/workers-vpc/api/) so the
@@ -59,20 +60,36 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 
   const targetUrl = buildCoreUrl(route, url);
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  if (request.signal.aborted) cancel();
+  request.signal.addEventListener("abort", cancel, { once: true });
+  const timer = setTimeout(cancel, route.timeoutMs ?? 8_000);
   try {
     // Deliberately no CF-Access-Client-Id / CF-Access-Client-Secret headers here -- the VPC
     // Service binding authenticates this request at the Cloudflare network layer via the
     // tunnel binding itself, not via a header Core or Access would otherwise need to check.
-    const body = request.method === "PUT" ? await request.text() : undefined;
+    let body: string | undefined;
+    if (request.method === "POST") {
+      if (!request.headers.get("Content-Type")?.toLowerCase().startsWith("application/json")) return jsonResponse(415, { error: "JSON_REQUIRED" });
+      const text = await request.text();
+      const review = normalizeLocalReviewRequest(route.upstreamPath, text);
+      if (!review?.ok) return jsonResponse(review?.status ?? 400, { error: "INVALID_REVIEW_BODY" });
+      body = review.body;
+    } else if (request.method === "PUT") body = await request.text();
     return await env.CORE_VPC.fetch(targetUrl, {
       method: request.method,
       body,
+      signal: controller.signal,
       headers: { Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
     });
   } catch {
     // Never surface the underlying exception (which could contain internal network detail) to
     // the caller -- map every VPC transport failure to one generic, safe reason.
     return jsonResponse(502, { error: "CORE_TRANSPORT_UNAVAILABLE" });
+  } finally {
+    clearTimeout(timer);
+    request.signal.removeEventListener("abort", cancel);
   }
 }
 

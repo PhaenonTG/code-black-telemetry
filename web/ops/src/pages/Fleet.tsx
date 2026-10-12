@@ -29,7 +29,7 @@ export default function Fleet() {
     <div className="page page-fleet">
       <PageHeader title="CHASE OPERATIONS" kicker="FLEET · STREAMS · ACTIVE UNITS" description="Track active chase units, onboard systems, and the live program feed." />
       <nav className="section-tabs" aria-label="Chase Operations sections">
-        <Link className="active" to="/chase">FLEET</Link>
+        <Link className="active" to="/fleet">FLEET</Link>
         <Link to="/stream">STREAMS</Link>
       </nav>
       {units.length === 0 ? (
@@ -38,7 +38,7 @@ export default function Fleet() {
           <p className="empty-state__body">
             {state.fabric.detail}. Units appear here as soon as they report through Fabric.
           </p>
-          <div className="empty-state__actions"><Link to="/">OPEN OPERATIONS MAP</Link><Link to="/system">VIEW SYSTEM HEALTH</Link></div>
+          <div className="empty-state__actions"><Link to="/map">OPEN OPERATIONS MAP</Link><Link to="/system">VIEW SYSTEM HEALTH</Link></div>
         </div>
       ) : (
         <div className="ops-fleet-grid">

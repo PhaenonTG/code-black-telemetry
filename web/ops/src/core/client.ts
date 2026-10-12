@@ -2,6 +2,7 @@ import { normalizeStormIntelSnapshot } from "../../../../web/overlay/src/stormIn
 import type { StormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/types";
 import type { FabricNormalizedState } from "../../../../src/services/fabric";
 import { supabase } from "../lib/supabase";
+import { newTraceId, reportCoreRequestFailure } from "../diagnostics";
 import { coreConfigured, type OpsCoreConfig } from "./config";
 import type { CoreHealthSnapshot, FabricSnapshotState, OpsConnectionState, StormIntelState } from "./types";
 
@@ -44,14 +45,24 @@ export function buildCoreRequestHeaders(token: string | null): Record<string, st
 }
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const startedAt = performance.now();
+  const traceId = newTraceId();
   const token = await currentAccessToken();
-  const response = await fetch(url, {
-    cache: "no-store",
-    signal,
-    headers: buildCoreRequestHeaders(token),
-  });
-  if (!response.ok) throw new OpsCoreClientError(`HTTP ${response.status}`);
-  return response.json() as Promise<T>;
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal,
+      headers: { ...buildCoreRequestHeaders(token), "X-CodeBlack-Trace-Id": traceId },
+    });
+    if (!response.ok) throw new OpsCoreClientError(`HTTP ${response.status}`);
+    return response.json() as Promise<T>;
+  } catch (error) {
+    // Keep only the route path and normalized failure text. Query parameters can include a
+    // selected location, so they are intentionally excluded from the incident ledger.
+    const action = new URL(url, window.location.origin).pathname;
+    reportCoreRequestFailure(action, error instanceof Error ? error.message : "Core request failed", performance.now() - startedAt, traceId);
+    throw error;
+  }
 }
 
 async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, outerSignal?: AbortSignal, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<T> {

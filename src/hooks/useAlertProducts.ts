@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getActiveMesoscaleDiscussions, getNwsAlerts, type AlertProduct } from "../services/situational";
 import { emitCodeBlackSound } from "../services/sound";
 import { triggerSevereFlash } from "../services/severeFlash";
@@ -14,9 +14,13 @@ function soundEventFor(product: AlertProduct) {
   return "severe-warning";
 }
 
-export function useAlertProducts(gps: GpsPoint | null) {
+export function useAlertProducts(gps: GpsPoint | null, requireFresh = false) {
   const [products, setProducts] = useState<AlertProduct[]>([]);
   const [error, setError] = useState("");
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const [checking, setChecking] = useState(false);
+  const refreshRef = useRef<() => void>(() => {});
+  const refresh = useCallback(() => refreshRef.current(), []);
   const seenSevereIds = useRef<Set<string>>(new Set());
   const resumeTick = useResumeTick();
   // App.tsx rebuilds its gps object on every telemetry tick (every 1-2s) -- depending on gps
@@ -29,17 +33,27 @@ export function useAlertProducts(gps: GpsPoint | null) {
   const gpsRef = useRef(gps);
   gpsRef.current = gps;
   const hasGps = gps != null;
+  const referenceKey = gps ? `${Math.round(gps.lat * 50)},${Math.round(gps.lon * 50)}` : "none";
 
   useEffect(() => {
-    if (!hasGps) return;
+    setProducts([]); setCheckedAt(null); setError("");
+    if (!hasGps) { setChecking(false); return; }
     let cancelled = false;
+    let busy = false;
+    let lastNws: AlertProduct[] = [];
+    let lastMds: AlertProduct[] = [];
     const load = async () => {
+      if (busy) return;
       const currentGps = gpsRef.current;
       if (!currentGps) return;
+      busy = true;
+      setChecking(true);
       try {
-        const [alerts, mds] = await Promise.all([getNwsAlerts(currentGps), getActiveMesoscaleDiscussions(currentGps)]);
+        const [alerts, mds] = await Promise.allSettled([getNwsAlerts(currentGps, requireFresh), getActiveMesoscaleDiscussions(currentGps, requireFresh)]);
         if (!cancelled) {
-          const next = [...alerts, ...mds].slice(0, 10);
+          if (alerts.status === "fulfilled") lastNws = alerts.value;
+          if (mds.status === "fulfilled") lastMds = mds.value;
+          const next = [...lastNws, ...lastMds].filter((product) => Date.parse(product.expires) > Date.now()).slice(0, 10);
           const currentSevere = next.filter((product) => SEVERE_SEVERITIES.includes(product.severity));
           const newSevere = currentSevere.filter((product) => !seenSevereIds.current.has(product.id));
           if (newSevere.length > 0) {
@@ -52,19 +66,25 @@ export function useAlertProducts(gps: GpsPoint | null) {
           }
           seenSevereIds.current = new Set(currentSevere.map((product) => product.id));
           setProducts(next);
-          setError("");
+          setError([alerts.status === "rejected" ? "NWS alerts unavailable" : "", mds.status === "rejected" ? "SPC discussions unavailable" : ""].filter(Boolean).join(" · "));
+          if (alerts.status === "fulfilled") setCheckedAt(Date.now());
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Alert fetch failed");
+      } finally {
+        busy = false;
+        if (!cancelled) setChecking(false);
       }
     };
+    refreshRef.current = () => { void load(); };
     void load();
     const timer = window.setInterval(load, 60_000);
     return () => {
       cancelled = true;
+      refreshRef.current = () => {};
       window.clearInterval(timer);
     };
-  }, [hasGps, resumeTick]);
+  }, [hasGps, referenceKey, resumeTick, requireFresh]);
 
-  return { products, error };
+  return { products, error, checkedAt, checking, refresh };
 }

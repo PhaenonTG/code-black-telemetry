@@ -18,6 +18,17 @@ const Settings = lazy(() => import("../pages/Settings"))
 const More = lazy(() => import("../pages/More"))
 const Stream = lazy(() => import("../pages/Stream"))
 const ChaseTargets = lazy(() => import("../pages/ChaseTargets"))
+const AegisObservation = lazy(() => import("../pages/AegisObservation"))
+const Diagnostics = lazy(() => import("../pages/Diagnostics"))
+const ProducerDesk = lazy(() => import("../pages/ProducerDesk"))
+const ChaseDesk = lazy(() => import("../pages/ChaseDesk"))
+const AnalysisDesk = lazy(() => import("../pages/AnalysisDesk"))
+import { useDesk } from "../desk/DeskProvider"
+
+function WorkspaceLanding() {
+  const { preferences } = useDesk()
+  return <Navigate to={`/${preferences.workspace}`} replace />
+}
 
 // /update-password is reachable regardless of auth state -- it's the landing page for a
 // Supabase password-recovery email link, which itself establishes a temporary session (see
@@ -37,7 +48,11 @@ export default function App() {
                   <AppShell>
                     <Suspense fallback={<div className="page-empty">Loading…</div>}>
                       <Routes>
-                        <Route path="/" element={<OpsWorkstation focus="OPERATIONS MAP" />} />
+                        <Route path="/" element={<WorkspaceLanding />} />
+                        <Route path="/producer" element={<ProducerDesk />} />
+                        <Route path="/chase" element={<ChaseDesk />} />
+                        <Route path="/analysis" element={<AnalysisDesk />} />
+                        <Route path="/map" element={<OpsWorkstation focus="OPERATIONS MAP" />} />
                         <Route path="/radar" element={<OpsWorkstation focus="RADAR LAB" />} />
                         <Route path="/weather" element={<StormIntelWorkspace />} />
                         <Route path="/field" element={<OpsWorkstation focus="FIELD INTELLIGENCE" />} />
@@ -46,8 +61,9 @@ export default function App() {
                         <Route path="/soundings" element={<DevelopmentPage title="SOUNDINGS" detail="Vertical profile endpoint not yet available. Sounding Snapshot will enter here when Core exposes normalized profile data." />} />
                         <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 2." />} />
                         <Route path="/targets" element={<ChaseTargets />} />
-                        <Route path="/chase" element={<Fleet />} />
-                        <Route path="/fleet" element={<Navigate to="/chase" replace />} />
+                        <Route path="/aegis" element={<AegisObservation />} />
+                        <Route path="/diagnostics" element={<Diagnostics />} />
+                        <Route path="/fleet" element={<Fleet />} />
                         <Route path="/stream" element={<Stream />} />
                         <Route path="/system" element={<Operations />} />
                         <Route path="/settings" element={<Settings />} />

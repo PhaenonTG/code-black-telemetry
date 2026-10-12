@@ -1,4 +1,3 @@
-// BROADCAST RADAR IS SERVER-SIDE ONLY. THE CHASE APP DOES NOT RENDER RADAR.
-// Master switch: while false, Chase performs no radar fetching, polling, decoding, layer work or timers.
-// Revert = set true (all radar code paths below remain in place, gated by this flag).
-export const CHASE_RADAR_ENABLED = false;
+// The native Chase build keeps radar disabled. The separate OPS desk enables its existing
+// radar renderer at build time; it must not change the native app's policy as a side effect.
+export const CHASE_RADAR_ENABLED = import.meta.env.VITE_OPS_RADAR_ENABLED === "true";

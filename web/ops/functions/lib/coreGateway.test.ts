@@ -33,6 +33,13 @@ describe("route allowlist", () => {
       upstreamPath: "/api/ai/v1/assessment/refresh",
       allowedQueryParams: [],
       methods: ["POST"],
+      timeoutMs: 90_000,
+    });
+    expect(resolveAllowlistRoute("api/ai/v1/target-analysis")).toEqual({
+      upstreamPath: "/api/ai/v1/target-analysis",
+      allowedQueryParams: [],
+      methods: ["POST"],
+      timeoutMs: 90_000,
     });
   });
 
@@ -43,6 +50,12 @@ describe("route allowlist", () => {
     expect(resolveAllowlistRoute("../etc/passwd")).toBeNull();
     expect(resolveAllowlistRoute("mqtt")).toBeNull();
     expect(resolveAllowlistRoute("")).toBeNull();
+  });
+
+  it("exposes private setup reads without any approval or publication mutation", () => {
+    expect(resolveAllowlistRoute("api/forecast/v1/chase-setups")?.methods).toEqual(["GET"]);
+    expect(resolveAllowlistRoute("api/forecast/v1/chase-setup")?.allowedQueryParams).toEqual(["setup_id"]);
+    expect(resolveAllowlistRoute("api/forecast/v1/chase-setup/approve")).toBeNull();
   });
 
   it("normalizes path segments from Cloudflare's [[path]] param shape", () => {

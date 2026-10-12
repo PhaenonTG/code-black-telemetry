@@ -10,6 +10,7 @@ export interface AllowlistRoute {
   upstreamPath: string;
   allowedQueryParams: string[];
   methods?: readonly string[];
+  timeoutMs?: number;
 }
 
 // Keys are exact Core-facing pathnames (matching Core's real REST paths 1:1), since this
@@ -19,6 +20,13 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
   "/health": { upstreamPath: "/health", allowedQueryParams: [] },
   "/api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "/api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
+  "/api/fabric/v1/aegis-observation-plan": { upstreamPath: "/api/fabric/v1/aegis-observation-plan", allowedQueryParams: [], methods: ["GET"] },
+  "/api/ai/v1/assessment": { upstreamPath: "/api/ai/v1/assessment", allowedQueryParams: [], methods: ["GET"] },
+  // Explicit local-model reviews only; this does not expose any paid provider or scheduler.
+  "/api/ai/v1/assessment/refresh": { upstreamPath: "/api/ai/v1/assessment/refresh", allowedQueryParams: [], methods: ["POST"], timeoutMs: 90_000 },
+  "/api/ai/v1/target-analysis": { upstreamPath: "/api/ai/v1/target-analysis", allowedQueryParams: [], methods: ["POST"], timeoutMs: 90_000 },
+  "/api/forecast/v1/chase-setups": { upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [], methods: ["GET"] },
+  "/api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id"], methods: ["GET"] },
   "/api/storm-intel/v1/health": { upstreamPath: "/api/storm-intel/v1/health", allowedQueryParams: [] },
   "/api/storm-intel/v1/point": {
     upstreamPath: "/api/storm-intel/v1/point",
@@ -45,11 +53,12 @@ function parseFiniteNumber(value: string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-// Validates the query parameters for a resolved route. Currently only Storm Intel's point
-// lookup takes query parameters; every other route in ALLOWLIST has none, so this always
-// passes for them. Kept generic (keyed on upstreamPath) so a future parameterized route does
-// not silently skip validation.
+// Validate parameterized reads before crossing the private transport boundary.
 export function validateQueryParams(route: AllowlistRoute, url: URL): QueryValidationResult {
+  if (route.upstreamPath === "/api/forecast/v1/chase-setup") {
+    const ids = url.searchParams.getAll("setup_id");
+    return ids.length === 1 && /^setup-\d{8}-[a-f0-9]{10}$/.test(ids[0]) ? { ok: true } : { ok: false, reason: "INVALID_SETUP_ID" };
+  }
   if (route.upstreamPath !== "/api/storm-intel/v1/point") return { ok: true };
 
   const latitude = parseFiniteNumber(url.searchParams.get("latitude"));

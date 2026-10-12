@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => {
   const coreProxyTarget = (env.CODEBLACK_CORE_PROXY_TARGET || "http://127.0.0.1:8000").replace(/\/+$/, "")
   return {
   plugins: [react()],
+  define: { "import.meta.env.VITE_OPS_RADAR_ENABLED": JSON.stringify("true") },
   resolve: {
     // Reused modules under ../../../src resolve `react`/`react-dom` relative
     // to their own location, which would otherwise find the repo root's

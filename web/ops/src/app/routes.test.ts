@@ -4,6 +4,9 @@ import { MORE_PAGE_LINKS, MORE_ROUTE, ROUTES } from "./routes";
 describe("OPS workstation routes", () => {
   it("exposes the approved major navigation families with only implemented sections live", () => {
     expect(ROUTES.map((route) => route.label)).toEqual([
+      "PRODUCER",
+      "CHASE",
+      "ANALYSIS",
       "OPERATIONS MAP",
       "WEATHER ANALYSIS",
       "RADAR LAB",
@@ -11,10 +14,12 @@ describe("OPS workstation routes", () => {
       "SOUNDINGS",
       "CONSENSUS",
       "CHASE TARGETS",
-      "CHASE OPERATIONS",
+      "AEGIS OBSERVATION",
+      "TEAM & DEVICES",
       "FIELD INTELLIGENCE",
       "LIVE STREAM",
       "SYSTEM",
+      "DIAGNOSTICS",
       "SETTINGS",
     ]);
     expect(ROUTES.filter((route) => route.state === "DEVELOPMENT").map((route) => route.label)).toEqual([
@@ -24,14 +29,13 @@ describe("OPS workstation routes", () => {
     ]);
   });
 
-  it("keeps the phone nav bounded to five destinations", () => {
+  it("keeps the phone nav bounded to the three approved workspaces and More", () => {
     expect([...ROUTES.filter((route) => route.inPhoneNav), MORE_ROUTE].map((route) => route.label)).toEqual([
-      "OPERATIONS MAP",
-      "WEATHER ANALYSIS",
-      "RADAR LAB",
-      "CHASE OPERATIONS",
+      "PRODUCER",
+      "CHASE",
+      "ANALYSIS",
       "MORE",
     ]);
-    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["CHASE TARGETS", "FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "SETTINGS"]);
+    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual(["OPERATIONS MAP", "WEATHER ANALYSIS", "RADAR LAB", "CHASE TARGETS", "AEGIS OBSERVATION", "TEAM & DEVICES", "FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "DIAGNOSTICS", "SETTINGS"]);
   });
 });

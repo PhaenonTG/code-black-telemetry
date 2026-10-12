@@ -1,39 +1,35 @@
 import { useEffect, useState } from "react"
+import { Link, useLocation } from "react-router-dom"
 import { useCoreOps } from "../core/useCoreOps"
-import { OpsStatusPill } from "../components/OpsStatusPill"
-import type { OpsConnectionState } from "../core/types"
+import { useDesk } from "../desk/DeskProvider"
+import { ageLabel } from "../desk/format"
+import { radarEvidenceStatus } from "../desk/radarEvidence"
+import codeblackShield from "../../../../src/assets/codeblack-shield.png"
 
-// Compact top strip for desktop/tablet -- not a duplicate of the Operations page, just the
-// handful of things worth glancing at without navigating away from whatever workspace is open.
-// No brand mark here -- the sidebar already shows the Code Black OPS logo/wordmark on every one
-// of these viewports, so a second copy here was pure duplication, not a second piece of info.
-export function StatusBar({ locationLabel }: { locationLabel: string }) {
+function Clock() {
   const [now, setNow] = useState(() => new Date())
+  useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(timer) }, [])
+  return <div className="desk-clock"><time dateTime={now.toISOString()}>{now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short" })}</time><span>{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · {now.toISOString().slice(11, 16)}Z</span></div>
+}
+
+export function StatusBar() {
   const { state } = useCoreOps()
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 1000)
-    return () => window.clearInterval(id)
-  }, [])
-  // The label already reads "FABRIC {wsState}" -- the pill next to it needs to be colored by that
-  // same wsState, not by a different metric (Fabric REST health) that happens to also be called
-  // "fabric". The old `wsState === "open" ? LIVE : state.fabric.state` fallback showed a green
-  // LIVE pill next to a "FABRIC DISABLED" label whenever REST was healthy but the WS just wasn't
-  // open -- the color and the text were answering two different questions.
-  const wsTone: OpsConnectionState = state.fabric.wsState === "open" ? "LIVE"
-    : state.fabric.wsState === "connecting" ? "CHECKING"
-    : state.fabric.wsState === "error" ? "DEGRADED"
-    : state.fabric.wsState === "closed" ? "OFFLINE"
-    : "UNAVAILABLE"
-  return (
-    <div className="statusbar">
-      <OpsStatusPill state={state.core.state} label={`CORE ${state.core.state}`} />
-      <OpsStatusPill state={wsTone} label={`FABRIC ${state.fabric.wsState.toUpperCase()}`} />
-      <div className="statusbar__spacer" />
-      <div className="statusbar__item statusbar__location">{locationLabel}</div>
-      <div className="statusbar__item">UTC {now.toISOString().slice(11, 19)}</div>
-      <div className="statusbar__item statusbar__clock">
-        {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-      </div>
-    </div>
-  )
+  const { gps, observation, alerts, alertsError, errors, now } = useDesk()
+  const { pathname } = useLocation()
+  const workspace = pathname === "/producer" ? "Producer" : pathname === "/chase" ? "Chase" : pathname === "/analysis" ? "Analysis" : "Ops"
+  const radar = radarEvidenceStatus(observation?.radar, !!errors.Observation, now)
+  const items = [
+    { label: "Core", state: state.core.state === "LIVE" ? "ok" : state.core.state === "CHECKING" ? "checking" : "off", detail: state.core.detail },
+    { label: "Radar", state: radar, detail: observation?.radar.updated_at ? `Radar evidence ${ageLabel(observation.radar.updated_at, now)}${radar === "warn" ? " · Review needed" : ""}` : "Radar evidence unavailable" },
+    { label: "GPS", state: gps.status === "ready" ? "ok" : gps.status === "requesting" ? "checking" : "off", detail: gps.status === "ready" ? `Device GPS ±${Math.round(gps.accuracyM)} m` : `Device location ${gps.status}` },
+    { label: "Alerts", state: alertsError ? "warn" : alerts.length ? "alert" : "off", detail: alertsError || `${alerts.length} active official products at the current reference` },
+  ]
+  return <header className="desk-header">
+    <a className="desk-skip" href="#ops-main">Skip to workspace</a>
+    <Link to="/producer" className="desk-header__brand"><img src={codeblackShield} alt="" /><span>CODE <b>BLACK</b> <em>OPS</em></span></Link>
+    <span className="desk-header__workspace">{workspace}</span>
+    <div className="desk-health" aria-label="Source health">{items.map((item) => <Link to="/system" key={item.label} className="desk-health__item" title={item.detail} aria-label={`${item.label}: ${item.detail}`}><i data-state={item.state} /><span>{item.label}</span></Link>)}</div>
+    <Link className="desk-health-mobile" to="/system" aria-label="Open source health"><i data-state={state.core.state === "LIVE" ? "ok" : "off"} />Sources</Link>
+    <Clock />
+  </header>
 }

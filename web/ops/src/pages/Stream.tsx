@@ -15,7 +15,7 @@ export default function Stream() {
     <div className="page page-stream">
       <PageHeader title="LIVE STREAM" kicker="CHASE OPERATIONS · PROGRAM FEED" description="Monitor the public Code Black broadcast while keeping field tools one click away." />
       <nav className="section-tabs" aria-label="Chase Operations sections">
-        <Link to="/chase">FLEET</Link><span className="active">STREAMS</span>
+        <Link to="/fleet">FLEET</Link><span className="active">STREAMS</span>
       </nav>
       <section className="stream-stage">
         <div className="stream-stage__label"><i /> LIVE PROGRAM · TWITCH</div>

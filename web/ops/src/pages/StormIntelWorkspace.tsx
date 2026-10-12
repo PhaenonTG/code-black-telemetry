@@ -16,6 +16,7 @@ import { firstAvailableSource, stormIntelSummary } from "../stormIntel/format";
 import { getReverseLocality, type LocalityResult } from "../../../../src/services/situational";
 import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings";
 import { mapWorkspaceVisibility } from "../mapWorkspace";
+import { AegisPanel } from "../desk/DeskPanels";
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null;
@@ -168,6 +169,7 @@ export default function StormIntelWorkspace() {
             {config.mode === "SIMULATION" && <p className="ops-error-text">EXPLICIT SIMULATION MODE — NOT LIVE CORE</p>}
           </section>
           <PointHistory history={pointHistory} onSelect={selectHistoryPoint} />
+          <AegisPanel scope="point" />
         </aside>
       </main>
 

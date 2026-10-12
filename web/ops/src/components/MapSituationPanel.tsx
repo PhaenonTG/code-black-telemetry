@@ -1,5 +1,7 @@
 import type { AlertProduct } from "../../../../src/services/situational"
 import type { RoadConditionEvent } from "../../../../src/services/mapLayerModels"
+import { useRef } from "react"
+import { useDialogFocus } from "./useDialogFocus"
 
 type Selection = { kind: "alert"; alert: AlertProduct } | { kind: "road"; road: RoadConditionEvent }
 
@@ -9,10 +11,12 @@ function timeText(value: string | number | null) {
   return Number.isFinite(d.getTime()) ? d.toLocaleString() : "Not reported"
 }
 
-export function MapSituationPanel({ selection, onClose }: { selection: Selection; onClose: () => void }) {
+export function MapSituationPanel({ selection, onClose, modal = false }: { selection: Selection; onClose: () => void; modal?: boolean }) {
+  const panel = useRef<HTMLElement>(null)
+  useDialogFocus(panel, onClose, modal)
   if (selection.kind === "alert") {
     const a = selection.alert
-    return <aside className="map-situation-panel" role="dialog" aria-modal="false" aria-label={a.title}>
+    return <aside ref={panel} tabIndex={-1} className="map-situation-panel" role="dialog" aria-modal={modal} aria-label={a.title}>
       <header><div><p>WEATHER ALERT</p><h2>{a.title}</h2></div><button onClick={onClose} aria-label="Close details">×</button></header>
       <div className="map-situation-panel__body">
         <strong>{a.headline}</strong>
@@ -24,7 +28,7 @@ export function MapSituationPanel({ selection, onClose }: { selection: Selection
     </aside>
   }
   const r = selection.road
-  return <aside className="map-situation-panel" role="dialog" aria-modal="false" aria-label={r.title}>
+  return <aside ref={panel} tabIndex={-1} className="map-situation-panel" role="dialog" aria-modal={modal} aria-label={r.title}>
     <header><div><p>ROAD CONDITION</p><h2>{r.title}</h2></div><button onClick={onClose} aria-label="Close details">×</button></header>
     <div className="map-situation-panel__body">
       <strong>{r.status || r.closureState}</strong>

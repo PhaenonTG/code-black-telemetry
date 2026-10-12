@@ -18,6 +18,8 @@ import { useCoreOps } from "../core/useCoreOps";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings";
 import { mapWorkspaceVisibility, type MapWorkspace } from "../mapWorkspace";
+import { useDesk } from "../desk/DeskProvider";
+import { AegisPanel, CellPanel } from "../desk/DeskPanels";
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null;
@@ -35,8 +37,6 @@ function gpsStatusLine(s: LocationState) {
 }
 
 type Selection = { kind: "alert"; alert: AlertProduct } | { kind: "road"; road: RoadConditionEvent };
-const CAMERA_WALL_KEY = "codeblack.ops.cameraWall";
-const CAMERA_BANDWIDTH_KEY = "codeblack.ops.cameraSnapshotMode";
 const VOICE_ALERTS_KEY = "codeblack.ops.voiceAlerts";
 
 function unitLocation(location: Record<string, unknown> | null | undefined): { lat: number; lon: number } | null {
@@ -49,10 +49,9 @@ function unitLocation(location: Record<string, unknown> | null | undefined): { l
 export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string }) {
   const [gps, setGps] = useState<LocationState>({ status: "requesting" });
   const [camera, setCamera] = useState<TrafficCamera | null>(null);
-  const [pinnedCameras, setPinnedCameras] = useState<TrafficCamera[]>(() => {
-    try { return (JSON.parse(localStorage.getItem(CAMERA_WALL_KEY) ?? "[]") as TrafficCamera[]).slice(0, 9); } catch { return []; }
-  });
-  const [lowBandwidth, setLowBandwidth] = useState(() => localStorage.getItem(CAMERA_BANDWIDTH_KEY) === "true");
+  const { pinnedCameras, togglePin: togglePinnedCamera, removePin, preferences, updatePreferences, choosePoint, setRadarFrame, cell } = useDesk();
+  const lowBandwidth = preferences.snapshotMode;
+  const setLowBandwidth = (snapshotMode: boolean) => updatePreferences({ snapshotMode });
   const [voiceAlerts, setVoiceAlerts] = useState(() => localStorage.getItem(VOICE_ALERTS_KEY) === "true");
   const spokenAlerts = useRef(new Set<string>());
   const spokenRoads = useRef(new Set<string>());
@@ -61,13 +60,12 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   const [nearbyUnitId, setNearbyUnitId] = useState<string>("");
   const { state: coreState, selectedPoint, selectPoint } = useCoreOps();
 
-  useEffect(() => { localStorage.setItem(CAMERA_WALL_KEY, JSON.stringify(pinnedCameras)); }, [pinnedCameras]);
-  useEffect(() => { localStorage.setItem(CAMERA_BANDWIDTH_KEY, String(lowBandwidth)); }, [lowBandwidth]);
   useEffect(() => { localStorage.setItem(VOICE_ALERTS_KEY, String(voiceAlerts)); }, [voiceAlerts]);
 
-  const togglePinnedCamera = (value: TrafficCamera) => setPinnedCameras((current) => current.some((item) => item.id === value.id)
-    ? current.filter((item) => item.id !== value.id)
-    : [...current, value].slice(-9));
+  useEffect(() => {
+    if (focus === "RADAR LAB") return () => setRadarFrame(null);
+  }, [focus, setRadarFrame]);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -188,7 +186,9 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
           nearbyBest={nearby.places}
           alerts={alertProducts.products}
           selectedPoint={selectedPoint}
-          onPointSelect={(point: AtlasSelectedPoint) => selectPoint(point)}
+          onPointSelect={(point: AtlasSelectedPoint) => choosePoint(point)}
+          onRadarFrame={focus === "RADAR LAB" ? setRadarFrame : undefined}
+          contextEcho={cell.fresh && cell.sample ? { ...cell.sample.point, label: `${cell.sample.site} dominant echo`, trusted: cell.sample.trusted } : null}
         />
         <div className="ops-map-overlay ops-map-overlay--top">
           <div>
@@ -209,9 +209,11 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
         {selection && <MapSituationPanel selection={selection} onClose={() => setSelection(null)} />}
       </div>
       <div className="ops-side-rail">
-        <CameraWall cameras={pinnedCameras} onOpen={setCamera} onRemove={(id) => setPinnedCameras((current) => current.filter((item) => item.id !== id))} />
+        <CameraWall cameras={pinnedCameras} onOpen={setCamera} onRemove={removePin} />
         <IncidentTimeline alerts={alertProducts.products} roads={operationalItems.roads} reports={operationalItems.reports} onRoad={(road) => { setCamera(null); setSelection({ kind: "road", road }); }} onAlert={(alert) => { setCamera(null); setSelection({ kind: "alert", alert }); }} onReport={(report) => selectPoint({ lat: report.lat, lon: report.lon })} />
         <PointInspector selectedPoint={selectedPoint} coreState={coreState} />
+        <AegisPanel scope="point" />
+        {focus === "RADAR LAB" && <CellPanel />}
       </div>
     </div>
   );

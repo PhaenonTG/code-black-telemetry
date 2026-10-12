@@ -129,7 +129,7 @@ function classifyAlert(event = "", headline = ""): AlertProduct["severity"] {
   return "other";
 }
 
-export async function getNwsAlerts(pos: Position): Promise<AlertProduct[]> {
+export async function getNwsAlerts(pos: Position, requireFresh = false): Promise<AlertProduct[]> {
   const url = `https://api.weather.gov/alerts/active?point=${pos.lat.toFixed(4)},${pos.lon.toFixed(4)}`;
   try {
     const data = await fetchJson<{ features?: Array<{ id: string; properties?: Record<string, string>; geometry?: AlertGeometry | null }> }>(url);
@@ -158,7 +158,8 @@ export async function getNwsAlerts(pos: Position): Promise<AlertProduct[]> {
     }).filter((alert) => ["tornado", "severe", "flash-flood", "pds", "watch", "other"].includes(alert.severity)).slice(0, 8);
     await saveNativeCache(LAST_ALERTS_KEY, products);
     return products;
-  } catch {
+  } catch (error) {
+    if (requireFresh) throw error;
     return readNativeCache<AlertProduct[]>(LAST_ALERTS_KEY, []);
   }
 }
@@ -271,7 +272,7 @@ function mdNumber(props: Record<string, unknown>) {
   return String(props.MDNUM ?? props.mdnum ?? props.DISCUSSION ?? props.id ?? "").replace(/\D/g, "");
 }
 
-export async function getActiveMesoscaleDiscussions(pos: Position): Promise<AlertProduct[]> {
+export async function getActiveMesoscaleDiscussions(pos: Position, requireFresh = false): Promise<AlertProduct[]> {
   const url =
     "https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/spc_mesoscale_discussion/MapServer/0/query?where=1%3D1&outFields=*&f=geojson";
   try {
@@ -316,7 +317,8 @@ export async function getActiveMesoscaleDiscussions(pos: Position): Promise<Aler
     );
     await saveNativeCache(LAST_MDS_KEY, products);
     return products;
-  } catch {
+  } catch (error) {
+    if (requireFresh) throw error;
     return readNativeCache<AlertProduct[]>(LAST_MDS_KEY, []);
   }
 }

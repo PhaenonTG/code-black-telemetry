@@ -19,10 +19,11 @@ export type WeatherAlertRuntimeStatus = {
 
 const PATH = "/api/core/api/weather-alert/v1/settings"
 
-async function request(method: "GET" | "PUT", body?: WeatherAlertSettings): Promise<WeatherAlertSettings> {
+async function request(method: "GET" | "PUT", body?: WeatherAlertSettings, signal?: AbortSignal): Promise<WeatherAlertSettings> {
   const token = await currentAccessToken()
   const response = await fetch(PATH, {
     method,
+    signal,
     headers: { ...buildCoreRequestHeaders(token), ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   })
@@ -30,7 +31,7 @@ async function request(method: "GET" | "PUT", body?: WeatherAlertSettings): Prom
   return response.json() as Promise<WeatherAlertSettings>
 }
 
-export const loadWeatherAlertSettings = () => request("GET")
+export const loadWeatherAlertSettings = (signal?: AbortSignal) => request("GET", undefined, signal)
 export const saveWeatherAlertSettings = (settings: WeatherAlertSettings) => request("PUT", settings)
 
 export async function loadWeatherAlertRuntimeStatus(): Promise<WeatherAlertRuntimeStatus> {

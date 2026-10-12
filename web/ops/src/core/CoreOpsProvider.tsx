@@ -7,6 +7,7 @@ import { fabricStateFromSnapshot } from "./fabricSnapshot";
 import { LatestRequestGate } from "./requestGate";
 import { addPointHistoryEntry, historyEntryFromSnapshot } from "../stormIntel/pointHistory";
 import type { OpsCoreState } from "./types";
+import { mergeFabricRest } from "./mergeFabricRest";
 
 function initialState(): OpsCoreState {
   const now = Date.now();
@@ -52,24 +53,22 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let refreshing = false;
     async function refresh() {
+      if (refreshing || document.hidden) return;
+      refreshing = true;
+      const startedAt = Date.now();
       const [core, fabric, stormIntelHealth] = await Promise.all([
         fetchCoreHealth(config),
         fetchFabricRest(config, fabricRef.current),
         fetchStormIntelHealth(config),
       ]);
+      refreshing = false;
       if (cancelled) return;
       setState((current) => ({
         ...current,
         core,
-        fabric: {
-          ...fabric,
-          units: current.fabric.units ?? fabric.units,
-          wsState: current.fabric.wsState,
-          lastWsEventAt: current.fabric.lastWsEventAt,
-          lastContactAt: current.fabric.lastContactAt ?? fabric.lastContactAt,
-          error: current.fabric.error,
-        },
+        fabric: mergeFabricRest(current.fabric, fabric, startedAt),
         stormIntel: {
           ...current.stormIntel,
           ...stormIntelHealth,
@@ -79,9 +78,11 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
     }
     void refresh();
     const id = window.setInterval(refresh, 30_000);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      document.removeEventListener("visibilitychange", refresh);
     };
   }, [config]);
 

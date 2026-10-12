@@ -35,6 +35,7 @@ export interface AllowlistRoute {
   upstreamPath: string;
   allowedQueryParams: string[];
   methods?: readonly string[];
+  timeoutMs?: number;
 }
 
 // Hardcoded allowlist. This is the entire set of paths this gateway will ever forward --
@@ -51,14 +52,20 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "health": { upstreamPath: "/health", allowedQueryParams: [] },
   "api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
+  "api/fabric/v1/aegis-observation-plan": { upstreamPath: "/api/fabric/v1/aegis-observation-plan", allowedQueryParams: [] },
+  "api/forecast/v1/chase-setups": { upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [], methods: ["GET"] },
+  "api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id"], methods: ["GET"] },
   "api/storm-intel/v1/health": { upstreamPath: "/api/storm-intel/v1/health", allowedQueryParams: [] },
   "api/storm-intel/v1/point": { upstreamPath: "/api/storm-intel/v1/point", allowedQueryParams: ["latitude", "longitude"] },
   "api/ai/v1/assessment": { upstreamPath: "/api/ai/v1/assessment", allowedQueryParams: [] },
-  "api/ai/v1/assessment/refresh": { upstreamPath: "/api/ai/v1/assessment/refresh", allowedQueryParams: [], methods: ["POST"] },
+  "api/ai/v1/assessment/refresh": { upstreamPath: "/api/ai/v1/assessment/refresh", allowedQueryParams: [], methods: ["POST"], timeoutMs: 90_000 },
+  "api/ai/v1/target-analysis": { upstreamPath: "/api/ai/v1/target-analysis", allowedQueryParams: [], methods: ["POST"], timeoutMs: 90_000 },
   "api/weather-alert/v1/settings": { upstreamPath: "/api/weather-alert/v1/settings", allowedQueryParams: [], methods: ["GET", "PUT"] },
   "api/weather-alert/v1/status": { upstreamPath: "/api/weather-alert/v1/status", allowedQueryParams: [], methods: ["GET"] },
   "api/gpu/v1/status": { upstreamPath: "/api/gpu/v1/status", allowedQueryParams: [], methods: ["GET"] },
   "api/gpu/v1/mode": { upstreamPath: "/api/gpu/v1/mode", allowedQueryParams: [], methods: ["POST"] },
+  "api/ops/v1/incidents": { upstreamPath: "/api/ops/v1/incidents", allowedQueryParams: ["limit", "severity", "subsystem"], methods: ["GET", "POST"] },
+  "api/ops/v1/incidents/verify": { upstreamPath: "/api/ops/v1/incidents/verify", allowedQueryParams: [], methods: ["POST"] },
 };
 
 export function normalizeRouteKey(path: string | string[] | undefined): string {
@@ -80,6 +87,7 @@ export type GatewayErrorReason =
   | "CORE_UNAVAILABLE"
   | "CORE_TIMEOUT"
   | "CORE_MALFORMED_RESPONSE"
+  | "INVALID_REVIEW_BODY"
   | "GATEWAY_MISCONFIGURED";
 
 export interface GatewayErrorBody {
@@ -160,6 +168,7 @@ export interface UpstreamResult {
   status: number;
   reason?: GatewayErrorReason;
   body?: unknown;
+  traceId?: string | null;
 }
 
 // Forwards to exactly one hardcoded-shape upstream URL (allowlisted path + allowlisted query
@@ -190,7 +199,7 @@ export async function forwardToCore(
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), route.timeoutMs ?? UPSTREAM_TIMEOUT_MS);
   try {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (env.CORE_GATEWAY_CF_ACCESS_CLIENT_ID && env.CORE_GATEWAY_CF_ACCESS_CLIENT_SECRET) {
@@ -222,7 +231,8 @@ export async function forwardToCore(
     if (!upstreamResponse.ok) {
       return { status: 502, reason: "CORE_UNAVAILABLE" };
     }
-    return { status: 200, body: parsed };
+    const traceId = upstreamResponse.headers.get("X-CodeBlack-Trace-Id");
+    return { status: 200, body: parsed, ...(traceId ? { traceId } : {}) };
   } catch (error) {
     const timedOut = error instanceof DOMException && error.name === "AbortError";
     return { status: 504, reason: timedOut ? "CORE_TIMEOUT" : "CORE_UNAVAILABLE" };
@@ -249,8 +259,10 @@ async function forwardToCoreViaServiceBinding(
     if (value !== null) targetUrl.searchParams.set(key, value);
   }
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), route.timeoutMs ?? UPSTREAM_TIMEOUT_MS);
   try {
-    const response = await worker.fetch(targetUrl.toString(), { ...init, headers: { Accept: "application/json", ...init.headers } });
+    const response = await worker.fetch(targetUrl.toString(), { ...init, signal: controller.signal, headers: { Accept: "application/json", ...init.headers } });
 
     const text = await response.text();
     if (text.length > MAX_UPSTREAM_BODY_BYTES) {
@@ -270,5 +282,7 @@ async function forwardToCoreViaServiceBinding(
     return { status: 200, body: parsed };
   } catch {
     return { status: 504, reason: "CORE_UNAVAILABLE" };
+  } finally {
+    clearTimeout(timer);
   }
 }

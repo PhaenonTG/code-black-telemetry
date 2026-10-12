@@ -16,17 +16,22 @@ export interface RouteDef {
 }
 
 export const ROUTES: RouteDef[] = [
-  { path: "/", label: "OPERATIONS MAP", icon: "map", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
-  { path: "/weather", label: "WEATHER ANALYSIS", icon: "cloud", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
-  { path: "/radar", label: "RADAR LAB", icon: "radar", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
+  { path: "/producer", label: "PRODUCER", icon: "camera", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "FIELD" },
+  { path: "/chase", label: "CHASE", icon: "fleet", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "FIELD" },
+  { path: "/analysis", label: "ANALYSIS", icon: "analysis", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
+  { path: "/map", label: "OPERATIONS MAP", icon: "map", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
+  { path: "/weather", label: "WEATHER ANALYSIS", icon: "cloud", state: "LIVE", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
+  { path: "/radar", label: "RADAR LAB", icon: "radar", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
   { path: "/models", label: "MODELS", icon: "models", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/soundings", label: "SOUNDINGS", icon: "sounding", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/consensus", label: "CONSENSUS", icon: "consensus", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/targets", label: "CHASE TARGETS", icon: "target", state: "LIVE", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
-  { path: "/chase", label: "CHASE OPERATIONS", icon: "fleet", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "FIELD" },
+  { path: "/aegis", label: "AEGIS OBSERVATION", icon: "radar", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
+  { path: "/fleet", label: "TEAM & DEVICES", icon: "team", state: "LIVE", inPhoneNav: false, inSidebar: false, section: "FIELD" },
   { path: "/field", label: "FIELD INTELLIGENCE", icon: "radio", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/stream", label: "LIVE STREAM", icon: "stream", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/system", label: "SYSTEM", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
+  { path: "/diagnostics", label: "DIAGNOSTICS", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
   { path: "/settings", label: "SETTINGS", icon: "settings", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
 ]
 
