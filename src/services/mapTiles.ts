@@ -2,6 +2,31 @@ const compiledMapboxToken = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string 
 const runtimeTokenPath = "/overlay-core/mapbox-token";
 let resolvedMapboxToken = compiledMapboxToken;
 let runtimeTokenRequest: Promise<boolean> | null = null;
+const RUNTIME_TOKEN_ATTEMPTS = 3;
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function requestRuntimeMapboxToken(): Promise<boolean> {
+  for (let attempt = 0; attempt < RUNTIME_TOKEN_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(runtimeTokenPath, { credentials: "same-origin", cache: "no-store" });
+      if (response.ok) {
+        const body = await response.json() as { token?: unknown };
+        const token = typeof body.token === "string" ? body.token.trim() : "";
+        if (token.startsWith("pk.") && token.length > 20) {
+          resolvedMapboxToken = token;
+          return true;
+        }
+      }
+    } catch {
+      // A Pages worker can briefly be unavailable during a publish. Retry below.
+    }
+    if (attempt < RUNTIME_TOKEN_ATTEMPTS - 1) await delay(250 * (attempt + 1));
+  }
+  return false;
+}
 
 export type BasemapProvider = "mapbox" | "osm";
 
@@ -23,16 +48,11 @@ export async function ensureMapboxAccessToken(): Promise<boolean> {
   if (hasMapboxToken()) return true;
   if (typeof window === "undefined" || typeof fetch !== "function") return false;
   if (!runtimeTokenRequest) {
-    runtimeTokenRequest = fetch(runtimeTokenPath, { credentials: "same-origin", cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) return false;
-        const body = await response.json() as { token?: unknown };
-        const token = typeof body.token === "string" ? body.token.trim() : "";
-        if (!token.startsWith("pk.") || token.length <= 20) return false;
-        resolvedMapboxToken = token;
-        return true;
-      })
-      .catch(() => false);
+    runtimeTokenRequest = requestRuntimeMapboxToken().finally(() => {
+      // Do not cache a failed bootstrap forever. A later component mount or
+      // operator retry should get a fresh chance once the worker is healthy.
+      if (!hasMapboxToken()) runtimeTokenRequest = null;
+    });
   }
   return runtimeTokenRequest;
 }
