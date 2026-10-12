@@ -40,3 +40,7 @@ __pycache__/
 *.njsproj
 *.sln
 *.sw?
+
+# Cloudflare Pages local build state. Recreated by Wrangler; never source.
+.wrangler/
+web/ops/.wrangler/
