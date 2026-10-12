@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { coreConfigured, readOpsCoreConfig } from "./config";
 
 describe("OPS Core config", () => {
-  it("defaults to explicit live mode but disconnected when no Core URL is configured", () => {
+  it("defaults to the same-origin authenticated Core gateway when no build URL is configured", () => {
     const config = readOpsCoreConfig({});
     expect(config.mode).toBe("LIVE_CORE");
-    expect(config.coreBaseUrl).toBe("");
-    expect(coreConfigured(config)).toBe(false);
+    expect(config.coreBaseUrl).toBe("/api/core");
+    expect(config.coreWsUrl).toBe("");
+    expect(coreConfigured(config)).toBe(true);
   });
 
   it("keeps simulation explicit and never masquerades as live", () => {

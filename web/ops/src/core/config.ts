@@ -17,12 +17,21 @@ export interface OpsCoreConfig {
 }
 
 export function readOpsCoreConfig(env: Record<string, unknown> = import.meta.env): OpsCoreConfig {
-  const coreBaseUrl = cleanUrl(env.VITE_CODEBLACK_CORE_BASE_URL);
+  // Production OPS is served by the same Pages Worker that owns the authenticated
+  // /api/core allowlist.  A blank build-time value used to leave the entire UI in
+  // "LIVE_CORE" mode while silently giving it no route to Core at all.  Keep an
+  // explicit value authoritative for local/tunnel development, but make the
+  // same-origin protected gateway the safe production default.
+  const explicitCoreBaseUrl = cleanUrl(env.VITE_CODEBLACK_CORE_BASE_URL);
+  const coreBaseUrl = explicitCoreBaseUrl || "/api/core";
   const explicitWs = cleanUrl(env.VITE_CODEBLACK_CORE_WS_URL);
-  const inferredWs = coreBaseUrl.startsWith("https://")
-    ? `wss://${coreBaseUrl.slice("https://".length)}`
-    : coreBaseUrl.startsWith("http://")
-      ? `ws://${coreBaseUrl.slice("http://".length)}`
+  // The Pages gateway is HTTP-only by design.  Infer a WebSocket endpoint only
+  // for an explicit absolute Core URL; REST polling remains fully functional
+  // through the authenticated gateway.
+  const inferredWs = explicitCoreBaseUrl.startsWith("https://")
+    ? `wss://${explicitCoreBaseUrl.slice("https://".length)}`
+    : explicitCoreBaseUrl.startsWith("http://")
+      ? `ws://${explicitCoreBaseUrl.slice("http://".length)}`
       : "";
   const pollSeconds = Number(env.VITE_CODEBLACK_STORM_INTEL_POLL_SECONDS ?? 30);
 
