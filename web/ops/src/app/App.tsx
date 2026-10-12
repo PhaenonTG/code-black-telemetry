@@ -51,6 +51,9 @@ export default function App() {
                         <Route path="/chase-setups" element={<ChaseSetups />} />
                         <Route path="/chase-setups/:setupId" element={<ChaseSetups />} />
                         <Route path="/aegis-alerts" element={<AegisAlerts />} />
+                        {/* Keep the short and earlier observation-plan URLs valid. */}
+                        <Route path="/aegis" element={<Navigate to="/aegis-alerts" replace />} />
+                        <Route path="/aegis-observation" element={<Navigate to="/aegis-alerts" replace />} />
                         <Route path="/automation-lab" element={<AutomationLab />} />
                         <Route path="/field" element={<OpsWorkstation focus="FIELD INTELLIGENCE" />} />
                         <Route path="/storm-intel" element={<Navigate to="/weather" replace />} />
