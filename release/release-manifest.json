@@ -1,0 +1,17 @@
+{
+  "schema": "codeblack.release-manifest/v1",
+  "account_id": "d9a20387567b68f364828ce6525d4ef4",
+  "surfaces": {
+    "ops_website": {
+      "pages_project": "codeblack-ops",
+      "public_hostname": "ops.codeblackwx.com",
+      "protected_ref": "origin/master",
+      "purpose": "Canonical public Code Black OPS website. Production promotion is allowed only from the protected ref via promote-ops-production.ps1."
+    },
+    "tablet_shell": {
+      "pages_project": "codeblack-ops-tablet",
+      "preview_branch": "tablet-shell",
+      "purpose": "Android/tablet OPS shell. It must never be deployed to codeblack-ops or ops.codeblackwx.com."
+    }
+  }
+}
