@@ -574,10 +574,12 @@ async function handleFacebookConnector(request: Request, url: URL, env: Env): Pr
     let permissions: string[] = [];
     try {
       const response = await fetch(`${FACEBOOK_GRAPH_ORIGIN}/me/permissions`, { headers: { Authorization: `Bearer ${longToken}` } });
-      const result = await response.json() as { data?: Array<{ permission?: string; status?: string }> };
+      const result = await response.json() as { data?: Array<{ permission?: string; status?: string }>; error?: { code?: number } };
+      if (!response.ok) return facebookResultPage("Permission check unavailable", `Meta rejected its permission check${typeof result.error?.code === "number" ? ` (code ${result.error.code})` : ""}. The existing Page credential was preserved. Try reconnecting after Meta is available again.`);
       if (response.ok && Array.isArray(result.data)) permissions = result.data.filter(item => item.status === "granted" && typeof item.permission === "string").map(item => item.permission!);
     } catch { return facebookResultPage("Permission check failed", "Facebook permissions could not be verified. Reconnect from Producer."); }
-    if (!["pages_show_list", "pages_read_engagement", "pages_read_user_content"].every(item => permissions.includes(item))) return facebookResultPage("Facebook permissions missing", "Grant access to read Nick's Page and its comments, then reconnect from Producer.");
+    const missing = ["pages_show_list", "pages_read_engagement", "pages_read_user_content"].filter(item => !permissions.includes(item));
+    if (missing.length) return facebookResultPage("Facebook permissions missing", `Meta did not grant: ${missing.join(", ")}. The existing Page credential was preserved. Reconnect from Producer and grant the missing access.`);
     let accounts: { data?: Array<{ id?: unknown; name?: unknown; access_token?: unknown }> };
     try {
       const response = await fetch(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts?fields=id,name,access_token&limit=100`, { headers: { Authorization: `Bearer ${longToken}`, Accept: "application/json" } });
