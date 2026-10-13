@@ -1,3 +1,5 @@
+import { handleProgramMedia } from "./program-media";
+
 const STATUS_KEY = "status";
 const CAPABILITIES_KEY = "capabilities";
 const FRAME_KEY = "program-frame";
@@ -69,6 +71,8 @@ function bridgeState(document: StoredDocument | undefined): "ONLINE" | "OFFLINE"
 export async function handleProducerStateRequest(request: Request, storage: BridgeStorage): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
+  const media = await handleProgramMedia(request, storage);
+  if (media) return media;
 
   if (path === "/api/chase/v1/facebook/internal/broadcast") {
     type Broadcast = import("./facebook-lifecycle").ManagedBroadcast;
