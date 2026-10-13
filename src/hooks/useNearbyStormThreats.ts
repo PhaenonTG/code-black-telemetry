@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { getNearbyStormThreats, type NearbyThreat } from "../services/situational";
-import { getNearestRadarSites } from "../services/radar";
 import { useResumeTick } from "./useResumeTick";
 
 type GpsPoint = { lat: number; lon: number };
@@ -26,12 +25,10 @@ export function useNearbyStormThreats(gps: GpsPoint | null) {
       const current = gpsRef.current;
       if (!current) return;
       try {
-        const sites = await getNearestRadarSites(current.lat, current.lon);
-        const stateAbbr = sites[0]?.state ?? "";
-        const next = await getNearbyStormThreats(current, stateAbbr);
+        const next = await getNearbyStormThreats(current);
         if (!cancelled) {
-          setThreats(next);
-          setError("");
+          setThreats(next.threats);
+          setError(next.complete ? "" : "Nearby warning coverage incomplete");
         }
       } catch {
         if (!cancelled) setError("Nearby threat lookup failed");

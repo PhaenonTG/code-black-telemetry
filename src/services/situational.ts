@@ -111,7 +111,7 @@ async function fetchJson<T>(url: string, timeoutMs = 4500): Promise<T> {
     });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const value = (await response.json()) as T;
-    const ttl = url.includes("spc_mesoscale") ? MD_CACHE_MS : url.includes("observations/latest") ? OBS_CACHE_MS : ALERT_CACHE_MS;
+    const ttl = url.includes("spc_mesoscale") ? MD_CACHE_MS : url.includes("observations/latest") ? OBS_CACHE_MS : url.includes("api.weather.gov/points/") ? LOCALITY_CACHE_MS : ALERT_CACHE_MS;
     cache.set(url, { expires: Date.now() + ttl, value });
     return value;
   } finally {
@@ -204,15 +204,38 @@ function nearestVertexDistance(pos: Position, coordinates: unknown): { distanceM
 
 const NEARBY_THREAT_SEVERITIES: AlertProduct["severity"][] = ["tornado", "pds", "severe", "flash-flood"];
 
-// State-wide query (NWS's area= param) rather than a point query -- deliberately broader than "am I
-// inside a warning" so a storm that's still 20-40mi out and hasn't reached the chaser yet still shows
-// up. stateAbbr should be a real 2-letter USPS code (radar site data already carries this -- see
-// getNearestRadarSites -- cheaper than reverse-geocoding just for this).
-export async function getNearbyStormThreats(pos: Position, stateAbbr: string): Promise<NearbyThreat[]> {
-  if (!stateAbbr) return [];
+export interface NearbyThreatCoverage {
+  threats: NearbyThreat[];
+  states: string[];
+  complete: boolean;
+}
+
+// Resolve the selected point and a 45-mile ring. A nearby warning can cross a state line, while
+// the nearest radar site can be in a different state altogether. NWS county UGC is authoritative
+// for the point; relativeLocation is a fallback when county is absent.
+async function warningStateAt(pos: Position): Promise<string> {
+  const data = await fetchJson<{ properties?: { county?: string; relativeLocation?: { properties?: { state?: string } } } }>(
+    `https://api.weather.gov/points/${pos.lat.toFixed(4)},${pos.lon.toFixed(4)}`,
+  );
+  const countyState = data.properties?.county?.match(/\/([A-Z]{2})[CZ]\d{3}(?:\?.*)?$/)?.[1];
+  return countyState ?? stateAbbr(data.properties?.relativeLocation?.properties?.state ?? "");
+}
+
+function warningCoveragePoints(pos: Position): Position[] {
+  const miles = 45;
+  const latStep = miles / 69;
+  const lonStep = miles / (69 * Math.max(0.1, Math.cos(pos.lat * Math.PI / 180)));
+  const diagonal = Math.SQRT1_2;
+  return [pos, ...[[1, 0], [-1, 0], [0, 1], [0, -1],
+    [diagonal, diagonal], [diagonal, -diagonal], [-diagonal, diagonal], [-diagonal, -diagonal]]
+    .map(([north, east]) => ({ lat: pos.lat + north * latStep, lon: pos.lon + east * lonStep }))];
+}
+
+// State-wide NWS area queries show polygons approaching the point. This is display-only context;
+// the separate point alert lookup drives in-warning notifications and sound.
+async function nearbyStormThreatsForState(pos: Position, stateAbbr: string): Promise<NearbyThreat[]> {
   const url = `https://api.weather.gov/alerts/active?area=${encodeURIComponent(stateAbbr)}`;
-  try {
-    const data = await fetchJson<{ features?: Array<{ id: string; properties?: Record<string, string>; geometry?: AlertGeometry | null }> }>(url);
+  const data = await fetchJson<{ features?: Array<{ id: string; properties?: Record<string, string>; geometry?: AlertGeometry | null }> }>(url);
     const threats: NearbyThreat[] = [];
     for (const feature of data.features ?? []) {
       const p = feature.properties ?? {};
@@ -244,10 +267,25 @@ export async function getNearbyStormThreats(pos: Position, stateAbbr: string): P
         inside,
       });
     }
-    return threats.sort((a, b) => a.distanceMi - b.distanceMi).slice(0, 5);
-  } catch {
-    return [];
+  return threats;
+}
+
+export async function getNearbyStormThreats(pos: Position): Promise<NearbyThreatCoverage> {
+  const locations = await Promise.allSettled(warningCoveragePoints(pos).map(warningStateAt));
+  const states = [...new Set(locations.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []))].sort();
+  if (states.length === 0) return { threats: [], states, complete: false };
+  const queries = await Promise.allSettled(states.map((state) => nearbyStormThreatsForState(pos, state)));
+  const byId = new Map<string, NearbyThreat>();
+  for (const result of queries) {
+    if (result.status !== "fulfilled") continue;
+    for (const threat of result.value) byId.set(threat.alert.id, threat);
   }
+  return {
+    threats: [...byId.values()].sort((a, b) => a.distanceMi - b.distanceMi).slice(0, 5),
+    states,
+    complete: locations.every((result) => result.status === "fulfilled" && !!result.value)
+      && queries.every((result) => result.status === "fulfilled"),
+  };
 }
 
 function pointInRing(point: Position, ring: number[][]): boolean {

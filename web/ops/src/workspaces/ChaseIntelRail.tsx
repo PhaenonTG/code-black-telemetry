@@ -4,12 +4,11 @@ import { fetchForecast } from "../core/client"
 import type { OpsCoreConfig } from "../core/config"
 import { getAegisFeed, type AegisAlertFeed } from "../core/aegisFeed"
 import { getRoadConditionsForViewport, type ViewportLayerResult, type RoadConditionEvent } from "../../../../src/services/mapLayerModels"
-import { getNearestRadarSites } from "../../../../src/services/radar"
-import { getNearbyStormThreats, type NearbyThreat } from "../../../../src/services/situational"
+import { getNearbyStormThreats, type NearbyThreatCoverage } from "../../../../src/services/situational"
 import { distanceMiles, nearbyRoadConditions, topOfficialAlert, type ChasePoint, type OfficialAlert } from "./chaseIntelModel"
 
 type OfficialResponse = { status: string; queried_at?: string; alerts?: OfficialAlert[]; notice?: string }
-type Snapshot = { point: ChasePoint; checkedAt: number; official: OfficialResponse | null; officialError: boolean; nearby: NearbyThreat[] | null; nearbyState: string | null; roads: ViewportLayerResult<RoadConditionEvent> | null; aegis: AegisAlertFeed | null }
+type Snapshot = { point: ChasePoint; checkedAt: number; official: OfficialResponse | null; officialError: boolean; nearby: NearbyThreatCoverage | null; roads: ViewportLayerResult<RoadConditionEvent> | null; aegis: AegisAlertFeed | null }
 
 function safeLink(value: string | undefined) { return value?.startsWith("https://api.weather.gov/") ? value : null }
 function timeLabel(value: number) { return new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }
@@ -31,7 +30,7 @@ export function useChaseIntel(config: OpsCoreConfig, point: ChasePoint | null) {
       const point = { lat: latitude, lon: longitude }
       const params = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude) })
       const context = Promise.allSettled([
-        getNearestRadarSites(latitude, longitude),
+        getNearbyStormThreats(point),
         getRoadConditionsForViewport({ viewport: { north: latitude + .4, south: latitude - .4, east: longitude + .5, west: longitude - .5, zoom: 9 }, detail: "medium", sessionId: null }),
         getAegisFeed(config),
       ])
@@ -39,11 +38,10 @@ export function useChaseIntel(config: OpsCoreConfig, point: ChasePoint | null) {
       const official = officialResult[0].status === "fulfilled" ? officialResult[0].value : null
       const officialError = officialResult[0].status === "rejected"
       const checkedAt = Date.now()
-      if (!cancelled) setSnapshot({ point, checkedAt, official, officialError, nearby: null, nearbyState: null, roads: null, aegis: null })
-      const [sitesResult, roadResult, aegisResult] = await context
-      const state = sitesResult.status === "fulfilled" ? sitesResult.value[0]?.state ?? null : null
-      const nearby = state ? await getNearbyStormThreats(point, state) : null
-      if (!cancelled) setSnapshot({ point, checkedAt, official, officialError, nearby, nearbyState: state,
+      if (!cancelled) setSnapshot({ point, checkedAt, official, officialError, nearby: null, roads: null, aegis: null })
+      const [nearbyResult, roadResult, aegisResult] = await context
+      const nearby = nearbyResult.status === "fulfilled" ? nearbyResult.value : null
+      if (!cancelled) setSnapshot({ point, checkedAt, official, officialError, nearby,
         roads: roadResult.status === "fulfilled" ? roadResult.value : null,
         aegis: aegisResult.status === "fulfilled" ? aegisResult.value : null })
       inFlight = false
@@ -76,7 +74,7 @@ export function ChaseIntelRail({ intel, point, vehiclePosition }: { intel: Snaps
   }).slice(0, 2) : []
   return <aside className="chase-intel" aria-label="Chase field intelligence">
     <section className="workspace-panel"><header><h2>Nearby warnings</h2><span>NWS · approximate</span></header>
-      {!point ? <p>Waiting for a reference location.</p> : !intel ? <p>Checking state warning polygons…</p> : intel.nearby === null ? <p>Nearby warning lookup unavailable.</p> : intel.nearby.length === 0 ? <p>No polygon warnings returned for {intel.nearbyState ?? "this state"}. State coverage and the scan may be incomplete.</p> : <div className="chase-intel__items">{intel.nearby.map(({ alert, inside, distanceMi, bearingCardinal }) => <div key={alert.id}><strong>{alert.title}</strong><span>{inside ? "Reference point inside polygon" : `~${Math.round(distanceMi)} mi ${bearingCardinal} · nearest polygon vertex`}</span><small>{alert.area}</small>{safeLink(alert.id) && <a href={alert.id} target="_blank" rel="noreferrer">NWS product ↗</a>}</div>)}</div>}
+      {!point ? <p>Waiting for a reference location.</p> : !intel ? <p>Checking nearby warning polygons…</p> : intel.nearby === null ? <p>Checking nearby warning coverage…</p> : <>{!intel.nearby.complete && <p>Nearby warning coverage incomplete. Check the NWS source before making a field decision.</p>}{intel.nearby.threats.length === 0 ? <p>No polygon warnings returned for {intel.nearby.states.join(", ") || "the reference area"}. This is not an all-clear.</p> : <div className="chase-intel__items">{intel.nearby.threats.map(({ alert, inside, distanceMi, bearingCardinal }) => <div key={alert.id}><strong>{alert.title}</strong><span>{inside ? "Reference point inside polygon" : `~${Math.round(distanceMi)} mi ${bearingCardinal} · nearest polygon vertex`}</span><small>{alert.area}</small>{safeLink(alert.id) && <a href={alert.id} target="_blank" rel="noreferrer">NWS product ↗</a>}</div>)}</div>}</>}
     </section>
     <section className="workspace-panel"><header><h2>Road conditions</h2><span>DOT · within ~25 mi</span></header>
       {!point ? <p>Waiting for a reference location.</p> : !intel ? <p>Checking providers…</p> : !intel.roads || !["ready", "empty", "stale"].includes(intel.roads.status) ? <p>{intel.roads?.message || "Road provider unavailable."}</p> : roads.length === 0 ? <p>No nearby provider events returned. Road coverage is not a route-safety check.</p> : <div className="chase-intel__items">{roads.map(({ road, distanceMi }) => <div key={road.id}><strong>{road.roadway || road.title}</strong><span>~{Math.round(distanceMi)} mi · {road.closureState} · {road.freshness}</span><small>{road.title}</small>{road.sourceUrl?.startsWith("https://") && <a href={road.sourceUrl} target="_blank" rel="noreferrer">Provider ↗</a>}</div>)}</div>}
