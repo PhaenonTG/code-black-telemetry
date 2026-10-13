@@ -2,7 +2,7 @@ import { createContext } from "react";
 import type { OpsCoreConfig } from "./config";
 import type { OpsCoreState, StormIntelHistoryEntry } from "./types";
 import type { LocationState } from "../adapters/LocationAdapter";
-import type { LocationMode } from "./referenceLocation";
+import type { LiveChaserFix, LocationMode } from "./referenceLocation";
 
 export type OpsSelectedPoint = { lat: number; lon: number };
 
@@ -16,6 +16,8 @@ export interface CoreOpsContextValue {
   referenceUnitId: string;
   referenceLabel: string;
   referenceIsFallback: boolean;
+  referenceIsStale: boolean;
+  referenceChaserFix: LiveChaserFix | null;
   chooseChaserLocation(unitId: string): void;
   chooseFallbackLocation(): void;
   updateDeviceLocation(point: OpsSelectedPoint): void;

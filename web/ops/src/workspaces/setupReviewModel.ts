@@ -25,3 +25,19 @@ export function canApprove(workflow: SetupWorkflow | undefined, current: boolean
   return current && ["OWNER", "ADMIN"].includes(role ?? "") && workflow?.status === "ready" &&
     Array.isArray(workflow.approval_blockers) && workflow.approval_blockers.length === 0;
 }
+
+export function approvalDisabledReason(workflow: SetupWorkflow | undefined, options: {
+  current: boolean; role?: string; note: string; acknowledged: boolean; fingerprint?: string;
+}): string | null {
+  if (!options.current) return "Return to the current revision before posting.";
+  if (!["OWNER", "ADMIN"].includes(options.role ?? "")) return "OWNER or ADMIN access is required to post a reviewed briefing.";
+  if (!options.fingerprint) return "This revision is missing its evidence fingerprint. Refresh before continuing.";
+  if (!workflow || workflow.status === "not_requested") return "Step 1 is required: run both advisory reviews.";
+  if (workflow.status === "pending") return "The advisory reviews are still running.";
+  if (workflow.status !== "ready") return "The advisory reviews did not complete. Retry them before posting.";
+  if (!Array.isArray(workflow.approval_blockers)) return "Approval requirements are unavailable. Refresh before continuing.";
+  if (workflow.approval_blockers.length) return workflow.approval_blockers[0];
+  if (!options.note.trim()) return "Add a review note before posting.";
+  if (!options.acknowledged) return "Confirm that you read the evidence and review limitations.";
+  return null;
+}

@@ -3,13 +3,14 @@ import { BoundedBackoff } from "./backoff";
 import { coreConfigured, readOpsCoreConfig } from "./config";
 import { CoreOpsContext, type OpsSelectedPoint } from "./CoreOpsContext";
 import { consumeFabricStream, fetchCoreHealth, fetchFabricRest, fetchStormIntelHealth, fetchStormIntelPoint } from "./client";
+import { planFabricReconnect } from "./fabricReconnect";
 import { fabricStateFromSnapshot } from "./fabricSnapshot";
 import { LatestRequestGate } from "./requestGate";
 import { mergeStormHealth, shouldRefreshPoint } from "./pointRefresh";
 import { addPointHistoryEntry, historyEntryFromSnapshot } from "../stormIntel/pointHistory";
 import type { OpsCoreState } from "./types";
 import { browserLocationAdapter, type LocationState } from "../adapters/LocationAdapter";
-import { liveChaserPoint, PEA_RIDGE_REFERENCE, type LocationMode } from "./referenceLocation";
+import { liveChaserFix, PEA_RIDGE_REFERENCE, retainedChaserFix, type LiveChaserFix, type LocationMode } from "./referenceLocation";
 
 const FABRIC_STREAM_FRESH_MS = 10_000;
 const REFERENCE_KEY = "codeblack.ops.locationReference.v1";
@@ -61,6 +62,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
   const [locationMode, setLocationMode] = useState<LocationMode>(saved.mode);
   const [referenceUnitId, setReferenceUnitId] = useState(saved.unitId);
   const [deviceLocation, setDeviceLocation] = useState<LocationState>({ status: "requesting" });
+  const [lastChaserFixes, setLastChaserFixes] = useState<Record<string, LiveChaserFix>>({});
   const [referenceNow, setReferenceNow] = useState(Date.now);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const referenceSourceRef = useRef(`${saved.mode}:${saved.unitId}:true`);
@@ -81,17 +83,34 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
   }, [locationMode, referenceUnitId]);
 
   const referenceUnit = state.fabric.units?.units.find((unit) => unit.unit_id === referenceUnitId);
-  const chaserPoint = useMemo(() => referenceUnit ? liveChaserPoint(referenceUnit, referenceNow) : null, [referenceUnit, referenceNow]);
+  const chaserFix = useMemo(() => referenceUnit ? liveChaserFix(referenceUnit, referenceNow) : null, [referenceUnit, referenceNow]);
+  useEffect(() => {
+    if (!referenceUnitId || !chaserFix) return;
+    // This intentionally snapshots an external GPS observation for outage continuity.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setLastChaserFixes((current) => {
+      const prior = current[referenceUnitId];
+      return prior?.point.lat === chaserFix.point.lat && prior.point.lon === chaserFix.point.lon && prior.observedAt === chaserFix.observedAt
+        ? current
+        : { ...current, [referenceUnitId]: chaserFix };
+    });
+  }, [chaserFix, referenceUnitId]);
+  const selectedChaserFix = retainedChaserFix(chaserFix, lastChaserFixes[referenceUnitId] ?? null);
+  const selectedChaserPoint = selectedChaserFix?.point ?? null;
   const deviceReady = deviceLocation.status === "ready" && referenceNow - deviceLocation.at <= 120_000;
-  const referenceIsFallback = locationMode === "fallback" || (locationMode === "follow" && !deviceReady) || (locationMode === "chaser" && !chaserPoint);
+  const referenceIsFallback = locationMode === "fallback" || (locationMode === "follow" && !deviceReady) || (locationMode === "chaser" && !selectedChaserFix);
+  const referenceIsStale = locationMode === "chaser" && Boolean(selectedChaserFix) && !chaserFix;
   const referenceLabel = locationMode === "manual" ? "Map point"
     : locationMode === "fallback" ? "Pea Ridge, AR"
-    : locationMode === "chaser" ? `${referenceUnit?.operator_name || referenceUnit?.display_name || "Chaser"}${chaserPoint ? " · GPS" : " · Pea Ridge fallback"}`
+    : locationMode === "chaser" ? `${referenceUnit?.operator_name || referenceUnit?.display_name || "Chaser"}${chaserFix ? " · GPS" : selectedChaserPoint ? " · last known GPS" : " · waiting for GPS"}`
     : deviceReady ? "My location · GPS" : "Pea Ridge, AR · fallback";
 
   useEffect(() => {
     if (locationMode === "manual" || document.hidden) return;
-    const target = locationMode === "chaser" ? chaserPoint ?? PEA_RIDGE_REFERENCE
+    // A selected chaser owns this reference until the operator changes it. A brief telemetry
+    // dropout must not substitute the browser/default position and bounce both Chase maps away
+    // from that operator; retain the last verified fix while clearly labeling it as last known.
+    const target = locationMode === "chaser" ? selectedChaserPoint ?? PEA_RIDGE_REFERENCE
       : locationMode === "follow" && deviceReady && deviceLocation.status === "ready" ? { lat: deviceLocation.lat, lon: deviceLocation.lon }
       : PEA_RIDGE_REFERENCE;
     const source = `${locationMode}:${referenceUnitId}:${referenceIsFallback}`;
@@ -100,7 +119,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
       referenceSourceRef.current = source;
       setSelectedPoint({ ...target });
     }
-  }, [locationMode, referenceUnitId, referenceIsFallback, deviceLocation, deviceReady, chaserPoint, referenceNow]);
+  }, [locationMode, referenceUnitId, referenceIsFallback, deviceLocation, deviceReady, selectedChaserPoint, referenceNow]);
 
   useEffect(() => {
     fabricRef.current = state.fabric;
@@ -162,21 +181,37 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
     if (!coreConfigured(config)) return;
     let cancelled = false;
     let reconnectTimer: number | null = null;
-    let controller: AbortController | null = null;
-    let watchdog: number | null = null;
+    let activeController: AbortController | null = null;
+    let clearActiveWatchdog: (() => void) | null = null;
     const backoff = new BoundedBackoff();
 
     const connect = () => {
       if (cancelled) return;
-      controller = new AbortController();
-      setState((current) => ({ ...current, fabric: { ...current.fabric, streamState: "connecting", error: null } }));
-      watchdog = window.setTimeout(() => controller?.abort(), FABRIC_STREAM_FRESH_MS);
+      const controller = new AbortController();
+      activeController = controller;
+      let watchdog: number | null = null;
+      let completedNormally = false;
+      let receivedSnapshot = false;
+      let streamError: string | null = null;
+      const clearWatchdog = () => {
+        if (watchdog !== null) window.clearTimeout(watchdog);
+        watchdog = null;
+      };
+      const armWatchdog = () => {
+        clearWatchdog();
+        watchdog = window.setTimeout(() => controller.abort(), FABRIC_STREAM_FRESH_MS);
+      };
+      clearActiveWatchdog = clearWatchdog;
+      setState((current) => current.fabric.streamState === "open"
+        ? current
+        : { ...current, fabric: { ...current.fabric, streamState: "connecting", error: null } });
+      armWatchdog();
       void consumeFabricStream(config, controller.signal, (event) => {
         if (cancelled || event.eventType !== "fabric.snapshot") return;
         const snapshot = fabricStateFromSnapshot(event.payload);
         if (!snapshot) throw new Error("Malformed Fabric snapshot");
-        if (watchdog !== null) window.clearTimeout(watchdog);
-        watchdog = window.setTimeout(() => controller?.abort(), FABRIC_STREAM_FRESH_MS);
+        receivedSnapshot = true;
+        armWatchdog();
         backoff.reset();
         setState((current) => ({
           ...current,
@@ -191,30 +226,35 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
             error: null,
           },
         }));
+      }).then(() => {
+        completedNormally = true;
       }).catch((error: unknown) => {
-        if (cancelled) return;
-        setState((current) => ({ ...current, fabric: {
-          ...current.fabric,
-          streamState: "error",
-          error: error instanceof Error ? error.message : "Fabric live feed failed",
-        } }));
+        streamError = error instanceof Error ? error.message : "Fabric live feed failed";
       }).finally(() => {
-        if (watchdog !== null) window.clearTimeout(watchdog);
+        clearWatchdog();
+        if (activeController === controller) {
+          activeController = null;
+          clearActiveWatchdog = null;
+        }
         if (cancelled) return;
-        setState((current) => ({ ...current, fabric: {
-          ...current.fabric,
-          streamState: "closed",
-          state: current.fabric.state === "LIVE" ? "STALE" : current.fabric.state,
-        } }));
-        reconnectTimer = window.setTimeout(connect, backoff.next());
+        const plan = planFabricReconnect(completedNormally, receivedSnapshot, () => backoff.next());
+        if (plan.markClosed) {
+          setState((current) => ({ ...current, fabric: {
+            ...current.fabric,
+            streamState: "closed",
+            state: current.fabric.state === "LIVE" ? "STALE" : current.fabric.state,
+            error: streamError ?? "Fabric feed closed before its first snapshot",
+          } }));
+        }
+        reconnectTimer = window.setTimeout(connect, plan.delayMs);
       });
     };
     connect();
     return () => {
       cancelled = true;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      if (watchdog !== null) window.clearTimeout(watchdog);
-      controller?.abort();
+      clearActiveWatchdog?.();
+      activeController?.abort();
     };
   }, [config]);
 
@@ -340,6 +380,8 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
       referenceUnitId,
       referenceLabel,
       referenceIsFallback,
+      referenceIsStale,
+      referenceChaserFix: locationMode === "chaser" ? selectedChaserFix : null,
       chooseChaserLocation,
       chooseFallbackLocation,
       updateDeviceLocation,
@@ -348,7 +390,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
       selectPoint,
       selectHistoryPoint,
     }),
-    [config, state, selectedPoint, selectPoint, selectHistoryPoint, locationMode, deviceLocation, referenceUnitId, referenceLabel, referenceIsFallback, chooseChaserLocation, chooseFallbackLocation, updateDeviceLocation, followDeviceLocation, refreshPoint],
+    [config, state, selectedPoint, selectPoint, selectHistoryPoint, locationMode, deviceLocation, referenceUnitId, referenceLabel, referenceIsFallback, referenceIsStale, selectedChaserFix, chooseChaserLocation, chooseFallbackLocation, updateDeviceLocation, followDeviceLocation, refreshPoint],
   );
   return <CoreOpsContext.Provider value={value}>{children}</CoreOpsContext.Provider>;
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { normalizeStormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/normalize";
 import { coreConfigured, readOpsCoreConfig } from "./config";
-import { normalizeFabricEvent } from "./client";
+import { normalizeFabricEvent, setupWorkflowErrorMessage } from "./client";
 import { fabricStateFromSnapshot } from "./fabricSnapshot";
 
 const productionPoint = {
@@ -76,6 +76,11 @@ const productionPoint = {
 };
 
 describe("Core transport helpers", () => {
+  it("surfaces actionable draft workflow errors without leaking proxy HTML", () => {
+    expect(setupWorkflowErrorMessage(409, { detail: "Another setup review is running. Try again shortly." })).toMatch(/Another setup review/);
+    expect(setupWorkflowErrorMessage(422, { detail: "Invalid setup review request" })).toMatch(/Invalid setup/);
+    expect(setupWorkflowErrorMessage(503, "<html>proxy error</html>")).toMatch(/review service is unavailable/);
+  });
   it("normalizes production Fabric snapshot events", () => {
     const event = normalizeFabricEvent(JSON.stringify({
       event_type: "fabric.snapshot",

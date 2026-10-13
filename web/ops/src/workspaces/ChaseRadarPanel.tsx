@@ -7,6 +7,7 @@ import { normalizeRadarFrames } from "../../../../src/services/radarLoop"
 import { radarFramesAreOperational } from "../../../../src/services/radarFailover"
 import { updateAtlasRadarLayer, removeAtlasRadarLayer } from "../../../../src/map/AtlasRadarLayer"
 import { AtlasRadarLegend } from "../../../../src/map/AtlasRadarLegend"
+import { tuneAtlasStyle } from "../../../../src/map/AtlasStyleManager"
 import { selectRadarFrame } from "./chaseRadarSelection"
 import { PEA_RIDGE_REFERENCE } from "../core/referenceLocation"
 
@@ -19,6 +20,7 @@ export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
   const [sites, setSites] = useState<RadarSite[]>([])
   const [frame, setFrame] = useState<RadarFrame | null>(null)
   const [error, setError] = useState("")
+  const [siteDiscoveryError, setSiteDiscoveryError] = useState("")
   const [checkedAt, setCheckedAt] = useState(0)
   const [now, setNow] = useState(() => Date.now())
   const [stormMotionReady, setStormMotionReady] = useState(false)
@@ -41,7 +43,11 @@ export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
     map.current = instance
     instance.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right")
     // This repo carries two mapbox-gl type versions. The runtime map instance is the same API.
-    instance.on("style.load", () => { styleReady.current = true; if (frameRef.current) updateAtlasRadarLayer(instance as unknown as Parameters<typeof updateAtlasRadarLayer>[0], frameRef.current, 0.82) })
+    instance.on("style.load", () => {
+      tuneAtlasStyle(instance as unknown as Parameters<typeof tuneAtlasStyle>[0])
+      styleReady.current = true
+      if (frameRef.current) updateAtlasRadarLayer(instance as unknown as Parameters<typeof updateAtlasRadarLayer>[0], frameRef.current, 0.82)
+    })
     return () => { map.current = null; styleReady.current = false; removeAtlasRadarLayer(instance as unknown as Parameters<typeof removeAtlasRadarLayer>[0]); instance.remove() }
     // Keep one WebGL map alive while radar site, product, and focus change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,14 +66,34 @@ export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
 
   useEffect(() => {
     let cancelled = false
-    void getNearestRadarSites(siteSearchLat, siteSearchLon).then((next) => { if (!cancelled) setSites(next.slice(0, 3)) })
-    return () => { cancelled = true }
+    let retryTimer = 0
+    const load = async () => {
+      try {
+        const next = await getNearestRadarSites(siteSearchLat, siteSearchLon)
+        if (next.length === 0) throw new Error("No radar sites returned")
+        if (!cancelled) {
+          setSites(next.slice(0, 3))
+          setSiteDiscoveryError("")
+        }
+      } catch {
+        if (!cancelled) {
+          setSiteDiscoveryError("Radar site lookup failed; retrying automatically.")
+          setStormMotionReady(false)
+          retryTimer = window.setTimeout(() => void load(), 10_000)
+        }
+      }
+    }
+    void load()
+    return () => { cancelled = true; window.clearTimeout(retryTimer) }
   }, [siteSearchLat, siteSearchLon])
 
   useEffect(() => {
+    setStormMotionReady(false)
     if (!chosenSite) return
     let cancelled = false
-    void getRadarStatus(chosenSite.id, product).then((status) => { if (!cancelled) setStormMotionReady(Boolean(status.stormMotion)) })
+    void getRadarStatus(chosenSite.id, product)
+      .then((status) => { if (!cancelled) setStormMotionReady(Boolean(status.stormMotion)) })
+      .catch(() => { if (!cancelled) setStormMotionReady(false) })
     return () => { cancelled = true }
   }, [chosenSite, product])
 
@@ -116,7 +142,7 @@ export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
       <label>Site <select aria-label="Radar site" value={siteOverride} onChange={(event) => { setFrame(null); setSiteOverride(event.target.value) }}><option value="">Auto · nearest healthy</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.id} · {site.name}</option>)}</select></label>
       <div role="group" aria-label="Radar product">{PRODUCTS.map((item) => <button type="button" key={item} aria-pressed={product === item} disabled={item === "SRV" && !stormMotionReady} title={item === "SRV" && !stormMotionReady ? "Storm motion is required for storm-relative velocity" : undefined} onClick={() => { setFrame(null); setProduct(item) }}>{item}</button>)}</div>
     </div>
-    <div className="chase-radar__viewport">{hasMapboxToken() ? <div ref={container} className="chase-radar__map" role="img" aria-label={`${product} radar from ${frame?.site.id ?? chosenSite?.id ?? "unavailable site"}`} /> : <div className="chase-radar__empty">Mapbox is not configured in this build.</div>}{(!frame || error) && <div className="chase-radar__message">{error || "Checking radar frames…"}</div>}</div>
+    <div className="chase-radar__viewport">{hasMapboxToken() ? <div ref={container} className="chase-radar__map" role="img" aria-label={`${product} radar from ${frame?.site.id ?? chosenSite?.id ?? "unavailable site"}`} /> : <div className="chase-radar__empty">Mapbox is not configured in this build.</div>}{(!frame || error || siteDiscoveryError) && <div className="chase-radar__message">{error || siteDiscoveryError || "Checking radar frames…"}</div>}</div>
     <div className="chase-radar__legend"><AtlasRadarLegend product={product} /></div>
     <footer><span>{frame ? `${frame.sourceLevel} · ${frame.freshness} · ${ageText(ageSeconds)} old` : checkedAt ? "No scan available" : "Checking…"}</span><span>{frame && Number.isFinite(scanTime) ? new Date(scanTime).toLocaleTimeString() : "Scan time unavailable"}</span></footer>
   </section>
