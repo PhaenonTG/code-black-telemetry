@@ -1,0 +1,11 @@
+{
+  "serviceName": "Code Black Native Broadcaster",
+  "listen": { "host": "127.0.0.1", "port": 18766 },
+  "source": { "name": "nick", "endpoint": "srt://YOUR-PRIVATE-CORE:8890?streamid=read:nick", "width": 1920, "height": 1080, "fps": 30 },
+  "encoder": { "codec": "h264_nvenc", "bitrateKbps": 6000, "keyframeSeconds": 2, "preset": "p5", "tune": "hq", "profile": "high", "lookahead": false, "spatialAq": true, "bFrames": 2 },
+  "recording": { "directory": "recordings", "container": "matroska", "writeToDisk": false },
+  "reconnect": { "fallbackSeconds": 3, "maxBackoffSeconds": 15 },
+  "sourceHealth": { "staleAfterMs": 3000, "lostAfterMs": 8000 },
+  "bridge": { "enabled": false, "endpoint": "https://ops.codeblackwx.com/api/producer/v1", "intervalMs": 2000 },
+  "productionBroadcastEnabled": false
+}

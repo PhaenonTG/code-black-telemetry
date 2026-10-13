@@ -1,0 +1,12 @@
+# Allowlist source only. Runtime credentials, relay certificates, media, logs and evidence stay local.
+*
+!.gitignore
+!*.js
+!*.ps1
+!*.md
+!config.example.json
+!test/
+test/*
+!test/*.test.js
+!test/lock-holder.js
+!test/publish-synthetic-to-core.ps1
