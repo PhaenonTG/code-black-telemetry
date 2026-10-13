@@ -337,6 +337,18 @@ describe("codeblack-chase-gateway", () => {
       FACEBOOK_PAGE_ACCESS_TOKEN: "facebook-secret",
     });
 
+    it("reports Meta HTTP 400 token errors without disclosing the upstream response", async () => {
+      const graphFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: 190, message: "secret upstream detail" } }), { status: 400 }));
+      vi.stubGlobal("fetch", graphFetch);
+      try {
+        const res = await handleRequest(new Request("https://x/api/chase/v1/comments", { headers: { Authorization: "Bearer secret" } }), commentEnv());
+        const body = await res.json() as { state: string; pollAfterMs: number };
+        expect(body.state).toBe("auth_failed");
+        expect(body.pollAfterMs).toBe(60000);
+        expect(JSON.stringify(body)).not.toContain("secret upstream detail");
+      } finally { vi.unstubAllGlobals(); }
+    });
+
     it("requires existing Chase authorization and never calls Graph first", async () => {
       const graphFetch = vi.fn();
       vi.stubGlobal("fetch", graphFetch);

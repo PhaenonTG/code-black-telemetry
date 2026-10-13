@@ -19,6 +19,7 @@
 //   GET  /api/chase/location/public   -- unauthenticated read of ONE hardcoded public unit, with
 //                                         the token injected server-side so the overlay page
 //                                         (whose source is public) never holds it.
+export { ProducerBridge } from "./producer-bridge";
 
 const CORE_ORIGIN = "http://127.0.0.1:8000";
 const MAX_BODY_BYTES = 16 * 1024;
@@ -63,6 +64,10 @@ export interface Env {
   FACEBOOK_PAGE_ACCESS_TOKEN?: string;
   // Static release manifest and APK. Absent until a Chase release is published.
   ASSETS?: AssetBinding;
+  PRODUCER_BRIDGE?: DurableObjectNamespace;
+  PRODUCER_BRIDGE_TOKEN?: string;
+  PRODUCER_CONTROLS_ENABLED?: string;
+  PRODUCER_OPERATOR_IDS?: string;
 }
 
 interface PublicLocationResponse {
@@ -184,7 +189,7 @@ async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
   }
   if (liveResponse.status === 401 || liveResponse.status === 403) return commentResponse("auth_failed", cursor);
   if (liveResponse.status === 429) return new Response(JSON.stringify({ state: "rate_limited", cursor, pollAfterMs: 10_000, comments: [] }), { status: 429, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": "10" } });
-  if (!liveResponse.ok) return commentResponse("reconnecting", cursor);
+  if (!liveResponse.ok) return graphFailureResponse(liveResponse, cursor);
   let liveData: { data?: Array<{ id?: unknown }> };
   try { liveData = await liveResponse.json() as { data?: Array<{ id?: unknown }> }; } catch { return commentResponse("reconnecting", cursor); }
   const liveId = Array.isArray(liveData.data) ? liveData.data.find((video) => typeof video?.id === "string")?.id : undefined;
@@ -205,7 +210,7 @@ async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
   }
   if (commentsResponse.status === 401 || commentsResponse.status === 403) return commentResponse("auth_failed", cursor);
   if (commentsResponse.status === 429) return new Response(JSON.stringify({ state: "rate_limited", cursor, pollAfterMs: 10_000, comments: [] }), { status: 429, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": "10" } });
-  if (!commentsResponse.ok) return commentResponse("reconnecting", cursor);
+  if (!commentsResponse.ok) return graphFailureResponse(commentsResponse, cursor);
   try {
     const normalized = normalizeGraphComments(await commentsResponse.json(), cursor);
     return commentResponse("ok", normalized.cursor, normalized.comments, COMMENT_POLL_AFTER_MS, true);
@@ -214,12 +219,24 @@ async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
   }
 }
 
+// Meta commonly reports expired tokens and permission failures as HTTP 400. Treat those as
+// authorization failures instead of making the app claim it is endlessly reconnecting.
+async function graphFailureResponse(response: Response, cursor: string): Promise<Response> {
+  try {
+    const result = await response.json() as { error?: { code?: number } };
+    const code = result.error?.code;
+    if (code === 190 || code === 102 || code === 10 || code === 200) return commentResponse("auth_failed", cursor, [], 60_000);
+    if (code === 4 || code === 17 || code === 32 || code === 613) return commentResponse("rate_limited", cursor, [], 30_000);
+  } catch { /* Never relay Meta error bodies or credential material to a client. */ }
+  return commentResponse("reconnecting", cursor, [], 5_000);
+}
+
 /**
  * Authenticates a Chase operator through Supabase and its existing active-profile policy.
  * During the signed migration window the pre-auth Chase token remains accepted so installed
  * field clients never lose a working uplink; it is not returned to authenticated clients.
  */
-type ChaseCaller = { operatorName?: string; vehicleName?: string };
+type ChaseCaller = { userId?: string; operatorName?: string; vehicleName?: string };
 
 /**
  * Resolves the active, server-managed OPS profile. The display name is presentation data only:
@@ -249,9 +266,9 @@ function vehicleNameFromProfile(value: unknown): string | undefined {
   return /^[a-z0-9][a-z0-9-]{0,62}$/.test(vehicle) ? vehicle : undefined;
 }
 
-async function authorizeCaller(request: Request, env: Env): Promise<ChaseCaller | null> {
+async function authorizeCaller(request: Request, env: Env, allowLegacy = true): Promise<ChaseCaller | null> {
   // Legacy field installs remain usable during migration, but cannot claim a user identity.
-  if (legacyAuthorized(request, env.CHASE_TOKEN)) return {};
+  if (allowLegacy && legacyAuthorized(request, env.CHASE_TOKEN)) return {};
   const header = request.headers.get("Authorization") ?? ""
   if (!header.startsWith("Bearer ") || !env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY) return null
   const token = header.slice("Bearer ".length).trim()
@@ -273,6 +290,7 @@ async function authorizeCaller(request: Request, env: Env): Promise<ChaseCaller 
     const profile = Array.isArray(profiles) ? profiles.find((candidate) => candidate.active === true) : undefined
     return profile
       ? {
+          userId: user.id,
           operatorName: displayNameFromProfile(profile.operator_name) ?? displayNameFromProfileEmail(profile.email),
           vehicleName: vehicleNameFromProfile(profile.vehicle_id),
         }
@@ -280,6 +298,44 @@ async function authorizeCaller(request: Request, env: Env): Promise<ChaseCaller 
   } catch {
     return null
   }
+}
+
+function producerWorkstationAuthorized(request: Request, env: Env): boolean {
+  const header = request.headers.get("Authorization") || "";
+  return Boolean(env.PRODUCER_BRIDGE_TOKEN && header === `Bearer ${env.PRODUCER_BRIDGE_TOKEN}`);
+}
+
+function producerOperatorAllowed(caller: ChaseCaller, env: Env): boolean {
+  if (env.PRODUCER_CONTROLS_ENABLED !== "true" || !caller.userId) return false;
+  return (env.PRODUCER_OPERATOR_IDS || "").split(",").map((id) => id.trim()).filter(Boolean).includes(caller.userId);
+}
+
+async function handleProducerRoute(request: Request, url: URL, env: Env): Promise<Response> {
+  if (!env.PRODUCER_BRIDGE) return json(503, { error: "BRIDGE_NOT_CONFIGURED" });
+  const workstation = url.pathname.startsWith("/api/producer/v1/workstation/");
+  let operator = "workstation";
+  if (workstation) {
+    if (!producerWorkstationAuthorized(request, env)) return json(401, { error: "AUTH_REQUIRED" });
+  } else {
+    const caller = await authorizeCaller(request, env, false);
+    if (!caller) return json(401, { error: "AUTH_REQUIRED" });
+    operator = caller.operatorName || caller.userId || "operator";
+    if (request.method === "POST" && url.pathname === "/api/producer/v1/commands" && !producerOperatorAllowed(caller, env)) return json(403, { error: "PRODUCER_CONTROL_FORBIDDEN" });
+  }
+  const id = env.PRODUCER_BRIDGE.idFromName("native-producer");
+  const stub = env.PRODUCER_BRIDGE.get(id);
+  const headers = new Headers();
+  for (const name of ["Content-Type", "Content-Length", "X-Producer-Frame-At"]) {
+    const value = request.headers.get(name); if (value) headers.set(name, value);
+  }
+  headers.set("X-Producer-Operator", operator);
+  const response = await stub.fetch(new Request(request.url, { method: request.method, headers, body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body }));
+  if (!workstation && request.method === "GET" && url.pathname === "/api/producer/v1/status" && response.ok) {
+    const document = await response.json() as Record<string, unknown>;
+    if (!("status" in document) && "producer" in document) document.status = document.producer;
+    return json(response.status, document);
+  }
+  return response;
 }
 
 async function authorized(request: Request, env: Env): Promise<boolean> {
@@ -546,6 +602,7 @@ async function handleUpdateRoute(request: Request, url: URL, env: Env): Promise<
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname.startsWith("/api/producer/v1/")) return handleProducerRoute(request, url, env);
   if (url.pathname === UPDATE_PATH || url.pathname === DOWNLOAD_PATH || url.pathname.startsWith(RELEASE_PREFIX)) {
     try {
       return await handleUpdateRoute(request, url, env);

@@ -6,7 +6,15 @@
   "compatibility_date": "2026-09-08",
 
   // This is the existing, narrowly scoped public Chase ingress.
-  "routes": [{ "pattern": "ops.codeblackwx.com/api/chase/*", "zone_name": "codeblackwx.com" }],
+  "routes": [
+    { "pattern": "ops.codeblackwx.com/api/chase/*", "zone_name": "codeblackwx.com" },
+    { "pattern": "ops.codeblackwx.com/api/producer/*", "zone_name": "codeblackwx.com" }
+  ],
+
+  "durable_objects": {
+    "bindings": [{ "name": "PRODUCER_BRIDGE", "class_name": "ProducerBridge" }]
+  },
+  "migrations": [{ "tag": "producer-bridge-v1", "new_sqlite_classes": ["ProducerBridge"] }],
 
   // Published by the local Chase release script. The directory stays free of secrets.
   "assets": {
