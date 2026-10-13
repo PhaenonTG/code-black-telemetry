@@ -227,6 +227,8 @@ root with `OPS_SMOKE_URL` set to that candidate's Pages preview URL and `OPS_SMO
 typecheck, unit tests, build, then a real Chromium sign-in and desktop workflow: dark Mapbox map,
 point selection, Fabric, forecast gateway, and Aegis feed. It fails closed if credentials are
 missing or a required Core response fails. Never commit these credentials or put them in a URL.
+For a one-off manual review without giving a script a password, set `OPS_SMOKE_INTERACTIVE=1`
+and run `npm run smoke:ops:live`; sign in yourself in the browser window that opens.
 Cloudflare currently auto-deploys `master`; this command is a release procedure, not an enforced
 Cloudflare deployment block. Enforce a required pre-merge check/branch rule before calling it an
 automatic production gate.

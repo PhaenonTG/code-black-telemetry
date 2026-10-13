@@ -1,14 +1,15 @@
 import { chromium } from "playwright";
 
 const baseUrl = (process.env.OPS_SMOKE_URL || "https://ops.codeblackwx.com").replace(/\/$/, "");
+const interactive = process.env.OPS_SMOKE_INTERACTIVE === "1";
 const email = process.env.OPS_SMOKE_EMAIL;
 const password = process.env.OPS_SMOKE_PASSWORD;
-if (!email || !password) {
-  console.error("OPS smoke needs OPS_SMOKE_EMAIL and OPS_SMOKE_PASSWORD for an active operator account.");
+if (!interactive && (!email || !password)) {
+  console.error("OPS smoke needs OPS_SMOKE_EMAIL and OPS_SMOKE_PASSWORD, or OPS_SMOKE_INTERACTIVE=1.");
   process.exit(2);
 }
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: !interactive });
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 await context.grantPermissions(["geolocation"], { origin: baseUrl });
 await context.setGeolocation({ latitude: 39.0473, longitude: -95.6752, accuracy: 30 });
@@ -29,10 +30,14 @@ function check(condition, detail) {
 
 try {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
-  await page.getByLabel("EMAIL").fill(email);
-  await page.getByLabel("PASSWORD").fill(password);
-  await page.getByRole("button", { name: "AUTHENTICATE" }).click();
-  await page.getByRole("navigation", { name: "Primary" }).waitFor({ timeout: 20_000 });
+  if (interactive) {
+    console.log("Sign in yourself in the opened browser; the smoke continues when OPS unlocks.");
+  } else {
+    await page.getByLabel("EMAIL").fill(email);
+    await page.getByLabel("PASSWORD").fill(password);
+    await page.getByRole("button", { name: "AUTHENTICATE" }).click();
+  }
+  await page.getByRole("navigation", { name: "Primary" }).waitFor({ timeout: interactive ? 120_000 : 20_000 });
   check(!(await page.getByText("AUTHENTICATION FAILED").isVisible()), "OPS sign-in failed");
 
   await page.goto(`${baseUrl}/radar`, { waitUntil: "domcontentloaded" });
