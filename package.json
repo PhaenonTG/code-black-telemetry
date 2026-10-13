@@ -19,6 +19,8 @@
     "test:walkthrough": "playwright test --config=playwright.config.ts",
     "test:walkthrough:s24": "powershell -ExecutionPolicy Bypass -File scripts/s24-rendered-walkthrough.ps1",
     "release:sanity": "node scripts/release-sanity.mjs",
+    "smoke:ops:live": "node scripts/ops-live-smoke.mjs",
+    "gate:ops:release": "node scripts/ops-release-gate.mjs",
     "radar:worker": "node radar-worker/worker.cjs"
   },
   "dependencies": {

@@ -221,6 +221,16 @@ Live: **Cloudflare Pages**, project `codeblack-ops`, root directory `web/ops`, b
 `ops.codeblackwx.com` (custom domain) and `codeblack-ops.pages.dev` (default Pages URL) — both
 present the same Supabase login gate, since auth is enforced in-app rather than at the edge.
 
+Before promoting an OPS candidate to `master`, run `npm run gate:ops:release` from the repository
+root with `OPS_SMOKE_URL` set to that candidate's Pages preview URL and `OPS_SMOKE_EMAIL` /
+`OPS_SMOKE_PASSWORD` set locally to an active, least-privilege operator account. The gate runs
+typecheck, unit tests, build, then a real Chromium sign-in and desktop workflow: dark Mapbox map,
+point selection, Fabric, forecast gateway, and Aegis feed. It fails closed if credentials are
+missing or a required Core response fails. Never commit these credentials or put them in a URL.
+Cloudflare currently auto-deploys `master`; this command is a release procedure, not an enforced
+Cloudflare deployment block. Enforce a required pre-merge check/branch rule before calling it an
+automatic production gate.
+
 ## Core-offline behavior
 
 CodeBlack-Core (the vehicle Pi / BLE telemetry link) is offline as current product state, not
