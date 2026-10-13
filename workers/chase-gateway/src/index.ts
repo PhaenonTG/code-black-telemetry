@@ -267,7 +267,6 @@ async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
   } catch {
     return commentResponse("reconnecting", cursor);
   }
-  if (liveResponse.status === 401 || liveResponse.status === 403) return commentResponse("auth_failed", cursor);
   if (liveResponse.status === 429) return new Response(JSON.stringify({ state: "rate_limited", cursor, pollAfterMs: 10_000, comments: [] }), { status: 429, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": "10" } });
   if (!liveResponse.ok) return graphFailureResponse(liveResponse, cursor);
   let liveData: { data?: Array<{ id?: unknown }> };
@@ -288,7 +287,6 @@ async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
   } catch {
     return commentResponse("reconnecting", cursor);
   }
-  if (commentsResponse.status === 401 || commentsResponse.status === 403) return commentResponse("auth_failed", cursor);
   if (commentsResponse.status === 429) return new Response(JSON.stringify({ state: "rate_limited", cursor, pollAfterMs: 10_000, comments: [] }), { status: 429, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": "10" } });
   if (!commentsResponse.ok) return graphFailureResponse(commentsResponse, cursor);
   try {
@@ -304,6 +302,24 @@ async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
   }
 }
 
+async function sharedFacebookComments(url: URL, env: Env): Promise<Response> {
+  if (!env.PRODUCER_BRIDGE) return forwardFacebookComments(url, env);
+  const reserve = await facebookBroker(env, "/api/chase/v1/facebook/internal/comment-cache", { method: "POST", body: JSON.stringify({ operation: "reserve" }) });
+  if (reserve.status === 200) {
+    const cached = await reserve.json() as { payload: Record<string, unknown> };
+    return json(200, cached.payload);
+  }
+  // During a rolling DO upgrade, do not multiply Meta calls across every polling client.
+  if (reserve.status !== 202) return commentResponse("reconnecting", "", [], 60_000);
+  const sharedUrl = new URL(url); sharedUrl.searchParams.delete("after");
+  const response = await forwardFacebookComments(sharedUrl, env);
+  const payload = await response.json() as Record<string, unknown>;
+  const page = payload.page as { live?: boolean } | undefined;
+  payload.pollAfterMs = payload.state === "rate_limited" ? 600_000 : payload.state !== "ok" || !page?.live ? 60_000 : 30_000;
+  await facebookBroker(env, "/api/chase/v1/facebook/internal/comment-cache", { method: "POST", body: JSON.stringify({ operation: "save", payload }) });
+  return json(200, payload);
+}
+
 // Meta commonly reports expired tokens and permission failures as HTTP 400. Treat those as
 // authorization failures instead of making the app claim it is endlessly reconnecting.
 async function graphFailureResponse(response: Response, cursor: string): Promise<Response> {
@@ -311,9 +327,9 @@ async function graphFailureResponse(response: Response, cursor: string): Promise
     const result = await response.json() as { error?: { code?: number } };
     const code = result.error?.code;
     if (code === 190 || code === 102 || code === 10 || code === 200) return commentResponse("auth_failed", cursor, [], 60_000);
-    if (code === 4 || code === 17 || code === 32 || code === 613) return commentResponse("rate_limited", cursor, [], 30_000);
+    if (code === 4 || code === 17 || code === 32 || code === 613) return commentResponse("rate_limited", cursor, [], 60_000);
   } catch { /* Never relay Meta error bodies or credential material to a client. */ }
-  return commentResponse("reconnecting", cursor, [], 5_000);
+  return commentResponse(response.status === 401 || response.status === 403 ? "auth_failed" : "reconnecting", cursor, [], 5_000);
 }
 
 /**
@@ -506,8 +522,16 @@ async function handleFacebookConnector(request: Request, url: URL, env: Env): Pr
     const caller = await authorizeCaller(request, env, false);
     if (!caller) return json(401, { error: "AUTH_REQUIRED" });
     const credential = await storedFacebookCredential(env);
+    let health: { state: string; httpStatus?: number; code?: number; subcode?: number } | undefined;
+    if (credential && url.searchParams.get("diagnostics") === "1" && facebookConnectorAllowed(caller, env)) {
+      try {
+        const probe = await fetch(`${FACEBOOK_GRAPH_ORIGIN}/${credential.pageId}/live_videos?broadcast_status=%5B%22LIVE%22%5D&fields=id`, { headers: { Authorization: `Bearer ${credential.token}` }, signal: AbortSignal.timeout(8000) });
+        const result = await probe.json() as { error?: { code?: number; error_subcode?: number } };
+        health = { state: probe.ok ? "healthy" : "auth_failed", httpStatus: probe.status, code: result.error?.code, subcode: result.error?.error_subcode };
+      } catch { health = { state: "unavailable" }; }
+    }
     return json(200, credential
-      ? { state: "connected", page: { id: credential.pageId, label: credential.label }, connectedAt: credential.connectedAt, canConnect: facebookConnectorAllowed(caller, env), canReply: facebookReplyAllowed(caller, env) && credential.permissions?.includes("pages_manage_engagement") === true }
+      ? { state: "connected", page: { id: credential.pageId, label: credential.label }, connectedAt: credential.connectedAt, health, canConnect: facebookConnectorAllowed(caller, env), canReply: facebookReplyAllowed(caller, env) && credential.permissions?.includes("pages_manage_engagement") === true }
       : { state: facebookConnectorConfigured(env) ? "not_connected" : "not_configured", page: { label: FACEBOOK_PAGE_LABEL }, canConnect: facebookConnectorAllowed(caller, env), canReply: false });
   }
 
@@ -911,7 +935,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   if (url.pathname === COMMENTS_PATH) {
     if (request.method !== "GET") return json(405, { error: "METHOD_NOT_ALLOWED" });
     if (!(await authorized(request, env))) return json(401, { error: "AUTH_REQUIRED" });
-    return forwardFacebookComments(url, env);
+    return sharedFacebookComments(url, env);
   }
 
   if (!env.CORE_VPC) return json(503, { error: "CORE_UNAVAILABLE" });

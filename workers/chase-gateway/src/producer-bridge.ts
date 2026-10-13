@@ -68,6 +68,25 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
   const url = new URL(request.url);
   const path = url.pathname;
 
+  if (path === "/api/chase/v1/facebook/internal/comment-cache" && request.method === "POST") {
+    const body = await jsonBody(request);
+    const cached = await storage.get<{ nextFetchAt: number; payload?: Record<string, unknown> }>("facebook-comments-cache");
+    if (body?.operation === "reserve") {
+      if (cached && cached.nextFetchAt > Date.now()) return json(200, { payload: cached.payload ?? { state: "reconnecting", comments: [], pollAfterMs: 15_000, cursor: "", page: { live: false, label: "Storm Chaser Nick Mounce" } } });
+      await storage.put("facebook-comments-cache", { ...cached, nextFetchAt: Date.now() + 10_000 });
+      return json(202, { fetch: true });
+    }
+    if (body?.operation === "save" && body.payload && typeof body.payload === "object" && !Array.isArray(body.payload)) {
+      const payload = body.payload as Record<string, unknown>;
+      const page = payload.page as { live?: boolean } | undefined;
+      const delay = payload.state === "rate_limited" ? 10 * 60_000 : payload.state !== "ok" || !page?.live ? 60_000 : 30_000;
+      payload.pollAfterMs = Math.max(Number(payload.pollAfterMs) || 0, delay);
+      await storage.put("facebook-comments-cache", { nextFetchAt: Date.now() + delay, payload });
+      return json(202, { accepted: true });
+    }
+    return json(400, { error: "INVALID_CACHE_OPERATION" });
+  }
+
   if (path === "/api/chase/v1/facebook/internal/targets" && request.method === "POST") {
     const body = await jsonBody(request);
     if (!body || typeof body.pageId !== "string" || typeof body.liveId !== "string" || !Array.isArray(body.ids)) return json(400, { error: "INVALID_TARGETS" });

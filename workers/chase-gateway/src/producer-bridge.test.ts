@@ -8,6 +8,15 @@ class MemoryStorage implements BridgeStorage {
 }
 
 describe("Producer bridge state", () => {
+  it("shares Facebook polling and applies ten-minute rate-limit backoff", async () => {
+    const storage = new MemoryStorage();
+    const cache = (body: unknown) => handleProducerStateRequest(new Request("https://x/api/chase/v1/facebook/internal/comment-cache", { method: "POST", body: JSON.stringify(body) }), storage);
+    expect((await cache({ operation: "reserve" })).status).toBe(202);
+    expect((await cache({ operation: "reserve" })).status).toBe(200);
+    await cache({ operation: "save", payload: { state: "rate_limited", comments: [] } });
+    const response = await cache({ operation: "reserve" });
+    expect(await response.json()).toMatchObject({ payload: { state: "rate_limited", pollAfterMs: 600000 } });
+  });
   it("enforces exclusive control leases and still permits emergency stops", async () => {
     const storage = new MemoryStorage();
     const call = (path: string, body: unknown, user = "operator-a", method = "POST") => handleProducerStateRequest(new Request(`https://x/api/producer/v1/${path}`, { method, headers: { "X-Producer-UserId": user }, ...(method === "GET" ? {} : { body: JSON.stringify(body) }) }), storage);
