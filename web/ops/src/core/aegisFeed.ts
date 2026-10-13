@@ -29,6 +29,25 @@ export interface AegisStatus {
     sites?: string[]; new_volumes?: number; qualified_alerts?: number; errors?: Array<{ site: string; message: string }> };
 }
 
+export interface AegisObservationPlan {
+  schema: "codeblack.aegis.observation-plan.v1";
+  generated_at: string;
+  state: string;
+  executor: {
+    state: string;
+    last_checked_at?: string | null;
+    last_event_at?: string | null;
+    last_event_kind?: string | null;
+    notice?: string;
+  };
+  gates: Record<string, string>;
+  live_chasers: unknown[];
+  setup_drafts: Array<{ setup_id: string; risk?: string; cadence_minutes?: number }>;
+  radar?: { available?: boolean; updated_at?: string; dominant_cell?: { available?: boolean; freshness_state?: string; last_error?: string | null } };
+  official_storm_objects?: { state?: string };
+  satellite?: { analysis_state?: string; state?: string; observed_at?: string; satellite?: string };
+}
+
 export interface AegisPolicyStatus {
   schema: "codeblack.aegis-policy-status.v1";
   live: { evidence_cutoff: number; delivery_enabled: boolean };
@@ -86,6 +105,10 @@ export function getAegisFeed(config: OpsCoreConfig, signal?: AbortSignal): Promi
 
 export function getAegisStatus(config: OpsCoreConfig, signal?: AbortSignal): Promise<AegisStatus> {
   return coreGet(config, "/api/fabric/v1/aegis-status", signal);
+}
+
+export function getAegisObservationPlan(config: OpsCoreConfig, signal?: AbortSignal): Promise<AegisObservationPlan> {
+  return coreGet(config, "/api/fabric/v1/aegis-observation-plan", signal);
 }
 
 export function getAegisPolicy(config: OpsCoreConfig, signal?: AbortSignal): Promise<AegisPolicyStatus> {

@@ -65,6 +65,7 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
   "api/fabric/v1/aegis-status": { upstreamPath: "/api/fabric/v1/aegis-status", allowedQueryParams: [], methods: ["GET"] },
   "api/fabric/v1/aegis-alerts": { upstreamPath: "/api/fabric/v1/aegis-alerts", allowedQueryParams: ["after", "limit"], methods: ["GET"] },
+  "api/fabric/v1/aegis-observation-plan": { upstreamPath: "/api/fabric/v1/aegis-observation-plan", allowedQueryParams: [], methods: ["GET"] },
   "api/fabric/v1/aegis-policy": { upstreamPath: "/api/fabric/v1/aegis-policy", allowedQueryParams: [], methods: ["GET"] },
   "api/fabric/v1/aegis-policy/replay": { upstreamPath: "/api/fabric/v1/aegis-policy/replay", allowedQueryParams: [], methods: ["POST"] },
   "api/fabric/v1/stream": { upstreamPath: "/api/fabric/v1/stream", allowedQueryParams: [] },

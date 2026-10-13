@@ -4,8 +4,8 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { PageHeader } from "../components/PageHeader";
 import { useCoreOps } from "../core/useCoreOps";
-import { getAegisFeed, getAegisStatus, replayAegisPolicy, type AegisRadarAlert,
-  type AegisRecordedReplay, type AegisStatus } from "../core/aegisFeed";
+import { getAegisFeed, getAegisObservationPlan, getAegisStatus, replayAegisPolicy, type AegisObservationPlan,
+  type AegisRadarAlert, type AegisRecordedReplay, type AegisStatus } from "../core/aegisFeed";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles";
 import "../styles/aegis.css";
 
@@ -48,6 +48,7 @@ function EvidenceMap({ alert }: { alert: AegisRadarAlert }) {
 export default function AegisAlerts() {
   const { config } = useCoreOps();
   const [status, setStatus] = useState<AegisStatus | null>(null);
+  const [plan, setPlan] = useState<AegisObservationPlan | null>(null);
   const [alerts, setAlerts] = useState<AegisRadarAlert[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +59,13 @@ export default function AegisAlerts() {
     const controller = new AbortController();
     const poll = async () => {
       try {
-        const [state, feed] = await Promise.all([getAegisStatus(config, controller.signal), getAegisFeed(config, controller.signal)]);
+        const [state, feed, observationPlan] = await Promise.all([
+          getAegisStatus(config, controller.signal),
+          getAegisFeed(config, controller.signal),
+          getAegisObservationPlan(config, controller.signal),
+        ]);
         if (controller.signal.aborted) return;
-        setStatus(state); setAlerts(feed.items.slice().reverse()); setError(null);
+        setStatus(state); setPlan(observationPlan); setAlerts(feed.items.slice().reverse()); setError(null);
       } catch (caught) {
         if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Feed unavailable");
       }
@@ -105,6 +110,21 @@ export default function AegisAlerts() {
     {error && <p className="aegis-error" role="status">Feed unavailable: {error}. This is not an all-clear.</p>}
     {status?.screen.errors?.length ? <p className="aegis-error" role="status">
       Radar/source errors: {status.screen.errors.map((item) => `${item.site}: ${item.message}`).join("; ")}</p> : null}
+    <section className="aegis-panel aegis-observation" aria-label="Active Aegis observation plan">
+      <div className="aegis-review__heading">
+        <div><p className="aegis-review__kicker">CONTINUOUS SURVEILLANCE / READ-ONLY</p><h2>Active observation plan</h2></div>
+        <span>{plan ? plan.executor.state.replaceAll("_", " ") : "Connecting to Core"}</span>
+      </div>
+      {plan ? <>
+        <p className="aegis-empty">Last executor check {utc(plan.executor.last_checked_at ?? undefined)} · {plan.setup_drafts.length} setup draft{plan.setup_drafts.length === 1 ? "" : "s"} under observation · {plan.live_chasers.length} live chaser{plan.live_chasers.length === 1 ? "" : "s"}.</p>
+        <div className="aegis-review__products" aria-label="Observation evidence gates">
+          {Object.entries(plan.gates).map(([gate, state]) => <span key={gate} className={state.includes("ready") ? "available" : "missing"}>{gate.replaceAll("_", " ")} · {state.replaceAll("_", " ")}</span>)}
+          <span className={plan.radar?.available ? "available" : "missing"}>radar · {plan.radar?.dominant_cell?.available ? "tracked cell" : plan.radar?.dominant_cell?.freshness_state?.replaceAll("_", " ") || "unavailable"}</span>
+          <span className={plan.satellite?.state === "available_metadata_only" ? "available" : "missing"}>satellite · {plan.satellite?.satellite || plan.satellite?.analysis_state || "unavailable"}</span>
+        </div>
+        <p className="aegis-empty">{plan.executor.notice || "Observation evidence is recorded without routing a vehicle or issuing an official warning."}</p>
+      </> : <p className="aegis-empty">Loading executor, radar, satellite, and setup-surveillance state.</p>}
+    </section>
     <div className="aegis-grid">
       <section className="aegis-panel" aria-label="Aegis alert feed">
         <h2>Alert feed</h2>
