@@ -459,6 +459,8 @@ describe("codeblack-chase-gateway", () => {
         expect(authorize.origin).toBe("https://www.facebook.com");
         expect(authorize.searchParams.get("state")).toBe(ticket);
         expect(authorize.searchParams.get("scope")).not.toContain("pages_manage_posts");
+        const publishConnect = await handleRequest(new Request(connectUrl), { ...env, FACEBOOK_LIFECYCLE_ENABLED: "true" });
+        expect(new URL(publishConnect.headers.get("Location")!).searchParams.get("scope")).toContain("pages_manage_posts");
         const callbackUrl = `https://x/api/chase/v1/facebook/callback?state=${ticket}&code=${"c".repeat(40)}`;
         const callback = await handleRequest(new Request(callbackUrl), env);
         expect(callback.status).toBe(200);

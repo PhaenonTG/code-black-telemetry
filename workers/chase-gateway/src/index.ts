@@ -20,6 +20,7 @@
 //                                         the token injected server-side so the overlay page
 //                                         (whose source is public) never holds it.
 export { ProducerBridge } from "./producer-bridge";
+import { handleFacebookLifecycle } from "./facebook-lifecycle";
 
 const CORE_ORIGIN = "http://127.0.0.1:8000";
 const MAX_BODY_BYTES = 16 * 1024;
@@ -73,6 +74,7 @@ export interface Env {
   FACEBOOK_TOKEN_KEK?: string;
   FACEBOOK_CONNECTOR_USER_IDS?: string;
   FACEBOOK_REPLIES_ENABLED?: string;
+  FACEBOOK_LIFECYCLE_ENABLED?: string;
   // Static release manifest and APK. Absent until a Chase release is published.
   ASSETS?: AssetBinding;
   PRODUCER_BRIDGE?: DurableObjectNamespace;
@@ -547,7 +549,7 @@ async function handleFacebookConnector(request: Request, url: URL, env: Env): Pr
     authorize.searchParams.set("redirect_uri", FACEBOOK_REDIRECT_URI);
     authorize.searchParams.set("state", ticket);
     authorize.searchParams.set("response_type", "code");
-    authorize.searchParams.set("scope", "pages_show_list,pages_read_engagement,pages_read_user_content,pages_manage_engagement");
+    authorize.searchParams.set("scope", `pages_show_list,pages_read_engagement,pages_read_user_content,pages_manage_engagement${env.FACEBOOK_LIFECYCLE_ENABLED === "true" ? ",pages_manage_posts" : ""}`);
     authorize.searchParams.set("auth_type", "rerequest");
     return Response.redirect(authorize.toString(), 302);
   }
@@ -638,6 +640,16 @@ async function handleProducerRoute(request: Request, url: URL, env: Env): Promis
   }
   const id = env.PRODUCER_BRIDGE.idFromName("native-producer");
   const stub = env.PRODUCER_BRIDGE.get(id);
+  if (url.pathname === "/api/producer/v1/facebook" || url.pathname.startsWith("/api/producer/v1/facebook/") || url.pathname === "/api/producer/v1/workstation/facebook-destination") {
+    return handleFacebookLifecycle(request, userId, controlAllowed, workstation, {
+      credential: () => storedFacebookCredential(env),
+      broker: (path, init) => facebookBroker(env, path, init),
+      encrypt: (value) => encryptFacebookToken(value, env.FACEBOOK_TOKEN_KEK!),
+      decrypt: (value) => decryptFacebookToken(value as StoredFacebookCredential, env.FACEBOOK_TOKEN_KEK!),
+      fetch,
+      enabled: env.FACEBOOK_LIFECYCLE_ENABLED === "true",
+    });
+  }
   const headers = new Headers();
   for (const name of ["Content-Type", "Content-Length", "X-Producer-Frame-At"]) {
     const value = request.headers.get(name); if (value) headers.set(name, value);

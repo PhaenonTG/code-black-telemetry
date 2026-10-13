@@ -3,6 +3,8 @@ const CAPABILITIES_KEY = "capabilities";
 const FRAME_KEY = "program-frame";
 const COMMANDS_KEY = "commands";
 const CONTROL_LEASE_KEY = "producer-control-lease";
+const BROADCAST_KEY = "facebook-managed-broadcast";
+const BROADCAST_OPERATIONS_KEY = "facebook-broadcast-operations";
 const FACEBOOK_OAUTH_SESSIONS_KEY = "facebook-oauth-sessions";
 const FACEBOOK_CREDENTIAL_KEY = "facebook-page-credential";
 const FACEBOOK_COMMENTS_KEY = "facebook-reply-targets";
@@ -67,6 +69,66 @@ function bridgeState(document: StoredDocument | undefined): "ONLINE" | "OFFLINE"
 export async function handleProducerStateRequest(request: Request, storage: BridgeStorage): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
+
+  if (path === "/api/chase/v1/facebook/internal/broadcast") {
+    type Broadcast = import("./facebook-lifecycle").ManagedBroadcast;
+    type Operation = { requestId: string; action: string; userId: string; digest: string; state: string; createdAt: number; code?: number; subcode?: number };
+    const broadcast = await storage.get<Broadcast>(BROADCAST_KEY) ?? null;
+    const operations = await storage.get<Operation[]>(BROADCAST_OPERATIONS_KEY) ?? [];
+    const active = operations.find(item => item.state === "pending" || item.state === "unknown");
+    if (request.method === "GET") {
+      const latest = active ?? operations.at(-1);
+      return json(200, { broadcast, operation: latest ? { requestId: latest.requestId, action: latest.action, state: latest.state } : null });
+    }
+    if (request.method !== "POST") return json(405, { error: "METHOD_NOT_ALLOWED" });
+    const body = await jsonBody(request, 16 * 1024);
+    if (!body) return json(400, { error: "INVALID_BROADCAST_STATE" });
+    if (body.operation === "refresh-reserve") {
+      const after = await storage.get<number>("facebook-broadcast-refresh-after") ?? 0;
+      if (after > Date.now()) return json(200, { deferred: true });
+      await storage.put("facebook-broadcast-refresh-after", Date.now() + 30_000);
+      return json(202, { accepted: true });
+    }
+    if (body.operation === "observed") {
+      const next = body.broadcast as Broadcast | undefined;
+      if (!next || !broadcast || next.id !== broadcast.id || typeof next.status !== "string") return json(409, { error: "BROADCAST_CHANGED" });
+      await storage.put(BROADCAST_KEY, { ...broadcast, status: next.status, observedAt: next.observedAt });
+      if (active?.state === "unknown" && ((active.action === "prepare" && next.status === "UNPUBLISHED") || (active.action === "publish" && next.status === "LIVE") || (active.action === "end" && ["LIVE_STOPPED", "PROCESSING", "VOD", "ENDED"].includes(next.status)))) {
+        active.state = "succeeded";
+        await storage.put(BROADCAST_OPERATIONS_KEY, operations);
+      }
+      return json(202, { accepted: true });
+    }
+    if (body.operation === "reserve") {
+      if (typeof body.requestId !== "string" || !COMMAND_ID.test(body.requestId) || typeof body.userId !== "string" || typeof body.digest !== "string" || !["prepare", "publish", "end"].includes(String(body.action))) return json(400, { error: "INVALID_BROADCAST_OPERATION" });
+      const prior = operations.find(item => item.requestId === body.requestId);
+      if (prior) return prior.userId === body.userId && prior.digest === body.digest ? json(409, { error: "BROADCAST_ALREADY_ATTEMPTED", state: prior.state }) : json(409, { error: "REQUEST_ID_CONFLICT" });
+      if (active) return json(409, { error: "BROADCAST_OPERATION_UNRESOLVED", state: active.state });
+      if ((broadcast?.id ?? null) !== body.expectedId) return json(409, { error: "BROADCAST_CHANGED" });
+      const terminal = broadcast && ["LIVE_STOPPED", "PROCESSING", "VOD", "ENDED", "SCHEDULED_CANCELED"].includes(broadcast.status);
+      if (body.action === "prepare" && broadcast && !terminal) return json(409, { error: "BROADCAST_ALREADY_PREPARED" });
+      if (body.action !== "prepare" && (!broadcast || terminal)) return json(409, { error: "NO_ACTIVE_MANAGED_BROADCAST" });
+      if (body.action === "publish" && broadcast?.status !== "UNPUBLISHED") return json(409, { error: "BROADCAST_NOT_UNPUBLISHED" });
+      operations.push({ requestId: body.requestId, action: String(body.action), userId: body.userId, digest: body.digest, state: "pending", createdAt: Date.now() });
+      await storage.put(BROADCAST_OPERATIONS_KEY, operations.slice(-200));
+      return json(202, { accepted: true });
+    }
+    if (body.operation === "result") {
+      const operation = operations.find(item => item.requestId === body.requestId && item.state === "pending");
+      if (!operation || !["succeeded", "failed", "unknown"].includes(String(body.state))) return json(409, { error: "BROADCAST_OPERATION_CHANGED" });
+      const next = body.broadcast as Broadcast | undefined;
+      if (next) {
+        if (!/^\d{5,30}$/.test(next.id) || !/^\d{5,30}$/.test(next.pageId) || typeof next.destination?.ciphertext !== "string" || typeof next.destination?.iv !== "string") return json(400, { error: "INVALID_ENCRYPTED_BROADCAST" });
+        await storage.put(BROADCAST_KEY, next);
+      }
+      operation.state = String(body.state);
+      if (typeof body.code === "number") operation.code = body.code;
+      if (typeof body.subcode === "number") operation.subcode = body.subcode;
+      await storage.put(BROADCAST_OPERATIONS_KEY, operations);
+      return json(202, { accepted: true });
+    }
+    return json(400, { error: "INVALID_BROADCAST_OPERATION" });
+  }
 
   if (path === "/api/chase/v1/facebook/internal/comment-cache" && request.method === "POST") {
     const body = await jsonBody(request);
@@ -248,6 +310,10 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
       if (action !== "preview.start" && status?.body.stateRevision !== expected) return json(409, { error: "STATE_CHANGED" });
       if (action === "facebook.output.start") {
         const current = status!.body;
+        const managed = await storage.get<import("./facebook-lifecycle").ManagedBroadcast>(BROADCAST_KEY);
+        const operations = await storage.get<Array<{ action: string; state: string }>>(BROADCAST_OPERATIONS_KEY) ?? [];
+        if (operations.some(item => item.action === "prepare" && ["pending", "unknown"].includes(item.state))) return json(409, { error: "FACEBOOK_PREPARE_UNRESOLVED" });
+        if (managed && (!["UNPUBLISHED", "PUBLISH_REQUESTED", "LIVE"].includes(managed.status) || (body?.payload as { videoId?: string } | undefined)?.videoId !== managed.id || (current.broadcast as { managedVideoId?: string } | undefined)?.managedVideoId !== managed.id)) return json(409, { error: "MANAGED_DESTINATION_NOT_READY" });
         const previews = current.previews as { program?: { state?: string } } | undefined;
         const audio = current.audio as { process?: string; available?: boolean; silence?: boolean; clipping?: boolean; lastAudioAt?: string } | undefined;
         const metrics = current.metrics as { last_video_timestamp?: string } | undefined;
