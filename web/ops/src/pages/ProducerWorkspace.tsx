@@ -191,21 +191,23 @@ export default function ProducerWorkspace() {
   const units = state.fabric.units?.units ?? []
   const producerBridgeState = bridgeState(producerStatus)
   const programCurrent = programFrameState === "CURRENT" && sourceFresh(producerStatus) && Boolean(programFrameUrl)
+  const programStateLabel = programCurrent ? "CURRENT" : producerBridgeState === "ONLINE" && producerStatus?.source_state !== "SOURCE_LIVE" ? "RELAY READY · WAITING FOR SOURCE" : producerBridgeState
 
   const selectSource = (id: string) => {
     setManualSourceId(id)
     try { localStorage.setItem(SELECTION_KEY, id) } catch { /* Selection remains for this session. */ }
   }
 
-  return <main className="workspace-page producer-workspace">
+  return <section className="workspace-page producer-workspace">
     <header className="workspace-heading"><div><h1>Producer</h1><p>Live stream control desk</p></div><button type="button" onClick={() => void refreshStatus()}>Refresh sources</button></header>
     <div className="producer-layout">
       <div className="producer-main">
         <section className="workspace-panel producer-stage" aria-label="PROGRAM preview">
-          <header><h2>PROGRAM</h2><span className={programCurrent ? "workspace-live" : "workspace-muted"}>{programCurrent ? "CURRENT" : producerBridgeState}</span></header>
+          <header><h2>PROGRAM</h2><span className={programCurrent || producerBridgeState === "ONLINE" ? "workspace-live" : "workspace-muted"}>{programStateLabel}</span></header>
           <ProgramMonitor active={producerBridgeState === "ONLINE" && sourceFresh(producerStatus)} fallback={programCurrent ? <img src={programFrameUrl} alt="Current PROGRAM preview" /> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
           <div className="producer-stage__foot"><div><strong>{producerStatus?.state ?? "NO BROADCASTER STATUS"}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>{producerStatus?.broadcast?.state ?? "OUTPUT UNKNOWN"}</span></div>
         </section>
+        <ProducerControls />
         <section className="workspace-panel producer-stage" aria-label="Selected live stream camera">
           <header><h2>Live camera</h2><span className={playing ? "workspace-live" : "workspace-muted"}>{playing ? "PUBLISHING" : statusError ? "STATUS UNAVAILABLE" : "NO LIVE PUBLISHER"}</span></header>
           <div className="producer-stage__viewport">
@@ -226,8 +228,7 @@ export default function ProducerWorkspace() {
         <section className="workspace-panel"><header><h2>Aegis · internal</h2><Link to="/aegis-alerts">Review ↗</Link></header><p>Radar findings are advisory and separate from official warnings. Team-wide delivery remains behind the review policy.</p></section>
         <section className="workspace-panel"><header><h2>Broadcast health</h2><Link to="/stream">Streams ↗</Link></header><p>{statusError || (status?.streaming as { summary?: string } | undefined)?.summary || "Checking stream infrastructure…"}</p></section>
         <FacebookProducerPanel />
-        <ProducerControls />
       </aside>
     </div>
-  </main>
+  </section>
 }

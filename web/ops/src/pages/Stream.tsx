@@ -61,15 +61,16 @@ export default function Stream() {
 
   return (
     <div className="page page-stream">
-      <PageHeader title="LIVE STREAM" kicker="CHASE OPERATIONS · PROGRAM FEED" description="Monitor the public Code Black broadcast while keeping field tools one click away." />
+      <PageHeader title="PROGRAM STATUS" kicker="FIELD · STREAM INFRASTRUCTURE" description="Review field ingest status here. Use Producer for the authenticated private PROGRAM monitor and output controls." actions={<Link className="page-action-link" to="/producer">OPEN PRODUCER</Link>} />
       <nav className="section-tabs" aria-label="Chase Operations sections">
         <Link to="/chase">FLEET</Link><span className="active">STREAMS</span>
       </nav>
       <section className="stream-stage">
         <div className="stream-stage__label"><i /> PROGRAM FEED · NOT CONFIGURED</div>
         <div className="stream-stage__standby">
-          <strong>NO EMBEDDABLE SOURCE WIRED UP</strong>
-          <p>The public broadcast currently streams to Facebook Live only. This page has no embed source configured for that yet.</p>
+          <strong>PRIVATE MONITOR LIVES IN PRODUCER</strong>
+          <p>This status page intentionally does not expose the authenticated PROGRAM feed. Open Producer to monitor video, audio, and Facebook output readiness.</p>
+          <Link className="page-action-link" to="/producer">Open private PROGRAM monitor →</Link>
         </div>
       </section>
       <section className="stream-health" aria-label="Stream infrastructure status">

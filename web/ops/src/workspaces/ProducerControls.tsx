@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { currentAccessToken } from "../core/client"
 import { readProducerResponse } from "./producerResponse"
 
-type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: { stateRevision: number; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; audio?: { available?: boolean; silence?: boolean; clipping?: boolean } } }
+type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: { stateRevision: number; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; archive?: { camera?: { state?: string; recording?: boolean } }; lowerThird?: { active?: boolean; text?: string }; audio?: { available?: boolean; silence?: boolean; clipping?: boolean } } }
 type Lifecycle = { enabled: boolean; permission: boolean; canManage: boolean; broadcast: { id: string; title: string; description: string; status: string; facebookProducerUrl: string } | null; operation?: { state: string; action: string } | null }
 type Command = { commandId: string; state: string; result?: { error?: string } }
 async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> {
@@ -81,6 +81,9 @@ export default function ProducerControls() {
   const managedSynced = !managed || status?.status?.broadcast?.managedVideoId === managed.id
   const unresolved = facebook?.operation?.state === "pending" || facebook?.operation?.state === "unknown"
   const audioHealthy = status?.status?.audio?.available === true && !status.status.audio.silence && !status.status.audio.clipping
+  const facebookSending = /sending|live|active/i.test(status?.status?.broadcast?.state ?? "")
+  const cameraRecording = status?.status?.archive?.camera?.recording === true || /recording|active/i.test(status?.status?.archive?.camera?.state ?? "")
+  const lowerThirdActive = status?.status?.lowerThird?.active === true || Boolean(status?.status?.lowerThird?.text)
   return <section className="workspace-panel producer-controls" aria-label="PROGRAM controls">
     <header><h2>PROGRAM controls</h2><span className={online ? "workspace-live" : "workspace-muted"}>{online ? "ONLINE" : "OFFLINE"}</span></header>
     <p>{owner ? "You have control. Lease renews while this tab is visible." : status?.controlLease && status.controlLease.expiresAt > checkedAt ? `Controlled by ${status.controlLease.operator}` : "No operator holds control."}</p>
@@ -90,13 +93,13 @@ export default function ProducerControls() {
       <button type="button" disabled={!canStart} onClick={() => void command("preview.start")}>Arm / recover preview</button>
       <button type="button" disabled={!allowed} onClick={() => void command("preview.stop")}>Stop preview + output</button>
       <button type="button" disabled={!canStart || status?.status?.source_state !== "SOURCE_LIVE" || !audioHealthy || !managedSynced || Boolean(managedTerminal) || managedEnding || unresolved} onClick={() => setConfirmStart(true)}>{managed ? "Send to Facebook preview…" : "Start Facebook output…"}</button>
-      <button type="button" disabled={!allowed} onClick={() => void command("facebook.output.stop")}>STOP Facebook output</button>
-      <button type="button" disabled={!canStart} onClick={() => void command("archive.camera.start")}>Start camera recording</button>
-      <button type="button" disabled={!allowed} onClick={() => void command("archive.camera.stop")}>Stop camera recording</button>
+      <button type="button" disabled={!owner || !online || blocked || !facebookSending} onClick={() => void command("facebook.output.stop")}>STOP Facebook output</button>
+      <button type="button" disabled={!canStart || cameraRecording} onClick={() => void command("archive.camera.start")}>Start camera recording</button>
+      <button type="button" disabled={!owner || !online || blocked || !cameraRecording} onClick={() => void command("archive.camera.stop")}>Stop camera recording</button>
     </div>
     {confirmStart && <div role="alertdialog" aria-label="Confirm Facebook output"><p>{managed ? `Send PROGRAM to managed broadcast ${managed.id}: ${managed.title}? ${managed.status === "UNPUBLISHED" ? "This broadcast is non-public until you publish it." : "This broadcast may already be public."}` : "Send PROGRAM to Nick’s configured Facebook stream key? If Facebook auto-publish is enabled, this can become public immediately. Check destination and audio first."}</p><button type="button" onClick={() => void command("facebook.output.start", true)}>Confirm start Facebook output</button><button type="button" onClick={() => setConfirmStart(false)}>Cancel</button></div>}
     <label>Lower third<input maxLength={120} value={text} onChange={event => setText(event.target.value)} placeholder="On-screen text" /></label>
-    <div className="producer-controls__grid"><button type="button" disabled={!canStart || !text.trim()} onClick={() => void command("lowerThird.set")}>Show lower third</button><button type="button" disabled={!canStart} onClick={() => void command("lowerThird.hide")}>Hide lower third</button></div>
+    <div className="producer-controls__grid"><button type="button" disabled={!canStart || !text.trim()} onClick={() => void command("lowerThird.set")}>Show lower third</button><button type="button" disabled={!canStart || !lowerThirdActive} onClick={() => void command("lowerThird.hide")}>Hide lower third</button></div>
     <p role="status" aria-live="polite">{message}</p>
     <p>Source: {status?.status?.source_state ?? "UNKNOWN"} · Facebook encoder: {status?.status?.broadcast?.state ?? "UNKNOWN"}</p>
     <p>Audio: {status?.status?.audio?.clipping ? "CLIPPING — reduce input level" : !status?.status?.audio?.available ? "UNAVAILABLE" : status.status.audio.silence ? "SILENT — check microphone" : "ACTIVE"}</p>

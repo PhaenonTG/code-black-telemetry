@@ -42,7 +42,7 @@ const CAMERA_WALL_KEY = "codeblack.ops.cameraWall";
 const CAMERA_BANDWIDTH_KEY = "codeblack.ops.cameraSnapshotMode";
 const VOICE_ALERTS_KEY = "codeblack.ops.voiceAlerts";
 
-export default function OpsWorkstation({ focus = "LIVE OPS", onChaseDestinationSelect, routeOverlay }: { focus?: string; onChaseDestinationSelect?: (point: AtlasSelectedPoint) => void; routeOverlay?: RoutePoint[] }) {
+export default function OpsWorkstation({ focus = "LIVE OPS", embedded = false, onChaseDestinationSelect, routeOverlay }: { focus?: string; embedded?: boolean; onChaseDestinationSelect?: (point: AtlasSelectedPoint) => void; routeOverlay?: RoutePoint[] }) {
   const phoneRadar = useViewport() === "phone" && focus === "RADAR LAB";
   const [radarVisibility, setRadarVisibility] = useState(PHONE_RADAR_LAYERS);
   const [pointOpen, setPointOpen] = useState(false);
@@ -165,7 +165,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS", onChaseDestinationS
                 design floor, and it also visually competed with sidebar card titles (POINT
                 INSPECTOR, STORM INTEL) for the same small red-caps treatment, flattening the
                 page/card hierarchy the critique flagged. The heading speaks for itself. */}
-            <h1>{focus}</h1>
+            {embedded ? <h2>{focus}</h2> : <h1>{focus}</h1>}
           </div>
           <div className="ops-nearby-reference">
             <span>NEARBY FOR</span>

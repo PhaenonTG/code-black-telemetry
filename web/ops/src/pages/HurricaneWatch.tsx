@@ -320,12 +320,16 @@ export default function HurricaneWatch() {
     window.addEventListener("afterprint", () => closedWarnings.forEach((item) => { item.open = false; }), { once: true });
     window.setTimeout(() => window.print(), 150);
   };
-  return <main className="hurricane-watch">
+  const sourceTime = Date.parse(data?.storm?.lastUpdate ?? data?.checked_at ?? "")
+  const sourceAgeHours = Number.isFinite(sourceTime) ? (Date.now() - sourceTime) / 3_600_000 : null
+  const sourceIsOld = sourceAgeHours !== null && sourceAgeHours > 12
+  return <section className="hurricane-watch">
     <header className="hurricane-watch__header"><div><h1><span>{data?.storm?.classification === "HU" ? "Hurricane" : "Storm"}</span> <em>{data?.storm?.name ?? "Gulf"}</em></h1><p>{category === null ? "" : `${data?.status === "active" ? "NHC Category" : "Last NHC Category"} ${category} · `}Grand Bay watch · source checks about every five minutes</p></div><Link to="/weather">Weather →</Link></header>
     {error && <p role="alert" className="hurricane-watch__error">{error}</p>}
     {!data && !error && <p role="status">Loading the latest assessment…</p>}
     {data?.status === "pending" && <p role="status">{data.notice}</p>}
     {data?.freshness === "stale" && <p role="alert" className="hurricane-watch__error">Source assessment is stale. Last successful check: {time(data.checked_at)}.</p>}
+    {sourceIsOld && <p role="alert" className="hurricane-watch__error">The displayed advisory is {Math.floor(sourceAgeHours)} hours old. Treat this as historical context and verify the latest NHC/NWS guidance before acting.</p>}
     {data?.status === "inactive" && <p className="hurricane-watch__error">NHC no longer lists this storm as active. The last assessment remains below.</p>}
     {data?.storm && a && <>
       <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button className="hurricane-watch__image-action" type="button" disabled={generatingImage || exportRadarStatus === "loading" || !radarVisible} onClick={() => void createImage()}>{generatingImage ? "Creating image…" : !radarVisible ? "Show radar for image" : exportRadarStatus === "loading" ? "Waiting for radar…" : "Create one-page image"}</button><button type="button" onClick={() => void share()}>Share text</button><button type="button" onClick={printBrief}>Print / PDF</button></div>
@@ -362,5 +366,5 @@ export default function HurricaneWatch() {
       <p className="hurricane-watch__sources"><a href={data.storm.publicAdvisory?.url} target="_blank" rel="noreferrer">NHC advisory ↗</a><a href={data.storm.forecastDiscussion?.url} target="_blank" rel="noreferrer">NHC model discussion ↗</a><a href={data.storm.forecastGraphics?.url} target="_blank" rel="noreferrer">NHC graphics ↗</a><a href="https://mesonet.agron.iastate.edu/docs/nexrad_mosaic/" target="_blank" rel="noreferrer">Radar source ↗</a></p>
     </>}
     {briefingImage && <div className="hurricane-watch__image-modal" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) closeImage(); }}><div className="hurricane-watch__image-dialog" role="dialog" aria-modal="true" aria-labelledby="hurricane-image-title"><div className="hurricane-watch__image-dialog-head"><div><h2 id="hurricane-image-title">One-page hurricane briefing</h2><p>Generated from the current OPS snapshot. Check the issue times before sharing.</p></div><button type="button" onClick={closeImage} aria-label="Close image preview">×</button></div><img src={briefingImage.url} alt={`${data?.storm?.name ?? "Storm"} one-page Grand Bay briefing with radar, official forecast, model guidance, warnings, and analysis`} /><div className="hurricane-watch__image-dialog-actions"><button type="button" onClick={() => void shareImage()}>Share image</button><a href={briefingImage.url} download={imageFilename}>Download PNG</a></div>{imageStatus && <p role="status">{imageStatus}</p>}</div></div>}
-  </main>;
+  </section>;
 }

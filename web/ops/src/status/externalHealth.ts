@@ -103,8 +103,8 @@ export function readMapHealth(now = Date.now()): ExternalHealthResult {
 
   if (!diagnostics.styleLoaded) {
     return {
-      state: "UNAVAILABLE",
-      detail: "Map runtime reported that the base style is not loaded",
+      state: "CHECKING",
+      detail: "Last map attempt had not finished loading its base style",
     }
   }
 

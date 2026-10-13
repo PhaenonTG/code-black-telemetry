@@ -66,8 +66,8 @@ export function buildSystemStatus(params: {
     {
       key: "streaming",
       label: "STREAMING",
-      state: "NOT_CONFIGURED",
-      detail: "Deferred",
+      state: "NO_DATA",
+      detail: "No active broadcast is expected by default; open Program Status for live ingest telemetry",
     },
   ]
 }

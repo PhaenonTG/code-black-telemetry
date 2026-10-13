@@ -138,7 +138,7 @@ export default function StatusCenter() {
             <div><span>DRAFT EFFECT</span><b>{aegisPolicy?.drafts_affect_live_scanner === false ? "NONE" : "UNKNOWN"}</b></div>
           </div>
           <p className="status-center__muted"><a href="/aegis-alerts">Open Aegis radar alert feed and evidence map</a> · <a href="/automation-lab">Rehearse alert workflow</a> · Supplemental, not an official warning.</p>
-          {settings ? <div className="status-center__controls">
+          {settings ? <details className="status-center__admin"><summary>Admin radar policy</summary><div className="status-center__controls">
             <label className="settings-toggle-row">
               <span className="settings-toggle-row__text"><b className="settings-toggle-row__label">Primary-site prewarm</b><small className="settings-toggle-row__description">Prewarm the closest active radar site before acquisition.</small></span>
               <span className={`switch ${settings.primary_prewarm_enabled ? "switch--on" : ""}`}><input type="checkbox" checked={settings.primary_prewarm_enabled} onChange={(event) => setSettings({ ...settings, primary_prewarm_enabled: event.target.checked })} /><i /></span>
@@ -149,7 +149,7 @@ export default function StatusCenter() {
               </select>
             </label>
             <button type="button" className="settings-save" disabled={saving} onClick={() => { void save() }}>{saving ? "SAVING…" : "SAVE RADAR POLICY"}</button>
-          </div> : <p className="status-center__muted">Radar policy is loading…</p>}
+          </div></details> : <p className="status-center__muted">Radar policy is loading…</p>}
         </section>
 
         <section className="status-center__panel">

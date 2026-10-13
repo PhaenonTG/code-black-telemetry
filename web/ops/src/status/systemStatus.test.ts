@@ -34,4 +34,11 @@ describe("System status truth", () => {
     expect(rows("LIVE", ["STALE"]).find((row) => row.key === "fleet")?.state).toBe("STALE")
     expect(rows("LIVE", []).find((row) => row.key === "fleet")?.state).toBe("NO_DATA")
   })
+
+  it("treats an inactive broadcast as standby information, not a broken configuration", () => {
+    expect(rows("LIVE", ["LIVE"]).find((row) => row.key === "streaming")).toMatchObject({
+      state: "NO_DATA",
+      detail: expect.stringContaining("expected by default"),
+    })
+  })
 })

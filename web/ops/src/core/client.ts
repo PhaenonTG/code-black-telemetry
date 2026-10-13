@@ -17,6 +17,8 @@ const REQUEST_TIMEOUT_MS = 10_000;
 // gateway hop too), not a cheap health check -- 10s was tight enough to time out on a normal, if
 // slow, response rather than a genuinely hung request.
 const POINT_REQUEST_TIMEOUT_MS = 25_000;
+const FORECAST_READ_CACHE_MS = 12_000;
+const forecastReads = new Map<string, { expiresAt: number; promise: Promise<unknown> }>();
 
 export class OpsCoreClientError extends Error {
   constructor(message: string) {
@@ -233,7 +235,25 @@ export async function consumeFabricStream(
 
 export async function fetchForecast<T>(config: OpsCoreConfig, path: string, signal?: AbortSignal): Promise<T> {
   if (!coreConfigured(config)) throw new OpsCoreClientError("Live Core is not configured");
-  return withTimeout((inner) => fetchJson<T>(`${config.coreBaseUrl}/api/forecast/v1/${path}`, inner), signal, POINT_REQUEST_TIMEOUT_MS);
+  const url = `${config.coreBaseUrl}/api/forecast/v1/${path}`;
+  const now = Date.now();
+  let shared = forecastReads.get(url);
+  if (!shared || shared.expiresAt <= now) {
+    const promise = withTimeout((inner) => fetchJson<T>(url, inner), undefined, POINT_REQUEST_TIMEOUT_MS);
+    shared = { expiresAt: now + FORECAST_READ_CACHE_MS, promise };
+    forecastReads.set(url, shared);
+    void promise.catch(() => { if (forecastReads.get(url)?.promise === promise) forecastReads.delete(url); });
+    if (forecastReads.size > 30) {
+      const oldest = forecastReads.keys().next().value as string | undefined;
+      if (oldest) forecastReads.delete(oldest);
+    }
+  }
+  if (!signal) return shared.promise as Promise<T>;
+  if (signal.aborted) throw new OpsCoreClientError("request cancelled");
+  return Promise.race([
+    shared.promise as Promise<T>,
+    new Promise<never>((_resolve, reject) => signal.addEventListener("abort", () => reject(new OpsCoreClientError("request cancelled")), { once: true })),
+  ]);
 }
 
 export function setupWorkflowErrorMessage(status: number, body: unknown): string {

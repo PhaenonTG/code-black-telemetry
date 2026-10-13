@@ -153,7 +153,7 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
   return (
     <div className="chase-setups page">
       <header className="chase-setups__header">
-        <div><h1>{isBriefings ? "Reviewed setup briefings" : "Chase setup drafts"}</h1><p>{isBriefings ? "Approved current revisions retained as private operational briefings." : "Potential setups for operator review. No draft is public."}</p></div>
+        <div><h2>{isBriefings ? "Reviewed setup briefings" : "Chase setup drafts"}</h2><p>{isBriefings ? "Approved current revisions retained as private operational briefings." : "Potential setups for operator review. No draft is public."}</p></div>
         <div className="chase-setups__header-actions">
           <span className={currentSource ? "chase-setups__fresh" : "chase-setups__stale"}>
             {index ? currentSource ? "Sources current" : index.status === "source_degraded" ? "Source check degraded" : index.status === "ready" ? "Source check stale" : "Awaiting first collection" : "Source status unavailable"}

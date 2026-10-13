@@ -6,8 +6,8 @@ describe("OPS workstation routes", () => {
   it("exposes the approved major navigation families without marking future sections live", () => {
     expect(ROUTES.map((route) => route.label)).toEqual([
       "PRODUCER",
-      "CHASE",
-      "ANALYSIS",
+      "CHASE DESK",
+      "SETUP REVIEW",
       "OPERATIONS MAP",
       "WEATHER ANALYSIS",
       "HURRICANE WATCH",
@@ -17,9 +17,9 @@ describe("OPS workstation routes", () => {
       "SOUNDINGS",
       "CONSENSUS",
       "TARGETS",
-      "CHASE OPERATIONS",
-      "FIELD INTELLIGENCE",
-      "LIVE STREAM",
+      "TEAM & DEVICES",
+      "FIELD MAP",
+      "PROGRAM STATUS",
       "SYSTEM",
       "STATUS CENTER",
       "AUTOMATION LAB",
@@ -31,7 +31,7 @@ describe("OPS workstation routes", () => {
       "TARGETS",
     ]);
     expect(ROUTES.filter((route) => route.section === "WORKSPACES" && route.inSidebar).map((route) => route.label)).toEqual([
-      "PRODUCER", "CHASE", "ANALYSIS",
+      "PRODUCER", "CHASE DESK", "SETUP REVIEW",
     ]);
   });
 
@@ -41,7 +41,7 @@ describe("OPS workstation routes", () => {
       "OPERATIONS MAP", "RADAR LAB", "MORE",
     ]);
     expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual([
-      "WEATHER ANALYSIS", "HURRICANE WATCH", "AEGIS RADAR ALERTS", "SOUNDINGS", "CHASE OPERATIONS", "FIELD INTELLIGENCE", "LIVE STREAM", "SYSTEM", "STATUS CENTER", "AUTOMATION LAB", "SETTINGS",
+      "WEATHER ANALYSIS", "HURRICANE WATCH", "AEGIS RADAR ALERTS", "SOUNDINGS", "TEAM & DEVICES", "FIELD MAP", "PROGRAM STATUS", "SYSTEM", "STATUS CENTER", "AUTOMATION LAB", "SETTINGS",
     ]);
   });
 });

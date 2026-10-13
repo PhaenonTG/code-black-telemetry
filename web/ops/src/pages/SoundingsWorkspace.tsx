@@ -93,6 +93,8 @@ export default function SoundingsWorkspace() {
   const [phase, setPhase] = useState<SoundingRequestState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [clock, setClock] = useState(() => Date.now());
   const [recent, setRecent] = useState<RecentLocation[]>(() => loadRecent());
   const [cityInput, setCityInput] = useState("");
   const [stateInput, setStateInput] = useState("");
@@ -110,6 +112,7 @@ export default function SoundingsWorkspace() {
     async (target: { lat: number; lon: number; label: string }) => {
       const request = beginRequest();
       setPhase("loading");
+      setStartedAt(Date.now());
       setError(null);
       setResult(null);
       setLoadedAt(null);
@@ -119,6 +122,7 @@ export default function SoundingsWorkspace() {
         setResult(sounding);
         setPhase("ready");
         setLoadedAt(Date.now());
+        setStartedAt(null);
         setRecent((prev) => {
           const next = [
             { label: target.label, lat: target.lat, lon: target.lon, savedAt: Date.now() },
@@ -134,6 +138,7 @@ export default function SoundingsWorkspace() {
         // location search (which never reaches here; see handleSearch's own catch).
         setResult(null);
         setPhase("unavailable");
+        setStartedAt(null);
         setError(
           err instanceof OpsCoreClientError && err.message === "request timeout"
             ? `Sounding exceeded ${SOUNDING_REQUEST_TIMEOUT_MS / 1000} seconds. Retry the request.`
@@ -160,6 +165,12 @@ export default function SoundingsWorkspace() {
     const timer = window.setTimeout(() => setPhase("stale"), STALE_AFTER_MS);
     return () => window.clearTimeout(timer);
   }, [phase, loadedAt]);
+
+  useEffect(() => {
+    if (phase !== "loading") return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [phase]);
 
   const strikerPoint = useMemo(() => fabricUnitPoint(state.fabric.units, "cbwx-unit-striker"), [state.fabric.units]);
   const tessaPoint = useMemo(() => fabricUnitPoint(state.fabric.units, "cbwx-unit-tessa"), [state.fabric.units]);
@@ -275,7 +286,7 @@ export default function SoundingsWorkspace() {
         </section>
       </aside>
 
-      <main className="soundings-main">
+      <section className="soundings-main">
         <div className="soundings-status-bar">
           {phase !== "idle" && <OpsStatusPill state={pillStateFor(phase)} label={statusLabel(phase, error)} />}
           <span className="soundings-status-bar__point">{point ? point.label : "No location selected"}</span>
@@ -283,7 +294,11 @@ export default function SoundingsWorkspace() {
 
         {phase === "idle" && <div className="soundings-empty">Select a location to load a sounding.</div>}
         {phase === "loading" && !result && (
-          <div className="soundings-empty">Loading sounding… Cold model data can take up to {SOUNDING_REQUEST_TIMEOUT_MS / 1000} seconds.</div>
+          <div className="soundings-empty soundings-loading" role="status">
+            <strong>{startedAt && clock - startedAt > 45_000 ? "Deriving the vertical profile…" : startedAt && clock - startedAt > 15_000 ? "Acquiring HRRR model levels…" : "Starting sounding request…"}</strong>
+            <progress max={SOUNDING_REQUEST_TIMEOUT_MS} value={startedAt ? Math.min(clock - startedAt, SOUNDING_REQUEST_TIMEOUT_MS) : 0} />
+            <span>{startedAt ? `${Math.max(0, Math.round((clock - startedAt) / 1000))}s elapsed` : "Starting"} · cold model data can take up to {SOUNDING_REQUEST_TIMEOUT_MS / 1000}s</span>
+          </div>
         )}
         {phase === "unavailable" && (
           <div className="soundings-empty soundings-empty--error">
@@ -367,7 +382,7 @@ export default function SoundingsWorkspace() {
             <AnalogMatchesPanel />
           </>
         )}
-      </main>
+      </section>
     </div>
   );
 }

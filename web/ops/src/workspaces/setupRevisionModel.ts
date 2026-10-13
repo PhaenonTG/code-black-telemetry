@@ -25,3 +25,7 @@ export function revisionChanges(entry: SetupRevisionEntry): string[] {
   return labels.length ? labels : ["No change in the displayed SPC and HRRR evidence."]
 }
 
+export function revisionHasDisplayedChange(entry: SetupRevisionEntry): boolean {
+  return entry.compared_to_revision === null || Boolean(entry.changes?.some((key) => changeLabels[key]))
+}
+

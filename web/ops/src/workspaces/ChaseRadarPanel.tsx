@@ -92,7 +92,7 @@ export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
     if (!chosenSite) return
     let cancelled = false
     void getRadarStatus(chosenSite.id, product)
-      .then((status) => { if (!cancelled) setStormMotionReady(Boolean(status.stormMotion)) })
+      .then((status) => { if (!cancelled) setStormMotionReady(Boolean(status?.stormMotion)) })
       .catch(() => { if (!cancelled) setStormMotionReady(false) })
     return () => { cancelled = true }
   }, [chosenSite, product])
@@ -109,9 +109,16 @@ export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
       try {
         const results = [] as Array<{ site: RadarSite; frames: RadarFrame[] }>
         for (const site of candidates) {
-          const frames = normalizeRadarFrames(await getRadarFrames(site.id, product, null, 2), 2)
-          results.push({ site, frames })
-          if (radarFramesAreOperational(frames) && frames[0]?.tileTemplate) break
+          try {
+            const frames = normalizeRadarFrames(await getRadarFrames(site.id, product, null, 2), 2)
+            results.push({ site, frames })
+            if (radarFramesAreOperational(frames) && frames[0]?.tileTemplate) break
+          } catch {
+            // Auto mode is a health failover, not merely a nearest-site preference. A failed
+            // first request must not prevent the next nearby site from being considered.
+            results.push({ site, frames: [] })
+            if (siteOverride) throw new Error(`Radar refresh failed for ${site.id}`)
+          }
         }
         if (cancelled || version !== requestVersion.current) return
         const selected = selectRadarFrame(results)
