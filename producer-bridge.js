@@ -89,6 +89,12 @@ class ProducerBridgeClient {
     }
   }
 
+  async syncFacebookDestination() {
+    const response = await this.request('/workstation/facebook-destination');
+    const destination = await response.json();
+    this.engine.facebookOutput.setManagedDestination(destination);
+  }
+
   async cycle() {
     if (this.running) return;
     this.running = true;
@@ -96,6 +102,7 @@ class ProducerBridgeClient {
       await this.pushJson('/workstation/status', this.safeStatus());
       await this.pushJson('/workstation/capabilities', this.engine.producerCommands.capabilities());
       await this.pushFrame();
+      try { await this.syncFacebookDestination(); } catch { /* Destination service can roll independently. Stop commands must still be consumed. */ }
       await this.executeCommands();
       this.state = 'ONLINE'; this.lastSuccessAt = new Date().toISOString(); this.lastError = null;
     } catch (error) {

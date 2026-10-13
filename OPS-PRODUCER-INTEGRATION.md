@@ -2,6 +2,10 @@
 
 Status: outbound bridge deployed and online. Authenticated OPS controls are deployed for Glenn, Spencer, Nick and Silas. Commands require a 30-second exclusive lease except emergency stops, expire after 15 seconds, and report actual workstation acknowledgments. Facebook output start requires explicit confirmation plus fresh video and healthy audio. Public Meta publishing/ending and 360 control remain unqualified.
 
+Managed Meta lifecycle implementation is staged behind `FACEBOOK_LIFECYCLE_ENABLED` and the Page's `pages_manage_posts` grant. Routes: GET `/api/producer/v1/facebook`; POST `/facebook/prepare`, `/facebook/publish`, `/facebook/end`, `/facebook/refresh`. Each mutation carries a UUID `requestId`, explicit `confirmed: true`, and the current `videoId` except prepare. Prepare also takes title/description. Publish requires `programConfirmed: true` after human verification. The same single unresolved-operation lock prevents duplicate Meta side effects. Stop-encoder controls remain separate from ending a public Page broadcast.
+
+GET `/api/producer/v1/workstation/facebook-destination` is workstation-token-only and must never be called from a browser or logged. The returned secure destination is used in memory by the native encoder. A managed broadcast's ID is passed with `facebook.output.start` as `payload.videoId` (Meta IDs are numeric strings, not command UUIDs). The gateway and workstation reject mismatches.
+
 ## Available now
 
 - Native producer UI: `http://127.0.0.1:18766/` on the broadcast workstation only.

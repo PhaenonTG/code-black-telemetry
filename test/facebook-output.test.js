@@ -64,3 +64,19 @@ test('Facebook start refuses stale video and unhealthy audio', () => {
   assert.throws(() => output.start(), /healthy audio/);
   assert.equal(fs.existsSync(output.lockFile), false);
 });
+
+test('managed destinations never appear in status and cannot change while sending', () => {
+  const { output } = setup();
+  const destination = facebookTarget('rtmps://live-api-s.facebook.com:443/rtmp/', 'a'.repeat(48));
+  output.setManagedDestination({ destination, videoId: '123456789012345' });
+  assert.equal(output.destination(), destination);
+  assert.equal(output.status().managedVideoId, '123456789012345');
+  assert.equal(JSON.stringify(output.status()).includes(destination), false);
+  assert.throws(() => output.setManagedDestination({ destination: destination.replace('facebook.com', 'evil.test'), videoId: '123456789012345' }));
+  output.start();
+  assert.throws(() => output.setManagedDestination({ destination, videoId: '999999999999999' }), /Stop output/);
+  output.setManagedDestination({ destination: null });
+  assert.equal(output.requested, false);
+  assert.equal(output.state, 'OFF');
+  assert.equal(output.managedVideoId, null);
+});

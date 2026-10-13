@@ -50,7 +50,24 @@ class FacebookOutput {
     this.buffer = '';
     this.lastFrame = 0;
     this.lastFrameMs = 0;
+    this.managedTarget = null;
+    this.managedVideoId = null;
   }
+
+  setManagedDestination(value) {
+    if (!value?.destination) {
+      if (this.managedVideoId && this.requested) this.stop();
+      this.managedTarget = null; this.managedVideoId = null;
+      return;
+    }
+    let url;
+    try { url = new URL(value.destination); } catch { throw new Error('Invalid managed Facebook destination.'); }
+    if (!/^\d{5,30}$/.test(value.videoId || '') || url.protocol !== 'rtmps:' || url.hostname !== 'live-api-s.facebook.com' || (url.port && url.port !== '443') || !/^\/rtmp\/[A-Za-z0-9_-]{10,2048}$/.test(url.pathname) || url.search || url.hash || url.username || url.password) throw new Error('Invalid managed Facebook destination.');
+    if (this.requested && this.managedVideoId !== value.videoId) throw new Error('Stop output before changing the managed Facebook broadcast.');
+    this.managedTarget = value.destination; this.managedVideoId = value.videoId;
+  }
+
+  destination() { return this.managedTarget || this.load(); }
 
   acquire() {
     // Only recover a dead process's lock. Never unlink an active owner's lock, even if it is
@@ -76,7 +93,7 @@ class FacebookOutput {
     if (this.requested) return { changed: false, message: 'Facebook output already requested' };
     if (!this.engine.config.productionBroadcastEnabled) throw new Error('Facebook output is disabled in configuration.');
     // Validate/decrypt before locking or touching an encoder. Errors never include secret data.
-    try { this.load(); } catch { throw new Error('Facebook credential needs setup. Run configure-facebook.ps1.'); }
+    try { this.destination(); } catch { throw new Error('Facebook credential needs setup. Run configure-facebook.ps1.'); }
     const obs = childProcess.spawnSync('tasklist.exe', ['/FI', 'IMAGENAME eq obs64.exe', '/NH'], { windowsHide: true, encoding: 'utf8' });
     if (/obs64\.exe/i.test(obs.stdout || '')) throw new Error('Close OBS before starting Native Facebook output so two encoders cannot use the same stream key.');
     if (this.engine.sourceState !== 'SOURCE_LIVE') throw new Error('Start the source preview/recording and wait for fresh Nick video before starting Facebook.');
@@ -110,7 +127,7 @@ class FacebookOutput {
       return;
     }
     let target;
-    try { target = this.load(); } catch { this.fail('Facebook credential cannot be decrypted by this Windows user.'); return; }
+    try { target = this.destination(); } catch { this.fail('Facebook credential cannot be decrypted by this Windows user.'); return; }
     this.state = 'CONNECTING';
     this.buffer = '';
     this.progress = {};
@@ -199,7 +216,8 @@ class FacebookOutput {
 
   status() {
     return { enabled: this.engine.config.productionBroadcastEnabled === true,
-      configured: fs.existsSync(this.credentialFile), state: this.state, requested: this.requested,
+      configured: Boolean(this.managedTarget) || fs.existsSync(this.credentialFile), state: this.state, requested: this.requested,
+      managedVideoId: this.managedVideoId,
       destination: 'Facebook · Storm Chaser Nick Mounce', startedAt: this.startedAt,
       lastSuccessAt: this.lastSuccessAt, lastError: this.lastError, reconnectCount: this.retries,
       frames: this.lastFrame, bitrate: this.progress.bitrate || null,

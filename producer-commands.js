@@ -53,7 +53,9 @@ class ProducerCommands {
     switch (command.action) {
       case 'preview.start': detail = this.engine.startRecording(); break;
       case 'preview.stop': detail = this.engine.stopRecording(); break;
-      case 'facebook.output.start': detail = this.engine.broadcastStart(); break;
+      case 'facebook.output.start':
+        if (command.payload?.videoId && command.payload.videoId !== this.engine.facebookOutput?.managedVideoId) throw this.error(409, 'MANAGED_DESTINATION_NOT_READY');
+        detail = this.engine.broadcastStart(); break;
       case 'facebook.output.stop': detail = this.engine.broadcastStop(); break;
       case 'archive.camera.start': detail = this.engine.cleanSink.start(); break;
       case 'archive.camera.stop': detail = this.engine.cleanSink.stop(); break;
