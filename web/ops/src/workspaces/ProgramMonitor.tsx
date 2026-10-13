@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import type Hls from "hls.js"
 import { currentAccessToken } from "../core/client"
-import { currentMediaTimestamp, isProgramMediaUrl } from "./programMonitorPolicy"
+import { currentMediaTimestamp, isProgramMediaUrl, mediaCompositionMatches } from "./programMonitorPolicy"
 
-export default function ProgramMonitor({ active, fallback }: { active: boolean; fallback: ReactNode }) {
+export default function ProgramMonitor({ active, fallback, compositionId }: { active: boolean; fallback: ReactNode; compositionId?: string }) {
   const video = useRef<HTMLVideoElement>(null)
   const player = useRef<Hls | null>(null)
   const sessionActive = useRef(false)
@@ -55,6 +55,7 @@ export default function ProgramMonitor({ active, fallback }: { active: boolean; 
         hls.on(HlsPlayer.Events.LEVEL_LOADED, (_event, data) => {
           const details = data.networkDetails as XMLHttpRequest | null
           const stamp = typeof details?.getResponseHeader === "function" ? currentMediaTimestamp(details.getResponseHeader("X-Producer-Frame-At")) : null
+          if (!mediaCompositionMatches(compositionId, details?.getResponseHeader("X-Producer-Composition") ?? null)) { stop("PROGRAM composition changed or is unverified. Snapshot fallback."); return }
           if (!stamp) { stop("PROGRAM media is stale or cannot be verified. Snapshot fallback."); return }
           lastManifestAt = stamp
         })
@@ -80,7 +81,7 @@ export default function ProgramMonitor({ active, fallback }: { active: boolean; 
       player.current?.destroy(); player.current = null
       media.pause(); media.removeAttribute("src"); media.load()
     }
-  }, [displayVideo])
+  }, [displayVideo, compositionId])
 
   const listen = () => {
     const media = video.current

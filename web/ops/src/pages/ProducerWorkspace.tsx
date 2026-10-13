@@ -9,6 +9,7 @@ import FacebookProducerPanel from "../workspaces/FacebookProducerPanel"
 import ProducerControls from "../workspaces/ProducerControls"
 import ProgramMonitor from "../workspaces/ProgramMonitor"
 import { readProducerResponse } from "../workspaces/producerResponse"
+import { mediaCompositionMatches } from "../workspaces/programMonitorPolicy"
 import "./Workspaces.css"
 
 const SELECTION_KEY = "codeblack.ops.producer.source.v1"
@@ -23,6 +24,7 @@ type ProducerBridgeStatus = {
   status?: ProducerBridgeStatus
   state?: string
   stateRevision?: number
+  composition?: { id?: string }
   source_state?: string
   transport_state?: string
   previews?: { program?: ProducerPreview }
@@ -163,6 +165,7 @@ export default function ProducerWorkspace() {
         if (response.status === 404) { clearFrame(); setProgramFrameState("No current PROGRAM frame"); return }
         if (!response.ok) throw new Error(`Preview returned ${response.status}`)
         const frameAt = response.headers.get("X-Producer-Frame-At") ?? ""
+        if (!mediaCompositionMatches(producerStatusRef.current?.composition?.id, response.headers.get("X-Producer-Composition"))) { clearFrame(); setProgramFrameState("PROGRAM composition is not current"); return }
         const frameTime = Date.parse(frameAt)
         if (!Number.isFinite(frameTime) || Date.now() - frameTime > 5_000) { clearFrame(); setProgramFrameState("PROGRAM frame is stale"); return }
         const blob = await response.blob()
@@ -180,7 +183,7 @@ export default function ProducerWorkspace() {
     const visible = () => { if (!document.hidden) void load() }
     document.addEventListener("visibilitychange", visible)
     return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); clearFrame() }
-  }, [producerStatus?.source_state, producerStatus?.previews?.program?.state])
+  }, [producerStatus?.source_state, producerStatus?.previews?.program?.state, producerStatus?.composition?.id])
 
   const sources = useMemo(() => parseProducerSources(status?.streaming), [status?.streaming])
   const alerts = alertSnapshot?.key === alertKey ? alertSnapshot.value : null
@@ -203,7 +206,7 @@ export default function ProducerWorkspace() {
       <div className="producer-main">
         <section className="workspace-panel producer-stage" aria-label="PROGRAM preview">
           <header><h2>PROGRAM</h2><span className={programCurrent ? "workspace-live" : "workspace-muted"}>{programCurrent ? "CURRENT" : producerBridgeState}</span></header>
-          <ProgramMonitor active={producerBridgeState === "ONLINE" && sourceFresh(producerStatus)} fallback={programCurrent ? <img src={programFrameUrl} alt="Current PROGRAM preview" /> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
+          <ProgramMonitor compositionId={producerStatus?.composition?.id} active={producerBridgeState === "ONLINE" && sourceFresh(producerStatus)} fallback={programCurrent ? <img src={programFrameUrl} alt="Current PROGRAM preview" /> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
           <div className="producer-stage__foot"><div><strong>{producerStatus?.state ?? "NO BROADCASTER STATUS"}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>{producerStatus?.broadcast?.state ?? "OUTPUT UNKNOWN"}</span></div>
         </section>
         <section className="workspace-panel producer-stage" aria-label="Selected live stream camera">

@@ -6,3 +6,7 @@ export function currentMediaTimestamp(value: string | null, now = Date.now()): n
   const time = value ? Date.parse(value) : NaN
   return Number.isFinite(time) && now - time >= -2000 && now - time <= 5000 ? time : null
 }
+export function mediaCompositionMatches(expected: string | undefined, actual: string | null): boolean {
+  if (actual !== null && !/^[a-f0-9]{24}$/.test(actual)) return false
+  return expected === undefined ? true : /^[a-f0-9]{24}$/.test(expected) && actual === expected
+}

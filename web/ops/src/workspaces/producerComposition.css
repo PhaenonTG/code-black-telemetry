@@ -1,0 +1,13 @@
+.producer-readout { padding: 12px 0; border-bottom: 1px solid var(--cb-line); }
+.producer-readout__title,.producer-readout__audio { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.producer-readout__formats { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 12px 0; }
+.producer-readout__formats dt { font-size: 11px; opacity: .7; }
+.producer-readout__formats dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.producer-readout__audio meter { width: 100%; }
+.producer-overlay-editor { padding: 12px 0; }
+.producer-overlay-editor summary { cursor: pointer; min-height: 36px; }
+.producer-overlay-editor fieldset { border: 0; padding: 0; display: grid; gap: 12px; min-width: 0; }
+.producer-overlay-editor label { display: grid; gap: 6px; }
+.producer-overlay-editor .producer-overlay-toggle { display: flex; align-items: center; gap: 8px; }
+.producer-overlay-editor input[type=checkbox] { width: 20px; height: 20px; }
+.producer-overlay-editor button { min-height: 44px; }

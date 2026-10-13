@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { currentAccessToken } from "../core/client"
 import { readProducerResponse } from "./producerResponse"
+import BroadcasterReadout from "./BroadcasterReadout"
+import ProducerOverlayEditor from "./ProducerOverlayEditor"
+import type { NativeStatus } from "./broadcasterStatus"
+import "./producerComposition.css"
 
-type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: { stateRevision: number; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; audio?: { available?: boolean; silence?: boolean; clipping?: boolean } } }
+type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: NativeStatus }
 type Lifecycle = { enabled: boolean; permission: boolean; canManage: boolean; broadcast: { id: string; title: string; description: string; status: string; facebookProducerUrl: string } | null; operation?: { state: string; action: string } | null }
 type Command = { commandId: string; state: string; result?: { error?: string } }
 async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> {
@@ -56,12 +60,12 @@ export default function ProducerControls() {
     return () => window.clearInterval(timer)
   }, [pending, refresh])
   async function lease(release = false) { setBusy(true); try { await api("control-lease", release ? "DELETE" : "POST"); setMessage(release ? "Control released." : "You have control."); await refresh() } catch (error) { setMessage(error instanceof Error ? error.message : "Control unavailable") } finally { setBusy(false) } }
-  async function command(action: string, confirmed = false) {
+  async function command(action: string, confirmed = false, payload?: Record<string, unknown>) {
     setBusy(true); setConfirmStart(false)
     try {
       const latest = await api<Status>("status"); setStatus(latest)
       if (!Number.isSafeInteger(latest.status?.stateRevision)) throw new Error("No current broadcaster revision.")
-      const next = await api<Command>("commands", "POST", { commandId: crypto.randomUUID(), action, expectedStateRevision: latest.status!.stateRevision, confirmed, ...(action === "lowerThird.set" ? { payload: { text: text.trim() } } : action === "facebook.output.start" && facebook?.broadcast ? { payload: { videoId: facebook.broadcast.id } } : {}) })
+      const next = await api<Command>("commands", "POST", { commandId: crypto.randomUUID(), action, expectedStateRevision: latest.status!.stateRevision, confirmed, ...(payload ? { payload } : action === "lowerThird.set" ? { payload: { text: text.trim() } } : action === "facebook.output.start" && facebook?.broadcast ? { payload: { videoId: facebook.broadcast.id } } : {}) })
       setPending(next); setMessage("QUEUED — waiting for broadcaster acknowledgment.")
     } catch (error) { setMessage(error instanceof Error ? error.message : "Command delivery unknown; check status before retrying.") } finally { setBusy(false) }
   }
@@ -83,6 +87,8 @@ export default function ProducerControls() {
   const audioHealthy = status?.status?.audio?.available === true && !status.status.audio.silence && !status.status.audio.clipping
   return <section className="workspace-panel producer-controls" aria-label="PROGRAM controls">
     <header><h2>PROGRAM controls</h2><span className={online ? "workspace-live" : "workspace-muted"}>{online ? "ONLINE" : "OFFLINE"}</span></header>
+    <BroadcasterReadout status={online ? status?.status : undefined} />
+    <ProducerOverlayEditor applied={status?.status?.overlays} enabled={canStart && status?.status?.capabilities?.actions?.composition?.includes("overlay.set") === true} sending={status?.status?.broadcast?.state === "SENDING"} onApply={payload => void command("overlay.set", false, payload)} onHide={() => void command("lowerThird.hide")} />
     <p>{owner ? "You have control. Lease renews while this tab is visible." : status?.controlLease && status.controlLease.expiresAt > checkedAt ? `Controlled by ${status.controlLease.operator}` : "No operator holds control."}</p>
     <button type="button" disabled={!allowed || busy || (!owner && !online)} onClick={() => void lease(owner)}>{owner ? "Release control" : "Take control"}</button>
     {!allowed && <p className="workspace-note">Controls are restricted to approved producer accounts and must be enabled by the gateway.</p>}
