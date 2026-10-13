@@ -3,6 +3,7 @@ import { BoundedBackoff } from "./backoff";
 import { coreConfigured, readOpsCoreConfig } from "./config";
 import { CoreOpsContext, type OpsSelectedPoint } from "./CoreOpsContext";
 import { consumeFabricStream, fetchCoreHealth, fetchFabricRest, fetchStormIntelHealth, fetchStormIntelPoint } from "./client";
+import { planFabricReconnect } from "./fabricReconnect";
 import { fabricStateFromSnapshot } from "./fabricSnapshot";
 import { LatestRequestGate } from "./requestGate";
 import { mergeStormHealth, shouldRefreshPoint } from "./pointRefresh";
@@ -162,21 +163,37 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
     if (!coreConfigured(config)) return;
     let cancelled = false;
     let reconnectTimer: number | null = null;
-    let controller: AbortController | null = null;
-    let watchdog: number | null = null;
+    let activeController: AbortController | null = null;
+    let clearActiveWatchdog: (() => void) | null = null;
     const backoff = new BoundedBackoff();
 
     const connect = () => {
       if (cancelled) return;
-      controller = new AbortController();
-      setState((current) => ({ ...current, fabric: { ...current.fabric, streamState: "connecting", error: null } }));
-      watchdog = window.setTimeout(() => controller?.abort(), FABRIC_STREAM_FRESH_MS);
+      const controller = new AbortController();
+      activeController = controller;
+      let watchdog: number | null = null;
+      let completedNormally = false;
+      let receivedSnapshot = false;
+      let streamError: string | null = null;
+      const clearWatchdog = () => {
+        if (watchdog !== null) window.clearTimeout(watchdog);
+        watchdog = null;
+      };
+      const armWatchdog = () => {
+        clearWatchdog();
+        watchdog = window.setTimeout(() => controller.abort(), FABRIC_STREAM_FRESH_MS);
+      };
+      clearActiveWatchdog = clearWatchdog;
+      setState((current) => current.fabric.streamState === "open"
+        ? current
+        : { ...current, fabric: { ...current.fabric, streamState: "connecting", error: null } });
+      armWatchdog();
       void consumeFabricStream(config, controller.signal, (event) => {
         if (cancelled || event.eventType !== "fabric.snapshot") return;
         const snapshot = fabricStateFromSnapshot(event.payload);
         if (!snapshot) throw new Error("Malformed Fabric snapshot");
-        if (watchdog !== null) window.clearTimeout(watchdog);
-        watchdog = window.setTimeout(() => controller?.abort(), FABRIC_STREAM_FRESH_MS);
+        receivedSnapshot = true;
+        armWatchdog();
         backoff.reset();
         setState((current) => ({
           ...current,
@@ -191,30 +208,35 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
             error: null,
           },
         }));
+      }).then(() => {
+        completedNormally = true;
       }).catch((error: unknown) => {
-        if (cancelled) return;
-        setState((current) => ({ ...current, fabric: {
-          ...current.fabric,
-          streamState: "error",
-          error: error instanceof Error ? error.message : "Fabric live feed failed",
-        } }));
+        streamError = error instanceof Error ? error.message : "Fabric live feed failed";
       }).finally(() => {
-        if (watchdog !== null) window.clearTimeout(watchdog);
+        clearWatchdog();
+        if (activeController === controller) {
+          activeController = null;
+          clearActiveWatchdog = null;
+        }
         if (cancelled) return;
-        setState((current) => ({ ...current, fabric: {
-          ...current.fabric,
-          streamState: "closed",
-          state: current.fabric.state === "LIVE" ? "STALE" : current.fabric.state,
-        } }));
-        reconnectTimer = window.setTimeout(connect, backoff.next());
+        const plan = planFabricReconnect(completedNormally, receivedSnapshot, () => backoff.next());
+        if (plan.markClosed) {
+          setState((current) => ({ ...current, fabric: {
+            ...current.fabric,
+            streamState: "closed",
+            state: current.fabric.state === "LIVE" ? "STALE" : current.fabric.state,
+            error: streamError ?? "Fabric feed closed before its first snapshot",
+          } }));
+        }
+        reconnectTimer = window.setTimeout(connect, plan.delayMs);
       });
     };
     connect();
     return () => {
       cancelled = true;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      if (watchdog !== null) window.clearTimeout(watchdog);
-      controller?.abort();
+      clearActiveWatchdog?.();
+      activeController?.abort();
     };
   }, [config]);
 
