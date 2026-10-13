@@ -10,6 +10,7 @@ export interface AllowlistRoute {
   upstreamPath: string;
   allowedQueryParams: string[];
   methods?: readonly string[];
+  opsWrite?: "review" | "decision";
 }
 
 // Keys are exact Core-facing pathnames (matching Core's real REST paths 1:1), since this
@@ -26,6 +27,8 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
   "/api/forecast/v1/hurricane-watch": { upstreamPath: "/api/forecast/v1/hurricane-watch", allowedQueryParams: [] },
   "/api/forecast/v1/chase-setups": { upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [] },
   "/api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id", "revision"] },
+  "/api/forecast/v1/chase-setup-review": { upstreamPath: "/api/forecast/v1/chase-setup-review", allowedQueryParams: [], methods: ["POST"], opsWrite: "review" },
+  "/api/forecast/v1/chase-setup-decision": { upstreamPath: "/api/forecast/v1/chase-setup-decision", allowedQueryParams: [], methods: ["POST"], opsWrite: "decision" },
   "/health": { upstreamPath: "/health", allowedQueryParams: [] },
   "/api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "/api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },

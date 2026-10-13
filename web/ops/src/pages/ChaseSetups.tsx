@@ -6,6 +6,8 @@ import { SetupTargetMap, type SetupCandidatePoint } from "../workspaces/SetupTar
 import { rankedCandidates, setupChronology } from "../workspaces/setupCandidateModel";
 import { SetupRevisionTimeline } from "../workspaces/SetupRevisionTimeline";
 import type { SetupRevisionHistory } from "../workspaces/setupRevisionModel";
+import { SetupReviewDesk } from "../workspaces/SetupReviewDesk";
+import type { SetupWorkflow } from "../workspaces/setupReviewModel";
 import "./ChaseSetups.css";
 
 type SetupRow = {
@@ -16,6 +18,7 @@ type SetupRow = {
 type SetupIndex = { status: string; checked_at?: string; last_source_check_at?: string; items: SetupRow[] };
 type SetupDetail = {
   setup_id: string; publication_state: string; revision: number; generated_at: string;
+  source_fingerprint?: string; workflow?: SetupWorkflow;
   current_revision?: number; is_current_revision?: boolean; revision_history?: SetupRevisionHistory;
   first_seen_at?: string; valid_from: string; valid_until: string; summary?: string;
   bounds?: number[];
@@ -160,13 +163,9 @@ export default function ChaseSetups({ detailBasePath = "/chase-setups" }: { deta
               {points.length > 0 && <p>Latest run: {when(points[0].run_time)} · Candidate valid: {when(points[0].valid_time)}</p>}
               <p>Screening indices are not probabilities, observed storm tracks, or route safety assessments.</p>
             </section>
-            <div className="chase-setups__reviews" aria-label="Advisory review status">
-              <div><h3>Aegis analysis</h3><p>Not connected for chase setups yet.</p></div>
-              <div><h3>Local 30B review</h3><p>Not connected for chase setups yet.</p></div>
-              <div><h3>Paid second opinion</h3><p>Disabled until the sanitized one-attempt workflow is verified.</p></div>
-            </div>
-            <footer className="chase-setups__approval"><button type="button" disabled>Approve publication</button>
-              <p>Approval is unavailable until evidence, advisory reviews, and exact-revision authorization are verified.</p></footer>
+            <SetupReviewDesk key={`${detail.setup_id}:${detail.revision}:${reloadVersion}`} config={config}
+              setupId={detail.setup_id} revision={detail.revision} fingerprint={detail.source_fingerprint}
+              current={detail.is_current_revision !== false} initial={detail.workflow} />
            </>}
         </article>
         <aside className="chase-setups__activity" aria-label="Draft activity">

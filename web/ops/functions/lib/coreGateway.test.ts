@@ -78,10 +78,11 @@ describe("verifyOpsAuth", () => {
       }
       expect(url).toContain("/rest/v1/profiles");
       expect(url).toContain("user_id=eq.user-1");
-      return jsonResponse(200, [{ active: true }]);
+      expect(url).toContain("select=active,role");
+      return jsonResponse(200, [{ active: true, role: "OWNER" }]);
     }) as typeof fetch;
     const result = await verifyOpsAuth("Bearer good-token", ENV, fetchImpl);
-    expect(result).toEqual({ ok: true, userId: "user-1" });
+    expect(result).toEqual({ ok: true, userId: "user-1", role: "OWNER" });
   });
 
   it("rejects a valid Supabase user with no profile row (unauthorized, not just unauthenticated)", async () => {

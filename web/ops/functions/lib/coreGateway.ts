@@ -34,6 +34,7 @@ export interface AllowlistRoute {
   upstreamPath: string;
   allowedQueryParams: string[];
   methods?: readonly string[];
+  opsWrite?: "review" | "decision";
 }
 
 // Hardcoded allowlist. This is the entire set of paths this gateway will ever forward --
@@ -57,6 +58,8 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "api/forecast/v1/hurricane-watch": { upstreamPath: "/api/forecast/v1/hurricane-watch", allowedQueryParams: [] },
   "api/forecast/v1/chase-setups": { upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [] },
   "api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id", "revision"] },
+  "api/forecast/v1/chase-setup-review": { upstreamPath: "/api/forecast/v1/chase-setup-review", allowedQueryParams: [], methods: ["POST"], opsWrite: "review" },
+  "api/forecast/v1/chase-setup-decision": { upstreamPath: "/api/forecast/v1/chase-setup-decision", allowedQueryParams: [], methods: ["POST"], opsWrite: "decision" },
   "health": { upstreamPath: "/health", allowedQueryParams: [] },
   "api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
@@ -150,7 +153,7 @@ export function gatewayErrorResponse(status: number, reason: GatewayErrorReason)
   });
 }
 
-export type AuthResult = { ok: true; userId: string } | { ok: false; status: number; reason: GatewayErrorReason };
+export type AuthResult = { ok: true; userId: string; role: string | null } | { ok: false; status: number; reason: GatewayErrorReason };
 
 // Delegates verification to Supabase itself rather than locally verifying the JWT. This avoids
 // holding a JWT signing secret or JWKS cache in the gateway, and it naturally honors revocation
@@ -193,7 +196,7 @@ export async function verifyOpsAuth(
   let profileResponse: Response;
   try {
     profileResponse = await fetchImpl(
-      `${supabaseUrl}/rest/v1/profiles?select=active&user_id=eq.${encodeURIComponent(userId)}`,
+      `${supabaseUrl}/rest/v1/profiles?select=active,role&user_id=eq.${encodeURIComponent(userId)}`,
       { headers: { Authorization: `Bearer ${token}`, apikey: publishableKey } },
     );
   } catch {
@@ -201,12 +204,12 @@ export async function verifyOpsAuth(
   }
   if (!profileResponse.ok) return { ok: false, status: 403, reason: "UNAUTHORIZED" };
 
-  const rows = (await profileResponse.json().catch(() => null)) as Array<{ active?: boolean }> | null;
+  const rows = (await profileResponse.json().catch(() => null)) as Array<{ active?: boolean; role?: string }> | null;
   if (!Array.isArray(rows) || rows.length === 0 || rows[0].active !== true) {
     return { ok: false, status: 403, reason: "UNAUTHORIZED" };
   }
 
-  return { ok: true, userId };
+  return { ok: true, userId, role: ["OWNER", "ADMIN", "OPERATOR"].includes(rows[0].role ?? "") ? rows[0].role! : null };
 }
 
 const UPSTREAM_TIMEOUT_MS = 8_000;
@@ -228,6 +231,8 @@ export async function forwardToCore(
   fetchImpl: typeof fetch = fetch,
   init: RequestInit = {},
 ): Promise<UpstreamResult> {
+  // Signed mutations are available only through the private binding.
+  if (route.opsWrite && !env.CORE_GATEWAY_WORKER) return { status: 502, reason: "CORE_UNAVAILABLE" };
   // Opt-in VPC transport path -- see the CORE_GATEWAY_WORKER doc comment on GatewayEnv above.
   // Only taken when something has actually bound CORE_GATEWAY_WORKER; every existing
   // deployment and every existing test that does not set it is completely unaffected.
@@ -327,6 +332,9 @@ async function forwardToCoreViaServiceBinding(
       return { status: 404, reason: "LOCATION_NOT_FOUND" };
     }
     if (!response.ok) {
+      if (route.opsWrite && [403, 409, 422].includes(response.status)) {
+        return { status: response.status, body: { error: response.status === 409 ? "SETUP_CONFLICT" : response.status === 403 ? "UNAUTHORIZED" : "INVALID_REQUEST" } };
+      }
       return { status: 502, reason: "CORE_UNAVAILABLE" };
     }
     return { status: 200, body: parsed };

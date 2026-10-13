@@ -14,6 +14,35 @@ function req(path: string, init?: RequestInit): Request {
 }
 
 describe("handleRequest -- allowlisted routes forward correctly", () => {
+  it("signs verified OPS actors and the exact decision body, failing closed without role or secret", async () => {
+    const path = "/api/forecast/v1/chase-setup-decision";
+    const body = '{"revision":7}';
+    const actor = "11111111-2222-3333-4444-555555555555";
+    let sent: RequestInit | undefined;
+    const env: Env = { OPS_WRITE_SECRET: "test-secret", CORE_VPC: fakeVpc(async (_url, init) => {
+      sent = init; return jsonResponse(200, { saved: true });
+    }) };
+    const response = await handleRequest(req(path, { method: "POST", body,
+      headers: { "X-Ops-User-Id": actor, "X-Ops-Role": "ADMIN", "X-Ops-Signature": "forged" } }), env);
+    expect(response.status).toBe(200);
+    const headers = new Headers(sent?.headers);
+    expect(headers.get("X-Ops-User-Id")).toBe(actor);
+    expect(headers.get("X-Ops-Role")).toBe("ADMIN");
+    const encoder = new TextEncoder();
+    const digest = await crypto.subtle.digest("SHA-256", encoder.encode(body));
+    const hex = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, "0")).join("");
+    const key = await crypto.subtle.importKey("raw", encoder.encode("test-secret"), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+    const signature = Uint8Array.from(headers.get("X-Ops-Signature")!.match(/../g)!, hex => parseInt(hex, 16));
+    expect(await crypto.subtle.verify("HMAC", key, signature,
+      encoder.encode(["POST", path, headers.get("X-Ops-Timestamp"), actor, "ADMIN", hex].join("\n")))).toBe(true);
+    for (const role of ["OPERATOR", "forged"]) {
+      expect((await handleRequest(req(path, { method: "POST", body,
+        headers: { "X-Ops-User-Id": actor, "X-Ops-Role": role } }), env)).status).toBe(403);
+    }
+    expect((await handleRequest(req(path, { method: "POST", body }), env)).status).toBe(403);
+    expect((await handleRequest(req(path, { method: "POST", body,
+      headers: { "X-Ops-User-Id": actor, "X-Ops-Role": "OWNER" } }), { ...env, OPS_WRITE_SECRET: undefined })).status).toBe(403);
+  });
   it("forwards only bounded Aegis replay POST bodies to Core", async () => {
     let sentUrl = "";
     let sentBody = "";

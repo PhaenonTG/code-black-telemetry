@@ -60,6 +60,8 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
   const route = resolveAllowlistRoute(routeKey);
   if (!route) return gatewayErrorResponse(404, "ROUTE_NOT_ALLOWED");
   if (!(route.methods ?? ["GET"]).includes(request.method)) return gatewayErrorResponse(405, "METHOD_NOT_ALLOWED");
+  if (route.opsWrite && (!auth.role || (route.opsWrite === "decision" && !["OWNER", "ADMIN"].includes(auth.role))))
+    return gatewayErrorResponse(403, "UNAUTHORIZED");
 
   if (route.upstreamPath === "/api/fabric/v1/stream") {
     return forwardFabricStream(env, request.signal);
@@ -73,11 +75,12 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
   const result = await forwardToCore(route, url, env, fetch, {
     method: request.method,
     body,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(route.opsWrite ? { "X-Ops-User-Id": auth.userId, "X-Ops-Role": auth.role! } : {}) },
   });
-  if (result.status !== 200) return gatewayErrorResponse(result.status, result.reason ?? "CORE_UNAVAILABLE");
+  if (result.status !== 200 && !result.body) return gatewayErrorResponse(result.status, result.reason ?? "CORE_UNAVAILABLE");
   return new Response(JSON.stringify(result.body), {
-    status: 200,
+    status: result.status,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }

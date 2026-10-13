@@ -27,6 +27,7 @@ export interface VpcServiceBinding {
 export interface Env {
   // Configured in wrangler.jsonc; fail safely if a future deployment omits it.
   CORE_VPC?: VpcServiceBinding;
+  OPS_WRITE_SECRET?: string;
 }
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -63,12 +64,28 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const body = request.method === "PUT" || request.method === "POST" ? await request.text() : undefined;
     if (request.method === "POST" && body && new TextEncoder().encode(body).length > 4096)
       return jsonResponse(413, { error: "REQUEST_TOO_LARGE" });
+    const actorHeaders: Record<string, string> = {};
+    if (route.opsWrite) {
+      const actor = request.headers.get("X-Ops-User-Id") ?? "";
+      const role = request.headers.get("X-Ops-Role") ?? "";
+      if (!env.OPS_WRITE_SECRET || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actor) ||
+          !["OWNER", "ADMIN", "OPERATOR"].includes(role) || (route.opsWrite === "decision" && role === "OPERATOR"))
+        return jsonResponse(403, { error: "UNAUTHORIZED" });
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const hex = (buffer: ArrayBuffer) => Array.from(new Uint8Array(buffer), value => value.toString(16).padStart(2, "0")).join("");
+      const encoder = new TextEncoder();
+      const bodyHash = hex(await crypto.subtle.digest("SHA-256", encoder.encode(body ?? "")));
+      const key = await crypto.subtle.importKey("raw", encoder.encode(env.OPS_WRITE_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      const signature = hex(await crypto.subtle.sign("HMAC", key, encoder.encode([request.method, route.upstreamPath, timestamp, actor, role, bodyHash].join("\n"))));
+      Object.assign(actorHeaders, { "X-Ops-User-Id": actor, "X-Ops-Role": role, "X-Ops-Timestamp": timestamp, "X-Ops-Signature": signature });
+    }
     return await env.CORE_VPC.fetch(targetUrl, {
       method: request.method,
       body,
       headers: {
         Accept: route.upstreamPath === "/api/fabric/v1/stream" ? "application/x-ndjson" : "application/json",
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...actorHeaders,
       },
       signal: request.signal,
     });
