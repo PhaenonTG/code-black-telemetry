@@ -70,6 +70,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
             Array.isArray(items) && items.length > 0 ? <details key={String(label)}><summary>{String(label)} ({items.length})</summary><ul>{items.map((item, i) => <li key={i}>{item}</li>)}</ul></details> : null)}
         </> : <p>{review?.status === "pending" ? "Waiting for the sequential local review to finish."
           : review?.reason === "unsupported_risk_category" ? "Review withheld: its risk category conflicted with the official SPC outlook."
+          : review?.reason === "unsupported_absence_claim" ? "Review withheld: missing storm or warning inputs were treated as an all-clear."
           : review?.reason === "interrupted" ? "This review was interrupted. Run the reviews again."
           : review?.reason ? "The reviewer could not return a validated assessment. Retry after a minute." : "Run reviews to assess this captured evidence."}</p>}</div>;
     })}</div>
