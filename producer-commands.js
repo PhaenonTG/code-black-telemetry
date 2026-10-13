@@ -1,6 +1,7 @@
 'use strict';
 
 const COMMAND_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const { validateOverlayPatch } = require('./program-composition');
 
 class ProducerCommands {
   constructor(engine, now = () => Date.now()) {
@@ -16,7 +17,7 @@ class ProducerCommands {
       actions: {
         source: [],
         preview: ['start', 'stop'],
-        composition: ['lowerThird.set', 'lowerThird.hide'],
+        composition: ['lowerThird.set', 'lowerThird.hide', 'overlay.set'],
         facebook: ['output.start', 'output.stop'],
         archive: ['camera.start', 'camera.stop'],
         camera360: [],
@@ -66,6 +67,7 @@ class ProducerCommands {
         break;
       }
       case 'lowerThird.hide': detail = this.engine.setOverlays({ lowerThird: { enabled: false } }); break;
+      case 'overlay.set': detail = this.engine.setOverlays(validateOverlayPatch(command.payload)); break;
       case 'facebook.publish':
       case 'facebook.end': throw this.error(409, 'META_PUBLISHING_NOT_QUALIFIED');
       default: throw this.error(400, 'unsupported producer action');

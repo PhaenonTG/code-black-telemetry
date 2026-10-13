@@ -16,7 +16,7 @@ function setup() {
   engine.videoAgeMs = () => 100;
   engine.audioProbe = { status: () => ({ process: 'RUNNING', available: true, silence: false, clipping: false, lastAudioAt: new Date().toISOString() }) };
   let proc;
-  const output = new FacebookOutput(engine, root, { load: () => facebookTarget('rtmps://live-api-s.facebook.com:443/rtmp/', 'a'.repeat(48)), spawn: () => {
+  const output = new FacebookOutput(engine, root, { obsRunning: () => false, load: () => facebookTarget('rtmps://live-api-s.facebook.com:443/rtmp/', 'a'.repeat(48)), spawn: () => {
     proc = new EventEmitter(); proc.stdout = new PassThrough(); proc.stderr = new PassThrough();
     proc.kill = () => { proc.emit('close', 0); }; proc.pid = 1234; return proc;
   } });
@@ -32,6 +32,11 @@ test('Facebook destinations reject unencrypted or foreign servers and malformed 
 test('output refuses absent source and never acquires the production lock', () => {
   const { engine, output } = setup(); engine.sourceState = 'SOURCE_LOST';
   assert.throws(() => output.start(), /fresh Nick video/);
+  assert.equal(fs.existsSync(output.lockFile), false);
+});
+test('OBS ownership guard remains enforced independently of output tests', () => {
+  const { output } = setup(); output.obsRunning = () => true;
+  assert.throws(() => output.start(), /Close OBS/);
   assert.equal(fs.existsSync(output.lockFile), false);
 });
 

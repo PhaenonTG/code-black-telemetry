@@ -20,6 +20,16 @@ function fixture() {
   return { engine, calls, commands: new ProducerCommands(engine) };
 }
 
+test('overlay.set acknowledges one scoped patch and rejects invalid payloads', () => {
+  const { commands, calls } = fixture();
+  const command = { commandId: '2bd3ed52-786b-4ead-a77a-a6438fd9b772', expectedStateRevision: 7, action: 'overlay.set', payload: { bug: { enabled: false }, callsign: 'NICK' } };
+  assert.equal(commands.execute(command).state, 'succeeded');
+  assert.equal(commands.execute(command).duplicate, true);
+  assert.equal(calls.length, 1);
+  assert.ok(commands.capabilities().actions.composition.includes('overlay.set'));
+  assert.throws(() => commands.execute({ ...command, commandId: '827f4148-0a4b-4bb9-b9be-ff42ac237ebd', expectedStateRevision: 8, payload: { path: 'private-file' } }));
+});
+
 test('reports only capabilities currently implemented by Native Broadcaster', () => {
   const { commands } = fixture();
   const capabilities = commands.capabilities();

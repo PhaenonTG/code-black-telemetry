@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const childProcess = require('child_process');
 const crypto = require('crypto');
+const { programCanvas } = require('./program-composition');
 
 function redact(value) {
   return String(value || '').replace(/(?:srt|rtmps?):\/\/[^\s'"\\]+/gi, '[stream endpoint redacted]');
@@ -34,6 +35,10 @@ class FacebookOutput {
     this.root = root;
     this.spawn = dependencies.spawn || childProcess.spawn;
     this.load = dependencies.load || (() => readCredential(root));
+    this.obsRunning = dependencies.obsRunning || (() => {
+      const obs = childProcess.spawnSync('tasklist.exe', ['/FI', 'IMAGENAME eq obs64.exe', '/NH'], { windowsHide: true, encoding: 'utf8' });
+      return /obs64\.exe/i.test(obs.stdout || '');
+    });
     this.credentialFile = path.join(root, 'runtime', 'facebook.credentials.json');
     this.lockFile = path.join(root, 'runtime', 'production-output.lock');
     this.process = null;
@@ -94,8 +99,7 @@ class FacebookOutput {
     if (!this.engine.config.productionBroadcastEnabled) throw new Error('Facebook output is disabled in configuration.');
     // Validate/decrypt before locking or touching an encoder. Errors never include secret data.
     try { this.destination(); } catch { throw new Error('Facebook credential needs setup. Run configure-facebook.ps1.'); }
-    const obs = childProcess.spawnSync('tasklist.exe', ['/FI', 'IMAGENAME eq obs64.exe', '/NH'], { windowsHide: true, encoding: 'utf8' });
-    if (/obs64\.exe/i.test(obs.stdout || '')) throw new Error('Close OBS before starting Native Facebook output so two encoders cannot use the same stream key.');
+    if (this.obsRunning()) throw new Error('Close OBS before starting Native Facebook output so two encoders cannot use the same stream key.');
     if (this.engine.sourceState !== 'SOURCE_LIVE') throw new Error('Start the source preview/recording and wait for fresh Nick video before starting Facebook.');
     const audio = this.engine.audioProbe.status();
     const videoAge = this.engine.videoAgeMs();
@@ -112,7 +116,7 @@ class FacebookOutput {
 
   args(target) {
     const { width, height, fps } = this.engine.config.source;
-    const filter = `fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,${this.engine.overlayFilter()}`;
+    const filter = programCanvas({ width, height, fps }, this.engine.overlayFilter());
     return ['-hide_banner', '-nostdin', '-loglevel', 'warning', '-progress', 'pipe:1', '-nostats',
       '-rw_timeout', '8000000', '-fflags', '+genpts+discardcorrupt', '-i', this.engine.config.source.endpoint,
       '-vf', filter, '-map', '0:v:0', '-map', '0:a?', ...this.engine.encoderArgs(),

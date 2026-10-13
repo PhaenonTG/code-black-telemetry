@@ -36,6 +36,24 @@ test('uploader sends completed segments before the manifest and never repeats an
   assert.equal(requests[0].init.headers['Content-Type'], 'video/mp2t');
   assert.equal(uploader.status().state, 'CURRENT');
 });
+
+test('native uploader stamps the actual composition and refuses mismatched generations', async () => {
+  const requests = [];
+  const { uploader, status } = fixture(async (route, init) => { requests.push({ route, init }); return new Response(null, { status: 202 }); });
+  const id = 'b'.repeat(24);
+  status.composition = { id };
+  status.previews.program.compositionId = 'c'.repeat(24);
+  await uploader.cycle(); assert.equal(requests.length, 0);
+  status.previews.program.compositionId = id;
+  status.previews.program.generation = 'c'.repeat(32);
+  await uploader.cycle(); assert.equal(requests.length, 0);
+  status.previews.program.generation = 'a'.repeat(32);
+  await uploader.cycle();
+  assert.equal(requests.at(-1).init.headers['X-Producer-Composition'], id);
+  assert.equal(uploader.status().compositionId, id);
+  status.composition.id = 'd'.repeat(24);
+  await uploader.cycle(); assert.equal(uploader.status().state, 'WAITING_FOR_COMPOSITION');
+});
 test('source loss, old video evidence and old manifests never upload cached media', async () => {
   let calls = 0; const { uploader, status, dir } = fixture(async () => { calls++; });
   status.source_state = 'SOURCE_LOST'; await uploader.cycle(); assert.equal(calls, 0);

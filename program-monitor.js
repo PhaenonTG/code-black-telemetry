@@ -14,13 +14,14 @@ class ProgramMediaUploader {
     this.directory = path.join(root, 'runtime', 'previews', 'program');
     this.getStatus = status; this.request = request; this.running = false;
     this.uploaded = new Set(); this.manifestMtime = 0;
-    this.state = 'WAITING_FOR_SOURCE'; this.lastError = null; this.lastSuccessAt = null;
+    this.state = 'WAITING_FOR_SOURCE'; this.lastError = null; this.lastSuccessAt = null; this.compositionId = null;
   }
   async cycle() {
     if (this.running) return;
     this.running = true;
     try {
       const status = this.getStatus();
+      if (status.composition?.id && status.previews?.program?.compositionId !== status.composition.id) { this.state = 'WAITING_FOR_COMPOSITION'; return; }
       const age = Date.now() - Date.parse(status.metrics?.last_video_timestamp);
       if (status.source_state !== 'SOURCE_LIVE' || status.previews?.program?.state !== 'ACTIVE' || !Number.isFinite(age) || age < -2000 || age > 5000) { this.state = 'WAITING_FOR_SOURCE'; return; }
       const file = path.join(this.directory, 'index.m3u8');
@@ -30,6 +31,8 @@ class ProgramMediaUploader {
       if (info.mtimeMs === this.manifestMtime) return;
       const text = fs.readFileSync(file, 'utf8'); const names = programSegments(text);
       if (!names) { this.state = 'WAITING_FOR_MEDIA'; return; }
+      const preview = status.previews.program;
+      if (preview.generation && names.some(name => !name.startsWith(`program-${preview.generation}-`))) { this.state = 'WAITING_FOR_MEDIA'; return; }
       await Promise.all(names.filter(name => !this.uploaded.has(name)).map(async name => {
         const segment = path.join(this.directory, name); const stat = fs.statSync(segment);
         if (stat.size <= 0 || stat.size > 512 * 1024 || Date.now() - stat.mtimeMs > 15000) throw new Error('PROGRAM media is outside the bounded live window.');
@@ -37,12 +40,13 @@ class ProgramMediaUploader {
         await this.request(`/workstation/preview/hls/${name}`, { method: 'POST', headers: { 'Content-Type': 'video/mp2t', 'Content-Length': String(bytes.length), 'X-Producer-Frame-At': stat.mtime.toISOString() }, body: bytes, signal: AbortSignal.timeout(2500) });
         this.uploaded.add(name);
       }));
-      await this.request('/workstation/preview/hls/index.m3u8', { method: 'POST', headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'X-Producer-Frame-At': info.mtime.toISOString() }, body: text, signal: AbortSignal.timeout(2500) });
+      await this.request('/workstation/preview/hls/index.m3u8', { method: 'POST', headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'X-Producer-Frame-At': info.mtime.toISOString(), ...(preview.compositionId ? { 'X-Producer-Composition': preview.compositionId } : {}) }, body: text, signal: AbortSignal.timeout(2500) });
       this.uploaded = new Set(names); this.manifestMtime = info.mtimeMs;
       this.state = 'CURRENT'; this.lastError = null; this.lastSuccessAt = new Date().toISOString();
+      this.compositionId = preview.compositionId || null;
     } catch { this.state = 'UNAVAILABLE'; this.lastError = 'PROGRAM monitor upload failed; command bridge remains independent.'; }
     finally { this.running = false; }
   }
-  status() { return { state: this.state, lastSuccessAt: this.lastSuccessAt, lastError: this.lastError }; }
+  status() { return { state: this.state, lastSuccessAt: this.lastSuccessAt, lastError: this.lastError, compositionId: this.compositionId }; }
 }
 module.exports = { ProgramMediaUploader, programSegments };

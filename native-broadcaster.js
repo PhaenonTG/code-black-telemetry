@@ -85,6 +85,7 @@ class Broadcaster {
     this.lastProgress = {};
     this.lastSourceFrame = 0;
     this.lastError = null;
+    this.inputVideo = null;
     this.activeRecording = null;
     this.transition(STATES.STARTING, 'initializing native broadcaster');
     this.transition(STATES.STANDBY, 'ready; recording output is off');
@@ -131,7 +132,7 @@ class Broadcaster {
   sourceArgs(output = null) {
     const endpoint = this.config.source.endpoint;
     return [
-      '-hide_banner', '-nostdin', '-loglevel', 'warning', '-progress', 'pipe:1', '-nostats',
+      '-hide_banner', '-nostdin', '-loglevel', 'info', '-progress', 'pipe:1', '-nostats',
       '-fflags', '+genpts+discardcorrupt', '-rw_timeout', '5000000', '-thread_queue_size', '1024', '-i', endpoint,
       '-filter_complex', this.programFilter(),
       // The first output proves the separate CLEAN branch without adding a second hardware encoder session.
@@ -179,6 +180,8 @@ class Broadcaster {
       return;
     }
     let stderrBuffer = '';
+    let readingInput = true;
+    if (kind === 'source') this.inputVideo = null;
     this.process.stdout.setEncoding('utf8');
     this.process.stdout.on('data', (chunk) => this.consumeProgress(chunk));
     this.process.stderr.setEncoding('utf8');
@@ -187,6 +190,9 @@ class Broadcaster {
       const lines = stderrBuffer.split(/\r?\n/);
       stderrBuffer = lines.pop();
       for (const line of lines) {
+        if (/^Output #/.test(line)) readingInput = false;
+        const input = kind === 'source' && readingInput && /Stream #0:\d+.*Video:.*?\b([1-9]\d{1,4})x([1-9]\d{1,4})\b.*?(?:(\d+(?:\.\d+)?) fps)?/.exec(line);
+        if (input && !this.inputVideo) this.inputVideo = { width: Number(input[1]), height: Number(input[2]), fps: Number(/([\d.]+) fps/.exec(line)?.[1]) || null, basis: 'ffmpeg_input_report', observedAt: iso() };
         if (/error|failed|nvenc|invalid|could not/i.test(line)) this.logger.write('ffmpeg_diagnostic', { kind, message: line });
       }
     });
@@ -333,7 +339,7 @@ function startApi(engine) {
       if (request.method === 'GET' && route === '/capabilities') return respond(response, 200, engine.producerCommands.capabilities());
       if (request.method === 'GET' && route === '/') { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return response.end(producerHtml()); }
       if (request.method === 'GET' && route === '/events') { response.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' }); response.write(': connected\n\n'); engine.events.add(response); request.on('close', () => engine.events.delete(response)); return; }
-      const preview = /^\/preview\/(clean|program)\/(index\.m3u8|latest\.jpg|(?:index)?\d+\.ts)$/.exec(route);
+      const preview = /^\/preview\/(clean|program)\/(index\.m3u8|latest\.jpg|(?:index)?\d+\.ts|(?:clean|program)-[0-9a-f]{32}-\d{1,16}\.ts)$/.exec(route);
       if (request.method === 'GET' && preview) { const file = path.join(ROOT, 'runtime', 'previews', preview[1], preview[2]); if (!fs.existsSync(file)) return respond(response, 404, { error: 'preview not available' }); response.writeHead(200, { 'content-type': preview[2].endsWith('.jpg') ? 'image/jpeg' : preview[2].endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t', 'cache-control': 'no-store' }); return fs.createReadStream(file).pipe(response); }
       const body = await parseBody(request);
       let result;
