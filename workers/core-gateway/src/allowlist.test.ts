@@ -12,6 +12,10 @@ describe("resolveRoute", () => {
     expect(resolveRoute("/api/storm-intel/v1/point")).toEqual(ALLOWLIST["/api/storm-intel/v1/point"]);
     expect(resolveRoute("/api/forecast/v1/chase-setups")).toEqual(ALLOWLIST["/api/forecast/v1/chase-setups"]);
     expect(resolveRoute("/api/forecast/v1/chase-setup")).toEqual(ALLOWLIST["/api/forecast/v1/chase-setup"]);
+    expect(resolveRoute("/api/forecast/v1/chase-setup-policy")).toEqual({
+      upstreamPath: "/api/forecast/v1/chase-setup-policy", allowedQueryParams: [],
+      methods: ["POST"], opsWrite: "decision",
+    });
   });
 
   it("rejects any non-allowlisted path -- no open proxy", () => {

@@ -60,6 +60,7 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id", "revision"] },
   "api/forecast/v1/chase-setup-review": { upstreamPath: "/api/forecast/v1/chase-setup-review", allowedQueryParams: [], methods: ["POST"], opsWrite: "review" },
   "api/forecast/v1/chase-setup-decision": { upstreamPath: "/api/forecast/v1/chase-setup-decision", allowedQueryParams: [], methods: ["POST"], opsWrite: "decision" },
+  "api/forecast/v1/chase-setup-policy": { upstreamPath: "/api/forecast/v1/chase-setup-policy", allowedQueryParams: [], methods: ["POST"], opsWrite: "decision" },
   "api/forecast/v1/chase-setup-paid-review": { upstreamPath: "/api/forecast/v1/chase-setup-paid-review", allowedQueryParams: [], methods: ["POST"], opsWrite: "decision" },
   "health": { upstreamPath: "/health", allowedQueryParams: [] },
   "api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },

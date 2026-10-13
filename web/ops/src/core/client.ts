@@ -258,7 +258,7 @@ export function setupWorkflowErrorMessage(status: number, body: unknown): string
     : "The action could not be confirmed. Refresh its status before trying again.";
 }
 
-export async function postSetupWorkflow<T>(config: OpsCoreConfig, path: "chase-setup-review" | "chase-setup-decision" | "chase-setup-paid-review", body: unknown): Promise<T> {
+export async function postSetupWorkflow<T>(config: OpsCoreConfig, path: "chase-setup-review" | "chase-setup-decision" | "chase-setup-policy" | "chase-setup-paid-review", body: unknown): Promise<T> {
   if (!coreConfigured(config)) throw new OpsCoreClientError("Live Core is not configured");
   return withTimeout(async (signal) => {
     const token = await currentAccessToken();

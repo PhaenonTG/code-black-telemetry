@@ -33,6 +33,10 @@ describe("route allowlist", () => {
     expect(resolveAllowlistRoute("api/forecast/v1/chase-setup")).toEqual({
       upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id", "revision"],
     });
+    expect(resolveAllowlistRoute("api/forecast/v1/chase-setup-policy")).toEqual({
+      upstreamPath: "/api/forecast/v1/chase-setup-policy", allowedQueryParams: [],
+      methods: ["POST"], opsWrite: "decision",
+    });
   });
 
   it("rejects any non-allowlisted path -- no passthrough", () => {

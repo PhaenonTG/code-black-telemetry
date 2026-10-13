@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { fetchForecast, postSetupWorkflow } from "../core/client";
 import type { OpsCoreConfig } from "../core/config";
-import { approvalDisabledReason, reviewStatus, type SetupWorkflow } from "./setupReviewModel";
+import { SetupWeightTuner } from "./SetupWeightTuner";
+import { approvalDisabledReason, reviewStatus, type SetupWeightPolicy, type SetupWorkflow } from "./setupReviewModel";
 
 export function SetupReviewDesk({ config, setupId, revision, fingerprint, current, initial, onWorkflowChange }: {
   config: OpsCoreConfig; setupId: string; revision: number; fingerprint?: string; current: boolean; initial?: SetupWorkflow;
@@ -64,6 +65,20 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
     } catch (err) { setError(err instanceof Error ? err.message : "Paid review could not be confirmed."); }
     finally { setBusy(false); }
   }
+  async function saveWeights(policy: SetupWeightPolicy) {
+    if (busy || !decisionRole || !fingerprint || !current) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const result = await postSetupWorkflow<SetupWorkflow>(config, "chase-setup-policy", {
+        setup_id: setupId, revision, source_fingerprint: fingerprint, policy,
+      });
+      setWorkflow(result);
+      onWorkflowChange?.(result);
+      setMessage("Weights saved for this revision. Run fresh advisory reviews before approval.");
+      setNote(""); setAcknowledged(false);
+    } catch (err) { setError(err instanceof Error ? err.message : "Weight policy could not be saved."); }
+    finally { setBusy(false); }
+  }
 
   return <section className="setup-review-desk" aria-label="Revision advisory reviews and decision">
     <ol className="setup-review-desk__steps" aria-label="Reviewed briefing posting steps">
@@ -71,6 +86,8 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
       <li data-complete={Boolean(note.trim() && acknowledged)}>Add note and acknowledge limits</li>
       <li data-complete={workflow?.decision?.decision === "approved"}>Post to Reviewed Briefings</li>
     </ol>
+    <SetupWeightTuner key={workflow?.weight_policy?.policy_digest ?? "missing"} binding={workflow?.weight_policy}
+      current={current} authorized={decisionRole} busy={busy} onSave={saveWeights} />
     <div className="chase-setups__section-head"><h3>Advisory reviews <small>REVISION {revision}</small></h3>
       <span>{reviewStatus(workflow?.status)}</span></div>
     <p>Independent interpretations of this revision’s SPC outlook and HRRR screening. Neither reviewer confirms storms or changes the evidence.</p>
@@ -101,7 +118,8 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
       <p>Not supplied: thermodynamic or wind profiles, surface observations, RAP, mesoscale discussions, watches, warnings, observed radar. The screening index cannot establish storm mode or specific hazards. The independent full review below remains private.</p></div>
     <div className="setup-review-desk__decision"><h3>Post to Reviewed Briefings</h3>
       {workflow?.decision ? <div className="setup-review-desk__saved"><strong>{workflow.decision.decision === "approved" ? "Approved for this revision" : "Changes requested"}</strong>
-        <p>{workflow.decision.note}</p><small>{workflow.decision.actor_role} · {new Date(workflow.decision.decided_at).toLocaleString()}</small></div> : <p>No operator decision saved for revision {revision}.</p>}
+        <p>{workflow.decision.note}</p><small>{workflow.decision.actor_role} · {new Date(workflow.decision.decided_at).toLocaleString()}</small>
+        {workflow.decision.decision === "approved" && <p>Automation armed: this revision is in Reviewed Briefings and is eligible for the hourly private review while its evidence and weight policy remain current.</p>}</div> : <p>No operator decision saved for revision {revision}.</p>}
       {workflow?.decision_history && workflow.decision_history.length > 1 && <details><summary>Decision history ({workflow.decision_history.length} recent)</summary><ol>{workflow.decision_history.map(event => <li key={event.id}><strong>{event.decision.replaceAll("_", " ")}</strong> · {new Date(event.decided_at).toLocaleString()}<p>{event.note}</p></li>)}</ol></details>}
       {!current ? <p>Historical revisions are read only. Return to the current revision to review or decide.</p>
         : !decisionRole ? <p>OWNER or ADMIN access is required to save an operator decision.</p> : <>

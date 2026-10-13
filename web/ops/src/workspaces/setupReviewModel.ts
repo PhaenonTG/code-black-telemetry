@@ -10,12 +10,33 @@ export type PaidSetupReview = {
   confidence?: "low" | "moderate" | "high"; summary?: string; supporting_factors?: string[];
   uncertainties?: string[]; next_hour_triggers?: string[];
 };
+export type EvidenceWeightSource = "spc_tornado_outlook" | "hrrr_screening" | "rap" | "nbm" | "gefs" |
+  "aigefs" | "surface_observations" | "environment_profiles" | "mesoscale_discussions" |
+  "watches" | "warnings" | "observed_radar";
+export type ReviewWeightSource = "aegis" | "local_30b" | "paid_review";
+export type SetupWeightPolicy = {
+  schema: "codeblack.chase.weight-policy.v1"; policy_id: string; mode: "advisory_only";
+  evidence_weights: Record<EvidenceWeightSource, number>;
+  review_weights: Record<ReviewWeightSource, number>;
+  rules: { renormalize_available_sources: true; official_sources_remain_authoritative: true;
+    weights_do_not_modify_raw_values: true; approval_gates_cannot_be_weighted: true };
+};
+export type SetupWeightBinding = {
+  schema: "codeblack.chase.weight-policy-binding.v1"; setup_id: string; revision: number;
+  source_fingerprint: string; policy: SetupWeightPolicy; policy_digest: string;
+};
+export type SetupWeightPolicyEvent = {
+  id: string; changed_at: string; actor_role: string; revision: number;
+  prior_policy_digest: string; policy_digest: string;
+};
 export type SetupWorkflow = {
   status: string; reviewers: Record<string, AdvisoryReview>; packet_digest?: string;
   started_at?: string; completed_at?: string; missing_evidence?: string[];
   approval_blockers?: string[]; decision?: SetupDecision | null; decision_history?: SetupDecision[];
   comparison?: { status: string; differences: string[] };
   paid_review?: PaidSetupReview;
+  weight_policy?: SetupWeightBinding;
+  weight_policy_history?: SetupWeightPolicyEvent[];
 };
 export function reviewStatus(status?: string): string {
   return ({ ready: "Ready", pending: "Reviewing", not_requested: "Not requested", unavailable: "Unavailable",
