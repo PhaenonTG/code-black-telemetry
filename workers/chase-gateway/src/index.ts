@@ -648,7 +648,7 @@ async function handleProducerRoute(request: Request, url: URL, env: Env): Promis
       broker: (path, init) => facebookBroker(env, path, init),
       encrypt: (value) => encryptFacebookToken(value, env.FACEBOOK_TOKEN_KEK!),
       decrypt: (value) => decryptFacebookToken(value as StoredFacebookCredential, env.FACEBOOK_TOKEN_KEK!),
-      fetch,
+      fetch: (input, init) => fetch(input, init),
       enabled: env.FACEBOOK_LIFECYCLE_ENABLED === "true",
     });
   }

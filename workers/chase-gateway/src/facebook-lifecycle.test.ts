@@ -27,7 +27,7 @@ describe("Facebook managed broadcast lifecycle", () => {
     const { deps, fetcher } = fixture();
     fetcher.mockResolvedValue(new Response(JSON.stringify({ error: { code: 4, message: "private-page-token" } }), { status: 403 }));
     const response = await handleFacebookLifecycle(new Request("https://ops/api/producer/v1/workstation/facebook-health"), undefined, false, true, deps);
-    expect(await response.json()).toEqual({ state: "rate_limited", code: 4, publishingPermissionVerified: true });
+    expect(await response.json()).toMatchObject({ state: "rate_limited", code: 4, httpStatus: 403, publishingPermissionVerified: true });
   });
   it("pins secure destinations and refuses injected servers or query credentials", () => {
     expect(validManagedDestination(target)).toBe(true);
