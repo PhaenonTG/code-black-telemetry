@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
+import { SetupTargetMap, type SetupCandidatePoint } from "../workspaces/SetupTargetMap";
 import "./ChaseSetups.css";
 
 type SetupRow = {
@@ -13,9 +14,10 @@ type SetupIndex = { status: string; checked_at?: string; last_source_check_at?: 
 type SetupDetail = {
   setup_id: string; publication_state: string; revision: number; generated_at: string;
   first_seen_at?: string; valid_from: string; valid_until: string; summary?: string;
+  bounds?: number[];
   identity_review_required?: boolean; detected_after_baseline?: boolean;
-  official: { provider?: string; day?: number; risk_label?: string; risk_code?: number; issued_at?: string; source_url?: string };
-  model: { status?: string; target_points?: Array<{ run_time?: string; valid_time?: string; score_index?: number }>; notice?: string };
+  official: { provider?: string; day?: number; risk_label?: string; risk_code?: number; issued_at?: string; source_url?: string; geometry?: unknown };
+  model: { status?: string; target_points?: Array<SetupCandidatePoint & { run_time?: string }>; notice?: string };
   source_checks?: { hrrr?: { status?: string; hours_checked?: number; hours_missing?: number } };
   review?: { required?: boolean; decision?: string | null; reason?: string };
 };
@@ -27,7 +29,7 @@ const when = (value?: string) => {
 };
 const setupId = /^setup-\d{8}-[0-9a-f]{10}$/;
 
-export default function ChaseSetups() {
+export default function ChaseSetups({ detailBasePath = "/chase-setups" }: { detailBasePath?: string }) {
   const { config } = useCoreOps();
   const { setupId: selectedId } = useParams();
   const navigate = useNavigate();
@@ -75,7 +77,7 @@ export default function ChaseSetups() {
   const currentSource = index?.status === "ready";
   const points = detail?.model.target_points ?? [];
   return (
-    <main className="chase-setups page">
+    <div className="chase-setups page">
       <header className="chase-setups__header">
         <div><h1>Chase setup drafts</h1><p>Potential setups for operator review. No draft is public.</p></div>
         <div className="chase-setups__header-actions">
@@ -94,7 +96,7 @@ export default function ChaseSetups() {
             <p>{index?.status === "ready" ? "New qualifying setups will appear after a complete source check." : "A complete source check has not produced a current draft."}</p>
           </div> : <ul>{rows.map((row) => <li key={row.setup_id}>
             <button type="button" className={selectedId === row.setup_id ? "selected" : ""}
-              onClick={() => navigate(`/chase-setups/${row.setup_id}`)}>
+              onClick={() => navigate(`${detailBasePath}/${row.setup_id}`)}>
               <strong>SPC Day {row.day} · {row.risk_label}</strong>
               <span>{when(row.valid_from)}–{when(row.valid_until)}</span>
               <small>{row.model_status === "available" ? "HRRR screening available" : "HRRR screening unavailable"} · Revision {row.revision}</small>
@@ -133,6 +135,7 @@ export default function ChaseSetups() {
            </>}
         </article>
         <aside className="chase-setups__activity" aria-label="Draft activity">
+          {detail && <section className="setup-target-area" aria-label="Setup screening area"><h2>Target area</h2><SetupTargetMap geometry={detail.official.geometry} bounds={detail.bounds} points={points} /><p>SPC area: official outlook. Gold dots: experimental HRRR screening candidates, not precise chase targets.</p></section>}
           <h2>Activity</h2>
           <dl><div><dt>Last source check</dt><dd>{when(index?.last_source_check_at ?? index?.checked_at)}</dd></div>
             <div><dt>Draft generated</dt><dd>{when(detail?.generated_at)}</dd></div>
@@ -140,6 +143,6 @@ export default function ChaseSetups() {
           <p>Official guidance remains the authority. This desk does not issue warnings.</p>
         </aside>
       </div>
-    </main>
+    </div>
   );
 }

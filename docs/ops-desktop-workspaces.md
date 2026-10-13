@@ -12,11 +12,13 @@ The three desktop workspaces are **additions to the current sidebar**, not a rep
 
 ## Chase
 
-- The workspace keeps the existing Mapbox operations map and map controls, with field-unit/Fabric context. Dedicated adjacent single-site radar, route tools, and optimized chase-specific controls are follow-on integration work; the Radar Lab and Fleet destinations remain accessible now.
+- The workspace keeps the existing Mapbox operations map and map controls, with a selectable Fabric field unit and adjacent single-site radar. Radar uses the existing worker, nearest-site fallback, REF/VEL/CC controls, and honest scan age/freshness. SRV is available only when storm motion is present. The Radar Lab and Fleet destinations remain accessible.
+- Route tools and more focused chase threat/road/official-warning rails remain integration work. A unit without a reported location is labeled as such; the map must not invent a vehicle position.
 
 ## Analysis
 
-- Setup and Surveillance modes preserve the existing Chase Setup Drafts and Aegis Radar Alerts functionality, with a saved local mode choice. An integrated target map, timeline, surveillance plot, and operator review/publish flow are follow-on integration work.
+- Setup and Surveillance modes preserve the existing Chase Setup Drafts and Aegis Radar Alerts functionality, with a saved local mode choice. Selecting a draft remains inside the Analysis workspace. Setup detail now maps the official SPC geometry and actual HRRR screening candidate coordinates supplied by Core, explicitly separating those sources.
+- A richer target table/change timeline, surveillance plot, and operator review/publish flow remain integration work. Setup approval stays disabled until evidence and exact-revision authorization are verified.
 
 ## Delivery boundary
 
