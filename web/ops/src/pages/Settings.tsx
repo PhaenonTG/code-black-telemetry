@@ -6,6 +6,7 @@ import { Icon } from "../components/Icon"
 import { useAuth } from "../auth/AuthProvider"
 import { Link } from "react-router-dom"
 import { loadWeatherAlertRuntimeStatus, loadWeatherAlertSettings, saveWeatherAlertSettings, type WeatherAlertRuntimeStatus, type WeatherAlertSettings } from "../weatherAlertSettings"
+import { useCoreOps } from "../core/useCoreOps"
 
 const THEME_OPTIONS: AppThemeMode[] = ["dark", "night", "system", "light"]
 
@@ -44,6 +45,7 @@ const LAYER_GROUPS = [
 // Road Conditions, Cameras, Notifications, etc. are documented as follow-up work, not faked here.
 export default function Settings() {
   const auth = useAuth()
+  const { config } = useCoreOps()
   const [theme, setTheme] = useState<AppThemeMode>("dark")
   const [layers, setLayers] = useState<MapLayerVisibility | null>(null)
   const [alertSettings, setAlertSettings] = useState<WeatherAlertSettings | null>(null)
@@ -57,14 +59,14 @@ export default function Settings() {
     return unsub
   }, [])
   useEffect(() => {
-    void loadWeatherAlertSettings().then(setAlertSettings).catch(() => setAlertError("Weather alert controls are unavailable."))
-    void loadWeatherAlertRuntimeStatus().then(setAlertRuntime).catch(() => undefined)
-  }, [])
+    void loadWeatherAlertSettings(config).then(setAlertSettings).catch(() => setAlertError("Weather alert controls are unavailable."))
+    void loadWeatherAlertRuntimeStatus(config).then(setAlertRuntime).catch(() => undefined)
+  }, [config])
 
   const saveAlerts = async () => {
     if (!alertSettings) return
     setAlertSaving(true); setAlertError(null)
-    try { setAlertSettings(await saveWeatherAlertSettings(alertSettings)) }
+    try { setAlertSettings(await saveWeatherAlertSettings(config, alertSettings)) }
     catch { setAlertError("Could not save weather alert controls. No change was confirmed.") }
     finally { setAlertSaving(false) }
   }

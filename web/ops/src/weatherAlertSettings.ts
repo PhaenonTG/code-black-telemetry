@@ -1,4 +1,5 @@
 import { buildCoreRequestHeaders, currentAccessToken, OpsCoreClientError } from "./core/client"
+import { coreConfigured, type OpsCoreConfig } from "./core/config"
 
 export type WeatherAlertSettings = {
   schema: string
@@ -17,11 +18,13 @@ export type WeatherAlertRuntimeStatus = {
   latency: { sample_count: number; p50_issue_to_discord_ms: number | null; p95_issue_to_discord_ms: number | null; latest_issue_to_discord_ms: number | null }
 }
 
-const PATH = "/api/core/api/weather-alert/v1/settings"
+const SETTINGS_PATH = "/api/weather-alert/v1/settings"
+const STATUS_PATH = "/api/weather-alert/v1/status"
 
-async function request(method: "GET" | "PUT", body?: WeatherAlertSettings): Promise<WeatherAlertSettings> {
+async function request(config: OpsCoreConfig, method: "GET" | "PUT", body?: WeatherAlertSettings): Promise<WeatherAlertSettings> {
+  if (!coreConfigured(config)) throw new OpsCoreClientError("Core gateway is unavailable")
   const token = await currentAccessToken()
-  const response = await fetch(PATH, {
+  const response = await fetch(`${config.coreBaseUrl}${SETTINGS_PATH}`, {
     method,
     headers: { ...buildCoreRequestHeaders(token), ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
@@ -30,12 +33,13 @@ async function request(method: "GET" | "PUT", body?: WeatherAlertSettings): Prom
   return response.json() as Promise<WeatherAlertSettings>
 }
 
-export const loadWeatherAlertSettings = () => request("GET")
-export const saveWeatherAlertSettings = (settings: WeatherAlertSettings) => request("PUT", settings)
+export const loadWeatherAlertSettings = (config: OpsCoreConfig) => request(config, "GET")
+export const saveWeatherAlertSettings = (config: OpsCoreConfig, settings: WeatherAlertSettings) => request(config, "PUT", settings)
 
-export async function loadWeatherAlertRuntimeStatus(): Promise<WeatherAlertRuntimeStatus> {
+export async function loadWeatherAlertRuntimeStatus(config: OpsCoreConfig): Promise<WeatherAlertRuntimeStatus> {
+  if (!coreConfigured(config)) throw new OpsCoreClientError("Core gateway is unavailable")
   const token = await currentAccessToken()
-  const response = await fetch("/api/core/api/weather-alert/v1/status", { headers: buildCoreRequestHeaders(token) })
+  const response = await fetch(`${config.coreBaseUrl}${STATUS_PATH}`, { headers: buildCoreRequestHeaders(token) })
   if (!response.ok) throw new OpsCoreClientError(`HTTP ${response.status}`)
   return response.json() as Promise<WeatherAlertRuntimeStatus>
 }
