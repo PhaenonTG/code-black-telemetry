@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { useCoreOps } from "../core/useCoreOps"
-import { fetchForecast } from "../core/client"
+import { currentAccessToken, fetchForecast } from "../core/client"
 import { fetchStatusCenter, type StatusCenterDocument } from "../status/statusCenterClient"
 import { chooseProducerSource, parseProducerSources } from "../workspaces/producerSources"
 import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
@@ -10,6 +10,8 @@ import "./Workspaces.css"
 const SELECTION_KEY = "codeblack.ops.producer.source.v1"
 type OfficialAlert = { id?: string; event?: string; headline?: string; severity?: string; expires?: string }
 type OfficialAlertResponse = { status: string; alerts: OfficialAlert[]; queried_at?: string }
+type ProducerComment = { id?: string; author?: string; message?: string; createdAt?: string }
+type CommentsResponse = { state?: string; cursor?: number; pollAfterMs?: number; comments?: ProducerComment[]; page?: { label?: string; live?: boolean } }
 
 function readSelection(): string {
   try { return localStorage.getItem(SELECTION_KEY) ?? "" } catch { return "" }
@@ -39,6 +41,9 @@ export default function ProducerWorkspace() {
   const [manualSourceId, setManualSourceId] = useState(readSelection)
   const [alertSnapshot, setAlertSnapshot] = useState<{ key: string; value: OfficialAlertResponse } | null>(null)
   const [alertError, setAlertError] = useState("")
+  const [comments, setComments] = useState<ProducerComment[]>([])
+  const [commentState, setCommentState] = useState("Connecting")
+  const [commentCursor, setCommentCursor] = useState(0)
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -78,6 +83,18 @@ export default function ProducerWorkspace() {
     return () => { cancelled = true; window.clearTimeout(initial); window.clearInterval(timer) }
   }, [config, alertLatitude, alertLongitude])
 
+  useEffect(() => {
+    let cancelled = false; let timer = 0
+    const poll = async () => {
+      try {
+        const token = await currentAccessToken(); const response = await fetch(`/api/chase/v1/comments?after=${commentCursor}`, { cache: "no-store", headers: token ? { Authorization: `Bearer ${token}` } : {} })
+        if (!response.ok) throw new Error(); const next = await response.json() as CommentsResponse
+        if (cancelled) return; setComments((prior) => [...prior, ...(next.comments ?? [])].slice(-100)); setCommentCursor(Number(next.cursor) || commentCursor); setCommentState(next.state ?? "Connected")
+        timer = window.setTimeout(() => void poll(), Math.max(2_000, Math.min(30_000, Number(next.pollAfterMs) || 5_000)))
+      } catch { if (!cancelled) { setCommentState("Unavailable"); timer = window.setTimeout(() => void poll(), 10_000) } }
+    }; void poll(); return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [commentCursor])
+
   const sources = useMemo(() => parseProducerSources(status?.streaming), [status?.streaming])
   const alerts = alertSnapshot?.key === alertKey ? alertSnapshot.value : null
   const selected = chooseProducerSource(sources, manualSourceId)
@@ -114,6 +131,8 @@ export default function ProducerWorkspace() {
         <section className="workspace-panel"><header><h2>Official alerts</h2><Link to="/weather">Weather ↗</Link></header>{alertError && <p className="workspace-warning">{alertError}</p>}{!selectedPoint ? <p>Select a map point to check official alerts for that area.</p> : alerts?.alerts.length ? <div className="workspace-list">{alerts.alerts.slice(0, 4).map((alert, index) => <div key={alert.id ?? index}><strong>{alert.event || alert.headline || "Official alert"}</strong><span>{alert.severity || "NWS"}{alert.expires ? ` · ${expiry(alert.expires, now)}` : ""}</span></div>)}</div> : <p>{alerts ? "No active alerts returned for the selected point." : "Checking NWS alerts…"}</p>}</section>
         <section className="workspace-panel"><header><h2>Aegis · internal</h2><Link to="/aegis-alerts">Review ↗</Link></header><p>Radar findings are advisory and separate from official warnings. Team-wide delivery remains behind the review policy.</p></section>
         <section className="workspace-panel"><header><h2>Broadcast health</h2><Link to="/stream">Streams ↗</Link></header><p>{statusError || (status?.streaming as { summary?: string } | undefined)?.summary || "Checking stream infrastructure…"}</p></section>
+        <section className="workspace-panel"><header><h2>Facebook comments</h2><span>{commentState}</span></header><div className="workspace-list">{comments.length ? comments.slice().reverse().slice(0, 12).map((comment, index) => <div key={comment.id ?? index}><strong>{comment.author ?? "Viewer"}</strong><span>{comment.message ?? ""}</span></div>) : <p>No comments received yet.</p>}</div><p className="workspace-note">Read-only viewer. OPS cannot post as the Page.</p></section>
+        <section className="workspace-panel"><header><h2>PROGRAM / controls</h2><span className="workspace-muted">BRIDGE OFFLINE</span></header><p>Video, broadcaster status, and remote controls stay offline until the authenticated outbound bridge is ready.</p></section>
       </aside>
     </div>
   </main>
