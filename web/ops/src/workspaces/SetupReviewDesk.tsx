@@ -93,6 +93,16 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
         </>}
       <p className="setup-review-desk__boundary">Approval records a private operator decision. Public delivery is not connected. A changed revision requires fresh reviews and a new decision.</p>
     </div>
+    <div className="setup-review-desk__decision" aria-label="Hourly paid second opinion">
+      <h3>Hourly independent review</h3>
+      {workflow?.paid_review?.status === "ready" ? <div className="setup-review-desk__saved">
+        <strong>{workflow.paid_review.verdict === "ready" ? "Evidence-bounded second opinion" : "Second opinion withheld"}</strong>
+        <p>{workflow.paid_review.summary}</p>
+        <small>{workflow.paid_review.model} · {workflow.paid_review.confidence ?? "confidence unavailable"} · {workflow.paid_review.reviewed_at ? new Date(workflow.paid_review.reviewed_at).toLocaleString() : "time unavailable"}</small>
+        {workflow.paid_review.uncertainties && workflow.paid_review.uncertainties.length > 0 && <details><summary>Uncertainties ({workflow.paid_review.uncertainties.length})</summary><ul>{workflow.paid_review.uncertainties.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
+        {workflow.paid_review.next_hour_triggers && workflow.paid_review.next_hour_triggers.length > 0 && <details><summary>Check next hour ({workflow.paid_review.next_hour_triggers.length})</summary><ul>{workflow.paid_review.next_hour_triggers.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
+      </div> : <p>Available hourly only after an OWNER or ADMIN approves this exact current revision. It stays private and does not publish a briefing.</p>}
+    </div>
     {error && <p className="chase-setups__error" role="alert">{error}</p>}
     {message && <p className="setup-review-desk__success" role="status">{message}</p>}
   </section>;

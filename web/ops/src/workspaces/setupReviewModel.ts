@@ -5,11 +5,17 @@ export type AdvisoryReview = {
   storm_mode?: string; initiation?: string;
 };
 export type SetupDecision = { id: string; decision: string; note: string; actor_role: string; decided_at: string; revision: number };
+export type PaidSetupReview = {
+  status: string; reviewed_at?: string; model?: string; verdict?: "ready" | "withhold";
+  confidence?: "low" | "moderate" | "high"; summary?: string; supporting_factors?: string[];
+  uncertainties?: string[]; next_hour_triggers?: string[];
+};
 export type SetupWorkflow = {
   status: string; reviewers: Record<string, AdvisoryReview>; packet_digest?: string;
   started_at?: string; completed_at?: string; missing_evidence?: string[];
   approval_blockers?: string[]; decision?: SetupDecision | null; decision_history?: SetupDecision[];
   comparison?: { status: string; differences: string[] };
+  paid_review?: PaidSetupReview;
 };
 export function reviewStatus(status?: string): string {
   return ({ ready: "Ready", pending: "Reviewing", not_requested: "Not requested", unavailable: "Unavailable",
