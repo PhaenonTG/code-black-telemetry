@@ -30,6 +30,7 @@ const FACEBOOK_CONNECT_SESSION_PATH = "/api/chase/v1/facebook/connect-session";
 const FACEBOOK_CONNECT_PATH = "/api/chase/v1/facebook/connect";
 const FACEBOOK_CALLBACK_PATH = "/api/chase/v1/facebook/callback";
 const FACEBOOK_CONNECTION_STATUS_PATH = "/api/chase/v1/facebook/status";
+const FACEBOOK_REPLY_PATH = "/api/chase/v1/facebook/reply";
 const FACEBOOK_REDIRECT_URI = "https://ops.codeblackwx.com/api/chase/v1/facebook/callback";
 const FACEBOOK_GRAPH_ORIGIN = "https://graph.facebook.com/v26.0";
 const COMMENT_POLL_AFTER_MS = 2_000;
@@ -71,6 +72,7 @@ export interface Env {
   FACEBOOK_APP_SECRET?: string;
   FACEBOOK_TOKEN_KEK?: string;
   FACEBOOK_CONNECTOR_USER_IDS?: string;
+  FACEBOOK_REPLIES_ENABLED?: string;
   // Static release manifest and APK. Absent until a Chase release is published.
   ASSETS?: AssetBinding;
   PRODUCER_BRIDGE?: DurableObjectNamespace;
@@ -163,6 +165,7 @@ type StoredFacebookCredential = {
   iv: string;
   connectedAt: string;
   connectedBy: string;
+  permissions?: string[];
 };
 
 function base64Url(bytes: Uint8Array): string {
@@ -290,6 +293,11 @@ async function forwardFacebookComments(url: URL, env: Env): Promise<Response> {
   if (!commentsResponse.ok) return graphFailureResponse(commentsResponse, cursor);
   try {
     const normalized = normalizeGraphComments(await commentsResponse.json(), cursor);
+    if (stored?.permissions?.includes("pages_manage_engagement") && env.PRODUCER_BRIDGE) {
+      await facebookBroker(env, "/api/chase/v1/facebook/internal/targets", {
+        method: "POST", body: JSON.stringify({ pageId: env.FACEBOOK_PAGE_ID, liveId, ids: normalized.comments.map(item => item.id) }),
+      });
+    }
     return commentResponse("ok", normalized.cursor, normalized.comments, COMMENT_POLL_AFTER_MS, true);
   } catch {
     return commentResponse("reconnecting", cursor);
@@ -392,6 +400,63 @@ function facebookConnectorConfigured(env: Env): boolean {
   );
 }
 
+function facebookReplyAllowed(caller: ChaseCaller, env: Env): boolean {
+  return env.FACEBOOK_REPLIES_ENABLED === "true" && Boolean(caller.userId && (env.PRODUCER_OPERATOR_IDS || "").split(",").map(id => id.trim()).includes(caller.userId));
+}
+
+async function handleFacebookReply(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json(405, { error: "METHOD_NOT_ALLOWED" });
+  const caller = await authorizeCaller(request, env, false);
+  if (!caller) return json(401, { error: "AUTH_REQUIRED" });
+  if (!facebookReplyAllowed(caller, env)) return json(403, { error: "FACEBOOK_REPLY_FORBIDDEN" });
+  if (Number(request.headers.get("Content-Length") || 0) > 8192) return json(413, { error: "REPLY_TOO_LARGE" });
+  let body: { commentId?: unknown; message?: unknown; requestId?: unknown; confirmed?: unknown };
+  try {
+    const text = await request.text();
+    if (new TextEncoder().encode(text).length > 8192) return json(413, { error: "REPLY_TOO_LARGE" });
+    body = JSON.parse(text);
+  } catch { return json(400, { error: "INVALID_REPLY" }); }
+  if (!body || body.confirmed !== true || typeof body.commentId !== "string" || !/^[0-9_]{5,100}$/.test(body.commentId)
+    || typeof body.message !== "string" || !body.message.trim() || body.message.length > 2000
+    || typeof body.requestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.requestId)) return json(400, { error: "INVALID_REPLY" });
+  const credential = await storedFacebookCredential(env);
+  if (!credential?.permissions?.includes("pages_manage_engagement")) return json(409, { error: "FACEBOOK_REPLY_PERMISSION_REQUIRED" });
+  let liveId: string | undefined;
+  try {
+    const response = await fetch(`${FACEBOOK_GRAPH_ORIGIN}/${credential.pageId}/live_videos?broadcast_status=%5B%22LIVE%22%5D&fields=id`, {
+      headers: { Authorization: `Bearer ${credential.token}` }, signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) return json(409, { error: "FACEBOOK_LIVE_UNAVAILABLE" });
+    const videos = await response.json() as { data?: Array<{ id?: string }> };
+    liveId = videos.data?.[0]?.id;
+  } catch { return json(503, { error: "FACEBOOK_UNAVAILABLE" }); }
+  if (!liveId) return json(409, { error: "NO_ACTIVE_FACEBOOK_LIVE" });
+  const digest = base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([body.commentId, body.message.trim()])))));
+  const reserved = await facebookBroker(env, "/api/chase/v1/facebook/internal/reply", {
+    method: "POST", body: JSON.stringify({ requestId: body.requestId, userId: caller.userId, digest, commentId: body.commentId, pageId: credential.pageId, liveId }),
+  });
+  if (reserved.status !== 202) {
+    if (reserved.status !== 200) return reserved;
+    const prior = await reserved.json() as { state: string; replyId?: string };
+    return json(prior.state === "sent" ? 200 : 409, { state: prior.state, replyId: prior.replyId, error: prior.state === "sent" ? undefined : "REPLY_ALREADY_ATTEMPTED" });
+  }
+  let state = "unknown"; let replyId: string | undefined;
+  try {
+    const response = await fetch(`${FACEBOOK_GRAPH_ORIGIN}/${body.commentId}/comments`, {
+      method: "POST", headers: { Authorization: `Bearer ${credential.token}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ message: body.message.trim() }), signal: AbortSignal.timeout(10_000),
+    });
+    if (response.ok) {
+      const result = await response.json() as { id?: unknown };
+      if (typeof result.id === "string") { state = "sent"; replyId = result.id; }
+    } else if (response.status >= 400 && response.status < 500) state = "failed";
+  } catch { /* A timeout can occur after Meta publishes; never automatically retry. */ }
+  await facebookBroker(env, "/api/chase/v1/facebook/internal/reply-result", {
+    method: "POST", body: JSON.stringify({ requestId: body.requestId, userId: caller.userId, state, replyId }),
+  });
+  return json(state === "sent" ? 200 : 502, { state, replyId, error: state === "sent" ? undefined : state === "unknown" ? "REPLY_OUTCOME_UNKNOWN" : "FACEBOOK_REPLY_REJECTED" });
+}
+
 function facebookResultPage(title: string, message: string, success = false): Response {
   const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -400,7 +465,8 @@ function facebookResultPage(title: string, message: string, success = false): Re
   const safeTitle = escapeHtml(title);
   const safeMessage = escapeHtml(message);
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>${safeTitle}</title><style>body{margin:0;background:#07090c;color:#fff;font-family:system-ui,sans-serif;display:grid;min-height:100vh;place-items:center}.card{max-width:34rem;margin:1.5rem;padding:2rem;border:1px solid #28303a;border-radius:14px;background:#0f1319}h1{margin:0 0 1rem;color:${color};font-size:1.4rem}p{line-height:1.5;color:#c8d0da}</style></head><body><main class="card"><h1>${safeTitle}</h1><p>${safeMessage}</p><p>You may close this window and return to Chase.</p></main></body></html>`;
-  return new Response(html, { status: success ? 200 : 400, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer" } });
+  const resultHtml = html.replace("You may close this window and return to Chase.", 'Return to Chase, or <a style="color:#8bc9ef" href="/producer">open the Producer console</a>.');
+  return new Response(resultHtml, { status: success ? 200 : 400, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer" } });
 }
 
 async function graphTokenExchange(parameters: Record<string, string>): Promise<string | null> {
@@ -439,11 +505,10 @@ async function handleFacebookConnector(request: Request, url: URL, env: Env): Pr
     if (request.method !== "GET") return json(405, { error: "METHOD_NOT_ALLOWED" });
     const caller = await authorizeCaller(request, env, false);
     if (!caller) return json(401, { error: "AUTH_REQUIRED" });
-    if (!facebookConnectorAllowed(caller, env)) return json(403, { error: "FACEBOOK_CONNECT_FORBIDDEN" });
     const credential = await storedFacebookCredential(env);
     return json(200, credential
-      ? { state: "connected", page: { id: credential.pageId, label: credential.label }, connectedAt: credential.connectedAt }
-      : { state: facebookConnectorConfigured(env) ? "not_connected" : "not_configured", page: { label: FACEBOOK_PAGE_LABEL } });
+      ? { state: "connected", page: { id: credential.pageId, label: credential.label }, connectedAt: credential.connectedAt, canConnect: facebookConnectorAllowed(caller, env), canReply: facebookReplyAllowed(caller, env) && credential.permissions?.includes("pages_manage_engagement") === true }
+      : { state: facebookConnectorConfigured(env) ? "not_connected" : "not_configured", page: { label: FACEBOOK_PAGE_LABEL }, canConnect: facebookConnectorAllowed(caller, env), canReply: false });
   }
 
   if (url.pathname === FACEBOOK_CONNECT_PATH) {
@@ -458,7 +523,7 @@ async function handleFacebookConnector(request: Request, url: URL, env: Env): Pr
     authorize.searchParams.set("redirect_uri", FACEBOOK_REDIRECT_URI);
     authorize.searchParams.set("state", ticket);
     authorize.searchParams.set("response_type", "code");
-    authorize.searchParams.set("scope", "pages_show_list,pages_read_engagement,pages_read_user_content");
+    authorize.searchParams.set("scope", "pages_show_list,pages_read_engagement,pages_read_user_content,pages_manage_engagement");
     authorize.searchParams.set("auth_type", "rerequest");
     return Response.redirect(authorize.toString(), 302);
   }
@@ -480,6 +545,13 @@ async function handleFacebookConnector(request: Request, url: URL, env: Env): Pr
     if (!shortToken) return facebookResultPage("Facebook connection failed", "Meta did not accept the authorization response. Please try again from Chase.");
     const longToken = await graphTokenExchange({ grant_type: "fb_exchange_token", client_id: env.FACEBOOK_APP_ID!, client_secret: env.FACEBOOK_APP_SECRET!, fb_exchange_token: shortToken });
     if (!longToken) return facebookResultPage("Facebook connection failed", "Meta did not issue a long-lived authorization. Please try again from Chase.");
+    let permissions: string[] = [];
+    try {
+      const response = await fetch(`${FACEBOOK_GRAPH_ORIGIN}/me/permissions`, { headers: { Authorization: `Bearer ${longToken}` } });
+      const result = await response.json() as { data?: Array<{ permission?: string; status?: string }> };
+      if (response.ok && Array.isArray(result.data)) permissions = result.data.filter(item => item.status === "granted" && typeof item.permission === "string").map(item => item.permission!);
+    } catch { return facebookResultPage("Permission check failed", "Facebook permissions could not be verified. Reconnect from Producer."); }
+    if (!["pages_show_list", "pages_read_engagement", "pages_read_user_content"].every(item => permissions.includes(item))) return facebookResultPage("Facebook permissions missing", "Grant access to read Nick's Page and its comments, then reconnect from Producer.");
     let accounts: { data?: Array<{ id?: unknown; name?: unknown; access_token?: unknown }> };
     try {
       const response = await fetch(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts?fields=id,name,access_token&limit=100`, { headers: { Authorization: `Bearer ${longToken}`, Accept: "application/json" } });
@@ -499,6 +571,7 @@ async function handleFacebookConnector(request: Request, url: URL, env: Env): Pr
       ...encrypted,
       connectedAt: new Date().toISOString(),
       connectedBy: session.userId,
+      permissions,
     };
     const stored = await facebookBroker(env, "/api/chase/v1/facebook/internal/credential", {
       method: "POST",
@@ -506,7 +579,7 @@ async function handleFacebookConnector(request: Request, url: URL, env: Env): Pr
       body: JSON.stringify({ ticket, credential }),
     });
     return stored.ok
-      ? facebookResultPage("Facebook comments connected", `${credential.label} is connected read-only.`, true)
+      ? facebookResultPage("Facebook comments connected", `${credential.label} is connected. ${permissions.includes("pages_manage_engagement") ? "Authorized producers can reply as the Page." : "Replies require reconnecting with comment-management permission."}`, true)
       : facebookResultPage("Facebook connection failed", "The credential could not be stored. Please try again from Chase.");
   }
 
@@ -815,6 +888,7 @@ async function handleUpdateRoute(request: Request, url: URL, env: Env): Promise<
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === FACEBOOK_REPLY_PATH) return handleFacebookReply(request, env);
   if (url.pathname.startsWith("/api/producer/v1/")) return handleProducerRoute(request, url, env);
   if ([FACEBOOK_CONNECT_SESSION_PATH, FACEBOOK_CONNECT_PATH, FACEBOOK_CALLBACK_PATH, FACEBOOK_CONNECTION_STATUS_PATH].includes(url.pathname)) {
     return handleFacebookConnector(request, url, env);

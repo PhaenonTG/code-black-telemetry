@@ -4,6 +4,8 @@ const FRAME_KEY = "program-frame";
 const COMMANDS_KEY = "commands";
 const FACEBOOK_OAUTH_SESSIONS_KEY = "facebook-oauth-sessions";
 const FACEBOOK_CREDENTIAL_KEY = "facebook-page-credential";
+const FACEBOOK_COMMENTS_KEY = "facebook-reply-targets";
+const FACEBOOK_REPLIES_KEY = "facebook-reply-requests";
 const MAX_COMMANDS = 100;
 const MAX_JSON_BYTES = 64 * 1024;
 const MAX_FRAME_BYTES = 2 * 1024 * 1024;
@@ -38,7 +40,10 @@ type StoredFacebookCredential = {
   iv: string;
   connectedAt: string;
   connectedBy: string;
+  permissions?: string[];
 };
+type ReplyTarget = { id: string; liveId: string; pageId: string; observedAt: number };
+type ReplyRequest = { requestId: string; userId: string; digest: string; state: string; createdAt: number; replyId?: string };
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
@@ -60,6 +65,43 @@ function bridgeState(document: StoredDocument | undefined): "ONLINE" | "OFFLINE"
 export async function handleProducerStateRequest(request: Request, storage: BridgeStorage): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
+
+  if (path === "/api/chase/v1/facebook/internal/targets" && request.method === "POST") {
+    const body = await jsonBody(request);
+    if (!body || typeof body.pageId !== "string" || typeof body.liveId !== "string" || !Array.isArray(body.ids)) return json(400, { error: "INVALID_TARGETS" });
+    const now = Date.now();
+    const prior = (await storage.get<ReplyTarget[]>(FACEBOOK_COMMENTS_KEY) ?? []).filter(item => now - item.observedAt < 2 * 60 * 60_000);
+    const targets = new Map(prior.map(item => [item.id, item]));
+    for (const id of body.ids.slice(0, 100)) if (typeof id === "string" && /^[0-9_]{5,100}$/.test(id)) targets.set(id, { id, pageId: body.pageId, liveId: body.liveId, observedAt: now });
+    await storage.put(FACEBOOK_COMMENTS_KEY, [...targets.values()].slice(-500));
+    return json(202, { accepted: true });
+  }
+  if (path === "/api/chase/v1/facebook/internal/reply" && request.method === "POST") {
+    const body = await jsonBody(request, 4096);
+    if (!body || typeof body.requestId !== "string" || !COMMAND_ID.test(body.requestId) || typeof body.userId !== "string" || typeof body.digest !== "string") return json(400, { error: "INVALID_REPLY_REQUEST" });
+    const now = Date.now();
+    const requests = (await storage.get<ReplyRequest[]>(FACEBOOK_REPLIES_KEY) ?? []).filter(item => now - item.createdAt < 24 * 60 * 60_000);
+    const existing = requests.find(item => item.requestId === body.requestId && item.userId === body.userId);
+    if (existing) return existing.digest === body.digest ? json(200, existing) : json(409, { error: "REPLY_REQUEST_CONFLICT" });
+    const targets = await storage.get<ReplyTarget[]>(FACEBOOK_COMMENTS_KEY) ?? [];
+    const target = targets.find(item => item.id === body.commentId && item.pageId === body.pageId && item.liveId === body.liveId && now - item.observedAt < 2 * 60 * 60_000);
+    if (!target) return json(409, { error: "COMMENT_NOT_IN_CURRENT_FEED" });
+    if (requests.some(item => item.userId === body.userId && now - item.createdAt < 3_000)) return json(429, { error: "REPLY_RATE_LIMITED" });
+    const entry: ReplyRequest = { requestId: body.requestId, userId: body.userId, digest: body.digest, state: "pending", createdAt: now };
+    requests.push(entry);
+    await storage.put(FACEBOOK_REPLIES_KEY, requests.slice(-1000));
+    return json(202, entry);
+  }
+  if (path === "/api/chase/v1/facebook/internal/reply-result" && request.method === "POST") {
+    const body = await jsonBody(request, 4096);
+    const requests = await storage.get<ReplyRequest[]>(FACEBOOK_REPLIES_KEY) ?? [];
+    const entry = requests.find(item => item.requestId === body?.requestId && item.userId === body?.userId);
+    if (!entry || !["sent", "failed", "unknown"].includes(String(body?.state))) return json(400, { error: "INVALID_REPLY_RESULT" });
+    entry.state = String(body!.state);
+    if (typeof body?.replyId === "string") entry.replyId = body.replyId;
+    await storage.put(FACEBOOK_REPLIES_KEY, requests);
+    return json(202, { accepted: true });
+  }
 
   if (path === "/api/chase/v1/facebook/internal/session" && request.method === "POST") {
     const body = await jsonBody(request, 4096);
@@ -196,5 +238,10 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
 
 export class ProducerBridge implements DurableObject {
   constructor(private readonly state: DurableObjectState) {}
-  fetch(request: Request): Promise<Response> { return handleProducerStateRequest(request, this.state.storage); }
+  fetch(request: Request): Promise<Response> {
+    if (new URL(request.url).pathname.startsWith("/api/chase/v1/facebook/internal/")) {
+      return this.state.blockConcurrencyWhile(() => handleProducerStateRequest(request, this.state.storage));
+    }
+    return handleProducerStateRequest(request, this.state.storage);
+  }
 }

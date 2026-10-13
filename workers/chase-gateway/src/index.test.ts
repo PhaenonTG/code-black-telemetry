@@ -426,19 +426,23 @@ describe("codeblack-chase-gateway", () => {
         idFromName: () => "test",
         get: () => ({ fetch: (request: Request) => handleProducerStateRequest(request, storage) }),
       } as unknown as DurableObjectNamespace;
-      const env = { ...connectorEnv(), PRODUCER_BRIDGE: bridge, CHASE_TOKEN: "legacy" };
+      const env = { ...connectorEnv(), PRODUCER_BRIDGE: bridge, CHASE_TOKEN: "legacy", FACEBOOK_REPLIES_ENABLED: "true", PRODUCER_OPERATOR_IDS: "304f8cd4-e0d6-4636-a3a5-e5569111b022" };
       const pageToken = "page-token-" + "p".repeat(64);
+      let posts = 0;
       const graphFetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
         const url = String(input);
         if (url.endsWith("/auth/v1/user")) return Response.json({ id: env.FACEBOOK_CONNECTOR_USER_IDS });
         if (url.includes("/rest/v1/profiles")) return Response.json([{ active: true, operator_name: "Nick" }]);
         if (url.endsWith("/oauth/access_token")) return Response.json({ access_token: "user-token-" + "u".repeat(64) });
+        if (url.endsWith("/me/permissions")) return Response.json({ data: ["pages_show_list", "pages_read_engagement", "pages_read_user_content", "pages_manage_engagement"].map(permission => ({ permission, status: "granted" })) });
         if (url.includes("/me/accounts?")) return Response.json({ data: [{ id: env.FACEBOOK_PAGE_ID, name: "Nick <Page>", access_token: pageToken }] });
         if (url.includes("/live_videos")) {
           expect(new Headers(init?.headers).get("Authorization")).toBe(`Bearer ${pageToken}`);
           expect(url).not.toContain(pageToken);
-          return Response.json({ data: [] });
+          return Response.json({ data: [{ id: "987654321" }] });
         }
+        if (new URL(url).pathname.endsWith("/987654321/comments")) return Response.json({ data: [{ id: "987654321_123456789", from: { name: "Viewer" }, message: "Test comment", created_time: new Date().toISOString() }] });
+        if (url.endsWith("/987654321_123456789/comments") && init?.method === "POST") { posts++; expect(new Headers(init.headers).get("Authorization")).toBe(`Bearer ${pageToken}`); return Response.json({ id: "reply12345" }); }
         throw new Error("Unexpected request");
       });
       vi.stubGlobal("fetch", graphFetch);
@@ -471,6 +475,16 @@ describe("codeblack-chase-gateway", () => {
           headers: { Authorization: "Bearer legacy" },
         }), env);
         expect(await comments.json()).toMatchObject({ state: "ok" });
+        const requestId = "b10c572a-03ed-4521-92f3-9e043bd76440";
+        const reply = (overrides = {}) => new Request("https://x/api/chase/v1/facebook/reply", { method: "POST", headers: { Authorization: "Bearer nick-jwt" }, body: JSON.stringify({ requestId, commentId: "987654321_123456789", message: "Thanks for watching", confirmed: true, ...overrides }) });
+        expect((await handleRequest(reply({ confirmed: false }), env)).status).toBe(400);
+        expect((await handleRequest(reply({ commentId: "111111111_222222222" }), env)).status).toBe(409);
+        expect(posts).toBe(0);
+        expect(await (await handleRequest(reply(), env)).json()).toMatchObject({ state: "sent", replyId: "reply12345" });
+        expect(await (await handleRequest(reply(), env)).json()).toMatchObject({ state: "sent" });
+        expect(posts).toBe(1);
+        expect((await handleRequest(reply({ message: "Changed text" }), env)).status).toBe(409);
+        expect((await handleRequest(reply(), { ...env, FACEBOOK_REPLIES_ENABLED: "false" })).status).toBe(403);
       } finally { vi.unstubAllGlobals(); }
     });
 
