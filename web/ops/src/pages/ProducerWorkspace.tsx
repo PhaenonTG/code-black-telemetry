@@ -16,7 +16,9 @@ type ProducerPreview = { state?: string; available?: boolean }
 type ProducerBridgeStatus = {
   observedAt?: string
   bridgeState?: string
+  bridge_state?: string
   bridge?: { state?: string; lastSuccessAt?: string }
+  status?: ProducerBridgeStatus
   state?: string
   stateRevision?: number
   source_state?: string
@@ -27,7 +29,7 @@ type ProducerBridgeStatus = {
   audio?: { available?: boolean; silence?: boolean; clipping?: boolean }
   lastError?: string | null
 }
-type ProducerCapabilities = { schemaVersion?: string; actions?: Record<string, string[]>; unavailable?: Record<string, string> }
+type ProducerCapabilities = { schemaVersion?: string; actions?: Record<string, string[]>; unavailable?: Record<string, string>; capabilities?: ProducerCapabilities }
 
 function readSelection(): string {
   try { return localStorage.getItem(SELECTION_KEY) ?? "" } catch { return "" }
@@ -49,9 +51,18 @@ function expiry(timestamp: string | undefined, now: number): string {
 }
 
 function bridgeState(document: ProducerBridgeStatus | null): string {
-  const state = document?.bridgeState ?? document?.bridge?.state
+  const state = document?.bridgeState ?? document?.bridge_state ?? document?.bridge?.state ?? document?.status?.bridgeState ?? document?.status?.bridge_state ?? document?.status?.bridge?.state
   if (typeof state === "string" && state.trim()) return state.toUpperCase()
   return document?.observedAt ? "ONLINE" : "OFFLINE"
+}
+
+function unwrapBridgeStatus(document: ProducerBridgeStatus): ProducerBridgeStatus {
+  const status = document.status && typeof document.status === "object" ? document.status : document
+  return { ...status, observedAt: document.observedAt ?? status.observedAt, bridgeState: document.bridgeState ?? document.bridge_state ?? document.bridge?.state ?? status.bridgeState ?? status.bridge_state ?? status.bridge?.state }
+}
+
+function unwrapCapabilities(document: ProducerCapabilities): ProducerCapabilities {
+  return document.capabilities && typeof document.capabilities === "object" ? document.capabilities : document
 }
 
 function sourceFresh(document: ProducerBridgeStatus | null): boolean {
@@ -143,7 +154,7 @@ export default function ProducerWorkspace() {
           statusResponse.json() as Promise<ProducerBridgeStatus>, capabilitiesResponse.json() as Promise<ProducerCapabilities>,
         ])
         if (cancelled) return
-        setProducerStatus(nextStatus); setProducerCapabilities(nextCapabilities); setProducerError("")
+        setProducerStatus(unwrapBridgeStatus(nextStatus)); setProducerCapabilities(unwrapCapabilities(nextCapabilities)); setProducerError("")
       } catch (reason) {
         if (!cancelled) { setProducerStatus(null); setProducerCapabilities(null); setProducerError(reason instanceof Error ? reason.message : "Producer bridge unavailable") }
       }
