@@ -653,7 +653,7 @@ async function handleProducerRoute(request: Request, url: URL, env: Env): Promis
     });
   }
   const headers = new Headers();
-  for (const name of ["Content-Type", "Content-Length", "X-Producer-Frame-At"]) {
+  for (const name of ["Content-Type", "Content-Length", "X-Producer-Frame-At", "X-Producer-Composition"]) {
     const value = request.headers.get(name); if (value) headers.set(name, value);
   }
   headers.set("X-Producer-Operator", operator);

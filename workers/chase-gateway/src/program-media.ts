@@ -6,7 +6,7 @@ const SLOTS = 12;
 const CHUNK = 96 * 1024;
 const MAX_SEGMENT = 512 * 1024;
 type Segment = { name: string; size: number; parts: number; capturedAt: string; receivedAt: string };
-type Manifest = { text: string; names: string[]; previousNames: string[]; capturedAt: string; receivedAt: string };
+type Manifest = { text: string; names: string[]; previousNames: string[]; capturedAt: string; receivedAt: string; compositionId?: string };
 const json = (status: number, error: string) => new Response(JSON.stringify({ error }), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 const fresh = (at: string | undefined, max: number) => { const age = at ? Date.now() - Date.parse(at) : NaN; return Number.isFinite(age) && age >= -2000 && age <= max; };
 const slot = (name: string) => Number(NAME.exec(name)?.[1]) % SLOTS;
@@ -46,7 +46,9 @@ export async function handleProgramMedia(request: Request, storage: BridgeStorag
         if (entry?.name !== segment || !fresh(entry.capturedAt, 15000)) return json(409, "SEGMENTS_NOT_READY");
       }
       const prior = await storage.get<Manifest>("program-hls-manifest");
-      await storage.put("program-hls-manifest", { text, names, previousNames: prior?.names ?? [], capturedAt, receivedAt: new Date().toISOString() } satisfies Manifest);
+      const compositionId = request.headers.get("X-Producer-Composition") ?? undefined;
+      if (compositionId !== undefined && !/^[a-f0-9]{24}$/.test(compositionId)) return json(400, "INVALID_COMPOSITION_ID");
+      await storage.put("program-hls-manifest", { text, names, previousNames: prior?.compositionId === compositionId ? prior?.names ?? [] : [], capturedAt, receivedAt: new Date().toISOString(), compositionId } satisfies Manifest);
     } else {
       if (request.headers.get("Content-Type") !== "video/mp2t" || Number(request.headers.get("Content-Length")) > MAX_SEGMENT) return json(413, "INVALID_MEDIA_SEGMENT");
       const bytes = await request.arrayBuffer();
@@ -61,11 +63,13 @@ export async function handleProgramMedia(request: Request, storage: BridgeStorag
   }
   if (ingest || request.method !== "GET") return json(405, "METHOD_NOT_ALLOWED");
   const [status, manifest] = await Promise.all([
-    storage.get<{ receivedAt: string; body: { source_state?: string; previews?: { program?: { state?: string } }; metrics?: { last_video_timestamp?: string } } }>("status"),
+    storage.get<{ receivedAt: string; body: { source_state?: string; composition?: { id?: string }; previews?: { program?: { state?: string; compositionId?: string } }; metrics?: { last_video_timestamp?: string } } }>("status"),
     storage.get<Manifest>("program-hls-manifest"),
   ]);
   if (!status || !fresh(status.receivedAt, 10000) || status.body.source_state !== "SOURCE_LIVE" || status.body.previews?.program?.state !== "ACTIVE" || !fresh(status.body.metrics?.last_video_timestamp, 5000) || !manifest || !fresh(manifest.receivedAt, 5000) || !fresh(manifest.capturedAt, 5000)) return json(404, "PROGRAM_MEDIA_NOT_CURRENT");
-  const headers = { "Cache-Control": "no-store, max-age=0", "X-Content-Type-Options": "nosniff", "X-Producer-Frame-At": manifest.capturedAt };
+  const expectedComposition = status.body.composition?.id ?? status.body.previews?.program?.compositionId;
+  if (expectedComposition && manifest.compositionId !== expectedComposition) return json(404, "PROGRAM_COMPOSITION_NOT_CURRENT");
+  const headers = { "Cache-Control": "no-store, max-age=0", "X-Content-Type-Options": "nosniff", "X-Producer-Frame-At": manifest.capturedAt, ...(manifest.compositionId ? { "X-Producer-Composition": manifest.compositionId } : {}) };
   if (name === "index.m3u8") {
     const text = manifest.text.split("\n").map(line => NAME.test(line.trim()) ? `${PREFIX}${line.trim()}` : line).join("\n");
     return new Response(text, { headers: { ...headers, "Content-Type": "application/vnd.apple.mpegurl" } });
