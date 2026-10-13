@@ -642,7 +642,7 @@ async function handleProducerRoute(request: Request, url: URL, env: Env): Promis
   }
   const id = env.PRODUCER_BRIDGE.idFromName("native-producer");
   const stub = env.PRODUCER_BRIDGE.get(id);
-  if (url.pathname === "/api/producer/v1/facebook" || url.pathname.startsWith("/api/producer/v1/facebook/") || url.pathname === "/api/producer/v1/workstation/facebook-destination") {
+  if (url.pathname === "/api/producer/v1/facebook" || url.pathname.startsWith("/api/producer/v1/facebook/") || ["/api/producer/v1/workstation/facebook-destination", "/api/producer/v1/workstation/facebook-health"].includes(url.pathname)) {
     return handleFacebookLifecycle(request, userId, controlAllowed, workstation, {
       credential: () => storedFacebookCredential(env),
       broker: (path, init) => facebookBroker(env, path, init),

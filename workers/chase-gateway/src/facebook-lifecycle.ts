@@ -31,6 +31,15 @@ export async function handleFacebookLifecycle(request: Request, userId: string |
   const enabled = deps.enabled && permission && Boolean(credential);
   const broadcast = state.broadcast;
   if (workstation) {
+    if (path === "/api/producer/v1/workstation/facebook-health" && request.method === "GET") {
+      if (!credential) return json(200, { state: "not_connected", publishingPermissionVerified: false });
+      try {
+        const response = await deps.fetch(`${GRAPH}/${credential.pageId}/live_videos?broadcast_status=%5B%22LIVE%22%5D&fields=id`, { headers: { Authorization: `Bearer ${credential.token}` }, signal: AbortSignal.timeout(5000) });
+        const result = await response.json() as { error?: { code?: number } };
+        const code = result.error?.code;
+        return json(200, { state: response.ok ? "healthy" : [4, 17, 32, 613].includes(code ?? 0) ? "rate_limited" : "unavailable", code, publishingPermissionVerified: permission });
+      } catch { return json(200, { state: "unavailable", publishingPermissionVerified: permission }); }
+    }
     if (path !== "/api/producer/v1/workstation/facebook-destination" || request.method !== "GET") return json(404, { error: "NOT_FOUND" });
     if (!enabled || !broadcast || !["UNPUBLISHED", "PUBLISH_REQUESTED", "LIVE"].includes(broadcast.status)) return json(200, { destination: null });
     const destination = await deps.decrypt(broadcast.destination);
