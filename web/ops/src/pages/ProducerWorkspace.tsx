@@ -6,6 +6,7 @@ import { fetchStatusCenter, type StatusCenterDocument } from "../status/statusCe
 import { chooseProducerSource, parseProducerSources } from "../workspaces/producerSources"
 import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
 import FacebookProducerPanel from "../workspaces/FacebookProducerPanel"
+import ProducerControls from "../workspaces/ProducerControls"
 import "./Workspaces.css"
 
 const SELECTION_KEY = "codeblack.ops.producer.source.v1"
@@ -16,7 +17,7 @@ type ProducerBridgeStatus = {
   observedAt?: string
   bridgeState?: string
   bridge_state?: string
-  bridge?: { state?: string; lastSuccessAt?: string }
+  bridge?: string | { state?: string; lastSuccessAt?: string }
   status?: ProducerBridgeStatus
   state?: string
   stateRevision?: number
@@ -50,14 +51,14 @@ function expiry(timestamp: string | undefined, now: number): string {
 }
 
 function bridgeState(document: ProducerBridgeStatus | null): string {
-  const state = document?.bridgeState ?? document?.bridge_state ?? document?.bridge?.state ?? document?.status?.bridgeState ?? document?.status?.bridge_state ?? document?.status?.bridge?.state
+  const state = document?.bridgeState ?? document?.bridge_state ?? (typeof document?.bridge === "string" ? document.bridge : document?.bridge?.state)
   if (typeof state === "string" && state.trim()) return state.toUpperCase()
   return document?.observedAt ? "ONLINE" : "OFFLINE"
 }
 
 function unwrapBridgeStatus(document: ProducerBridgeStatus): ProducerBridgeStatus {
   const status = document.status && typeof document.status === "object" ? document.status : document
-  return { ...status, observedAt: document.observedAt ?? status.observedAt, bridgeState: document.bridgeState ?? document.bridge_state ?? document.bridge?.state ?? status.bridgeState ?? status.bridge_state ?? status.bridge?.state }
+  return { ...status, observedAt: document.observedAt ?? status.observedAt, bridgeState: bridgeState(document) }
 }
 
 function unwrapCapabilities(document: ProducerCapabilities): ProducerCapabilities {
@@ -78,7 +79,7 @@ export default function ProducerWorkspace() {
   const [alertSnapshot, setAlertSnapshot] = useState<{ key: string; value: OfficialAlertResponse } | null>(null)
   const [alertError, setAlertError] = useState("")
   const [producerStatus, setProducerStatus] = useState<ProducerBridgeStatus | null>(null)
-  const [producerCapabilities, setProducerCapabilities] = useState<ProducerCapabilities | null>(null)
+  const [, setProducerCapabilities] = useState<ProducerCapabilities | null>(null)
   const [producerError, setProducerError] = useState("")
   const [programFrameUrl, setProgramFrameUrl] = useState("")
   const [programFrameAt, setProgramFrameAt] = useState("")
@@ -190,7 +191,6 @@ export default function ProducerWorkspace() {
   const units = state.fabric.units?.units ?? []
   const producerBridgeState = bridgeState(producerStatus)
   const programCurrent = programFrameState === "CURRENT" && sourceFresh(producerStatus) && Boolean(programFrameUrl)
-  const controlActions = Object.entries(producerCapabilities?.actions ?? {}).flatMap(([group, actions]) => actions.map((action) => `${group}.${action}`))
 
   const selectSource = (id: string) => {
     setManualSourceId(id)
@@ -228,7 +228,7 @@ export default function ProducerWorkspace() {
         <section className="workspace-panel"><header><h2>Aegis · internal</h2><Link to="/aegis-alerts">Review ↗</Link></header><p>Radar findings are advisory and separate from official warnings. Team-wide delivery remains behind the review policy.</p></section>
         <section className="workspace-panel"><header><h2>Broadcast health</h2><Link to="/stream">Streams ↗</Link></header><p>{statusError || (status?.streaming as { summary?: string } | undefined)?.summary || "Checking stream infrastructure…"}</p></section>
         <FacebookProducerPanel />
-        <section className="workspace-panel"><header><h2>PROGRAM controls</h2><span className={producerBridgeState === "ONLINE" ? "workspace-live" : "workspace-muted"}>{producerBridgeState}</span></header><p>{producerError || (producerCapabilities ? `Bridge schema ${producerCapabilities.schemaVersion ?? "unknown"}.` : "Waiting for authenticated capability report.")}</p>{controlActions.length ? <div className="workspace-list">{controlActions.map((action) => <div key={action}><strong>{action}</strong><span>CONTROL ACCESS PENDING</span></div>)}</div> : <p className="workspace-note">No producer actions have been reported yet.</p>}<p className="workspace-note">Remote stream commands remain pending the producer confirmation flow. Facebook connection and comment replies are managed separately above.</p></section>
+        <ProducerControls />
       </aside>
     </div>
   </main>
