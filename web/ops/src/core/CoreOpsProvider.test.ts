@@ -11,9 +11,15 @@ describe("CoreOpsProvider architecture", () => {
 
   it("keeps feed cleanup and point-request cancellation in the shared provider", () => {
     const provider = readFileSync(new URL("./CoreOpsProvider.tsx", import.meta.url), "utf8");
-    expect(provider).toContain("controller?.abort()");
+    expect(provider).toContain("activeController?.abort()");
     expect(provider).toContain("new AbortController()");
     expect(provider).toContain("controller.abort()");
     expect(provider).toContain("isCurrent(requestId)");
+  });
+
+  it("preserves an open status while a clean bounded stream rotates", () => {
+    const provider = readFileSync(new URL("./CoreOpsProvider.tsx", import.meta.url), "utf8");
+    expect(provider).toContain('current.fabric.streamState === "open"');
+    expect(provider).toContain("planFabricReconnect(completedNormally, receivedSnapshot");
   });
 });
