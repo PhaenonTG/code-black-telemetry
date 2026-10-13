@@ -34,8 +34,8 @@ export default function AnalysisWorkspace() {
   return <main className="analysis-workspace">
     <header className="workspace-heading"><div><h1>Analysis</h1><p>{subtitle}</p></div><div className="analysis-mode" role="group" aria-label="Analysis mode"><button type="button" aria-pressed={mode === "drafts"} onClick={() => chooseMode("drafts")}>Drafts</button><button type="button" aria-pressed={mode === "briefings"} onClick={() => chooseMode("briefings")}>Reviewed briefings</button><button type="button" aria-pressed={mode === "surveillance"} onClick={() => chooseMode("surveillance")}>Surveillance</button></div></header>
     <div className="analysis-context"><span>{context}</span><nav aria-label="Analysis tools"><Link to="/weather">Weather analysis ↗</Link><Link to="/radar">Radar Lab ↗</Link></nav></div>
-    {mode === "drafts" ? <ChaseSetups queue="drafts" detailBasePath="/analysis/drafts" />
-      : mode === "briefings" ? <ChaseSetups queue="briefings" detailBasePath="/analysis/briefings" />
-      : <AegisAlerts />}
+    {mode === "drafts" ? <ChaseSetups embedded queue="drafts" detailBasePath="/analysis/drafts" />
+      : mode === "briefings" ? <ChaseSetups embedded queue="briefings" detailBasePath="/analysis/briefings" />
+      : <AegisAlerts embedded />}
   </main>
 }

@@ -91,5 +91,34 @@
 .chase-setups__empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:310px;padding:20px}
 .chase-setups__empty strong{font-size:15px}.chase-setups__empty p,.chase-setups__loading{max-width:320px;font-size:12px;line-height:1.55;color:var(--cb-muted)}
 .chase-setups__loading{margin:20px}.chase-setups__error{border-left:3px solid var(--cb-amber);background:#302510;color:#ffe2a2;padding:11px 13px;font-size:12px;line-height:1.5}
+
+/* The embedded analysis desk uses one page heading and a compact queue sidebar. */
+.chase-setups--embedded.page{padding:14px 0 0;min-height:0}
+.chase-setups--embedded .chase-setups__header{align-items:center;gap:12px;margin-bottom:12px}
+.chase-setups--embedded .chase-setups__header h2{margin:0 0 4px;font-size:16px;line-height:1.3;letter-spacing:0}
+.chase-setups--embedded .chase-setups__header p{font-size:11px}
+.chase-setups--embedded .chase-setups__layout{grid-template-columns:minmax(200px,22%) minmax(0,1fr) minmax(230px,25%);min-height:0;align-items:start}
+.chase-setups--embedded .chase-setups__list{grid-column:auto;display:block;min-height:0}
+.chase-setups--embedded .chase-setups__list h2{display:block;min-width:0;border-right:0;border-bottom:1px solid var(--cb-line);padding:12px;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.chase-setups--embedded .chase-setups__list ul{display:block;max-height:65vh;overflow:auto;overscroll-behavior:contain}
+.chase-setups--embedded .chase-setups__list li{min-width:0;border-right:0}
+.chase-setups--embedded .chase-setups__list li+li{border-top:1px solid var(--cb-line)}
+.chase-setups--embedded .chase-setups__list li button{padding:12px;min-height:88px;height:auto}
+.chase-setups--embedded .chase-setups__detail,.chase-setups--embedded .chase-setups__activity{grid-column:auto}
+.chase-setups__list,.chase-setups__detail,.chase-setups__activity{border-radius:6px;overflow:clip}
+.chase-setups__detail{padding:16px}
+.chase-setups__detail-head h2{font-size:21px}
+.chase-setups__section-head{flex-wrap:wrap}
+.chase-setups__section-head span{white-space:normal;line-height:1.4}
+.chase-setups__list .chase-setups__empty{min-height:160px;padding:16px}
+.chase-setups__detail>.chase-setups__empty{min-height:240px}
+.chase-setups__header-actions button,.chase-setups__candidates td button,.setup-review-desk button{min-height:44px;border-radius:4px}
+.chase-setups__list button:focus-visible,.chase-setups__header-actions button:focus-visible{outline:2px solid #8bc9ef;outline-offset:-3px}
+.chase-setups__activity h2{padding:12px;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.chase-setups__candidates{padding:14px 0}
+.chase-setups__table-scroll{border-radius:4px;overscroll-behavior-x:contain}
+@media(max-width:1200px){.chase-setups--embedded .chase-setups__layout{grid-template-columns:minmax(200px,27%) minmax(0,1fr)}.chase-setups--embedded .chase-setups__activity{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.chase-setups--embedded .chase-setups__activity>h2,.chase-setups--embedded .chase-setups__activity>.chase-setups__chronology{grid-column:1/-1}}
+@media(min-width:761px){.chase-setups--embedded .chase-setups__layout{grid-template-columns:minmax(0,1fr) minmax(260px,28%)}.chase-setups--embedded .chase-setups__list{grid-column:1/-1;display:grid;grid-template-columns:170px minmax(0,1fr);align-items:stretch}.chase-setups--embedded .chase-setups__list h2{display:flex;align-items:center;border-bottom:0;border-right:1px solid var(--cb-line)}.chase-setups--embedded .chase-setups__list ul{display:flex;flex-wrap:wrap;max-height:240px}.chase-setups--embedded .chase-setups__list li{flex:1 1 260px;max-width:400px;border-right:1px solid var(--cb-line)}.chase-setups--embedded .chase-setups__list li+li{border-top:0}.chase-setups--embedded .chase-setups__list .chase-setups__empty{min-height:90px;padding:12px;align-items:flex-start;text-align:left}.chase-setups--embedded .chase-setups__list .chase-setups__empty p{max-width:none;margin:5px 0}.chase-setups--embedded .chase-setups__activity{grid-column:auto;display:block}}
+@media(max-width:760px){.chase-setups--embedded .chase-setups__layout{grid-template-columns:1fr}.chase-setups--embedded .chase-setups__list ul{max-height:250px}.chase-setups--embedded .chase-setups__activity{display:block}.chase-setups--embedded .chase-setups__header{align-items:flex-start;flex-direction:column}.chase-setups__detail-head{flex-wrap:wrap}.chase-setups__labels{justify-content:flex-start}.chase-setups__evidence dl{grid-template-columns:1fr}.chase-setups__detail{padding:12px}}
 @media(max-width:1180px){.chase-setups__layout{grid-template-columns:minmax(220px,32%) minmax(0,1fr)}.chase-setups__activity{grid-column:1/-1}.chase-setups__activity dl{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.chase-setups__activity dl>div{border-bottom:0}}
 @media(max-width:760px){.chase-setups{padding:16px 14px 90px}.chase-setups__header{align-items:start;flex-direction:column}.chase-setups__layout{display:flex;flex-direction:column}.chase-setups__list,.chase-setups__detail,.chase-setups__activity{width:100%}.chase-setups__list{max-height:300px;overflow:auto}.chase-setups__detail{padding:16px}.chase-setups__detail-head{flex-direction:column}.chase-setups__labels{justify-content:flex-start}.chase-setups__evidence dl,.chase-setups__reviews{grid-template-columns:1fr}.chase-setups__approval{align-items:stretch;flex-direction:column}.chase-setups__activity dl{grid-template-columns:1fr}.chase-setups__empty{min-height:150px}}

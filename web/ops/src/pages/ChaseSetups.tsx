@@ -37,7 +37,7 @@ const when = (value?: string) => {
 };
 const setupId = /^setup-\d{8}-[0-9a-f]{10}$/;
 
-export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue = "drafts" }: { detailBasePath?: string; queue?: SetupQueue }) {
+export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue = "drafts", embedded = false }: { detailBasePath?: string; queue?: SetupQueue; embedded?: boolean }) {
   const { config } = useCoreOps();
   const { setupId: selectedId } = useParams();
   const navigate = useNavigate();
@@ -151,9 +151,9 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
   const ranked = rankedCandidates(points);
   const selectedCandidateKey = selectedCandidate && selectedCandidate.setupId === detail?.setup_id ? selectedCandidate.key : null;
   return (
-    <div className="chase-setups page">
+    <div className={`chase-setups page${embedded ? " chase-setups--embedded" : ""}`}>
       <header className="chase-setups__header">
-        <div><h1>{isBriefings ? "Reviewed setup briefings" : "Chase setup drafts"}</h1><p>{isBriefings ? "Approved current revisions retained as private operational briefings." : "Potential setups for operator review. No draft is public."}</p></div>
+        <div>{embedded ? <h2>{isBriefings ? "Reviewed briefings" : "Setup drafts"}</h2> : <h1>{isBriefings ? "Reviewed setup briefings" : "Chase setup drafts"}</h1>}<p>{isBriefings ? "Approved current revisions retained as private operational briefings." : "Potential setups for operator review. No draft is public."}</p></div>
         <div className="chase-setups__header-actions">
           <span className={currentSource ? "chase-setups__fresh" : "chase-setups__stale"}>
             {index ? currentSource ? "Sources current" : index.status === "source_degraded" ? "Source check degraded" : index.status === "ready" ? "Source check stale" : "Awaiting first collection" : "Source status unavailable"}
@@ -169,7 +169,7 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
             <strong>{isBriefings ? "No reviewed briefings at this time" : "No setup drafts at this time"}</strong>
             <p>{isBriefings ? "Approving a current revision moves it here automatically." : index?.status === "ready" ? "New qualifying setups will appear after a complete source check." : "A complete source check has not produced a current draft."}</p>
           </div> : <ul>{rows.map((row) => <li key={row.setup_id}>
-            <button type="button" className={selectedId === row.setup_id ? "selected" : ""}
+            <button type="button" aria-current={selectedId === row.setup_id ? "page" : undefined} className={selectedId === row.setup_id ? "selected" : ""}
               onClick={() => navigate(`${detailBasePath}/${row.setup_id}`)}>
               <strong>SPC Day {row.day} · {row.risk_label}</strong>
               <span>{when(row.valid_from)}–{when(row.valid_until)}</span>

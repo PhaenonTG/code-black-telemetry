@@ -107,8 +107,10 @@ export default function ProducerControls() {
     {facebook?.permission && !facebook.enabled && <p className="workspace-note">Broadcast management is awaiting server qualification.</p>}
     {managed ? <><p><strong>{managed.title}</strong><br />Facebook status: {managed.status}<br />Broadcast {managed.id}</p><a href={managed.facebookProducerUrl} target="_blank" rel="noreferrer">Verify Facebook video and audio preview ↗</a><p className="workspace-note">{managedSynced ? "Encoder destination synchronized." : "Waiting for the broadcaster to synchronize this destination."}</p></> : <p>No managed Facebook broadcast prepared.</p>}
     {unresolved && <p role="alert">A {facebook?.operation?.action} operation is {facebook?.operation?.state}. Do not retry it. Verify the outcome in Facebook Live Producer.</p>}
-    <label>Broadcast title<input maxLength={254} value={title} onChange={event => setTitle(event.target.value)} /></label>
-    <label>Broadcast description<textarea maxLength={2000} rows={3} value={description} onChange={event => setDescription(event.target.value)} /></label>
+    <details className="producer-controls__metadata"><summary>Broadcast title &amp; description</summary>
+      <label>Broadcast title<input maxLength={254} value={title} onChange={event => setTitle(event.target.value)} /></label>
+      <label>Broadcast description<textarea maxLength={2000} rows={3} value={description} onChange={event => setDescription(event.target.value)} /></label>
+    </details>
     <div className="producer-controls__grid">
       <button type="button" disabled={!canStart || !facebook?.canManage || Boolean(managed && !managedTerminal) || unresolved || !title.trim()} onClick={() => setConfirmFacebook("prepare")}>Prepare non-public broadcast…</button>
       <button type="button" disabled={!canStart || !facebook?.canManage || managed?.status !== "UNPUBLISHED" || status?.status?.broadcast?.state !== "SENDING" || status.status.source_state !== "SOURCE_LIVE" || !audioHealthy || !managedSynced || unresolved} onClick={() => { setProgramConfirmed(false); setConfirmFacebook("publish") }}>Go Live on Facebook…</button>

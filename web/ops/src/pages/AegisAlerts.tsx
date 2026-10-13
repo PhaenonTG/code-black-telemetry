@@ -45,7 +45,7 @@ function EvidenceMap({ alert }: { alert: AegisRadarAlert }) {
   return <div ref={container} className="aegis-map" role="img" aria-label="Official warning polygon and unconfirmed radar candidate point" />;
 }
 
-export default function AegisAlerts() {
+export default function AegisAlerts({ embedded = false }: { embedded?: boolean }) {
   const { config } = useCoreOps();
   const [status, setStatus] = useState<AegisStatus | null>(null);
   const [plan, setPlan] = useState<AegisObservationPlan | null>(null);
@@ -97,8 +97,8 @@ export default function AegisAlerts() {
   const selectedScan = recorded?.scans.find((scan) => scan.volume_key === selectedVolume)
     || recorded?.scans.at(-1) || null;
   return <div className="page aegis-page">
-    <PageHeader kicker="FABRIC / SUPPLEMENTAL INTELLIGENCE" title="Aegis Radar Alerts"
-      description="Warning-triggered radar evidence. Always follow official NWS warnings; Aegis never issues or cancels one." />
+    {embedded ? <header className="analysis-surveillance-heading"><h2>Radar surveillance</h2><p>Warning-triggered radar evidence. Always follow official NWS warnings; Aegis never issues or cancels one.</p></header> : <PageHeader kicker="FABRIC / SUPPLEMENTAL INTELLIGENCE" title="Aegis Radar Alerts"
+      description="Warning-triggered radar evidence. Always follow official NWS warnings; Aegis never issues or cancels one." />}
     <div className="aegis-summary">
       <span className={status?.delivery_enabled ? "aegis-state live" : "aegis-state shadow"}>
         {status?.delivery_enabled ? "LIVE DELIVERY" : "SHADOW / NO DELIVERY"}</span>
