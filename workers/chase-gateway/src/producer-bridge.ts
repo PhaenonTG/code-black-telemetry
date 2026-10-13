@@ -245,7 +245,7 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
       if (!lease || lease.expiresAt <= Date.now() || lease.userId !== actorId) return json(409, { error: "CONTROL_LEASE_REQUIRED" });
       const status = await storage.get<StoredDocument>(STATUS_KEY);
       if (bridgeState(status) !== "ONLINE") return json(409, { error: "BRIDGE_OFFLINE" });
-      if (status?.body.stateRevision !== expected) return json(409, { error: "STATE_CHANGED" });
+      if (action !== "preview.start" && status?.body.stateRevision !== expected) return json(409, { error: "STATE_CHANGED" });
       if (action === "facebook.output.start") {
         const current = status!.body;
         const previews = current.previews as { program?: { state?: string } } | undefined;
