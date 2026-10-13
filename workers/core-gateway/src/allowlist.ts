@@ -25,7 +25,7 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
   "/api/forecast/v1/verified-events": { upstreamPath: "/api/forecast/v1/verified-events", allowedQueryParams: ["latitude", "longitude", "radius_miles", "year"] },
   "/api/forecast/v1/hurricane-watch": { upstreamPath: "/api/forecast/v1/hurricane-watch", allowedQueryParams: [] },
   "/api/forecast/v1/chase-setups": { upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [] },
-  "/api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id"] },
+  "/api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id", "revision"] },
   "/health": { upstreamPath: "/health", allowedQueryParams: [] },
   "/api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "/api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
@@ -81,8 +81,12 @@ function parseFiniteNumber(value: string | null): number | null {
 // not silently skip validation.
 export function validateQueryParams(route: AllowlistRoute, url: URL): QueryValidationResult {
   if (route.upstreamPath === "/api/forecast/v1/chase-setup") {
-    return /^setup-\d{8}-[0-9a-f]{10}$/.test(url.searchParams.get("setup_id") ?? "")
-      ? { ok: true } : { ok: false, reason: "INVALID_SETUP_ID" };
+    if (!/^setup-\d{8}-[0-9a-f]{10}$/.test(url.searchParams.get("setup_id") ?? "")) {
+      return { ok: false, reason: "INVALID_SETUP_ID" };
+    }
+    const revision = url.searchParams.get("revision");
+    return revision === null || /^[1-9]\d{0,8}$/.test(revision)
+      ? { ok: true } : { ok: false, reason: "INVALID_REVISION" };
   }
   if (route.upstreamPath !== "/api/storm-intel/v1/point") return { ok: true };
 

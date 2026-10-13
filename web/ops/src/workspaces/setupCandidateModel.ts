@@ -21,7 +21,7 @@ export function setupChronology(detail: {
     { key: "official", label: "SPC outlook issued", at: detail.official.issued_at },
     { key: "first", label: "Draft first detected", at: detail.first_seen_at },
     { key: "model", label: "Latest retained HRRR run", at: newestRun },
-    { key: "draft", label: "Current draft generated", at: detail.generated_at },
+    { key: "draft", label: "Draft evidence generated", at: detail.generated_at },
   ].filter((entry): entry is SetupChronologyEntry => Boolean(entry.at && Number.isFinite(Date.parse(entry.at))))
     .toSorted((a, b) => Date.parse(a.at) - Date.parse(b.at))
 }

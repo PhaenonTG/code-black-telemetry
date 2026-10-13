@@ -33,6 +33,9 @@ describe("validateQueryParams", () => {
     expect(validateQueryParams(chaseRoute, new URL("https://internal/api/forecast/v1/chase-setup?setup_id=setup-20261011-123456789a"))).toEqual({ ok: true });
     expect(validateQueryParams(chaseRoute, new URL("https://internal/api/forecast/v1/chase-setup?setup_id=..%2Fsecret"))).toEqual({ ok: false, reason: "INVALID_SETUP_ID" });
     expect(validateQueryParams(chaseRoute, new URL("https://internal/api/forecast/v1/chase-setup"))).toEqual({ ok: false, reason: "INVALID_SETUP_ID" });
+    expect(validateQueryParams(chaseRoute, new URL("https://internal/api/forecast/v1/chase-setup?setup_id=setup-20261011-123456789a&revision=20"))).toEqual({ ok: true });
+    expect(validateQueryParams(chaseRoute, new URL("https://internal/api/forecast/v1/chase-setup?setup_id=setup-20261011-123456789a&revision=0"))).toEqual({ ok: false, reason: "INVALID_REVISION" });
+    expect(validateQueryParams(chaseRoute, new URL("https://internal/api/forecast/v1/chase-setup?setup_id=setup-20261011-123456789a&revision=1.5"))).toEqual({ ok: false, reason: "INVALID_REVISION" });
   });
 
   it("passes routes with no query params regardless of what is on the URL", () => {

@@ -31,7 +31,7 @@ describe("route allowlist", () => {
       upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [],
     });
     expect(resolveAllowlistRoute("api/forecast/v1/chase-setup")).toEqual({
-      upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id"],
+      upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id", "revision"],
     });
   });
 

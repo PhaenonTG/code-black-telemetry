@@ -19,7 +19,7 @@ The three desktop workspaces are **additions to the current sidebar**, not a rep
 ## Analysis
 
 - Setup and Surveillance modes preserve the existing Chase Setup Drafts and Aegis Radar Alerts functionality, with a saved local mode choice. Selecting a draft remains inside the Analysis workspace. Setup detail maps official SPC geometry and actual HRRR screening candidate coordinates supplied by Core, explicitly separating those sources. A ranked table now shows the retained coordinate-bearing HRRR points, model index, classification, valid time, and run time; selecting a row focuses its map marker. Index is not confidence, and these are not named chase targets.
-- Source chronology uses timestamps actually present in the current Core draft. Core exposes no previous-revision evidence, so the UI does not invent a “what changed” delta. A true change timeline, surveillance plot, and operator review/publish flow remain integration work. Setup approval stays disabled until evidence and exact-revision authorization are verified.
+- Source chronology uses timestamps present in the selected Core draft. Revision history preserves evidence snapshots as Core collects them, names the SPC/HRRR fields that changed between adjacent captured revisions, and lets the operator select a revision to inspect its evidence, screening points, and map. Existing drafts start with a captured baseline; older evidence is explicitly unavailable. The desk shows the latest 20 captured revisions and identifies historical views. A surveillance plot and operator review/publish flow remain integration work. Setup approval stays disabled until evidence and exact-revision authorization are verified.
 
 ## Delivery boundary
 

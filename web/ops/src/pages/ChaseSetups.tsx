@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
 import { SetupTargetMap, type SetupCandidatePoint } from "../workspaces/SetupTargetMap";
 import { rankedCandidates, setupChronology } from "../workspaces/setupCandidateModel";
+import { SetupRevisionTimeline } from "../workspaces/SetupRevisionTimeline";
+import type { SetupRevisionHistory } from "../workspaces/setupRevisionModel";
 import "./ChaseSetups.css";
 
 type SetupRow = {
@@ -14,6 +16,7 @@ type SetupRow = {
 type SetupIndex = { status: string; checked_at?: string; last_source_check_at?: string; items: SetupRow[] };
 type SetupDetail = {
   setup_id: string; publication_state: string; revision: number; generated_at: string;
+  current_revision?: number; is_current_revision?: boolean; revision_history?: SetupRevisionHistory;
   first_seen_at?: string; valid_from: string; valid_until: string; summary?: string;
   bounds?: number[];
   identity_review_required?: boolean; detected_after_baseline?: boolean;
@@ -34,6 +37,8 @@ export default function ChaseSetups({ detailBasePath = "/chase-setups" }: { deta
   const { config } = useCoreOps();
   const { setupId: selectedId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const revisionParam = searchParams.get("revision");
   const [index, setIndex] = useState<SetupIndex | null>(null);
   const [detail, setDetail] = useState<SetupDetail | null>(null);
   const [indexError, setIndexError] = useState("");
@@ -69,11 +74,26 @@ export default function ChaseSetups({ detailBasePath = "/chase-setups" }: { deta
       setDetailError("Invalid setup ID.");
       return () => controller.abort();
     }
-    void fetchForecast<SetupDetail>(config, `chase-setup?setup_id=${encodeURIComponent(selectedId)}`, controller.signal)
+    if (revisionParam !== null && !/^[1-9]\d{0,8}$/.test(revisionParam)) {
+      setDetailError("Invalid revision number.");
+      return () => controller.abort();
+    }
+    const query = new URLSearchParams({ setup_id: selectedId });
+    if (revisionParam !== null) query.set("revision", revisionParam);
+    void fetchForecast<SetupDetail>(config, `chase-setup?${query}`, controller.signal)
       .then((record) => { if (!controller.signal.aborted) setDetail(record); })
-      .catch(() => { if (!controller.signal.aborted) setDetailError("This private draft is unavailable."); });
+      .catch(() => { if (!controller.signal.aborted) setDetailError(revisionParam ? "This captured revision is unavailable." : "This private draft is unavailable."); });
     return () => controller.abort();
-  }, [config, selectedId, reloadVersion]);
+  }, [config, selectedId, revisionParam, reloadVersion]);
+
+  const selectRevision = (revision: number | null) => {
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      if (revision === null) next.delete("revision");
+      else next.set("revision", String(revision));
+      return next;
+    });
+  };
 
   const rows = index?.items ?? [];
   const currentSource = index?.status === "ready";
@@ -114,6 +134,10 @@ export default function ChaseSetups({ detailBasePath = "/chase-setups" }: { deta
             <div className="chase-setups__detail-head"><div>
               <h2>Setup review</h2><p>{detail.setup_id} · Revision {detail.revision}</p>
             </div><div className="chase-setups__labels"><span>PRIVATE DRAFT</span><span>NOT A WARNING</span></div></div>
+            {detail.is_current_revision === false && <div className="chase-setups__historical" role="status">
+              <p>Viewing captured revision {detail.revision}. Current revision: {detail.current_revision}. The evidence and map below show this earlier draft.</p>
+              <button type="button" onClick={() => selectRevision(null)}>Return to current revision</button>
+            </div>}
             {detail.identity_review_required && <p className="chase-setups__error">Setup identity needs operator review before notification or publication.</p>}
             <section className="chase-setups__candidates" aria-label="Ranked experimental screening candidates">
               <div className="chase-setups__section-head"><h3>Retained screening points</h3><span>{ranked.length} shown · sorted by index</span></div>
@@ -147,8 +171,10 @@ export default function ChaseSetups({ detailBasePath = "/chase-setups" }: { deta
         </article>
         <aside className="chase-setups__activity" aria-label="Draft activity">
           {detail && <section className="setup-target-area" aria-label="Setup screening area"><h2>Target area</h2><SetupTargetMap geometry={detail.official.geometry} bounds={detail.bounds} points={points} selectedKey={selectedCandidateKey} /><p>SPC area: official outlook. Gold dots: experimental HRRR screening candidates, not precise chase targets. Select a table row to focus one.</p></section>}
+          {detail && <SetupRevisionTimeline history={detail.revision_history} selectedRevision={detail.revision}
+            currentRevision={detail.current_revision ?? detail.revision} onSelect={selectRevision} />}
           <h2>Source chronology</h2>
-          {detail ? <><ol className="chase-setups__chronology">{setupChronology(detail).map((entry) => <li key={entry.key}><strong>{entry.label}</strong><time dateTime={entry.at}>{when(entry.at)}</time></li>)}</ol><p>Current revision {detail.revision}. Core does not provide prior-revision evidence, so a “what changed” comparison is not available.</p></> : <p>Select a draft to inspect its source timestamps.</p>}
+          {detail ? <><ol className="chase-setups__chronology">{setupChronology(detail).map((entry) => <li key={entry.key}><strong>{entry.label}</strong><time dateTime={entry.at}>{when(entry.at)}</time></li>)}</ol><p>Source timestamps for revision {detail.revision}.</p></> : <p>Select a draft to inspect its source timestamps.</p>}
           <dl><div><dt>Last source check</dt><dd>{when(index?.last_source_check_at ?? index?.checked_at)}</dd></div></dl>
           <p>Official guidance remains the authority. This desk does not issue warnings.</p>
         </aside>
