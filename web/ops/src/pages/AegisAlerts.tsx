@@ -4,7 +4,8 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { PageHeader } from "../components/PageHeader";
 import { useCoreOps } from "../core/useCoreOps";
-import { getAegisFeed, getAegisStatus, type AegisRadarAlert, type AegisStatus } from "../core/aegisFeed";
+import { getAegisFeed, getAegisStatus, replayAegisPolicy, type AegisRadarAlert,
+  type AegisRecordedReplay, type AegisStatus } from "../core/aegisFeed";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles";
 import "../styles/aegis.css";
 
@@ -50,6 +51,9 @@ export default function AegisAlerts() {
   const [alerts, setAlerts] = useState<AegisRadarAlert[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [recorded, setRecorded] = useState<AegisRecordedReplay | null>(null);
+  const [recordedError, setRecordedError] = useState<string | null>(null);
+  const [selectedVolume, setSelectedVolume] = useState<string | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     const poll = async () => {
@@ -65,7 +69,28 @@ export default function AegisAlerts() {
     const timer = window.setInterval(() => void poll(), REFRESH_MS);
     return () => { controller.abort(); window.clearInterval(timer); };
   }, [config]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const poll = async () => {
+      try {
+        const result = await replayAegisPolicy<AegisRecordedReplay>(config,
+          { mode: "recorded", evidenceCutoff: status?.screen.cutoff ?? 85, limit: 10 }, controller.signal);
+        if (result.mode !== "recorded") throw new Error("Unexpected Core replay mode");
+        if (!controller.signal.aborted) { setRecorded(result); setRecordedError(null); }
+      } catch (caught) {
+        if (!controller.signal.aborted) {
+          setRecorded(null);
+          setRecordedError(caught instanceof Error ? caught.message : "Recorded scans unavailable");
+        }
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 30_000);
+    return () => { controller.abort(); window.clearInterval(timer); };
+  }, [config, status?.screen.cutoff]);
   const selected = alerts.find((item) => item.id === selectedId) || alerts[0] || null;
+  const selectedScan = recorded?.scans.find((scan) => scan.volume_key === selectedVolume)
+    || recorded?.scans.at(-1) || null;
   return <div className="page aegis-page">
     <PageHeader kicker="FABRIC / SUPPLEMENTAL INTELLIGENCE" title="Aegis Radar Alerts"
       description="Warning-triggered radar evidence. Always follow official NWS warnings; Aegis never issues or cancels one." />
@@ -106,5 +131,42 @@ export default function AegisAlerts() {
         </> : <p className="aegis-empty">A qualifying alert will show its NWS polygon and radar candidate point here.</p>}
       </section>
     </div>
+    <section className="aegis-panel aegis-review" aria-label="Recorded radar screenings">
+      <div className="aegis-review__heading">
+        <div><p className="aegis-review__kicker">SHADOW REVIEW / CORE RECORDS</p><h2>Recent radar screenings</h2></div>
+        <span>{recorded ? `${recorded.scans_reviewed} scans · ${recorded.candidates_reviewed} captured candidates` : "Awaiting Core"}</span>
+      </div>
+      <p className="aegis-empty">These are saved screening records, not published alerts or verified tornado reports. A missing candidate is not an all-clear.</p>
+      {recordedError && <p className="aegis-error" role="status">Recorded scans unavailable: {recordedError}</p>}
+      {recorded && recorded.scans.length === 0 && <p className="aegis-empty">No radar screenings have been recorded yet.</p>}
+      {recorded && recorded.scans.length > 0 && <div className="aegis-review__grid">
+        <div className="aegis-review__list" role="group" aria-label="Select a recorded scan">
+          {recorded.scans.slice().reverse().map((scan) => <button key={scan.volume_key} type="button"
+            className={selectedScan?.volume_key === scan.volume_key ? "selected" : ""}
+            onClick={() => setSelectedVolume(scan.volume_key)}>
+            <b>{scan.site}</b><span>{utc(scan.scan_time)}</span>
+            <small>{scan.candidates.length} captured candidate{scan.candidates.length === 1 ? "" : "s"}</small>
+          </button>)}
+        </div>
+        {selectedScan && <div className="aegis-review__detail">
+          <h3>{selectedScan.site} · {utc(selectedScan.scan_time)}</h3>
+          <p>Processed {utc(selectedScan.processed_at)}</p>
+          <div className="aegis-review__products" aria-label="Radar product availability">
+            {Object.entries(selectedScan.available_products).map(([product, available]) => <span
+              key={product} className={available ? "available" : "missing"}>{product} {available ? "available" : "missing"}</span>)}
+          </div>
+          {selectedScan.candidates.length ? <ul className="aegis-review__candidates">
+            {selectedScan.candidates.map((candidate, index) => <li key={`${candidate.warning_id || "none"}:${index}`}>
+              <b>{candidate.decision.replaceAll("_", " ")}</b> · evidence score {candidate.evidence_score ?? "not assigned"}
+              {candidate.warning_id && <span> · warning {candidate.warning_id}</span>}
+              {candidate.factors.length > 0 && <small>{candidate.factors.join(" · ")}</small>}
+            </li>)}
+          </ul> : <p>No captured candidate in this scan.</p>}
+          <h4>Radar limits</h4>
+          <ul>{selectedScan.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul>
+        </div>}
+      </div>}
+      <p className="aegis-empty">{recorded?.limitation || "Historical replay is read-only and sends no messages."}</p>
+    </section>
   </div>;
 }

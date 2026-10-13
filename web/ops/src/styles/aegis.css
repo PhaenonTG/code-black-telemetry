@@ -23,3 +23,25 @@
 .aegis-evidence b { color: #ffcf76; }
 .aegis-evidence a { color: #92bdff; }
 @media (max-width: 850px) { .aegis-grid { grid-template-columns: 1fr; } .aegis-map { height: 310px; } }
+.aegis-review { margin-top: 18px; }
+.aegis-review__heading { display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; }
+.aegis-review__heading h2 { margin: 3px 0 0; }
+.aegis-review__heading > span, .aegis-review__kicker { color: #f7c77a; font-size: 12px; font-weight: 800; letter-spacing: .06em; }
+.aegis-review__kicker { margin: 0; }
+.aegis-review__grid { display: grid; grid-template-columns: minmax(210px, 310px) minmax(0, 1fr); gap: 16px; }
+.aegis-review__list { max-height: 380px; overflow: auto; display: grid; align-content: start; gap: 7px; }
+.aegis-review__list button { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; text-align: left; padding: 11px;
+  color: #edf3fa; background: #1b2634; border: 1px solid #3b4c61; border-radius: 9px; cursor: pointer; }
+.aegis-review__list button.selected, .aegis-review__list button:hover { border-color: #f7c77a; background: #253244; }
+.aegis-review__list span { justify-self: end; font-size: 11px; color: #afc0d4; }
+.aegis-review__list small { grid-column: 1 / -1; color: #c1cede; }
+.aegis-review__detail { min-width: 0; padding: 14px 17px; border: 1px solid #3b4c61; border-radius: 10px; background: #192330; color: #c5d1df; }
+.aegis-review__detail h3 { margin: 0; overflow-wrap: anywhere; color: #f3f7fc; }
+.aegis-review__detail h4 { margin-bottom: 5px; color: #f3f7fc; }
+.aegis-review__detail ul { padding-left: 20px; line-height: 1.5; }
+.aegis-review__products { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.aegis-review__products span { padding: 4px 7px; border-radius: 6px; font-size: 11px; font-weight: 800; }
+.aegis-review__products .available { background: #174732; color: #b9f1d3; }
+.aegis-review__products .missing { background: #4a2729; color: #ffd2d2; }
+.aegis-review__candidates small { display: block; color: #aabed3; }
+@media (max-width: 650px) { .aegis-review__grid { grid-template-columns: 1fr; } .aegis-review__list { max-height: 210px; } }
