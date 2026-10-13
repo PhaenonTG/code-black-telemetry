@@ -14,11 +14,13 @@ describe("workspace polish preserves workflow boundaries", () => {
     expect(html).not.toContain("<h1")
     expect(html).toContain("<h2>Radar surveillance</h2>")
     expect(html).toContain("Always follow official NWS warnings")
+    expect(html).not.toContain('class="page aegis-page"')
   })
   it("uses one page heading when drafts are embedded in Analysis", () => {
     const html = renderToStaticMarkup(<MemoryRouter initialEntries={["/analysis/drafts"]}><AnalysisWorkspace /></MemoryRouter>)
     expect(html.match(/<h1/g)).toHaveLength(1)
     expect(html).toContain("<h2>Setup drafts</h2>")
+    expect(html).toContain('class="chase-setups chase-setups--embedded"')
     expect(html).toContain("No draft is public.")
     expect(html).toContain('aria-pressed="true">Drafts')
   })

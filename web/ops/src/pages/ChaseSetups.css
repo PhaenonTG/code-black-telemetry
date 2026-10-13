@@ -93,7 +93,7 @@
 .chase-setups__loading{margin:20px}.chase-setups__error{border-left:3px solid var(--cb-amber);background:#302510;color:#ffe2a2;padding:11px 13px;font-size:12px;line-height:1.5}
 
 /* The embedded analysis desk uses one page heading and a compact queue sidebar. */
-.chase-setups--embedded.page{padding:14px 0 0;min-height:0}
+.analysis-workspace .chase-setups--embedded{padding:14px 0 0;min-height:0;min-width:0}
 .chase-setups--embedded .chase-setups__header{align-items:center;gap:12px;margin-bottom:12px}
 .chase-setups--embedded .chase-setups__header h2{margin:0 0 4px;font-size:16px;line-height:1.3;letter-spacing:0}
 .chase-setups--embedded .chase-setups__header p{font-size:11px}
@@ -116,7 +116,9 @@
 .chase-setups__list button:focus-visible,.chase-setups__header-actions button:focus-visible{outline:2px solid #8bc9ef;outline-offset:-3px}
 .chase-setups__activity h2{padding:12px;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
 .chase-setups__candidates{padding:14px 0}
-.chase-setups__table-scroll{border-radius:4px;overscroll-behavior-x:contain}
+.chase-setups__table-scroll{border-radius:4px;max-height:320px;overflow:auto;overscroll-behavior:contain}
+.chase-setups__table-scroll th{position:sticky;top:0;z-index:1;background:var(--cb-panel-hi)}
+.chase-setups__table-scroll:focus-visible{outline:2px solid #8bc9ef;outline-offset:2px}
 @media(max-width:1200px){.chase-setups--embedded .chase-setups__layout{grid-template-columns:minmax(200px,27%) minmax(0,1fr)}.chase-setups--embedded .chase-setups__activity{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.chase-setups--embedded .chase-setups__activity>h2,.chase-setups--embedded .chase-setups__activity>.chase-setups__chronology{grid-column:1/-1}}
 @media(min-width:761px){.chase-setups--embedded .chase-setups__layout{grid-template-columns:minmax(0,1fr) minmax(260px,28%)}.chase-setups--embedded .chase-setups__list{grid-column:1/-1;display:grid;grid-template-columns:170px minmax(0,1fr);align-items:stretch}.chase-setups--embedded .chase-setups__list h2{display:flex;align-items:center;border-bottom:0;border-right:1px solid var(--cb-line)}.chase-setups--embedded .chase-setups__list ul{display:flex;flex-wrap:wrap;max-height:240px}.chase-setups--embedded .chase-setups__list li{flex:1 1 260px;max-width:400px;border-right:1px solid var(--cb-line)}.chase-setups--embedded .chase-setups__list li+li{border-top:0}.chase-setups--embedded .chase-setups__list .chase-setups__empty{min-height:90px;padding:12px;align-items:flex-start;text-align:left}.chase-setups--embedded .chase-setups__list .chase-setups__empty p{max-width:none;margin:5px 0}.chase-setups--embedded .chase-setups__activity{grid-column:auto;display:block}}
 @media(max-width:760px){.chase-setups--embedded .chase-setups__layout{grid-template-columns:1fr}.chase-setups--embedded .chase-setups__list ul{max-height:250px}.chase-setups--embedded .chase-setups__activity{display:block}.chase-setups--embedded .chase-setups__header{align-items:flex-start;flex-direction:column}.chase-setups__detail-head{flex-wrap:wrap}.chase-setups__labels{justify-content:flex-start}.chase-setups__evidence dl{grid-template-columns:1fr}.chase-setups__detail{padding:12px}}

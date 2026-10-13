@@ -96,7 +96,7 @@ export default function AegisAlerts({ embedded = false }: { embedded?: boolean }
   const selected = alerts.find((item) => item.id === selectedId) || alerts[0] || null;
   const selectedScan = recorded?.scans.find((scan) => scan.volume_key === selectedVolume)
     || recorded?.scans.at(-1) || null;
-  return <div className="page aegis-page">
+  return <div className={embedded ? "aegis-page" : "page aegis-page"}>
     {embedded ? <header className="analysis-surveillance-heading"><h2>Radar surveillance</h2><p>Warning-triggered radar evidence. Always follow official NWS warnings; Aegis never issues or cancels one.</p></header> : <PageHeader kicker="FABRIC / SUPPLEMENTAL INTELLIGENCE" title="Aegis Radar Alerts"
       description="Warning-triggered radar evidence. Always follow official NWS warnings; Aegis never issues or cancels one." />}
     <div className="aegis-summary">

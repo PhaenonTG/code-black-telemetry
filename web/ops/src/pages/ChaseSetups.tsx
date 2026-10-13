@@ -8,6 +8,7 @@ import { SetupRevisionTimeline } from "../workspaces/SetupRevisionTimeline";
 import type { SetupRevisionHistory } from "../workspaces/setupRevisionModel";
 import { SetupReviewDesk } from "../workspaces/SetupReviewDesk";
 import type { SetupWorkflow } from "../workspaces/setupReviewModel";
+import { setupQueueRevision } from "../workspaces/setupQueueRevision";
 import "./ChaseSetups.css";
 
 type SetupRow = {
@@ -151,7 +152,7 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
   const ranked = rankedCandidates(points);
   const selectedCandidateKey = selectedCandidate && selectedCandidate.setupId === detail?.setup_id ? selectedCandidate.key : null;
   return (
-    <div className={`chase-setups page${embedded ? " chase-setups--embedded" : ""}`}>
+    <div className={`chase-setups${embedded ? " chase-setups--embedded" : " page"}`}>
       <header className="chase-setups__header">
         <div>{embedded ? <h2>{isBriefings ? "Reviewed briefings" : "Setup drafts"}</h2> : <h1>{isBriefings ? "Reviewed setup briefings" : "Chase setup drafts"}</h1>}<p>{isBriefings ? "Approved current revisions retained as private operational briefings." : "Potential setups for operator review. No draft is public."}</p></div>
         <div className="chase-setups__header-actions">
@@ -173,7 +174,7 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
               onClick={() => navigate(`${detailBasePath}/${row.setup_id}`)}>
               <strong>SPC Day {row.day} · {row.risk_label}</strong>
               <span>{when(row.valid_from)}–{when(row.valid_until)}</span>
-              <small>{row.model_status === "available" ? "HRRR screening available" : "HRRR screening unavailable"} · Revision {row.revision}</small>
+              <small>{row.model_status === "available" ? "HRRR screening available" : "HRRR screening unavailable"} · Revision {setupQueueRevision(row, detail)}</small>
             </button>
           </li>)}</ul>}
         </section>
@@ -191,7 +192,7 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
             {detail.identity_review_required && <p className="chase-setups__error">Setup identity needs operator review before notification or publication.</p>}
             <section className="chase-setups__candidates" aria-label="Ranked experimental screening candidates">
               <div className="chase-setups__section-head"><h3>Retained screening points</h3><span>{ranked.length} shown · sorted by index</span></div>
-              {ranked.length === 0 ? <p>No coordinate-bearing HRRR screening points were returned.</p> : <div className="chase-setups__table-scroll"><table><thead><tr><th scope="col">Rank</th><th scope="col">Coordinates</th><th scope="col">Valid (local)</th><th scope="col">Run (local)</th><th scope="col">Index</th><th scope="col">Classification</th></tr></thead><tbody>
+              {ranked.length === 0 ? <p>No coordinate-bearing HRRR screening points were returned.</p> : <div className="chase-setups__table-scroll" role="region" aria-label="Screening points table" tabIndex={0}><table><thead><tr><th scope="col">Rank</th><th scope="col">Coordinates</th><th scope="col">Valid (local)</th><th scope="col">Run (local)</th><th scope="col">Index</th><th scope="col">Classification</th></tr></thead><tbody>
                 {ranked.map((point) => <tr key={point.key} className={selectedCandidateKey === point.key ? "is-selected" : ""}><td><button type="button" aria-label={`Show screening point ${point.rank} on map`} aria-pressed={selectedCandidateKey === point.key} onClick={() => setSelectedCandidate({ setupId: detail.setup_id, key: point.key })}>{point.rank} ↗</button></td><td>{point.latitude.toFixed(3)}, {point.longitude.toFixed(3)}</td><td>{when(point.valid_time)}</td><td>{when(point.run_time)}</td><td>{point.score_index.toFixed(3)}</td><td>{point.classification?.replaceAll("_", " ") ?? "Unclassified"}</td></tr>)}
               </tbody></table></div>}
               <p>Index is a model screening value, not confidence. Ranking does not identify a safe route, observed storm, or precise chase target.</p>
