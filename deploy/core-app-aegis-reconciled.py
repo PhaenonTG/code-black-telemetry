@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -8,7 +9,7 @@ import httpx
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, WebSocket
 from pydantic import BaseModel, Field
-from starlette.responses import Response
+from starlette.responses import Response, StreamingResponse
 
 from code_black_core_api.chase_compat import resolve_legacy_chase_location
 from code_black_core_api.chase_config import (
@@ -220,6 +221,28 @@ def create_app(
     @app.get("/api/fabric/v1/units", tags=["fabric"])
     def fabric_units() -> FabricNormalizedState:
         return fabric.snapshot()
+
+    @app.get("/api/fabric/v1/stream", tags=["fabric"])
+    async def fabric_stream() -> StreamingResponse:
+        """Bounded NDJSON snapshots; reconnecting rechecks gateway authorization."""
+
+        async def frames() -> AsyncIterator[str]:
+            for index in range(23):
+                snapshot = fabric.snapshot()
+                event = {
+                    "event_type": "fabric.snapshot",
+                    "timestamp": snapshot.generated_at.isoformat(),
+                    "payload": snapshot.model_dump(mode="json", by_alias=True),
+                }
+                yield json.dumps(event, separators=(",", ":")) + "\n"
+                if index < 22:
+                    await asyncio.sleep(2)
+
+        return StreamingResponse(
+            frames(),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        )
 
     @app.get("/api/fabric/v1/units/{unit_id}", tags=["fabric"])
     def fabric_unit(unit_id: str) -> dict[str, object]:
