@@ -41,7 +41,7 @@ test('executes a command once and returns the prior result for a duplicate comma
 test('rejects a command made against stale producer state', () => {
   const { commands } = fixture();
   assert.throws(
-    () => commands.execute({ commandId: '827f4148-0a4b-4bb9-b9be-ff42ac237ebd', expectedStateRevision: 6, action: 'preview.start' }),
+    () => commands.execute({ commandId: '827f4148-0a4b-4bb9-b9be-ff42ac237ebd', expectedStateRevision: 6, action: 'lowerThird.hide' }),
     (error) => error.statusCode === 409 && error.message === 'STATE_CHANGED',
   );
 });

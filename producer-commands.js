@@ -46,8 +46,8 @@ class ProducerCommands {
     }
     if (!Number.isSafeInteger(command.expectedStateRevision)) throw this.error(400, 'expectedStateRevision is required');
     if (command.createdAt && (!Number.isFinite(Date.parse(command.createdAt)) || this.now() - Date.parse(command.createdAt) > 15000)) throw this.error(409, 'COMMAND_EXPIRED');
-    const stop = ['preview.stop', 'facebook.output.stop', 'archive.camera.stop'].includes(command.action);
-    if (!stop && command.expectedStateRevision !== this.engine.stateRevision) throw this.error(409, 'STATE_CHANGED');
+    const revisionIndependent = ['preview.start', 'preview.stop', 'facebook.output.stop', 'archive.camera.stop'].includes(command.action);
+    if (!revisionIndependent && command.expectedStateRevision !== this.engine.stateRevision) throw this.error(409, 'STATE_CHANGED');
 
     let detail;
     switch (command.action) {
