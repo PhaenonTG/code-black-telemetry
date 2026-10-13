@@ -7,6 +7,7 @@ import { chooseProducerSource, parseProducerSources } from "../workspaces/produc
 import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
 import FacebookProducerPanel from "../workspaces/FacebookProducerPanel"
 import ProducerControls from "../workspaces/ProducerControls"
+import ProgramMonitor from "../workspaces/ProgramMonitor"
 import "./Workspaces.css"
 
 const SELECTION_KEY = "codeblack.ops.producer.source.v1"
@@ -203,9 +204,7 @@ export default function ProducerWorkspace() {
       <div className="producer-main">
         <section className="workspace-panel producer-stage" aria-label="PROGRAM preview">
           <header><h2>PROGRAM</h2><span className={programCurrent ? "workspace-live" : "workspace-muted"}>{programCurrent ? "CURRENT" : producerBridgeState}</span></header>
-          <div className="producer-stage__viewport">
-            {programCurrent ? <img src={programFrameUrl} alt="Current PROGRAM preview" /> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>}
-          </div>
+          <ProgramMonitor active={producerBridgeState === "ONLINE" && sourceFresh(producerStatus)} fallback={programCurrent ? <img src={programFrameUrl} alt="Current PROGRAM preview" /> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
           <div className="producer-stage__foot"><div><strong>{producerStatus?.state ?? "NO BROADCASTER STATUS"}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>{producerStatus?.broadcast?.state ?? "OUTPUT UNKNOWN"}</span></div>
         </section>
         <section className="workspace-panel producer-stage" aria-label="Selected live stream camera">

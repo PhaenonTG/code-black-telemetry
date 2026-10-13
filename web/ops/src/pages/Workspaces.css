@@ -66,3 +66,7 @@
 .producer-controls textarea { width: 100%; box-sizing: border-box; min-height: 72px; }
 .producer-controls [role="alertdialog"] { border: 1px solid #efb34d; padding: 12px; margin-top: 12px; }
 .producer-controls [role="alertdialog"] button { margin: 4px; }
+.producer-stage__viewport video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.producer-monitor-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; }
+.producer-monitor-controls button { min-height: 44px; padding: 10px 14px; touch-action: manipulation; }
+.producer-monitor-controls [role="status"] { flex: 1 1 220px; font-size: 12px; }
