@@ -31,7 +31,7 @@ body{font-variant-numeric:tabular-nums}
 .sidebar__brand-mark{width:32px;height:32px;flex:0 0 auto;object-fit:contain}
 .sidebar__brand-text{font-weight:900;font-size:13px;letter-spacing:.03em;white-space:nowrap}
 .sidebar__brand-text b{color:var(--cb-red)}
-.sidebar__links{display:flex;flex-direction:column;gap:2px}
+.sidebar__links{display:flex;flex-direction:column;gap:2px;min-height:0;overflow-y:auto;scrollbar-width:thin}
 .sidebar__section{display:flex;flex-direction:column;gap:2px;margin-bottom:12px}
 .sidebar__section:last-child{margin-top:auto;margin-bottom:0}
 .sidebar__section-label{margin:6px 10px 4px;color:var(--cb-dim);font-size:8px;font-weight:900;letter-spacing:.16em}

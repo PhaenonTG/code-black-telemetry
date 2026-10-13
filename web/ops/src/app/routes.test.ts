@@ -5,6 +5,9 @@ import { PHONE_ROUTES } from "../layouts/phoneRoutes";
 describe("OPS workstation routes", () => {
   it("exposes the approved major navigation families without marking future sections live", () => {
     expect(ROUTES.map((route) => route.label)).toEqual([
+      "PRODUCER",
+      "CHASE",
+      "ANALYSIS",
       "OPERATIONS MAP",
       "WEATHER ANALYSIS",
       "HURRICANE WATCH",
@@ -27,6 +30,9 @@ describe("OPS workstation routes", () => {
       "MODELS",
       "CONSENSUS",
       "TARGETS",
+    ]);
+    expect(ROUTES.filter((route) => route.section === "WORKSPACES" && route.inSidebar).map((route) => route.label)).toEqual([
+      "PRODUCER", "CHASE", "ANALYSIS",
     ]);
   });
 

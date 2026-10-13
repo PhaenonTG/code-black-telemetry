@@ -9,7 +9,7 @@ import codeblackShield from "../../../../src/assets/codeblack-shield.png"
 // screen width for the map/panels without losing any destination -- tablet's rail is a viewport
 // constraint, not a user choice, so it has no toggle.
 export function Sidebar({ rail, collapsible, onToggleCollapse }: { rail: boolean; collapsible?: boolean; onToggleCollapse?: () => void }) {
-  const sections = (["ANALYSIS", "FIELD", "SYSTEM"] as const).map((name) => ({
+  const sections = (["WORKSPACES", "ANALYSIS", "FIELD", "SYSTEM"] as const).map((name) => ({
     name,
     routes: ROUTES.filter((route) => route.inSidebar && route.section === name),
   }))

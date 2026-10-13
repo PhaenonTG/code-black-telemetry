@@ -13,10 +13,13 @@ export interface RouteDef {
   // Shown in the desktop/tablet sidebar. "More" itself isn't a sidebar destination there --
   // desktop/tablet have room to show Fleet/Operations/Settings directly instead.
   inSidebar: boolean
-  section: "ANALYSIS" | "FIELD" | "SYSTEM"
+  section: "WORKSPACES" | "ANALYSIS" | "FIELD" | "SYSTEM"
 }
 
 export const ROUTES: RouteDef[] = [
+  { path: "/producer", label: "PRODUCER", icon: "stream", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "WORKSPACES" },
+  { path: "/workspace/chase", label: "CHASE", icon: "fleet", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "WORKSPACES" },
+  { path: "/analysis", label: "ANALYSIS", icon: "models", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "WORKSPACES" },
   { path: "/", label: "OPERATIONS MAP", icon: "map", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
   { path: "/weather", label: "WEATHER ANALYSIS", icon: "cloud", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
   { path: "/hurricane", label: "HURRICANE WATCH", icon: "cloud", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
@@ -40,4 +43,4 @@ export const ROUTES: RouteDef[] = [
 // doesn't deserve its own bottom-nav slot) -- desktop/tablet reach those directly from the sidebar.
 export const MORE_ROUTE: RouteDef = { path: "/more", label: "MORE", icon: "more", state: "LIVE", inPhoneNav: true, inSidebar: false, section: "SYSTEM" }
 
-export const MORE_PAGE_LINKS = ROUTES.filter((r) => !r.inPhoneNav && r.state === "LIVE")
+export const MORE_PAGE_LINKS = ROUTES.filter((r) => !r.inPhoneNav && r.state === "LIVE" && r.section !== "WORKSPACES")
