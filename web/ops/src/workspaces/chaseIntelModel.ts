@@ -2,6 +2,12 @@ import type { RoadConditionEvent } from "../../../../src/services/mapLayerModels
 import { distanceToRouteMiles, type RoutePoint } from "../../../../src/services/navigationRoute"
 
 export type ChasePoint = { lat: number; lon: number }
+
+// Refresh field intelligence after roughly a third of a mile of movement without
+// restarting every request for normal GPS jitter.
+export function chaseIntelRefreshKey(point: ChasePoint | null): string {
+  return point ? `${Math.round(point.lat * 200)},${Math.round(point.lon * 200)}` : ""
+}
 export type OfficialAlert = { id?: string; event?: string; headline?: string; severity?: string; expires?: string; source_url?: string }
 
 export function distanceMiles(a: ChasePoint, b: ChasePoint) {

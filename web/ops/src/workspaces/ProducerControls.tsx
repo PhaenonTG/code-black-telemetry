@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { currentAccessToken } from "../core/client"
+import { readProducerResponse } from "./producerResponse"
 
 type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: { stateRevision: number; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; audio?: { available?: boolean; silence?: boolean; clipping?: boolean } } }
 type Lifecycle = { enabled: boolean; permission: boolean; canManage: boolean; broadcast: { id: string; title: string; description: string; status: string; facebookProducerUrl: string } | null; operation?: { state: string; action: string } | null }
@@ -8,9 +9,7 @@ async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> 
   const token = await currentAccessToken()
   if (!token) throw new Error("Sign in to OPS again.")
   const response = await fetch(`/api/producer/v1/${path}`, { method, cache: "no-store", headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(10_000) })
-  const data = await response.json()
-  if (!response.ok) throw new Error(`${data.error || `HTTP ${response.status}`}${typeof data.code === "number" ? ` (Meta ${data.code})` : ""}`)
-  return data as T
+  return readProducerResponse<T>(response)
 }
 
 export default function ProducerControls() {
@@ -32,9 +31,9 @@ export default function ProducerControls() {
   const online = status?.bridge === "ONLINE"
   const allowed = status?.controlAccess?.allowed === true
   const refresh = useCallback(async () => { try { setStatus(await api<Status>("status")); setCheckedAt(Date.now()) } catch (error) { setStatus(null); setMessage(String(error instanceof Error ? error.message : error)) } }, [])
-  useEffect(() => { const initial = window.setTimeout(() => void refresh(), 0); const timer = window.setInterval(() => void refresh(), 3_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refresh])
+  useEffect(() => { const initial = window.setTimeout(() => void refresh(), 0); const timer = window.setInterval(() => { if (!document.hidden) void refresh() }, 3_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refresh])
   const refreshFacebook = useCallback(async () => { try { setFacebook(await api<Lifecycle>("facebook")); setFacebookError("") } catch (error) { setFacebookError(error instanceof Error ? error.message : "Facebook management unavailable") } }, [])
-  useEffect(() => { const initial = window.setTimeout(() => void refreshFacebook(), 0); const timer = window.setInterval(() => void refreshFacebook(), 5_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refreshFacebook])
+  useEffect(() => { const initial = window.setTimeout(() => void refreshFacebook(), 0); const timer = window.setInterval(() => { if (!document.hidden) void refreshFacebook() }, 5_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refreshFacebook])
   useEffect(() => {
     if (!owner) return
     const timer = window.setInterval(async () => {

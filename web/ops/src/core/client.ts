@@ -236,6 +236,17 @@ export async function fetchForecast<T>(config: OpsCoreConfig, path: string, sign
   return withTimeout((inner) => fetchJson<T>(`${config.coreBaseUrl}/api/forecast/v1/${path}`, inner), signal, POINT_REQUEST_TIMEOUT_MS);
 }
 
+export function setupWorkflowErrorMessage(status: number, body: unknown): string {
+  const record = body && typeof body === "object" ? body as Record<string, unknown> : null;
+  const detail = typeof record?.detail === "string" ? record.detail : typeof record?.error === "string" ? record.error : "";
+  if (status === 409) return detail || "The draft changed, a review is busy, or approval requirements changed. Refresh and check the current evidence.";
+  if (status === 422) return detail || "The review request was invalid. Refresh this revision before trying again.";
+  if (status === 403) return "This action requires an authorized OPS account with the appropriate role.";
+  if (status === 401) return "Your OPS session expired. Sign in again before continuing.";
+  return status >= 500 ? "The review service is unavailable. Nothing was posted; retry after checking Core status."
+    : "The action could not be confirmed. Refresh its status before trying again.";
+}
+
 export async function postSetupWorkflow<T>(config: OpsCoreConfig, path: "chase-setup-review" | "chase-setup-decision" | "chase-setup-paid-review", body: unknown): Promise<T> {
   if (!coreConfigured(config)) throw new OpsCoreClientError("Live Core is not configured");
   return withTimeout(async (signal) => {
@@ -245,11 +256,10 @@ export async function postSetupWorkflow<T>(config: OpsCoreConfig, path: "chase-s
       headers: { ...buildCoreRequestHeaders(token), "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new OpsCoreClientError(response.status === 409
-      ? "The draft changed, a review is busy, or approval requirements changed. Refresh and check the current evidence."
-      : response.status === 403 ? "This action requires an authorized OPS account with the appropriate role."
-      : "The action could not be confirmed. Refresh its status before trying again.");
-    return response.json() as Promise<T>;
+    const result = await response.json().catch(() => null) as T | null;
+    if (!response.ok) throw new OpsCoreClientError(setupWorkflowErrorMessage(response.status, result));
+    if (result === null) throw new OpsCoreClientError("The review service returned an invalid response. Refresh before trying again.");
+    return result;
   });
 }
 

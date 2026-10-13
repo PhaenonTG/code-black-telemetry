@@ -7,7 +7,7 @@ import Fleet, { lastSeenLabel } from "./Fleet"
 function renderFleet(hasSnapshot: boolean): string {
   const value: CoreOpsContextValue = {
     locationMode: "follow", updateDeviceLocation: () => {}, followDeviceLocation: () => {}, refreshPoint: () => {},
-    deviceLocation: { status: "unavailable" }, referenceUnitId: "", referenceLabel: "Pea Ridge, AR · fallback", referenceIsFallback: true, chooseChaserLocation: () => {}, chooseFallbackLocation: () => {},
+    deviceLocation: { status: "unavailable" }, referenceUnitId: "", referenceLabel: "Pea Ridge, AR · fallback", referenceIsFallback: true, referenceIsStale: false, referenceChaserFix: null, chooseChaserLocation: () => {}, chooseFallbackLocation: () => {},
     config: { mode: "LIVE_CORE", coreBaseUrl: "http://localhost:8000", coreWsUrl: "ws://localhost:8000", unitId: "cbwx-unit-tessa", stormIntelPollSeconds: 30 },
     state: {
       core: { state: "LIVE", detail: "Core ready", checkedAt: 0 },

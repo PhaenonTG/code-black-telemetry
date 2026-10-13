@@ -9,7 +9,7 @@ import { mergeStormHealth, shouldRefreshPoint } from "./pointRefresh";
 import { addPointHistoryEntry, historyEntryFromSnapshot } from "../stormIntel/pointHistory";
 import type { OpsCoreState } from "./types";
 import { browserLocationAdapter, type LocationState } from "../adapters/LocationAdapter";
-import { liveChaserPoint, PEA_RIDGE_REFERENCE, retainedChaserPoint, type LocationMode } from "./referenceLocation";
+import { liveChaserFix, PEA_RIDGE_REFERENCE, retainedChaserFix, type LiveChaserFix, type LocationMode } from "./referenceLocation";
 
 const FABRIC_STREAM_FRESH_MS = 10_000;
 const REFERENCE_KEY = "codeblack.ops.locationReference.v1";
@@ -61,7 +61,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
   const [locationMode, setLocationMode] = useState<LocationMode>(saved.mode);
   const [referenceUnitId, setReferenceUnitId] = useState(saved.unitId);
   const [deviceLocation, setDeviceLocation] = useState<LocationState>({ status: "requesting" });
-  const [lastChaserPoints, setLastChaserPoints] = useState<Record<string, OpsSelectedPoint>>({});
+  const [lastChaserFixes, setLastChaserFixes] = useState<Record<string, LiveChaserFix>>({});
   const [referenceNow, setReferenceNow] = useState(Date.now);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const referenceSourceRef = useRef(`${saved.mode}:${saved.unitId}:true`);
@@ -82,24 +82,26 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
   }, [locationMode, referenceUnitId]);
 
   const referenceUnit = state.fabric.units?.units.find((unit) => unit.unit_id === referenceUnitId);
-  const chaserPoint = useMemo(() => referenceUnit ? liveChaserPoint(referenceUnit, referenceNow) : null, [referenceUnit, referenceNow]);
+  const chaserFix = useMemo(() => referenceUnit ? liveChaserFix(referenceUnit, referenceNow) : null, [referenceUnit, referenceNow]);
   useEffect(() => {
-    if (!referenceUnitId || !chaserPoint) return;
+    if (!referenceUnitId || !chaserFix) return;
     // This intentionally snapshots an external GPS observation for outage continuity.
     // oxlint-disable-next-line react/set-state-in-effect
-    setLastChaserPoints((current) => {
+    setLastChaserFixes((current) => {
       const prior = current[referenceUnitId];
-      return prior?.lat === chaserPoint.lat && prior.lon === chaserPoint.lon
+      return prior?.point.lat === chaserFix.point.lat && prior.point.lon === chaserFix.point.lon && prior.observedAt === chaserFix.observedAt
         ? current
-        : { ...current, [referenceUnitId]: chaserPoint };
+        : { ...current, [referenceUnitId]: chaserFix };
     });
-  }, [chaserPoint, referenceUnitId]);
-  const selectedChaserPoint = retainedChaserPoint(chaserPoint, lastChaserPoints[referenceUnitId] ?? null);
+  }, [chaserFix, referenceUnitId]);
+  const selectedChaserFix = retainedChaserFix(chaserFix, lastChaserFixes[referenceUnitId] ?? null);
+  const selectedChaserPoint = selectedChaserFix?.point ?? null;
   const deviceReady = deviceLocation.status === "ready" && referenceNow - deviceLocation.at <= 120_000;
-  const referenceIsFallback = locationMode === "fallback" || (locationMode === "follow" && !deviceReady) || (locationMode === "chaser" && !chaserPoint);
+  const referenceIsFallback = locationMode === "fallback" || (locationMode === "follow" && !deviceReady) || (locationMode === "chaser" && !selectedChaserFix);
+  const referenceIsStale = locationMode === "chaser" && Boolean(selectedChaserFix) && !chaserFix;
   const referenceLabel = locationMode === "manual" ? "Map point"
     : locationMode === "fallback" ? "Pea Ridge, AR"
-    : locationMode === "chaser" ? `${referenceUnit?.operator_name || referenceUnit?.display_name || "Chaser"}${chaserPoint ? " · GPS" : selectedChaserPoint ? " · last known GPS" : " · waiting for GPS"}`
+    : locationMode === "chaser" ? `${referenceUnit?.operator_name || referenceUnit?.display_name || "Chaser"}${chaserFix ? " · GPS" : selectedChaserPoint ? " · last known GPS" : " · waiting for GPS"}`
     : deviceReady ? "My location · GPS" : "Pea Ridge, AR · fallback";
 
   useEffect(() => {
@@ -356,6 +358,8 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
       referenceUnitId,
       referenceLabel,
       referenceIsFallback,
+      referenceIsStale,
+      referenceChaserFix: locationMode === "chaser" ? selectedChaserFix : null,
       chooseChaserLocation,
       chooseFallbackLocation,
       updateDeviceLocation,
@@ -364,7 +368,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
       selectPoint,
       selectHistoryPoint,
     }),
-    [config, state, selectedPoint, selectPoint, selectHistoryPoint, locationMode, deviceLocation, referenceUnitId, referenceLabel, referenceIsFallback, chooseChaserLocation, chooseFallbackLocation, updateDeviceLocation, followDeviceLocation, refreshPoint],
+    [config, state, selectedPoint, selectPoint, selectHistoryPoint, locationMode, deviceLocation, referenceUnitId, referenceLabel, referenceIsFallback, referenceIsStale, selectedChaserFix, chooseChaserLocation, chooseFallbackLocation, updateDeviceLocation, followDeviceLocation, refreshPoint],
   );
   return <CoreOpsContext.Provider value={value}>{children}</CoreOpsContext.Provider>;
 }

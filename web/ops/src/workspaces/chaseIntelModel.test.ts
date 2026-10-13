@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest"
 import type { RoadConditionEvent } from "../../../../src/services/mapLayerModels"
-import { distanceMiles, nearbyRoadConditions, routeRoadConditions, topOfficialAlert } from "./chaseIntelModel"
+import { chaseIntelRefreshKey, distanceMiles, nearbyRoadConditions, routeRoadConditions, topOfficialAlert } from "./chaseIntelModel"
 
 describe("Chase field-intel selection", () => {
+  it("refreshes after meaningful movement while ignoring ordinary GPS jitter", () => {
+    expect(chaseIntelRefreshKey(null)).toBe("")
+    expect(chaseIntelRefreshKey({ lat: 36.45001, lon: -94.12001 })).toBe(chaseIntelRefreshKey({ lat: 36.4501, lon: -94.1201 }))
+    expect(chaseIntelRefreshKey({ lat: 36.45, lon: -94.12 })).not.toBe(chaseIntelRefreshKey({ lat: 36.456, lon: -94.12 }))
+  })
   it("prioritizes active tornado warnings over severe warnings and expired products", () => {
     const now = Date.parse("2026-10-13T12:00:00Z")
     const picked = topOfficialAlert([

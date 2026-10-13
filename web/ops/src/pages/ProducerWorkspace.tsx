@@ -7,6 +7,7 @@ import { chooseProducerSource, parseProducerSources } from "../workspaces/produc
 import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
 import FacebookProducerPanel from "../workspaces/FacebookProducerPanel"
 import ProducerControls from "../workspaces/ProducerControls"
+import { readProducerResponse } from "../workspaces/producerResponse"
 import "./Workspaces.css"
 
 const SELECTION_KEY = "codeblack.ops.producer.source.v1"
@@ -29,7 +30,6 @@ type ProducerBridgeStatus = {
   audio?: { available?: boolean; silence?: boolean; clipping?: boolean }
   lastError?: string | null
 }
-type ProducerCapabilities = { schemaVersion?: string; actions?: Record<string, string[]>; unavailable?: Record<string, string>; capabilities?: ProducerCapabilities }
 
 function readSelection(): string {
   try { return localStorage.getItem(SELECTION_KEY) ?? "" } catch { return "" }
@@ -61,10 +61,6 @@ function unwrapBridgeStatus(document: ProducerBridgeStatus): ProducerBridgeStatu
   return { ...status, observedAt: document.observedAt ?? status.observedAt, bridgeState: bridgeState(document) }
 }
 
-function unwrapCapabilities(document: ProducerCapabilities): ProducerCapabilities {
-  return document.capabilities && typeof document.capabilities === "object" ? document.capabilities : document
-}
-
 function sourceFresh(document: ProducerBridgeStatus | null): boolean {
   return document?.source_state === "SOURCE_LIVE" && document?.previews?.program?.state === "ACTIVE"
 }
@@ -79,12 +75,13 @@ export default function ProducerWorkspace() {
   const [alertSnapshot, setAlertSnapshot] = useState<{ key: string; value: OfficialAlertResponse } | null>(null)
   const [alertError, setAlertError] = useState("")
   const [producerStatus, setProducerStatus] = useState<ProducerBridgeStatus | null>(null)
-  const [, setProducerCapabilities] = useState<ProducerCapabilities | null>(null)
   const [producerError, setProducerError] = useState("")
   const [programFrameUrl, setProgramFrameUrl] = useState("")
   const [programFrameAt, setProgramFrameAt] = useState("")
   const [programFrameState, setProgramFrameState] = useState("Waiting for broadcaster status")
   const programObjectUrl = useRef("")
+  const producerStatusRef = useRef<ProducerBridgeStatus | null>(null)
+  useEffect(() => { producerStatusRef.current = producerStatus }, [producerStatus])
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -111,6 +108,7 @@ export default function ProducerWorkspace() {
     if (alertLatitude == null || alertLongitude == null) return
     let cancelled = false
     const load = async () => {
+      if (document.hidden) return
       const params = new URLSearchParams({ latitude: String(alertLatitude), longitude: String(alertLongitude) })
       try {
         const next = await fetchForecast<OfficialAlertResponse>(config, `alerts?${params}`)
@@ -127,26 +125,23 @@ export default function ProducerWorkspace() {
   useEffect(() => {
     let cancelled = false
     const load = async () => {
+      if (document.hidden) return
       try {
         const token = await currentAccessToken()
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
-        const [statusResponse, capabilitiesResponse] = await Promise.all([
-          fetch("/api/producer/v1/status", { cache: "no-store", headers }),
-          fetch("/api/producer/v1/capabilities", { cache: "no-store", headers }),
-        ])
-        if (!statusResponse.ok || !capabilitiesResponse.ok) throw new Error(`Producer bridge returned ${!statusResponse.ok ? statusResponse.status : capabilitiesResponse.status}`)
-        const [nextStatus, nextCapabilities] = await Promise.all([
-          statusResponse.json() as Promise<ProducerBridgeStatus>, capabilitiesResponse.json() as Promise<ProducerCapabilities>,
-        ])
+        const statusResponse = await fetch("/api/producer/v1/status", { cache: "no-store", headers })
+        const nextStatus = await readProducerResponse<ProducerBridgeStatus>(statusResponse)
         if (cancelled) return
-        setProducerStatus(unwrapBridgeStatus(nextStatus)); setProducerCapabilities(unwrapCapabilities(nextCapabilities)); setProducerError("")
+        setProducerStatus(unwrapBridgeStatus(nextStatus)); setProducerError("")
       } catch (reason) {
-        if (!cancelled) { setProducerStatus(null); setProducerCapabilities(null); setProducerError(reason instanceof Error ? reason.message : "Producer bridge unavailable") }
+        if (!cancelled) setProducerError(reason instanceof Error ? reason.message : "Producer bridge unavailable")
       }
     }
     void load()
     const timer = window.setInterval(() => void load(), 4_000)
-    return () => { cancelled = true; window.clearInterval(timer) }
+    const visible = () => { if (!document.hidden) void load() }
+    document.addEventListener("visibilitychange", visible)
+    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", visible) }
   }, [])
 
   useEffect(() => {
@@ -157,7 +152,9 @@ export default function ProducerWorkspace() {
       setProgramFrameUrl("")
     }
     const load = async () => {
-      if (!sourceFresh(producerStatus)) { clearFrame(); setProgramFrameState(producerStatus ? "PROGRAM unavailable until the source is live" : "Waiting for broadcaster status"); return }
+      if (document.hidden) return
+      const currentStatus = producerStatusRef.current
+      if (!sourceFresh(currentStatus)) { clearFrame(); setProgramFrameState(currentStatus ? "PROGRAM unavailable until the source is live" : "Waiting for broadcaster status"); return }
       try {
         const token = await currentAccessToken()
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
@@ -179,7 +176,9 @@ export default function ProducerWorkspace() {
     }
     void load()
     const timer = window.setInterval(() => void load(), 1_500)
-    return () => { cancelled = true; window.clearInterval(timer); clearFrame() }
+    const visible = () => { if (!document.hidden) void load() }
+    document.addEventListener("visibilitychange", visible)
+    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); clearFrame() }
   }, [producerStatus?.source_state, producerStatus?.previews?.program?.state])
 
   const sources = useMemo(() => parseProducerSources(status?.streaming), [status?.streaming])

@@ -4,21 +4,20 @@ import { ChaseRadarPanel } from "../workspaces/ChaseRadarPanel"
 import { ChaseIntelRail, ChaseOfficialBanner, useChaseIntel } from "../workspaces/ChaseIntelRail"
 import OpsWorkstation from "./OpsWorkstation"
 import "./Workspaces.css"
-import { liveChaserFix } from "../core/referenceLocation"
 import { useState } from "react"
 import { useChaseRoute } from "../workspaces/useChaseRoute"
 import type { ChasePoint } from "../workspaces/chaseIntelModel"
 
 export default function ChaseWorkspace() {
-  const { config, state, selectedPoint, deviceLocation, locationMode, referenceUnitId, referenceLabel, referenceIsFallback } = useCoreOps()
+  const { config, state, selectedPoint, deviceLocation, locationMode, referenceUnitId, referenceLabel, referenceIsFallback, referenceIsStale, referenceChaserFix } = useCoreOps()
   const [choosingDestination, setChoosingDestination] = useState(false)
   const [destination, setDestination] = useState<ChasePoint | null>(null)
   const units = state.fabric.units?.units ?? []
   const active = locationMode === "chaser" ? units.find((unit) => unit.unit_id === referenceUnitId) : undefined
   const radarFocus = selectedPoint
-  const vehiclePosition = locationMode === "chaser" && !referenceIsFallback
-  const lastFix = active ? liveChaserFix(active)?.observedAt : null
-  const origin = locationMode === "chaser" && !referenceIsFallback ? liveChaserFix(active)?.point ?? null
+  const vehiclePosition = locationMode === "chaser" && !referenceIsFallback && !referenceIsStale
+  const lastFix = referenceChaserFix?.observedAt ?? null
+  const origin = locationMode === "chaser" ? referenceChaserFix?.point ?? null
     : locationMode === "follow" && !referenceIsFallback && deviceLocation.status === "ready"
       ? { lat: deviceLocation.lat, lon: deviceLocation.lon } : null
   const route = useChaseRoute(origin, destination)

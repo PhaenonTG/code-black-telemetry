@@ -5,7 +5,7 @@ import type { OpsCoreConfig } from "../core/config"
 import { getAegisFeed, type AegisAlertFeed } from "../core/aegisFeed"
 import { getRoadConditionsForViewport, type ViewportLayerResult, type RoadConditionEvent } from "../../../../src/services/mapLayerModels"
 import { getNearbyStormThreats, type NearbyThreatCoverage } from "../../../../src/services/situational"
-import { distanceMiles, nearbyRoadConditions, routeRoadConditions, topOfficialAlert, type ChasePoint, type OfficialAlert } from "./chaseIntelModel"
+import { chaseIntelRefreshKey, distanceMiles, nearbyRoadConditions, routeRoadConditions, topOfficialAlert, type ChasePoint, type OfficialAlert } from "./chaseIntelModel"
 import type { useChaseRoute } from "./useChaseRoute"
 
 type OfficialResponse = { status: string; queried_at?: string; alerts?: OfficialAlert[]; notice?: string }
@@ -17,6 +17,7 @@ function timeLabel(value: number) { return new Date(value).toLocaleTimeString([]
 export function useChaseIntel(config: OpsCoreConfig, point: ChasePoint | null) {
   const latestPoint = useRef(point)
   const hasPoint = point !== null
+  const pointKey = chaseIntelRefreshKey(point)
   useEffect(() => { latestPoint.current = point }, [point])
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   useEffect(() => {
@@ -50,7 +51,7 @@ export function useChaseIntel(config: OpsCoreConfig, point: ChasePoint | null) {
     const initial = window.setTimeout(() => void load(), 0)
     const timer = window.setInterval(() => void load(), 30_000)
     return () => { cancelled = true; window.clearTimeout(initial); window.clearInterval(timer) }
-  }, [config, hasPoint])
+  }, [config, hasPoint, pointKey])
   return point && snapshot && distanceMiles(point, snapshot.point) <= .5 ? snapshot : null
 }
 
