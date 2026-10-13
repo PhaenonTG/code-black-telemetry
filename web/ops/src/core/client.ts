@@ -236,7 +236,7 @@ export async function fetchForecast<T>(config: OpsCoreConfig, path: string, sign
   return withTimeout((inner) => fetchJson<T>(`${config.coreBaseUrl}/api/forecast/v1/${path}`, inner), signal, POINT_REQUEST_TIMEOUT_MS);
 }
 
-export async function postSetupWorkflow<T>(config: OpsCoreConfig, path: "chase-setup-review" | "chase-setup-decision", body: unknown): Promise<T> {
+export async function postSetupWorkflow<T>(config: OpsCoreConfig, path: "chase-setup-review" | "chase-setup-decision" | "chase-setup-paid-review", body: unknown): Promise<T> {
   if (!coreConfigured(config)) throw new OpsCoreClientError("Live Core is not configured");
   return withTimeout(async (signal) => {
     const token = await currentAccessToken();

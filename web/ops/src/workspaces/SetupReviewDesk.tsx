@@ -49,6 +49,15 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
     } catch (err) { setError(err instanceof Error ? err.message : "Action unavailable. Refresh to check its status."); }
     finally { setBusy(false); }
   }
+  async function requestPaidReview() {
+    if (busy || !decisionRole || !fingerprint || workflow?.decision?.decision !== "approved") return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      setWorkflow(await postSetupWorkflow<SetupWorkflow>(config, "chase-setup-paid-review", { setup_id: setupId, revision, source_fingerprint: fingerprint }));
+      setMessage("Full private review requested for this exact approved revision.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Paid review could not be confirmed."); }
+    finally { setBusy(false); }
+  }
 
   return <section className="setup-review-desk" aria-label="Revision advisory reviews and decision">
     <div className="chase-setups__section-head"><h3>Advisory reviews <small>REVISION {revision}</small></h3>
@@ -95,13 +104,15 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
     </div>
     <div className="setup-review-desk__decision" aria-label="Hourly paid second opinion">
       <h3>Hourly independent review</h3>
+      {decisionRole && current && <button type="button" className="setup-review-desk__run" disabled={busy || workflow?.decision?.decision !== "approved" || !fingerprint} onClick={() => void requestPaidReview()}>
+        {busy ? "Requesting full review…" : "Run full review now"}</button>}
       {workflow?.paid_review?.status === "ready" ? <div className="setup-review-desk__saved">
         <strong>{workflow.paid_review.verdict === "ready" ? "Evidence-bounded second opinion" : "Second opinion withheld"}</strong>
         <p>{workflow.paid_review.summary}</p>
         <small>{workflow.paid_review.model} · {workflow.paid_review.confidence ?? "confidence unavailable"} · {workflow.paid_review.reviewed_at ? new Date(workflow.paid_review.reviewed_at).toLocaleString() : "time unavailable"}</small>
         {workflow.paid_review.uncertainties && workflow.paid_review.uncertainties.length > 0 && <details><summary>Uncertainties ({workflow.paid_review.uncertainties.length})</summary><ul>{workflow.paid_review.uncertainties.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
         {workflow.paid_review.next_hour_triggers && workflow.paid_review.next_hour_triggers.length > 0 && <details><summary>Check next hour ({workflow.paid_review.next_hour_triggers.length})</summary><ul>{workflow.paid_review.next_hour_triggers.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
-      </div> : <p>Available hourly only after an OWNER or ADMIN approves this exact current revision. It stays private and does not publish a briefing.</p>}
+      </div> : <p>Available hourly or on owner/admin request only after approval of this exact current revision. It stays private and does not publish a briefing.</p>}
     </div>
     {error && <p className="chase-setups__error" role="alert">{error}</p>}
     {message && <p className="setup-review-desk__success" role="status">{message}</p>}
