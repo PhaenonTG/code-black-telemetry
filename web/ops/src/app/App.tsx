@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react"
-import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom"
+import { BrowserRouter, Navigate, Routes, Route, useLocation, useParams } from "react-router-dom"
 import { AuthProvider } from "../auth/AuthProvider"
 import { AuthGate } from "../components/AuthGate"
 import { CoreOpsProvider } from "../core/CoreOpsProvider"
@@ -22,12 +22,18 @@ const Stream = lazy(() => import("../pages/Stream"))
 const AiHandoff = lazy(() => import("../pages/AiHandoff"))
 const MobileHome = lazy(() => import("../pages/MobileHome"))
 const HurricaneWatch = lazy(() => import("../pages/HurricaneWatch"))
-const ChaseSetups = lazy(() => import("../pages/ChaseSetups"))
 const AegisAlerts = lazy(() => import("../pages/AegisAlerts"))
 const AutomationLab = lazy(() => import("../pages/AutomationLab"))
 const ProducerWorkspace = lazy(() => import("../pages/ProducerWorkspace"))
 const ChaseWorkspace = lazy(() => import("../pages/ChaseWorkspace"))
 const AnalysisWorkspace = lazy(() => import("../pages/AnalysisWorkspace"))
+
+function LegacyChaseSetupRedirect() {
+  const { setupId } = useParams()
+  const location = useLocation()
+  const destination = setupId ? `/analysis/drafts/${setupId}${location.search}` : `/analysis/drafts${location.search}`
+  return <Navigate to={destination} replace />
+}
 
 // /update-password is reachable regardless of auth state -- it's the landing page for a
 // Supabase password-recovery email link, which itself establishes a temporary session (see
@@ -51,12 +57,16 @@ export default function App() {
                         <Route path="/producer" element={<ProducerWorkspace />} />
                         <Route path="/workspace/chase" element={<ChaseWorkspace />} />
                         <Route path="/analysis" element={<AnalysisWorkspace />} />
-                        <Route path="/analysis/setup/:setupId" element={<AnalysisWorkspace />} />
+                        <Route path="/analysis/drafts" element={<AnalysisWorkspace />} />
+                        <Route path="/analysis/drafts/:setupId" element={<AnalysisWorkspace />} />
+                        <Route path="/analysis/briefings" element={<AnalysisWorkspace />} />
+                        <Route path="/analysis/briefings/:setupId" element={<AnalysisWorkspace />} />
+                        <Route path="/analysis/setup/:setupId" element={<LegacyChaseSetupRedirect />} />
                         <Route path="/radar" element={<OpsWorkstation focus="RADAR LAB" />} />
                         <Route path="/weather" element={<StormIntelWorkspace />} />
                         <Route path="/hurricane" element={<HurricaneWatch />} />
-                        <Route path="/chase-setups" element={<ChaseSetups />} />
-                        <Route path="/chase-setups/:setupId" element={<ChaseSetups />} />
+                        <Route path="/chase-setups" element={<LegacyChaseSetupRedirect />} />
+                        <Route path="/chase-setups/:setupId" element={<LegacyChaseSetupRedirect />} />
                         <Route path="/aegis-alerts" element={<AegisAlerts />} />
                         {/* Keep the short and earlier observation-plan URLs valid. */}
                         <Route path="/aegis" element={<Navigate to="/aegis-alerts" replace />} />

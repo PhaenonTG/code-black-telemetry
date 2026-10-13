@@ -4,8 +4,9 @@ import { fetchForecast, postSetupWorkflow } from "../core/client";
 import type { OpsCoreConfig } from "../core/config";
 import { canApprove, reviewStatus, type SetupWorkflow } from "./setupReviewModel";
 
-export function SetupReviewDesk({ config, setupId, revision, fingerprint, current, initial }: {
+export function SetupReviewDesk({ config, setupId, revision, fingerprint, current, initial, onWorkflowChange }: {
   config: OpsCoreConfig; setupId: string; revision: number; fingerprint?: string; current: boolean; initial?: SetupWorkflow;
+  onWorkflowChange?: (workflow: SetupWorkflow) => void;
 }) {
   const auth = useAuth();
   const role = auth.status === "authorized" ? auth.profile.role : undefined;
@@ -26,6 +27,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
         `chase-setup?setup_id=${setupId}&revision=${revision}`, controller.signal).then(record => {
           if (!controller.signal.aborted) {
             setWorkflow(record.workflow);
+            onWorkflowChange?.(record.workflow);
             if (record.current_revision !== revision) setError("A newer revision is available. Refresh before making a decision.");
           }
         }).catch(() => { if (!controller.signal.aborted) setError("Review status could not be refreshed. Use Refresh to check again."); });
@@ -33,7 +35,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
     };
     timer = setTimeout(() => void poll(), 5000);
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [config, setupId, revision, workflow?.status]);
+  }, [config, onWorkflowChange, setupId, revision, workflow?.status]);
 
   async function submit(decision?: "approved" | "changes_requested") {
     if (busy) return;
@@ -45,6 +47,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
           ...(decision ? { decision, note, packet_digest: workflow?.packet_digest } : {}),
         });
       setWorkflow(result);
+      onWorkflowChange?.(result);
       if (decision) { setMessage(`Decision saved for revision ${revision}.`); setNote(""); setAcknowledged(false); }
     } catch (err) { setError(err instanceof Error ? err.message : "Action unavailable. Refresh to check its status."); }
     finally { setBusy(false); }
@@ -53,7 +56,9 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
     if (busy || !decisionRole || !fingerprint || workflow?.decision?.decision !== "approved") return;
     setBusy(true); setError(""); setMessage("");
     try {
-      setWorkflow(await postSetupWorkflow<SetupWorkflow>(config, "chase-setup-paid-review", { setup_id: setupId, revision, source_fingerprint: fingerprint }));
+      const result = await postSetupWorkflow<SetupWorkflow>(config, "chase-setup-paid-review", { setup_id: setupId, revision, source_fingerprint: fingerprint });
+      setWorkflow(result);
+      onWorkflowChange?.(result);
       setMessage("Full private review requested for this exact approved revision.");
     } catch (err) { setError(err instanceof Error ? err.message : "Paid review could not be confirmed."); }
     finally { setBusy(false); }
@@ -87,7 +92,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
       <p>{workflow?.comparison?.status === "differences" ? `The reviewers differ in ${workflow.comparison.differences.map(field => field.replaceAll("_", " ")).join(" and ")}. Read both explanations before deciding.`
         : workflow?.comparison?.status === "aligned_categories" ? "Hazard categories and attention items align. Read both explanations; matching categories do not establish certainty."
         : "Both validated reviews are needed to compare their findings."}</p>
-      <p>Not supplied: thermodynamic or wind profiles, surface observations, RAP, mesoscale discussions, watches, warnings, observed radar. The screening index cannot establish storm mode or specific hazards. Paid second opinion is disabled.</p></div>
+      <p>Not supplied: thermodynamic or wind profiles, surface observations, RAP, mesoscale discussions, watches, warnings, observed radar. The screening index cannot establish storm mode or specific hazards. The independent full review below remains private.</p></div>
     <div className="setup-review-desk__decision"><h3>Operator decision</h3>
       {workflow?.decision ? <div className="setup-review-desk__saved"><strong>{workflow.decision.decision === "approved" ? "Approved for this revision" : "Changes requested"}</strong>
         <p>{workflow.decision.note}</p><small>{workflow.decision.actor_role} · {new Date(workflow.decision.decided_at).toLocaleString()}</small></div> : <p>No operator decision saved for revision {revision}.</p>}
