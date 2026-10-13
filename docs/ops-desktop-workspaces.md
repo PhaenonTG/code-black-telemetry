@@ -14,7 +14,7 @@ The three desktop workspaces are **additions to the current sidebar**, not a rep
 
 - The workspace keeps the existing Mapbox operations map and map controls, with a selectable Fabric field unit and adjacent single-site radar. Radar uses the existing worker, nearest-site fallback, REF/VEL/CC controls, and honest scan age/freshness. SRV is available only when storm motion is present. The Radar Lab and Fleet destinations remain accessible.
 - A point-specific official warning banner queries Core, while a supporting rail shows NWS state-polygon warnings, DOT road events, the field reference, and nearby recent Aegis candidates. The rail labels nearest-vertex distances as approximate, distinguishes reported vehicle GPS from a manually selected point, and never treats absent data as an all-clear. Road event coverage varies by provider; Aegis remains explicitly internal and unconfirmed.
-- Route tools and more focused chase threat/road/official-warning rails remain integration work. A unit without a reported location is labeled as such; the map must not invent a vehicle position.
+- Chase can now choose a destination separately from its official-warning reference. With a fresh browser or chaser GPS origin, it draws a Mapbox route up to 80 miles and shows provider road events approximately within five miles of the route. Routing and provider coverage are explicitly incomplete and are not turn-by-turn navigation or a route-safety check. More focused threat and official-warning rails remain integration work. A unit without a reported location is labeled as such; the map must not invent a vehicle position.
 
 ## Analysis
 

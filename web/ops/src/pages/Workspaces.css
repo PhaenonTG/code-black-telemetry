@@ -4,6 +4,7 @@
 .workspace-heading h1{margin:0;font-size:25px;font-weight:900;letter-spacing:.03em;text-transform:uppercase}
 .workspace-heading p{margin:4px 0 0;color:var(--cb-muted);font-size:12px}
 .workspace-heading button,.workspace-heading a,.analysis-context a{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:8px 12px;border:1px solid var(--cb-line);background:var(--cb-panel);color:var(--cb-text);font-size:11px;font-weight:800;letter-spacing:.04em;cursor:pointer}
+.workspace-heading button[aria-pressed=true]{border-color:var(--cb-red);background:var(--cb-red-deep)}
 .workspace-heading nav,.analysis-context nav{display:flex;gap:8px;flex-wrap:wrap}
 .workspace-panel{background:var(--cb-panel);border:1px solid var(--cb-line);min-width:0}
 .workspace-panel>header{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:42px;padding:9px 12px;border-bottom:1px solid var(--cb-line)}

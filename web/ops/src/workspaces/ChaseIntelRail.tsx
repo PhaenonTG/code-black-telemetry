@@ -5,7 +5,8 @@ import type { OpsCoreConfig } from "../core/config"
 import { getAegisFeed, type AegisAlertFeed } from "../core/aegisFeed"
 import { getRoadConditionsForViewport, type ViewportLayerResult, type RoadConditionEvent } from "../../../../src/services/mapLayerModels"
 import { getNearbyStormThreats, type NearbyThreatCoverage } from "../../../../src/services/situational"
-import { distanceMiles, nearbyRoadConditions, topOfficialAlert, type ChasePoint, type OfficialAlert } from "./chaseIntelModel"
+import { distanceMiles, nearbyRoadConditions, routeRoadConditions, topOfficialAlert, type ChasePoint, type OfficialAlert } from "./chaseIntelModel"
+import type { useChaseRoute } from "./useChaseRoute"
 
 type OfficialResponse = { status: string; queried_at?: string; alerts?: OfficialAlert[]; notice?: string }
 type Snapshot = { point: ChasePoint; checkedAt: number; official: OfficialResponse | null; officialError: boolean; nearby: NearbyThreatCoverage | null; roads: ViewportLayerResult<RoadConditionEvent> | null; aegis: AegisAlertFeed | null }
@@ -65,8 +66,9 @@ export function ChaseOfficialBanner({ intel, point, vehiclePosition }: { intel: 
   </section>
 }
 
-export function ChaseIntelRail({ intel, point, vehiclePosition }: { intel: Snapshot | null; point: ChasePoint | null; vehiclePosition: boolean }) {
+export function ChaseIntelRail({ intel, point, vehiclePosition, route, routeOrigin, routeDestination }: { intel: Snapshot | null; point: ChasePoint | null; vehiclePosition: boolean; route: ReturnType<typeof useChaseRoute>; routeOrigin: ChasePoint | null; routeDestination: ChasePoint | null }) {
   const roads = point && intel?.roads ? nearbyRoadConditions(intel.roads.data, point) : []
+  const routeRoads = routeOrigin && route.roads ? routeRoadConditions(route.roads.data, routeOrigin, route.path) : []
   const candidates = point && intel?.aegis ? intel.aegis.items.filter((item) => {
     const created = Date.parse(item.created_at)
     const [lon, lat] = item.candidate.coordinates
@@ -78,6 +80,10 @@ export function ChaseIntelRail({ intel, point, vehiclePosition }: { intel: Snaps
     </section>
     <section className="workspace-panel"><header><h2>Road conditions</h2><span>DOT · within ~25 mi</span></header>
       {!point ? <p>Waiting for a reference location.</p> : !intel ? <p>Checking providers…</p> : !intel.roads || !["ready", "empty", "stale"].includes(intel.roads.status) ? <p>{intel.roads?.message || "Road provider unavailable."}</p> : roads.length === 0 ? <p>No nearby provider events returned. Road coverage is not a route-safety check.</p> : <div className="chase-intel__items">{roads.map(({ road, distanceMi }) => <div key={road.id}><strong>{road.roadway || road.title}</strong><span>~{Math.round(distanceMi)} mi · {road.closureState} · {road.freshness}</span><small>{road.title}</small>{road.sourceUrl?.startsWith("https://") && <a href={road.sourceUrl} target="_blank" rel="noreferrer">Provider ↗</a>}</div>)}</div>}
+    </section>
+    <section className="workspace-panel"><header><h2>Route context</h2><span>MAPBOX · ~5 MI CORRIDOR</span></header>
+      {!routeDestination ? <p>Set a route destination, then tap the map. Your warning reference stays at the selected location.</p> : <p>Destination {routeDestination.lat.toFixed(3)}, {routeDestination.lon.toFixed(3)} · approximate route context, not turn-by-turn navigation.</p>}
+      {route.status === "no-origin" ? <p>Choose a live browser or chaser GPS source to check a route.</p> : route.status === "too-far" ? <p>Choose a destination within 80 miles for field route context.</p> : route.status === "checking" ? <p>Checking route and road providers…</p> : route.status === "unavailable" ? <p>Route unavailable. Road conditions cannot be checked along this route.</p> : route.status === "ready" && (!route.roads || !["ready", "empty", "stale"].includes(route.roads.status)) ? <p>Route found; road provider coverage unavailable.</p> : route.status === "ready" && routeRoads.length === 0 ? <p>No provider events returned near this route. This is not a route-safety check.</p> : route.status === "ready" ? <div className="chase-intel__items">{routeRoads.map(({ road, distanceMi, routeDistanceMi }) => <div key={road.id}><strong>{road.roadway || road.title}</strong><span>~{Math.round(distanceMi)} mi from origin · ~{Math.round(routeDistanceMi)} mi from route · {road.closureState}</span><small>{road.title} · {road.freshness}</small>{road.sourceUrl?.startsWith("https://") && <a href={road.sourceUrl} target="_blank" rel="noreferrer">Provider ↗</a>}</div>)}</div> : null}
     </section>
     <section className="workspace-panel"><header><h2>Field target</h2><span>{vehiclePosition ? "UNIT GPS" : "MAP REFERENCE"}</span></header><p>{point ? `${point.lat.toFixed(3)}, ${point.lon.toFixed(3)} · ${vehiclePosition ? "reported unit position" : "map reference; unit position unavailable"}` : "No unit position or selected point."}</p></section>
     <section className="workspace-panel"><header><h2>Aegis internal</h2><Link to="/aegis-alerts">Open feed ↗</Link></header>{!intel?.aegis ? <p>Internal radar feed unavailable.</p> : candidates.length === 0 ? <p>No recent nearby candidate returned. Internal analysis is not an official warning.</p> : <div className="chase-intel__items">{candidates.map((item) => <div key={item.id}><strong>{item.radar.site} · candidate</strong><span>Evidence {item.rating.evidence_score} / 100 · unconfirmed</span><small>{item.official_warning.event} · {timeLabel(Date.parse(item.created_at))}</small></div>)}</div>}</section>

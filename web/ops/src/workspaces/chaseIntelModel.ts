@@ -1,4 +1,5 @@
 import type { RoadConditionEvent } from "../../../../src/services/mapLayerModels"
+import { distanceToRouteMiles, type RoutePoint } from "../../../../src/services/navigationRoute"
 
 export type ChasePoint = { lat: number; lon: number }
 export type OfficialAlert = { id?: string; event?: string; headline?: string; severity?: string; expires?: string; source_url?: string }
@@ -35,4 +36,14 @@ export function nearbyRoadConditions(roads: RoadConditionEvent[], point: ChasePo
     .filter((entry) => entry.distanceMi <= maxMiles)
     .sort((a, b) => a.distanceMi - b.distanceMi)
     .slice(0, 5)
+}
+
+export function routeRoadConditions(roads: RoadConditionEvent[], origin: ChasePoint, route: RoutePoint[], corridorMiles = 5) {
+  if (route.length < 2) return []
+  return roads.flatMap((road) => Number.isFinite(road.lat) && Number.isFinite(road.lon)
+    ? [{ road, distanceMi: distanceMiles(origin, { lat: road.lat, lon: road.lon }), routeDistanceMi: distanceToRouteMiles(road, route) }]
+    : [])
+    .filter((entry) => entry.routeDistanceMi <= corridorMiles)
+    .sort((a, b) => a.distanceMi - b.distanceMi)
+    .slice(0, 8)
 }

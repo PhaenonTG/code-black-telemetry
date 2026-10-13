@@ -20,6 +20,7 @@ import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/
 import { mapWorkspaceVisibility, PHONE_RADAR_LAYERS, type MapWorkspace } from "../mapWorkspace";
 import { useViewport } from "../hooks/useViewport";
 import { PhoneSheet } from "../../../../src/components/PhoneSheet";
+import type { RoutePoint } from "../../../../src/services/navigationRoute";
 
 function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
   if (s.status !== "ready") return null;
@@ -41,7 +42,7 @@ const CAMERA_WALL_KEY = "codeblack.ops.cameraWall";
 const CAMERA_BANDWIDTH_KEY = "codeblack.ops.cameraSnapshotMode";
 const VOICE_ALERTS_KEY = "codeblack.ops.voiceAlerts";
 
-export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string }) {
+export default function OpsWorkstation({ focus = "LIVE OPS", onChaseDestinationSelect, routeOverlay }: { focus?: string; onChaseDestinationSelect?: (point: AtlasSelectedPoint) => void; routeOverlay?: RoutePoint[] }) {
   const phoneRadar = useViewport() === "phone" && focus === "RADAR LAB";
   const [radarVisibility, setRadarVisibility] = useState(PHONE_RADAR_LAYERS);
   const [pointOpen, setPointOpen] = useState(false);
@@ -153,7 +154,8 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
           nearbyBest={nearby.places}
           alerts={alertProducts.products}
           selectedPoint={selectedPoint}
-          onPointSelect={(point: AtlasSelectedPoint) => selectPoint(point)}
+          routeOverlay={routeOverlay}
+          onPointSelect={(point: AtlasSelectedPoint) => onChaseDestinationSelect ? onChaseDestinationSelect(point) : selectPoint(point)}
         />
         {!phoneRadar && <div className="ops-map-overlay ops-map-overlay--top">
           <div>

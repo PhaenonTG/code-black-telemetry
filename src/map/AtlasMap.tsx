@@ -50,7 +50,7 @@ import { radarFailoverReason, radarFramesAreOperational } from "../services/rada
 import { LayerGlyph } from "../components/situational/LayerGlyph";
 import { getNearbyStormReports, type StormReport } from "../services/stormReports";
 import { getRiverGaugesForViewport, type RiverGaugeObservation } from "../services/riverGaugeProvider";
-import { fetchNavigationRoute, type RoutePoint } from "../services/navigationRoute";
+import { distanceToRouteMiles, fetchNavigationRoute, type RoutePoint } from "../services/navigationRoute";
 
 // Platform-aware (web/OPS polls faster to realize the chunk-assembler's freshness gain; native
 // stays conservative for battery/cellular) -- see recommendedRadarRefreshMs() in services/radar.
@@ -92,20 +92,6 @@ function inRouteAheadCorridor(point: { lat: number; lon: number }, gps: AtlasGps
   return delta <= 55;
 }
 
-function distanceToRouteMiles(point: { lat: number; lon: number }, route: RoutePoint[]) {
-  let best = Number.POSITIVE_INFINITY;
-  const scale = Math.cos(point.lat * Math.PI / 180);
-  for (let index = 1; index < route.length; index += 1) {
-    const a = route[index - 1]; const b = route[index];
-    const ax = (a.lon - point.lon) * 69 * scale; const ay = (a.lat - point.lat) * 69;
-    const bx = (b.lon - point.lon) * 69 * scale; const by = (b.lat - point.lat) * 69;
-    const dx = bx - ax; const dy = by - ay; const length = dx * dx + dy * dy;
-    const t = length ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / length)) : 0;
-    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
-  }
-  return best;
-}
-
 type AtlasMapProps = {
   gps: AtlasGpsPoint | null;
   expanded?: boolean;
@@ -135,6 +121,8 @@ type AtlasMapProps = {
   phoneTools?: ReactNode;
   escapeControl?: ReactNode;
   selectedPoint?: AtlasSelectedPoint | null;
+  // Chase supplies a separately chosen destination without changing the official alert point.
+  routeOverlay?: RoutePoint[];
   // OPS reference controls center and nearby radar without inventing a vehicle GPS marker.
   referencePoint?: AtlasSelectedPoint | null;
   referenceKey?: string;
@@ -254,6 +242,7 @@ export function AtlasMap({
   phoneTools,
   escapeControl,
   selectedPoint = null,
+  routeOverlay,
   referencePoint = null,
   referenceKey,
   onPointSelect,
@@ -1209,10 +1198,10 @@ export function AtlasMap({
     updateAtlasSurfaceStationLayer(map, clusteredSurfaceStations, surfaceStationsVisible);
     updateAtlasStormReportLayer(map, visibleStormReports, stormReportsVisible);
     updateAtlasRiverGaugeLayer(map, visibleRiverGauges, riverGaugesVisible);
-    updateAtlasNavigationRouteLayer(map, navigationRoute, routeAheadOnly, styleInfoRef.current.firstSymbolLayerId);
+    updateAtlasNavigationRouteLayer(map, routeOverlay ?? navigationRoute, routeOverlay ? routeOverlay.length > 1 : routeAheadOnly, styleInfoRef.current.firstSymbolLayerId);
     updateAtlasChaserNetLayer(map, clusteredChaserNetMembers, chaserPinStyle, chaserNetVisible);
     updateAtlasChaserNetReportLayer(map, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible);
-  }, [clusteredRoadConditions, lineRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredSurfaceStations, surfaceStationsVisible, visibleStormReports, stormReportsVisible, visibleRiverGauges, riverGaugesVisible, navigationRoute, routeAheadOnly, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
+  }, [clusteredRoadConditions, lineRoadConditions, clusteredTrafficCameras, roadConditionsVisible, trafficCamerasVisible, clusteredSurfaceStations, surfaceStationsVisible, visibleStormReports, stormReportsVisible, visibleRiverGauges, riverGaugesVisible, navigationRoute, routeAheadOnly, routeOverlay, clusteredChaserNetMembers, clusteredChaserNetReports, chaserPinStyle, chaserNetVisible, loaded]);
 
 
   useEffect(() => {
