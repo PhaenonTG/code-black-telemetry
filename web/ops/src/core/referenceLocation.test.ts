@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { CHASER_LOCATION_MAX_AGE_MS, isChaserUnit, liveChaserFix, liveChaserPoint, locationPoint, timestampMs } from "./referenceLocation";
+import { CHASER_LOCATION_MAX_AGE_MS, isChaserUnit, liveChaserFix, liveChaserPoint, locationPoint, retainedChaserPoint, timestampMs } from "./referenceLocation";
 
 describe("location validation", () => {
+  it("holds a selected chaser's last verified point through a temporary dropout", () => {
+    const lastVerified = { lat: 38.667, lon: -96.932 };
+    expect(retainedChaserPoint(null, lastVerified)).toBe(lastVerified);
+    expect(retainedChaserPoint({ lat: 38.668, lon: -96.931 }, lastVerified)).toEqual({ lat: 38.668, lon: -96.931 });
+    expect(retainedChaserPoint(null, null)).toBeNull();
+  });
+
   it("does not turn null, blank, or boolean coordinates into an apparent Gulf of Guinea position", () => {
     for (const missing of [null, undefined, "", " ", false, [], {}]) {
       expect(locationPoint({ lat: missing, lon: missing })).toBeNull();

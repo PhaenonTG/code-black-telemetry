@@ -25,6 +25,6 @@ export function LocationControl() {
       <option value="fallback">Pea Ridge, AR</option>
       {locationMode === "manual" && <option value="manual">Map point</option>}
     </select></label>
-    <span className="location-control__detail" role="status">{referenceIsFallback ? "Pea Ridge, AR" : selectedPoint ? `${selectedPoint.lat.toFixed(3)}, ${selectedPoint.lon.toFixed(3)}` : referenceLabel}<small>{referenceIsFallback ? locationMode === "fallback" ? "Fixed reference" : "Fallback" : locationMode === "manual" ? "Selected point" : "GPS reference"}</small></span>
+    <span className="location-control__detail" role="status">{referenceIsFallback ? locationMode === "chaser" ? referenceLabel : "Pea Ridge, AR" : selectedPoint ? `${selectedPoint.lat.toFixed(3)}, ${selectedPoint.lon.toFixed(3)}` : referenceLabel}<small>{locationMode === "chaser" && referenceIsFallback ? "Last verified chaser position" : referenceIsFallback ? locationMode === "fallback" ? "Fixed reference" : "Fallback" : locationMode === "manual" ? "Selected point" : "GPS reference"}</small></span>
   </div>
 }

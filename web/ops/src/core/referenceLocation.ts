@@ -5,6 +5,11 @@ export type LocationMode = "follow" | "manual" | "chaser" | "fallback";
 export const PEA_RIDGE_REFERENCE: OpsReferencePoint = { lat: 36.45, lon: -94.12 };
 export const CHASER_LOCATION_MAX_AGE_MS = 120_000;
 
+/** Keep the selected operator's last verified position through a temporary feed dropout. */
+export function retainedChaserPoint(live: OpsReferencePoint | null, lastVerified: OpsReferencePoint | null): OpsReferencePoint | null {
+  return live ?? lastVerified;
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>

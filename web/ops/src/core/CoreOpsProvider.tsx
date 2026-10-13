@@ -9,7 +9,7 @@ import { mergeStormHealth, shouldRefreshPoint } from "./pointRefresh";
 import { addPointHistoryEntry, historyEntryFromSnapshot } from "../stormIntel/pointHistory";
 import type { OpsCoreState } from "./types";
 import { browserLocationAdapter, type LocationState } from "../adapters/LocationAdapter";
-import { liveChaserPoint, PEA_RIDGE_REFERENCE, type LocationMode } from "./referenceLocation";
+import { liveChaserPoint, PEA_RIDGE_REFERENCE, retainedChaserPoint, type LocationMode } from "./referenceLocation";
 
 const FABRIC_STREAM_FRESH_MS = 10_000;
 const REFERENCE_KEY = "codeblack.ops.locationReference.v1";
@@ -61,6 +61,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
   const [locationMode, setLocationMode] = useState<LocationMode>(saved.mode);
   const [referenceUnitId, setReferenceUnitId] = useState(saved.unitId);
   const [deviceLocation, setDeviceLocation] = useState<LocationState>({ status: "requesting" });
+  const [lastChaserPoints, setLastChaserPoints] = useState<Record<string, OpsSelectedPoint>>({});
   const [referenceNow, setReferenceNow] = useState(Date.now);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const referenceSourceRef = useRef(`${saved.mode}:${saved.unitId}:true`);
@@ -82,16 +83,31 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
 
   const referenceUnit = state.fabric.units?.units.find((unit) => unit.unit_id === referenceUnitId);
   const chaserPoint = useMemo(() => referenceUnit ? liveChaserPoint(referenceUnit, referenceNow) : null, [referenceUnit, referenceNow]);
+  useEffect(() => {
+    if (!referenceUnitId || !chaserPoint) return;
+    // This intentionally snapshots an external GPS observation for outage continuity.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setLastChaserPoints((current) => {
+      const prior = current[referenceUnitId];
+      return prior?.lat === chaserPoint.lat && prior.lon === chaserPoint.lon
+        ? current
+        : { ...current, [referenceUnitId]: chaserPoint };
+    });
+  }, [chaserPoint, referenceUnitId]);
+  const selectedChaserPoint = retainedChaserPoint(chaserPoint, lastChaserPoints[referenceUnitId] ?? null);
   const deviceReady = deviceLocation.status === "ready" && referenceNow - deviceLocation.at <= 120_000;
   const referenceIsFallback = locationMode === "fallback" || (locationMode === "follow" && !deviceReady) || (locationMode === "chaser" && !chaserPoint);
   const referenceLabel = locationMode === "manual" ? "Map point"
     : locationMode === "fallback" ? "Pea Ridge, AR"
-    : locationMode === "chaser" ? `${referenceUnit?.operator_name || referenceUnit?.display_name || "Chaser"}${chaserPoint ? " · GPS" : " · Pea Ridge fallback"}`
+    : locationMode === "chaser" ? `${referenceUnit?.operator_name || referenceUnit?.display_name || "Chaser"}${chaserPoint ? " · GPS" : selectedChaserPoint ? " · last known GPS" : " · waiting for GPS"}`
     : deviceReady ? "My location · GPS" : "Pea Ridge, AR · fallback";
 
   useEffect(() => {
     if (locationMode === "manual" || document.hidden) return;
-    const target = locationMode === "chaser" ? chaserPoint ?? PEA_RIDGE_REFERENCE
+    // A selected chaser owns this reference until the operator changes it. A brief telemetry
+    // dropout must not substitute the browser/default position and bounce both Chase maps away
+    // from that operator; retain the last verified fix while clearly labeling it as last known.
+    const target = locationMode === "chaser" ? selectedChaserPoint ?? PEA_RIDGE_REFERENCE
       : locationMode === "follow" && deviceReady && deviceLocation.status === "ready" ? { lat: deviceLocation.lat, lon: deviceLocation.lon }
       : PEA_RIDGE_REFERENCE;
     const source = `${locationMode}:${referenceUnitId}:${referenceIsFallback}`;
@@ -100,7 +116,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
       referenceSourceRef.current = source;
       setSelectedPoint({ ...target });
     }
-  }, [locationMode, referenceUnitId, referenceIsFallback, deviceLocation, deviceReady, chaserPoint, referenceNow]);
+  }, [locationMode, referenceUnitId, referenceIsFallback, deviceLocation, deviceReady, selectedChaserPoint, referenceNow]);
 
   useEffect(() => {
     fabricRef.current = state.fabric;

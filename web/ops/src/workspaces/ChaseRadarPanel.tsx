@@ -7,6 +7,7 @@ import { normalizeRadarFrames } from "../../../../src/services/radarLoop"
 import { radarFramesAreOperational } from "../../../../src/services/radarFailover"
 import { updateAtlasRadarLayer, removeAtlasRadarLayer } from "../../../../src/map/AtlasRadarLayer"
 import { AtlasRadarLegend } from "../../../../src/map/AtlasRadarLegend"
+import { tuneAtlasStyle } from "../../../../src/map/AtlasStyleManager"
 import { selectRadarFrame } from "./chaseRadarSelection"
 import { PEA_RIDGE_REFERENCE } from "../core/referenceLocation"
 
@@ -41,7 +42,11 @@ export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
     map.current = instance
     instance.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right")
     // This repo carries two mapbox-gl type versions. The runtime map instance is the same API.
-    instance.on("style.load", () => { styleReady.current = true; if (frameRef.current) updateAtlasRadarLayer(instance as unknown as Parameters<typeof updateAtlasRadarLayer>[0], frameRef.current, 0.82) })
+    instance.on("style.load", () => {
+      tuneAtlasStyle(instance as unknown as Parameters<typeof tuneAtlasStyle>[0])
+      styleReady.current = true
+      if (frameRef.current) updateAtlasRadarLayer(instance as unknown as Parameters<typeof updateAtlasRadarLayer>[0], frameRef.current, 0.82)
+    })
     return () => { map.current = null; styleReady.current = false; removeAtlasRadarLayer(instance as unknown as Parameters<typeof removeAtlasRadarLayer>[0]); instance.remove() }
     // Keep one WebGL map alive while radar site, product, and focus change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
