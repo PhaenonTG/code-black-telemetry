@@ -21,6 +21,8 @@ function initialHealth(): ExternalHealthSnapshot {
     map: readMapHealth(),
     radar: CHECKING,
     singleSiteRadar: CHECKING,
+    forecast: CHECKING,
+    hurricane: CHECKING,
     weather: CHECKING,
     alerts: CHECKING,
     checkedAt: 0,
@@ -34,7 +36,7 @@ function initialHealth(): ExternalHealthSnapshot {
 export default function Operations() {
   const [health, setHealth] = useState<ExternalHealthSnapshot>(initialHealth)
   const [refreshNonce, setRefreshNonce] = useState(0)
-  const { state: coreState } = useCoreOps()
+  const { config, state: coreState } = useCoreOps()
   const [providerDiagnostics, setProviderDiagnostics] = useState<MapProviderDiagnostic[]>(() => readMapProviderDiagnostics())
 
   useEffect(() => {
@@ -44,7 +46,7 @@ export default function Operations() {
       // Map runtime health is local/observable and can update as soon as the user visits Map.
       setHealth((current) => ({ ...current, map: readMapHealth() }))
 
-      const next = await probeExternalHealth()
+      const next = await probeExternalHealth(config)
       if (!cancelled) setHealth(next)
     }
 
@@ -73,7 +75,7 @@ export default function Operations() {
       window.removeEventListener("online", handleNetworkChange)
       window.removeEventListener("offline", handleNetworkChange)
     }
-  }, [refreshNonce])
+  }, [config, refreshNonce])
 
   const rows = buildSystemStatus({
     coreReachable: coreState.core.state === "LIVE",
@@ -81,6 +83,8 @@ export default function Operations() {
     map: health.map,
     radar: health.radar,
     singleSiteRadar: health.singleSiteRadar,
+    forecast: health.forecast,
+    hurricane: health.hurricane,
     weather: health.weather,
     alerts: health.alerts,
   })

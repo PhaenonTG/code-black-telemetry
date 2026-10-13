@@ -26,6 +26,8 @@ export function buildSystemStatus(params: {
   map: ObservableHealth
   radar: ObservableHealth
   singleSiteRadar: ObservableHealth
+  forecast: ObservableHealth
+  hurricane: ObservableHealth
   weather: ObservableHealth
   alerts: ObservableHealth
 }): SystemStatusLine[] {
@@ -48,10 +50,12 @@ export function buildSystemStatus(params: {
       detail: networkOnline ? "Browser reports online" : "Browser reports offline",
     },
     { key: "map", label: "MAP DATA", ...params.map },
-    { key: "radar", label: "RADAR", ...params.radar },
+    { key: "radar", label: "RADAR MOSAIC SOURCE", ...params.radar },
     { key: "singleSiteRadar", label: "SINGLE-SITE RADAR", ...params.singleSiteRadar },
-    { key: "weather", label: "WEATHER", ...params.weather },
-    { key: "alerts", label: "ALERTS", ...params.alerts },
+    { key: "forecast", label: "FORECAST API", ...params.forecast },
+    { key: "hurricane", label: "HURRICANE WATCH", ...params.hurricane },
+    { key: "weather", label: "NWS WEATHER API", ...params.weather },
+    { key: "alerts", label: "NWS ALERTS API", ...params.alerts },
     {
       key: "telemetry",
       label: "TELEMETRY",

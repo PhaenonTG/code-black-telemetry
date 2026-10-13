@@ -10,6 +10,8 @@ function rows(fabricState: OpsConnectionState, unitHealth: Array<"LIVE" | "DEGRA
     map: unavailable,
     radar: unavailable,
     singleSiteRadar: unavailable,
+    forecast: unavailable,
+    hurricane: unavailable,
     weather: unavailable,
     alerts: unavailable,
   })

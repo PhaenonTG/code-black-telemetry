@@ -2,7 +2,7 @@ import { renderToString } from "react-dom/server"
 import { MemoryRouter } from "react-router-dom"
 import { describe, expect, it } from "vitest"
 import { CoreOpsContext, type CoreOpsContextValue } from "../core/CoreOpsContext"
-import Fleet from "./Fleet"
+import Fleet, { lastSeenLabel } from "./Fleet"
 
 function renderFleet(hasSnapshot: boolean): string {
   const value: CoreOpsContextValue = {
@@ -34,5 +34,15 @@ describe("Fleet empty states", () => {
   it("distinguishes a valid empty snapshot from an unavailable snapshot", () => {
     expect(renderFleet(true)).toContain("NO UNITS REGISTERED")
     expect(renderFleet(false)).toContain("NO FABRIC UNIT SNAPSHOT")
+  })
+})
+
+describe("Fleet last seen", () => {
+  it("formats Core's ISO timestamp instead of showing NaN", () => {
+    expect(lastSeenLabel(new Date(Date.now() - 90_000).toISOString())).toContain("Last seen 1:30 ago")
+  })
+
+  it("does not invent a timestamp for malformed data", () => {
+    expect(lastSeenLabel("invalid")).toBe("Last seen unavailable")
   })
 })

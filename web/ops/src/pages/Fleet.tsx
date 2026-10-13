@@ -12,9 +12,13 @@ function pillState(health: FabricPresenceState): OpsConnectionState {
   return health === "NOT_CONFIGURED" ? "UNAVAILABLE" : health
 }
 
-function lastSeenLabel(lastSeen: number | null): string {
+export function lastSeenLabel(lastSeen: number | string | null): string {
   if (lastSeen == null) return "Never reported"
-  return `Last seen ${ageText(Math.max(0, Math.round((Date.now() - lastSeen) / 1000)))} ago`
+  const timestamp = typeof lastSeen === "string"
+    ? Date.parse(lastSeen)
+    : lastSeen < 100_000_000_000 ? lastSeen * 1000 : lastSeen
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return "Last seen unavailable"
+  return `Last seen ${ageText(Math.max(0, Math.round((Date.now() - timestamp) / 1000)))} ago`
 }
 
 export default function Fleet() {

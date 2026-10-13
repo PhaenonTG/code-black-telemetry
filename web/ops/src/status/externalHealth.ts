@@ -1,6 +1,8 @@
 import { hasMapboxToken, readMapRuntimeDiagnostics } from "../../../../src/services/mapTiles"
 import { radarWorkerBase } from "../../../../src/services/radar"
 import type { OperationalState } from "../../../../src/services/operationalStatus"
+import { buildCoreRequestHeaders, currentAccessToken } from "../core/client"
+import { coreConfigured, type OpsCoreConfig } from "../core/config"
 
 export interface ExternalHealthResult {
   state: OperationalState
@@ -11,6 +13,8 @@ export interface ExternalHealthSnapshot {
   map: ExternalHealthResult
   radar: ExternalHealthResult
   singleSiteRadar: ExternalHealthResult
+  forecast: ExternalHealthResult
+  hurricane: ExternalHealthResult
   weather: ExternalHealthResult
   alerts: ExternalHealthResult
   checkedAt: number
@@ -124,12 +128,51 @@ export async function probeSingleSiteRadarHealth(): Promise<ExternalHealthResult
   if (!base) {
     return { state: "NOT_CONFIGURED", detail: "VITE_RADAR_WORKER_URL is not set" }
   }
-  return probeUrl(
-    `${base}/api/v1/radar/health?health=${Date.now()}`,
-    "application/json",
-    "radar-worker reachable",
-    "radar-worker unreachable",
-  )
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const response = await fetch(`${base}/api/v1/radar/status?product=REF&health=${Date.now()}`, { cache: "no-store", signal: controller.signal })
+    if (!response.ok) return { state: "UNAVAILABLE", detail: `Radar status HTTP ${response.status}` }
+    return interpretRadarStatus(await response.json())
+  } catch (error) {
+    return { state: "UNAVAILABLE", detail: error instanceof Error ? `Radar status unavailable · ${error.message}` : "Radar status unavailable" }
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
+export function interpretRadarStatus(value: unknown): ExternalHealthResult {
+  if (!value || typeof value !== "object") return { state: "UNAVAILABLE", detail: "Radar status response malformed" }
+  const status = value as Record<string, unknown>
+  const age = status.dataAgeSeconds
+  if (status.backendState !== "READY" || typeof age !== "number" || !Number.isFinite(age) || age < 0) {
+    return { state: "NO_DATA", detail: "Radar worker reachable; no usable reflectivity frame" }
+  }
+  const detail = `${String(status.selectedSite ?? "Radar site")} reflectivity frame ${Math.round(age / 60)}m old`
+  if (age > 15 * 60) return { state: "STALE", detail }
+  if (age > 10 * 60) return { state: "AGING", detail }
+  return { state: "LIVE", detail }
+}
+
+async function probeCoreForecast(config: OpsCoreConfig, path: string, label: string): Promise<ExternalHealthResult> {
+  if (!coreConfigured(config)) return { state: "NOT_CONFIGURED", detail: "Core forecast gateway is not configured" }
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), 8_000)
+  try {
+    const token = await currentAccessToken()
+    const response = await fetch(`${config.coreBaseUrl}/api/forecast/v1/${path}`, {
+      cache: "no-store", signal: controller.signal, headers: buildCoreRequestHeaders(token),
+    })
+    if (!response.ok) return { state: "UNAVAILABLE", detail: `${label} HTTP ${response.status}` }
+    const body = await response.json() as Record<string, unknown>
+    if (path === "runs" && !Array.isArray(body.runs)) return { state: "UNAVAILABLE", detail: "Forecast run response malformed" }
+    if (path === "hurricane-watch" && typeof body.status !== "string") return { state: "UNAVAILABLE", detail: "Hurricane watch response malformed" }
+    return { state: "LIVE", detail: path === "runs" ? `Core forecast API ready · ${Array.isArray(body.runs) ? body.runs.length : 0} runs` : `Core hurricane watch ready · ${body.status}` }
+  } catch (error) {
+    return { state: "UNAVAILABLE", detail: error instanceof Error ? `${label} unavailable · ${error.message}` : `${label} unavailable` }
+  } finally {
+    window.clearTimeout(timer)
+  }
 }
 
 export async function probeWeatherHealth(): Promise<ExternalHealthResult> {
@@ -150,10 +193,12 @@ export async function probeAlertsHealth(): Promise<ExternalHealthResult> {
   )
 }
 
-export async function probeExternalHealth(): Promise<ExternalHealthSnapshot> {
-  const [radar, singleSiteRadar, weather, alerts] = await Promise.all([
+export async function probeExternalHealth(config: OpsCoreConfig): Promise<ExternalHealthSnapshot> {
+  const [radar, singleSiteRadar, forecast, hurricane, weather, alerts] = await Promise.all([
     probeRadarHealth(),
     probeSingleSiteRadarHealth(),
+    probeCoreForecast(config, "runs", "Forecast"),
+    probeCoreForecast(config, "hurricane-watch", "Hurricane watch"),
     probeWeatherHealth(),
     probeAlertsHealth(),
   ])
@@ -162,6 +207,8 @@ export async function probeExternalHealth(): Promise<ExternalHealthSnapshot> {
     map: readMapHealth(),
     radar,
     singleSiteRadar,
+    forecast,
+    hurricane,
     weather,
     alerts,
     checkedAt: Date.now(),
