@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
 import { SetupTargetMap, type SetupCandidatePoint } from "../workspaces/SetupTargetMap";
+import { rankedCandidates, setupChronology } from "../workspaces/setupCandidateModel";
 import "./ChaseSetups.css";
 
 type SetupRow = {
@@ -17,7 +18,7 @@ type SetupDetail = {
   bounds?: number[];
   identity_review_required?: boolean; detected_after_baseline?: boolean;
   official: { provider?: string; day?: number; risk_label?: string; risk_code?: number; issued_at?: string; source_url?: string; geometry?: unknown };
-  model: { status?: string; target_points?: Array<SetupCandidatePoint & { run_time?: string }>; notice?: string };
+  model: { status?: string; target_points?: Array<SetupCandidatePoint & { run_time?: string; classification?: string }>; notice?: string };
   source_checks?: { hrrr?: { status?: string; hours_checked?: number; hours_missing?: number } };
   review?: { required?: boolean; decision?: string | null; reason?: string };
 };
@@ -39,6 +40,7 @@ export default function ChaseSetups({ detailBasePath = "/chase-setups" }: { deta
   const [detailError, setDetailError] = useState("");
   const [busy, setBusy] = useState(false);
   const [reloadVersion, setReloadVersion] = useState(0);
+  const [selectedCandidate, setSelectedCandidate] = useState<{ setupId: string; key: string } | null>(null);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     setBusy(true);
@@ -76,6 +78,8 @@ export default function ChaseSetups({ detailBasePath = "/chase-setups" }: { deta
   const rows = index?.items ?? [];
   const currentSource = index?.status === "ready";
   const points = detail?.model.target_points ?? [];
+  const ranked = rankedCandidates(points);
+  const selectedCandidateKey = selectedCandidate && selectedCandidate.setupId === detail?.setup_id ? selectedCandidate.key : null;
   return (
     <div className="chase-setups page">
       <header className="chase-setups__header">
@@ -111,6 +115,13 @@ export default function ChaseSetups({ detailBasePath = "/chase-setups" }: { deta
               <h2>Setup review</h2><p>{detail.setup_id} · Revision {detail.revision}</p>
             </div><div className="chase-setups__labels"><span>PRIVATE DRAFT</span><span>NOT A WARNING</span></div></div>
             {detail.identity_review_required && <p className="chase-setups__error">Setup identity needs operator review before notification or publication.</p>}
+            <section className="chase-setups__candidates" aria-label="Ranked experimental screening candidates">
+              <div className="chase-setups__section-head"><h3>Retained screening points</h3><span>{ranked.length} shown · sorted by index</span></div>
+              {ranked.length === 0 ? <p>No coordinate-bearing HRRR screening points were returned.</p> : <div className="chase-setups__table-scroll"><table><thead><tr><th scope="col">Rank</th><th scope="col">Coordinates</th><th scope="col">Valid (local)</th><th scope="col">Run (local)</th><th scope="col">Index</th><th scope="col">Classification</th></tr></thead><tbody>
+                {ranked.map((point) => <tr key={point.key} className={selectedCandidateKey === point.key ? "is-selected" : ""}><td><button type="button" aria-label={`Show screening point ${point.rank} on map`} aria-pressed={selectedCandidateKey === point.key} onClick={() => setSelectedCandidate({ setupId: detail.setup_id, key: point.key })}>{point.rank} ↗</button></td><td>{point.latitude.toFixed(3)}, {point.longitude.toFixed(3)}</td><td>{when(point.valid_time)}</td><td>{when(point.run_time)}</td><td>{point.score_index.toFixed(3)}</td><td>{point.classification?.replaceAll("_", " ") ?? "Unclassified"}</td></tr>)}
+              </tbody></table></div>}
+              <p>Index is a model screening value, not confidence. Ranking does not identify a safe route, observed storm, or precise chase target.</p>
+            </section>
             <p className="chase-setups__summary">{detail.summary}</p>
             <section className="chase-setups__evidence">
               <h3>SPC outlook <small>OFFICIAL</small></h3>
@@ -135,11 +146,10 @@ export default function ChaseSetups({ detailBasePath = "/chase-setups" }: { deta
            </>}
         </article>
         <aside className="chase-setups__activity" aria-label="Draft activity">
-          {detail && <section className="setup-target-area" aria-label="Setup screening area"><h2>Target area</h2><SetupTargetMap geometry={detail.official.geometry} bounds={detail.bounds} points={points} /><p>SPC area: official outlook. Gold dots: experimental HRRR screening candidates, not precise chase targets.</p></section>}
-          <h2>Activity</h2>
-          <dl><div><dt>Last source check</dt><dd>{when(index?.last_source_check_at ?? index?.checked_at)}</dd></div>
-            <div><dt>Draft generated</dt><dd>{when(detail?.generated_at)}</dd></div>
-            <div><dt>First detected</dt><dd>{when(detail?.first_seen_at)}</dd></div></dl>
+          {detail && <section className="setup-target-area" aria-label="Setup screening area"><h2>Target area</h2><SetupTargetMap geometry={detail.official.geometry} bounds={detail.bounds} points={points} selectedKey={selectedCandidateKey} /><p>SPC area: official outlook. Gold dots: experimental HRRR screening candidates, not precise chase targets. Select a table row to focus one.</p></section>}
+          <h2>Source chronology</h2>
+          {detail ? <><ol className="chase-setups__chronology">{setupChronology(detail).map((entry) => <li key={entry.key}><strong>{entry.label}</strong><time dateTime={entry.at}>{when(entry.at)}</time></li>)}</ol><p>Current revision {detail.revision}. Core does not provide prior-revision evidence, so a “what changed” comparison is not available.</p></> : <p>Select a draft to inspect its source timestamps.</p>}
+          <dl><div><dt>Last source check</dt><dd>{when(index?.last_source_check_at ?? index?.checked_at)}</dd></div></dl>
           <p>Official guidance remains the authority. This desk does not issue warnings.</p>
         </aside>
       </div>
