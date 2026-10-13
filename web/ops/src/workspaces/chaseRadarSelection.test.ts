@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { RadarFrame, RadarSite } from "../../../../src/services/radar"
-import { selectRadarFrame } from "./chaseRadarSelection"
+import { loadRadarCandidates, selectRadarFrame } from "./chaseRadarSelection"
 
 const site = (id: string): RadarSite => ({ id, name: id, state: "READY", lat: 39, lon: -95 })
 const frame = (id: string, ageSeconds: number, freshness: RadarFrame["freshness"], tiled = true): RadarFrame => ({
@@ -18,5 +18,18 @@ describe("Chase radar site selection", () => {
   })
   it("never selects a frame without tiles", () => {
     expect(selectRadarFrame([{ site: site("KAAA"), frames: [frame("not-renderable", 30, "LIVE", false)] }])).toBeNull()
+  })
+  it("continues to a healthy alternate when the nearest site request fails", async () => {
+    const requested: string[] = []
+    const results = await loadRadarCandidates([site("KAAA"), site("KBBB"), site("KCCC")], async (candidate) => {
+      requested.push(candidate.id)
+      if (candidate.id === "KAAA") throw new Error("site unavailable")
+      return [frame(candidate.id, 90, "LIVE")]
+    })
+    expect(requested).toEqual(["KAAA", "KBBB"])
+    expect(selectRadarFrame(results)?.site.id).toBe("KBBB")
+  })
+  it("does not silently substitute a site when the operator explicitly selected one", async () => {
+    await expect(loadRadarCandidates([site("KAAA")], async () => { throw new Error("site unavailable") }, true)).rejects.toThrow("site unavailable")
   })
 })

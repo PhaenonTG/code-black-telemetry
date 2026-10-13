@@ -4,11 +4,10 @@ import "mapbox-gl/dist/mapbox-gl.css"
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles"
 import { ageText, getNearestRadarSites, getRadarFrames, getRadarStatus, radarWorkerMissingOnWeb, recommendedRadarRefreshMs, type RadarFrame, type RadarProduct, type RadarSite } from "../../../../src/services/radar"
 import { normalizeRadarFrames } from "../../../../src/services/radarLoop"
-import { radarFramesAreOperational } from "../../../../src/services/radarFailover"
 import { updateAtlasRadarLayer, removeAtlasRadarLayer } from "../../../../src/map/AtlasRadarLayer"
 import { AtlasRadarLegend } from "../../../../src/map/AtlasRadarLegend"
 import { tuneAtlasStyle } from "../../../../src/map/AtlasStyleManager"
-import { selectRadarFrame } from "./chaseRadarSelection"
+import { loadRadarCandidates, selectRadarFrame } from "./chaseRadarSelection"
 import { PEA_RIDGE_REFERENCE } from "../core/referenceLocation"
 
 type Point = { lat: number; lon: number }
@@ -107,19 +106,8 @@ export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
       pending = true
       const candidates = siteOverride ? [chosenSite] : sites
       try {
-        const results = [] as Array<{ site: RadarSite; frames: RadarFrame[] }>
-        for (const site of candidates) {
-          try {
-            const frames = normalizeRadarFrames(await getRadarFrames(site.id, product, null, 2), 2)
-            results.push({ site, frames })
-            if (radarFramesAreOperational(frames) && frames[0]?.tileTemplate) break
-          } catch {
-            // Auto mode is a health failover, not merely a nearest-site preference. A failed
-            // first request must not prevent the next nearby site from being considered.
-            results.push({ site, frames: [] })
-            if (siteOverride) throw new Error(`Radar refresh failed for ${site.id}`)
-          }
-        }
+        const results = await loadRadarCandidates(candidates, async (site) =>
+          normalizeRadarFrames(await getRadarFrames(site.id, product, null, 2), 2), Boolean(siteOverride))
         if (cancelled || version !== requestVersion.current) return
         const selected = selectRadarFrame(results)
         setCheckedAt(Date.now())
