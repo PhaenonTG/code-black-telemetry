@@ -72,7 +72,7 @@ from code_black_core_api.weather import (
     WeatherServiceError,
     unavailable_weather_provider_response,
 )
-from code_black_core_api.weather_alert_control import WeatherAlertControlError, request_settings, request_status
+from code_black_core_api.weather_alert_control import WeatherAlertControlError, request_settings
 from code_black_core_api.gpu_control import GpuControlError, request_gpu_control
 from code_black_core_api.diagnostics import IncidentInput, IncidentLedger
 from code_black_core_api.aegis_observation import build_observation_plan
@@ -522,8 +522,8 @@ def create_app(
     @app.get("/api/weather-alert/v1/status", tags=["weather-alert-controls"])
     def weather_alert_status() -> dict[str, object]:
         try:
-            return request_status(settings.weather_alert_control_url)
-        except WeatherAlertControlError as error:
+            return request_status_center("http://127.0.0.1:8795/api/internal/weather-alert-status")
+        except StatusCenterError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
 
     @app.get("/api/gpu/v1/status", tags=["gpu-controls"])
