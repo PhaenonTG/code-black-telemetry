@@ -24,6 +24,7 @@ from code_black_core_api.chase_ingest import (
     heartbeat_to_fabric_message,
 )
 from code_black_core_api.mesonet import register_mesonet
+from code_black_core_api.status_center import StatusCenterError, request_status_center
 from code_black_core_api.config import load_settings
 from code_black_core_api.context import ChangeTracker, ContextSnapshot, build_context_snapshot
 from code_black_core_api.fabric import (
@@ -243,6 +244,30 @@ def create_app(
             media_type="application/x-ndjson",
             headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
         )
+
+    @app.get("/api/ops/status-center/v1/status", tags=["ops-status-center"])
+    def ops_status_center() -> dict[str, object]:
+        try:
+            return request_status_center("http://127.0.0.1:8795/api/internal/ops-status")
+        except StatusCenterError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+
+    @app.get("/api/ops/status-center/v1/radar-control-settings", tags=["ops-status-center"])
+    def radar_control_settings() -> dict[str, object]:
+        try:
+            return request_status_center("http://127.0.0.1:8795/api/internal/radar-control-settings")
+        except StatusCenterError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+
+    @app.put("/api/ops/status-center/v1/radar-control-settings", tags=["ops-status-center"])
+    def replace_radar_control_settings(document: dict[str, object]) -> dict[str, object]:
+        try:
+            return request_status_center(
+                "http://127.0.0.1:8795/api/internal/radar-control-settings",
+                method="PUT", payload=document,
+            )
+        except StatusCenterError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
 
     @app.get("/api/fabric/v1/units/{unit_id}", tags=["fabric"])
     def fabric_unit(unit_id: str) -> dict[str, object]:
