@@ -1,5 +1,17 @@
 # Code Black Native Broadcaster
 
+## PROGRAM video/audio monitor — local implementation, not deployed
+
+The `feat/program-monitor-native`, `feat/program-monitor-gateway`, and `feat/program-monitor-ops` branches are coordinated local changes. Do not deploy or push them until the agents working on production agree on a release window. This implementation has not changed the running workstation or its configuration.
+
+PROGRAM preview now includes H.264 640×360 video at 700 kbps plus stereo AAC at 64 kbps. CLEAN remains video-only. Unique segment generations prevent replay across restarts; only expired generated preview TS files are pruned, never recordings. An independent uploader sends completed segments before committing each playlist, without delaying the command loop.
+
+Cloud routes are `/api/producer/v1/preview/hls/index.m3u8` and generated `program-<32 hex>-<sequence>.ts` segments. Every GET requires the existing active OPS session. Matching workstation uploads use the separate bridge token. Twelve fixed storage slots and 96-KiB chunks bound retention; source, preview, video-health and manifest freshness all gate playback. No public URLs, token query parameters, or Facebook credentials are used.
+
+The OPS player loads HLS.js only when requested, starts muted, supports explicit audio enablement, and falls back to snapshots on unsupported browsers, source loss, auth errors, stalled playback or stale media. Backgrounding stops monitoring. Modern iPad-size layout is tested in isolated Chromium; actual Safari/iPad playback still needs device qualification.
+
+After coordinated gateway/OPS deployment, enable `bridge.programMonitorEnabled: true` in the workstation's private configuration and restart the native service only during a safe output-OFF window. The example flag defaults to false. Rollback disables that flag; existing JPEG snapshots remain available. Do not restart an on-air encoder to activate this feature.
+
 This is the separate PHAENON3-native producer. It does not read, write, launch, configure, or otherwise depend on OBS. Its public output is a manually armed Facebook RTMPS encoder with a Windows DPAPI-protected stream key; OBS must remain closed while Native Facebook output is active.
 
 The engine consumes only the approved CORE `nick` reader, creates a camera-only CLEAN preview, independently composes a PROGRAM preview with NVENC, and can send PROGRAM to Facebook. Field mode discards the PROGRAM encoder output locally so a long show cannot fill C:. The optional CLEAN camera archive is a separate, explicit control. The producer binds its control API to `127.0.0.1:18766` only.

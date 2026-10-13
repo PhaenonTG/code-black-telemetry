@@ -6,6 +6,6 @@
   "recording": { "directory": "recordings", "container": "matroska", "writeToDisk": false },
   "reconnect": { "fallbackSeconds": 3, "maxBackoffSeconds": 15 },
   "sourceHealth": { "staleAfterMs": 3000, "lostAfterMs": 8000 },
-  "bridge": { "enabled": false, "endpoint": "https://ops.codeblackwx.com/api/producer/v1", "intervalMs": 2000 },
+  "bridge": { "enabled": false, "endpoint": "https://ops.codeblackwx.com/api/producer/v1", "intervalMs": 2000, "programMonitorEnabled": false },
   "productionBroadcastEnabled": false
 }

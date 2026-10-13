@@ -3,6 +3,7 @@
 const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { ProgramMediaUploader } = require('./program-monitor');
 
 function endpoint(value) {
   const url = new URL(value);
@@ -35,11 +36,14 @@ class ProducerBridgeClient {
     this.lastSuccessAt = null;
     this.lastError = null;
     this.lastFrameMtime = 0;
+    this.mediaEnabled = config.programMonitorEnabled === true;
+    this.mediaTimer = null;
+    this.media = new ProgramMediaUploader(root, () => this.engine.status(), (route, init) => this.request(route, init));
   }
 
   async request(route, init = {}) {
     const token = this.load();
-    const response = await this.fetch(`${this.base}${route}`, { ...init, headers: { ...(init.headers || {}), Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(8000) });
+    const response = await this.fetch(`${this.base}${route}`, { ...init, headers: { ...(init.headers || {}), Authorization: `Bearer ${token}` }, signal: init.signal || AbortSignal.timeout(8000) });
     if (!response.ok) throw new Error(`bridge ${route} returned HTTP ${response.status}`);
     return response;
   }
@@ -110,9 +114,12 @@ class ProducerBridgeClient {
     } finally { this.running = false; }
   }
 
-  start() { if (!this.timer) { this.cycle(); this.timer = setInterval(() => this.cycle(), this.intervalMs); } }
-  stop() { if (this.timer) clearInterval(this.timer); this.timer = null; }
-  status() { return { configured: true, state: this.state, lastSuccessAt: this.lastSuccessAt, lastError: this.lastError }; }
+  start() {
+    if (!this.timer) { this.cycle(); this.timer = setInterval(() => this.cycle(), this.intervalMs); }
+    if (this.mediaEnabled && !this.mediaTimer) { this.media.cycle(); this.mediaTimer = setInterval(() => this.media.cycle(), 1000); }
+  }
+  stop() { if (this.timer) clearInterval(this.timer); if (this.mediaTimer) clearInterval(this.mediaTimer); this.timer = null; this.mediaTimer = null; }
+  status() { return { configured: true, state: this.state, lastSuccessAt: this.lastSuccessAt, lastError: this.lastError, programMonitor: { enabled: this.mediaEnabled, ...this.media.status() } }; }
 }
 
 module.exports = { ProducerBridgeClient, endpoint };

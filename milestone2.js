@@ -15,14 +15,25 @@ function processStartUtc(pid) {
 function iso() { return new Date().toISOString(); }
 function ensure(dir) { fs.mkdirSync(dir, { recursive: true }); }
 function base(root) { return path.join(root, 'runtime', 'previews'); }
-function hlsArgs(ffmpeg, endpoint, directory, program, filter) {
+function prunePreviewSegments(directory, kind, now = Date.now()) {
+  if (!['program', 'clean'].includes(kind) || !fs.existsSync(directory)) return;
+  const pattern = new RegExp(`^${kind}-[0-9a-f]{32}-[0-9]{1,16}\\.ts$`);
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isFile() || !pattern.test(entry.name)) continue;
+    const file = path.join(directory, entry.name);
+    try { if (now - fs.statSync(file).mtimeMs > 30000) fs.unlinkSync(file); } catch { /* A preview encoder may still own the file. */ }
+  }
+}
+function hlsArgs(ffmpeg, endpoint, directory, program, filter, generation = crypto.randomUUID().replace(/-/g, '')) {
   ensure(directory);
   const vf = program ? `scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black,${filter}` :
     'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black';
   return [
     '-hide_banner', '-nostdin', '-loglevel', 'warning', '-y', '-rw_timeout', '5000000', '-fflags', '+genpts+discardcorrupt', '-i', endpoint,
-    '-vf', vf, '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-b:v', '700k', '-maxrate', '700k', '-bufsize', '1400k', '-g', '30',
-    '-f', 'hls', '-hls_time', '1', '-hls_list_size', '4', '-hls_flags', 'delete_segments+append_list', path.join(directory, 'index.m3u8')
+    '-vf', vf, '-map', '0:v:0', ...(program ? ['-map', '0:a?', '-c:a', 'aac', '-b:a', '64k', '-ac', '2', '-ar', '48000'] : ['-an']),
+    '-r', '30', '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-b:v', '700k', '-maxrate', '700k', '-bufsize', '1400k', '-g', '30', '-sc_threshold', '0',
+    '-f', 'hls', '-hls_time', '1', '-hls_list_size', '4', '-hls_flags', 'delete_segments+program_date_time+temp_file',
+    '-hls_segment_filename', path.join(directory, `${program ? 'program' : 'clean'}-${generation}-%010d.ts`), path.join(directory, 'index.m3u8')
   ];
 }
 
@@ -35,6 +46,7 @@ class PreviewManager {
   startOne(kind) {
     if (this.processes.has(kind) || !this.engine.recordingRequested) return;
     const dir = path.join(base(this.root), kind);
+    prunePreviewSegments(dir, kind);
     const args = hlsArgs(this.engine.ffmpeg, this.engine.config.source.endpoint, dir, kind === 'program', this.engine.overlayFilter());
     const proc = childProcess.spawn(this.engine.ffmpeg, args, { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     this.processes.set(kind, proc);
@@ -178,4 +190,4 @@ function enableMilestone2(engine, root) {
   return { html };
 }
 
-module.exports = { enableMilestone2, html };
+module.exports = { enableMilestone2, html, hlsArgs, prunePreviewSegments };
