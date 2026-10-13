@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { useCoreOps } from "../core/useCoreOps"
 import { currentAccessToken, fetchForecast } from "../core/client"
@@ -12,6 +12,22 @@ type OfficialAlert = { id?: string; event?: string; headline?: string; severity?
 type OfficialAlertResponse = { status: string; alerts: OfficialAlert[]; queried_at?: string }
 type ProducerComment = { id?: string; author?: string; message?: string; createdAt?: string }
 type CommentsResponse = { state?: string; cursor?: number; pollAfterMs?: number; comments?: ProducerComment[]; page?: { label?: string; live?: boolean } }
+type ProducerPreview = { state?: string; available?: boolean }
+type ProducerBridgeStatus = {
+  observedAt?: string
+  bridgeState?: string
+  bridge?: { state?: string; lastSuccessAt?: string }
+  state?: string
+  stateRevision?: number
+  source_state?: string
+  transport_state?: string
+  previews?: { program?: ProducerPreview }
+  metrics?: { last_video_timestamp?: string | null }
+  broadcast?: { state?: string; configured?: boolean; enabled?: boolean }
+  audio?: { available?: boolean; silence?: boolean; clipping?: boolean }
+  lastError?: string | null
+}
+type ProducerCapabilities = { schemaVersion?: string; actions?: Record<string, string[]>; unavailable?: Record<string, string> }
 
 function readSelection(): string {
   try { return localStorage.getItem(SELECTION_KEY) ?? "" } catch { return "" }
@@ -32,6 +48,16 @@ function expiry(timestamp: string | undefined, now: number): string {
   return minutes > 0 ? `expires in ${minutes} min` : "expired"
 }
 
+function bridgeState(document: ProducerBridgeStatus | null): string {
+  const state = document?.bridgeState ?? document?.bridge?.state
+  if (typeof state === "string" && state.trim()) return state.toUpperCase()
+  return document?.observedAt ? "ONLINE" : "OFFLINE"
+}
+
+function sourceFresh(document: ProducerBridgeStatus | null): boolean {
+  return document?.source_state === "SOURCE_LIVE" && document?.previews?.program?.state === "ACTIVE"
+}
+
 export default function ProducerWorkspace() {
   const { config, state, selectedPoint, selectPoint } = useCoreOps()
   const [status, setStatus] = useState<StatusCenterDocument | null>(null)
@@ -43,7 +69,14 @@ export default function ProducerWorkspace() {
   const [alertError, setAlertError] = useState("")
   const [comments, setComments] = useState<ProducerComment[]>([])
   const [commentState, setCommentState] = useState("Connecting")
-  const [commentCursor, setCommentCursor] = useState(0)
+  const commentCursorRef = useRef(0)
+  const [producerStatus, setProducerStatus] = useState<ProducerBridgeStatus | null>(null)
+  const [producerCapabilities, setProducerCapabilities] = useState<ProducerCapabilities | null>(null)
+  const [producerError, setProducerError] = useState("")
+  const [programFrameUrl, setProgramFrameUrl] = useState("")
+  const [programFrameAt, setProgramFrameAt] = useState("")
+  const [programFrameState, setProgramFrameState] = useState("Waiting for broadcaster status")
+  const programObjectUrl = useRef("")
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -87,13 +120,71 @@ export default function ProducerWorkspace() {
     let cancelled = false; let timer = 0
     const poll = async () => {
       try {
-        const token = await currentAccessToken(); const response = await fetch(`/api/chase/v1/comments?after=${commentCursor}`, { cache: "no-store", headers: token ? { Authorization: `Bearer ${token}` } : {} })
+        const token = await currentAccessToken(); const response = await fetch(`/api/chase/v1/comments?after=${commentCursorRef.current}`, { cache: "no-store", headers: token ? { Authorization: `Bearer ${token}` } : {} })
         if (!response.ok) throw new Error(); const next = await response.json() as CommentsResponse
-        if (cancelled) return; setComments((prior) => [...prior, ...(next.comments ?? [])].slice(-100)); setCommentCursor(Number(next.cursor) || commentCursor); setCommentState(next.state ?? "Connected")
+        if (cancelled) return; setComments((prior) => [...prior, ...(next.comments ?? [])].slice(-100)); const cursor = Number(next.cursor) || commentCursorRef.current; commentCursorRef.current = cursor; setCommentState(next.state ?? "Connected")
         timer = window.setTimeout(() => void poll(), Math.max(2_000, Math.min(30_000, Number(next.pollAfterMs) || 5_000)))
       } catch { if (!cancelled) { setCommentState("Unavailable"); timer = window.setTimeout(() => void poll(), 10_000) } }
     }; void poll(); return () => { cancelled = true; window.clearTimeout(timer) }
-  }, [commentCursor])
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const token = await currentAccessToken()
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+        const [statusResponse, capabilitiesResponse] = await Promise.all([
+          fetch("/api/producer/v1/status", { cache: "no-store", headers }),
+          fetch("/api/producer/v1/capabilities", { cache: "no-store", headers }),
+        ])
+        if (!statusResponse.ok || !capabilitiesResponse.ok) throw new Error(`Producer bridge returned ${!statusResponse.ok ? statusResponse.status : capabilitiesResponse.status}`)
+        const [nextStatus, nextCapabilities] = await Promise.all([
+          statusResponse.json() as Promise<ProducerBridgeStatus>, capabilitiesResponse.json() as Promise<ProducerCapabilities>,
+        ])
+        if (cancelled) return
+        setProducerStatus(nextStatus); setProducerCapabilities(nextCapabilities); setProducerError("")
+      } catch (reason) {
+        if (!cancelled) { setProducerStatus(null); setProducerCapabilities(null); setProducerError(reason instanceof Error ? reason.message : "Producer bridge unavailable") }
+      }
+    }
+    void load()
+    const timer = window.setInterval(() => void load(), 4_000)
+    return () => { cancelled = true; window.clearInterval(timer) }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const clearFrame = () => {
+      if (programObjectUrl.current) URL.revokeObjectURL(programObjectUrl.current)
+      programObjectUrl.current = ""
+      setProgramFrameUrl("")
+    }
+    const load = async () => {
+      if (!sourceFresh(producerStatus)) { clearFrame(); setProgramFrameState(producerStatus ? "PROGRAM unavailable until the source is live" : "Waiting for broadcaster status"); return }
+      try {
+        const token = await currentAccessToken()
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+        const response = await fetch(`/api/producer/v1/preview/program.jpg?t=${Date.now()}`, { cache: "no-store", headers })
+        if (response.status === 404) { clearFrame(); setProgramFrameState("No current PROGRAM frame"); return }
+        if (!response.ok) throw new Error(`Preview returned ${response.status}`)
+        const frameAt = response.headers.get("X-Producer-Frame-At") ?? ""
+        const frameTime = Date.parse(frameAt)
+        if (!Number.isFinite(frameTime) || Date.now() - frameTime > 5_000) { clearFrame(); setProgramFrameState("PROGRAM frame is stale"); return }
+        const blob = await response.blob()
+        if (cancelled) return
+        const nextUrl = URL.createObjectURL(blob)
+        if (programObjectUrl.current) URL.revokeObjectURL(programObjectUrl.current)
+        programObjectUrl.current = nextUrl
+        setProgramFrameUrl(nextUrl); setProgramFrameAt(frameAt); setProgramFrameState("CURRENT")
+      } catch (reason) {
+        if (!cancelled) { clearFrame(); setProgramFrameState(reason instanceof Error ? reason.message : "PROGRAM preview unavailable") }
+      }
+    }
+    void load()
+    const timer = window.setInterval(() => void load(), 1_500)
+    return () => { cancelled = true; window.clearInterval(timer); clearFrame() }
+  }, [producerStatus?.source_state, producerStatus?.previews?.program?.state])
 
   const sources = useMemo(() => parseProducerSources(status?.streaming), [status?.streaming])
   const alerts = alertSnapshot?.key === alertKey ? alertSnapshot.value : null
@@ -102,6 +193,9 @@ export default function ProducerWorkspace() {
   const statusFresh = !statusError && statusCheckedAt > 0 && now - statusCheckedAt < 60_000 && generatedAt > 0 && now - generatedAt < 60_000
   const playing = statusFresh && selected?.publisherOnline && selected.playerUrl
   const units = state.fabric.units?.units ?? []
+  const producerBridgeState = bridgeState(producerStatus)
+  const programCurrent = programFrameState === "CURRENT" && sourceFresh(producerStatus) && Boolean(programFrameUrl)
+  const controlActions = Object.entries(producerCapabilities?.actions ?? {}).flatMap(([group, actions]) => actions.map((action) => `${group}.${action}`))
 
   const selectSource = (id: string) => {
     setManualSourceId(id)
@@ -112,6 +206,13 @@ export default function ProducerWorkspace() {
     <header className="workspace-heading"><div><h1>Producer</h1><p>Live stream control desk</p></div><button type="button" onClick={() => void refreshStatus()}>Refresh sources</button></header>
     <div className="producer-layout">
       <div className="producer-main">
+        <section className="workspace-panel producer-stage" aria-label="PROGRAM preview">
+          <header><h2>PROGRAM</h2><span className={programCurrent ? "workspace-live" : "workspace-muted"}>{programCurrent ? "CURRENT" : producerBridgeState}</span></header>
+          <div className="producer-stage__viewport">
+            {programCurrent ? <img src={programFrameUrl} alt="Current PROGRAM preview" /> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>}
+          </div>
+          <div className="producer-stage__foot"><div><strong>{producerStatus?.state ?? "NO BROADCASTER STATUS"}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>{producerStatus?.broadcast?.state ?? "OUTPUT UNKNOWN"}</span></div>
+        </section>
         <section className="workspace-panel producer-stage" aria-label="Selected live stream camera">
           <header><h2>Live camera</h2><span className={playing ? "workspace-live" : "workspace-muted"}>{playing ? "PUBLISHING" : statusError ? "STATUS UNAVAILABLE" : "NO LIVE PUBLISHER"}</span></header>
           <div className="producer-stage__viewport">
@@ -132,7 +233,7 @@ export default function ProducerWorkspace() {
         <section className="workspace-panel"><header><h2>Aegis · internal</h2><Link to="/aegis-alerts">Review ↗</Link></header><p>Radar findings are advisory and separate from official warnings. Team-wide delivery remains behind the review policy.</p></section>
         <section className="workspace-panel"><header><h2>Broadcast health</h2><Link to="/stream">Streams ↗</Link></header><p>{statusError || (status?.streaming as { summary?: string } | undefined)?.summary || "Checking stream infrastructure…"}</p></section>
         <section className="workspace-panel"><header><h2>Facebook comments</h2><span>{commentState}</span></header><div className="workspace-list">{comments.length ? comments.slice().reverse().slice(0, 12).map((comment, index) => <div key={comment.id ?? index}><strong>{comment.author ?? "Viewer"}</strong><span>{comment.message ?? ""}</span></div>) : <p>No comments received yet.</p>}</div><p className="workspace-note">Read-only viewer. OPS cannot post as the Page.</p></section>
-        <section className="workspace-panel"><header><h2>PROGRAM / controls</h2><span className="workspace-muted">BRIDGE OFFLINE</span></header><p>Video, broadcaster status, and remote controls stay offline until the authenticated outbound bridge is ready.</p></section>
+        <section className="workspace-panel"><header><h2>PROGRAM controls</h2><span className={producerBridgeState === "ONLINE" ? "workspace-live" : "workspace-muted"}>{producerBridgeState}</span></header><p>{producerError || (producerCapabilities ? `Bridge schema ${producerCapabilities.schemaVersion ?? "unknown"}.` : "Waiting for authenticated capability report.")}</p>{controlActions.length ? <div className="workspace-list">{controlActions.map((action) => <div key={action}><strong>{action}</strong><span>CONTROL ACCESS PENDING</span></div>)}</div> : <p className="workspace-note">No producer actions have been reported yet.</p>}<p className="workspace-note">Remote commands are intentionally unavailable until producer accounts and the confirmation flow are approved. Facebook comments remain read-only; current state is shown above without masking Meta authentication failures.</p></section>
       </aside>
     </div>
   </main>
