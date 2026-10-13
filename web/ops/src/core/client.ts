@@ -235,6 +235,17 @@ export async function fetchForecast<T>(config: OpsCoreConfig, path: string, sign
   return withTimeout((inner) => fetchJson<T>(`${config.coreBaseUrl}/api/forecast/v1/${path}`, inner), signal, POINT_REQUEST_TIMEOUT_MS);
 }
 
+export async function approveChaseDay(config: OpsCoreConfig, setupId: string, expectedRevision: number): Promise<{ publication_state: string; revision: number }> {
+  if (!coreConfigured(config)) throw new OpsCoreClientError("Live Core is not configured");
+  const token = await currentAccessToken();
+  const response = await fetch(`${config.coreBaseUrl}/api/forecast/v1/chase-setup/approval`, {
+    method: "POST", cache: "no-store", headers: { ...buildCoreRequestHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ setup_id: setupId, expected_revision: expectedRevision }),
+  });
+  if (!response.ok) throw new OpsCoreClientError(`HTTP ${response.status}`);
+  return response.json() as Promise<{ publication_state: string; revision: number }>;
+}
+
 // Cold HRRR profiles can take over 50 seconds on Core. Leave room for network variation
 // without changing the faster Storm Intel point or location-search timeouts.
 export const SOUNDING_REQUEST_TIMEOUT_MS = 75_000;

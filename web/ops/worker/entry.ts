@@ -60,12 +60,19 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
   const route = resolveAllowlistRoute(routeKey);
   if (!route) return gatewayErrorResponse(404, "ROUTE_NOT_ALLOWED");
   if (!(route.methods ?? ["GET"]).includes(request.method)) return gatewayErrorResponse(405, "METHOD_NOT_ALLOWED");
+  if (route.requiresOwner && auth.role !== "OWNER" && auth.role !== "ADMIN") return gatewayErrorResponse(403, "UNAUTHORIZED");
 
   if (route.upstreamPath === "/api/fabric/v1/stream") {
     return forwardFabricStream(env, request.signal);
   }
 
-  const body = request.method === "PUT" ? await request.text() : undefined;
+  let body: string | undefined;
+  if (route.upstreamPath === "/api/forecast/v1/chase-setup/approval") {
+    const candidate = await request.json().catch(() => null) as { expected_revision?: unknown; setup_id?: unknown } | null;
+    if (!candidate || typeof candidate.setup_id !== "string" || !/^setup-\d{8}-[0-9a-f]{10}$/.test(candidate.setup_id)
+        || !Number.isInteger(candidate.expected_revision) || candidate.expected_revision < 1) return gatewayErrorResponse(400, "CORE_MALFORMED_RESPONSE");
+    body = JSON.stringify({ setup_id: candidate.setup_id, expected_revision: candidate.expected_revision, approved_by: auth.userId });
+  } else if (request.method === "PUT") body = await request.text();
   const result = await forwardToCore(route, url, env, fetch, {
     method: request.method,
     body,

@@ -34,6 +34,7 @@ export interface AllowlistRoute {
   upstreamPath: string;
   allowedQueryParams: string[];
   methods?: readonly string[];
+  requiresOwner?: boolean;
 }
 
 // Hardcoded allowlist. This is the entire set of paths this gateway will ever forward --
@@ -57,6 +58,7 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "api/forecast/v1/hurricane-watch": { upstreamPath: "/api/forecast/v1/hurricane-watch", allowedQueryParams: [] },
   "api/forecast/v1/chase-setups": { upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [] },
   "api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id"] },
+  "api/forecast/v1/chase-setup/approval": { upstreamPath: "/api/forecast/v1/chase-setup/approval", allowedQueryParams: [], methods: ["POST"], requiresOwner: true },
   "health": { upstreamPath: "/health", allowedQueryParams: [] },
   "api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
@@ -145,7 +147,8 @@ export function gatewayErrorResponse(status: number, reason: GatewayErrorReason)
   });
 }
 
-export type AuthResult = { ok: true; userId: string } | { ok: false; status: number; reason: GatewayErrorReason };
+export type OpsRole = "OWNER" | "ADMIN" | "OPERATOR";
+export type AuthResult = { ok: true; userId: string; role: OpsRole } | { ok: false; status: number; reason: GatewayErrorReason };
 
 // Delegates verification to Supabase itself rather than locally verifying the JWT. This avoids
 // holding a JWT signing secret or JWKS cache in the gateway, and it naturally honors revocation
@@ -188,7 +191,7 @@ export async function verifyOpsAuth(
   let profileResponse: Response;
   try {
     profileResponse = await fetchImpl(
-      `${supabaseUrl}/rest/v1/profiles?select=active&user_id=eq.${encodeURIComponent(userId)}`,
+      `${supabaseUrl}/rest/v1/profiles?select=active,role&user_id=eq.${encodeURIComponent(userId)}`,
       { headers: { Authorization: `Bearer ${token}`, apikey: publishableKey } },
     );
   } catch {
@@ -196,12 +199,14 @@ export async function verifyOpsAuth(
   }
   if (!profileResponse.ok) return { ok: false, status: 403, reason: "UNAUTHORIZED" };
 
-  const rows = (await profileResponse.json().catch(() => null)) as Array<{ active?: boolean }> | null;
-  if (!Array.isArray(rows) || rows.length === 0 || rows[0].active !== true) {
+  const rows = (await profileResponse.json().catch(() => null)) as Array<{ active?: boolean; role?: unknown }> | null;
+  const role = rows?.[0]?.role;
+  if (!Array.isArray(rows) || rows.length === 0 || rows[0].active !== true
+      || (role !== "OWNER" && role !== "ADMIN" && role !== "OPERATOR")) {
     return { ok: false, status: 403, reason: "UNAUTHORIZED" };
   }
 
-  return { ok: true, userId };
+  return { ok: true, userId, role };
 }
 
 const UPSTREAM_TIMEOUT_MS = 8_000;

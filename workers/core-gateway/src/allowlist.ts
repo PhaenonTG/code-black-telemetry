@@ -26,6 +26,7 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
   "/api/forecast/v1/hurricane-watch": { upstreamPath: "/api/forecast/v1/hurricane-watch", allowedQueryParams: [] },
   "/api/forecast/v1/chase-setups": { upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [] },
   "/api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id"] },
+  "/api/forecast/v1/chase-setup/approval": { upstreamPath: "/api/forecast/v1/chase-setup/approval", allowedQueryParams: [], methods: ["POST"] },
   "/health": { upstreamPath: "/health", allowedQueryParams: [] },
   "/api/fabric/v1/health": { upstreamPath: "/api/fabric/v1/health", allowedQueryParams: [] },
   "/api/fabric/v1/units": { upstreamPath: "/api/fabric/v1/units", allowedQueryParams: [] },
