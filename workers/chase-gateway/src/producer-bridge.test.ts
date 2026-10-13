@@ -8,6 +8,27 @@ class MemoryStorage implements BridgeStorage {
 }
 
 describe("Producer bridge state", () => {
+  it("enforces exclusive control leases and still permits emergency stops", async () => {
+    const storage = new MemoryStorage();
+    const call = (path: string, body: unknown, user = "operator-a", method = "POST") => handleProducerStateRequest(new Request(`https://x/api/producer/v1/${path}`, { method, headers: { "X-Producer-UserId": user }, ...(method === "GET" ? {} : { body: JSON.stringify(body) }) }), storage);
+    const command = { commandId: "067169a4-52c0-4d08-8d7f-638e93ee8451", expectedStateRevision: 3, action: "preview.start" };
+    expect((await call("commands", command)).status).toBe(409);
+    expect((await call("control-lease", {})).status).toBe(200);
+    expect((await call("control-lease", {}, "operator-b")).status).toBe(409);
+    await handleProducerStateRequest(new Request("https://x/api/producer/v1/workstation/status", { method: "POST", body: JSON.stringify({ stateRevision: 3 }) }), storage);
+    expect((await call("commands", command)).status).toBe(202);
+    expect((await call("commands", { ...command, action: "preview.stop" })).status).toBe(409);
+    expect((await call("commands", { ...command, commandId: "338274ab-bf75-4f45-8b56-ed5b70d562b5", action: "facebook.output.stop", expectedStateRevision: 0 }, "operator-b")).status).toBe(202);
+    expect((await call("commands", { ...command, commandId: "5e4d0620-b15d-411a-8e5c-33e0062243e5", action: "facebook.output.start", confirmed: true })).status).toBe(409);
+  });
+
+  it("expires queued commands before a disconnected workstation can execute them", async () => {
+    const storage = new MemoryStorage();
+    storage.values.set("commands", [{ commandId: "2bd3ed52-786b-4ead-a77a-a6438fd9b772", state: "queued", createdAt: new Date(Date.now() - 20000).toISOString() }]);
+    const response = await handleProducerStateRequest(new Request("https://x/api/producer/v1/workstation/commands"), storage);
+    expect(await response.json()).toEqual({ commands: [] });
+    expect(await storage.get("commands")).toMatchObject([{ state: "timed_out" }]);
+  });
   it("stores one-time Facebook OAuth sessions and an encrypted Page credential", async () => {
     const storage = new MemoryStorage();
     const ticket = "a".repeat(43);

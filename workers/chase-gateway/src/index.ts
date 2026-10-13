@@ -600,13 +600,17 @@ async function handleProducerRoute(request: Request, url: URL, env: Env): Promis
   if (!env.PRODUCER_BRIDGE) return json(503, { error: "BRIDGE_NOT_CONFIGURED" });
   const workstation = url.pathname.startsWith("/api/producer/v1/workstation/");
   let operator = "workstation";
+  let userId: string | undefined;
+  let controlAllowed = false;
   if (workstation) {
     if (!producerWorkstationAuthorized(request, env)) return json(401, { error: "AUTH_REQUIRED" });
   } else {
     const caller = await authorizeCaller(request, env, false);
     if (!caller) return json(401, { error: "AUTH_REQUIRED" });
     operator = caller.operatorName || caller.userId || "operator";
-    if (request.method === "POST" && url.pathname === "/api/producer/v1/commands" && !producerOperatorAllowed(caller, env)) return json(403, { error: "PRODUCER_CONTROL_FORBIDDEN" });
+    userId = caller.userId;
+    controlAllowed = producerOperatorAllowed(caller, env);
+    if (!["GET", "HEAD"].includes(request.method) && !controlAllowed) return json(403, { error: "PRODUCER_CONTROL_FORBIDDEN" });
   }
   const id = env.PRODUCER_BRIDGE.idFromName("native-producer");
   const stub = env.PRODUCER_BRIDGE.get(id);
@@ -615,10 +619,12 @@ async function handleProducerRoute(request: Request, url: URL, env: Env): Promis
     const value = request.headers.get(name); if (value) headers.set(name, value);
   }
   headers.set("X-Producer-Operator", operator);
+  if (userId) headers.set("X-Producer-UserId", userId);
   const response = await stub.fetch(new Request(request.url, { method: request.method, headers, body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body }));
   if (!workstation && request.method === "GET" && url.pathname === "/api/producer/v1/status" && response.ok) {
     const document = await response.json() as Record<string, unknown>;
     if (!("status" in document) && "producer" in document) document.status = document.producer;
+    document.controlAccess = { allowed: controlAllowed, userId };
     return json(response.status, document);
   }
   return response;

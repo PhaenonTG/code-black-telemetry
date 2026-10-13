@@ -2,6 +2,7 @@ const STATUS_KEY = "status";
 const CAPABILITIES_KEY = "capabilities";
 const FRAME_KEY = "program-frame";
 const COMMANDS_KEY = "commands";
+const CONTROL_LEASE_KEY = "producer-control-lease";
 const FACEBOOK_OAUTH_SESSIONS_KEY = "facebook-oauth-sessions";
 const FACEBOOK_CREDENTIAL_KEY = "facebook-page-credential";
 const FACEBOOK_COMMENTS_KEY = "facebook-reply-targets";
@@ -27,6 +28,7 @@ type StoredCommand = {
   operator: string; createdAt: string; state: "queued" | "succeeded" | "failed" | "timed_out";
   result?: unknown; completedAt?: string;
 };
+type ControlLease = { userId: string; operator: string; expiresAt: number };
 type StoredOAuthSession = {
   ticket: string;
   userId: string;
@@ -175,6 +177,7 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
 
   if (path === "/api/producer/v1/status" && request.method === "GET") {
     const value = await storage.get<StoredDocument>(STATUS_KEY);
+    const lease = await storage.get<ControlLease>(CONTROL_LEASE_KEY);
     const producer = value?.body ?? null;
     return json(200, {
       bridge: bridgeState(value),
@@ -182,7 +185,17 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
       producer,
       // Compatibility alias consumed by the OPS Producer workspace.
       status: producer,
+      controlLease: lease && lease.expiresAt > Date.now() ? lease : null,
     });
+  }
+  if (path === "/api/producer/v1/control-lease" && ["POST", "DELETE"].includes(request.method)) {
+    const userId = request.headers.get("X-Producer-UserId");
+    if (!userId) return json(403, { error: "PRODUCER_CONTROL_FORBIDDEN" });
+    const current = await storage.get<ControlLease>(CONTROL_LEASE_KEY);
+    if (current && current.expiresAt > Date.now() && current.userId !== userId) return json(409, { error: "CONTROL_HELD", operator: current.operator, expiresAt: current.expiresAt });
+    const lease = { userId, operator: request.headers.get("X-Producer-Operator") || "Producer", expiresAt: request.method === "DELETE" ? 0 : Date.now() + 30_000 };
+    await storage.put(CONTROL_LEASE_KEY, lease);
+    return json(200, { lease: lease.expiresAt ? lease : null });
   }
   if (path === "/api/producer/v1/capabilities" && request.method === "GET") {
     const value = await storage.get<StoredDocument>(CAPABILITIES_KEY);
@@ -205,7 +218,26 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
     if (action === "lowerThird.set" && (typeof (body?.payload as Record<string, unknown> | undefined)?.text !== "string" || String((body?.payload as Record<string, unknown>).text).length > 120)) return json(400, { error: "INVALID_PAYLOAD" });
     const commands = await storage.get<StoredCommand[]>(COMMANDS_KEY) ?? [];
     const prior = commands.find((item) => item.commandId === commandId);
-    if (prior) return json(200, prior);
+    if (prior) return prior.action === action && JSON.stringify(prior.payload ?? {}) === JSON.stringify(body?.payload ?? {}) ? json(200, prior) : json(409, { error: "COMMAND_ID_CONFLICT" });
+    const actorId = request.headers.get("X-Producer-UserId");
+    const emergencyStop = action === "facebook.output.stop" || action === "preview.stop" || action === "archive.camera.stop";
+    if (actorId && !emergencyStop) {
+      const lease = await storage.get<ControlLease>(CONTROL_LEASE_KEY);
+      if (!lease || lease.expiresAt <= Date.now() || lease.userId !== actorId) return json(409, { error: "CONTROL_LEASE_REQUIRED" });
+      const status = await storage.get<StoredDocument>(STATUS_KEY);
+      if (bridgeState(status) !== "ONLINE") return json(409, { error: "BRIDGE_OFFLINE" });
+      if (status?.body.stateRevision !== expected) return json(409, { error: "STATE_CHANGED" });
+      if (action === "facebook.output.start") {
+        const current = status!.body;
+        const previews = current.previews as { program?: { state?: string } } | undefined;
+        const audio = current.audio as { process?: string; available?: boolean; silence?: boolean; clipping?: boolean; lastAudioAt?: string } | undefined;
+        const metrics = current.metrics as { last_video_timestamp?: string } | undefined;
+        if (body?.confirmed !== true || current.source_state !== "SOURCE_LIVE" || previews?.program?.state !== "ACTIVE"
+          || !metrics?.last_video_timestamp || !Number.isFinite(Date.parse(metrics.last_video_timestamp)) || Date.now() - Date.parse(metrics.last_video_timestamp) > 5_000
+          || audio?.process !== "RUNNING" || !audio.available || audio.silence || audio.clipping
+          || !audio.lastAudioAt || !Number.isFinite(Date.parse(audio.lastAudioAt)) || Date.now() - Date.parse(audio.lastAudioAt) > 5_000) return json(409, { error: "SOURCE_OR_AUDIO_NOT_READY" });
+      }
+    }
     const command: StoredCommand = { commandId, action, expectedStateRevision: expected as number, ...(body?.payload && typeof body.payload === "object" && !Array.isArray(body.payload) ? { payload: body.payload as Record<string, unknown> } : {}), operator: request.headers.get("X-Producer-Operator") || "unknown", createdAt: new Date().toISOString(), state: "queued" };
     commands.push(command);
     await storage.put(COMMANDS_KEY, commands.slice(-MAX_COMMANDS));
@@ -213,6 +245,8 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
   }
   if (path === "/api/producer/v1/workstation/commands" && request.method === "GET") {
     const commands = await storage.get<StoredCommand[]>(COMMANDS_KEY) ?? [];
+    for (const command of commands) if (command.state === "queued" && Date.now() - Date.parse(command.createdAt) > 15_000) { command.state = "timed_out"; command.completedAt = new Date().toISOString(); }
+    await storage.put(COMMANDS_KEY, commands);
     return json(200, { commands: commands.filter((item) => item.state === "queued").slice(0, 20) });
   }
   if (path === "/api/producer/v1/workstation/ack" && request.method === "POST") {
@@ -239,9 +273,6 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
 export class ProducerBridge implements DurableObject {
   constructor(private readonly state: DurableObjectState) {}
   fetch(request: Request): Promise<Response> {
-    if (new URL(request.url).pathname.startsWith("/api/chase/v1/facebook/internal/")) {
-      return this.state.blockConcurrencyWhile(() => handleProducerStateRequest(request, this.state.storage));
-    }
-    return handleProducerStateRequest(request, this.state.storage);
+    return this.state.blockConcurrencyWhile(() => handleProducerStateRequest(request, this.state.storage));
   }
 }
