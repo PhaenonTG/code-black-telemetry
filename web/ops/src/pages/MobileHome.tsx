@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthProvider"
 import { Icon } from "../components/Icon"
 import { useCoreOps } from "../core/useCoreOps"
 import { useViewport } from "../hooks/useViewport"
+import { PEA_RIDGE_REFERENCE } from "../core/referenceLocation"
 const OpsWorkstation = lazy(() => import("./OpsWorkstation"))
 
 const PRIMARY_ACTIONS = [
@@ -59,7 +60,7 @@ export default function MobileHome() {
 
       <section className="mobile-home__watch" aria-label="Watch locations">
         <div className="mobile-home__section-title"><span>Watch locations</span><Link to="/weather">Weather</Link></div>
-        <Link to="/weather" onClick={() => selectPoint({ lat: 36.45, lon: -94.12 })} className="mobile-home__location"><Icon name="gps" /><span><b>Pea Ridge, AR</b><small>Spencer / Silas base</small></span><Icon name="chevron" /></Link>
+        <Link to="/weather" onClick={() => selectPoint(PEA_RIDGE_REFERENCE)} className="mobile-home__location"><Icon name="gps" /><span><b>Pea Ridge, AR</b><small>Spencer / Silas base</small></span><Icon name="chevron" /></Link>
         <Link to="/weather" onClick={() => selectPoint({ lat: 39.05, lon: -95.68 })} className="mobile-home__location"><Icon name="gps" /><span><b>Topeka, KS</b><small>Nick base</small></span><Icon name="chevron" /></Link>
       </section>
     </div>

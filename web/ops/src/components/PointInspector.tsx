@@ -22,7 +22,7 @@ export function PointInspector({
   coreState: OpsCoreState;
   onRetry?: () => void;
   onFollow?: () => void;
-  locationMode?: "follow" | "manual";
+  locationMode?: "follow" | "manual" | "chaser" | "fallback";
 }) {
   const snapshot = coreState.stormIntel.pointSnapshot;
   const units = coreState.fabric.units?.units ?? [];

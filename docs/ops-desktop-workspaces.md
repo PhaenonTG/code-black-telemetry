@@ -23,4 +23,6 @@ The three desktop workspaces are **additions to the current sidebar**, not a rep
 
 ## Delivery boundary
 
-This branch is an incremental desktop implementation of the previously approved project, not acceptance of the entire plan. Keep the public OPS site on its current stable release until the workspaces pass production-like Mapbox/media smoke tests and the outstanding integrations are reviewed. Avoid claiming that a public OPS session grants access to the private stream player.
+This is an incremental desktop implementation of the previously approved project, not acceptance of the entire plan. Producer and Chase Mapbox surfaces, the shared location selector, and the desktop and phone layouts passed local rendered smoke tests before release. The live stream publishers were unavailable during testing, so playback, latency, and audio remain unverified. The private stream player still requires Tailscale; OPS sign-in alone does not grant playback access.
+
+The shared location selector follows browser GPS when available, offers reported chaser fixes, and uses Pea Ridge, Arkansas (36.45, -94.12) as the fallback. A chaser fix expires after two minutes. The selected reference applies across the map, Chase, Producer, Weather, Soundings, and nearby results; choosing a map point temporarily makes that point the reference.

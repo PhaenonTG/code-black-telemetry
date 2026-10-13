@@ -3,15 +3,12 @@ import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles"
 import type { FabricUnitState } from "../../../../src/services/fabric"
+import { locationPoint, liveChaserPoint, PEA_RIDGE_REFERENCE } from "../core/referenceLocation"
 
 type Point = { lat: number; lon: number }
 
 function unitPoint(unit: FabricUnitState): Point | null {
-  const location = unit.location
-  if (!location) return null
-  const lat = Number(location.lat ?? location.latitude)
-  const lon = Number(location.lon ?? location.lng ?? location.longitude)
-  return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null
+  return liveChaserPoint(unit) ?? locationPoint(unit.location)
 }
 
 export function ProducerSituationMap({ selectedPoint, units, onPointSelect }: { selectedPoint: Point | null; units: FabricUnitState[]; onPointSelect: (point: Point) => void }) {
@@ -21,9 +18,9 @@ export function ProducerSituationMap({ selectedPoint, units, onPointSelect }: { 
   onPointSelectRef.current = onPointSelect
   const positions = useMemo(() => units.flatMap((unit) => {
     const point = unitPoint(unit)
-    return point ? [{ id: unit.unit_id, name: unit.operator_name || unit.display_name, point, online: unit.overall_health !== "OFFLINE" }] : []
+    return point ? [{ id: unit.unit_id, name: unit.operator_name || unit.display_name, point, online: Boolean(liveChaserPoint(unit)) }] : []
   }), [units])
-  const center = selectedPoint ?? positions[0]?.point ?? { lat: 39.0473, lon: -95.6752 }
+  const center = selectedPoint ?? PEA_RIDGE_REFERENCE
 
   useEffect(() => {
     if (!container.current || !hasMapboxToken()) return
@@ -45,7 +42,7 @@ export function ProducerSituationMap({ selectedPoint, units, onPointSelect }: { 
       const element = document.createElement("div")
       element.className = item.online ? "producer-map__unit" : "producer-map__unit producer-map__unit--offline"
       element.textContent = item.name
-      element.title = `${item.name} · ${item.online ? "reported" : "offline"}`
+      element.title = `${item.name} · ${item.online ? "GPS reporting" : "last known position · no fresh GPS"}`
       markers.push(new mapboxgl.Marker({ element }).setLngLat([item.point.lon, item.point.lat]).addTo(instance))
     }
     if (selectedPoint) {

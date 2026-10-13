@@ -135,6 +135,9 @@ type AtlasMapProps = {
   phoneTools?: ReactNode;
   escapeControl?: ReactNode;
   selectedPoint?: AtlasSelectedPoint | null;
+  // OPS reference controls center and nearby radar without inventing a vehicle GPS marker.
+  referencePoint?: AtlasSelectedPoint | null;
+  referenceKey?: string;
   onPointSelect?: (point: AtlasSelectedPoint) => void;
 };
 
@@ -251,6 +254,8 @@ export function AtlasMap({
   phoneTools,
   escapeControl,
   selectedPoint = null,
+  referencePoint = null,
+  referenceKey,
   onPointSelect,
 }: AtlasMapProps) {
   const compact = controlsVariant === "compact";
@@ -264,10 +269,13 @@ export function AtlasMap({
   // arriving conditions (map style loaded vs. first real GPS fix) -- see the dedicated intro effect
   // below for why they can't share one gate.
   const introAppliedRef = useRef(false);
-  const latestRef = useRef({ gps, rangeRings, expanded });
+  const lastReferenceKeyRef = useRef<string | undefined>(undefined);
+  const latestRef = useRef({ gps, rangeRings, expanded, referencePoint });
   const onPointSelectRef = useRef(onPointSelect);
   onPointSelectRef.current = onPointSelect;
   const [cameraMode, setCameraMode] = useState<AtlasCameraMode>("FOLLOW_NORTH");
+  const cameraModeRef = useRef(cameraMode);
+  cameraModeRef.current = cameraMode;
   const [bearing, setBearing] = useState(gps?.headingDeg ?? 0);
   const [pitch, setPitch] = useState(0);
   // Speed-aware zoom (AtlasCameraController.zoomForSpeed) re-zooms the camera every time GPS speed
@@ -426,7 +434,7 @@ export function AtlasMap({
     window.dispatchEvent(new CustomEvent("codeblack:map-operational-update", { detail: { roads: operationalRoadConditions, reports: stormReports } }));
   }, [compact, operationalRoadConditions, stormReports]);
 
-  latestRef.current = { gps, rangeRings, expanded };
+  latestRef.current = { gps, rangeRings, expanded, referencePoint };
 
   useEffect(() => {
     incrementAtlasCounter("reactMounts");
@@ -473,7 +481,7 @@ export function AtlasMap({
       const map = new mapboxgl.Map({
         container: containerRef.current,
         style: styleUri,
-        center: initial.gps ? [initial.gps.lon, initial.gps.lat] : [-94.13, 36.45],
+        center: initial.referencePoint ? [initial.referencePoint.lon, initial.referencePoint.lat] : selectedPoint ? [selectedPoint.lon, selectedPoint.lat] : initial.gps ? [initial.gps.lon, initial.gps.lat] : [-94.12, 36.45],
         zoom: INTRO_START_ZOOM,
         bearing: 0,
         pitch: 0,
@@ -903,8 +911,9 @@ export function AtlasMap({
   const [stormMotionOpen, setStormMotionOpen] = useState(false);
   // A Level II frame request can take several seconds. Key site selection to a roughly six-mile
   // location cell so ordinary GPS jitter does not cancel and restart the request forever.
-  const radarFocusLat = gps ? Math.round(gps.lat * 10) / 10 : null;
-  const radarFocusLon = gps ? Math.round(gps.lon * 10) / 10 : null;
+  const radarReference = referencePoint ?? gps;
+  const radarFocusLat = radarReference ? Math.round(radarReference.lat * 10) / 10 : null;
+  const radarFocusLon = radarReference ? Math.round(radarReference.lon * 10) / 10 : null;
   const applyStormMotion = async (directionDegrees: number, speedKnots: number) => {
     const motion = await setRadarStormMotion({ directionDegrees, speedKnots, source: "MANUAL" });
     setStormMotionState(motion);
@@ -925,7 +934,7 @@ export function AtlasMap({
     const load = async () => {
       const center = mapRef.current?.getCenter();
       const focus = radarFocusLat != null && radarFocusLon != null ? { lat: radarFocusLat, lon: radarFocusLon } : (center ? { lat: center.lat, lon: center.lng } : null);
-      const nearbySites = focus ? await getNearestRadarSites(focus.lat, focus.lon) : await getNearestRadarSites(36.13, -94.16);
+      const nearbySites = focus ? await getNearestRadarSites(focus.lat, focus.lon) : await getNearestRadarSites(36.45, -94.12);
       setRadarNearbySites(nearbySites.slice(0, 3));
       const nearestCandidates = nearbySites.slice(0, 3).map((site) => site.id);
       const candidates = radarSiteOverride ? [radarSiteOverride, ...nearestCandidates.filter((site) => site !== radarSiteOverride)].slice(0, 3) : nearestCandidates;
@@ -1136,21 +1145,22 @@ export function AtlasMap({
   }, [viewport, chaserNetVisible]);
 
   useEffect(() => {
-    if (!stormReportsVisible || !gps) { setStormReports([]); return; }
+    const point = referencePoint ?? gps;
+    if (!stormReportsVisible || !point) { setStormReports([]); return; }
     let cancelled = false;
     // Was only applied on the initial fetch -- the 5-minute refresh below set `result.reports`
     // straight through with no cutoff, so a report that aged past 2 hours (or one the feed
     // returned stale) could silently reappear on the map after any refresh even though the
     // initial load explicitly excludes it. Same filter, both call sites now.
     const applyStalenessCutoff = (reports: typeof stormReports) => reports.filter((report) => Date.now() - report.validTime <= 2 * 60 * 60_000);
-    void getNearbyStormReports(gps, 250, 2).then((result) => {
+    void getNearbyStormReports(point, 250, 2).then((result) => {
       if (!cancelled) setStormReports(applyStalenessCutoff(result.reports));
     });
     const timer = window.setInterval(() => {
-      void getNearbyStormReports(gps, 250, 2).then((result) => { if (!cancelled) setStormReports(applyStalenessCutoff(result.reports)); });
+      void getNearbyStormReports(point, 250, 2).then((result) => { if (!cancelled) setStormReports(applyStalenessCutoff(result.reports)); });
     }, 5 * 60_000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [stormReportsVisible, gps?.lat, gps?.lon]);
+  }, [stormReportsVisible, gps?.lat, gps?.lon, referencePoint?.lat, referencePoint?.lon]);
 
   useEffect(() => {
     if (!riverGaugesVisible || !viewport || viewport.zoom < 5) { setRiverGauges([]); return; }
@@ -1216,6 +1226,18 @@ export function AtlasMap({
     if (!map || !loaded) return;
     updateAtlasSelectedPoint(map, selectedPoint);
   }, [loaded, selectedPoint]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || !referencePoint) return;
+    const sourceChanged = lastReferenceKeyRef.current !== referenceKey;
+    lastReferenceKeyRef.current = referenceKey;
+    if (sourceChanged) setCameraMode("FOLLOW_NORTH");
+    // Actual GPS already owns its intro and follow animations. A source choice
+    // resumes following; coordinate ticks respect a user's free camera.
+    if (gps || (!sourceChanged && cameraModeRef.current === "FREE")) return;
+    map.easeTo({ center: [referencePoint.lon, referencePoint.lat], zoom: Math.max(map.getZoom(), 7), duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 400 });
+  }, [loaded, referencePoint?.lat, referencePoint?.lon, referenceKey, gps]);
 
   useEffect(() => {
     const map = mapRef.current;

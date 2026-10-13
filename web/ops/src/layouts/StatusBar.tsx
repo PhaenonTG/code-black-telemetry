@@ -2,12 +2,13 @@ import { useEffect, useState } from "react"
 import { useCoreOps } from "../core/useCoreOps"
 import { OpsStatusPill } from "../components/OpsStatusPill"
 import type { OpsConnectionState } from "../core/types"
+import { LocationControl } from "./LocationControl"
 
 // Compact top strip for desktop/tablet -- not a duplicate of the Operations page, just the
 // handful of things worth glancing at without navigating away from whatever workspace is open.
 // No brand mark here -- the sidebar already shows the Code Black OPS logo/wordmark on every one
 // of these viewports, so a second copy here was pure duplication, not a second piece of info.
-export function StatusBar({ locationLabel }: { locationLabel: string }) {
+export function StatusBar() {
   const [now, setNow] = useState(() => new Date())
   const { state } = useCoreOps()
   useEffect(() => {
@@ -25,7 +26,7 @@ export function StatusBar({ locationLabel }: { locationLabel: string }) {
       <OpsStatusPill state={state.core.state} label={`CORE ${state.core.state}`} />
       <OpsStatusPill state={wsTone} label={`FABRIC FEED ${state.fabric.streamState.toUpperCase()}`} />
       <div className="statusbar__spacer" />
-      <div className="statusbar__item statusbar__location">{locationLabel}</div>
+      <LocationControl />
       <div className="statusbar__item">UTC {now.toISOString().slice(11, 19)}</div>
       <div className="statusbar__item statusbar__clock">
         {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}

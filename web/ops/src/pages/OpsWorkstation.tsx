@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AtlasMap, type AtlasSelectedPoint } from "../../../../src/map/AtlasMap";
-import { browserLocationAdapter, ipLocationAdapter, type LocationState } from "../adapters";
+import type { LocationState } from "../adapters";
 import type { AtlasGpsPoint } from "../../../../src/map/types";
 import { useAlertProducts } from "../../../../src/hooks/useAlertProducts";
 import { useNearbyPlaces } from "../../../../src/hooks/useNearbyPlaces";
@@ -41,18 +41,10 @@ const CAMERA_WALL_KEY = "codeblack.ops.cameraWall";
 const CAMERA_BANDWIDTH_KEY = "codeblack.ops.cameraSnapshotMode";
 const VOICE_ALERTS_KEY = "codeblack.ops.voiceAlerts";
 
-function unitLocation(location: Record<string, unknown> | null | undefined): { lat: number; lon: number } | null {
-  if (!location) return null;
-  const lat = Number(location.lat ?? location.latitude);
-  const lon = Number(location.lon ?? location.lng ?? location.longitude);
-  return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
-}
-
 export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string }) {
   const phoneRadar = useViewport() === "phone" && focus === "RADAR LAB";
   const [radarVisibility, setRadarVisibility] = useState(PHONE_RADAR_LAYERS);
   const [pointOpen, setPointOpen] = useState(false);
-  const [gps, setGps] = useState<LocationState>({ status: "requesting" });
   const [camera, setCamera] = useState<TrafficCamera | null>(null);
   const [pinnedCameras, setPinnedCameras] = useState<TrafficCamera[]>(() => {
     try { return (JSON.parse(localStorage.getItem(CAMERA_WALL_KEY) ?? "[]") as TrafficCamera[]).slice(0, 9); } catch { return []; }
@@ -63,8 +55,7 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
   const spokenRoads = useRef(new Set<string>());
   const [selection, setSelection] = useState<Selection | null>(null);
   const [operationalItems, setOperationalItems] = useState<{ roads: RoadConditionEvent[]; reports: StormReport[] }>({ roads: [], reports: [] });
-  const [nearbyUnitId, setNearbyUnitId] = useState<string>("");
-  const { state: coreState, selectedPoint, selectPoint, updateDeviceLocation, refreshPoint, followDeviceLocation, locationMode } = useCoreOps();
+  const { state: coreState, selectedPoint, selectPoint, deviceLocation: gps, referenceLabel, referenceUnitId, referenceIsFallback, refreshPoint, followDeviceLocation, locationMode } = useCoreOps();
 
   useEffect(() => { localStorage.setItem(CAMERA_WALL_KEY, JSON.stringify(pinnedCameras)); }, [pinnedCameras]);
   useEffect(() => { localStorage.setItem(CAMERA_BANDWIDTH_KEY, String(lowBandwidth)); }, [lowBandwidth]);
@@ -75,38 +66,10 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
     : [...current, value].slice(-9));
 
   useEffect(() => {
-    let cancelled = false;
-    void browserLocationAdapter.getCurrent().then((s) => { if (!cancelled) setGps(s); });
-    const unwatch = browserLocationAdapter.watch((s) => { if (!cancelled) setGps(s); });
-    return () => { cancelled = true; unwatch(); };
-  }, []);
-  useEffect(() => {
     const receive = (event: Event) => setOperationalItems((event as CustomEvent<{ roads: RoadConditionEvent[]; reports: StormReport[] }>).detail);
     window.addEventListener("codeblack:map-operational-update", receive);
     return () => window.removeEventListener("codeblack:map-operational-update", receive);
   }, []);
-
-  // First landing anywhere in the app (selectedPoint is shared app-wide state) with nothing picked
-  // yet defaults to the viewer's own position instead of requiring a map tap before Point
-  // Inspector shows anything -- same one-shot-into-a-null-slot behavior as Storm Intel's.
-  useEffect(() => {
-    if (gps.status === "ready") updateDeviceLocation({ lat: gps.lat, lon: gps.lon });
-  }, [gps, updateDeviceLocation]);
-
-  // Device GPS denied/unavailable leaves the effect above with nothing to auto-select -- fall back
-  // to a coarse, IP-based approximate location instead of leaving Point Inspector permanently empty
-  // until a manual map tap. Only kicks in once GPS has actually settled to denied/unavailable (not
-  // while still "requesting"), so real GPS always wins the race when it's available.
-  useEffect(() => {
-    if (selectedPoint) return;
-    if (gps.status !== "denied" && gps.status !== "unavailable") return;
-    let cancelled = false;
-    void ipLocationAdapter.getApprox().then((approx) => {
-      if (cancelled || !approx) return;
-      updateDeviceLocation({ lat: approx.lat, lon: approx.lon });
-    });
-    return () => { cancelled = true; };
-  }, [gps.status, selectedPoint, updateDeviceLocation]);
 
   useEffect(() => {
     if (phoneRadar) return;
@@ -141,18 +104,8 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
     };
   }, []);
 
-  const atlasGps = toAtlasGps(gps);
-  const chaserReferences = useMemo(() => (coreState.fabric.units?.units ?? [])
-    .map((unit) => ({ unit, location: unitLocation(unit.location) }))
-    .filter((entry): entry is typeof entry & { location: { lat: number; lon: number } } => entry.location != null && (entry.unit.unit_type === "chase-platform" || entry.unit.role.includes("chase"))), [coreState.fabric.units]);
-  useEffect(() => {
-    if (!nearbyUnitId && chaserReferences.length) setNearbyUnitId(chaserReferences[0].unit.unit_id);
-    else if (nearbyUnitId && !chaserReferences.some((entry) => entry.unit.unit_id === nearbyUnitId)) setNearbyUnitId(chaserReferences[0]?.unit.unit_id ?? "");
-  }, [chaserReferences, nearbyUnitId]);
-  const selectedChaser = chaserReferences.find((entry) => entry.unit.unit_id === nearbyUnitId) ?? null;
-  // Nearby is explicitly chaser-relative. A map click still drives Storm Intel, but never silently
-  // relocates gas/hotel/ER results. Fall back to this device only when no chaser position exists.
-  const gpsPoint = useMemo(() => selectedChaser?.location ?? (atlasGps ? { lat: atlasGps.lat, lon: atlasGps.lon } : null), [atlasGps, selectedChaser]);
+  const atlasGps = locationMode === "follow" && !referenceIsFallback ? toAtlasGps(gps) : null;
+  const gpsPoint = selectedPoint;
   const spotters = useSpotters(gpsPoint);
   const poi = useNearbyPoiList(gpsPoint);
   const nearby = useNearbyPlaces(gpsPoint);
@@ -183,13 +136,15 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
       <div className="ops-map-stage">
         <AtlasMap
           gps={atlasGps}
+          referencePoint={locationMode === "manual" ? null : selectedPoint}
+          referenceKey={`${locationMode}:${referenceUnitId}`}
           rangeRings="off"
-          statusLines={[gpsStatusLine(gps)]}
+          statusLines={[atlasGps ? gpsStatusLine(gps) : referenceLabel]}
           controlsVariant={phoneRadar ? "phone-radar" : "full"}
           visibility={phoneRadar ? radarVisibility : undefined}
           onVisibilityChange={phoneRadar ? setRadarVisibility : undefined}
           phoneTools={<>
-            <label className="ops-radar-field">Nearby for<select value={nearbyUnitId} onChange={event => setNearbyUnitId(event.target.value)}>{chaserReferences.length === 0 && <option value="">This device</option>}{chaserReferences.map(({ unit }) => <option key={unit.unit_id} value={unit.unit_id}>{unit.operator_name || unit.display_name}</option>)}</select></label>
+            <span className="ops-radar-field">Nearby for {referenceLabel}</span>
             <button type="button" aria-pressed={voiceAlerts} onClick={() => setVoiceAlerts(value => !value)}>Voice alerts {voiceAlerts ? "on" : "off"}</button>
           </>}
           spotters={spotters.spotters}
@@ -210,13 +165,10 @@ export default function OpsWorkstation({ focus = "LIVE OPS" }: { focus?: string 
                 page/card hierarchy the critique flagged. The heading speaks for itself. */}
             <h1>{focus}</h1>
           </div>
-          <label className="ops-nearby-reference">
+          <div className="ops-nearby-reference">
             <span>NEARBY FOR</span>
-            <select value={nearbyUnitId} onChange={(event) => setNearbyUnitId(event.target.value)}>
-              {chaserReferences.length === 0 && <option value="">THIS DEVICE</option>}
-              {chaserReferences.map(({ unit }) => <option key={unit.unit_id} value={unit.unit_id}>{unit.operator_name || unit.display_name}</option>)}
-            </select>
-          </label>
+            <strong>{referenceLabel}</strong>
+          </div>
           <OpsStatusPill state={coreState.stormIntel.state} label="STORM INTEL" />
           <button type="button" className={voiceAlerts ? "ops-voice-toggle active" : "ops-voice-toggle"} onClick={() => setVoiceAlerts((value) => !value)} title="Speak new tornado and flash-flood warnings">VOICE {voiceAlerts ? "ON" : "OFF"}</button>
         </div>}

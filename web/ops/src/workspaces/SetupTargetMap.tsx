@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles"
+import { PEA_RIDGE_REFERENCE } from "../core/referenceLocation"
 
 export interface SetupCandidatePoint { latitude?: number; longitude?: number; valid_time?: string; run_time?: string; score_index?: number }
 type Props = { geometry: unknown; bounds: number[] | undefined; points: SetupCandidatePoint[]; selectedKey?: string | null }
@@ -17,7 +18,7 @@ export function SetupTargetMap({ geometry, bounds, points, selectedKey }: Props)
     if (!container.current || !hasMapboxToken()) return
     mapboxgl.accessToken = mapboxAccessToken()
     const validBounds = bounds?.length === 4 && bounds.every(Number.isFinite) && bounds[0] < bounds[2] && bounds[1] < bounds[3]
-    const center: [number, number] = validBounds ? [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2] : [-95.6752, 39.0473]
+    const center: [number, number] = validBounds ? [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2] : [PEA_RIDGE_REFERENCE.lon, PEA_RIDGE_REFERENCE.lat]
     const map = new mapboxgl.Map({ container: container.current, style: atlasStyleUri(), center, zoom: 4.5, attributionControl: false })
     mapRef.current = map
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right")

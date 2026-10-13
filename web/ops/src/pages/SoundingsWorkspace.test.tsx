@@ -12,6 +12,7 @@ import SoundingsWorkspace from "./SoundingsWorkspace";
 function contextValue(): CoreOpsContextValue {
   return {
     locationMode: "follow", updateDeviceLocation: () => {}, followDeviceLocation: () => {}, refreshPoint: () => {},
+    deviceLocation: { status: "unavailable" }, referenceUnitId: "", referenceLabel: "Pea Ridge, AR · fallback", referenceIsFallback: true, chooseChaserLocation: () => {}, chooseFallbackLocation: () => {},
     config: { mode: "LIVE_CORE", coreBaseUrl: "https://ops.codeblackwx.com/api/core", coreWsUrl: "wss://ops.codeblackwx.com/api/core", unitId: "cbwx-unit-tessa", stormIntelPollSeconds: 30 },
     state: {
       core: { state: "LIVE", detail: "", checkedAt: 0 },

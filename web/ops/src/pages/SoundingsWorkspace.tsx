@@ -3,11 +3,11 @@ import { AnalogMatchesPanel } from "../components/AnalogMatchesPanel";
 import { Hodograph } from "../components/Hodograph";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { SkewT } from "../components/SkewT";
-import { browserLocationAdapter, type LocationState } from "../adapters";
 import { fetchSoundingPoint, searchSoundingLocation, OpsCoreClientError, SOUNDING_REQUEST_TIMEOUT_MS } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
 import type { OpsConnectionState, SoundingPointResult, SoundingRequestState } from "../core/types";
 import { LatestRequest } from "./latestRequest";
+import { liveChaserPoint } from "../core/referenceLocation";
 
 const RECENT_KEY = "codeblack.ops.soundings.recent-locations.v1";
 const MAX_RECENT = 6;
@@ -47,14 +47,7 @@ function fabricUnitPoint(units: unknown, unitId: string): { lat: number; lon: nu
   if (!Array.isArray(list)) return null;
   const unit = list.find((u) => typeof u === "object" && u !== null && (u as { unit_id?: unknown }).unit_id === unitId);
   if (!unit) return null;
-  const location = (unit as { location?: unknown }).location;
-  if (typeof location !== "object" || location === null) return null;
-  const lat = (location as Record<string, unknown>).latitude;
-  const lon = (location as Record<string, unknown>).longitude;
-  if (typeof lat === "number" && typeof lon === "number" && Number.isFinite(lat) && Number.isFinite(lon)) {
-    return { lat, lon };
-  }
-  return null;
+  return liveChaserPoint(unit);
 }
 
 function formatUtc(iso: string | null | undefined): string {
@@ -89,8 +82,7 @@ const PRIORITY_PARAM_KEYS = [
 ];
 
 export default function SoundingsWorkspace() {
-  const { config, state } = useCoreOps();
-  const [gps, setGps] = useState<LocationState>({ status: "requesting" });
+  const { config, state, selectedPoint: opsPoint, referenceLabel, deviceLocation: gps } = useCoreOps();
   const [point, setPoint] = useState<{ lat: number; lon: number; label: string } | null>(null);
   const [result, setResult] = useState<SoundingPointResult | null>(null);
   // "idle" -- not "CHECKING" -- until a sounding request has actually been made. Root cause of a
@@ -113,16 +105,6 @@ export default function SoundingsWorkspace() {
   }, []);
 
   useEffect(() => () => requests.current.cancel(), []);
-
-  useEffect(() => {
-    let cancelled = false;
-    void browserLocationAdapter.getCurrent().then((s) => {
-      if (!cancelled) setGps(s);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const loadSounding = useCallback(
     async (target: { lat: number; lon: number; label: string }) => {
@@ -243,6 +225,7 @@ export default function SoundingsWorkspace() {
           {searchError && <p className="soundings-panel__error">{searchError}</p>}
 
           <div className="soundings-quick-locations">
+            <button type="button" disabled={!opsPoint} onClick={() => opsPoint && selectPoint({ ...opsPoint, label: referenceLabel })}>OPS reference</button>
             <button
               type="button"
               disabled={gps.status !== "ready"}

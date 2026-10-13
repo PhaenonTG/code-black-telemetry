@@ -28,7 +28,7 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
   const [radius, setRadius] = useState(500);
   const [departure, setDeparture] = useState(localNow);
   const [margin, setMargin] = useState(30);
-  const [origin, setOrigin] = useState({ latitude, longitude, source: "selected map point" });
+  const origin = { latitude, longitude, source: "OPS location reference" };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ candidates: (Candidate & { arrival: Arrival })[]; notice: string; alerts: AlertsResult | null; briefings: BriefingsResult | null; verified: VerifiedEventsResult | null } | null>(null);
@@ -55,15 +55,6 @@ export function ForecastTargets({ config, latitude, longitude }: { config: OpsCo
     } catch (cause) { if (!active.signal.aborted) setError(cause instanceof Error ? cause.message : "Target search unavailable"); }
     finally { if (!active.signal.aborted) setBusy(false); }
   }
-  useEffect(() => {
-    setOrigin({ latitude, longitude, source: "selected map point" });
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (position) => setOrigin({ latitude: position.coords.latitude, longitude: position.coords.longitude, source: "device location" }),
-      () => undefined,
-      { enableHighAccuracy: false, maximumAge: 5 * 60_000, timeout: 8_000 },
-    );
-  }, [latitude, longitude]);
   useEffect(() => {
     const departNow = localNow();
     setDeparture(departNow);

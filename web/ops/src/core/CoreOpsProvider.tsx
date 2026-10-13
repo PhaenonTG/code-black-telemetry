@@ -8,8 +8,19 @@ import { LatestRequestGate } from "./requestGate";
 import { mergeStormHealth, shouldRefreshPoint } from "./pointRefresh";
 import { addPointHistoryEntry, historyEntryFromSnapshot } from "../stormIntel/pointHistory";
 import type { OpsCoreState } from "./types";
+import { browserLocationAdapter, type LocationState } from "../adapters/LocationAdapter";
+import { liveChaserPoint, PEA_RIDGE_REFERENCE, type LocationMode } from "./referenceLocation";
 
 const FABRIC_STREAM_FRESH_MS = 10_000;
+const REFERENCE_KEY = "codeblack.ops.locationReference.v1";
+function savedReference(): { mode: LocationMode; unitId: string } {
+  try {
+    const value = JSON.parse(localStorage.getItem(REFERENCE_KEY) ?? "null");
+    if (value?.mode === "chaser" && typeof value.unitId === "string") return { mode: "chaser", unitId: value.unitId };
+    if (value?.mode === "fallback") return { mode: "fallback", unitId: "" };
+  } catch { /* Default to browser location with Pea Ridge fallback. */ }
+  return { mode: "follow", unitId: "" };
+}
 
 function initialState(): OpsCoreState {
   const now = Date.now();
@@ -45,13 +56,51 @@ function initialState(): OpsCoreState {
 export function CoreOpsProvider({ children }: { children: ReactNode }) {
   const config = useMemo(() => readOpsCoreConfig(), []);
   const [state, setState] = useState<OpsCoreState>(() => initialState());
-  const [selectedPoint, setSelectedPoint] = useState<OpsSelectedPoint | null>(null);
-  const [locationMode, setLocationMode] = useState<"follow" | "manual">("follow");
+  const [saved] = useState(savedReference);
+  const [selectedPoint, setSelectedPoint] = useState<OpsSelectedPoint | null>(PEA_RIDGE_REFERENCE);
+  const [locationMode, setLocationMode] = useState<LocationMode>(saved.mode);
+  const [referenceUnitId, setReferenceUnitId] = useState(saved.unitId);
+  const [deviceLocation, setDeviceLocation] = useState<LocationState>({ status: "requesting" });
+  const [referenceNow, setReferenceNow] = useState(Date.now);
   const [refreshNonce, setRefreshNonce] = useState(0);
-  const devicePointRef = useRef<OpsSelectedPoint | null>(null);
+  const referenceSourceRef = useRef(`${saved.mode}:${saved.unitId}:true`);
   const lastRequestedRef = useRef<{ point: OpsSelectedPoint | null; at: number }>({ point: null, at: 0 });
   const fabricRef = useRef(state.fabric);
   const pointRequestRef = useRef(new LatestRequestGate());
+
+  useEffect(() => browserLocationAdapter.watch(setDeviceLocation), []);
+  useEffect(() => {
+    const refresh = () => setReferenceNow(Date.now());
+    const timer = window.setInterval(refresh, 15_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+  }, []);
+  useEffect(() => {
+    if (locationMode === "manual") return;
+    try { localStorage.setItem(REFERENCE_KEY, JSON.stringify({ mode: locationMode, unitId: referenceUnitId })); } catch { /* Session choice still works. */ }
+  }, [locationMode, referenceUnitId]);
+
+  const referenceUnit = state.fabric.units?.units.find((unit) => unit.unit_id === referenceUnitId);
+  const chaserPoint = useMemo(() => referenceUnit ? liveChaserPoint(referenceUnit, referenceNow) : null, [referenceUnit, referenceNow]);
+  const deviceReady = deviceLocation.status === "ready" && referenceNow - deviceLocation.at <= 120_000;
+  const referenceIsFallback = locationMode === "fallback" || (locationMode === "follow" && !deviceReady) || (locationMode === "chaser" && !chaserPoint);
+  const referenceLabel = locationMode === "manual" ? "Map point"
+    : locationMode === "fallback" ? "Pea Ridge, AR"
+    : locationMode === "chaser" ? `${referenceUnit?.operator_name || referenceUnit?.display_name || "Chaser"}${chaserPoint ? " · GPS" : " · Pea Ridge fallback"}`
+    : deviceReady ? "My location · GPS" : "Pea Ridge, AR · fallback";
+
+  useEffect(() => {
+    if (locationMode === "manual" || document.hidden) return;
+    const target = locationMode === "chaser" ? chaserPoint ?? PEA_RIDGE_REFERENCE
+      : locationMode === "follow" && deviceReady && deviceLocation.status === "ready" ? { lat: deviceLocation.lat, lon: deviceLocation.lon }
+      : PEA_RIDGE_REFERENCE;
+    const source = `${locationMode}:${referenceUnitId}:${referenceIsFallback}`;
+    const last = lastRequestedRef.current;
+    if (source !== referenceSourceRef.current || shouldRefreshPoint(last.point, target, Date.now() - last.at)) {
+      referenceSourceRef.current = source;
+      setSelectedPoint({ ...target });
+    }
+  }, [locationMode, referenceUnitId, referenceIsFallback, deviceLocation, deviceReady, chaserPoint, referenceNow]);
 
   useEffect(() => {
     fabricRef.current = state.fabric;
@@ -247,30 +296,32 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
   }, [config, selectedPoint, refreshNonce]);
 
   const updateDeviceLocation = useCallback((point: OpsSelectedPoint) => {
-    devicePointRef.current = point;
-    if (locationMode !== "follow" || document.hidden) return;
-    const last = lastRequestedRef.current;
-    if (shouldRefreshPoint(last.point, point, Date.now() - last.at)) setSelectedPoint({ ...point });
-  }, [locationMode]);
-
-  useEffect(() => {
-    const refresh = () => {
-      if (devicePointRef.current) updateDeviceLocation(devicePointRef.current);
-    };
-    const timer = window.setInterval(refresh, 15_000);
-    document.addEventListener("visibilitychange", refresh);
-    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
-  }, [updateDeviceLocation]);
+    setDeviceLocation({ status: "ready", ...point, accuracyM: 0, headingDeg: null, speedMph: null, at: Date.now() });
+  }, []);
 
   const followDeviceLocation = useCallback(() => {
+    referenceSourceRef.current = "";
     setLocationMode("follow");
-    if (devicePointRef.current) setSelectedPoint({ ...devicePointRef.current });
+    setReferenceUnitId("");
+    void browserLocationAdapter.getCurrent().then(setDeviceLocation);
+  }, []);
+  const chooseChaserLocation = useCallback((unitId: string) => {
+    referenceSourceRef.current = "";
+    setReferenceUnitId(unitId);
+    setLocationMode("chaser");
+  }, []);
+  const chooseFallbackLocation = useCallback(() => {
+    referenceSourceRef.current = "";
+    setReferenceUnitId("");
+    setLocationMode("fallback");
+    setSelectedPoint({ ...PEA_RIDGE_REFERENCE });
   }, []);
   const refreshPoint = useCallback(() => setRefreshNonce((value) => value + 1), []);
 
   const selectPoint = useCallback((point: OpsSelectedPoint | null) => {
+    referenceSourceRef.current = "";
     setLocationMode(point ? "manual" : "follow");
-    setSelectedPoint(point);
+    setSelectedPoint(point ?? { ...PEA_RIDGE_REFERENCE });
   }, []);
 
   const selectHistoryPoint = useCallback((entry: { requested: OpsSelectedPoint }) => {
@@ -285,13 +336,19 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
       selectedPoint,
       pointHistory: state.stormIntel.pointHistory,
       locationMode,
+      deviceLocation,
+      referenceUnitId,
+      referenceLabel,
+      referenceIsFallback,
+      chooseChaserLocation,
+      chooseFallbackLocation,
       updateDeviceLocation,
       followDeviceLocation,
       refreshPoint,
       selectPoint,
       selectHistoryPoint,
     }),
-    [config, state, selectedPoint, selectPoint, selectHistoryPoint, locationMode, updateDeviceLocation, followDeviceLocation, refreshPoint],
+    [config, state, selectedPoint, selectPoint, selectHistoryPoint, locationMode, deviceLocation, referenceUnitId, referenceLabel, referenceIsFallback, chooseChaserLocation, chooseFallbackLocation, updateDeviceLocation, followDeviceLocation, refreshPoint],
   );
   return <CoreOpsContext.Provider value={value}>{children}</CoreOpsContext.Provider>;
 }

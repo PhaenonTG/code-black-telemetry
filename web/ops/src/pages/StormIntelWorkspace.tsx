@@ -5,7 +5,7 @@ import { useAlertProducts } from "../../../../src/hooks/useAlertProducts";
 import { useNearbyPlaces } from "../../../../src/hooks/useNearbyPlaces";
 import { useNearbyPoiList } from "../../../../src/hooks/useNearbyPoiList";
 import { useSpotters } from "../../../../src/hooks/useSpotters";
-import { browserLocationAdapter, ipLocationAdapter, type LocationState } from "../adapters";
+import type { LocationState } from "../adapters";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { PointHistory } from "../components/PointHistory";
 import { PointInspector } from "../components/PointInspector";
@@ -35,9 +35,8 @@ function isoShort(value: string | null | undefined): string {
 }
 
 export default function StormIntelWorkspace() {
-  const [gps, setGps] = useState<LocationState>({ status: "requesting" });
   const [locality, setLocality] = useState<LocalityResult | null>(null);
-  const { config, state: coreState, selectedPoint, pointHistory, selectPoint, selectHistoryPoint, updateDeviceLocation, refreshPoint, followDeviceLocation } = useCoreOps();
+  const { config, state: coreState, selectedPoint, pointHistory, selectPoint, selectHistoryPoint, deviceLocation: gps, locationMode, referenceUnitId, referenceIsFallback, refreshPoint, followDeviceLocation } = useCoreOps();
   const snapshot = coreState.stormIntel.pointSnapshot;
   const source = firstAvailableSource(snapshot);
   const summary = !selectedPoint
@@ -54,37 +53,7 @@ export default function StormIntelWorkspace() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void browserLocationAdapter.getCurrent().then((s) => { if (!cancelled) setGps(s); });
-    const unwatch = browserLocationAdapter.watch((s) => { if (!cancelled) setGps(s); });
-    return () => { cancelled = true; unwatch(); };
-  }, []);
-
-  const atlasGps = toAtlasGps(gps);
-
-  // First landing on Storm Intel with nothing picked yet (anywhere in the app -- selectedPoint is
-  // shared app-wide state) defaults to the viewer's own position instead of an empty "select a
-  // point" prompt. Only ever fires once, into a null slot -- never overrides a point the chaser
-  // (or Live Ops) already selected.
-  useEffect(() => {
-    if (gps.status === "ready") updateDeviceLocation({ lat: gps.lat, lon: gps.lon });
-  }, [gps, updateDeviceLocation]);
-
-  // Device GPS denied/unavailable leaves the effect above with nothing to auto-select -- fall back
-  // to a coarse, IP-based approximate location instead of leaving this on "SELECT A MAP POINT"
-  // until a manual tap. Only kicks in once GPS has actually settled to denied/unavailable (not
-  // while still "requesting"), so real GPS always wins the race when it's available.
-  useEffect(() => {
-    if (selectedPoint) return;
-    if (gps.status !== "denied" && gps.status !== "unavailable") return;
-    let cancelled = false;
-    void ipLocationAdapter.getApprox().then((approx) => {
-      if (cancelled || !approx) return;
-      updateDeviceLocation({ lat: approx.lat, lon: approx.lon });
-    });
-    return () => { cancelled = true; };
-  }, [gps.status, selectedPoint, updateDeviceLocation]);
+  const atlasGps = locationMode === "follow" && !referenceIsFallback ? toAtlasGps(gps) : null;
 
   useEffect(() => {
     if (!selectedPoint) { setLocality(null); return; }
@@ -123,6 +92,8 @@ export default function StormIntelWorkspace() {
         <section className="storm-workspace__map" aria-label="Storm Intel map selector">
           <AtlasMap
             gps={atlasGps}
+            referencePoint={locationMode === "manual" ? null : selectedPoint}
+            referenceKey={`${locationMode}:${referenceUnitId}`}
             rangeRings="off"
             statusLines={[coreState.stormIntel.pointLoading ? "POINT REQUEST ACTIVE" : "CLICK MAP FOR POINT INTEL"]}
             controlsVariant="full"

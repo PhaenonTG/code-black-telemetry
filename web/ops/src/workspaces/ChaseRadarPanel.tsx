@@ -8,6 +8,7 @@ import { radarFramesAreOperational } from "../../../../src/services/radarFailove
 import { updateAtlasRadarLayer, removeAtlasRadarLayer } from "../../../../src/map/AtlasRadarLayer"
 import { AtlasRadarLegend } from "../../../../src/map/AtlasRadarLegend"
 import { selectRadarFrame } from "./chaseRadarSelection"
+import { PEA_RIDGE_REFERENCE } from "../core/referenceLocation"
 
 type Point = { lat: number; lon: number }
 const PRODUCTS: RadarProduct[] = ["REF", "VEL", "SRV", "CC"]
@@ -26,7 +27,7 @@ export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
   const styleReady = useRef(false)
   const frameRef = useRef<RadarFrame | null>(null)
   const requestVersion = useRef(0)
-  const point = focus ?? { lat: 39.0473, lon: -95.6752 }
+  const point = focus ?? PEA_RIDGE_REFERENCE
   const focusLat = point.lat
   const focusLon = point.lon
   const siteSearchLat = Math.round(focusLat * 20) / 20
