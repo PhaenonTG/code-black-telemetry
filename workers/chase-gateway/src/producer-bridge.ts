@@ -2,6 +2,8 @@ const STATUS_KEY = "status";
 const CAPABILITIES_KEY = "capabilities";
 const FRAME_KEY = "program-frame";
 const COMMANDS_KEY = "commands";
+const FACEBOOK_OAUTH_SESSIONS_KEY = "facebook-oauth-sessions";
+const FACEBOOK_CREDENTIAL_KEY = "facebook-page-credential";
 const MAX_COMMANDS = 100;
 const MAX_JSON_BYTES = 64 * 1024;
 const MAX_FRAME_BYTES = 2 * 1024 * 1024;
@@ -22,6 +24,20 @@ type StoredCommand = {
   commandId: string; action: string; expectedStateRevision: number; payload?: Record<string, unknown>;
   operator: string; createdAt: string; state: "queued" | "succeeded" | "failed" | "timed_out";
   result?: unknown; completedAt?: string;
+};
+type StoredOAuthSession = {
+  ticket: string;
+  userId: string;
+  createdAt: string;
+  usedAt?: string;
+};
+type StoredFacebookCredential = {
+  pageId: string;
+  label: string;
+  ciphertext: string;
+  iv: string;
+  connectedAt: string;
+  connectedBy: string;
 };
 
 function json(status: number, body: unknown): Response {
@@ -44,6 +60,54 @@ function bridgeState(document: StoredDocument | undefined): "ONLINE" | "OFFLINE"
 export async function handleProducerStateRequest(request: Request, storage: BridgeStorage): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
+
+  if (path === "/api/chase/v1/facebook/internal/session" && request.method === "POST") {
+    const body = await jsonBody(request, 4096);
+    const ticket = typeof body?.ticket === "string" ? body.ticket : "";
+    const userId = typeof body?.userId === "string" ? body.userId : "";
+    const createdAt = typeof body?.createdAt === "string" ? body.createdAt : "";
+    if (!/^[A-Za-z0-9_-]{43}$/.test(ticket) || !/^[0-9a-f-]{36}$/i.test(userId) || !Number.isFinite(Date.parse(createdAt))) {
+      return json(400, { error: "INVALID_OAUTH_SESSION" });
+    }
+    const now = Date.now();
+    const sessions = (await storage.get<StoredOAuthSession[]>(FACEBOOK_OAUTH_SESSIONS_KEY) ?? [])
+      .filter((item) => now - Date.parse(item.createdAt) <= 15 * 60_000 && !item.usedAt);
+    sessions.push({ ticket, userId, createdAt });
+    await storage.put(FACEBOOK_OAUTH_SESSIONS_KEY, sessions.slice(-20));
+    return json(202, { accepted: true });
+  }
+  if (path === "/api/chase/v1/facebook/internal/session" && request.method === "GET") {
+    const ticket = url.searchParams.get("ticket") ?? "";
+    if (!/^[A-Za-z0-9_-]{43}$/.test(ticket)) return json(400, { error: "INVALID_OAUTH_SESSION" });
+    const sessions = await storage.get<StoredOAuthSession[]>(FACEBOOK_OAUTH_SESSIONS_KEY) ?? [];
+    const session = sessions.find((item) => item.ticket === ticket && !item.usedAt && Date.now() - Date.parse(item.createdAt) <= 15 * 60_000);
+    return session ? json(200, session) : json(404, { error: "OAUTH_SESSION_NOT_FOUND" });
+  }
+  if (path === "/api/chase/v1/facebook/internal/credential" && request.method === "POST") {
+    const body = await jsonBody(request, 16 * 1024);
+    const credential = body?.credential as Record<string, unknown> | undefined;
+    const ticket = typeof body?.ticket === "string" ? body.ticket : "";
+    if (!credential || !/^[A-Za-z0-9_-]{43}$/.test(ticket)
+      || typeof credential.pageId !== "string" || !/^\d{5,30}$/.test(credential.pageId)
+      || typeof credential.label !== "string" || credential.label.length < 1 || credential.label.length > 120
+      || typeof credential.ciphertext !== "string" || !/^[A-Za-z0-9_-]{20,12000}$/.test(credential.ciphertext)
+      || typeof credential.iv !== "string" || !/^[A-Za-z0-9_-]{16}$/.test(credential.iv)
+      || typeof credential.connectedAt !== "string" || !Number.isFinite(Date.parse(credential.connectedAt))
+      || typeof credential.connectedBy !== "string" || !/^[0-9a-f-]{36}$/i.test(credential.connectedBy)) {
+      return json(400, { error: "INVALID_FACEBOOK_CREDENTIAL" });
+    }
+    const sessions = await storage.get<StoredOAuthSession[]>(FACEBOOK_OAUTH_SESSIONS_KEY) ?? [];
+    const session = sessions.find((item) => item.ticket === ticket && !item.usedAt && Date.now() - Date.parse(item.createdAt) <= 15 * 60_000);
+    if (!session || session.userId !== credential.connectedBy) return json(404, { error: "OAUTH_SESSION_NOT_FOUND" });
+    await storage.put(FACEBOOK_CREDENTIAL_KEY, credential as unknown as StoredFacebookCredential);
+    session.usedAt = new Date().toISOString();
+    await storage.put(FACEBOOK_OAUTH_SESSIONS_KEY, sessions);
+    return json(202, { accepted: true });
+  }
+  if (path === "/api/chase/v1/facebook/internal/credential" && request.method === "GET") {
+    const credential = await storage.get<StoredFacebookCredential>(FACEBOOK_CREDENTIAL_KEY);
+    return credential ? json(200, credential) : json(404, { error: "FACEBOOK_CREDENTIAL_NOT_FOUND" });
+  }
 
   if (path === "/api/producer/v1/workstation/status" && request.method === "POST") {
     const body = await jsonBody(request);

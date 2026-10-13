@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { handleRequest, type Env } from "./index";
+import { handleProducerStateRequest, type BridgeStorage } from "./producer-bridge";
 
 function assetsOf(files: Record<string, string | Uint8Array>): NonNullable<Env["ASSETS"]> {
   return {
@@ -401,6 +402,107 @@ describe("codeblack-chase-gateway", () => {
         expect(await res.json()).toEqual({ state: "not_configured", cursor: "", pollAfterMs: 2000, comments: [], page: { label: "Storm Chaser Nick Mounce", live: false } });
         expect(graphFetch).not.toHaveBeenCalled();
       } finally { vi.unstubAllGlobals(); }
+    });
+  });
+
+  describe("9c. Facebook Page connection", () => {
+    const connectorEnv = (): Env => envWith({
+      SUPABASE_URL: "https://project.supabase.co",
+      SUPABASE_PUBLISHABLE_KEY: "publishable-key",
+      FACEBOOK_CONNECTOR_USER_IDS: "304f8cd4-e0d6-4636-a3a5-e5569111b022",
+      FACEBOOK_PAGE_ID: "650911364781023",
+      FACEBOOK_APP_ID: "1725568138528923",
+      FACEBOOK_APP_SECRET: "s".repeat(32),
+      FACEBOOK_TOKEN_KEK: "k".repeat(48),
+    });
+
+    it("completes a single-use authorization and relays comments with the encrypted Page token", async () => {
+      const values = new Map<string, unknown>();
+      const storage: BridgeStorage = {
+        async get<T>(key: string) { return structuredClone(values.get(key)) as T | undefined; },
+        async put<T>(key: string, value: T) { values.set(key, structuredClone(value)); },
+      };
+      const bridge = {
+        idFromName: () => "test",
+        get: () => ({ fetch: (request: Request) => handleProducerStateRequest(request, storage) }),
+      } as unknown as DurableObjectNamespace;
+      const env = { ...connectorEnv(), PRODUCER_BRIDGE: bridge, CHASE_TOKEN: "legacy" };
+      const pageToken = "page-token-" + "p".repeat(64);
+      const graphFetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/auth/v1/user")) return Response.json({ id: env.FACEBOOK_CONNECTOR_USER_IDS });
+        if (url.includes("/rest/v1/profiles")) return Response.json([{ active: true, operator_name: "Nick" }]);
+        if (url.endsWith("/oauth/access_token")) return Response.json({ access_token: "user-token-" + "u".repeat(64) });
+        if (url.includes("/me/accounts?")) return Response.json({ data: [{ id: env.FACEBOOK_PAGE_ID, name: "Nick <Page>", access_token: pageToken }] });
+        if (url.includes("/live_videos")) {
+          expect(new Headers(init?.headers).get("Authorization")).toBe(`Bearer ${pageToken}`);
+          expect(url).not.toContain(pageToken);
+          return Response.json({ data: [] });
+        }
+        throw new Error("Unexpected request");
+      });
+      vi.stubGlobal("fetch", graphFetch);
+      try {
+        const session = await handleRequest(new Request("https://x/api/chase/v1/facebook/connect-session", {
+          method: "POST", headers: { Authorization: "Bearer nick-jwt" },
+        }), env);
+        expect(session.status).toBe(200);
+        const { connectUrl } = await session.json() as { connectUrl: string };
+        const ticket = new URL(connectUrl).searchParams.get("ticket")!;
+        const connect = await handleRequest(new Request(connectUrl), env);
+        expect(connect.status).toBe(302);
+        const authorize = new URL(connect.headers.get("Location")!);
+        expect(authorize.origin).toBe("https://www.facebook.com");
+        expect(authorize.searchParams.get("state")).toBe(ticket);
+        expect(authorize.searchParams.get("scope")).not.toContain("pages_manage_posts");
+        const callbackUrl = `https://x/api/chase/v1/facebook/callback?state=${ticket}&code=${"c".repeat(40)}`;
+        const callback = await handleRequest(new Request(callbackUrl), env);
+        expect(callback.status).toBe(200);
+        const html = await callback.text();
+        expect(html).toContain("Nick &lt;Page&gt;");
+        expect(html).not.toContain(pageToken);
+        expect(JSON.stringify([...values.values()])).not.toContain(pageToken);
+        expect((await handleRequest(new Request(callbackUrl), env)).status).toBe(400);
+        const status = await handleRequest(new Request("https://x/api/chase/v1/facebook/status", {
+          headers: { Authorization: "Bearer nick-jwt" },
+        }), env);
+        expect(await status.json()).toMatchObject({ state: "connected" });
+        const comments = await handleRequest(new Request("https://x/api/chase/v1/comments", {
+          headers: { Authorization: "Bearer legacy" },
+        }), env);
+        expect(await comments.json()).toMatchObject({ state: "ok" });
+      } finally { vi.unstubAllGlobals(); }
+    });
+
+    it("requires an authenticated OPS session and rejects the legacy Chase bearer", async () => {
+      const res = await handleRequest(new Request("https://x/api/chase/v1/facebook/connect-session", {
+        method: "POST", headers: { Authorization: "Bearer legacy" },
+      }), envWith({ CHASE_TOKEN: "legacy" }));
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: "AUTH_REQUIRED" });
+    });
+
+    it("allows only Nick's queued connector account", async () => {
+      const authFetch = vi.fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ id: "79d44375-c0fe-434c-b3b9-8c1d00984a49" }), { status: 200 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify([{ active: true, email: "spencer@codeblackwx.com" }]), { status: 200 }));
+      vi.stubGlobal("fetch", authFetch);
+      try {
+        const res = await handleRequest(new Request("https://x/api/chase/v1/facebook/connect-session", {
+          method: "POST", headers: { Authorization: "Bearer user-jwt" },
+        }), connectorEnv());
+        expect(res.status).toBe(403);
+        expect(await res.json()).toEqual({ error: "FACEBOOK_CONNECT_FORBIDDEN" });
+      } finally { vi.unstubAllGlobals(); }
+    });
+
+    it("never exposes app or Page credentials from the public callback surface", async () => {
+      const res = await handleRequest(new Request("https://x/api/chase/v1/facebook/callback?error=access_denied"), connectorEnv());
+      const body = await res.text();
+      expect(res.status).toBe(400);
+      expect(body).toContain("Facebook connection unavailable");
+      expect(body).not.toContain("1725568138528923");
+      expect(body).not.toContain("s".repeat(32));
     });
   });
 

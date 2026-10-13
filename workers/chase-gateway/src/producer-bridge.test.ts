@@ -8,6 +8,39 @@ class MemoryStorage implements BridgeStorage {
 }
 
 describe("Producer bridge state", () => {
+  it("stores one-time Facebook OAuth sessions and an encrypted Page credential", async () => {
+    const storage = new MemoryStorage();
+    const ticket = "a".repeat(43);
+    const userId = "304f8cd4-e0d6-4636-a3a5-e5569111b022";
+    let response = await handleProducerStateRequest(new Request("https://x/api/chase/v1/facebook/internal/session", {
+      method: "POST",
+      body: JSON.stringify({ ticket, userId, createdAt: new Date().toISOString() }),
+    }), storage);
+    expect(response.status).toBe(202);
+    response = await handleProducerStateRequest(new Request(`https://x/api/chase/v1/facebook/internal/session?ticket=${ticket}`), storage);
+    expect(await response.json()).toMatchObject({ ticket, userId });
+
+    response = await handleProducerStateRequest(new Request("https://x/api/chase/v1/facebook/internal/credential", {
+      method: "POST",
+      body: JSON.stringify({
+        ticket,
+        credential: {
+          pageId: "650911364781023",
+          label: "Storm Chaser Nick Mounce",
+          ciphertext: "b".repeat(40),
+          iv: "c".repeat(16),
+          connectedAt: new Date().toISOString(),
+          connectedBy: userId,
+        },
+      }),
+    }), storage);
+    expect(response.status).toBe(202);
+    response = await handleProducerStateRequest(new Request("https://x/api/chase/v1/facebook/internal/credential"), storage);
+    expect(await response.json()).toMatchObject({ pageId: "650911364781023", connectedBy: userId });
+    response = await handleProducerStateRequest(new Request(`https://x/api/chase/v1/facebook/internal/session?ticket=${ticket}`), storage);
+    expect(response.status).toBe(404);
+  });
+
   it("reports offline until the workstation pushes status, then reports online", async () => {
     const storage = new MemoryStorage();
     let response = await handleProducerStateRequest(new Request("https://x/api/producer/v1/status"), storage);
