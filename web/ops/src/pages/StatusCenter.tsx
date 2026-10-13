@@ -31,7 +31,7 @@ function detailFor(tile: StatusTile): string {
 }
 
 export default function StatusCenter() {
-  const { config } = useCoreOps()
+  const { config, state } = useCoreOps()
   const [document, setDocument] = useState<StatusCenterDocument | null>(null)
   const [settings, setSettings] = useState<RadarControlSettings | null>(null)
   const [aegis, setAegis] = useState<AegisStatus | null>(null)
@@ -124,6 +124,13 @@ export default function StatusCenter() {
             <div><span>AEGIS SCREEN</span><b>{aegis?.screen.enabled ? "RUNNING" : "UNAVAILABLE"}</b></div>
             <div><span>ALERT DELIVERY</span><b>{aegis?.delivery_enabled ? "LIVE" : "SHADOW / OFF"}</b></div>
             <div><span>EVIDENCE CUTOFF</span><b>{aegis?.screen.cutoff ?? "—"}/100</b></div>
+          </div>
+          <div className="status-center__facts">
+            <div><span>FABRIC LIVE STREAM</span><b>{state.fabric.streamState === "open" && state.fabric.lastStreamEventAt !== null
+              && Date.now() - state.fabric.lastStreamEventAt < 10_000 ? "LIVE" : state.fabric.streamState.toUpperCase()}</b></div>
+            <div><span>LAST STREAM FRAME</span><b>{state.fabric.lastStreamEventAt
+              ? new Date(state.fabric.lastStreamEventAt).toLocaleTimeString() : "—"}</b></div>
+            <div><span>RADAR REVIEW</span><b><a href="/aegis-alerts">OPEN SHADOW SCANS</a></b></div>
           </div>
           <div className="status-center__facts">
             <div><span>POLICY DRAFT</span><b>{aegisPolicy?.current_draft ? `REV ${aegisPolicy.current_draft.revision}` : "UNAVAILABLE"}</b></div>
