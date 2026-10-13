@@ -239,6 +239,11 @@ async function run({ dir, cfg, fetchWarnings = activeWarnings, fetchSites = () =
         const scan = await analyzeVolume(key, siteState.previousCandidates, site,
           { available: true, fetchedAt: new Date(nowMs).toISOString(), features: relevant.map((w) => ({ id: w.id,
             geometry: w.geometry, properties: { event: w.event } })) });
+        // Preserve the official warning identities presented to this scan, even
+        // when no candidate was found. Retrospective false-negative review
+        // otherwise cannot identify the warned storm from scans.jsonl alone.
+        scan.warningContext = relevant.map((w) => ({ id: w.id, event: w.event,
+          sent: w.sent, expires: w.expires, source_url: w.source_url }));
         for (const candidate of scan.candidates) {
           const w = relevant.find((row) => row.id === candidate.warningId);
           if (!w) continue;

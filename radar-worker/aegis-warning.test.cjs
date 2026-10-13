@@ -84,5 +84,7 @@ test("one new volume per key, one alert per qualified candidate, restart safe", 
     assert.equal(alert.candidate.tdsConfirmed, false);
     assert.equal(alert.map.features[1].geometry.type, "Point");
     assert.equal(fs.readFileSync(path.join(dir, "scans.jsonl"), "utf8").trim().split("\n").length, 2);
+    const firstScan = JSON.parse(fs.readFileSync(path.join(dir, "scans.jsonl"), "utf8").trim().split("\n")[0]);
+    assert.deepEqual(firstScan.warningContext.map((item) => item.id), [id]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

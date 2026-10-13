@@ -31,6 +31,13 @@ only fresh, schema-validated, threshold-qualified candidate events when that
 same gate is enabled. The OPS Aegis Alerts route and authenticated gateway
 allowlist are built and tested in source; OPS production deployment is separate.
 
+Core API consolidations must retain four routes: Aegis status, alerts, policy,
+and bounded replay. On 2026-10-12, a later Core release dropped them while the
+private feed remained healthy; the additive `deploy/core-app-aegis-reconciled.py`
+release restored them atop the current ESP-ingest recovery release. A future
+Core release must merge these endpoints rather than replacing them with an
+older app snapshot. OPS cannot show this workflow if the API bridge disappears.
+
 ## Canary as of 2026-10-11
 
 - Core scanner timer, feed service, and Fabric read endpoints are running.
@@ -46,6 +53,21 @@ allowlist are built and tested in source; OPS production deployment is separate.
   records errors and never promotes missing evidence to an alert.
 
 ## Release gates
+
+The read-only `aegis-calibration.cjs` harness accepts a Core scan JSONL archive,
+an independently reviewed label JSONL, and scanner config. Each label identifies
+`site`, `volume_key`, `warning_id`, `truth` (`confirmed_tornado`,
+`reviewed_no_tornado`, or `uncertain`), `reviewer`, `source_url`, and
+`reviewed_at`. It reports TP/FP/TN/FN, precision, and recall across cutoffs
+70–100. Uncertain labels are excluded; no labels means **not evaluable**, not a
+successful calibration. A warning by itself is never a tornado truth label.
+The harness does not alter configuration or delivery. Its scan-level matching
+still needs a representative reviewed corpus, including misses and no-event
+storms, before any cutoff or activation decision.
+New scan records preserve the official warning IDs presented to the screen,
+including scans with zero candidates. This supports retrospective miss review;
+older records may lack these IDs and need independent reconstruction before
+labeling. It does not itself supply tornado ground truth.
 
 1. Run retrospective false-positive/false-negative review against human-labeled
    historical events, including null cases and distant/aliased radar samples.

@@ -7,10 +7,10 @@ After=network-online.target
 Type=oneshot
 User=cbwx-core
 Group=cbwx-core
-WorkingDirectory=/srv/codeblack/releases/aegis-warning/v5
+WorkingDirectory=/srv/codeblack/releases/aegis-warning/v6
 Environment=CODEBLACK_AEGIS_RADAR_DATA=/srv/codeblack/data/radar-worker/aegis-warning
 Environment=CODEBLACK_AEGIS_RADAR_CONFIG=/srv/codeblack/data/radar-worker/aegis-warning/config.json
-ExecStart=/usr/bin/flock -n /srv/codeblack/data/radar-worker/aegis-warning/.run.lock /usr/bin/node /srv/codeblack/releases/aegis-warning/v5/aegis-warning.cjs
+ExecStart=/usr/bin/flock -n /srv/codeblack/data/radar-worker/aegis-warning/.run.lock /usr/bin/node /srv/codeblack/releases/aegis-warning/v6/aegis-warning.cjs
 TimeoutStartSec=240
 UMask=0027
 NoNewPrivileges=true
