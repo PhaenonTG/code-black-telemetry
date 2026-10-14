@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { currentMediaTimestamp, isProgramMediaUrl, currentProgramRender, mediaCompositionMatches, PROGRAM_STATUS_POLL_MS } from "./programMonitorPolicy"
+import { currentMediaTimestamp, isProgramMediaUrl, currentProgramRender, mediaCompositionMatches, PROGRAM_PREVIEW_POLL_MS, PROGRAM_STATUS_POLL_MS } from "./programMonitorPolicy"
 describe("PROGRAM monitor request policy", () => {
   const origin = "https://ops.codeblackwx.com"
   it("allows only authenticated same-origin playlist and segment routes", () => {
@@ -37,9 +37,11 @@ describe("PROGRAM monitor request policy", () => {
     expect(currentProgramRender({source_state:"SOURCE_LOST",previews:{program:{state:"ACTIVE"}}})).toBe(false)
   })
   it("keeps cached live render proof within its five-second budget between polls", () => {
+    expect(PROGRAM_STATUS_POLL_MS).toBeLessThan(5000)
+    expect(PROGRAM_PREVIEW_POLL_MS).toBeGreaterThan(PROGRAM_STATUS_POLL_MS)
     const now=Date.now(),id="a".repeat(24)
-    const status={engine:"obs",observedAt:new Date(now-2000).toISOString(),composition:{id},previews:{program:{state:"ACTIVE"}},program:{state:"RENDERING",compositionId:id,generation:"b".repeat(32),lastFrameAt:new Date(now-3000).toISOString()}}
+    const status={engine:"obs",observedAt:new Date(now-1000).toISOString(),composition:{id},previews:{program:{state:"ACTIVE"}},program:{state:"RENDERING",compositionId:id,generation:"b".repeat(32),lastFrameAt:new Date(now-1000).toISOString()}}
     expect(currentProgramRender(status,now+PROGRAM_STATUS_POLL_MS+500)).toBe(true)
-    expect(currentProgramRender(status,now+4000)).toBe(false)
+    expect(currentProgramRender(status,now+4100)).toBe(false)
   })
 })

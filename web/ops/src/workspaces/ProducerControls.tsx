@@ -33,9 +33,9 @@ export default function ProducerControls() {
   const online = status?.bridge === "ONLINE"
   const allowed = status?.controlAccess?.allowed === true
   const refresh = useCallback(async () => { try { setStatus(await api<Status>("status")); setCheckedAt(Date.now()) } catch (error) { setStatus(null); setMessage(String(error instanceof Error ? error.message : error)) } }, [])
-  useEffect(() => { const initial = window.setTimeout(() => void refresh(), 0); const timer = window.setInterval(() => { if (!document.hidden && producerReadAllowed()) void refresh() }, 10_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refresh])
+  useEffect(() => { const initial = window.setTimeout(() => void refresh(), 0); const timer = window.setInterval(() => { if (!document.hidden && producerReadAllowed()) void refresh() }, 30_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refresh])
   const refreshFacebook = useCallback(async () => { try { setFacebook(await api<Lifecycle>("facebook")); setFacebookError("") } catch (error) { setFacebookError(error instanceof Error ? error.message : "Facebook management unavailable") } }, [])
-  useEffect(() => { const initial = window.setTimeout(() => void refreshFacebook(), 0); const timer = window.setInterval(() => { if (!document.hidden && producerReadAllowed()) void refreshFacebook() }, 15_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refreshFacebook])
+  useEffect(() => { const initial = window.setTimeout(() => void refreshFacebook(), 0); const timer = window.setInterval(() => { if (!document.hidden && producerReadAllowed()) void refreshFacebook() }, 60_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refreshFacebook])
   useEffect(() => {
     if (!owner) return
     const timer = window.setInterval(async () => {

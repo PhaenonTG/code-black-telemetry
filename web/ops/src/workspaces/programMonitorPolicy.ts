@@ -1,6 +1,8 @@
 const PATH = /^\/api\/producer\/v1\/preview\/hls\/(?:index\.m3u8|program-[0-9a-f]{32}-[0-9]{1,16}\.ts)$/
-// Keep status inside the five-second proof lifetime without sending a request every second.
-export const PROGRAM_STATUS_POLL_MS = 1500
+// Keep status inside the five-second proof lifetime while staying within the shared
+// Cloudflare Workers request allowance. A fresh read also runs when the tab returns.
+export const PROGRAM_STATUS_POLL_MS = 3000
+export const PROGRAM_PREVIEW_POLL_MS = 15_000
 export function isProgramMediaUrl(value: string, origin: string): boolean {
   try { const url = new URL(value, origin); return url.origin === origin && PATH.test(url.pathname) && !url.search && !url.hash && !url.username && !url.password } catch { return false }
 }

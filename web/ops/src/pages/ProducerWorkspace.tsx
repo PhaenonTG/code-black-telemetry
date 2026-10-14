@@ -8,7 +8,7 @@ import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
 import FacebookProducerPanel from "../workspaces/FacebookProducerPanel"
 import ProducerControls from "../workspaces/ProducerControls"
 import ProgramMonitor from "../workspaces/ProgramMonitor"
-import { currentMediaTimestamp, currentProgramRender, mediaCompositionMatches, PROGRAM_STATUS_POLL_MS } from "../workspaces/programMonitorPolicy"
+import { currentMediaTimestamp, currentProgramRender, mediaCompositionMatches, PROGRAM_PREVIEW_POLL_MS, PROGRAM_STATUS_POLL_MS } from "../workspaces/programMonitorPolicy"
 import { readProducerResponse } from "../workspaces/producerResponse"
 import { noteProducerResponse, producerReadAllowed, producerRetryMessage } from "../workspaces/producerRateLimit"
 import "./Workspaces.css"
@@ -91,6 +91,7 @@ export default function ProducerWorkspace() {
   useEffect(() => { producerStatusRef.current = producerStatus }, [producerStatus])
 
   const refreshStatus = useCallback(async () => {
+    if (document.hidden) return
     try {
       const next = await fetchStatusCenter(config)
       setStatus(next)
@@ -105,7 +106,9 @@ export default function ProducerWorkspace() {
     const initial = window.setTimeout(() => void refreshStatus(), 0)
     const timer = window.setInterval(() => void refreshStatus(), 20_000)
     const clock = window.setInterval(() => setNow(Date.now()), 15_000)
-    return () => { window.clearTimeout(initial); window.clearInterval(timer); window.clearInterval(clock) }
+    const visible = () => { if (!document.hidden) void refreshStatus() }
+    document.addEventListener("visibilitychange", visible)
+    return () => { window.clearTimeout(initial); window.clearInterval(timer); window.clearInterval(clock); document.removeEventListener("visibilitychange", visible) }
   }, [refreshStatus])
 
   const alertLatitude = selectedPoint?.lat
@@ -196,7 +199,7 @@ export default function ProducerWorkspace() {
       } finally { inFlight = false }
     }
     void load()
-    const timer = window.setInterval(() => void load(), 3_000)
+    const timer = window.setInterval(() => void load(), PROGRAM_PREVIEW_POLL_MS)
     const visible = () => { if (!document.hidden) void load() }
     document.addEventListener("visibilitychange", visible)
     return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); clearFrame() }
