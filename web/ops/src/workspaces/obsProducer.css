@@ -1,0 +1,14 @@
+.obs-producer__telemetry { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .6rem; margin: .8rem 0; }
+.obs-producer__telemetry > div { min-width: 0; padding: .75rem; border: 1px solid rgba(140,160,180,.22); border-radius: .55rem; background: rgba(7,13,20,.35); }
+.obs-producer__telemetry span, .obs-producer__telemetry strong, .obs-producer__telemetry small { display: block; overflow-wrap: anywhere; }
+.obs-producer__telemetry span, .obs-producer__telemetry small { color: #a6b6c6; font-size: .76rem; }
+.obs-producer__telemetry strong { margin: .3rem 0; font-size: .95rem; }
+.obs-producer fieldset { min-width: 0; margin: .8rem 0; padding: .75rem; border: 1px solid rgba(140,160,180,.22); border-radius: .55rem; }
+.obs-producer legend { padding: 0 .3rem; color: #d9e4ed; font-size: .85rem; }
+.obs-producer select, .obs-producer input { width: 100%; max-width: 100%; min-height: 44px; }
+.obs-producer button { min-height: 44px; white-space: normal; border: 1px solid var(--cb-line, #314154); border-radius: 5px; background: #1b2c3d; color: var(--cb-text, #edf3f9); font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1.4; touch-action: manipulation; cursor: pointer; }
+.obs-producer button:disabled { opacity: .5; cursor: not-allowed; }
+.obs-producer button:not(:disabled):hover { border-color: #7d9bb8; background: #253e56; }
+.obs-producer button:focus-visible, .obs-producer select:focus-visible, .obs-producer input:focus-visible { outline: 2px solid #8cc9ff; outline-offset: 3px; }
+.obs-producer .obs-producer__stop { background: #421b25; border-color: #a84453; color: #ffd7dd; }
+@media (max-width: 520px) { .obs-producer__telemetry { grid-template-columns: 1fr; } }

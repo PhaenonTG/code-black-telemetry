@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { currentAccessToken } from "../core/client"
 import { readProducerResponse } from "./producerResponse"
+import ObsProducerPanel from "./ObsProducerPanel"
+import { supportsObsAction, type ObsStatus } from "./obsProducerPolicy"
 
-type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: { stateRevision: number; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; archive?: { camera?: { state?: string; recording?: boolean } }; lowerThird?: { active?: boolean; text?: string }; audio?: { available?: boolean; silence?: boolean; clipping?: boolean } } }
+type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: ObsStatus & { stateRevision: number; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; archive?: { camera?: { state?: string; recording?: boolean } }; lowerThird?: { active?: boolean; text?: string }; audio?: { available?: boolean; silence?: boolean; clipping?: boolean } } }
 type Lifecycle = { enabled: boolean; permission: boolean; canManage: boolean; broadcast: { id: string; title: string; description: string; status: string; facebookProducerUrl: string } | null; operation?: { state: string; action: string } | null }
-type Command = { commandId: string; state: string; result?: { error?: string } }
+type Command = { commandId: string; state: string; result?: { error?: string; deliveryUnknown?: boolean } }
 async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const token = await currentAccessToken()
   if (!token) throw new Error("Sign in to OPS again.")
@@ -14,8 +16,11 @@ async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> 
 
 export default function ProducerControls() {
   const [status, setStatus] = useState<Status | null>(null)
+  const obsMode = status?.status?.engine === "obs"
+  const hasStatus = status !== null
   const [message, setMessage] = useState("")
   const [pending, setPending] = useState<Command | null>(null)
+  const [obsUncertain, setObsUncertain] = useState(false)
   const [confirmStart, setConfirmStart] = useState(false)
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
@@ -33,7 +38,7 @@ export default function ProducerControls() {
   const refresh = useCallback(async () => { try { setStatus(await api<Status>("status")); setCheckedAt(Date.now()) } catch (error) { setStatus(null); setMessage(String(error instanceof Error ? error.message : error)) } }, [])
   useEffect(() => { const initial = window.setTimeout(() => void refresh(), 0); const timer = window.setInterval(() => { if (!document.hidden) void refresh() }, 3_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refresh])
   const refreshFacebook = useCallback(async () => { try { setFacebook(await api<Lifecycle>("facebook")); setFacebookError("") } catch (error) { setFacebookError(error instanceof Error ? error.message : "Facebook management unavailable") } }, [])
-  useEffect(() => { const initial = window.setTimeout(() => void refreshFacebook(), 0); const timer = window.setInterval(() => { if (!document.hidden) void refreshFacebook() }, 5_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refreshFacebook])
+  useEffect(() => { if (obsMode || !hasStatus) return; const initial = window.setTimeout(() => void refreshFacebook(), 0); const timer = window.setInterval(() => { if (!document.hidden) void refreshFacebook() }, 5_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [obsMode, hasStatus, refreshFacebook])
   useEffect(() => {
     if (!owner) return
     const timer = window.setInterval(async () => {
@@ -49,21 +54,33 @@ export default function ProducerControls() {
     const timer = window.setInterval(async () => {
       try {
         const next = await api<Command>(`commands/${pending.commandId}`)
-        if (next.state !== "queued") { setPending(next); setMessage(`${next.state.toUpperCase()}${next.result?.error ? `: ${next.result.error}` : " — check live status below."}`); void refresh() }
-        else if (Date.now() - started > 20_000) { setPending({ ...next, state: "unknown" }); setMessage("Delivery unconfirmed. Check output status before trying another start command.") }
-      } catch { if (Date.now() - started > 20_000) { setPending({ ...pending, state: "unknown" }); setMessage("Delivery unconfirmed. Connection lost; check status before retrying.") } }
+        if (next.state !== "queued") { setPending(next); if (obsMode && next.result?.deliveryUnknown) setObsUncertain(true); setMessage(`${next.state.toUpperCase()}${next.result?.error ? `: ${next.result.error}` : " — check live status below."}`); void refresh() }
+        else if (Date.now() - started > 20_000) { setPending({ ...next, state: "unknown" }); if (obsMode) setObsUncertain(true); setMessage("Delivery unconfirmed. Check output status before trying another start command.") }
+      } catch { if (Date.now() - started > 20_000) { setPending({ ...pending, state: "unknown" }); if (obsMode) setObsUncertain(true); setMessage("Delivery unconfirmed. Connection lost; check status before retrying.") } }
     }, 1_500)
     return () => window.clearInterval(timer)
-  }, [pending, refresh])
+  }, [pending, refresh, obsMode])
   async function lease(release = false) { setBusy(true); try { await api("control-lease", release ? "DELETE" : "POST"); setMessage(release ? "Control released." : "You have control."); await refresh() } catch (error) { setMessage(error instanceof Error ? error.message : "Control unavailable") } finally { setBusy(false) } }
-  async function command(action: string, confirmed = false) {
+  async function command(action: string, confirmed = false, payload?: Record<string, unknown>) {
     setBusy(true); setConfirmStart(false)
+    let submitted = false
     try {
       const latest = await api<Status>("status"); setStatus(latest)
       if (!Number.isSafeInteger(latest.status?.stateRevision)) throw new Error("No current broadcaster revision.")
-      const next = await api<Command>("commands", "POST", { commandId: crypto.randomUUID(), action, expectedStateRevision: latest.status!.stateRevision, confirmed, ...(action === "lowerThird.set" ? { payload: { text: text.trim() } } : action === "facebook.output.start" && facebook?.broadcast ? { payload: { videoId: facebook.broadcast.id } } : {}) })
+      if ((obsMode || latest.status?.engine === "obs") && !supportsObsAction(latest.status, action)) throw new Error("OBS action is unavailable or the broadcaster changed. Refresh before trying again.")
+      submitted = true
+      const next = await api<Command>("commands", "POST", { commandId: crypto.randomUUID(), action, expectedStateRevision: latest.status!.stateRevision, confirmed, ...(payload ? { payload } : action === "lowerThird.set" ? { payload: { text: text.trim() } } : action === "facebook.output.start" && facebook?.broadcast ? { payload: { videoId: facebook.broadcast.id } } : {}) })
       setPending(next); setMessage("QUEUED — waiting for broadcaster acknowledgment.")
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Command delivery unknown; check status before retrying.") } finally { setBusy(false) }
+    } catch (error) { if (obsMode && submitted) setObsUncertain(true); setMessage(error instanceof Error ? error.message : "Command delivery unknown; check status before retrying.") } finally { setBusy(false) }
+  }
+  async function resolveObsUncertainty() {
+    setBusy(true)
+    try {
+      const latest = await api<Status>("status")
+      if (latest.bridge !== "ONLINE" || latest.status?.engine !== "obs") throw new Error("OBS is not connected. Keep the uncertain command locked.")
+      setStatus(latest); setPending(null); setObsUncertain(false); setMessage("You confirmed OBS’s actual state. Controls unlocked; the original command will not be retried.")
+    } catch (error) { setMessage(error instanceof Error ? error.message : "OBS state could not be checked.") }
+    finally { setBusy(false) }
   }
   async function facebookAction(action: "prepare" | "publish" | "end" | "refresh") {
     setBusy(true); setConfirmFacebook(null)
@@ -81,6 +98,7 @@ export default function ProducerControls() {
   const managedSynced = !managed || status?.status?.broadcast?.managedVideoId === managed.id
   const unresolved = facebook?.operation?.state === "pending" || facebook?.operation?.state === "unknown"
   const audioHealthy = status?.status?.audio?.available === true && !status.status.audio.silence && !status.status.audio.clipping
+  if (obsMode) return <ObsProducerPanel status={status?.status} online={online} allowed={allowed} owner={owner} busy={busy || pending?.state === "queued"} uncertain={obsUncertain || pending?.state === "unknown" || pending?.result?.deliveryUnknown === true} message={message} onLease={() => void lease(owner)} onResolveUncertainty={() => void resolveObsUncertainty()} onCommand={(action, payload) => void command(action, false, payload)} />
   const facebookSending = /sending|live|active/i.test(status?.status?.broadcast?.state ?? "")
   const cameraRecording = status?.status?.archive?.camera?.recording === true || /recording|active/i.test(status?.status?.archive?.camera?.state ?? "")
   const lowerThirdActive = status?.status?.lowerThird?.active === true || Boolean(status?.status?.lowerThird?.text)
