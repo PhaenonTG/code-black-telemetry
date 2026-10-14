@@ -181,6 +181,8 @@ function estimateStormMotion(site) {
     directionDegrees,
     speedKnots,
     confidence,
+    location: { lat: c2.lat, lon: c2.lon },
+    observedAt: new Date(c2.time).toISOString(),
     sampleSpanMinutes: Math.round(elapsedHours * 60),
     baselineFrameId: baseline.id,
     newestFrameId: newest.id,
@@ -608,7 +610,21 @@ async function estimateStormMotionWithOfficial(siteId) {
   const candidate = official.state === "available"
     ? official.stormTracking.find((storm) => storm.current?.position && storm.movement && Number.isFinite(Number(storm.movement.kts)))
     : null;
-  if (candidate) return { ok: true, id: candidate.id, directionDegrees: Number(candidate.movement.deg), speedKnots: Number(candidate.movement.kts), confidence: "HIGH", source: "NEXRAD_LEVEL3_NST", official: true, observedPosition: candidate.current.position, forecasts: candidate.forecast };
+  if (candidate) return {
+    ok: true,
+    id: candidate.id,
+    directionDegrees: Number(candidate.movement.deg),
+    speedKnots: Number(candidate.movement.kts),
+    confidence: "HIGH",
+    source: "NEXRAD_LEVEL3_NST",
+    official: true,
+    location: candidate.current.position,
+    observedAt: official.sources.NST?.time || official.generatedAt,
+    // Retained for existing radar clients while Core consumes the normalized
+    // location/observedAt contract shared with the Level II fallback.
+    observedPosition: candidate.current.position,
+    forecasts: candidate.forecast,
+  };
   const fallback = estimateStormMotion(siteId);
   return { ...fallback, source: fallback.ok ? "LEVEL2_REFLECTIVITY_CENTROID" : "UNAVAILABLE", official: false, officialSources: official.sources };
 }
