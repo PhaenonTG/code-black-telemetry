@@ -10,6 +10,7 @@ import { SetupReviewDesk } from "../workspaces/SetupReviewDesk";
 import type { SetupWorkflow } from "../workspaces/setupReviewModel";
 import type { WeightedSynthesis } from "../workspaces/setupReviewModel";
 import { SetupSynthesis } from "../workspaces/SetupSynthesis";
+import { SetupRrfsEvidence, type ModelPriority, type RrfsEvidence } from "../workspaces/SetupRrfsEvidence";
 import "./ChaseSetups.css";
 
 type SetupRow = {
@@ -23,6 +24,8 @@ type SetupDetail = {
   setup_id: string; publication_state: string; revision: number; generated_at: string;
   source_fingerprint?: string; workflow?: SetupWorkflow;
   weighted_synthesis?: WeightedSynthesis | null;
+  model_priority?: ModelPriority;
+  ingestion?: { models?: { rrfs?: RrfsEvidence } };
   current_revision?: number; is_current_revision?: boolean; revision_history?: SetupRevisionHistory;
   first_seen_at?: string; valid_from: string; valid_until: string; summary?: string;
   bounds?: number[];
@@ -208,6 +211,7 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
             </section>
             <p className="chase-setups__summary">{detail.summary}</p>
             <SetupSynthesis synthesis={detail.weighted_synthesis} />
+            <SetupRrfsEvidence key={`${detail.setup_id}:${detail.revision}`} rrfs={detail.ingestion?.models?.rrfs} priority={detail.model_priority} />
             <section className="chase-setups__evidence">
               <h3>SPC outlook <small>OFFICIAL</small></h3>
               <dl><div><dt>Risk area</dt><dd>Day {detail.official.day} · {detail.official.risk_label}</dd></div>
