@@ -10,8 +10,8 @@ export type PaidSetupReview = {
   confidence?: "low" | "moderate" | "high"; summary?: string; supporting_factors?: string[];
   uncertainties?: string[]; next_hour_triggers?: string[];
 };
-export type EvidenceWeightSource = "spc_tornado_outlook" | "hrrr_screening" | "rap" | "nbm" | "gefs" |
-  "aigefs" | "href" | "wofs" | "surface_observations" | "environment_profiles" | "mesoscale_discussions" |
+export type EvidenceWeightSource = "spc_tornado_outlook" | "hrrr_screening" | "rap" | "nbm" | "gfs" | "gefs" |
+  "gefs_extended" | "aigefs" | "href" | "wofs" | "extended_outlook" | "surface_observations" | "environment_profiles" | "mesoscale_discussions" |
   "watches" | "warnings" | "observed_radar";
 export type ReviewWeightSource = "aegis" | "local_30b" | "paid_review";
 export type SetupWeightPolicy = {
