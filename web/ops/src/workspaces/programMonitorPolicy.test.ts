@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { currentMediaTimestamp, isProgramMediaUrl } from "./programMonitorPolicy"
+import { currentMediaTimestamp, isProgramMediaUrl, currentProgramRender, mediaCompositionMatches } from "./programMonitorPolicy"
 describe("PROGRAM monitor request policy", () => {
   const origin = "https://ops.codeblackwx.com"
   it("allows only authenticated same-origin playlist and segment routes", () => {
@@ -13,5 +13,27 @@ describe("PROGRAM monitor request policy", () => {
     expect(currentMediaTimestamp(null, now)).toBeNull()
     expect(currentMediaTimestamp(new Date(now - 6000).toISOString(), now)).toBeNull()
     expect(currentMediaTimestamp(new Date(now + 5000).toISOString(), now)).toBeNull()
+  })
+  it("requires exact composition alignment when IDs are advertised, but supports legacy media", () => {
+    const id="a".repeat(24)
+    expect(mediaCompositionMatches(id,id)).toBe(true)
+    for(const value of [null,"","b".repeat(24),"bad"])expect(mediaCompositionMatches(id,value)).toBe(false)
+    expect(mediaCompositionMatches("bad","bad")).toBe(false)
+    expect(mediaCompositionMatches(undefined,null)).toBe(true)
+    expect(mediaCompositionMatches(undefined,id)).toBe(true)
+  })
+  it("allows OBS standby PROGRAM with no live camera, only while render proof is fresh", () => {
+    const now=Date.now(), id="a".repeat(24)
+    const status={engine:"obs",observedAt:new Date(now).toISOString(),source_state:"SOURCE_LOST",composition:{id},previews:{program:{state:"ACTIVE"}},program:{state:"RENDERING",compositionId:id,generation:"b".repeat(32),lastFrameAt:new Date(now).toISOString()}}
+    expect(currentProgramRender(status,now)).toBe(true)
+    expect(currentProgramRender(status,now+6000)).toBe(false)
+    expect(currentProgramRender({...status,program:{...status.program,compositionId:"c".repeat(24)}},now)).toBe(false)
+    expect(currentProgramRender({...status,program:{...status.program,generation:"bad"}},now)).toBe(false)
+    expect(currentProgramRender({...status,previews:{program:{state:"OFF"}}},now)).toBe(false)
+    expect(currentProgramRender({...status,program:undefined,source_state:"SOURCE_LIVE"},now)).toBe(false)
+  })
+  it("preserves legacy live-source eligibility without composition IDs", () => {
+    expect(currentProgramRender({source_state:"SOURCE_LIVE",previews:{program:{state:"ACTIVE"}}})).toBe(true)
+    expect(currentProgramRender({source_state:"SOURCE_LOST",previews:{program:{state:"ACTIVE"}}})).toBe(false)
   })
 })
