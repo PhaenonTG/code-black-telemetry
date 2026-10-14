@@ -311,6 +311,13 @@ Needed before changing networking:
 
 ### P3 - Polish / Future
 
+- Task: Add a dedicated OPS Socials workspace for composing and publishing to connected social accounts.
+  Reason: approved briefing material should be reusable in destination-specific posts without confusing a private Reviewed Briefing with a public publication. The workspace should support drafts, per-destination previews, account selection, explicit OWNER/ADMIN confirmation, publish status, retry-safe idempotency, and an append-only audit history. Account tokens and OAuth scopes must remain server-side and least-privileged. Reviewed Briefings must never auto-publish; every public destination remains an explicit choice. Keep this separate from Producer live-broadcast and comment controls.
+  Subsystem: OPS/social publishing/Core gateway.
+  Complexity: large.
+  Dependencies: destination selection, platform API and app-review access, OAuth/account ownership, media requirements, retention policy, and approval rules.
+  Independent: no.
+
 - Task: Continue consolidating long historical comments into docs when they become stale.
   Reason: reduces maintenance load without losing decisions.
   Subsystem: docs/code comments.
