@@ -312,10 +312,17 @@ Needed before changing networking:
 ### P3 - Polish / Future
 
 - Task: Add a dedicated OPS Socials workspace for composing and publishing to connected social accounts.
-  Reason: approved briefing material should be reusable in destination-specific posts without confusing a private Reviewed Briefing with a public publication. The workspace should support drafts, per-destination previews, account selection, explicit OWNER/ADMIN confirmation, publish status, retry-safe idempotency, and an append-only audit history. Account tokens and OAuth scopes must remain server-side and least-privileged. Reviewed Briefings must never auto-publish; every public destination remains an explicit choice. Keep this separate from Producer live-broadcast and comment controls.
+  Reason: approved briefing material should be reusable in destination-specific posts without confusing a private Reviewed Briefing with a public publication. The workspace should support drafts, per-destination previews, account selection, explicit OWNER/ADMIN confirmation, publish status, retry-safe idempotency, and an append-only audit history. Add an Activity & Notifications section for account connections, authorization expiry, drafts awaiting approval, scheduled or attempted publications, successes, failures, retries, and destination responses. It should support unread state, filters, links back to the affected post/account, and user-controlled in-app notification preferences; external push/email delivery is a separate opt-in. Account tokens and OAuth scopes must remain server-side and least-privileged. Reviewed Briefings must never auto-publish; every public destination remains an explicit choice. Keep this separate from Producer live-broadcast and comment controls.
   Subsystem: OPS/social publishing/Core gateway.
   Complexity: large.
   Dependencies: destination selection, platform API and app-review access, OAuth/account ownership, media requirements, retention policy, and approval rules.
+  Independent: no.
+
+- Task: Persist Socials account connections against the signed-in Supabase user and restore them on each OPS session.
+  Reason: a returning user should see the accounts they are authorized to use without reconnecting them every session. Store account identity, display metadata, scopes, connection health, ownership/team grants, notification preferences, and last verification against the stable Supabase `auth.uid()`. Enforce owner/team row access with RLS and explicit role checks; never authorize from user-editable `user_metadata`. Keep provider access and refresh tokens out of the browser, JWT, and exposed tables—store them encrypted behind the trusted publishing service and return only safe connection metadata to OPS. Supabase login-identity linking and social publishing-account linking are separate concepts and must not be conflated. Include explicit connect, reauthorize, revoke, and audit flows.
+  Subsystem: Supabase Auth/RLS, OPS Socials, trusted publishing service.
+  Complexity: large.
+  Dependencies: publishing account schema, team/role model, server-side secret storage, provider token refresh rules, RLS policies, account revocation behavior, and session/bootstrap integration.
   Independent: no.
 
 - Task: Continue consolidating long historical comments into docs when they become stale.
