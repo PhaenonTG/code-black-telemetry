@@ -17,6 +17,17 @@ type SetupRow = {
 };
 type SetupIndex = { status: string; checked_at?: string; last_source_check_at?: string; items: SetupRow[] };
 type SetupQueue = "drafts" | "briefings";
+type SampleField = { value?: number; unit?: string };
+type StormFeature = { storm_id?: string; distance_km?: number; probabilities_percent?: { ProbSevere?: number; ProbTor?: number; ProbHail?: number; ProbWind?: number } };
+type ExtraEvidence = {
+  status?: string; checked_at?: string;
+  models?: { href?: { status?: string; hours?: Array<{ run_time?: string; valid_time?: string; points?: Array<{ fields?: Record<string, SampleField> }> }> } };
+  storm_observations?: {
+    probsevere?: { status?: string; observed_at?: string; points?: Array<{ features?: StormFeature[] }> };
+    glm?: { status?: string; points?: Array<{ status?: string; observed_at?: string; flash_count_100km?: number; file_count?: number }> };
+    wofs?: { status?: string };
+  };
+};
 type SetupDetail = {
   setup_id: string; publication_state: string; revision: number; generated_at: string;
   source_fingerprint?: string; workflow?: SetupWorkflow;
@@ -27,6 +38,7 @@ type SetupDetail = {
   official: { provider?: string; day?: number; risk_label?: string; risk_code?: number; issued_at?: string; source_url?: string; geometry?: unknown };
   model: { status?: string; target_points?: Array<SetupCandidatePoint & { run_time?: string; classification?: string }>; notice?: string };
   source_checks?: { hrrr?: { status?: string; hours_checked?: number; hours_missing?: number } };
+  ingestion?: ExtraEvidence;
   review?: { required?: boolean; decision?: string | null; reason?: string };
 };
 
@@ -148,6 +160,14 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
   const currentSource = index?.status === "ready" && sourceFresh;
   const isBriefings = queue === "briefings";
   const points = detail?.model.target_points ?? [];
+  const ingestion = detail?.ingestion;
+  const observations = ingestion?.status === "stale" ? undefined : ingestion?.storm_observations;
+  const nearestStorm = observations?.probsevere?.points?.[0]?.features?.[0];
+  const glm = observations?.glm?.points?.[0];
+  const href = ingestion?.status === "stale" ? undefined : ingestion?.models?.href;
+  const hrefHour = href?.hours?.[0];
+  const hrefFields = hrefHour?.points?.[0]?.fields;
+  const probability = (field?: SampleField) => field?.unit === "%" && typeof field.value === "number" && field.value >= 0 && field.value <= 100 ? `${field.value.toFixed(1)}%` : "Unavailable";
   const ranked = rankedCandidates(points);
   const selectedCandidateKey = selectedCandidate && selectedCandidate.setupId === detail?.setup_id ? selectedCandidate.key : null;
   return (
@@ -209,6 +229,19 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
               <p>{detail.model.status === "available" ? `${points.length} retained in-area candidate point${points.length === 1 ? "" : "s"}.` : "No current in-area screening candidate is available."}</p>
               {points.length > 0 && <p>Latest run: {when(points[0].run_time)} · Candidate valid: {when(points[0].valid_time)}</p>}
               <p>Screening indices are not probabilities, observed storm tracks, or route safety assessments.</p>
+            </section>
+            <section className="chase-setups__evidence" aria-label="Additional storm evidence">
+              <h3>Additional storm evidence <small>INDEPENDENT SOURCES</small></h3>
+              <p>Sampled at existing HRRR screening points. Source age and availability are checked independently; these products do not change target ranking.</p>
+              <dl>
+                <div><dt>MRMS ProbSevere</dt><dd>{observations?.probsevere?.status === "available" ? `${observations.probsevere.points?.[0]?.features?.length ?? 0} nearby tracked feature(s) · ${when(observations.probsevere.observed_at)}` : "Unavailable or stale"}</dd></div>
+                {nearestStorm && <div><dt>Nearest tracked feature</dt><dd>{nearestStorm.distance_km?.toFixed(1) ?? "?"} km · Severe {nearestStorm.probabilities_percent?.ProbSevere ?? "?"}% · Tor {nearestStorm.probabilities_percent?.ProbTor ?? "?"}% · Hail {nearestStorm.probabilities_percent?.ProbHail ?? "?"}% · Wind {nearestStorm.probabilities_percent?.ProbWind ?? "?"}%</dd></div>}
+                <div><dt>GOES total lightning</dt><dd>{glm?.status === "available" && typeof glm.flash_count_100km === "number" ? `${glm.flash_count_100km} flashes within 100 km across ${glm.file_count ?? 0} recent files · ${when(glm.observed_at)}` : "Unavailable or stale"}</dd></div>
+                <div><dt>HREF ensemble</dt><dd>{href?.status === "available" && hrefHour ? `Run ${when(hrefHour.run_time)} · valid ${when(hrefHour.valid_time)}` : "Unavailable or stale"}</dd></div>
+                {hrefFields && <div><dt>HREF threshold chances</dt><dd>Reflectivity &gt;40 dBZ {probability(hrefFields.reflectivity_probability_40)} · Updraft helicity &gt;75 {probability(hrefFields.updraft_helicity_probability_75)} · CAPE &gt;1000 {probability(hrefFields.cape_probability_1000)} · Lightning {probability(hrefFields.lightning_probability)}</dd></div>}
+                <div><dt>WoFS</dt><dd>Experimental viewer only · <a href="https://cbwofs.nssl.noaa.gov/viewer/experimental" target="_blank" rel="noopener noreferrer">Open NOAA viewer ↗</a></dd></div>
+              </dl>
+              <p>ProbSevere features are detected storm objects, not warnings. GLM counts total lightning, not ground strikes. WoFS numeric guidance is not yet ingested.</p>
             </section>
             <SetupReviewDesk key={`${detail.setup_id}:${detail.revision}:${reloadVersion}`} config={config}
               setupId={detail.setup_id} revision={detail.revision} fingerprint={detail.source_fingerprint}
