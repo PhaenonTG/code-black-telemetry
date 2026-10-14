@@ -87,7 +87,7 @@ describe("Producer bridge state", () => {
   it("never serves a preview unless both the frame and source state are current", async () => {
     const storage = new MemoryStorage();
     const frame = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
-    await handleProducerStateRequest(new Request("https://x/api/producer/v1/workstation/preview/program.jpg", { method: "POST", headers: { "Content-Type": "image/jpeg", "X-Producer-Frame-At": "2026-10-13T17:00:00Z" }, body: frame }), storage);
+    await handleProducerStateRequest(new Request("https://x/api/producer/v1/workstation/preview/program.jpg", { method: "POST", headers: { "Content-Type": "image/jpeg", "X-Producer-Frame-At": new Date().toISOString() }, body: frame }), storage);
     let response = await handleProducerStateRequest(new Request("https://x/api/producer/v1/preview/program.jpg"), storage);
     expect(response.status).toBe(404);
     await handleProducerStateRequest(new Request("https://x/api/producer/v1/workstation/status", { method: "POST", body: JSON.stringify({ source_state: "SOURCE_LIVE" }) }), storage);

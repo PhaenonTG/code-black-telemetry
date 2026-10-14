@@ -659,8 +659,8 @@ async function handleProducerRoute(request: Request, url: URL, env: Env): Promis
     });
   }
   const headers = new Headers();
-  for (const name of ["Content-Type", "Content-Length", "X-Producer-Frame-At"]) {
-    const value = request.headers.get(name); if (value) headers.set(name, value);
+  for (const name of ["Content-Type", "Content-Length", "X-Producer-Frame-At", "X-Producer-Composition"]) {
+    const value = request.headers.get(name); if (value !== null) headers.set(name, value);
   }
   headers.set("X-Producer-Operator", operator);
   if (userId) headers.set("X-Producer-UserId", userId);

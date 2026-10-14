@@ -1,4 +1,5 @@
 import { handleProgramMedia } from "./program-media";
+import { COMPOSITION_ID, compositionMatches, mediaFresh, programEligible } from "./media-proof";
 import { OBS_ACTIONS, obsActionAdvertised, validObsPayload } from "./obs-command-policy";
 
 const STATUS_KEY = "status";
@@ -28,7 +29,7 @@ export interface BridgeStorage {
 }
 
 type StoredDocument = { receivedAt: string; body: Record<string, unknown> };
-type StoredFrame = { receivedAt: string; frameAt: string; bytes: ArrayBuffer };
+type StoredFrame = { receivedAt: string; frameAt: string; bytes: ArrayBuffer; compositionId?: string };
 type StoredCommand = {
   commandId: string; action: string; expectedStateRevision: number; payload?: Record<string, unknown>;
   operator: string; createdAt: string; state: "queued" | "succeeded" | "failed" | "timed_out";
@@ -254,11 +255,16 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
     return json(202, { accepted: true });
   }
   if (path === "/api/producer/v1/workstation/preview/program.jpg" && request.method === "POST") {
+    const header = request.headers.get("X-Producer-Composition");
+    if (header !== null && !COMPOSITION_ID.test(header)) return json(400, { error: "INVALID_COMPOSITION_ID" });
+    const compositionId = header ?? undefined;
+    const status = await storage.get<StoredDocument>(STATUS_KEY);
+    if (status?.body.engine === "obs" && (!programEligible(status) || !compositionMatches(status.body, compositionId))) return json(409, { error: "PROGRAM_COMPOSITION_NOT_CURRENT" });
     const size = Number(request.headers.get("Content-Length") || 0);
     if (size > MAX_FRAME_BYTES || request.headers.get("Content-Type") !== "image/jpeg") return json(413, { error: "INVALID_FRAME" });
     const bytes = await request.arrayBuffer();
     if (!bytes.byteLength || bytes.byteLength > MAX_FRAME_BYTES) return json(413, { error: "INVALID_FRAME" });
-    await storage.put(FRAME_KEY, { receivedAt: new Date().toISOString(), frameAt: request.headers.get("X-Producer-Frame-At") || new Date().toISOString(), bytes } satisfies StoredFrame);
+    await storage.put(FRAME_KEY, { receivedAt: new Date().toISOString(), frameAt: request.headers.get("X-Producer-Frame-At") || new Date().toISOString(), bytes, compositionId } satisfies StoredFrame);
     return json(202, { accepted: true });
   }
 
@@ -290,10 +296,9 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
   }
   if (path === "/api/producer/v1/preview/program.jpg" && request.method === "GET") {
     const [status, frame] = await Promise.all([storage.get<StoredDocument>(STATUS_KEY), storage.get<StoredFrame>(FRAME_KEY)]);
-    const sourceLive = status?.body.source_state === "SOURCE_LIVE";
-    const current = frame && Date.now() - Date.parse(frame.receivedAt) <= 5_000;
-    if (!sourceLive || !current || !frame) return json(404, { error: "PREVIEW_NOT_CURRENT" });
-    return new Response(frame.bytes, { status: 200, headers: { "Content-Type": "image/jpeg", "Cache-Control": "no-store", "X-Producer-Frame-At": frame.frameAt, "X-Content-Type-Options": "nosniff" } });
+    const current = frame && mediaFresh(frame.receivedAt, 5000) && mediaFresh(frame.frameAt, 5000);
+    if (!programEligible(status) || !status || !current || !frame || !compositionMatches(status.body, frame.compositionId)) return json(404, { error: "PREVIEW_NOT_CURRENT" });
+    return new Response(frame.bytes, { status: 200, headers: { "Content-Type": "image/jpeg", "Cache-Control": "no-store", "X-Producer-Frame-At": frame.frameAt, "X-Content-Type-Options": "nosniff", ...(frame.compositionId ? { "X-Producer-Composition": frame.compositionId } : {}) } });
   }
 
   if (path === "/api/producer/v1/commands" && request.method === "POST") {
