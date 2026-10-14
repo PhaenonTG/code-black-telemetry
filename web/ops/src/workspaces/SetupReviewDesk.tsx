@@ -12,7 +12,8 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
   const auth = useAuth();
   const role = auth.status === "authorized" ? auth.profile.role : undefined;
   const [workflow, setWorkflow] = useState(initial);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"review" | "decision" | "paid" | "weights" | null>(null);
+  const busy = busyAction !== null;
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [note, setNote] = useState("");
@@ -41,7 +42,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
 
   async function submit(decision?: "approved" | "changes_requested") {
     if (busy) return;
-    setBusy(true); setError(""); setMessage("");
+    setBusyAction(decision ? "decision" : "review"); setError(""); setMessage("");
     try {
       const result = await postSetupWorkflow<SetupWorkflow>(config,
         decision ? "chase-setup-decision" : "chase-setup-review", {
@@ -52,22 +53,22 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
       onWorkflowChange?.(result);
       if (decision) { setMessage(decision === "approved" ? `Posted revision ${revision} to Reviewed Briefings.` : `Changes requested for revision ${revision}.`); setNote(""); setAcknowledged(false); }
     } catch (err) { setError(err instanceof Error ? err.message : "Action unavailable. Refresh to check its status."); }
-    finally { setBusy(false); }
+    finally { setBusyAction(null); }
   }
   async function requestPaidReview() {
     if (busy || !decisionRole || !fingerprint || workflow?.decision?.decision !== "approved") return;
-    setBusy(true); setError(""); setMessage("");
+    setBusyAction("paid"); setError(""); setMessage("");
     try {
       const result = await postSetupWorkflow<SetupWorkflow>(config, "chase-setup-paid-review", { setup_id: setupId, revision, source_fingerprint: fingerprint });
       setWorkflow(result);
       onWorkflowChange?.(result);
       setMessage("Full private review requested for this exact approved revision.");
     } catch (err) { setError(err instanceof Error ? err.message : "Paid review could not be confirmed."); }
-    finally { setBusy(false); }
+    finally { setBusyAction(null); }
   }
   async function saveWeights(policy: SetupWeightPolicy) {
     if (busy || !decisionRole || !fingerprint || !current) return;
-    setBusy(true); setError(""); setMessage("");
+    setBusyAction("weights"); setError(""); setMessage("");
     try {
       const result = await postSetupWorkflow<SetupWorkflow>(config, "chase-setup-policy", {
         setup_id: setupId, revision, source_fingerprint: fingerprint, policy,
@@ -77,7 +78,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
       setMessage("Weights saved for this revision. Run fresh advisory reviews before approval.");
       setNote(""); setAcknowledged(false);
     } catch (err) { setError(err instanceof Error ? err.message : "Weight policy could not be saved."); }
-    finally { setBusy(false); }
+    finally { setBusyAction(null); }
   }
 
   return <section className="setup-review-desk" aria-label="Revision advisory reviews and decision">
@@ -93,7 +94,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
     <p>Independent interpretations of this revision’s SPC outlook and HRRR screening. Neither reviewer confirms storms or changes the evidence.</p>
     <button type="button" className="setup-review-desk__run" onClick={() => void submit()}
       disabled={!current || !fingerprint || !role || busy || workflow?.status === "pending" || workflow?.status === "ready"}>
-      {workflow?.status === "pending" ? "Review in progress…" : workflow?.status === "ready" ? "Reviews saved" : workflow?.status === "not_requested" || !workflow ? "Run required advisory reviews" : "Retry advisory reviews"}</button>
+      {workflow?.status === "pending" ? "Review in progress…" : busyAction === "review" ? "Starting reviews…" : workflow?.status === "ready" ? "Reviews saved" : workflow?.status === "not_requested" || !workflow ? "Run required advisory reviews" : "Retry advisory reviews"}</button>
     {workflow?.started_at && <p className="setup-review-desk__time">Started {new Date(workflow.started_at).toLocaleString()}
       {workflow.completed_at && ` · Completed ${new Date(workflow.completed_at).toLocaleString()}`}</p>}
     <div className="chase-setups__reviews">{[["aegis", "Aegis analysis"], ["local_30b", "Local 30B review"]].map(([key, title]) => {
@@ -137,7 +138,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
     <div className="setup-review-desk__decision" aria-label="Hourly paid second opinion">
       <h3>Hourly independent review</h3>
       {decisionRole && current && <button type="button" className="setup-review-desk__run" disabled={busy || workflow?.decision?.decision !== "approved" || !fingerprint} onClick={() => void requestPaidReview()}>
-        {busy ? "Requesting full review…" : "Run full review now"}</button>}
+        {busyAction === "paid" ? "Requesting full review…" : "Run full review now"}</button>}
       {workflow?.paid_review?.status === "ready" ? <div className="setup-review-desk__saved">
         <strong>{workflow.paid_review.verdict === "ready" ? "Evidence-bounded second opinion" : "Second opinion withheld"}</strong>
         <p>{workflow.paid_review.summary}</p>

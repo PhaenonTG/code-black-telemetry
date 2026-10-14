@@ -77,6 +77,7 @@ const productionPoint = {
 
 describe("Core transport helpers", () => {
   it("surfaces actionable draft workflow errors without leaking proxy HTML", () => {
+    expect(setupWorkflowErrorMessage(409, { error: "SETUP_CONFLICT" })).toMatch(/latest revision is being refreshed/);
     expect(setupWorkflowErrorMessage(409, { detail: "Another setup review is running. Try again shortly." })).toMatch(/Another setup review/);
     expect(setupWorkflowErrorMessage(422, { detail: "Invalid setup review request" })).toMatch(/Invalid setup/);
     expect(setupWorkflowErrorMessage(503, "<html>proxy error</html>")).toMatch(/review service is unavailable/);
