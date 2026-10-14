@@ -3,7 +3,7 @@ import type Hls from "hls.js"
 import { currentAccessToken } from "../core/client"
 import { currentMediaTimestamp, isProgramMediaUrl, mediaCompositionMatches } from "./programMonitorPolicy"
 
-export default function ProgramMonitor({ active, fallback, compositionId }: { active: boolean; fallback: ReactNode; compositionId?: string }) {
+export default function ProgramMonitor({ active, canStart, fallback, compositionId }: { active: boolean; canStart: boolean; fallback: ReactNode; compositionId?: string }) {
   const video = useRef<HTMLVideoElement>(null)
   const player = useRef<Hls | null>(null)
   const sessionActive = useRef(false)
@@ -100,7 +100,7 @@ export default function ProgramMonitor({ active, fallback, compositionId }: { ac
         onPlay={() => { const target = player.current?.liveSyncPosition; if (typeof target === "number" && video.current && Math.abs(video.current.currentTime - target) > 4) video.current.currentTime = target }} /> : fallback}
     </div>
     <div className="producer-monitor-controls">
-      <button type="button" disabled={!active} onClick={() => { setMuted(true); setPlaying(false); setState(displayVideo ? "Monitor stopped — snapshot fallback" : "Connecting to authenticated PROGRAM monitor…"); setEnabled(!displayVideo) }}>{displayVideo ? "Stop monitor" : "Start video monitor"}</button>
+      <button type="button" disabled={!active || (!displayVideo && !canStart)} onClick={() => { setMuted(true); setPlaying(false); setState(displayVideo ? "Monitor stopped — snapshot fallback" : "Connecting to authenticated PROGRAM monitor…"); setEnabled(!displayVideo) }}>{displayVideo ? "Stop monitor" : "Start video monitor"}</button>
       <button type="button" disabled={!displayVideo} onClick={listen}>{muted ? "Listen to PROGRAM" : "Mute PROGRAM"}</button>
       <span role="status" aria-live="polite">{!active ? "Monitor waiting for current PROGRAM rendering" : displayVideo ? `${state}${playing ? muted ? " · MUTED" : " · audio enabled" : ""}` : state}</span>
     </div>

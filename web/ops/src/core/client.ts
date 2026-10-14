@@ -62,7 +62,12 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
     headers: buildCoreRequestHeaders(token),
   });
   if (!response.ok) throw new OpsCoreClientError(`HTTP ${response.status}`);
-  return response.json() as Promise<T>;
+  const contentType = response.headers.get("content-type");
+  if (contentType?.toLowerCase().includes("text/html")) {
+    throw new OpsCoreClientError("Core gateway returned a web page instead of data. Check Ops API routing.");
+  }
+  try { return await response.json() as T; }
+  catch { throw new OpsCoreClientError("Core gateway returned invalid data."); }
 }
 
 async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, outerSignal?: AbortSignal, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<T> {

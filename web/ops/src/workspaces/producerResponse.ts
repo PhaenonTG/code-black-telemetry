@@ -1,4 +1,7 @@
+import { noteProducerResponse, producerRetryMessage } from "./producerRateLimit"
+
 export async function readProducerResponse<T>(response: Response): Promise<T> {
+  noteProducerResponse(response)
   const text = await response.text();
   let data: unknown = null;
   if (text) {
@@ -6,7 +9,7 @@ export async function readProducerResponse<T>(response: Response): Promise<T> {
   }
   if (!response.ok) {
     const record = data && typeof data === "object" ? data as Record<string, unknown> : null;
-    const error = typeof record?.error === "string" ? record.error : `Producer service returned HTTP ${response.status}`;
+    const error = response.status === 429 ? producerRetryMessage() : typeof record?.error === "string" ? record.error : `Producer service returned HTTP ${response.status}`;
     const code = typeof record?.code === "number" ? ` (Meta ${record.code})` : "";
     throw new Error(`${error}${code}`);
   }

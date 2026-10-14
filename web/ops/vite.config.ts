@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { build as bundleWorker } from 'esbuild'
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 // The repo root, three levels up (web/ops -> web -> repo root). Reused OPS
@@ -14,7 +15,24 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, dirname, "")
   const coreProxyTarget = (env.CODEBLACK_CORE_PROXY_TARGET || "http://127.0.0.1:8000").replace(/\/+$/, "")
   return {
-  plugins: [react()],
+  // Pages production has previously served the SPA fallback for /api/core/*
+  // when a deploy ran `vite build` directly and omitted the Advanced Mode worker.
+  // Emit the worker as part of *every* Vite build, regardless of the build command.
+  plugins: [react(), {
+    name: 'ops-pages-worker',
+    apply: 'build',
+    async closeBundle() {
+      await bundleWorker({
+        entryPoints: [path.join(dirname, 'worker/entry.ts')],
+        outfile: path.join(dirname, 'dist/_worker.js'),
+        bundle: true,
+        format: 'esm',
+        platform: 'neutral',
+        target: 'es2022',
+        minify: true,
+      })
+    },
+  }],
   resolve: {
     // Reused modules under ../../../src resolve `react`/`react-dom` relative
     // to their own location, which would otherwise find the repo root's

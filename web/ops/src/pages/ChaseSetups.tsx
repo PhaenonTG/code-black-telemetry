@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
@@ -56,9 +56,11 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
   const [busy, setBusy] = useState(false);
   const [sourceFresh, setSourceFresh] = useState(false);
   const [queueLoading, setQueueLoading] = useState(true);
+  const [decisionRows, setDecisionRows] = useState<SetupRow[] | null>(null);
   const [decisions, setDecisions] = useState<Record<string, string | null>>({});
   const [reloadVersion, setReloadVersion] = useState(0);
   const [selectedCandidate, setSelectedCandidate] = useState<{ setupId: string; key: string } | null>(null);
+  const detailSelection = useRef("");
 
   const refresh = useCallback(async (signal?: AbortSignal, quiet = false) => {
     if (!quiet) setBusy(true);
@@ -68,9 +70,10 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
       const lastSourceCheck = Date.parse(result.last_source_check_at ?? result.checked_at ?? "");
       const sourceAge = Date.now() - lastSourceCheck;
       setIndex(result);
+      setDecisionRows((previous) => previous && previous.length === result.items.length && previous.every((row, position) => row.setup_id === result.items[position]?.setup_id && row.revision === result.items[position]?.revision) ? previous : result.items);
       setSourceFresh(Number.isFinite(lastSourceCheck) && sourceAge >= 0 && sourceAge <= 30 * 60_000);
     } catch {
-      if (!signal?.aborted) setIndexError("Private setup drafts are unavailable. No source or review state has been inferred.");
+      if (!signal?.aborted) { setIndexError("Private setup drafts are unavailable. No source or review state has been inferred."); setQueueLoading(false); setSourceFresh(false); }
     } finally {
       if (!signal?.aborted && !quiet) setBusy(false);
     }
@@ -91,8 +94,8 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
 
   useEffect(() => {
     const controller = new AbortController();
-    const items = index?.items ?? [];
-    if (!index) return () => controller.abort();
+    const items = decisionRows ?? [];
+    if (!decisionRows) return () => controller.abort();
     setQueueLoading(true);
     void Promise.all(items.map(async (row) => {
       try {
@@ -109,11 +112,12 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
       }
     });
     return () => controller.abort();
-  }, [config, index]);
+  }, [config, decisionRows]);
 
   useEffect(() => {
     const controller = new AbortController();
-    setDetail(null);
+    const selection = `${selectedId ?? ""}:${revisionParam ?? "current"}`;
+    if (detailSelection.current !== selection) { setDetail(null); detailSelection.current = selection; }
     setDetailError("");
     if (!selectedId) return () => controller.abort();
     if (!setupId.test(selectedId)) {
@@ -177,8 +181,8 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
       {indexError && <p className="chase-setups__error" role="alert">{indexError}</p>}
       <div className="chase-setups__layout">
         <section className="chase-setups__list" aria-label={isBriefings ? "Reviewed setup briefings" : "Private setup drafts"}>
-          <h2>{isBriefings ? "Reviewed briefings" : "Detected drafts"} <span>{queueLoading ? "…" : rows.length}</span></h2>
-          {queueLoading ? <div className="chase-setups__empty"><strong>Loading review states…</strong><p>Matching each active setup to its exact operator decision.</p></div> : rows.length === 0 ? <div className="chase-setups__empty">
+          <h2>{isBriefings ? "Reviewed briefings" : "Detected drafts"} <span>{queueLoading && !index ? "…" : rows.length}</span></h2>
+          {indexError && !index ? <div className="chase-setups__empty"><strong>Setup list unavailable</strong><p>Review state could not be verified.</p></div> : queueLoading ? <div className="chase-setups__empty"><strong>Loading review states…</strong><p>Matching each active setup to its exact operator decision.</p></div> : rows.length === 0 ? <div className="chase-setups__empty">
             <strong>{isBriefings ? "No reviewed briefings at this time" : "No setup drafts at this time"}</strong>
             <p>{isBriefings ? "Approving a current revision moves it here automatically." : index?.status === "ready" ? "New qualifying setups will appear after a complete source check." : "A complete source check has not produced a current draft."}</p>
           </div> : <ul>{rows.map((row) => <li key={row.setup_id}>

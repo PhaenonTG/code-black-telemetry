@@ -1,5 +1,5 @@
 // Bundles worker/entry.ts (the Cloudflare Pages Advanced Mode gateway) into dist/_worker.js
-// after `vite build` has produced the rest of dist/. Run via `npm run build`, never directly.
+// Kept for manual repair; Vite now bundles this worker on every production build.
 import { build } from "esbuild";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

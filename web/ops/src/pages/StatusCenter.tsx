@@ -90,7 +90,7 @@ export default function StatusCenter() {
       <PageHeader
         title="STATUS CENTER"
         kicker="LIVE PLATFORM TELEMETRY"
-        description={document?.generated_at ? `Verified Core telemetry · updated ${new Date(document.generated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "Loading verified Core telemetry…"}
+        description={error ? "Verified Core telemetry unavailable" : document?.generated_at ? `Verified Core telemetry · updated ${new Date(document.generated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "Loading verified Core telemetry…"}
         actions={<button type="button" className="page-action-link" onClick={() => { void refresh() }}>REFRESH</button>}
       />
 
@@ -99,9 +99,9 @@ export default function StatusCenter() {
       <section className="status-center__summary" aria-label="Platform summary">
         <div className="status-center__overall">
           <span>PLATFORM STATE</span>
-          <StatusBadge state={stateForBadge(document?.summary?.overall)} />
-          <b>{document?.summary?.overall ?? "CHECKING"}</b>
-          <small>{document?.summary?.attention_count ?? 0} active attention item(s)</small>
+          <StatusBadge state={error ? "UNAVAILABLE" : stateForBadge(document?.summary?.overall)} />
+          <b>{error ? "UNAVAILABLE" : document?.summary?.overall ?? "CHECKING"}</b>
+          <small>{error ? "Current attention count unavailable" : document?.summary ? `${document.summary.attention_count} active attention item(s)` : "Attention count unavailable"}</small>
         </div>
         <div className="status-center__tiles">
           {tiles.map((tile) => <article key={tile.id} className="status-center__tile">
@@ -118,7 +118,7 @@ export default function StatusCenter() {
           <div className="status-center__facts">
             <div><span>WORKER</span><b>{toText((radar.worker as Record<string, unknown> | undefined)?.state)}</b></div>
             <div><span>PIPELINE</span><b>{toText(radar.state)}</b></div>
-            <div><span>TELEMETRY</span><b>{toText((radar.telemetry as Record<string, unknown> | undefined)?.stale) === "true" ? "STALE" : "CURRENT"}</b></div>
+            <div><span>TELEMETRY</span><b>{error || !document ? "UNAVAILABLE" : toText((radar.telemetry as Record<string, unknown> | undefined)?.stale) === "true" ? "STALE" : (radar.telemetry ? "CURRENT" : "UNKNOWN")}</b></div>
           </div>
           <div className="status-center__facts">
             <div><span>AEGIS SCREEN</span><b>{aegis?.screen.enabled ? "RUNNING" : "UNAVAILABLE"}</b></div>
@@ -149,12 +149,12 @@ export default function StatusCenter() {
               </select>
             </label>
             <button type="button" className="settings-save" disabled={saving} onClick={() => { void save() }}>{saving ? "SAVING…" : "SAVE RADAR POLICY"}</button>
-          </div></details> : <p className="status-center__muted">Radar policy is loading…</p>}
+          </div></details> : <p className="status-center__muted">{error ? "Radar policy unavailable." : "Radar policy is loading…"}</p>}
         </section>
 
         <section className="status-center__panel">
           <h2>ATTENTION QUEUE</h2>
-          {(document?.attention ?? []).length === 0 ? <p className="status-center__muted">No active operator attention items.</p> : <div className="status-center__attention">
+          {error ? <p className="status-center__muted">Current attention queue unavailable. Previously received items may be out of date.</p> : !document ? <p className="status-center__muted">Loading attention queue…</p> : (document.attention ?? []).length === 0 ? <p className="status-center__muted">No active operator attention items.</p> : <div className="status-center__attention">
             {document?.attention?.map((item) => <article key={item.id}>
               <span>{item.severity ?? "NOTICE"}</span><b>{item.title}</b><p>{item.detail ?? "No detail provided"}</p>
             </article>)}

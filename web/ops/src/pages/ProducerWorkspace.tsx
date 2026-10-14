@@ -10,6 +10,7 @@ import ProducerControls from "../workspaces/ProducerControls"
 import ProgramMonitor from "../workspaces/ProgramMonitor"
 import { currentMediaTimestamp, currentProgramRender, mediaCompositionMatches, PROGRAM_STATUS_POLL_MS } from "../workspaces/programMonitorPolicy"
 import { readProducerResponse } from "../workspaces/producerResponse"
+import { noteProducerResponse, producerReadAllowed, producerRetryMessage } from "../workspaces/producerRateLimit"
 import "./Workspaces.css"
 
 const SELECTION_KEY = "codeblack.ops.producer.source.v1"
@@ -132,7 +133,7 @@ export default function ProducerWorkspace() {
     let cancelled = false
     let inFlight = false
     const load = async () => {
-      if (document.hidden || inFlight) return
+      if (document.hidden || inFlight || !producerReadAllowed()) return
       inFlight = true
       try {
         const token = await currentAccessToken()
@@ -162,6 +163,7 @@ export default function ProducerWorkspace() {
     }
     const load = async () => {
       if (document.hidden || inFlight) return
+      if (!producerReadAllowed()) { setProgramFrameState(producerRetryMessage()); return }
       const currentStatus = producerStatusRef.current
       if (!sourceFresh(currentStatus)) { setProgramFrameState(currentStatus ? "Waiting for current PROGRAM rendering" : "Waiting for broadcaster status"); return }
       inFlight = true
@@ -169,6 +171,8 @@ export default function ProducerWorkspace() {
         const token = await currentAccessToken()
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
         const response = await fetch(`/api/producer/v1/preview/program.jpg?t=${Date.now()}`, { cache: "no-store", headers })
+        noteProducerResponse(response)
+        if (response.status === 429) throw new Error(producerRetryMessage())
         if (response.status === 404) { setProgramFrameState("No current PROGRAM frame"); return }
         if (!response.ok) throw new Error(`Preview returned ${response.status}`)
         const frameAt = response.headers.get("X-Producer-Frame-At") ?? ""
@@ -192,7 +196,7 @@ export default function ProducerWorkspace() {
       } finally { inFlight = false }
     }
     void load()
-    const timer = window.setInterval(() => void load(), 1_500)
+    const timer = window.setInterval(() => void load(), 3_000)
     const visible = () => { if (!document.hidden) void load() }
     document.addEventListener("visibilitychange", visible)
     return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); clearFrame() }
@@ -222,7 +226,7 @@ export default function ProducerWorkspace() {
       <div className="producer-main">
         <section className="workspace-panel producer-stage" aria-label="PROGRAM preview">
           <header><h2>PROGRAM</h2><span className={programCurrent || producerBridgeState === "ONLINE" ? "workspace-live" : "workspace-muted"}>{programStateLabel}</span></header>
-          <ProgramMonitor key={`${producerStatus?.composition?.id ?? "legacy"}:${producerStatus?.program?.generation ?? "legacy"}`} active={producerBridgeState === "ONLINE" && sourceFresh(producerStatus)} compositionId={producerStatus?.composition?.id} fallback={heldFrame ? <><img src={programFrameUrl} alt={programCurrent ? "Current PROGRAM preview" : "Last verified PROGRAM frame"} />{!programCurrent && <span className="producer-stage__held-label">LAST VERIFIED FRAME · awaiting fresh PROGRAM proof</span>}</> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
+          <ProgramMonitor key={producerStatus?.composition?.id ?? "legacy"} active={producerBridgeState === "ONLINE" && Boolean(producerStatus?.composition?.id)} canStart={sourceFresh(producerStatus)} compositionId={producerStatus?.composition?.id} fallback={heldFrame ? <><img src={programFrameUrl} alt={programCurrent ? "Current PROGRAM preview" : "Last verified PROGRAM frame"} />{!programCurrent && <span className="producer-stage__held-label">LAST VERIFIED FRAME · awaiting fresh PROGRAM proof</span>}</> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
           <div className="producer-stage__foot"><div><strong>{producerStatus?.state ?? "NO BROADCASTER STATUS"}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>{producerStatus?.broadcast?.state ?? "OUTPUT UNKNOWN"}</span></div>
         </section>
         <ProducerControls />

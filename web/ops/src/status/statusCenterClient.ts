@@ -48,7 +48,8 @@ async function statusRequest<T>(config: OpsCoreConfig, path: string, init?: Requ
     headers: { ...buildCoreRequestHeaders(token), ...init?.headers },
   })
   if (!response.ok) throw new OpsCoreClientError(`Status Center HTTP ${response.status}`)
-  return response.json() as Promise<T>
+  if (response.headers.get("content-type")?.toLowerCase().includes("text/html")) throw new OpsCoreClientError("Status Center gateway returned a web page instead of data. Check Ops API routing.")
+  try { return await response.json() as T } catch { throw new OpsCoreClientError("Status Center returned invalid data.") }
 }
 
 export function fetchStatusCenter(config: OpsCoreConfig): Promise<StatusCenterDocument> {

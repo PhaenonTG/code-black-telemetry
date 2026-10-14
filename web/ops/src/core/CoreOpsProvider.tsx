@@ -202,7 +202,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
         watchdog = window.setTimeout(() => controller.abort(), FABRIC_STREAM_FRESH_MS);
       };
       clearActiveWatchdog = clearWatchdog;
-      setState((current) => current.fabric.streamState === "open"
+      setState((current) => current.fabric.streamState === "open" || current.fabric.streamState === "closed"
         ? current
         : { ...current, fabric: { ...current.fabric, streamState: "connecting", error: null } });
       armWatchdog();

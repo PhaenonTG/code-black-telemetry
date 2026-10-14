@@ -1337,7 +1337,7 @@ export function AtlasMap({
   // the Layers popover rather than a second status vocabulary, and only surfaces a badge for a
   // layer the user actually turned on (an off-by-choice layer isn't a failure worth a badge for).
   const mosaicStatusLabel = mosaicVisible
-    ? { loading: "MOSAIC LOADING", ready: "MOSAIC LIVE", stale: "MOSAIC STALE", unavailable: "MOSAIC UNAVAILABLE" }[mosaicStatus]
+    ? { loading: "MOSAIC LOADING", ready: "MOSAIC SOURCE ON", stale: "MOSAIC STALE", unavailable: "MOSAIC UNAVAILABLE" }[mosaicStatus]
     : null;
   const roadStatusLabel = roadConditionsVisible
     ? `ROADS ${providerStatusLabel(roadLayerStatus, roadConditions.length, roadProviderCount).toUpperCase()}`

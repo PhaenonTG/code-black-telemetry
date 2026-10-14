@@ -5,6 +5,7 @@ import { AuthGate } from "../components/AuthGate"
 import { CoreOpsProvider } from "../core/CoreOpsProvider"
 import { AppShell } from "../layouts/AppShell"
 import UpdatePassword from "../pages/UpdatePassword"
+import { RouteLoadBoundary } from "./RouteLoadBoundary"
 
 // Route-level code splitting -- this bundle shipped as a single ~3MB JS chunk with everything
 // (including the map/mapbox-gl stack, only needed by two of these routes) loaded on first paint,
@@ -51,7 +52,7 @@ export default function App() {
               <AuthGate>
                 <CoreOpsProvider>
                   <AppShell>
-                    <Suspense fallback={<div className="page-empty">Loading…</div>}>
+                    <RouteLoadBoundary><Suspense fallback={<div className="page-empty">Loading…</div>}>
                       <Routes>
                         <Route path="/" element={<MobileHome />} />
                         <Route path="/producer" element={<ProducerWorkspace />} />
@@ -88,7 +89,7 @@ export default function App() {
                         <Route path="/more" element={<More />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                       </Routes>
-                    </Suspense>
+                    </Suspense></RouteLoadBoundary>
                   </AppShell>
                 </CoreOpsProvider>
               </AuthGate>

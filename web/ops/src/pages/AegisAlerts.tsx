@@ -113,7 +113,7 @@ export default function AegisAlerts() {
     <section className="aegis-panel aegis-observation" aria-label="Active Aegis observation plan">
       <div className="aegis-review__heading">
         <div><p className="aegis-review__kicker">CONTINUOUS SURVEILLANCE / READ-ONLY</p><h2>Active observation plan</h2></div>
-        <span>{plan ? plan.executor.state.replaceAll("_", " ") : "Connecting to Core"}</span>
+        <span>{plan ? plan.executor.state.replaceAll("_", " ") : error ? "Core unavailable" : "Connecting to Core"}</span>
       </div>
       {plan ? <>
         <p className="aegis-empty">Last executor check {utc(plan.executor.last_checked_at ?? undefined)} · {plan.setup_drafts.length} setup draft{plan.setup_drafts.length === 1 ? "" : "s"} under observation · {plan.live_chasers.length} live chaser{plan.live_chasers.length === 1 ? "" : "s"}.</p>
@@ -123,12 +123,12 @@ export default function AegisAlerts() {
           <span className={plan.satellite?.state === "available_metadata_only" ? "available" : "missing"}>satellite · {plan.satellite?.satellite || plan.satellite?.analysis_state || "unavailable"}</span>
         </div>
         <p className="aegis-empty">{plan.executor.notice || "Observation evidence is recorded without routing a vehicle or issuing an official warning."}</p>
-      </> : <p className="aegis-empty">Loading executor, radar, satellite, and setup-surveillance state.</p>}
+      </> : <p className="aegis-empty">{error ? "Observation plan unavailable; no current evidence has been verified." : "Loading executor, radar, satellite, and setup-surveillance state."}</p>}
     </section>
     <div className="aegis-grid">
       <section className="aegis-panel" aria-label="Aegis alert feed">
         <h2>Alert feed</h2>
-        {!alerts.length && <p className="aegis-empty">No qualifying Aegis alerts in the feed. This does not mean there are no official warnings or hazards.</p>}
+        {!alerts.length && <p className="aegis-empty">{error ? "Alert feed unavailable; this is not an all-clear." : "No qualifying Aegis alerts in the feed. This does not mean there are no official warnings or hazards."}</p>}
         {alerts.map((item) => <button key={item.id} type="button"
           className={`aegis-alert-item${selected?.id === item.id ? " selected" : ""}`}
           onClick={() => setSelectedId(item.id)}>

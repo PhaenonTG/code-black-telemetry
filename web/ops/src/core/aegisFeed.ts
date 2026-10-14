@@ -96,7 +96,8 @@ async function coreGet<T>(config: OpsCoreConfig, route: string, signal?: AbortSi
   const response = await fetch(`${config.coreBaseUrl}${route}`, { cache: "no-store", signal,
     headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
   if (!response.ok) throw new Error(`Core feed HTTP ${response.status}`);
-  return response.json() as Promise<T>;
+  if (response.headers.get("content-type")?.toLowerCase().includes("text/html")) throw new Error("Aegis gateway returned a web page instead of data. Check Ops API routing.");
+  try { return await response.json() as T; } catch { throw new Error("Aegis feed returned invalid data."); }
 }
 
 export function getAegisFeed(config: OpsCoreConfig, signal?: AbortSignal): Promise<AegisAlertFeed> {
@@ -128,7 +129,9 @@ export async function replayAegisPolicy<T extends AegisScenarioReplay | AegisRec
       ...(token ? { Authorization: `Bearer ${token}` } : {}) },
   });
   if (!response.ok) throw new Error(`Core replay HTTP ${response.status}`);
-  const result = await response.json() as T;
+  if (response.headers.get("content-type")?.toLowerCase().includes("text/html")) throw new Error("Aegis gateway returned a web page instead of data. Check Ops API routing.");
+  let result: T;
+  try { result = await response.json() as T; } catch { throw new Error("Core replay returned invalid data."); }
   if (result.dry_run !== true || result.no_messages_sent !== true || result.no_config_changed !== true)
     throw new Error("Core did not confirm a side-effect-free replay");
   return result;
