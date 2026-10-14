@@ -8,6 +8,7 @@ import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
 import FacebookProducerPanel from "../workspaces/FacebookProducerPanel"
 import ProducerControls from "../workspaces/ProducerControls"
 import ProgramMonitor from "../workspaces/ProgramMonitor"
+import { currentMediaTimestamp, currentProgramRender, mediaCompositionMatches } from "../workspaces/programMonitorPolicy"
 import { readProducerResponse } from "../workspaces/producerResponse"
 import "./Workspaces.css"
 
@@ -16,6 +17,9 @@ type OfficialAlert = { id?: string; event?: string; headline?: string; severity?
 type OfficialAlertResponse = { status: string; alerts: OfficialAlert[]; queried_at?: string }
 type ProducerPreview = { state?: string; available?: boolean }
 type ProducerBridgeStatus = {
+  engine?: string
+  composition?: { id?: string }
+  program?: { state?: string; compositionId?: string; generation?: string; lastFrameAt?: string }
   observedAt?: string
   bridgeState?: string
   bridge_state?: string
@@ -59,11 +63,11 @@ function bridgeState(document: ProducerBridgeStatus | null): string {
 
 function unwrapBridgeStatus(document: ProducerBridgeStatus): ProducerBridgeStatus {
   const status = document.status && typeof document.status === "object" ? document.status : document
-  return { ...status, observedAt: document.observedAt ?? status.observedAt, bridgeState: bridgeState(document) }
+  return { ...status, observedAt: status.observedAt ?? document.observedAt, bridgeState: bridgeState(document) }
 }
 
 function sourceFresh(document: ProducerBridgeStatus | null): boolean {
-  return document?.source_state === "SOURCE_LIVE" && document?.previews?.program?.state === "ACTIVE"
+  return currentProgramRender(document)
 }
 
 export default function ProducerWorkspace() {
@@ -80,6 +84,7 @@ export default function ProducerWorkspace() {
   const [programFrameUrl, setProgramFrameUrl] = useState("")
   const [programFrameAt, setProgramFrameAt] = useState("")
   const [programFrameState, setProgramFrameState] = useState("Waiting for broadcaster status")
+  const [programFrameComposition, setProgramFrameComposition] = useState<string | undefined>()
   const programObjectUrl = useRef("")
   const producerStatusRef = useRef<ProducerBridgeStatus | null>(null)
   useEffect(() => { producerStatusRef.current = producerStatus }, [producerStatus])
@@ -155,7 +160,7 @@ export default function ProducerWorkspace() {
     const load = async () => {
       if (document.hidden) return
       const currentStatus = producerStatusRef.current
-      if (!sourceFresh(currentStatus)) { clearFrame(); setProgramFrameState(currentStatus ? "PROGRAM unavailable until the source is live" : "Waiting for broadcaster status"); return }
+      if (!sourceFresh(currentStatus)) { clearFrame(); setProgramFrameState(currentStatus ? "Waiting for current PROGRAM rendering" : "Waiting for broadcaster status"); return }
       try {
         const token = await currentAccessToken()
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
@@ -163,14 +168,16 @@ export default function ProducerWorkspace() {
         if (response.status === 404) { clearFrame(); setProgramFrameState("No current PROGRAM frame"); return }
         if (!response.ok) throw new Error(`Preview returned ${response.status}`)
         const frameAt = response.headers.get("X-Producer-Frame-At") ?? ""
-        const frameTime = Date.parse(frameAt)
-        if (!Number.isFinite(frameTime) || Date.now() - frameTime > 5_000) { clearFrame(); setProgramFrameState("PROGRAM frame is stale"); return }
+        const frameComposition = response.headers.get("X-Producer-Composition")
+        if (!currentMediaTimestamp(frameAt)) { clearFrame(); setProgramFrameState("PROGRAM frame is stale"); return }
+        if (!mediaCompositionMatches(currentStatus?.composition?.id, frameComposition)) { clearFrame(); setProgramFrameState("PROGRAM composition mismatch"); return }
         const blob = await response.blob()
         if (cancelled) return
+        if (producerStatusRef.current?.composition?.id !== currentStatus?.composition?.id || !sourceFresh(producerStatusRef.current)) { clearFrame(); setProgramFrameState("PROGRAM changed during capture"); return }
         const nextUrl = URL.createObjectURL(blob)
         if (programObjectUrl.current) URL.revokeObjectURL(programObjectUrl.current)
         programObjectUrl.current = nextUrl
-        setProgramFrameUrl(nextUrl); setProgramFrameAt(frameAt); setProgramFrameState("CURRENT")
+        setProgramFrameUrl(nextUrl); setProgramFrameAt(frameAt); setProgramFrameComposition(currentStatus?.composition?.id); setProgramFrameState("CURRENT")
       } catch (reason) {
         if (!cancelled) { clearFrame(); setProgramFrameState(reason instanceof Error ? reason.message : "PROGRAM preview unavailable") }
       }
@@ -180,7 +187,7 @@ export default function ProducerWorkspace() {
     const visible = () => { if (!document.hidden) void load() }
     document.addEventListener("visibilitychange", visible)
     return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); clearFrame() }
-  }, [producerStatus?.source_state, producerStatus?.previews?.program?.state])
+  }, [producerStatus?.source_state, producerStatus?.previews?.program?.state, producerStatus?.composition?.id, producerStatus?.program?.generation])
 
   const sources = useMemo(() => parseProducerSources(status?.streaming), [status?.streaming])
   const alerts = alertSnapshot?.key === alertKey ? alertSnapshot.value : null
@@ -190,8 +197,8 @@ export default function ProducerWorkspace() {
   const playing = statusFresh && selected?.publisherOnline && selected.playerUrl
   const units = state.fabric.units?.units ?? []
   const producerBridgeState = bridgeState(producerStatus)
-  const programCurrent = programFrameState === "CURRENT" && sourceFresh(producerStatus) && Boolean(programFrameUrl)
-  const programStateLabel = programCurrent ? "CURRENT" : producerBridgeState === "ONLINE" && producerStatus?.source_state !== "SOURCE_LIVE" ? "RELAY READY · WAITING FOR SOURCE" : producerBridgeState
+  const programCurrent = programFrameState === "CURRENT" && sourceFresh(producerStatus) && programFrameComposition === producerStatus?.composition?.id && Boolean(programFrameUrl) && Boolean(currentMediaTimestamp(programFrameAt))
+  const programStateLabel = programCurrent ? "CURRENT" : producerBridgeState === "ONLINE" && producerStatus?.engine === "obs" ? sourceFresh(producerStatus) ? "OBS PROGRAM READY" : "WAITING FOR PROGRAM" : producerBridgeState === "ONLINE" && producerStatus?.source_state !== "SOURCE_LIVE" ? "RELAY READY · WAITING FOR SOURCE" : producerBridgeState
 
   const selectSource = (id: string) => {
     setManualSourceId(id)
@@ -204,7 +211,7 @@ export default function ProducerWorkspace() {
       <div className="producer-main">
         <section className="workspace-panel producer-stage" aria-label="PROGRAM preview">
           <header><h2>PROGRAM</h2><span className={programCurrent || producerBridgeState === "ONLINE" ? "workspace-live" : "workspace-muted"}>{programStateLabel}</span></header>
-          <ProgramMonitor active={producerBridgeState === "ONLINE" && sourceFresh(producerStatus)} fallback={programCurrent ? <img src={programFrameUrl} alt="Current PROGRAM preview" /> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
+          <ProgramMonitor key={`${producerStatus?.composition?.id ?? "legacy"}:${producerStatus?.program?.generation ?? "legacy"}`} active={producerBridgeState === "ONLINE" && sourceFresh(producerStatus)} compositionId={producerStatus?.composition?.id} fallback={programCurrent ? <img src={programFrameUrl} alt="Current PROGRAM preview" /> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
           <div className="producer-stage__foot"><div><strong>{producerStatus?.state ?? "NO BROADCASTER STATUS"}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>{producerStatus?.broadcast?.state ?? "OUTPUT UNKNOWN"}</span></div>
         </section>
         <ProducerControls />
