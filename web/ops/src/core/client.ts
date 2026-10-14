@@ -250,6 +250,9 @@ export async function fetchForecast<T>(config: OpsCoreConfig, path: string, sign
 export function setupWorkflowErrorMessage(status: number, body: unknown): string {
   const record = body && typeof body === "object" ? body as Record<string, unknown> : null;
   const detail = typeof record?.detail === "string" ? record.detail : typeof record?.error === "string" ? record.error : "";
+  if (status === 409 && detail === "SETUP_CONFLICT") {
+    return "The draft changed or another review started. The latest revision is being refreshed; try again when it appears.";
+  }
   if (status === 409) return detail || "The draft changed, a review is busy, or approval requirements changed. Refresh and check the current evidence.";
   if (status === 422) return detail || "The review request was invalid. Refresh this revision before trying again.";
   if (status === 403) return "This action requires an authorized OPS account with the appropriate role.";

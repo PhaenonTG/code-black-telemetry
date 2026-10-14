@@ -57,8 +57,8 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
   const [reloadVersion, setReloadVersion] = useState(0);
   const [selectedCandidate, setSelectedCandidate] = useState<{ setupId: string; key: string } | null>(null);
 
-  const refresh = useCallback(async (signal?: AbortSignal) => {
-    setBusy(true);
+  const refresh = useCallback(async (signal?: AbortSignal, quiet = false) => {
+    if (!quiet) setBusy(true);
     setIndexError("");
     try {
       const result = await fetchForecast<SetupIndex>(config, "chase-setups", signal);
@@ -69,15 +69,22 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
     } catch {
       if (!signal?.aborted) setIndexError("Private setup drafts are unavailable. No source or review state has been inferred.");
     } finally {
-      if (!signal?.aborted) setBusy(false);
+      if (!signal?.aborted && !quiet) setBusy(false);
     }
   }, [config]);
 
   useEffect(() => {
     const controller = new AbortController();
     void refresh(controller.signal);
-    return () => controller.abort();
+    const timer = window.setInterval(() => void refresh(controller.signal, true), 30_000);
+    return () => { controller.abort(); window.clearInterval(timer); };
   }, [refresh]);
+
+  useEffect(() => {
+    if (!selectedId || !detail || revisionParam !== null || detail.is_current_revision === false) return;
+    const indexedRevision = index?.items.find((row) => row.setup_id === selectedId)?.revision;
+    if (indexedRevision && indexedRevision !== detail.revision) setReloadVersion((version) => version + 1);
+  }, [detail, index, revisionParam, selectedId]);
 
   useEffect(() => {
     const controller = new AbortController();
