@@ -8,6 +8,8 @@ import { SetupRevisionTimeline } from "../workspaces/SetupRevisionTimeline";
 import type { SetupRevisionHistory } from "../workspaces/setupRevisionModel";
 import { SetupReviewDesk } from "../workspaces/SetupReviewDesk";
 import type { SetupWorkflow } from "../workspaces/setupReviewModel";
+import type { WeightedSynthesis } from "../workspaces/setupReviewModel";
+import { SetupSynthesis } from "../workspaces/SetupSynthesis";
 import "./ChaseSetups.css";
 
 type SetupRow = {
@@ -20,6 +22,7 @@ type SetupQueue = "drafts" | "briefings";
 type SetupDetail = {
   setup_id: string; publication_state: string; revision: number; generated_at: string;
   source_fingerprint?: string; workflow?: SetupWorkflow;
+  weighted_synthesis?: WeightedSynthesis | null;
   current_revision?: number; is_current_revision?: boolean; revision_history?: SetupRevisionHistory;
   first_seen_at?: string; valid_from: string; valid_until: string; summary?: string;
   bounds?: number[];
@@ -197,6 +200,7 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
               <p>Index is a model screening value, not confidence. Ranking does not identify a safe route, observed storm, or precise chase target.</p>
             </section>
             <p className="chase-setups__summary">{detail.summary}</p>
+            <SetupSynthesis synthesis={detail.weighted_synthesis} />
             <section className="chase-setups__evidence">
               <h3>SPC outlook <small>OFFICIAL</small></h3>
               <dl><div><dt>Risk area</dt><dd>Day {detail.official.day} · {detail.official.risk_label}</dd></div>

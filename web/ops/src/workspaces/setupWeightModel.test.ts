@@ -3,9 +3,9 @@ import type { SetupWeightPolicy } from "./setupReviewModel";
 import { EVIDENCE_WEIGHT_SOURCES, REVIEW_WEIGHT_SOURCES, samePolicy, setWeight, validPolicyTotals, weightTotal } from "./setupWeightModel";
 
 const policy = (): SetupWeightPolicy => ({
-  schema: "codeblack.chase.weight-policy.v1", policy_id: "balanced-advisory-v1", mode: "advisory_only",
+  schema: "codeblack.chase.weight-policy.v2", policy_id: "balanced-advisory-v2", mode: "advisory_only",
   evidence_weights: {
-    spc_tornado_outlook: 220, hrrr_screening: 150, rap: 100, nbm: 80, gefs: 80, aigefs: 50,
+    spc_tornado_outlook: 220, hrrr_screening: 150, rap: 100, nbm: 80, gefs: 80, aigefs: 50, href: 0, wofs: 0,
     surface_observations: 100, environment_profiles: 70, mesoscale_discussions: 50,
     watches: 30, warnings: 30, observed_radar: 40,
   },

@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import ChaseSetups from "./ChaseSetups"
-import AegisAlerts from "./AegisAlerts"
+import ChaseSurveillance from "./ChaseSurveillance"
 import "./Workspaces.css"
 
 type Mode = "drafts" | "briefings" | "surveillance"
@@ -36,6 +36,6 @@ export default function AnalysisWorkspace() {
     <div className="analysis-context"><span>{context}</span><nav aria-label="Analysis tools"><Link to="/weather">Weather analysis ↗</Link><Link to="/radar">Radar Lab ↗</Link></nav></div>
     {mode === "drafts" ? <ChaseSetups queue="drafts" detailBasePath="/analysis/drafts" />
       : mode === "briefings" ? <ChaseSetups queue="briefings" detailBasePath="/analysis/briefings" />
-      : <AegisAlerts />}
+      : <ChaseSurveillance />}
   </section>
 }

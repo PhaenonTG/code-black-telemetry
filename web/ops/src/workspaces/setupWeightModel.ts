@@ -2,13 +2,14 @@ import type { EvidenceWeightSource, ReviewWeightSource, SetupWeightPolicy } from
 
 export const EVIDENCE_WEIGHT_SOURCES: readonly EvidenceWeightSource[] = [
   "spc_tornado_outlook", "hrrr_screening", "rap", "nbm", "gefs", "aigefs",
+  "href", "wofs",
   "surface_observations", "environment_profiles", "mesoscale_discussions",
   "watches", "warnings", "observed_radar",
 ];
 export const REVIEW_WEIGHT_SOURCES: readonly ReviewWeightSource[] = ["aegis", "local_30b", "paid_review"];
 export const WEIGHT_LABELS: Record<EvidenceWeightSource | ReviewWeightSource, string> = {
   spc_tornado_outlook: "SPC tornado outlook", hrrr_screening: "HRRR screening", rap: "RAP",
-  nbm: "NBM", gefs: "GEFS", aigefs: "AIGFS", surface_observations: "Surface observations",
+  nbm: "NBM", gefs: "GEFS", aigefs: "AIGFS", href: "HREF probabilities", wofs: "WoFS numeric guidance", surface_observations: "Surface observations",
   environment_profiles: "Environmental profiles", mesoscale_discussions: "Mesoscale discussions",
   watches: "Watches", warnings: "Warnings", observed_radar: "Observed radar",
   aegis: "Aegis", local_30b: "Local 30B", paid_review: "Paid review",

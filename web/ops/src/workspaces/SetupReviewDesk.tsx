@@ -115,7 +115,9 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
       <p>{workflow?.comparison?.status === "differences" ? `The reviewers differ in ${workflow.comparison.differences.map(field => field.replaceAll("_", " ")).join(" and ")}. Read both explanations before deciding.`
         : workflow?.comparison?.status === "aligned_categories" ? "Hazard categories and attention items align. Read both explanations; matching categories do not establish certainty."
         : "Both validated reviews are needed to compare their findings."}</p>
-      <p>Not supplied: thermodynamic or wind profiles, surface observations, RAP, mesoscale discussions, watches, warnings, observed radar. The screening index cannot establish storm mode or specific hazards. The independent full review below remains private.</p></div>
+      <p>{workflow?.missing_evidence?.length ? `Not supplied: ${workflow.missing_evidence.map(value => value.replaceAll("_", " ")).join(", ")}. ` : "All tracked packet source classes were supplied. "}The screening index cannot establish storm mode or specific hazards. The independent full review below remains private.</p>
+      {workflow?.review_synthesis && <div className="setup-review-desk__review-weights"><strong>Available review influence</strong>{workflow.review_synthesis.contributions.map(row => <span key={row.source} data-ready={row.available}>{row.source.replaceAll("_", " ")} · {row.available ? `${(row.available_influence_bp / 10).toFixed(1)}%` : "pending"}</span>)}<small>Coverage {(workflow.review_synthesis.coverage_bp / 10).toFixed(1)}% · advisory influence, not confidence</small></div>}
+    </div>
     <div className="setup-review-desk__decision"><h3>Post to Reviewed Briefings</h3>
       {workflow?.decision ? <div className="setup-review-desk__saved"><strong>{workflow.decision.decision === "approved" ? "Approved for this revision" : "Changes requested"}</strong>
         <p>{workflow.decision.note}</p><small>{workflow.decision.actor_role} · {new Date(workflow.decision.decided_at).toLocaleString()}</small>

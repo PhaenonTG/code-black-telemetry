@@ -11,11 +11,11 @@ export type PaidSetupReview = {
   uncertainties?: string[]; next_hour_triggers?: string[];
 };
 export type EvidenceWeightSource = "spc_tornado_outlook" | "hrrr_screening" | "rap" | "nbm" | "gefs" |
-  "aigefs" | "surface_observations" | "environment_profiles" | "mesoscale_discussions" |
+  "aigefs" | "href" | "wofs" | "surface_observations" | "environment_profiles" | "mesoscale_discussions" |
   "watches" | "warnings" | "observed_radar";
 export type ReviewWeightSource = "aegis" | "local_30b" | "paid_review";
 export type SetupWeightPolicy = {
-  schema: "codeblack.chase.weight-policy.v1"; policy_id: string; mode: "advisory_only";
+  schema: "codeblack.chase.weight-policy.v2"; policy_id: string; mode: "advisory_only";
   evidence_weights: Record<EvidenceWeightSource, number>;
   review_weights: Record<ReviewWeightSource, number>;
   rules: { renormalize_available_sources: true; official_sources_remain_authoritative: true;
@@ -37,7 +37,16 @@ export type SetupWorkflow = {
   paid_review?: PaidSetupReview;
   weight_policy?: SetupWeightBinding;
   weight_policy_history?: SetupWeightPolicyEvent[];
+  review_synthesis?: ReviewSynthesis;
 };
+export type WeightedContribution = { source: EvidenceWeightSource; available: boolean; detail: string; configured_weight_bp: number; available_influence_bp: number };
+export type ModelMatrixRow = { source: string; status: string; role?: string; run_age_hours?: number; sampled_hours?: number; fields: string[]; experimental: boolean; ensemble_complete?: boolean | null };
+export type ObservationMatrixRow = { source: string; status: string; count: number; observed_at?: string; freshness?: string };
+export type WeightedSynthesis = { schema: string; policy_digest: string; coverage_bp: number; coverage_percent: number;
+  contributions: WeightedContribution[]; missing_weighted_sources: string[]; model_matrix: ModelMatrixRow[];
+  observation_matrix: ObservationMatrixRow[]; corridor_support: Array<{ latitude: number; longitude: number; valid_time?: string; screening_index?: number; supporting_sources: string[]; source_count: number; notice: string }>;
+  explanation: string };
+export type ReviewSynthesis = { schema: string; coverage_bp: number; contributions: Array<{ source: ReviewWeightSource; available: boolean; configured_weight_bp: number; available_influence_bp: number }>; explanation: string };
 export function reviewStatus(status?: string): string {
   return ({ ready: "Ready", pending: "Reviewing", not_requested: "Not requested", unavailable: "Unavailable",
     incomplete: "Review incomplete", interrupted: "Interrupted — retry review" } as Record<string, string>)[status ?? ""] ?? "Unavailable";
