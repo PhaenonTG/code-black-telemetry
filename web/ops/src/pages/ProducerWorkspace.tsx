@@ -8,7 +8,7 @@ import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
 import FacebookProducerPanel from "../workspaces/FacebookProducerPanel"
 import ProducerControls from "../workspaces/ProducerControls"
 import ProgramMonitor from "../workspaces/ProgramMonitor"
-import { currentMediaTimestamp, currentProgramRender, mediaCompositionMatches } from "../workspaces/programMonitorPolicy"
+import { currentMediaTimestamp, currentProgramRender, mediaCompositionMatches, PROGRAM_STATUS_POLL_MS } from "../workspaces/programMonitorPolicy"
 import { readProducerResponse } from "../workspaces/producerResponse"
 import "./Workspaces.css"
 
@@ -130,8 +130,10 @@ export default function ProducerWorkspace() {
 
   useEffect(() => {
     let cancelled = false
+    let inFlight = false
     const load = async () => {
-      if (document.hidden) return
+      if (document.hidden || inFlight) return
+      inFlight = true
       try {
         const token = await currentAccessToken()
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
@@ -141,10 +143,10 @@ export default function ProducerWorkspace() {
         setProducerStatus(unwrapBridgeStatus(nextStatus)); setProducerError("")
       } catch (reason) {
         if (!cancelled) setProducerError(reason instanceof Error ? reason.message : "Producer bridge unavailable")
-      }
+      } finally { inFlight = false }
     }
     void load()
-    const timer = window.setInterval(() => void load(), 4_000)
+    const timer = window.setInterval(() => void load(), PROGRAM_STATUS_POLL_MS)
     const visible = () => { if (!document.hidden) void load() }
     document.addEventListener("visibilitychange", visible)
     return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", visible) }

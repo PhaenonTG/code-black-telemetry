@@ -1,4 +1,7 @@
 const PATH = /^\/api\/producer\/v1\/preview\/hls\/(?:index\.m3u8|program-[0-9a-f]{32}-[0-9]{1,16}\.ts)$/
+// A two-second workstation push plus a four-second UI poll can exceed the
+// five-second proof lifetime. Poll faster; never widen the media freshness gate.
+export const PROGRAM_STATUS_POLL_MS = 1000
 export function isProgramMediaUrl(value: string, origin: string): boolean {
   try { const url = new URL(value, origin); return url.origin === origin && PATH.test(url.pathname) && !url.search && !url.hash && !url.username && !url.password } catch { return false }
 }
