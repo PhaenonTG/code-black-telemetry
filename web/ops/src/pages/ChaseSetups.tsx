@@ -234,14 +234,14 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
               <h3>Additional storm evidence <small>INDEPENDENT SOURCES</small></h3>
               <p>Sampled at existing HRRR screening points. Source age and availability are checked independently; these products do not change target ranking.</p>
               <dl>
-                <div><dt>MRMS ProbSevere</dt><dd>{observations?.probsevere?.status === "available" ? `${observations.probsevere.points?.[0]?.features?.length ?? 0} nearby tracked feature(s) · ${when(observations.probsevere.observed_at)}` : "Unavailable or stale"}</dd></div>
+                <div><dt>MRMS ProbSevere · first point</dt><dd>{observations?.probsevere?.status === "available" ? `${observations.probsevere.points?.[0]?.features?.length ?? 0} nearby tracked feature(s) · ${when(observations.probsevere.observed_at)}` : "Unavailable or stale"}</dd></div>
                 {nearestStorm && <div><dt>Nearest tracked feature</dt><dd>{nearestStorm.distance_km?.toFixed(1) ?? "?"} km · Severe {nearestStorm.probabilities_percent?.ProbSevere ?? "?"}% · Tor {nearestStorm.probabilities_percent?.ProbTor ?? "?"}% · Hail {nearestStorm.probabilities_percent?.ProbHail ?? "?"}% · Wind {nearestStorm.probabilities_percent?.ProbWind ?? "?"}%</dd></div>}
-                <div><dt>GOES total lightning</dt><dd>{glm?.status === "available" && typeof glm.flash_count_100km === "number" ? `${glm.flash_count_100km} flashes within 100 km across ${glm.file_count ?? 0} recent files · ${when(glm.observed_at)}` : "Unavailable or stale"}</dd></div>
-                <div><dt>HREF ensemble</dt><dd>{href?.status === "available" && hrefHour ? `Run ${when(hrefHour.run_time)} · valid ${when(hrefHour.valid_time)}` : "Unavailable or stale"}</dd></div>
-                {hrefFields && <div><dt>HREF threshold chances</dt><dd>Reflectivity &gt;40 dBZ {probability(hrefFields.reflectivity_probability_40)} · Updraft helicity &gt;75 {probability(hrefFields.updraft_helicity_probability_75)} · CAPE &gt;1000 {probability(hrefFields.cape_probability_1000)} · Lightning {probability(hrefFields.lightning_probability)}</dd></div>}
+                <div><dt>GOES total lightning · first point</dt><dd>{glm?.status === "available" && typeof glm.flash_count_100km === "number" ? `${glm.flash_count_100km} flashes within 100 km across ${glm.file_count ?? 0} recent files · ${when(glm.observed_at)}` : "Unavailable or stale"}</dd></div>
+                <div><dt>HREF ensemble · first point</dt><dd>{href?.status === "available" && hrefHour ? `Run ${when(hrefHour.run_time)} · valid ${when(hrefHour.valid_time)}` : "Unavailable or stale"}</dd></div>
+                {hrefFields && <div><dt>HREF neighborhood probabilities</dt><dd>Reflectivity &gt;40 dBZ {probability(hrefFields.reflectivity_probability_40)} · Updraft helicity &gt;75 {probability(hrefFields.updraft_helicity_probability_75)} · CAPE &gt;1000 {probability(hrefFields.cape_probability_1000)} · Lightning {probability(hrefFields.lightning_probability)}</dd></div>}
                 <div><dt>WoFS</dt><dd>Experimental viewer only · <a href="https://cbwofs.nssl.noaa.gov/viewer/experimental" target="_blank" rel="noopener noreferrer">Open NOAA viewer ↗</a></dd></div>
               </dl>
-              <p>ProbSevere features are detected storm objects, not warnings. GLM counts total lightning, not ground strikes. WoFS numeric guidance is not yet ingested.</p>
+              <p>ProbSevere features are detected storm objects, not warnings. GLM counts total lightning, not ground strikes. HREF thresholds describe neighborhood forecast fields, not tornado probabilities. WoFS numeric guidance is not yet ingested.</p>
             </section>
             <SetupReviewDesk key={`${detail.setup_id}:${detail.revision}:${reloadVersion}`} config={config}
               setupId={detail.setup_id} revision={detail.revision} fingerprint={detail.source_fingerprint}
