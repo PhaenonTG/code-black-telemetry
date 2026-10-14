@@ -1,4 +1,5 @@
 import { handleProgramMedia } from "./program-media";
+import { OBS_ACTIONS, obsActionAdvertised, validObsPayload } from "./obs-command-policy";
 
 const STATUS_KEY = "status";
 const CAPABILITIES_KEY = "capabilities";
@@ -18,6 +19,7 @@ const COMMAND_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 const ACTIONS = new Set([
   "preview.start", "preview.stop", "facebook.output.start", "facebook.output.stop",
   "archive.camera.start", "archive.camera.stop", "lowerThird.set", "lowerThird.hide",
+  ...OBS_ACTIONS.keys(),
 ]);
 
 export interface BridgeStorage {
@@ -301,11 +303,18 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
     const expected = body?.expectedStateRevision;
     if (typeof commandId !== "string" || !COMMAND_ID.test(commandId) || typeof action !== "string" || !ACTIONS.has(action) || !Number.isSafeInteger(expected)) return json(400, { error: "INVALID_COMMAND" });
     if (action === "lowerThird.set" && (typeof (body?.payload as Record<string, unknown> | undefined)?.text !== "string" || String((body?.payload as Record<string, unknown>).text).length > 120)) return json(400, { error: "INVALID_PAYLOAD" });
+    if (OBS_ACTIONS.has(action) && !validObsPayload(action, body?.payload)) return json(400, { error: "INVALID_OBS_PAYLOAD" });
+    const workstationStatus = await storage.get<StoredDocument>(STATUS_KEY);
+    if (OBS_ACTIONS.has(action)) {
+      if (!request.headers.get("X-Producer-UserId")) return json(403, { error: "PRODUCER_CONTROL_FORBIDDEN" });
+      if (bridgeState(workstationStatus) !== "ONLINE" || !workstationStatus || !obsActionAdvertised(action, workstationStatus.body)) return json(409, { error: "OBS_ACTION_UNAVAILABLE" });
+    }
+    if (workstationStatus?.body.engine === "obs" && ["facebook.output.start", "archive.camera.start", "archive.camera.stop", "lowerThird.set", "lowerThird.hide"].includes(action)) return json(409, { error: "OBS_ACTION_UNAVAILABLE" });
     const commands = await storage.get<StoredCommand[]>(COMMANDS_KEY) ?? [];
     const prior = commands.find((item) => item.commandId === commandId);
     if (prior) return prior.action === action && JSON.stringify(prior.payload ?? {}) === JSON.stringify(body?.payload ?? {}) ? json(200, prior) : json(409, { error: "COMMAND_ID_CONFLICT" });
     const actorId = request.headers.get("X-Producer-UserId");
-    const emergencyStop = action === "facebook.output.stop" || action === "preview.stop" || action === "archive.camera.stop";
+    const emergencyStop = action === "facebook.output.stop" || action === "preview.stop" || action === "archive.camera.stop" || action === "obs.recording.stop";
     if (actorId && !emergencyStop) {
       const lease = await storage.get<ControlLease>(CONTROL_LEASE_KEY);
       if (!lease || lease.expiresAt <= Date.now() || lease.userId !== actorId) return json(409, { error: "CONTROL_LEASE_REQUIRED" });

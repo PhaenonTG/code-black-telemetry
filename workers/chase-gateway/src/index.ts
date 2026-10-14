@@ -643,6 +643,12 @@ async function handleProducerRoute(request: Request, url: URL, env: Env): Promis
   const id = env.PRODUCER_BRIDGE.idFromName("native-producer");
   const stub = env.PRODUCER_BRIDGE.get(id);
   if (url.pathname === "/api/producer/v1/facebook" || url.pathname.startsWith("/api/producer/v1/facebook/") || ["/api/producer/v1/workstation/facebook-destination", "/api/producer/v1/workstation/facebook-health"].includes(url.pathname)) {
+    if (request.method === "POST" && ["/api/producer/v1/facebook/prepare", "/api/producer/v1/facebook/publish", "/api/producer/v1/facebook/end"].includes(url.pathname)) {
+      const stateResponse = await stub.fetch(new Request("https://producer.internal/api/producer/v1/status"));
+      if (!stateResponse.ok) return json(503, { error: "BRIDGE_STATUS_UNAVAILABLE" });
+      const stateDocument = await stateResponse.json() as { status?: { engine?: string }; producer?: { engine?: string } };
+      if ((stateDocument.status ?? stateDocument.producer)?.engine === "obs") return json(409, { error: "OBS_FACEBOOK_NOT_QUALIFIED" });
+    }
     return handleFacebookLifecycle(request, userId, controlAllowed, workstation, {
       credential: () => storedFacebookCredential(env),
       broker: (path, init) => facebookBroker(env, path, init),
