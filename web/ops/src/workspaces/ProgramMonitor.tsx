@@ -14,7 +14,7 @@ export default function ProgramMonitor({ active, fallback, compositionId }: { ac
   const displayVideo = active && enabled
   useEffect(() => {
     if (active) return
-    const timer = window.setTimeout(() => { setEnabled(false); setMuted(true); setPlaying(false) }, 0)
+    const timer = window.setTimeout(() => { setEnabled(false); setMuted(true); setPlaying(false); setState("Monitor waiting for current PROGRAM rendering") }, 0)
     return () => window.clearTimeout(timer)
   }, [active])
 
