@@ -32,6 +32,7 @@ type ExtraEvidence = {
     mesoscale_discussions?: { status?: string; items?: Array<{ discussion_id?: string }> };
     storm_reports?: { status?: string; items?: Array<{ event?: string; observed_at?: string }> };
     observed_soundings?: { status?: string; station_id?: string; distance_km?: number; observed_at?: string; levels?: Array<{ pressure_hpa?: number }> };
+    nws_surface_observations?: { status?: string; stations?: Array<{ station_id?: string; distance_km?: number; observed_at?: string; fields?: Record<string, { value?: number; quality_control?: string }> }> };
   };
 };
 type SetupDetail = {
@@ -252,6 +253,7 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
                 <div><dt>SPC mesoscale discussions</dt><dd>{advisory?.mesoscale_discussions?.status === "available" ? `${advisory.mesoscale_discussions.items?.length ?? 0} intersecting sampled points` : "Unavailable or stale"}</dd></div>
                 <div><dt>Current radar track</dt><dd>{detail.observed_storms?.status === "current_observation_available" && detail.observed_storms.tracks?.length ? `${detail.observed_storms.tracks[0].max_dbz ?? "?"} dBZ · ${detail.observed_storms.tracks[0].direction_degrees ?? "?"}° at ${detail.observed_storms.tracks[0].speed_knots ?? "?"} kt · ${when(detail.observed_storms.observed_at)}` : "No fresh in-area track supplied"}</dd></div>
                 <div><dt>Observed sounding</dt><dd>{advisory?.observed_soundings?.status === "available" ? `${advisory.observed_soundings.station_id ?? "Station unknown"} · ${advisory.observed_soundings.distance_km ?? "?"} km from sampled area · ${when(advisory.observed_soundings.observed_at)} · ${advisory.observed_soundings.levels?.length ?? 0} selected levels` : "Unavailable or stale"}</dd></div>
+                <div><dt>NWS station observation</dt><dd>{advisory?.nws_surface_observations?.status === "available" && advisory.nws_surface_observations.stations?.length ? `${advisory.nws_surface_observations.stations[0].station_id ?? "Station unknown"} · ${when(advisory.nws_surface_observations.stations[0].observed_at)} · ${Object.keys(advisory.nws_surface_observations.stations[0].fields ?? {}).length} valid-unit fields` : "Unavailable or stale"}</dd></div>
                 <div><dt>Preliminary storm reports</dt><dd>{advisory?.storm_reports?.status === "available" ? `${advisory.storm_reports.items?.length ?? 0} nearby reports in prior 24 hours` : "Unavailable or stale"}</dd></div>
               </dl>
               <p>ProbSevere features are detected storm objects, not warnings. GLM counts total lightning, not ground strikes. HREF thresholds describe neighborhood forecast fields, not tornado probabilities. WoFS numeric guidance is not yet ingested. An empty alert, discussion, or report sample is not an all-clear; radar tracks and soundings have limited space and time coverage.</p>
