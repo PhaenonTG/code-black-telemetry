@@ -27,6 +27,12 @@ type ExtraEvidence = {
     glm?: { status?: string; points?: Array<{ status?: string; observed_at?: string; flash_count_100km?: number; file_count?: number }> };
     wofs?: { status?: string };
   };
+  advisory_evidence?: {
+    official_alerts?: { status?: string; checked_at?: string; items?: Array<{ event?: string; expires_at?: string }> };
+    mesoscale_discussions?: { status?: string; items?: Array<{ discussion_id?: string }> };
+    storm_reports?: { status?: string; items?: Array<{ event?: string; observed_at?: string }> };
+    observed_soundings?: { status?: string; station_id?: string; distance_km?: number; observed_at?: string; levels?: Array<{ pressure_hpa?: number }> };
+  };
 };
 type SetupDetail = {
   setup_id: string; publication_state: string; revision: number; generated_at: string;
@@ -39,6 +45,7 @@ type SetupDetail = {
   model: { status?: string; target_points?: Array<SetupCandidatePoint & { run_time?: string; classification?: string }>; notice?: string };
   source_checks?: { hrrr?: { status?: string; hours_checked?: number; hours_missing?: number } };
   ingestion?: ExtraEvidence;
+  observed_storms?: { status?: string; observed_at?: string; tracks?: Array<{ max_dbz?: number; direction_degrees?: number; speed_knots?: number }> };
   review?: { required?: boolean; decision?: string | null; reason?: string };
 };
 
@@ -162,6 +169,7 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
   const points = detail?.model.target_points ?? [];
   const ingestion = detail?.ingestion;
   const observations = ingestion?.status === "stale" ? undefined : ingestion?.storm_observations;
+  const advisory = ingestion?.status === "stale" ? undefined : ingestion?.advisory_evidence;
   const nearestStorm = observations?.probsevere?.points?.[0]?.features?.[0];
   const glm = observations?.glm?.points?.[0];
   const href = ingestion?.status === "stale" ? undefined : ingestion?.models?.href;
@@ -240,8 +248,13 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
                 <div><dt>HREF ensemble · first point</dt><dd>{href?.status === "available" && hrefHour ? `Run ${when(hrefHour.run_time)} · valid ${when(hrefHour.valid_time)}` : "Unavailable or stale"}</dd></div>
                 {hrefFields && <div><dt>HREF neighborhood probabilities</dt><dd>Reflectivity &gt;40 dBZ {probability(hrefFields.reflectivity_probability_40)} · Updraft helicity &gt;75 {probability(hrefFields.updraft_helicity_probability_75)} · CAPE &gt;1000 {probability(hrefFields.cape_probability_1000)} · Lightning {probability(hrefFields.lightning_probability)}</dd></div>}
                 <div><dt>WoFS</dt><dd>Experimental viewer only · <a href="https://cbwofs.nssl.noaa.gov/viewer/experimental" target="_blank" rel="noopener noreferrer">Open NOAA viewer ↗</a></dd></div>
+                <div><dt>NWS active alerts · sampled points</dt><dd>{advisory?.official_alerts?.status === "available" ? `${advisory.official_alerts.items?.length ?? 0} returned · checked ${when(advisory.official_alerts.checked_at)}${advisory.official_alerts.items?.length ? ` · ${advisory.official_alerts.items.map((item) => item.event).filter(Boolean).slice(0, 3).join(", ")}` : ""}` : "Unavailable or stale"}</dd></div>
+                <div><dt>SPC mesoscale discussions</dt><dd>{advisory?.mesoscale_discussions?.status === "available" ? `${advisory.mesoscale_discussions.items?.length ?? 0} intersecting sampled points` : "Unavailable or stale"}</dd></div>
+                <div><dt>Current radar track</dt><dd>{detail.observed_storms?.status === "current_observation_available" && detail.observed_storms.tracks?.length ? `${detail.observed_storms.tracks[0].max_dbz ?? "?"} dBZ · ${detail.observed_storms.tracks[0].direction_degrees ?? "?"}° at ${detail.observed_storms.tracks[0].speed_knots ?? "?"} kt · ${when(detail.observed_storms.observed_at)}` : "No fresh in-area track supplied"}</dd></div>
+                <div><dt>Observed sounding</dt><dd>{advisory?.observed_soundings?.status === "available" ? `${advisory.observed_soundings.station_id ?? "Station unknown"} · ${advisory.observed_soundings.distance_km ?? "?"} km from sampled area · ${when(advisory.observed_soundings.observed_at)} · ${advisory.observed_soundings.levels?.length ?? 0} selected levels` : "Unavailable or stale"}</dd></div>
+                <div><dt>Preliminary storm reports</dt><dd>{advisory?.storm_reports?.status === "available" ? `${advisory.storm_reports.items?.length ?? 0} nearby reports in prior 24 hours` : "Unavailable or stale"}</dd></div>
               </dl>
-              <p>ProbSevere features are detected storm objects, not warnings. GLM counts total lightning, not ground strikes. HREF thresholds describe neighborhood forecast fields, not tornado probabilities. WoFS numeric guidance is not yet ingested.</p>
+              <p>ProbSevere features are detected storm objects, not warnings. GLM counts total lightning, not ground strikes. HREF thresholds describe neighborhood forecast fields, not tornado probabilities. WoFS numeric guidance is not yet ingested. An empty alert, discussion, or report sample is not an all-clear; radar tracks and soundings have limited space and time coverage.</p>
             </section>
             <SetupReviewDesk key={`${detail.setup_id}:${detail.revision}:${reloadVersion}`} config={config}
               setupId={detail.setup_id} revision={detail.revision} fingerprint={detail.source_fingerprint}
