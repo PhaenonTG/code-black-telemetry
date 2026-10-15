@@ -9,6 +9,7 @@
     "lint": "oxlint src",
     "test": "vitest run",
     "build": "vite build && node scripts/verify-pages-build.mjs",
+    "build:private-gateway": "node scripts/build-private-gateway.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

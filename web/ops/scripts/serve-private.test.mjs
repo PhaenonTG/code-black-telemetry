@@ -46,3 +46,21 @@ test("health, missing assets and unsafe paths are bounded", async () => {
   assert.equal((await fetch(`${origin}/missing.js`)).status, 404);
   assert.equal((await fetch(`${origin}/%00secret`)).status, 400);
 });
+
+test("configured Core gateway receives API requests without SPA fallback", async () => {
+  const privateServer = createPrivateOpsServer({ distDir: root, coreGateway: async request => {
+    assert.equal(new URL(request.url).pathname, "/api/core/api/forecast/v1/chase-setup-review");
+    assert.equal(request.method, "POST");
+    assert.equal(await request.text(), '{"setup_id":"sample"}');
+    return Response.json({ accepted: true });
+  } });
+  await new Promise(resolve => privateServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const url = `http://127.0.0.1:${privateServer.address().port}/api/core/api/forecast/v1/chase-setup-review`;
+    const result = await fetch(url, { method: "POST", body: '{"setup_id":"sample"}' });
+    assert.equal(result.status, 200);
+    assert.deepEqual(await result.json(), { accepted: true });
+  } finally {
+    await new Promise(resolve => privateServer.close(resolve));
+  }
+});

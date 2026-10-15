@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
+import { Readable } from "node:stream";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,9 +42,41 @@ function inside(root, target) {
   return rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
 
-export function createPrivateOpsServer({ distDir = defaultDist } = {}) {
+async function sendCoreResponse(request, response, gateway) {
+  let body;
+  if (request.method === "POST" || request.method === "PUT") {
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of request) {
+      size += chunk.length;
+      if (size > 4096) { json(response, 413, { error: "REQUEST_TOO_LARGE" }); return; }
+      chunks.push(chunk);
+    }
+    body = Buffer.concat(chunks);
+  }
+  const origin = `http://127.0.0.1${request.url}`;
+  const webRequest = new Request(origin, {
+    method: request.method,
+    headers: request.headers,
+    ...(body === undefined ? {} : { body }),
+  });
+  const upstream = await gateway(webRequest);
+  response.writeHead(upstream.status, Object.fromEntries(upstream.headers));
+  if (!upstream.body) { response.end(); return; }
+  const stream = Readable.fromWeb(upstream.body);
+  response.on("close", () => stream.destroy());
+  stream.on("error", () => response.destroy()).pipe(response);
+}
+
+export function createPrivateOpsServer({ distDir = defaultDist, coreGateway } = {}) {
   const root = resolve(distDir);
   return createServer(async (request, response) => {
+    if (request.url?.startsWith("/api/core/")) {
+      if (!coreGateway) { json(response, 503, { error: "PRIVATE_ROUTE_NOT_MIGRATED" }); return; }
+      try { await sendCoreResponse(request, response, coreGateway); }
+      catch { if (!response.headersSent) json(response, 502, { error: "CORE_UNAVAILABLE" }); else response.destroy(); }
+      return;
+    }
     if (request.method !== "GET" && request.method !== "HEAD") {
       json(response, 405, { error: "METHOD_NOT_ALLOWED" });
       return;
@@ -100,7 +133,18 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     throw new Error("OPS_PRIVATE_PORT must be an unprivileged TCP port");
   }
   const distDir = process.env.OPS_PRIVATE_DIST || defaultDist;
-  createPrivateOpsServer({ distDir }).listen(port, "127.0.0.1", () => {
+  let coreGateway;
+  if (process.env.OPS_PRIVATE_CORE_BASE_URL) {
+    const { handlePrivateCoreRequest } = await import("../dist-private/core-gateway.mjs");
+    const env = {
+      OPS_PRIVATE_CORE_BASE_URL: process.env.OPS_PRIVATE_CORE_BASE_URL,
+      OPS_PRIVATE_WRITE_SECRET: process.env.OPS_PRIVATE_WRITE_SECRET,
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
+      VITE_SUPABASE_PUBLISHABLE_KEY: process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    };
+    coreGateway = request => handlePrivateCoreRequest(request, env);
+  }
+  createPrivateOpsServer({ distDir, coreGateway }).listen(port, "127.0.0.1", () => {
     console.log(`Private Ops candidate listening on 127.0.0.1:${port}`);
   });
 }

@@ -14,7 +14,22 @@ Known existing defect: the operator reports that the local 30B review of drafts 
 
 Diagnostic update, 2026-10-14: read-only inspection of saved Core advisory metadata found two older revisions with validation failures and one later revision with both reviewers ready. Current active drafts have no saved advisory result yet. The failure is therefore intermittent in the stored evidence; the operator's recurring failure still needs a current reproduction. A candidate Core change now records which allowlisted assessment field failed shape validation and retains a successful Aegis review when retrying the same packet after a 30B failure. A candidate Ops change shows safe failure categories rather than only a generic retry message. These changes remain undeployed and do not weaken the approval gate.
 
+Access check, 2026-10-14: the signed-in Cloudflare One dashboard shows **Zero Trust Free**. The existing healthy Core tunnel has three published application routes and no private network route. No route or billing setting was changed. A private route and one enrolled device still require a pilot; the existing published routes are not the proposed video path. A synthetic, local-only `qwen3-coder:30b` assessment completed successfully in about 20 seconds with the expected top-level field types, so model installation/availability is not the persistent failure. Real draft packet validation remains the open issue.
+
+Implementation update, 2026-10-14: a local private Ops server candidate now has an optional `/api/core/*` handler. It reuses the production Core allowlist and Supabase active-profile check, forwards only to loopback Core, strips unknown query keys, signs authorized draft writes with the same Core HMAC contract, and streams Fabric NDJSON. Producer, Chase, public provider, and overlay routes remain explicit 503 responses. The candidate has unit tests but has not been deployed or connected to a Cloudflare private route. A private build must embed the current Supabase public URL/key and set `VITE_CODEBLACK_CORE_BASE_URL=/api/core`; the server process must receive the same public auth values, `OPS_PRIVATE_CORE_BASE_URL=http://127.0.0.1:8000`, and the existing Core `CODEBLACK_OPS_WRITE_SECRET` value as `OPS_PRIVATE_WRITE_SECRET` through protected runtime configuration. Do not print or commit those values. Run `npm run build:private-gateway` before starting the server with Core routing enabled.
+
 ## Current dependencies found in source
+
+The current route contract is grouped below. Each route family needs an explicit private implementation; unimplemented families must return JSON 503 rather than the React application shell.
+
+| Browser path family | Current handler | Private candidate | Cutover status |
+| --- | --- | --- | --- |
+| `/api/core/*` | Ops Pages Worker, Supabase auth, Core VPC gateway | Local Core allowlist/auth/signing candidate | Unit tested; live auth, read, write and stream parity pending |
+| `/api/producer/v1/*` | Chase Gateway Durable Object | None | 503; live media/commands block cutover |
+| `/api/chase/v1/*` | Chase Gateway and Core broker | None | 503; Facebook and field flow block cutover |
+| `/api/public/hurricane`, `/api/ardot-camera-stream`, `/api/camera-health`, `/api/kandrive/*`, `/api/modot/*`, `/api/odot/*`, `/api/tdot/*` | Ops Pages Worker/provider relays | None | 503; map and camera parity pending |
+| `/overlay-core/*` | Ops Pages public Storm Intel relay | None | 503; OBS overlay parity pending |
+
 
 | Surface | Current location | Migration requirement |
 | --- | --- | --- |
