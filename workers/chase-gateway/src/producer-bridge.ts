@@ -319,13 +319,26 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
     const prior = commands.find((item) => item.commandId === commandId);
     if (prior) return prior.action === action && JSON.stringify(prior.payload ?? {}) === JSON.stringify(body?.payload ?? {}) ? json(200, prior) : json(409, { error: "COMMAND_ID_CONFLICT" });
     const actorId = request.headers.get("X-Producer-UserId");
-    const emergencyStop = action === "facebook.output.stop" || action === "preview.stop" || action === "archive.camera.stop" || action === "obs.recording.stop";
+    const emergencyStop = action === "facebook.output.stop" || action === "preview.stop" || action === "archive.camera.stop" || action === "obs.recording.stop" || /^obs\.output\.(facebook|youtube)\.stop$/.test(action);
     if (actorId && !emergencyStop) {
       const lease = await storage.get<ControlLease>(CONTROL_LEASE_KEY);
       if (!lease || lease.expiresAt <= Date.now() || lease.userId !== actorId) return json(409, { error: "CONTROL_LEASE_REQUIRED" });
       const status = await storage.get<StoredDocument>(STATUS_KEY);
       if (bridgeState(status) !== "ONLINE") return json(409, { error: "BRIDGE_OFFLINE" });
       if (action !== "preview.start" && status?.body.stateRevision !== expected) return json(409, { error: "STATE_CHANGED" });
+      const outputStart = /^obs\.output\.(facebook|youtube)\.start$/.exec(action);
+      if (outputStart) {
+        const current = status!.body;
+        const audio = current.audio as { available?: boolean; state?: string } | undefined;
+        const composition = current.composition as { id?: string } | undefined;
+        const program = current.program as { state?: string; lastFrameAt?: string } | undefined;
+        const payload = body?.payload as { compositionId?: string; confirmed?: boolean };
+        const outputs = current.outputs as Record<string, { configured?: boolean; state?: string }> | undefined;
+        if (body?.confirmed !== true || payload.confirmed !== true || payload.compositionId !== composition?.id) return json(409, { error: "OUTPUT_CONFIRMATION_CHANGED" });
+        if (!mediaFresh(status!.receivedAt, 3000) || current.source_state !== "SOURCE_LIVE" || audio?.available !== true || audio.state !== "SIGNAL" || program?.state !== "RENDERING" || !program.lastFrameAt || !mediaFresh(program.lastFrameAt, 3000)) return json(409, { error: "SOURCE_OR_AUDIO_NOT_READY" });
+        if (outputs?.[outputStart[1]]?.configured !== true) return json(409, { error: "OUTPUT_DESTINATION_NOT_CONFIGURED" });
+        if (outputStart[1] === "youtube" && outputs.facebook?.state !== "SENDING") return json(409, { error: "YOUTUBE_REQUIRES_FACEBOOK_ENCODER" });
+      }
       if (action === "facebook.output.start") {
         const current = status!.body;
         const managed = await storage.get<import("./facebook-lifecycle").ManagedBroadcast>(BROADCAST_KEY);

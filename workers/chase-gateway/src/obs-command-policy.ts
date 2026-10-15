@@ -5,11 +5,19 @@ export const OBS_ACTIONS = new Map([
   ["obs.overlay.visibility", ["overlay", "visibility"]],
   ["obs.recording.start", ["recording", "start"]],
   ["obs.recording.stop", ["recording", "stop"]],
+  ["obs.output.facebook.start", ["outputs", "facebook.start"]],
+  ["obs.output.facebook.stop", ["outputs", "facebook.stop"]],
+  ["obs.output.youtube.start", ["outputs", "youtube.start"]],
+  ["obs.output.youtube.stop", ["outputs", "youtube.stop"]],
 ]);
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 export function validObsPayload(action: string, payload: unknown): boolean {
   if (!record(payload)) return false;
   const keys = Object.keys(payload);
+  const output = /^obs\.output\.(facebook|youtube)\.(start|stop)$/.exec(action);
+  if (output) return keys.length === 3 && keys.every(key => ["destination", "compositionId", "confirmed"].includes(key))
+    && payload.destination === output[1] && typeof payload.confirmed === "boolean" && (output[2] !== "start" || payload.confirmed === true)
+    && typeof payload.compositionId === "string" && /^[a-f0-9]{24}$/.test(payload.compositionId);
   if (action === "obs.scene.set") return keys.length === 1 && typeof payload.sceneName === "string" && OBS_SCENES.includes(payload.sceneName);
   if (action === "obs.overlay.visibility") return keys.length === 1 && typeof payload.enabled === "boolean";
   if (action === "obs.audio.set") return keys.length > 0 && keys.every(key => ["muted", "volumeDb"].includes(key))

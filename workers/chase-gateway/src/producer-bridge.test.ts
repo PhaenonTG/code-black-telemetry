@@ -8,6 +8,31 @@ class MemoryStorage implements BridgeStorage {
 }
 
 describe("Producer bridge state", () => {
+  it("gates destination output commands on lease, native capability, composition and camera/audio", async () => {
+    const storage = new MemoryStorage();
+    const call = (path: string, body: unknown, user = "operator-a") => handleProducerStateRequest(new Request(`https://x/api/producer/v1/${path}`, {method:"POST",headers:{"X-Producer-UserId":user},body:JSON.stringify(body)}), storage);
+    const compositionId="a".repeat(24);
+    const current={engine:"obs",stateRevision:7,source_state:"SOURCE_LIVE",audio:{available:true,state:"SIGNAL"},composition:{id:compositionId},program:{state:"RENDERING",lastFrameAt:new Date().toISOString()},outputs:{facebook:{configured:true,state:"OFF"},youtube:{configured:true,state:"OFF"}},capabilities:{actions:{outputs:["facebook.start","facebook.stop","youtube.start","youtube.stop"]}}};
+    await call("workstation/status",current);
+    const command=(target="facebook",operation="start",payload: Record<string,unknown>={})=>({commandId:crypto.randomUUID(),action:`obs.output.${target}.${operation}`,expectedStateRevision:7,confirmed:true,payload:{destination:target,compositionId,confirmed:true,...payload}});
+    expect((await call("commands",command())).status).toBe(409);
+    await call("control-lease",{});
+    expect((await call("commands",command("facebook","start",{confirmed:false}))).status).toBe(400);
+    expect((await call("commands",command("facebook","start",{compositionId:"b".repeat(24)}))).status).toBe(409);
+    expect((await call("commands",command("youtube"))).status).toBe(409);
+    expect((await call("commands",command())).status).toBe(202);
+    await call("workstation/status",{...current,source_state:"SOURCE_LOST"});
+    expect((await call("commands",command())).status).toBe(409);
+    // Approved emergency stops remain available without the exclusive lease.
+    expect((await call("commands",command("youtube","stop"),"operator-b")).status).toBe(202);
+  });
+  it("does not enable output controls for a currently running pre-output broadcaster", async () => {
+    const storage=new MemoryStorage();
+    await handleProducerStateRequest(new Request("https://x/api/producer/v1/workstation/status",{method:"POST",body:JSON.stringify({engine:"obs",stateRevision:1,capabilities:{actions:{facebook:["output.stop"]}}})}),storage);
+    const response=await handleProducerStateRequest(new Request("https://x/api/producer/v1/commands",{method:"POST",headers:{"X-Producer-UserId":"operator-a"},body:JSON.stringify({commandId:crypto.randomUUID(),action:"obs.output.facebook.start",expectedStateRevision:1,confirmed:true,payload:{destination:"facebook",compositionId:"a".repeat(24),confirmed:true}})}),storage);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({error:"OBS_ACTION_UNAVAILABLE"});
+  });
   it("shares Facebook polling and applies ten-minute rate-limit backoff", async () => {
     const storage = new MemoryStorage();
     const cache = (body: unknown) => handleProducerStateRequest(new Request("https://x/api/chase/v1/facebook/internal/comment-cache", { method: "POST", body: JSON.stringify(body) }), storage);
