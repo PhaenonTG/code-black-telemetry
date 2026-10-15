@@ -46,6 +46,8 @@ Producer shadow update, 2026-10-14: isolated gateway branch `feat/private-produc
 
 OBS shadow client update, 2026-10-14: isolated `ObsProducerBridge` branch `feat/private-producer-shadow-20261014` at `c45d873` adds an **opt-in** private status/media copy to the existing bridge process. It never mirrors command polling, acknowledgments, leases, or Facebook actions, and failed shadow uploads do not block the primary gateway request. The queue is ordered, capped at 24 entries, and times out each upload after five seconds. All 46 bridge tests passed. That repository has no remote, so a verified full-history bundle is saved at `C:/CodeBlack/backups/obs-private-producer-shadow-c45d873-20261014.bundle`. The active workstation bridge was not restarted or reconfigured. Before live shadowing, the private server needs a protected persistent service, reachable endpoint, distinct token, and a planned restart of the one existing bridge instance.
 
+Producer server staging, 2026-10-14: the Node 18 bundle and shadow server are staged at `/srv/codeblack/releases/private-producer/pilot-20261014-r1` on Core. A time-limited listener on `127.0.0.1:4188` returned health 200, unauthenticated status 401, authenticated empty status 200, and JSON 503 for workstation command polling. The test token was disposable and no active OBS data or production credential was used. The listener exited, both pilot ports were verified closed, and the production Core service remained active. No persistent shadow service or OBS endpoint switch has been made.
+
 ## Current dependencies found in source
 
 The current route contract is grouped below. Each route family needs an explicit private implementation; unimplemented families must return JSON 503 rather than the React application shell.
