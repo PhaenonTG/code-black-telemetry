@@ -1,0 +1,91 @@
+{
+  "schema": "codeblack.project.v1",
+  "id": "local-ai-labs",
+  "name": "Local AI & Spencer Labs",
+  "summary": "Core and Phaenon3 inference, model work, Media Lab, and image sandbox.",
+  "phase": "LIVE / EXPERIMENTAL",
+  "note": "Phaenon3 reachability can make this status unknown; it does not establish a model failure.",
+  "services": [
+    {
+      "id": "core-ai",
+      "host": "core",
+      "name": "Code Black Intelligence",
+      "unit": "codeblack-ai.service"
+    },
+    {
+      "id": "ollama-core",
+      "host": "core",
+      "name": "Ollama (Core)",
+      "unit": "ollama.service"
+    },
+    {
+      "id": "ai-router",
+      "host": "phaenon3",
+      "name": "AI Router / AEGIS"
+    },
+    {
+      "id": "ollama-phaenon3",
+      "host": "phaenon3",
+      "name": "Ollama (PHAENON3)"
+    },
+    {
+      "id": "ailab-runner",
+      "host": "phaenon3",
+      "name": "AI Lab Deployment Runner"
+    },
+    {
+      "id": "media-lab",
+      "host": "phaenon3",
+      "name": "Media Lab"
+    },
+    {
+      "id": "image-sandbox",
+      "host": "phaenon3",
+      "name": "Image Sandbox"
+    },
+    {
+      "id": "aegis-factory-watchdog",
+      "host": "phaenon3",
+      "name": "Aegis Factory Watchdog"
+    },
+    {
+      "id": "ailab-healthwatch",
+      "host": "phaenon3",
+      "name": "AI Lab Health Watch"
+    },
+    {
+      "id": "sandbox-comfyui",
+      "host": "phaenon3",
+      "name": "Sandbox ComfyUI (CPU)"
+    },
+    {
+      "id": "q4-status-monitor",
+      "host": "phaenon3",
+      "name": "Wan 2.2 Q4 Status Monitor"
+    },
+    {
+      "id": "q4-verification-watcher",
+      "host": "phaenon3",
+      "name": "Wan 2.2 Q4 Verification Watcher"
+    },
+    {
+      "id": "q4-download-recovery",
+      "host": "phaenon3",
+      "name": "Wan 2.2 Q4 Download Recovery"
+    }
+  ],
+  "links": [
+    {
+      "id": "media-lab",
+      "name": "Media Lab",
+      "url": "https://phaenon3.tail1d0673.ts.net/",
+      "access": "PRIVATE"
+    },
+    {
+      "id": "image-sandbox",
+      "name": "Image Sandbox",
+      "url": "https://phaenon3.tail1d0673.ts.net/image-sandbox/",
+      "access": "PRIVATE"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "schema": "codeblack.project.v1",
+  "id": "ops-alerting",
+  "name": "OPS & alerting",
+  "summary": "Core Status Center, private OPS, Discord triage, and notification delivery.",
+  "phase": "LIVE / PRIVATE PILOT",
+  "note": "Private OPS remains a pilot; the public route still serves existing callers.",
+  "services": [
+    {
+      "id": "status-center",
+      "host": "core",
+      "name": "System Status Center",
+      "unit": "codeblack-status-center.service"
+    },
+    {
+      "id": "alert-actions",
+      "host": "core",
+      "name": "Alert Action Console"
+    },
+    {
+      "id": "ntfy-private",
+      "host": "core",
+      "name": "Private iPhone Notifications",
+      "unit": "codeblack-ntfy.service"
+    },
+    {
+      "id": "discord-bot",
+      "host": "edge",
+      "name": "Discord Bot",
+      "unit": "codeblack-discord-bot.service"
+    },
+    {
+      "id": "edge-notification-dispatch",
+      "host": "edge",
+      "name": "Edge Notification Dispatch",
+      "unit": "codeblack-notification-dispatch.timer"
+    },
+    {
+      "id": "edge-alert-evaluate",
+      "host": "edge",
+      "name": "Edge Alert Evaluate",
+      "unit": "codeblack-edge-alert-evaluate.timer"
+    },
+    {
+      "id": "edge-ntfy-bridge",
+      "host": "edge",
+      "name": "iPhone Ops Alerts"
+    },
+    {
+      "id": "silas-aegis-notify",
+      "host": "phaenon3",
+      "name": "Silas / AEGIS Notify Watcher"
+    },
+    {
+      "id": "private-ops",
+      "host": "core",
+      "name": "Private OPS",
+      "unit": "codeblack-private-ops.service"
+    },
+    {
+      "id": "private-producer-shadow",
+      "host": "core",
+      "name": "Private Producer shadow",
+      "unit": "codeblack-private-producer-shadow.service"
+    }
+  ],
+  "links": [
+    {
+      "id": "ops",
+      "name": "OPS",
+      "url": "https://ops.codeblackwx.com/",
+      "access": "PRIVATE"
+    },
+    {
+      "id": "status-center",
+      "name": "System Status Center",
+      "url": "https://codeblack-core.tail1d0673.ts.net/status/",
+      "access": "PRIVATE"
+    },
+    {
+      "id": "edge-dashboard",
+      "name": "Edge Dashboard",
+      "url": "https://codeblack-edge.tail1d0673.ts.net/",
+      "access": "PRIVATE"
+    }
+  ]
+}

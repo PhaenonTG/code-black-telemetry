@@ -36,6 +36,7 @@ from http.cookies import SimpleCookie
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import collector  # noqa: E402
+import project_landscape  # noqa: E402
 
 VERSION = "1.0.4"
 SCHEMA = "codeblack.status.v1"
@@ -1267,40 +1268,12 @@ def alert_action_state():
         return {}
 
 
-def build_projects(service_by_id, links):
+def build_projects(service_by_id, links, inventories=None, with_coverage=False):
     """Combine curated project scope with current, status-only service evidence."""
-    links_by_id = {item["id"]: item for item in links}
-    projects = []
-    for entry in REG.get("projects", []):
-        monitored = [service_by_id[sid] for sid in entry["service_ids"] if sid in service_by_id]
-        missing = [sid for sid in entry["service_ids"] if sid not in service_by_id]
-        # Project cards show every scoped service, including field devices whose
-        # outages are informational to the platform-wide alert rollup.
-        states = [service["state"] for service in monitored]
-        healthy_count = sum(state in ("HEALTHY", "LIVE", "ONLINE") for state in states)
-        troubled_count = sum(state in ("OFFLINE", "FAILED", "CRITICAL", "DEGRADED", "WARNING") for state in states)
-        unknown_count = len(states) - healthy_count - troubled_count
-        if not monitored:
-            health = "UNMONITORED"
-        elif not states:
-            health = "UNKNOWN"
-        elif missing or any(state in ("OFFLINE", "FAILED", "CRITICAL", "DEGRADED", "WARNING") for state in states):
-            health = "DEGRADED"
-        elif any(state not in ("HEALTHY", "LIVE", "ONLINE") for state in states):
-            health = "UNKNOWN"
-        else:
-            health = "HEALTHY"
-        projects.append({"id": entry["id"], "name": entry["name"], "phase": entry["phase"],
-                         "summary": entry["summary"], "note": entry["note"], "health": health,
-                         "monitored_count": len(monitored), "expected_count": len(entry["service_ids"]),
-                         "healthy_count": healthy_count, "troubled_count": troubled_count,
-                         "unknown_count": unknown_count,
-                         "services": [{"id": service["id"], "name": service["name"],
-                                       "state": service["state"], "host": service["host"],
-                                       "state_reason": service["state_reason"]} for service in monitored],
-                         "missing_services": missing,
-                         "links": [links_by_id[lid] for lid in entry["link_ids"] if lid in links_by_id]})
-    return projects
+    if inventories is None:
+        inventories = {}
+    result, coverage = project_landscape.reconcile(REG.get("projects", []), SERVICES, service_by_id, links, inventories)
+    return (result, coverage) if with_coverage else result
 
 
 def build_status():
@@ -1336,7 +1309,13 @@ def build_status():
     overall = "OFFLINE" if hby["core"]["state"] == "OFFLINE" else "UNKNOWN" if hby["core"]["state"] == "UNKNOWN" else ("DEGRADED" if crit or any(s in ("DEGRADED", "OFFLINE") for s in host_states) or any(a["severity"] == "WARNING" for a in attention) else "HEALTHY")
     probes = list(PROBES.values())
     links = [{"id": l["id"], "name": l["name"], "purpose": l["purpose"], "host": l["host"], "access": l["access"], "url": l["url"], "group": l["group"], "verified": link_state(l)} for l in REG["links"]]
-    projects = build_projects(sby, links)
+    inventories = {}
+    for host_id in ("core", "edge", "phaenon3"):
+        document, _telemetry, fresh = coll(host_id)
+        inventory = (document or {}).get("project_inventory")
+        observed = parse_ts((inventory or {}).get("generated_at"))
+        inventories[host_id] = (inventory, bool(fresh and observed and now() - observed < 180))
+    projects, project_coverage = build_projects(sby, links, inventories, with_coverage=True)
     history = PROJECT_HISTORY.summary(projects)
     for project in projects:
         project["history"] = history[project["id"]]
@@ -1359,7 +1338,7 @@ def build_status():
             "summary": {"overall": overall, "attention_count": sum(1 for a in attention if a["severity"] != "INFO"), "tiles": tiles}, "attention": attention, "hosts": hosts,
             "services": [s for s in services if True], "streaming": streaming, "radar": radar, "weather": weather, "dns": dns, "ai": ai, "labs": labs, "compute": compute,
             "network": network, "storage": storage, "notifications": build_notifications(sby), "esp_fleet": esp_fleet,
-            "links": links, "address_book": book, "projects": projects}
+            "links": links, "address_book": book, "projects": projects, "project_coverage": project_coverage}
 
 
 def status_doc():
@@ -1613,7 +1592,7 @@ def changelog_loop():
 
 
 # ------------------------------------------------------------------------------------------------ http
-SECTIONS = {"hosts", "services", "network", "streaming", "radar", "weather", "ai", "labs", "dns", "storage", "links", "compute", "attention", "summary", "esp_fleet", "projects"}
+SECTIONS = {"hosts", "services", "network", "streaming", "radar", "weather", "ai", "labs", "dns", "storage", "links", "compute", "attention", "summary", "esp_fleet", "projects", "project_coverage"}
 
 
 def weather_alert_control(method, body=None, resource="settings"):

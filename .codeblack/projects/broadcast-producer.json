@@ -1,0 +1,60 @@
+{
+  "schema": "codeblack.project.v1",
+  "id": "broadcast-producer",
+  "name": "Broadcast & Producer",
+  "summary": "Stream monitor, MediaMTX, broadcast overlays, and private Producer shadow.",
+  "phase": "LIVE / SHADOW PILOT",
+  "note": "Private Producer commands remain outside this service-health rollup until the pilot qualifies them.",
+  "services": [
+    {
+      "id": "stream-monitor",
+      "host": "core",
+      "name": "Stream Monitor",
+      "unit": "codeblack-monitor.service"
+    },
+    {
+      "id": "mediamtx",
+      "host": "core",
+      "name": "MediaMTX",
+      "unit": "mediamtx.service"
+    },
+    {
+      "id": "overlay",
+      "host": "core",
+      "name": "Broadcast Overlay",
+      "unit": "codeblack-overlay.service"
+    },
+    {
+      "id": "overlay-dev",
+      "host": "core",
+      "name": "Overlay (dev)",
+      "unit": "codeblack-overlay-dev.service"
+    }
+  ],
+  "links": [
+    {
+      "id": "stream-monitor",
+      "name": "Stream Monitor",
+      "url": "https://codeblack-core.tail1d0673.ts.net/monitor/",
+      "access": "PRIVATE"
+    },
+    {
+      "id": "overlay",
+      "name": "Broadcast Overlay",
+      "url": "https://codeblack-core.tail1d0673.ts.net/overlay/",
+      "access": "PRIVATE"
+    },
+    {
+      "id": "mtx-striker",
+      "name": "WebRTC viewer: STRIKER",
+      "url": "https://codeblack-core.tail1d0673.ts.net/mtx/spencer/",
+      "access": "PRIVATE"
+    },
+    {
+      "id": "mtx-tessa",
+      "name": "WebRTC viewer: TESSA",
+      "url": "https://codeblack-core.tail1d0673.ts.net/mtx/tessa/",
+      "access": "PRIVATE"
+    }
+  ]
+}

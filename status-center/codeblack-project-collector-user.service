@@ -1,0 +1,19 @@
+[Unit]
+Description=Code Black Edge project and status collector
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/codeblack/services/project-collector
+Environment=CODEBLACK_PROJECT_CONFIG=/srv/codeblack/services/project-landscape/config
+Environment=CODEBLACK_PROJECT_STATE=/srv/codeblack/data/status-collector/project-inventory
+ExecStart=/usr/bin/python3 /srv/codeblack/services/project-collector/collector.py --host edge --registry /srv/codeblack/services/status-collector/registry.json
+Restart=always
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+MemoryMax=200M
+TasksMax=64
+
+[Install]
+WantedBy=default.target

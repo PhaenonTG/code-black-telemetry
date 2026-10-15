@@ -17,6 +17,9 @@ set -eu
 CORE_HOST="${CODEBLACK_CORE_HOST:-codeblack-core}"
 VERSION="${1:-v1-$(date -u +%Y%m%d-%H%M%S)}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+if [ "${CODEBLACK_DEPLOY_REPORT_ACTIVE:-}" != 1 ]; then
+  exec python3 "$(dirname "$0")/scripts/deploy_with_status.py" --host "$CORE_HOST" --manifest "$(dirname "$0")/.codeblack/projects/radar-aegis.json" --unit codeblack-radar-product --release "radar-product/$VERSION" -- sh "$0" "$VERSION"
+fi
 cd "$(dirname "$0")/radar-product"
 
 echo "== Uploading release $VERSION to $CORE_HOST =="

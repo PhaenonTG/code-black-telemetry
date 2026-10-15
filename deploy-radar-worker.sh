@@ -26,6 +26,9 @@ set -eu
 CORE_HOST="${CODEBLACK_CORE_HOST:-codeblack-core}"
 RELEASE_DIR="/srv/codeblack/releases/radar-worker/v1"
 SERVICE_NAME="codeblack-radar-worker"
+if [ "${CODEBLACK_DEPLOY_REPORT_ACTIVE:-}" != 1 ]; then
+  exec python3 "$(dirname "$0")/scripts/deploy_with_status.py" --host "$CORE_HOST" --manifest "$(dirname "$0")/.codeblack/projects/radar-aegis.json" --unit "$SERVICE_NAME" --release "radar-worker/v1" -- sh "$0" "$@"
+fi
 
 cd "$(dirname "$0")"
 LOCAL_FILE="radar-worker/worker.cjs"

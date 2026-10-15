@@ -949,11 +949,12 @@ R.projects = (d) => {
   const projects = Array.isArray(d.projects) ? d.projects : [];
   if (!projects.length) { box.appendChild(h('div', 'emptynote', 'Project scope is not available from this backend. See the full inventory below.')); return; }
   const grid = h('div', 'project-grid');
-  projects.forEach((p) => {
+  projects.filter((p) => p.registration !== 'DISCOVERED').forEach((p) => {
     const services = Array.isArray(p.services) ? p.services : [];
     const issues = services.filter((s) => s.state !== 'HEALTHY').slice(0, 4);
     const facts = [h('div', 'hd', [h('h3', null, p.name), chip(p.health)]),
-      h('div', 'phase', p.phase), h('p', 'reason', p.summary),
+      h('div', 'phase', 'Milestone: ' + (p.declared_phase || p.phase)), h('p', 'reason', p.summary),
+      kv('Deployment', p.deployment_state || 'UNVERIFIED'),
       kv('Healthy', (p.healthy_count ?? services.filter((s) => s.state === 'HEALTHY').length) + ' / ' + (p.expected_count || 0) + ' services'),
       kv('Monitored', (p.monitored_count || 0) + ' / ' + (p.expected_count || 0) + ' services'),
       h('p', 'note', p.note)];
@@ -962,11 +963,18 @@ R.projects = (d) => {
     facts.push(h('div', 'project-history', (bins.length ? bins : Array(48).fill('NO_DATA')).map((state) => h('span', ['HEALTHY','DEGRADED','UNKNOWN','UNMONITORED'].includes(state) ? state.toLowerCase() : '', null, {title:state}))));
     if (issues.length) facts.push(h('ul', 'project-services', issues.map((s) => h('li', null, [h('b', null, s.name), ' — ' + s.state + ' on ' + s.host]))));
     else facts.push(h('p', 'note', p.health === 'UNMONITORED' ? 'No live health probe is registered.' : 'All listed monitored services report healthy.'));
+    const deployments = (p.deployments || []).map((x) => h('li', null, [x.unit + ' — ' + x.state, h('div', 'muted small', (x.release || 'Release unknown') + ' · ' + (x.commit ? 'Git ' + x.commit.slice(0, 12) : 'No matching source receipt') + (x.deployed_at ? ' · ' + new Date(x.deployed_at).toLocaleString() : ''))]));
+    if (deployments.length) facts.push(h('details', null, [h('summary', null, 'Deployment records'), h('ul', 'project-services', deployments)]));
     const links = (p.links || []).filter((l) => safeUrl(l.url)).slice(0, 4).map((l) => lnk(l.name, l.url));
     if (links.length) facts.push(h('div', 'linkrow', links));
     grid.appendChild(card('project-card', facts));
   });
   box.appendChild(grid);
+  const coverage = d.project_coverage;
+  if (coverage) box.appendChild(card('', [h('h3', null, 'Deployment watch · ' + coverage.finding_count + ' to review'),
+    h('p', 'note', (coverage.hosts || []).map((x) => x.host + ': ' + x.state).join(' · ')),
+    h('details', null, [h('summary', null, 'Discovered projects / services · ' + coverage.discovered_projects), h('ul', 'project-services', projects.filter((p) => p.registration === 'DISCOVERED').map((p) => h('li', null, p.name + ' · ' + p.health + ' · ' + p.phase)))]),
+    h('details', null, [h('summary', null, 'Coverage findings'), h('ul', 'project-services', (coverage.findings || []).map((x) => h('li', null, x.kind + ' · ' + (x.host || x.project || 'inventory') + ' · ' + (x.detail || 'Check manifest'))))]) ]));
 };
 R.footer = (d) => {
   const f = $('#foot'); f.replaceChildren();
@@ -975,7 +983,7 @@ R.footer = (d) => {
     'probes ' + (isNull(b.probes_total) ? '?' : b.probes_total) + ' total / ' + (isNull(b.probes_stale) ? '?' : b.probes_stale) + ' stale / ' + (isNull(b.probes_failing) ? '?' : b.probes_failing) + ' failing',
     'generated ' + (d.generated_at || '?'), 'read-only view'].join('  |  ')));
 };
-const SECTIONS = [['tiles', (d) => d.summary], ['projects', (d) => d.projects], ['attention', (d) => d.attention], ['notifications', (d) => d.notifications], ['esp', (d) => d.esp_fleet], ['hosts', (d) => d.hosts], ['services', (d) => d.services], ['streaming', (d) => d.streaming], ['radar', (d) => d.radar],
+const SECTIONS = [['tiles', (d) => d.summary], ['projects', (d) => [d.projects, d.project_coverage]], ['attention', (d) => d.attention], ['notifications', (d) => d.notifications], ['esp', (d) => d.esp_fleet], ['hosts', (d) => d.hosts], ['services', (d) => d.services], ['streaming', (d) => d.streaming], ['radar', (d) => d.radar],
   ['weather', (d) => d.weather], ['compute', (d) => d.compute], ['network', (d) => d.network], ['dns', (d) => d.dns], ['storage', (d) => d.storage], ['ai', (d) => d.ai], ['labs', (d) => d.labs],
   ['launchpad', (d) => d.links], ['address', (d) => d.address_book], ['inventory', (d) => [d.hosts, d.services]], ['footer', (d) => [d.backend, d.schema]]];
 const RELTIME = new Set(['hosts', 'services', 'esp', 'streaming', 'radar', 'weather', 'compute', 'network', 'dns', 'storage', 'ai', 'labs', 'attention', 'notifications']);

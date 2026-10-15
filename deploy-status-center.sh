@@ -7,9 +7,12 @@ set -eu
 CORE_HOST="${CODEBLACK_CORE_HOST:-codeblack-core}"
 VERSION="${1:-v1-$(date -u +%Y%m%d-%H%M%S)}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+if [ "${CODEBLACK_DEPLOY_REPORT_ACTIVE:-}" != 1 ]; then
+  exec python3 "$(dirname "$0")/scripts/deploy_with_status.py" --host "$CORE_HOST" --manifest "$(dirname "$0")/.codeblack/projects/ops-alerting.json" --unit codeblack-status-center --release "status-center/$VERSION" -- sh "$0" "$VERSION"
+fi
 cd "$(dirname "$0")/status-center"
 ssh "$CORE_HOST" "rm -rf /tmp/sc-release && mkdir -p /tmp/sc-release/web"
-scp -q server.py collector.py registry.json "$CORE_HOST:/tmp/sc-release/"
+scp -q server.py collector.py project_inventory.py project_landscape.py registry.json "$CORE_HOST:/tmp/sc-release/"
 scp -q web/index.html "$CORE_HOST:/tmp/sc-release/web/"
 scp -q codeblack-status-center.service "$CORE_HOST:/tmp/codeblack-status-center.service"
 ssh "$CORE_HOST" "VERSION='$VERSION' STAMP='$STAMP' sh -s" <<'REMOTE'

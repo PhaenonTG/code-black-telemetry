@@ -23,6 +23,7 @@ import sys
 import threading
 import time
 import urllib.request
+import project_inventory
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -292,13 +293,14 @@ def collect(checks):
     out["http"] = check_http(checks.get("http", []))
     out["commands"] = check_commands(checks.get("commands", []))
     out["symlinks"] = check_symlinks(checks.get("symlinks", []))
+    out["project_inventory"] = project_inventory.collect(expected=[u if u.endswith((".service", ".timer")) else u + ".service" for u in checks.get("units", [])], host=checks.get("project_host", "core"))
     return out
 
 
 # --------------------------------------------------------------------------- standalone server
 def serve(host_id, registry_path, bind, port):
     reg = json.load(open(registry_path, encoding="utf-8"))
-    checks = next(h for h in reg["hosts"] if h["id"] == host_id).get("checks", {})
+    checks = {**next(h for h in reg["hosts"] if h["id"] == host_id).get("checks", {}), "project_host": host_id}
     if IS_WIN:
         threading.Thread(target=_win_cpu_sampler, daemon=True).start()
 
