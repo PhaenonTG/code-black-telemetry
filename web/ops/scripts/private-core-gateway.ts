@@ -21,7 +21,8 @@ export interface PrivateCoreEnv extends GatewayEnv {
 }
 
 const prefix = "/api/core/";
-const maxWriteBytes = 4096;
+const maxPostBytes = 4096;
+const maxPutBytes = 64 * 1024;
 const maxResponseBytes = 2_000_000;
 const overlayPrefix = "/overlay-core";
 const overlayCors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS" };
@@ -74,6 +75,7 @@ export async function handlePrivateCoreRequest(
 
   let body: string | undefined;
   if (request.method === "POST" || request.method === "PUT") {
+    const maxWriteBytes = request.method === "PUT" ? maxPutBytes : maxPostBytes;
     if (Number(request.headers.get("Content-Length") ?? 0) > maxWriteBytes)
       return gatewayErrorResponse(413, "REQUEST_TOO_LARGE");
     body = await request.text();

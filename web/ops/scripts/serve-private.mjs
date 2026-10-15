@@ -49,9 +49,11 @@ async function sendCoreResponse(request, response, gateway) {
     if (request.method === "POST" || request.method === "PUT") {
     const chunks = [];
     let size = 0;
+    const maxBytes = request.method === "PUT" ? 64 * 1024 :
+      request.url?.startsWith("/api/kandrive/graphql") ? 24_000 : 4096;
     for await (const chunk of request) {
       size += chunk.length;
-      if (size > (request.url?.startsWith("/api/kandrive/graphql") ? 24_000 : 4096)) { json(response, 413, { error: "REQUEST_TOO_LARGE" }); return; }
+      if (size > maxBytes) { json(response, 413, { error: "REQUEST_TOO_LARGE" }); return; }
       chunks.push(chunk);
     }
     body = Buffer.concat(chunks);

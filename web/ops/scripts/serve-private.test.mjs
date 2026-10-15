@@ -66,6 +66,22 @@ test("configured Core gateway receives API requests without SPA fallback", async
   }
 });
 
+test("private Core PUT accepts settings larger than the POST limit and bounds the body", async () => {
+  const privateServer = createPrivateOpsServer({ distDir: root, apiGateway: async request => {
+    assert.equal(request.method, "PUT");
+    assert.equal((await request.text()).length, 5000);
+    return Response.json({ accepted: true });
+  } });
+  await new Promise(resolve => privateServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const url = `http://127.0.0.1:${privateServer.address().port}/api/core/api/weather-alert/v1/settings`;
+    assert.equal((await fetch(url, { method: "PUT", body: "x".repeat(5000) })).status, 200);
+    assert.equal((await fetch(url, { method: "PUT", body: "x".repeat(64 * 1024 + 1) })).status, 413);
+  } finally {
+    await new Promise(resolve => privateServer.close(resolve));
+  }
+});
+
 test("private hostname rejects an unexpected Host header", async () => {
   const privateServer = createPrivateOpsServer({ distDir: root, allowedHostname: "ops-private.example.test" });
   await new Promise(resolve => privateServer.listen(0, "127.0.0.1", resolve));
