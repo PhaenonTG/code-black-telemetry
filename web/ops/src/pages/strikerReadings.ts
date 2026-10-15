@@ -2,19 +2,19 @@ import type { FabricDeviceState, FabricNormalizedState } from "../../../../src/s
 
 export const STRIKER_SENSORS = [
   { id: "cbwx-striker-weather", title: "Weather ESP", fields: [
-    { key: "temperature_c", label: "Temperature", unit: "°C" },
-    { key: "humidity_pct", label: "Humidity", unit: "%" },
-    { key: "dewpoint_c", label: "Dew point", unit: "°C" },
+    { key: "temperature_c", label: "Temperature" },
+    { key: "humidity_pct", label: "Humidity" },
+    { key: "dewpoint_c", label: "Dew point" },
   ] },
   { id: "cbwx-striker-nav", title: "Vane / Nav ESP", fields: [
-    { key: "wind_hz", label: "Wind pulses", unit: "Hz" },
-    { key: "wind_direction_deg", label: "Wind direction", unit: "°" },
-    { key: "trunk_temperature_c", label: "BME280 temperature", unit: "°C" },
-    { key: "pressure_hpa", label: "Pressure", unit: "hPa" },
-    { key: "speed_mps", label: "GPS speed", unit: "m/s" },
-    { key: "heading_deg", label: "GPS heading", unit: "°" },
-    { key: "latitude", label: "Latitude", unit: "°" },
-    { key: "longitude", label: "Longitude", unit: "°" },
+    { key: "wind_hz", label: "Wind pulses" },
+    { key: "wind_direction_deg", label: "Wind direction" },
+    { key: "trunk_temperature_c", label: "BME280 temperature" },
+    { key: "pressure_hpa", label: "Pressure" },
+    { key: "speed_mps", label: "GPS speed" },
+    { key: "heading_deg", label: "GPS heading" },
+    { key: "latitude", label: "Latitude" },
+    { key: "longitude", label: "Longitude" },
   ] },
 ] as const
 
@@ -50,4 +50,17 @@ export function strikerReading(device: FabricDeviceState | null, key: string, no
   const mesonet = device.latest?.mesonet as Record<string, unknown> | undefined
   const value = mesonet?.[key]
   return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+export function formatStrikerReading(key: string, value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "—"
+  if (key === "temperature_c" || key === "trunk_temperature_c" || key === "dewpoint_c") {
+    return `${(value * 9 / 5 + 32).toFixed(1)} °F`
+  }
+  if (key === "pressure_hpa") return `${(value * 0.0295299830714).toFixed(2)} inHg`
+  if (key === "speed_mps") return `${(value * 2.2369362921).toFixed(1)} mph`
+  if (key === "humidity_pct") return `${value.toFixed(1)}%`
+  if (key === "wind_hz") return `${value.toFixed(1)} Hz`
+  if (key === "latitude" || key === "longitude") return `${value.toFixed(5)}°`
+  return `${value.toFixed(1)}°`
 }

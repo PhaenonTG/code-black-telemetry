@@ -6,7 +6,7 @@ import type { FabricPresenceState } from "../../../../src/services/fabric/types"
 import { ageText } from "../../../../src/services/radar"
 import { Link } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { STRIKER_SENSORS, strikerDevice, strikerReading, strikerReportAge } from "./strikerReadings"
+import { formatStrikerReading, STRIKER_SENSORS, strikerDevice, strikerReading, strikerReportAge } from "./strikerReadings"
 
 // FabricPresenceState has one member OpsConnectionState doesn't (NOT_CONFIGURED) -- map it to
 // the closest existing pill tone rather than casting past the type system.
@@ -52,12 +52,12 @@ export default function Fleet() {
               <p>{reportAge === null ? "No Core report" : `Core report ${Math.ceil(reportAge / 1000)}s ago`}</p>
               <dl>{sensor.fields.map((field) => {
                 const value = strikerReading(device, field.key, now)
-                return <div key={field.key}><dt>{field.label}</dt><dd>{value === null ? "—" : `${value.toFixed(field.key === "latitude" || field.key === "longitude" ? 5 : 1)}${field.unit}`}</dd></div>
+                return <div key={field.key}><dt>{field.label}</dt><dd>{formatStrikerReading(field.key, value)}</dd></div>
               })}</dl>
             </article>
           })}
         </div>
-        <p className="striker-readings__note">Values come from each board’s accepted Core report. Reporting does not confirm sensor calibration or wiring.</p>
+        <p className="striker-readings__note">Core source values are shown in °F, mph, and inHg where applicable. Wind pulses remain raw Hz. Reporting does not confirm sensor calibration or wiring.</p>
       </section>
       {units.length === 0 ? (
         <div className="empty-state empty-state--centered">
