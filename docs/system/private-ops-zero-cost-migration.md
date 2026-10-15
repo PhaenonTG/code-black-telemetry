@@ -60,6 +60,8 @@ Disabled service staging, 2026-10-14: `/srv/codeblack/releases/private-ops/pilot
 
 Certificate renewal staging, 2026-10-14: a Certbot deploy hook is installed under `/etc/letsencrypt/renewal-hooks/deploy`. It calls `systemctl try-restart` only when the renewed lineage is exactly `/etc/letsencrypt/live/ops-private.codeblackwx.com`; a dry invocation for another lineage and the target lineage left the disabled Ops service inactive. The DNS-01 plugin still needs a new, narrowly scoped Cloudflare token, and no certificate or TXT challenge has been requested. The proposed token summary is limited to `codeblackwx.com` DNS Edit; creation is pending action-time approval in the browser.
 
+Cloudflare pilot forms, 2026-10-14: three browser forms are prepared but **not submitted**. The API token summary requests DNS Edit for `codeblackwx.com` only. A private Access application draft targets `ops-private.codeblackwx.com:443`, uses the existing `Glenn only` allow policy, and enables Cloudflare One Client authentication. The device enrollment draft also selects `Glenn only`; its Save button has not been used. These drafts are held for the required action-time approvals. Apply and verify the enrollment restriction and Access application before enabling the private hostname route, then issue the DNS-01 certificate, map the hostname on Core, and start the disabled pilot listener. Do not treat a draft as active protection.
+
 ## Current dependencies found in source
 
 The current route contract is grouped below. Each route family needs an explicit private implementation; unimplemented families must return JSON 503 rather than the React application shell.
