@@ -1,6 +1,6 @@
 # Private Ops migration with zero new recurring cost
 
-Status: planning and route audit, 2026-10-14. No production routing change is authorized by this document.
+Status: planning and first local candidate, 2026-10-14. No production routing change has been made.
 
 ## Goal and constraints
 
@@ -92,8 +92,8 @@ The current Pages site, Chase Gateway Worker, Durable Object and OBS bridge conf
 
 ## Immediate next engineering slice
 
-1. Confirm current Core hosting and free private-route account facts; select a non-production hostname and one pilot device.
-2. Build a static-site plus `/health` candidate on Core in an isolated release directory, with no DNS or production process change.
+1. Confirm the Cloudflare One account's Free eligibility and device enrollment; select a non-production hostname and one pilot device.
+2. Build and run `web/ops/scripts/serve-private.mjs` in an isolated Core release directory, with no DNS or production process change. It binds only to loopback, serves a supplied `dist` directory, exposes `/health`, and returns JSON 503 for unmigrated `/api/*` and `/overlay-core/*` instead of the SPA. A local test already verifies static assets, SPA routes, route rejection and health. For a manual pilot: set `OPS_PRIVATE_PORT` to a free unprivileged port and `OPS_PRIVATE_DIST` to the exact candidate build directory, then run `node web/ops/scripts/serve-private.mjs` from the checkout. Do not point the production domain at it while APIs are unmigrated.
 3. Write and run the route-contract matrix against both current production and the candidate, then migrate the least stateful Core relays before Producer.
 
 No production cutover occurs until the relevant gate passes.
