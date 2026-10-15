@@ -165,7 +165,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const { handlePrivateApiRequest } = await import("../dist-private/core-gateway.mjs");
     const env = {
       OPS_PRIVATE_CORE_BASE_URL: process.env.OPS_PRIVATE_CORE_BASE_URL,
-      OPS_PRIVATE_WRITE_SECRET: process.env.OPS_PRIVATE_WRITE_SECRET,
+      OPS_PRIVATE_WRITE_SECRET: process.env.OPS_PRIVATE_WRITE_SECRET || process.env.CODEBLACK_OPS_WRITE_SECRET,
       OPS_PRIVATE_PRODUCER_BASE_URL: process.env.OPS_PRIVATE_PRODUCER_BASE_URL,
       OPS_PRIVATE_PRODUCER_TOKEN: process.env.OPS_PRIVATE_PRODUCER_TOKEN,
       VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,

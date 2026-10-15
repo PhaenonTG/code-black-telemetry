@@ -1,0 +1,46 @@
+[Unit]
+Description=Code Black private Ops pilot
+After=network-online.target codeblack-core-api.service
+Wants=network-online.target
+ConditionPathExists=/etc/letsencrypt/live/ops-private.codeblackwx.com/fullchain.pem
+
+[Service]
+Type=simple
+User=cbwx-private-ops
+Group=cbwx-private-ops
+WorkingDirectory=/srv/codeblack/releases/private-ops/pilot-20261014-r5
+EnvironmentFile=/srv/codeblack/config/private-ops/runtime.env
+EnvironmentFile=/etc/codeblack/ops-write.env
+Environment=OPS_PRIVATE_PORT=443
+Environment=OPS_PRIVATE_BIND_HOST=192.168.0.187
+Environment=OPS_PRIVATE_HOSTNAME=ops-private.codeblackwx.com
+Environment=OPS_PRIVATE_DIST=/srv/codeblack/releases/private-ops/pilot-20261014-r5/dist
+Environment=OPS_PRIVATE_TLS_CERT=/run/credentials/codeblack-private-ops.service/tls.crt
+Environment=OPS_PRIVATE_TLS_KEY=/run/credentials/codeblack-private-ops.service/tls.key
+LoadCredential=tls.crt:/etc/letsencrypt/live/ops-private.codeblackwx.com/fullchain.pem
+LoadCredential=tls.key:/etc/letsencrypt/live/ops-private.codeblackwx.com/privkey.pem
+ExecStart=/usr/bin/node /srv/codeblack/releases/private-ops/pilot-20261014-r5/scripts/serve-private.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+TasksMax=128
+MemoryHigh=384M
+MemoryMax=512M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=codeblack-private-ops
+
+[Install]
+WantedBy=multi-user.target
