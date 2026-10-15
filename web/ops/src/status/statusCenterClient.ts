@@ -17,10 +17,25 @@ export interface StatusAttention {
   since?: string
 }
 
+export interface StatusProject {
+  id: string
+  name: string
+  phase: string
+  summary: string
+  note: string
+  health: string
+  monitored_count: number
+  expected_count: number
+  services: Array<{ id: string; name: string; state: string; host: string; state_reason?: string | null }>
+  missing_services: string[]
+  links: Array<{ id: string; name: string; url: string; access: string }>
+}
+
 export interface StatusCenterDocument {
   generated_at?: string
   summary?: { overall?: string; attention_count?: number; tiles?: StatusTile[] }
   attention?: StatusAttention[]
+  projects?: StatusProject[]
   radar?: Record<string, unknown>
   streaming?: Record<string, unknown>
   weather?: Record<string, unknown>

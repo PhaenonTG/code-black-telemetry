@@ -9,6 +9,7 @@ import {
   saveRadarControlSettings,
   type RadarControlSettings,
   type StatusCenterDocument,
+  type StatusProject,
   type StatusTile,
 } from "../status/statusCenterClient"
 
@@ -75,6 +76,13 @@ export default function StatusCenter() {
   }
 
   const tiles = document?.summary?.tiles ?? []
+  const projects = document?.projects ?? []
+  const projectCounts = projects.reduce((counts, project) => {
+    if (project.health === "HEALTHY") counts.healthy += 1
+    else if (project.health === "UNMONITORED") counts.unmonitored += 1
+    else counts.attention += 1
+    return counts
+  }, { healthy: 0, attention: 0, unmonitored: 0 })
   const radar = document?.radar ?? {}
   const sections = [
     ["RADAR", radar],
@@ -110,6 +118,33 @@ export default function StatusCenter() {
             <p>{detailFor(tile)}</p>
           </article>)}
         </div>
+      </section>
+
+      <section className="status-landscape" aria-label="Project landscape">
+        <div className="status-landscape__header">
+          <div><span className="status-landscape__eyebrow">CODE BLACK // MISSION GRID</span><h2>PROJECT LANDSCAPE</h2><p>Rollout phase and live service health across the operation.</p></div>
+          <div className="status-landscape__counts" aria-label="Project health counts">
+            <div><b>{projects.length}</b><span>PROJECTS</span></div>
+            <div><b>{projectCounts.healthy}</b><span>CLEAR</span></div>
+            <div><b>{projectCounts.attention}</b><span>CHECK</span></div>
+            <div><b>{projectCounts.unmonitored}</b><span>NO PROBE</span></div>
+          </div>
+        </div>
+        {error ? <p className="status-center__muted">Project health is unavailable while Core telemetry is disconnected.</p> : !document ? <p className="status-center__muted">Loading mission grid…</p> : projects.length === 0 ? <p className="status-center__muted">Core has not published the project landscape yet.</p> :
+          <div className="status-landscape__grid">{projects.map((project: StatusProject, index) => <article key={project.id} className={`status-landscape__card status-landscape__card--${project.health.toLowerCase()}`}>
+            <div className="status-landscape__card-top"><span className="status-landscape__number">{String(index + 1).padStart(2, "0")} / {String(projects.length).padStart(2, "0")}</span><StatusBadge state={stateForBadge(project.health)} /></div>
+            <h3>{project.name}</h3>
+            <div className="status-landscape__phase">{project.phase}</div>
+            <p>{project.summary}</p>
+            <div className="status-landscape__coverage"><span>SERVICE COVERAGE</span><b>{project.monitored_count} / {project.expected_count}</b></div>
+            <div className="status-landscape__meter" aria-hidden="true"><i style={{ width: project.expected_count ? `${Math.min(100, 100 * project.monitored_count / project.expected_count)}%` : "0%" }} /></div>
+            <details><summary>VIEW SIGNALS <span>{project.services.length}</span></summary>
+              <ul>{project.services.map((service) => <li key={service.id}><span>{service.name}<small>{service.host}</small></span><b className={`status-landscape__signal status-landscape__signal--${service.state.toLowerCase()}`} title={service.state_reason ?? undefined}>{service.state}</b></li>)}</ul>
+              {project.missing_services.length > 0 && <p className="status-landscape__missing">Missing probes: {project.missing_services.join(", ")}</p>}
+            </details>
+            <p className="status-landscape__note">{project.note}</p>
+            {project.links.length > 0 && <div className="status-landscape__links">{project.links.map((link) => <a key={link.id} href={link.url} target="_blank" rel="noreferrer">{link.name} ↗</a>)}</div>}
+          </article>)}</div>}
       </section>
 
       <div className="status-center__grid">
