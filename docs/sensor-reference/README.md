@@ -8,6 +8,7 @@ changed or missing vendor link does not erase the calibration record.
 | Device | Reference | Physical identification | Status |
 | --- | --- | --- | --- |
 | Striker Nav cup anemometer | [Inspeed reed switch data](inspeed-reed-anemometer.json) | WS2 bottle-shaped body, plastic D2/D3 cups, two magnets on the roof *mount* | GPIO25; one pulse/turn; manufacturer factor applied; hand-spin functional check passed; field calibration unverified |
+| Striker Weather temperature/humidity probe | [Seeed 101990881 data](seeed-101990881-air-temperature-humidity.json) | Digi-Key order identifies Seeed SKU 101990881; physical probe not yet inspected | RS485 Modbus probe; legacy GPIO16/17/4 settings match protocol, but no live probe response yet |
 | Planned Nav environmental sensor | [Bosch BME280 data](bosch-bme280.json) | BME280 is specified in firmware, but the actual module has not been confirmed on the bus | Not reporting |
 
 The two roof-mount magnets do not change the anemometer's pulse count.
@@ -18,11 +19,10 @@ older Vortex reference and is **not** the selected WS2 factor. Hand spinning
 verified signal and conversion, not aerodynamic accuracy.
 
 Other devices still need physical identification before a model-specific
-reference can be saved: the Weather ESP's RS485 temperature/humidity probe,
-the RS485 wind vane, the optional GPS module, and any analog vane/resistor
-network. Their configured baud rates, addresses and registers are test
-settings, not verified manufacturer specifications. Do not infer a datasheet
-from those settings.
+reference can be saved: the RS485 wind vane, optional GPS module, and any
+analog vane/resistor network. The Seeed probe is identified by a purchase
+record, but the actual unit, its configured address, and the RS485 interface
+board still need a physical/live check.
 
 Live Weather ESP check on 2026-10-15: firmware 0.1.6, Core HTTP 200, no
 temperature/humidity or GPS reading, and legacy ADC GPIO34 raw value zero.
