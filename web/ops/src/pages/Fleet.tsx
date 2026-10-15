@@ -6,7 +6,7 @@ import type { FabricPresenceState } from "../../../../src/services/fabric/types"
 import { ageText } from "../../../../src/services/radar"
 import { Link } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { formatStrikerReading, STRIKER_SENSORS, strikerDevice, strikerReading, strikerReportAge } from "./strikerReadings"
+import { formatStrikerReading, STRIKER_SENSORS, strikerDevice, strikerReading, strikerReadingAge, strikerReportAge } from "./strikerReadings"
 
 // FabricPresenceState has one member OpsConnectionState doesn't (NOT_CONFIGURED) -- map it to
 // the closest existing pill tone rather than casting past the type system.
@@ -41,23 +41,24 @@ export default function Fleet() {
         <Link to="/stream">STREAMS</Link>
       </nav>
       <section className="striker-readings" aria-label="Striker ESP live readings">
-        <div className="striker-readings__heading"><div><p>STRIKER · CORE MESONET</p><h2>ESP readings</h2></div><span>Live values expire after 3 seconds · unavailable sensors show —</span></div>
+        <div className="striker-readings__heading"><div><p>STRIKER · CORE MESONET</p><h2>ESP readings</h2></div><span>Recent values show their age · unavailable sensors show —</span></div>
         <div className="striker-readings__grid">
           {STRIKER_SENSORS.map((sensor) => {
             const device = strikerDevice(snapshot, sensor.id)
             const reportAge = strikerReportAge(device, now)
-            const live = reportAge !== null && reportAge <= 5_000 && device?.connected !== false
+            const live = reportAge !== null && reportAge <= 15_000 && device?.connected !== false
             return <article className="striker-readings__card" key={sensor.id}>
               <header><h3>{sensor.title}</h3><strong className={live ? "is-live" : ""}>{live ? "REPORTING" : "NO FRESH REPORT"}</strong></header>
               <p>{reportAge === null ? "No Core report" : `Core report ${Math.ceil(reportAge / 1000)}s ago`}</p>
               <dl>{sensor.fields.map((field) => {
                 const value = strikerReading(device, field.key, now)
-                return <div key={field.key}><dt>{field.label}</dt><dd>{formatStrikerReading(field.key, value)}</dd></div>
+                const readingAge = value === null ? null : strikerReadingAge(device, field.key, now)
+                return <div key={field.key}><dt>{field.label}</dt><dd>{formatStrikerReading(field.key, value)}<small>{readingAge === null ? "Unavailable" : `${Math.ceil(readingAge / 1000)}s old`}</small></dd></div>
               })}</dl>
             </article>
           })}
         </div>
-        <p className="striker-readings__note">Core source values are shown in °F, mph, and inHg where applicable. Wind pulses remain raw Hz. Reporting does not confirm sensor calibration or wiring.</p>
+        <p className="striker-readings__note">Recent readings remain visible for up to 30 seconds during uplink delays, with their age shown. Core source values are displayed in °F, mph, and inHg where applicable. Wind pulses remain raw Hz. Reporting does not confirm sensor calibration or wiring.</p>
       </section>
       {units.length === 0 ? (
         <div className="empty-state empty-state--centered">
