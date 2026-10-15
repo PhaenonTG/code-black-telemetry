@@ -82,6 +82,7 @@ export interface FabricDeviceState {
   age_ms?: number | null;
   health_state?: FabricPresenceState;
   transport?: FabricTransportMetadata;
+  latest?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
 
