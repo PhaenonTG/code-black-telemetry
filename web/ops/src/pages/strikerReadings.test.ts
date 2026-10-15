@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { FabricDeviceState } from "../../../../src/services/fabric/types"
-import { strikerReading } from "./strikerReadings"
+import { formatStrikerReading, strikerReading } from "./strikerReadings"
 
 const now = Date.parse("2026-10-15T12:00:00Z")
 const device = {
@@ -14,6 +14,14 @@ const device = {
 } satisfies FabricDeviceState
 
 describe("Striker ESP readings", () => {
+  it("uses familiar display units without changing Core's source values", () => {
+    expect(formatStrikerReading("temperature_c", 0)).toBe("32.0 °F")
+    expect(formatStrikerReading("dewpoint_c", 20)).toBe("68.0 °F")
+    expect(formatStrikerReading("pressure_hpa", 1013.25)).toBe("29.92 inHg")
+    expect(formatStrikerReading("speed_mps", 10)).toBe("22.4 mph")
+    expect(formatStrikerReading("wind_hz", 2)).toBe("2.0 Hz")
+    expect(formatStrikerReading("temperature_c", null)).toBe("—")
+  })
   it("shows accepted live values and expires them using sensor timestamps", () => {
     expect(strikerReading(device, "temperature_c", now)).toBe(22.4)
     expect(strikerReading(device, "dewpoint_c", now)).toBe(13.5)
