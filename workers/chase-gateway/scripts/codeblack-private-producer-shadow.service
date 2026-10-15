@@ -1,0 +1,36 @@
+[Unit]
+Description=Code Black private Producer read-only shadow
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/srv/codeblack/releases/private-producer/shadow-20261015-r1/dist-private/producer-bridge.mjs
+
+[Service]
+Type=simple
+User=cbwx-private-ops
+Group=cbwx-private-ops
+WorkingDirectory=/srv/codeblack/releases/private-producer/shadow-20261015-r1
+EnvironmentFile=/srv/codeblack/config/private-producer/runtime.env
+ExecStart=/usr/bin/node /srv/codeblack/releases/private-producer/shadow-20261015-r1/scripts/private-producer-shadow.mjs
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/srv/codeblack/data/private-producer-shadow
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+TasksMax=128
+MemoryHigh=384M
+MemoryMax=512M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=codeblack-private-producer-shadow
+
+[Install]
+WantedBy=multi-user.target
