@@ -1,0 +1,13 @@
+# Private Producer shadow candidate
+
+This candidate is the first, read-only Producer migration slice. It is built from gateway commit `b31fa3c`; the concurrent composition and overlay edits in the other gateway worktree are not copied or changed here. Reconcile those edits before qualifying a full replacement.
+
+`npm run build:private-producer` bundles the existing Durable Object Producer handler for Core's Node 18 runtime. `scripts/private-producer-shadow.mjs` exposes only status, capabilities, JPEG, and HLS reads plus the corresponding workstation ingest routes. It binds to `127.0.0.1`, requires one server-side bearer token of at least 32 characters, and returns JSON 503 for commands, command polling/acknowledgments, leases, and Facebook routes. This process must not be connected to a second active OBS bridge command consumer.
+
+Status and capabilities are written to a versioned, atomically replaced state file. Preview frames and HLS segments stay in memory and disappear on restart; the existing freshness rules make stale media unavailable. Requests are serialized through the original handler to preserve the Durable Object's single-writer behavior. The state path must be a new directory with restricted access and must not point at production Durable Object exports or bridge journals.
+
+For an isolated loopback start, set `OPS_PRIVATE_PRODUCER_PORT`, `OPS_PRIVATE_PRODUCER_STATE` to a file path in a private directory, and `OPS_PRIVATE_PRODUCER_TOKEN` to a protected random value. Then run `node scripts/private-producer-shadow.mjs` from a staged build with sibling `dist-private/producer-bridge.mjs`. Do not put the token in a browser build or a command line argument. No permanent service unit or public/private route is installed by this slice.
+
+Verification on 2026-10-14: gateway typecheck, 65 original gateway tests, and three shadow tests passed on Windows. The same three shadow tests passed on Core's Node 18.19.1 from a new `/tmp/codeblack-private-producer-shadow-20261014-r1` directory. They cover auth, disabled controls, status persistence, transient JPEG, and the frame size bound. No live OBS data was sent and no process was left running.
+
+Before routing live data: merge the concurrent composition changes, verify authenticated HLS/audio with representative media, arrange a **single** OBS bridge endpoint switch or safe duplication of ingest only, and build a separate authenticated operator gateway. A durable command journal, lease parity, Facebook state, live controls, and rollback checks remain required before replacing the current gateway. This shadow alone does not reduce Cloudflare Worker requests.

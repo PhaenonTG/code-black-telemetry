@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run src && npm run test:private-producer",
+    "build:private-producer": "node scripts/build-private-producer.mjs",
+    "test:private-producer": "npm run build:private-producer && node --test scripts/private-producer-shadow.test.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260903.1",
+    "esbuild": "^0.28.1",
     "typescript": "~6.0.2",
     "vitest": "^5.0.0",
     "wrangler": "^4.0.0"
