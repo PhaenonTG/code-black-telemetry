@@ -69,8 +69,9 @@ class IncidentActionsTests(unittest.TestCase):
         self.assertEqual(actions.session_actor(f"other=1; cb_actions_session={token}"), "glenn")
         self.assertIsNone(actions.session_actor("cb_actions_session=invalid"))
         self.assertEqual(actions.safe_next("/alert-actions/incident?id=svc:test"), "/alert-actions/incident?id=svc%3Atest")
-        for unsafe in ("https://evil.example/", "//evil.example/", "/alert-actions//evil.example",
-                       "/status/", "/alert-actions/incident?id=bad%0d%0aHeader:evil"):
+        self.assertEqual(actions.safe_next("/status/"), "/status/")
+        for unsafe in ("https://evil.example/", "//evil.example", "/alert-actions//evil.example",
+                       "/alert-actions/incident?id=bad%0d%0aHeader:evil"):
             self.assertEqual(actions.safe_next(unsafe), "/alert-actions/services")
         rendered = actions.login_page("/alert-actions/incident?id=svc:test").decode()
         self.assertIn('name=password type=password', rendered)
@@ -80,6 +81,27 @@ class IncidentActionsTests(unittest.TestCase):
         actions.apply_action("edge:incident", "snooze", minutes=15)
         state = actions.public_state()
         self.assertEqual(set(state["edge:incident"]), {"acknowledged_at", "snoozed_until"})
+
+    def test_discord_action_token_scope_and_idempotent_snooze(self):
+        secret = "sample-machine-token"
+        auth = actions.ROOT / "discord-bot-auth.json"
+        auth.write_text(json.dumps({"token_sha256": hashlib.sha256(secret.encode()).hexdigest(),
+                                    "guild_id": "1516679001043898408"}))
+        with patch.object(actions, "BOT_AUTH", auth):
+            self.assertEqual(actions.verify_bot_token("Bearer " + secret), "1516679001043898408")
+            self.assertIsNone(actions.verify_bot_token("Bearer wrong"))
+        payload = {"guild_id": "1516679001043898408", "actor_id": "1516686074871545976",
+                   "interaction_id": "1516686074871545977", "alert_id": "svc:api",
+                   "action": "snooze", "minutes": 15}
+        first = actions.apply_bot_action(payload, "1516679001043898408")
+        with patch.object(actions.time, "time", return_value=time.time() + 20):
+            second = actions.apply_bot_action(payload, "1516679001043898408")
+        self.assertEqual(first["snoozed_until"], second["snoozed_until"])
+        self.assertNotIn("recent_request_ids", second)
+        with self.assertRaises(ValueError):
+            actions.apply_bot_action({**payload, "guild_id": "1"}, "1516679001043898408")
+        with self.assertRaises(ValueError):
+            actions.apply_bot_action({**payload, "action": "restart"}, "1516679001043898408")
 
     def test_alert_history_tracks_open_change_and_resolution(self):
         original = {"id": "svc:radar", "title": "Radar worker", "severity": "WARNING", "status_only": False}

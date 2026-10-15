@@ -17,12 +17,14 @@ import time
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import SimpleCookie
 from pathlib import Path
 
 BASE = "https://codeblack-core.tail1d0673.ts.net/alert-actions"
 STATUS = "https://codeblack-core.tail1d0673.ts.net/status/"
 ROOT = Path(os.environ.get("CODEBLACK_ACTIONS_DIR", "/srv/codeblack/data/alert-actions"))
 AUTH = Path(os.environ.get("CODEBLACK_ACTIONS_AUTH", "/srv/codeblack/config/alert-actions/auth.json"))
+BOT_AUTH = Path(os.environ.get("CODEBLACK_ACTIONS_BOT_AUTH", "/srv/codeblack/config/alert-actions/discord-bot-auth.json"))
 BIND = os.environ.get("CODEBLACK_ACTIONS_BIND", "127.0.0.1")
 PORT = int(os.environ.get("CODEBLACK_ACTIONS_PORT", "8796"))
 UNITS = {"codeblack-ntfy.service": "Private ntfy server",
@@ -156,15 +158,19 @@ def watch_attention():
         time.sleep(delay)
 
 
-def apply_action(alert_id, action, minutes=None, at=None):
+def apply_action(alert_id, action, minutes=None, at=None, request_id=None):
     if not ID.fullmatch(alert_id):
         raise ValueError("invalid alert ID")
+    if request_id is not None and not re.fullmatch(r"[0-9]{15,22}", request_id):
+        raise ValueError("invalid request ID")
     at = time.time() if at is None else at
     with LOCK:
         obj = read_state()
         if len(obj) >= 1000 and alert_id not in obj:
             raise ValueError("action store full")
         item = obj.setdefault(alert_id, {})
+        if request_id in item.get("recent_request_ids", ()):
+            return public_state(obj, at)
         if action == "ack":
             item["acknowledged_at"] = utc(at)
         elif action == "snooze":
@@ -179,8 +185,45 @@ def apply_action(alert_id, action, minutes=None, at=None):
             obj.pop(alert_id, None)
         else:
             raise ValueError("invalid action")
+        if request_id is not None and action != "clear":
+            item["recent_request_ids"] = (item.get("recent_request_ids", []) + [request_id])[-20:]
         save_state(obj)
         return public_state(obj, at)
+
+
+def verify_bot_token(header):
+    if not header or not header.startswith("Bearer "):
+        return None
+    try:
+        config = json.loads(BOT_AUTH.read_text(encoding="utf-8"))
+        supplied = hashlib.sha256(header[7:].encode("utf-8")).hexdigest()
+        expected = config["token_sha256"]
+        guild_id = str(config["guild_id"])
+        if re.fullmatch(r"[0-9a-f]{64}", expected) and hmac.compare_digest(supplied, expected):
+            return guild_id
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return None
+
+
+def apply_bot_action(payload, guild_id):
+    if not isinstance(payload, dict) or str(payload.get("guild_id")) != guild_id:
+        raise ValueError("guild mismatch")
+    actor_id, request_id = str(payload.get("actor_id", "")), str(payload.get("interaction_id", ""))
+    if not re.fullmatch(r"[0-9]{15,22}", actor_id):
+        raise ValueError("invalid actor")
+    if not re.fullmatch(r"[0-9]{15,22}", request_id):
+        raise ValueError("invalid interaction")
+    action = payload.get("action")
+    if action not in ("ack", "snooze", "unsnooze"):
+        raise ValueError("unsupported bot action")
+    minutes = payload.get("minutes") if action == "snooze" else None
+    if action == "snooze" and (type(minutes) is not int or minutes not in (15, 60, 240, 1440)):
+        raise ValueError("invalid snooze duration")
+    alert_id = str(payload.get("alert_id", ""))
+    state = apply_action(alert_id, action, minutes, request_id=request_id)
+    audit("discord:" + actor_id, action, alert_id, "ok")
+    return state.get(alert_id, {})
 
 
 def audit(actor, action, target, result):
@@ -241,6 +284,8 @@ def safe_next(value):
     if not parsed.scheme and not parsed.netloc and not parsed.fragment:
         if parsed.path == "/alert-actions/services" and not parsed.query:
             return "/alert-actions/services"
+        if parsed.path == "/status/" and not parsed.query:
+            return "/status/"
         if parsed.path == "/alert-actions/incident":
             alert_id = urllib.parse.parse_qs(parsed.query).get("id", [""])[0]
             if ID.fullmatch(alert_id):
@@ -315,7 +360,7 @@ def page(title, body):
             ".row{display:flex;justify-content:space-between;gap:12px;align-items:start;border-top:1px solid #303947;padding:14px 0}.row:first-child{border-top:0;padding-top:0}.row:last-child{padding-bottom:0}.row-main{min-width:0;overflow-wrap:anywhere}"
             ".pill{display:inline-block;border-radius:99px;padding:4px 9px;font-size:.67rem;font-weight:800;letter-spacing:.04em;background:#34404d;color:#dce8f3;white-space:nowrap}.pill.healthy{background:#1b503f;color:#a7f2cb}.pill.warning,.pill.degraded{background:#674829;color:#ffe1ad}.pill.critical,.pill.offline{background:#69333b;color:#ffb9c3}.pill.info{background:#24465d;color:#acdfff}"
             "a{color:#9bd1ff}a:hover{color:#fff}.btn,button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;border:1px solid #607186;border-radius:10px;padding:10px 15px;background:#263545;color:#f5f8fb;font:inherit;font-weight:700;text-decoration:none;cursor:pointer}button:hover,.btn:hover{background:#34465b;color:#fff}.btn.primary,button.primary{background:#e43b50;border-color:#e43b50;color:white}.btn.primary:hover,button.primary:hover{background:#f25263}.btn.danger,button.danger{border-color:#b45c68;background:#472730}"
-            "input,select{font:inherit;color:#f4f7fa;background:#0f151e;border:1px solid #536170;border-radius:9px;padding:11px;max-width:100%}input:focus,select:focus{outline:2px solid #8bbdeb}label{color:#c9d3dd;font-size:.9rem}form{margin:14px 0 0}form input:not([type=hidden]){width:100%;max-width:420px}form button{margin-top:10px}"
+            "input,select{font:inherit;font-size:16px;color:#f4f7fa;background:#0f151e;border:1px solid #536170;border-radius:9px;padding:11px;max-width:100%}input:focus,select:focus{outline:2px solid #8bbdeb}label{color:#c9d3dd;font-size:.9rem}form{margin:14px 0 0}form input:not([type=hidden]){width:100%;max-width:420px}form button{margin-top:10px}"
             ".actions{display:flex;gap:8px;flex-wrap:wrap}.kicker{color:#e4af76;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.empty{padding:18px;border:1px dashed #45505e;border-radius:14px;color:#9eacbb}.mono,code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.88em;overflow-wrap:anywhere}"
             "@media(max-width:600px){.shell{padding:16px 14px 64px}.card{padding:17px}.row{gap:8px}.stat{font-size:1.65rem}}"
             "</style><div class=shell><header class=top><div class=brand>CODE <b>BLACK</b> / OPS</div><span class=private>● TAILNET PRIVATE</span></header>"
@@ -410,7 +455,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'")
         for name, value in (extra_headers or {}).items():
-            self.send_header(name, value)
+            for item in value if isinstance(value, (list, tuple)) else (value,):
+                self.send_header(name, item)
         self.end_headers()
         self.wfile.write(body)
 
@@ -427,7 +473,14 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/state":
             return self.respond(200, json.dumps(public_state()).encode(), "application/json")
         if parsed.path == "/login":
-            return self.respond(200, login_page(urllib.parse.parse_qs(parsed.query).get("next", [""])[0]))
+            destination = safe_next(urllib.parse.parse_qs(parsed.query).get("next", [""])[0])
+            existing = session_actor(self.headers.get("Cookie"))
+            if existing and destination == "/status/":
+                token = self.headers.get("Cookie", "")
+                cookie = SimpleCookie(); cookie.load(token)
+                return self.respond(303, b"", extra_headers={"Location": destination,
+                    "Set-Cookie": f"cb_ops_status_session={cookie['cb_actions_session'].value}; Path=/status; Secure; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL}"})
+            return self.respond(200, login_page(destination))
         if not self.actor("/alert-actions" + self.path):
             return
         if parsed.path in ("/", "/services"):
@@ -462,6 +515,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/bot/action":
+            return self.handle_bot_action()
         if parsed.path == "/login":
             return self.handle_login()
         actor = self.actor("/alert-actions/services")
@@ -504,6 +559,22 @@ class Handler(BaseHTTPRequestHandler):
             audit(actor, "restart", value("unit"), "timeout")
             return self.respond(504, page("Timeout", "<h1>Restart timed out; check Status Center before retrying.</h1>"))
 
+    def handle_bot_action(self):
+        guild_id = verify_bot_token(self.headers.get("Authorization"))
+        if guild_id is None:
+            return self.respond(401, b'{"error":"UNAUTHORIZED"}', "application/json")
+        if self.headers.get("Origin") or self.headers.get("Content-Type", "").split(";", 1)[0] != "application/json":
+            return self.respond(415, b'{"error":"JSON_REQUIRED"}', "application/json")
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if size < 2 or size > 2048:
+                raise ValueError("invalid request size")
+            payload = json.loads(self.rfile.read(size))
+            state = apply_bot_action(payload, guild_id)
+            return self.respond(200, json.dumps({"ok": True, "state": state}).encode(), "application/json")
+        except (ValueError, TypeError, UnicodeError):
+            return self.respond(400, b'{"error":"INVALID_ACTION"}', "application/json")
+
     def send_test_notification(self, actor):
         global LAST_TEST
         with LOCK:
@@ -543,7 +614,8 @@ class Handler(BaseHTTPRequestHandler):
             token = create_session(value("username"))
             return self.respond(303, b"", extra_headers={
                 "Location": destination,
-                "Set-Cookie": f"cb_actions_session={token}; Path=/alert-actions; Secure; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL}"})
+                "Set-Cookie": [f"cb_actions_session={token}; Path=/alert-actions; Secure; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL}",
+                               f"cb_ops_status_session={token}; Path=/status; Secure; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL}"]})
         except (ValueError, UnicodeError):
             return self.respond(400, login_page("/alert-actions/services", "Invalid sign-in form."))
 
