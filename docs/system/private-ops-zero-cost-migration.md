@@ -16,6 +16,10 @@ Diagnostic update, 2026-10-14: read-only inspection of saved Core advisory metad
 
 Access check, 2026-10-14: the signed-in Cloudflare One dashboard shows **Zero Trust Free**. The existing healthy Core tunnel has three published application routes and no private network route. No route or billing setting was changed. A private route and one enrolled device still require a pilot; the existing published routes are not the proposed video path. A synthetic, local-only `qwen3-coder:30b` assessment completed successfully in about 20 seconds with the expected top-level field types, so model installation/availability is not the persistent failure. Real draft packet validation remains the open issue.
 
+Private hostname design check, 2026-10-14: Cloudflare's current private-hostname route uses the enrolled client's DNS/traffic path, then resolves the hostname on the `cloudflared` host. It does not provide a browser-trusted TLS certificate to the origin. Core currently has no Caddy/Certbot installation; Tailscale Serve owns `100.96.77.89:443`, while `192.168.0.187:443` is free. The pilot therefore needs a distinct hostname under a controlled public domain, a DNS-01 certificate (so the site itself stays private), a TLS listener bound only to the intended Core interface, and an origin-side hostname mapping. Verify the Cloudflare private route and Gateway access policy with one device before changing DNS or operator login redirects. Do not substitute a Cloudflare Origin CA certificate directly in the browser path; enrolled browsers must trust the certificate. Confirm that WARP and Tailscale can coexist on each device, especially iOS.
+
+The candidate server accepts optional `OPS_PRIVATE_TLS_CERT` and `OPS_PRIVATE_TLS_KEY` file paths, `OPS_PRIVATE_BIND_HOST` and `OPS_PRIVATE_HOSTNAME`. It refuses a non-loopback bind without TLS and the expected hostname, and rejects a mismatched Host header. Keep the certificate/key outside the repository with restricted file permissions. Host checking is an extra guard, not a replacement for Cloudflare Access/Gateway policy and host firewall rules. The current executable remains loopback HTTP by default.
+
 Implementation update, 2026-10-14: a local private Ops server candidate now has an optional `/api/core/*` handler. It reuses the production Core allowlist and Supabase active-profile check, forwards only to loopback Core, strips unknown query keys, signs authorized draft writes with the same Core HMAC contract, and streams Fabric NDJSON. The two public Storm Intel overlay reads and the public Mapbox token route also have private candidates. Producer, Chase, camera/road, and public hurricane routes remain explicit 503 responses. The candidate has unit tests but has not been deployed or connected to a Cloudflare private route. A private build must embed the current Supabase public URL/key and set `VITE_CODEBLACK_CORE_BASE_URL=/api/core`; the server process must receive the same public auth values, `OPS_PRIVATE_CORE_BASE_URL=http://127.0.0.1:8000`, the existing Core `CODEBLACK_OPS_WRITE_SECRET` value as `OPS_PRIVATE_WRITE_SECRET`, and optionally `MAPBOX_PUBLIC_TOKEN` through protected runtime configuration. Do not print or commit those values. Run `npm run build:private-gateway` before starting the server with Core routing enabled.
 
 30B reproduction, 2026-10-14: a read-only call with one current production draft packet returned `unsupported_absence_claim` after about 19 seconds. The claim guard correctly rejected the result; no advisory or decision was written. Adding an explicit evidence-scoped wording instruction to the snapshot produced one `ready` result on the same packet under the unchanged guards. An intermediate probe returned a PHAENON3 non-200 response, so reliability is not yet proven. The wording change and safe failure diagnostics are isolated Core candidates. Repeated real workflow checks after a controlled release are required before the draft-review gate can pass.
@@ -72,6 +76,7 @@ Gate: exact current versions, a genuine $0 access path, and a reproducible 30B f
 ### 1. Private site skeleton
 
 - Deploy a candidate static Ops build and a health endpoint on Core at a private hostname, behind an authenticated private network route.
+- Issue and renew a browser-trusted certificate through DNS-01 for that controlled hostname; keep public A/AAAA records and published application routes absent. Terminate HTTPS on Core and restrict the listener to the pilot interface and enrolled route.
 - Preserve the current `ops.codeblackwx.com` deployment. Configure the private origin in Supabase allowed redirects and validate login, logout, password reset, profile authorization and session refresh.
 - Test desktop, iPhone and iPad, including reconnect after changing networks and coexistence with Tailscale.
 
@@ -130,3 +135,9 @@ The current Pages site, Chase Gateway Worker, Durable Object and OBS bridge conf
 4. Write and run the route-contract matrix against both current production and the candidate, then migrate the least stateful Core relays before Producer.
 
 No production cutover occurs until the relevant gate passes.
+
+## Access references
+
+- Cloudflare private hostname routing and DNS resolution: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/private-net/cloudflared/connect-private-hostname/
+- Cloudflare private IP/hostname Access application policy: https://developers.cloudflare.com/cloudflare-one/access-controls/applications/non-http/self-hosted-private-app/
+- Let's Encrypt DNS-01 validation without an exposed web server: https://letsencrypt.org/docs/challenge-types/

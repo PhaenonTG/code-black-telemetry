@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { get } from "node:http";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -60,6 +61,24 @@ test("configured Core gateway receives API requests without SPA fallback", async
     const result = await fetch(url, { method: "POST", body: '{"setup_id":"sample"}' });
     assert.equal(result.status, 200);
     assert.deepEqual(await result.json(), { accepted: true });
+  } finally {
+    await new Promise(resolve => privateServer.close(resolve));
+  }
+});
+
+test("private hostname rejects an unexpected Host header", async () => {
+  const privateServer = createPrivateOpsServer({ distDir: root, allowedHostname: "ops-private.example.test" });
+  await new Promise(resolve => privateServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const url = `http://127.0.0.1:${privateServer.address().port}/health`;
+    assert.equal((await fetch(url)).status, 421);
+    const status = await new Promise((resolve, reject) => {
+      get(url, { headers: { Host: "ops-private.example.test" } }, response => {
+        response.resume();
+        resolve(response.statusCode);
+      }).on("error", reject);
+    });
+    assert.equal(status, 200);
   } finally {
     await new Promise(resolve => privateServer.close(resolve));
   }

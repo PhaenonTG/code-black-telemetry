@@ -1,6 +1,8 @@
 import { createServer } from "node:http";
+import { createServer as createSecureServer } from "node:https";
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
+import { isIP } from "node:net";
 import { Readable } from "node:stream";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,9 +70,15 @@ async function sendCoreResponse(request, response, gateway) {
   stream.on("error", () => response.destroy()).pipe(response);
 }
 
-export function createPrivateOpsServer({ distDir = defaultDist, apiGateway } = {}) {
+export function createPrivateOpsServer({ distDir = defaultDist, apiGateway, tls, allowedHostname } = {}) {
   const root = resolve(distDir);
-  return createServer(async (request, response) => {
+  const handle = async (request, response) => {
+    if (allowedHostname) {
+      let hostname;
+      try { hostname = new URL(`http://${request.headers.host}`).hostname.toLowerCase(); }
+      catch { json(response, 400, { error: "INVALID_HOST" }); return; }
+      if (hostname !== allowedHostname.toLowerCase()) { json(response, 421, { error: "INVALID_HOST" }); return; }
+    }
     if (request.url?.startsWith("/api/core/") || request.url?.startsWith("/overlay-core/")) {
       if (!apiGateway) { json(response, 503, { error: "PRIVATE_ROUTE_NOT_MIGRATED" }); return; }
       try { await sendCoreResponse(request, response, apiGateway); }
@@ -123,15 +131,28 @@ export function createPrivateOpsServer({ distDir = defaultDist, apiGateway } = {
     });
     if (request.method === "HEAD") { response.end(); return; }
     createReadStream(file).on("error", () => response.destroy()).pipe(response);
-  });
+  };
+  return tls ? createSecureServer(tls, handle) : createServer(handle);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const rawPort = process.env.OPS_PRIVATE_PORT;
   const port = Number(rawPort);
-  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
-    throw new Error("OPS_PRIVATE_PORT must be an unprivileged TCP port");
+  const tlsCert = process.env.OPS_PRIVATE_TLS_CERT;
+  const tlsKey = process.env.OPS_PRIVATE_TLS_KEY;
+  if (Boolean(tlsCert) !== Boolean(tlsKey)) throw new Error("Both private TLS paths are required");
+  if (!Number.isInteger(port) || port < (tlsCert ? 1 : 1024) || port > 65535) {
+    throw new Error("OPS_PRIVATE_PORT is invalid");
   }
+  const bindHost = process.env.OPS_PRIVATE_BIND_HOST || "127.0.0.1";
+  const allowedHostname = process.env.OPS_PRIVATE_HOSTNAME;
+  if (!isIP(bindHost) || ["0.0.0.0", "::"].includes(bindHost)) throw new Error("OPS_PRIVATE_BIND_HOST must be a specific IP");
+  if (bindHost !== "127.0.0.1" && bindHost !== "::1" && !tlsCert)
+    throw new Error("A non-loopback private listener requires TLS");
+  if (bindHost !== "127.0.0.1" && bindHost !== "::1" && !allowedHostname)
+    throw new Error("A non-loopback private listener requires OPS_PRIVATE_HOSTNAME");
+  if (allowedHostname && !/^[a-z0-9.-]+$/i.test(allowedHostname)) throw new Error("OPS_PRIVATE_HOSTNAME is invalid");
+  const tls = tlsCert ? { cert: await readFile(tlsCert), key: await readFile(tlsKey) } : undefined;
   const distDir = process.env.OPS_PRIVATE_DIST || defaultDist;
   let apiGateway;
   if (process.env.OPS_PRIVATE_CORE_BASE_URL) {
@@ -145,7 +166,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     };
     apiGateway = request => handlePrivateApiRequest(request, env);
   }
-  createPrivateOpsServer({ distDir, apiGateway }).listen(port, "127.0.0.1", () => {
-    console.log(`Private Ops candidate listening on 127.0.0.1:${port}`);
+  createPrivateOpsServer({ distDir, apiGateway, tls, allowedHostname }).listen(port, bindHost, () => {
+    console.log(`Private Ops candidate listening on ${bindHost}:${port}`);
   });
 }
