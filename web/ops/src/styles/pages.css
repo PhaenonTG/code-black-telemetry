@@ -111,6 +111,7 @@
 .ops-fleet-card__readings dl div{min-width:0;padding:10px;background:rgba(255,255,255,.03);border:1px solid var(--cb-line)}
 .ops-fleet-card__readings dt{color:var(--cb-muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
 .ops-fleet-card__readings dd{margin:5px 0 0;color:var(--cb-text);font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+.ops-fleet-card__readings small{display:block;margin-top:3px;color:var(--cb-amber);font-size:10px}
 @media(max-width:390px){.ops-fleet-grid{grid-template-columns:minmax(0,1fr)}}
 
 /* ---- Phase 3 Storm Intel workspace ---- */
