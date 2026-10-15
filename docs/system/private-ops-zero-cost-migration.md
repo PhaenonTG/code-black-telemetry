@@ -12,6 +12,8 @@ This plan does not promise every third-party source is unlimited. Supabase Auth,
 
 Known existing defect: the operator reports that the local 30B review of drafts fails every time. The current chase setup workflow calls `qwen3-coder:30b` after Aegis, allows a longer 225-second transport window, and marks the workflow `incomplete` when either review is unavailable. The existing approval gate then blocks posting a Reviewed Briefing. The private-site migration must not conceal that state or turn a failed model result into a passing review. This defect is in scope for diagnosis and repair before declaring draft workflows fully functional. No paid fallback may run automatically; any replacement reviewer must be local/free, evidence-bounded, and validated against the same safety rules. Confirm whether tropical drafts share the symptom before changing that separate workflow.
 
+Diagnostic update, 2026-10-14: read-only inspection of saved Core advisory metadata found two older revisions with validation failures and one later revision with both reviewers ready. Current active drafts have no saved advisory result yet. The failure is therefore intermittent in the stored evidence; the operator's recurring failure still needs a current reproduction. A candidate Core change now records which allowlisted assessment field failed shape validation and retains a successful Aegis review when retrying the same packet after a 30B failure. A candidate Ops change shows safe failure categories rather than only a generic retry message. These changes remain undeployed and do not weaken the approval gate.
+
 ## Current dependencies found in source
 
 | Surface | Current location | Migration requirement |

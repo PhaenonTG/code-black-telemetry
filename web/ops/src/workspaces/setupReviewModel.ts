@@ -1,9 +1,33 @@
 export type AdvisoryReview = {
-  status: string; model: string; reason?: string; summary?: string;
+  status: string; model: string; reason?: string; validation_field?: string; summary?: string;
   supporting_factors?: string[]; limiting_factors?: string[]; uncertainties?: string[];
   missing_information?: string[]; attention?: string[]; primary_hazards?: string[];
   storm_mode?: string; initiation?: string;
 };
+const validationFields: Record<string, string> = {
+  environment_summary: "summary", storm_mode_assessment: "storm mode", initiation_assessment: "initiation",
+  supporting_factors: "supporting factors", limiting_factors: "limiting factors",
+  uncertainties: "uncertainties", missing_information: "missing information",
+  primary_hazards: "primary hazards", recommended_attention: "recommended attention",
+};
+export function advisoryFailureMessage(review?: AdvisoryReview): string {
+  if (!review || review.status === "not_requested") return "Run reviews to assess this captured evidence.";
+  if (review.status === "pending") return "Waiting for the sequential local review to finish.";
+  if (review.reason === "timeout") return "The local model timed out. Retry when the review host is available.";
+  if (review.reason === "network_error" || review.reason === "http_status" || review.reason === "not_configured")
+    return "The review host could not be reached or is not configured. Check its status before retrying.";
+  if (review.reason === "worker_result" || review.reason === "invalid_json")
+    return "The review host returned an invalid response. Retry after checking the model service.";
+  if (review.reason === "validation_failed") {
+    const field = validationFields[review.validation_field ?? ""];
+    return field ? `The local model returned an invalid ${field} field. Retry the review.`
+      : "The local model's assessment failed validation. Retry the review.";
+  }
+  if (review.reason === "unsupported_risk_category") return "Review withheld: its risk category conflicted with the official SPC outlook.";
+  if (review.reason === "unsupported_absence_claim") return "Review withheld: missing storm or warning inputs were treated as an all-clear.";
+  if (review.reason === "interrupted") return "This review was interrupted. Run the reviews again.";
+  return "The reviewer could not return a validated assessment. Retry after a minute.";
+}
 export type SetupDecision = { id: string; decision: string; note: string; actor_role: string; decided_at: string; revision: number };
 export type PaidSetupReview = {
   status: string; reviewed_at?: string; model?: string; verdict?: "ready" | "withhold";

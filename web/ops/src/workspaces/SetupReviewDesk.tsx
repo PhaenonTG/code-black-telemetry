@@ -3,7 +3,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { fetchForecast, postSetupWorkflow } from "../core/client";
 import type { OpsCoreConfig } from "../core/config";
 import { SetupWeightTuner } from "./SetupWeightTuner";
-import { approvalDisabledReason, reviewStatus, type SetupWeightPolicy, type SetupWorkflow } from "./setupReviewModel";
+import { advisoryFailureMessage, approvalDisabledReason, reviewStatus, type SetupWeightPolicy, type SetupWorkflow } from "./setupReviewModel";
 
 export function SetupReviewDesk({ config, setupId, revision, fingerprint, current, initial, onWorkflowChange }: {
   config: OpsCoreConfig; setupId: string; revision: number; fingerprint?: string; current: boolean; initial?: SetupWorkflow;
@@ -106,11 +106,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
           {[["Supporting evidence", review.supporting_factors], ["Limits", review.limiting_factors], ["Uncertainty", review.uncertainties],
             ["Watch next", review.attention], ["Missing information", review.missing_information]].map(([label, items]) =>
             Array.isArray(items) && items.length > 0 ? <details key={String(label)}><summary>{String(label)} ({items.length})</summary><ul>{items.map((item, i) => <li key={i}>{item}</li>)}</ul></details> : null)}
-        </> : <p>{review?.status === "pending" ? "Waiting for the sequential local review to finish."
-          : review?.reason === "unsupported_risk_category" ? "Review withheld: its risk category conflicted with the official SPC outlook."
-          : review?.reason === "unsupported_absence_claim" ? "Review withheld: missing storm or warning inputs were treated as an all-clear."
-          : review?.reason === "interrupted" ? "This review was interrupted. Run the reviews again."
-          : review?.reason ? "The reviewer could not return a validated assessment. Retry after a minute." : "Run reviews to assess this captured evidence."}</p>}</div>;
+        </> : <p>{advisoryFailureMessage(review)}</p>}</div>;
     })}</div>
     <div className="setup-review-desk__comparison"><strong>Review comparison</strong>
       <p>{workflow?.comparison?.status === "differences" ? `The reviewers differ in ${workflow.comparison.differences.map(field => field.replaceAll("_", " ")).join(" and ")}. Read both explanations before deciding.`
