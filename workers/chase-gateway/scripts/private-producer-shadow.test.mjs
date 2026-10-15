@@ -65,3 +65,26 @@ test("preview media stays transient and bounded", async () => {
   });
   assert.equal(tooLarge.status, 413);
 });
+
+test("HLS segment and manifest follow the private read path", async () => {
+  const now = new Date().toISOString();
+  const name = `program-${"a".repeat(32)}-1.ts`;
+  const media = Buffer.alloc(188);
+  media[0] = 0x47;
+  const live = { source_state: "SOURCE_LIVE", previews: { program: { state: "ACTIVE" } }, metrics: { last_video_timestamp: now } };
+  assert.equal((await call("/api/producer/v1/workstation/status", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(live),
+  })).status, 202);
+  const put = (file, body, contentType) => call(`/api/producer/v1/workstation/preview/hls/${file}`, {
+    method: "POST", headers: { "Content-Type": contentType, "X-Producer-Frame-At": now }, body,
+  });
+  assert.equal((await put(name, media, "video/mp2t")).status, 202);
+  const manifest = `#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:1\n#EXTINF:1.000000,\n#EXT-X-PROGRAM-DATE-TIME:${now}\n${name}\n`;
+  assert.equal((await put("index.m3u8", manifest, "application/vnd.apple.mpegurl")).status, 202);
+  const playlist = await call("/api/producer/v1/preview/hls/index.m3u8");
+  assert.equal(playlist.status, 200);
+  assert.match(await playlist.text(), new RegExp(`/api/producer/v1/preview/hls/${name}`));
+  const segment = await call(`/api/producer/v1/preview/hls/${name}`);
+  assert.equal(segment.status, 200);
+  assert.deepEqual(Buffer.from(await segment.arrayBuffer()), media);
+});
