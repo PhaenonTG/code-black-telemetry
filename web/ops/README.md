@@ -37,6 +37,16 @@ Copy `.env.example` to `.env` and fill in a real Mapbox token to see the map/rad
 the Supabase project's URL and publishable key (`VITE_SUPABASE_URL`,
 `VITE_SUPABASE_PUBLISHABLE_KEY`) to see the login screen actually authenticate.
 
+### Private OPS release
+
+Build the private host with `npm run build:private`. This selects
+`.env.private.local` and verifies that the resulting browser assets contain the
+public Supabase URL, publishable key, and Core address. The ordinary `npm run
+build` selects production mode and must not be used for a private host release;
+the server's runtime environment cannot repair missing browser build settings.
+Never place a Supabase service role key or other private credentials in a `VITE_`
+variable.
+
 ## Auth
 
 Production auth is **Supabase Auth (email + password)**, enforced inside the app — see
