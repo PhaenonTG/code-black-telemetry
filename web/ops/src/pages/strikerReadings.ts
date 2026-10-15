@@ -7,6 +7,7 @@ export const STRIKER_SENSORS = [
     { key: "dewpoint_c", label: "Dew point", unit: "°C" },
   ] },
   { id: "cbwx-striker-nav", title: "Vane / Nav ESP", fields: [
+    { key: "wind_hz", label: "Wind pulses", unit: "Hz" },
     { key: "wind_direction_deg", label: "Wind direction", unit: "°" },
     { key: "trunk_temperature_c", label: "BME280 temperature", unit: "°C" },
     { key: "pressure_hpa", label: "Pressure", unit: "hPa" },
