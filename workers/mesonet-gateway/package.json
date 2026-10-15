@@ -1,0 +1,14 @@
+{
+  "name": "codeblack-mesonet-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "predeploy": "npm test",
+    "deploy": "wrangler deploy",
+    "postdeploy": "node scripts/verify-live.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.131.1"
+  }
+}

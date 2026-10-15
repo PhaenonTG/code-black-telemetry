@@ -60,6 +60,7 @@ export interface Env {
   // Shared bearer secret. Checked against the caller's `Authorization: Bearer <token>` header on
   // every authenticated route, and injected server-side (never exposed) on the public route.
   CHASE_TOKEN?: string;
+  MESONET_READ_TOKEN?: string;
   // The same public Supabase project configuration used by Code Black OPS. These are public
   // client values, stored as Worker secrets to avoid accidental source/config drift. No service
   // role key is ever used by Chase or this Worker.
@@ -959,6 +960,66 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 
   if (!env.CORE_VPC) return json(503, { error: "CORE_UNAVAILABLE" });
+
+  // Device credentials belong to Mesonet Core, not Chase caller authentication.
+  // Keep these routes ahead of the generic Chase auth fallback on every gateway release.
+  if (url.pathname === "/api/chase/mesonet/ota/check" ||
+      /^\/api\/chase\/mesonet\/ota\/image\/(wind|weather|striker-weather|striker-nav)\/\d{1,5}\.\d{1,5}\.\d{1,5}$/.test(url.pathname)) {
+    if (request.method !== "GET") return json(405, { error: "METHOD_NOT_ALLOWED" });
+    const authorization = request.headers.get("Authorization");
+    if (!authorization?.startsWith("Bearer ")) return json(401, { error: "AUTH_REQUIRED" });
+    const path = url.pathname.replace("/api/chase/mesonet/ota", "/api/mesonet/v1/ota");
+    try {
+      const upstream = await env.CORE_VPC.fetch(`${CORE_ORIGIN}${path}${url.search}`, {
+        headers: { Authorization: authorization },
+      });
+      const headers = new Headers(upstream.headers);
+      headers.set("Cache-Control", "no-store");
+      return new Response(upstream.body, { status: upstream.status, headers });
+    } catch { return json(502, { error: "CORE_TRANSPORT_UNAVAILABLE" }); }
+  }
+
+  if (url.pathname === "/api/chase/mesonet/ingest") {
+    if (request.method !== "POST") return json(405, { error: "METHOD_NOT_ALLOWED" });
+    const authorization = request.headers.get("Authorization");
+    if (!authorization?.startsWith("Bearer ")) return json(401, { error: "AUTH_REQUIRED" });
+    const length = Number(request.headers.get("Content-Length") || "0");
+    if (length > 4096) return json(413, { error: "PAYLOAD_TOO_LARGE" });
+    const body = await request.arrayBuffer();
+    if (body.byteLength > 4096) return json(413, { error: "PAYLOAD_TOO_LARGE" });
+    try {
+      return await env.CORE_VPC.fetch(`${CORE_ORIGIN}/api/mesonet/v1/ingest`, {
+        method: "POST", body,
+        headers: { Authorization: authorization, "Content-Type": "application/json" },
+      });
+    } catch { return json(502, { error: "CORE_TRANSPORT_UNAVAILABLE" }); }
+  }
+
+  if (url.pathname === "/api/chase/mesonet/public") {
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: PUBLIC_CORS_HEADERS });
+    if (request.method !== "GET") return json(405, { error: "METHOD_NOT_ALLOWED" });
+    if (!env.MESONET_READ_TOKEN) return json(503, { error: "NOT_CONFIGURED" });
+    try {
+      const upstream = await env.CORE_VPC.fetch(`${CORE_ORIGIN}/api/mesonet/v1/latest`, {
+        headers: { Authorization: `Bearer ${env.MESONET_READ_TOKEN}` },
+      });
+      if (!upstream.ok) return json(503, { error: "READINGS_UNAVAILABLE" });
+      const state = await upstream.json() as Record<string, {
+        readings?: Record<string, number | null>; calibration_verified?: boolean;
+      }>;
+      const wind = state.wind?.readings ?? {}, weather = state.weather?.readings ?? {};
+      return new Response(JSON.stringify({
+        temperature_c: weather.temperature_c ?? null,
+        humidity_pct: weather.humidity_pct ?? null,
+        dewpoint_c: weather.dewpoint_c ?? null,
+        wind_mps: state.wind?.calibration_verified ? wind.wind_mps ?? null : null,
+        wind_avg_mps: state.wind?.calibration_verified ? wind.wind_avg_mps ?? null : null,
+        gust_mps: state.wind?.calibration_verified ? wind.gust_mps ?? null : null,
+        wind_calibration_verified: state.wind?.calibration_verified === true,
+        wind_reference: "apparent", generated_at: new Date().toISOString(),
+      }), { headers: { ...PUBLIC_CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "no-store" } });
+    } catch { return json(502, { error: "CORE_TRANSPORT_UNAVAILABLE" }); }
+  }
 
   if (url.pathname === "/api/chase/location/public") {
     if (request.method === "OPTIONS") {

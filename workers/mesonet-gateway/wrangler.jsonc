@@ -1,0 +1,11 @@
+{
+  "name": "codeblack-mesonet-gateway",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-08",
+  "routes": [{ "pattern": "ops.codeblackwx.com/api/chase/mesonet/*", "zone_name": "codeblackwx.com" }],
+  "vpc_services": [{
+    "binding": "CORE_VPC",
+    "service_id": "01a07ab2-e9b9-7072-8d86-bb514e27712c",
+    "remote": true
+  }]
+}

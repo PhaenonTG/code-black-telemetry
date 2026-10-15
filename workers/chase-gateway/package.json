@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "predeploy": "npm run typecheck && npm test && node scripts/verify-mesonet-contract.mjs pre",
+    "deploy": "wrangler deploy",
+    "postdeploy": "node scripts/verify-mesonet-contract.mjs live"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260903.1",
