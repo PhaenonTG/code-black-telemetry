@@ -49,8 +49,13 @@ async function sendCoreResponse(request, response, gateway) {
   if (request.method === "POST" || request.method === "PUT") {
     const chunks = [];
     let size = 0;
+    const path = request.url?.split("?", 1)[0] ?? "";
+    const workstation = path.startsWith("/api/producer/v1/workstation/");
     const maxBytes = request.method === "PUT" ? 64 * 1024 :
-      request.url?.startsWith("/api/kandrive/graphql") ? 24_000 : 4096;
+      workstation && path.endsWith("/preview/program.jpg") ? 2 * 1024 * 1024 :
+      workstation && path.endsWith(".ts") ? 512 * 1024 :
+      workstation ? 64 * 1024 :
+      path.startsWith("/api/kandrive/graphql") ? 24_000 : 4096;
     for await (const chunk of request) {
       size += chunk.length;
       if (size > maxBytes) { json(response, 413, { error: "REQUEST_TOO_LARGE" }); return; }

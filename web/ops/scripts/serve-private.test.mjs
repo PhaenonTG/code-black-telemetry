@@ -85,6 +85,22 @@ test("configured Producer gateway receives reads and refuses commands without SP
   }
 });
 
+test("private workstation media uses its own bounded upload limit", async () => {
+  const privateServer = createPrivateOpsServer({ distDir: root, apiGateway: async request => {
+    assert.equal(new URL(request.url).pathname, "/api/producer/v1/workstation/preview/program.jpg");
+    assert.equal((await request.arrayBuffer()).byteLength, 512 * 1024);
+    return Response.json({ accepted: true });
+  } });
+  await new Promise(resolve => privateServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const url = `http://127.0.0.1:${privateServer.address().port}/api/producer/v1/workstation/preview/program.jpg`;
+    assert.equal((await fetch(url, { method: "POST", body: new Uint8Array(512 * 1024) })).status, 200);
+    assert.equal((await fetch(url, { method: "POST", body: new Uint8Array(2 * 1024 * 1024 + 1) })).status, 413);
+  } finally {
+    await new Promise(resolve => privateServer.close(resolve));
+  }
+});
+
 test("private Core PUT accepts settings larger than the POST limit and bounds the body", async () => {
   const privateServer = createPrivateOpsServer({ distDir: root, apiGateway: async request => {
     assert.equal(request.method, "PUT");

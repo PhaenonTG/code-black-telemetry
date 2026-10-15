@@ -174,6 +174,14 @@ The current Pages site, Chase Gateway Worker, Durable Object and OBS bridge conf
 
 ## Immediate next engineering slice
 
+### Pilot state on 2026-10-15
+
+- PHAENON3 Cloudflare One Client is connected to `gentle-smoke-a96a`. The authenticated private site at `https://ops-private.codeblackwx.com` loaded in the browser, and its Core and fabric indicators were live. The public Ops site and public gateway remain in service.
+- Core serves immutable private Ops release `pilot-20261015-r7` over trusted TLS. The private Producer shadow service serves immutable release `shadow-20261015-r1` on Core loopback. Its status/capability/media read route and authenticated, size-limited workstation ingest route are staged. Command controls intentionally return `503 SHADOW_READ_ONLY`.
+- The OBS bridge has the opt-in shadow client code and a local backup bundle, but the bridge is stopped and no live OBS media or audio has been qualified. No private command consumer has been started.
+- PHAENON3 login and private Producer page load passed. Password reset, profile/session lifecycle, full route parity, iPhone/iPad, AI console/player access, Chase/Facebook/OTA, 30B review reliability, and durable Producer controls remain open gates. PHAENON3 Tailscale reported its own device offline despite a LAN ping to Core, so client coexistence needs a separate check.
+- Cloudflare One account access is active for the pilot. Cost and quota behavior must still be monitored before declaring the full workflow free. The public cutover gate has **not** passed.
+
 1. Reconcile the concurrent gateway composition/overlay work against the Producer shadow branch without resetting the dirty worktree. Qualify representative live HLS/audio and bounded preview data on a single private shadow endpoint; do not create a second command consumer.
 2. Build the private Ops assets with the required public auth configuration, stage them as a new immutable Core release, and verify authenticated login/Core read/write/stream parity on loopback. The transient Node 18 runtime check already passed; it did not verify those workflows.
 3. Select a non-production hostname, issue a browser-trusted DNS-01 certificate, verify the existing Cloudflare One Free account's private-route eligibility, and enroll one pilot device. Keep current public routes intact.

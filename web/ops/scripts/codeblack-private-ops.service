@@ -8,18 +8,19 @@ ConditionPathExists=/etc/letsencrypt/live/ops-private.codeblackwx.com/fullchain.
 Type=simple
 User=cbwx-private-ops
 Group=cbwx-private-ops
-WorkingDirectory=/srv/codeblack/releases/private-ops/pilot-20261014-r5
+WorkingDirectory=/srv/codeblack/releases/private-ops/pilot-20261015-r7
 EnvironmentFile=/srv/codeblack/config/private-ops/runtime.env
+EnvironmentFile=/srv/codeblack/config/private-producer/runtime.env
 EnvironmentFile=/etc/codeblack/ops-write.env
 Environment=OPS_PRIVATE_PORT=443
 Environment=OPS_PRIVATE_BIND_HOST=192.168.0.187
 Environment=OPS_PRIVATE_HOSTNAME=ops-private.codeblackwx.com
-Environment=OPS_PRIVATE_DIST=/srv/codeblack/releases/private-ops/pilot-20261014-r5/dist
+Environment=OPS_PRIVATE_DIST=/srv/codeblack/releases/private-ops/pilot-20261015-r7/dist
 Environment=OPS_PRIVATE_TLS_CERT=/run/credentials/codeblack-private-ops.service/tls.crt
 Environment=OPS_PRIVATE_TLS_KEY=/run/credentials/codeblack-private-ops.service/tls.key
 LoadCredential=tls.crt:/etc/letsencrypt/live/ops-private.codeblackwx.com/fullchain.pem
 LoadCredential=tls.key:/etc/letsencrypt/live/ops-private.codeblackwx.com/privkey.pem
-ExecStart=/usr/bin/node /srv/codeblack/releases/private-ops/pilot-20261014-r5/scripts/serve-private.mjs
+ExecStart=/usr/bin/node /srv/codeblack/releases/private-ops/pilot-20261015-r7/scripts/serve-private.mjs
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15

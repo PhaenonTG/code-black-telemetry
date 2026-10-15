@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { handlePrivateProducerRead, type PrivateProducerEnv } from "./private-producer-gateway";
+import { handlePrivateProducerRead, handlePrivateProducerWrite, type PrivateProducerEnv } from "./private-producer-gateway";
 
 const userId = "4b10eb9e-af64-4077-a659-2fe4adf69b12";
 const token = "private-service-token-with-at-least-32-characters";
@@ -11,10 +11,10 @@ const env: PrivateProducerEnv = {
 };
 
 function mockFetch(upstream: Response = Response.json({ status: { source_state: "ready" } })) {
-  const calls: Array<{ url: string; headers: Headers }> = [];
+  const calls: Array<{ url: string; headers: Headers; method?: string }> = [];
   const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    calls.push({ url, headers: new Headers(init?.headers) });
+    calls.push({ url, headers: new Headers(init?.headers), method: init?.method });
     if (url.endsWith("/auth/v1/user")) return Response.json({ id: userId });
     if (url.includes("/rest/v1/profiles?")) return Response.json([{ active: true, role: "OPERATOR" }]);
     return upstream;
@@ -24,6 +24,35 @@ function mockFetch(upstream: Response = Response.json({ status: { source_state: 
 
 const request = (path: string, method = "GET", authorized = true) => new Request(`http://localhost${path}`, {
   method, headers: authorized ? { Authorization: "Bearer browser-session" } : undefined,
+});
+
+describe("private Producer workstation shadow ingest", () => {
+  const write = (path: string, body: BodyInit, authorization = `Bearer ${token}`, contentType = "application/json") =>
+    new Request(`http://localhost/api/producer/v1/workstation/${path}`, {
+      method: "POST", headers: { Authorization: authorization, "Content-Type": contentType }, body,
+    });
+
+  it("accepts only the scoped token and shadow paths", async () => {
+    const mock = mockFetch(Response.json({ accepted: true }));
+    expect((await handlePrivateProducerWrite(write("status", "{}" , "Bearer wrong-token"), env, mock.fetcher)).status).toBe(401);
+    expect((await handlePrivateProducerWrite(write("commands", "{}"), env, mock.fetcher)).status).toBe(503);
+    expect((await handlePrivateProducerWrite(write("status", "{}", `Bearer ${token}`, "text/plain"), env, mock.fetcher)).status).toBe(415);
+    expect(mock.calls).toHaveLength(0);
+    const result = await handlePrivateProducerWrite(write("status", '{"bridge":"ready"}'), env, mock.fetcher);
+    expect(result.status).toBe(200);
+    expect(mock.calls[0].url).toBe("http://127.0.0.1:4188/api/producer/v1/workstation/status");
+    expect(mock.calls[0].headers.get("Authorization")).toBe(`Bearer ${token}`);
+    expect(mock.calls[0].method).toBe("POST");
+  });
+
+  it("bounds media and refuses non-loopback upstreams", async () => {
+    const mock = mockFetch(Response.json({ accepted: true }));
+    expect((await handlePrivateProducerWrite(write("preview/program.jpg", new Uint8Array(2 * 1024 * 1024 + 1), `Bearer ${token}`, "image/jpeg"), env, mock.fetcher)).status).toBe(413);
+    expect(mock.calls).toHaveLength(0);
+    expect((await handlePrivateProducerWrite(write("preview/program.jpg", new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), `Bearer ${token}`, "image/jpeg"), { ...env, OPS_PRIVATE_PRODUCER_BASE_URL: "https://example.com" }, mock.fetcher)).status).toBe(502);
+    const segment = `preview/hls/program-${"a".repeat(32)}-123.ts`;
+    expect((await handlePrivateProducerWrite(write(segment, new Uint8Array([1, 2]), `Bearer ${token}`, "video/mp2t"), env, mock.fetcher)).status).toBe(200);
+  });
 });
 
 describe("private Producer operator relay", () => {

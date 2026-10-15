@@ -6,7 +6,7 @@ import { MODOT_PREFIX, handleModotRequest } from "../functions/lib/modotRelay";
 import { ODOT_PREFIX, handleOdotRequest } from "../functions/lib/odotRelay";
 import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
 import { privateProviderFetch } from "./private-provider-fetch";
-import { handlePrivateProducerRead, type PrivateProducerEnv } from "./private-producer-gateway";
+import { handlePrivateProducerRead, handlePrivateProducerWrite, type PrivateProducerEnv } from "./private-producer-gateway";
 import {
   gatewayErrorResponse,
   resolveAllowlistRoute,
@@ -177,6 +177,7 @@ export async function handlePrivateOverlayRequest(
 export function handlePrivateApiRequest(request: Request, env: PrivateCoreEnv, fetchImpl: typeof fetch = fetch): Promise<Response> {
   const path = new URL(request.url).pathname;
   if (path.startsWith("/api/core/")) return handlePrivateCoreRequest(request, env, fetchImpl);
+  if (path.startsWith("/api/producer/v1/workstation/")) return handlePrivateProducerWrite(request, env, fetchImpl);
   if (path.startsWith("/api/producer/v1/")) return handlePrivateProducerRead(request, env, fetchImpl);
   if (path.startsWith("/overlay-core/")) return handlePrivateOverlayRequest(request, env, fetchImpl);
   if (path === CAMERA_HEALTH_PATH) return handleCameraHealth(request);
