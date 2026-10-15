@@ -53,6 +53,7 @@ Important variables:
 ## Documentation
 
 - `PROJECT_STATE.md`: long-form project handoff and historical implementation notes.
+- `docs/sensor-reference/README.md`: Striker sensor calibration tables, manufacturer sources, and field verification status.
 - `ARCHITECTURE.md`: current code structure and dependency boundaries.
 - `docs/on-device-radar-architecture.md`: retired native radar notes and mosaic-first radar status.
 - `docs/2026-08-06-audit-handoff.md`: latest audit findings, TODOs, streaming readiness, and networking review.
