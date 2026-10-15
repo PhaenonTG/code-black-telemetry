@@ -12,7 +12,7 @@ if ($env:CODEBLACK_DEPLOY_REPORT_ACTIVE -ne '1') {
 }
 Push-Location $opsDirectory
 try {
-  & npm run build:private
+  & npm.cmd run build:private
   if ($LASTEXITCODE -ne 0) { throw 'Private OPS build or sign-in verification failed.' }
   $bundlePath = Join-Path ([IO.Path]::GetTempPath()) "codeblack-$Version.tgz"
   & tar -czf $bundlePath dist
