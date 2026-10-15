@@ -16,6 +16,7 @@ export interface LiveChaserReading {
   label: string
   value: string
   ageMs: number
+  note?: string
 }
 
 function timestamp(value: unknown): number | null {
@@ -39,8 +40,6 @@ function liveValue(device: FabricDeviceState, key: string, now: number): { value
     const humidityAt = timestamp(humidity?.observed_at)
     if (humidity?.state !== "live" || humidityAt === null || now - humidityAt > MAX_LIVE_AGE_MS || now - humidityAt < -5_000) return null
   }
-  // Wind speed must not be presented as measured mph before calibration.
-  if (key === "wind_mps" && device.metadata?.calibration_verified !== true) return null
   const mesonet = device.latest?.mesonet as Record<string, unknown> | undefined
   const value = mesonet?.[key]
   return typeof value === "number" && Number.isFinite(value) ? { value, ageMs: Math.max(0, now - observedAt) } : null
@@ -60,7 +59,10 @@ export function liveChaserReadings(unit: FabricUnitState, now: number): LiveChas
   return FIELDS.flatMap(({ key, label }) => {
     for (const device of unit.devices) {
       const reading = liveValue(device, key, now)
-      if (reading) return [{ key, label, value: formatChaserReading(key, reading.value), ageMs: reading.ageMs }]
+      if (reading) return [{
+        key, label, value: formatChaserReading(key, reading.value), ageMs: reading.ageMs,
+        note: key === "wind_mps" && device.metadata?.calibration_verified !== true ? "Uncalibrated" : undefined,
+      }]
     }
     return []
   })
