@@ -32,6 +32,8 @@ Implementation update, 2026-10-14: a local private Ops server candidate now has 
 
 Review release update, 2026-10-15 UTC: Core now runs `setup-review-retry-20261014-r2`, which makes one bounded corrective attempt after local validation failure using a fresh request ID. Four Core read endpoints returned HTTP 200 after restart. Two active setup revisions completed with both reviewers `ready` and no approval blockers; no briefing was approved or published. One PHAENON3 non-200 response still interrupted a 30B attempt on the second setup. A later manual retry reused the ready Aegis result and completed 30B. Treat the local reviewer as improved, with a remaining transient worker rejection to monitor. The Ops failure-category UI and private-site candidate are still undeployed.
 
+Producer shadow update, 2026-10-14: isolated gateway branch `feat/private-producer-service-20261014` at `fbf6ac3` adds a loopback-only, token-guarded shadow server built from the last committed gateway baseline (`b31fa3c`). It reuses the existing status/capabilities/JPEG/HLS handler, persists latest status/capabilities in a separate state file, and serves media from bounded transient memory. Command, lease, acknowledgment, and Facebook routes return JSON 503. Gateway typecheck, 65 original tests, and four shadow tests passed; the four shadow tests also passed on Core Node 18.19.1 using synthetic data. This is code and a transient runtime check only: no OBS bridge, live media feed, operator browser, Cloudflare route, or production service was changed. The concurrent gateway composition worktree remains dirty and untouched. The shadow does not reduce Worker requests until a qualified single-bridge migration.
+
 ## Current dependencies found in source
 
 The current route contract is grouped below. Each route family needs an explicit private implementation; unimplemented families must return JSON 503 rather than the React application shell.
@@ -39,7 +41,7 @@ The current route contract is grouped below. Each route family needs an explicit
 | Browser path family | Current handler | Private candidate | Cutover status |
 | --- | --- | --- | --- |
 | `/api/core/*` | Ops Pages Worker, Supabase auth, Core VPC gateway | Local Core allowlist/auth/signing candidate | Unit tested; live auth, read, write and stream parity pending |
-| `/api/producer/v1/*` | Chase Gateway Durable Object | None | 503; live media/commands block cutover |
+| `/api/producer/v1/*` | Chase Gateway Durable Object | Isolated status/media shadow service | Not connected; controls and live media still block cutover |
 | `/api/chase/v1/*` | Chase Gateway and Core broker | None | 503; Facebook and field flow block cutover |
 | `/api/ardot-camera-stream`, `/api/camera-health` | Ops Pages camera relays | Reused handlers with redirect host checks | Unit tested; live camera parity pending |
 | `/api/public/hurricane`, `/api/kandrive/*`, `/api/modot/*`, `/api/odot/*`, `/api/tdot/*` | Ops Pages Worker/provider relays | None | 503; map and road parity pending |
@@ -139,10 +141,10 @@ The current Pages site, Chase Gateway Worker, Durable Object and OBS bridge conf
 
 ## Immediate next engineering slice
 
-1. Confirm the Cloudflare One account's Free eligibility and device enrollment; select a non-production hostname and one pilot device.
-2. Build and run `web/ops/scripts/serve-private.mjs` in an isolated Core release directory, with no DNS or production process change. It binds only to loopback, serves a supplied `dist` directory, exposes `/health`, and returns JSON 503 for unmigrated `/api/*` and `/overlay-core/*` instead of the SPA. A local test already verifies static assets, SPA routes, route rejection and health. For a manual pilot: set `OPS_PRIVATE_PORT` to a free unprivileged port and `OPS_PRIVATE_DIST` to the exact candidate build directory, then run `node web/ops/scripts/serve-private.mjs` from the checkout. Do not point the production domain at it while APIs are unmigrated.
-3. Classify the recurring local 30B draft-review failure from one real attempt's bounded diagnostics, then repair or qualify a free local replacement in a separate isolated Core checkout. Preserve the current approval gate throughout.
-4. Write and run the route-contract matrix against both current production and the candidate, then migrate the least stateful Core relays before Producer.
+1. Reconcile the concurrent gateway composition/overlay work against the Producer shadow branch without resetting the dirty worktree. Qualify representative live HLS/audio and bounded preview data on a single private shadow endpoint; do not create a second command consumer.
+2. Build the private Ops assets with the required public auth configuration, stage them as a new immutable Core release, and verify authenticated login/Core read/write/stream parity on loopback. The transient Node 18 runtime check already passed; it did not verify those workflows.
+3. Select a non-production hostname, issue a browser-trusted DNS-01 certificate, verify the existing Cloudflare One Free account's private-route eligibility, and enroll one pilot device. Keep current public routes intact.
+4. Complete the operator gateway, durable command/lease/acknowledgment parity, Facebook/Chase/provider relays, iOS access to AI console/private player, and route-contract checks before any cutover. Monitor the remaining intermittent PHAENON3 worker rejection separately while retaining the review approval gate.
 
 No production cutover occurs until the relevant gate passes.
 
