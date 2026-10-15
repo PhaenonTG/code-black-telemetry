@@ -5,6 +5,8 @@ import type { OpsConnectionState } from "../core/types"
 import type { FabricPresenceState } from "../../../../src/services/fabric/types"
 import { ageText } from "../../../../src/services/radar"
 import { Link } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { STRIKER_SENSORS, strikerDevice, strikerReading, strikerReportAge } from "./strikerReadings"
 
 // FabricPresenceState has one member OpsConnectionState doesn't (NOT_CONFIGURED) -- map it to
 // the closest existing pill tone rather than casting past the type system.
@@ -25,6 +27,11 @@ export default function Fleet() {
   const { state } = useCoreOps()
   const snapshot = state.fabric.units
   const units = snapshot?.units ?? []
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   return (
     <div className="page page-fleet">
@@ -33,6 +40,25 @@ export default function Fleet() {
         <Link className="active" to="/chase">FLEET</Link>
         <Link to="/stream">STREAMS</Link>
       </nav>
+      <section className="striker-readings" aria-label="Striker ESP live readings">
+        <div className="striker-readings__heading"><div><p>STRIKER · CORE MESONET</p><h2>ESP readings</h2></div><span>Live values expire after 3 seconds · unavailable sensors show —</span></div>
+        <div className="striker-readings__grid">
+          {STRIKER_SENSORS.map((sensor) => {
+            const device = strikerDevice(snapshot, sensor.id)
+            const reportAge = strikerReportAge(device, now)
+            const live = reportAge !== null && reportAge <= 5_000 && device?.connected !== false
+            return <article className="striker-readings__card" key={sensor.id}>
+              <header><h3>{sensor.title}</h3><strong className={live ? "is-live" : ""}>{live ? "REPORTING" : "NO FRESH REPORT"}</strong></header>
+              <p>{reportAge === null ? "No Core report" : `Core report ${Math.ceil(reportAge / 1000)}s ago`}</p>
+              <dl>{sensor.fields.map((field) => {
+                const value = strikerReading(device, field.key, now)
+                return <div key={field.key}><dt>{field.label}</dt><dd>{value === null ? "—" : `${value.toFixed(field.key === "latitude" || field.key === "longitude" ? 5 : 1)}${field.unit}`}</dd></div>
+              })}</dl>
+            </article>
+          })}
+        </div>
+        <p className="striker-readings__note">Values come from each board’s accepted Core report. Reporting does not confirm sensor calibration or wiring.</p>
+      </section>
       {units.length === 0 ? (
         <div className="empty-state empty-state--centered">
           <p className="empty-state__title">{snapshot ? "NO UNITS REGISTERED" : "NO FABRIC UNIT SNAPSHOT"}</p>
