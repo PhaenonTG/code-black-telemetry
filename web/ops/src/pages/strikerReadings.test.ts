@@ -1,49 +1,45 @@
 import { describe, expect, it } from "vitest"
-import type { FabricDeviceState } from "../../../../src/services/fabric/types"
-import { displayedStrikerReading, formatStrikerReading, strikerReading, strikerReadingAge } from "./strikerReadings"
+import type { FabricUnitState } from "../../../../src/services/fabric/types"
+import { liveChaserReadings } from "./strikerReadings"
 
 const now = Date.parse("2026-10-15T12:00:00Z")
-const device = {
-  device_id: "cbwx-striker-weather", unit_id: "cbwx-unit-striker", device_type: "esp32-weather",
-  display_label: "Weather", capabilities: [], connected: true, last_seen: now - 1_000,
-  latest: { mesonet: { temperature_c: 22.4, humidity_pct: 57, dewpoint_c: 13.5 } },
-  metadata: { quality: {
-    temperature_c: { state: "live", observed_at: new Date(now - 1_000).toISOString() },
-    humidity_pct: { state: "live", observed_at: new Date(now - 1_000).toISOString() },
-  } },
-} satisfies FabricDeviceState
+const unit: FabricUnitState = {
+  unit_id: "cbwx-unit-striker", display_name: "STRIKER", operator_name: "Spencer",
+  unit_type: "chase-platform", role: "chase-platform", capabilities: [],
+  overall_health: "LIVE", last_seen: now - 1_000,
+  devices: [{
+    device_id: "cbwx-striker-weather", unit_id: "cbwx-unit-striker", device_type: "esp32-weather",
+    display_label: "Weather", capabilities: [], connected: true, last_seen: now - 1_000,
+    latest: { mesonet: { temperature_c: 22.4, humidity_pct: 57, dewpoint_c: 13.5, pressure_hpa: null } },
+    metadata: { quality: {
+      temperature_c: { state: "live", observed_at: new Date(now - 1_000).toISOString() },
+      humidity_pct: { state: "live", observed_at: new Date(now - 1_000).toISOString() },
+      pressure_hpa: { state: "unavailable", observed_at: new Date(now - 1_000).toISOString() },
+    } },
+  }, {
+    device_id: "cbwx-striker-nav", unit_id: "cbwx-unit-striker", device_type: "esp32-navigation",
+    display_label: "Navigation", capabilities: [], connected: true, last_seen: now - 1_000,
+    latest: { mesonet: { wind_hz: 3.2, wind_mps: 6.5 } },
+    metadata: { calibration_verified: false, quality: {
+      wind_hz: { state: "live", observed_at: new Date(now - 1_000).toISOString() },
+      wind_mps: { state: "live", observed_at: new Date(now - 1_000).toISOString() },
+    } },
+  }],
+}
 
-describe("Striker ESP readings", () => {
-  it("uses familiar display units without changing Core's source values", () => {
-    expect(formatStrikerReading("temperature_c", 0)).toBe("32.0 °F")
-    expect(formatStrikerReading("dewpoint_c", 20)).toBe("68.0 °F")
-    expect(formatStrikerReading("pressure_hpa", 1013.25)).toBe("29.92 inHg")
-    expect(formatStrikerReading("speed_mps", 10)).toBe("22.4 mph")
-    expect(formatStrikerReading("wind_hz", 2)).toBe("2.0 Hz")
-    expect(formatStrikerReading("temperature_c", null)).toBe("—")
-  })
-  it("holds a recent accepted value through brief uplink gaps, then expires it", () => {
-    expect(strikerReading(device, "temperature_c", now)).toBe(22.4)
-    expect(strikerReading(device, "dewpoint_c", now)).toBe(13.5)
-    expect(strikerReading(device, "temperature_c", now + 3_100)).toBe(22.4)
-    expect(strikerReadingAge(device, "temperature_c", now + 3_100)).toBe(4_100)
-    expect(strikerReading(device, "temperature_c", now + 28_000)).toBe(22.4)
-    expect(strikerReading(device, "temperature_c", now + 29_100)).toBeNull()
-  })
-
-  it("does not show a value when the sensor is unavailable or the report is old", () => {
-    expect(strikerReading({ ...device, metadata: { quality: { temperature_c: { state: "unavailable", observed_at: new Date(now).toISOString() } } } }, "temperature_c", now)).toBeNull()
-    expect(strikerReading({ ...device, last_seen: now - 31_000 }, "temperature_c", now)).toBeNull()
-    expect(strikerReading({ ...device, connected: false }, "temperature_c", now)).toBeNull()
+describe("per-chaser live conditions", () => {
+  it("shows only valid current values with display units, excluding uncalibrated wind speed", () => {
+    expect(liveChaserReadings(unit, now).map((item) => [item.label, item.value])).toEqual([
+      ["Temperature", "72.3 °F"], ["Humidity", "57.0%"], ["Dew point", "56.3 °F"], ["Wind pulses", "3.2 Hz"],
+    ])
   })
 
-  it("labels a last valid value during a sensor dropout and expires it after one minute", () => {
-    const unavailable = { ...device, latest: { mesonet: { temperature_c: null } }, metadata: {
-      quality: { temperature_c: { state: "unavailable", observed_at: new Date(now).toISOString() } },
-    } }
-    const saved = { value: 22.4, observedAt: now - 10_000 }
-    expect(displayedStrikerReading(unavailable, "temperature_c", now, saved)).toEqual({ value: 22.4, ageMs: 10_000, source: "last_valid" })
-    expect(displayedStrikerReading(unavailable, "temperature_c", now + 51_000, saved)).toBeNull()
-    expect(displayedStrikerReading(unavailable, "temperature_c", now)).toBeNull()
+  it("does not carry old or unavailable measurements forward", () => {
+    expect(liveChaserReadings(unit, now + 16_000)).toEqual([])
+    expect(liveChaserReadings({ ...unit, devices: unit.devices.map((device) => ({ ...device, connected: false })) }, now)).toEqual([])
+  })
+
+  it("keeps measurements with their owning chaser", () => {
+    expect(liveChaserReadings({ ...unit, unit_id: "cbwx-unit-tessa", operator_name: "Nick", devices: [] }, now)).toEqual([])
   })
 })
