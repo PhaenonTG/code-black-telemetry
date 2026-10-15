@@ -30,7 +30,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Private OPS did not restart successfully.' }
   $asset = [regex]::Match((Get-Content dist/index.html -Raw), 'assets/index-[a-zA-Z0-9_-]+\.js').Value
   if (-not $asset) { throw 'Built entry page is missing its application asset.' }
-  & ssh $CoreHost "curl --retry 5 --retry-connrefused --retry-delay 1 --fail --silent --show-error --resolve ops-private.codeblackwx.com:443:192.168.0.187 https://ops-private.codeblackwx.com/status-center | grep -F '$asset' >/dev/null && curl --fail --silent --show-error --resolve ops-private.codeblackwx.com:443:192.168.0.187 https://ops-private.codeblackwx.com/$asset >/dev/null"
+  & ssh $CoreHost "curl --retry 5 --retry-connrefused --retry-delay 1 --fail --silent --show-error -H 'Accept: text/html' --resolve ops-private.codeblackwx.com:443:192.168.0.187 https://ops-private.codeblackwx.com/status-center | grep -F '$asset' >/dev/null && curl --fail --silent --show-error --resolve ops-private.codeblackwx.com:443:192.168.0.187 https://ops-private.codeblackwx.com/$asset >/dev/null"
   if ($LASTEXITCODE -ne 0) { throw 'Served private OPS does not match the new release.' }
   Write-Host "Private OPS is serving $Version; deployment result will be recorded."
 } finally {
