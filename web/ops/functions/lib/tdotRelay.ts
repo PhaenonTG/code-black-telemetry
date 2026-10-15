@@ -27,6 +27,10 @@ export async function handleTdotRequest(request: Request, fetchImpl: typeof fetc
       cf: { cacheTtl: 60, cacheEverything: true },
     } as RequestInit);
     if (!response.ok) return Response.json({ error: "PROVIDER_UNAVAILABLE" }, { status: 502 });
+    if (response.status === 204) return new Response("[]", {
+      status: 200,
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", "X-Content-Type-Options": "nosniff" },
+    });
     return new Response(response.body, {
       status: 200,
       headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", "X-Content-Type-Options": "nosniff" },

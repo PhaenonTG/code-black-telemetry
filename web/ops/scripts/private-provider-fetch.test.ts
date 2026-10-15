@@ -24,4 +24,11 @@ describe("bounded private provider transport", () => {
     expect(await (await privateProviderFetch(url, {}, upstream)).json()).toEqual({ ok: true });
     expect(upstream).toHaveBeenCalledTimes(1);
   });
+
+  it("preserves a no-content response without inventing a body", async () => {
+    const upstream = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const response = await privateProviderFetch("https://www.tdot.tn.gov/opendata/api/public/RoadwayWeather?case=no-content", {}, upstream);
+    expect(response.status).toBe(204);
+    expect(response.body).toBeNull();
+  });
 });

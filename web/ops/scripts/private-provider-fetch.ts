@@ -41,7 +41,9 @@ async function limitedBytes(response: Response): Promise<Uint8Array> {
 }
 
 function restored(entry: Cached): Response {
-  return new Response(entry.bytes.slice(), { status: entry.status, headers: { "Content-Type": entry.contentType } });
+  return new Response([204, 205, 304].includes(entry.status) ? null : entry.bytes.slice(), {
+    status: entry.status, headers: { "Content-Type": entry.contentType },
+  });
 }
 
 export async function privateProviderFetch(input: RequestInfo | URL, init: RequestInit = {}, upstreamFetch: typeof fetch = fetch): Promise<Response> {
