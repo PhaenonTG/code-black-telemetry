@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { FabricDeviceState } from "../../../../src/services/fabric/types"
-import { formatStrikerReading, strikerReading } from "./strikerReadings"
+import { formatStrikerReading, strikerReading, strikerReadingAge } from "./strikerReadings"
 
 const now = Date.parse("2026-10-15T12:00:00Z")
 const device = {
@@ -22,15 +22,18 @@ describe("Striker ESP readings", () => {
     expect(formatStrikerReading("wind_hz", 2)).toBe("2.0 Hz")
     expect(formatStrikerReading("temperature_c", null)).toBe("—")
   })
-  it("shows accepted live values and expires them using sensor timestamps", () => {
+  it("holds a recent accepted value through brief uplink gaps, then expires it", () => {
     expect(strikerReading(device, "temperature_c", now)).toBe(22.4)
     expect(strikerReading(device, "dewpoint_c", now)).toBe(13.5)
-    expect(strikerReading(device, "temperature_c", now + 3_100)).toBeNull()
+    expect(strikerReading(device, "temperature_c", now + 3_100)).toBe(22.4)
+    expect(strikerReadingAge(device, "temperature_c", now + 3_100)).toBe(4_100)
+    expect(strikerReading(device, "temperature_c", now + 28_000)).toBe(22.4)
+    expect(strikerReading(device, "temperature_c", now + 29_100)).toBeNull()
   })
 
   it("does not show a value when the sensor is unavailable or the report is old", () => {
     expect(strikerReading({ ...device, metadata: { quality: { temperature_c: { state: "unavailable", observed_at: new Date(now).toISOString() } } } }, "temperature_c", now)).toBeNull()
-    expect(strikerReading({ ...device, last_seen: now - 6_000 }, "temperature_c", now)).toBeNull()
+    expect(strikerReading({ ...device, last_seen: now - 31_000 }, "temperature_c", now)).toBeNull()
     expect(strikerReading({ ...device, connected: false }, "temperature_c", now)).toBeNull()
   })
 })
