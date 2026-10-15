@@ -118,6 +118,11 @@ class IncidentActionsTests(unittest.TestCase):
                                   {"id": "svc:radar", "title": "Radar worker",
                                    "severity": "WARNING", "status_only": False}], at="2026-10-10T00:00:00Z")
         self.assertEqual([item["id"] for item in actions.recent_history(20)], ["svc:radar"])
+        actions.record_attention([{"id": "svc:radar", "title": "Radar worker",
+                                   "severity": "WARNING", "status_only": False},
+                                  {"id": "svc:radio-test", "title": "Status only radio",
+                                   "severity": "WARNING", "status_only": True}], at="2026-10-10T00:01:00Z")
+        self.assertEqual([item["id"] for item in actions.bot_recent_history()], ["svc:radar"])
 
     def test_operations_page_escapes_status_content(self):
         snapshot = {"summary": {"overall": "DEGRADED"}, "generated_at": "now",

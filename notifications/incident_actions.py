@@ -110,6 +110,10 @@ def recent_history(limit=12):
         return []
 
 
+def bot_recent_history(limit=20):
+    return [entry for entry in recent_history(max(limit * 2, 20)) if not entry.get("status_only")][:limit]
+
+
 def record_attention(items, at=None):
     """Keep a small local history of transitions observed in Status Center."""
     at = utc() if at is None else at
@@ -475,7 +479,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/bot/recent":
             if verify_bot_token(self.headers.get("Authorization")) is None:
                 return self.respond(401, b'{"error":"UNAUTHORIZED"}', "application/json")
-            return self.respond(200, json.dumps({"events": recent_history(20)}).encode(), "application/json")
+            return self.respond(200, json.dumps({"events": bot_recent_history()}).encode(), "application/json")
         if parsed.path == "/login":
             destination = safe_next(urllib.parse.parse_qs(parsed.query).get("next", [""])[0])
             existing = session_actor(self.headers.get("Cookie"))
