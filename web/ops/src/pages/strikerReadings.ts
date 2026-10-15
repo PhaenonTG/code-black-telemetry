@@ -34,6 +34,12 @@ export function strikerReportAge(device: FabricDeviceState | null, now: number):
 }
 
 const MAX_DISPLAY_AGE_MS = 30_000
+const MAX_LAST_VALID_AGE_MS = 60_000
+
+export interface LastValidStrikerReading {
+  value: number
+  observedAt: number
+}
 
 export function strikerReadingAge(device: FabricDeviceState | null, key: string, now: number): number | null {
   // A short uplink delay must not make a valid number blink away. Keep its age
@@ -63,6 +69,22 @@ export function strikerReading(device: FabricDeviceState | null, key: string, no
   const mesonet = device.latest?.mesonet as Record<string, unknown> | undefined
   const value = mesonet?.[key]
   return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+export function displayedStrikerReading(
+  device: FabricDeviceState | null,
+  key: string,
+  now: number,
+  lastValid?: LastValidStrikerReading,
+): { value: number; ageMs: number; source: "current" | "last_valid" } | null {
+  const current = strikerReading(device, key, now)
+  const currentAge = current === null ? null : strikerReadingAge(device, key, now)
+  if (current !== null && currentAge !== null) return { value: current, ageMs: currentAge, source: "current" }
+  if (!lastValid || !Number.isFinite(lastValid.value) || !Number.isFinite(lastValid.observedAt)) return null
+  const ageMs = now - lastValid.observedAt
+  return ageMs >= 0 && ageMs <= MAX_LAST_VALID_AGE_MS
+    ? { value: lastValid.value, ageMs, source: "last_valid" }
+    : null
 }
 
 export function formatStrikerReading(key: string, value: number | null): string {
