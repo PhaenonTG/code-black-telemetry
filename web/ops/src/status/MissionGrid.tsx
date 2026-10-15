@@ -1,0 +1,68 @@
+import { StatusBadge } from "../components/StatusBadge"
+import { chaseReadiness, hostImpacts, projectHealthCounts } from "./missionModel"
+import type { StatusCenterDocument } from "./statusCenterClient"
+import "./mission-grid.css"
+
+function badge(state: string): "LIVE" | "DEGRADED" | "UNAVAILABLE" | "CHECKING" {
+  if (state === "HEALTHY" || state === "PASS" || state === "READY") return "LIVE"
+  if (state === "DEGRADED" || state === "WATCH" || state === "CHECK") return "DEGRADED"
+  if (state === "OFFLINE" || state === "BLOCKED" || state === "HOLD") return "UNAVAILABLE"
+  return "CHECKING"
+}
+
+function timeLabel(value: string | null | undefined): string {
+  return value ? new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"
+}
+
+export function MissionGrid({ document, error }: { document: StatusCenterDocument | null; error: string | null }) {
+  const projects = document?.projects ?? []
+  const counts = projects.reduce((count, project) => {
+    if (project.health === "HEALTHY") count.clear += 1
+    else if (project.health === "UNMONITORED") count.unmonitored += 1
+    else count.check += 1
+    return count
+  }, { clear: 0, check: 0, unmonitored: 0 })
+  const impacts = document ? hostImpacts(document) : []
+  const readiness = document ? chaseReadiness(document) : null
+
+  return <>
+    <section className="status-landscape" aria-label="Project landscape">
+      <div className="status-landscape__header">
+        <div><span className="status-landscape__eyebrow">CODE BLACK // MISSION GRID</span><h2>PROJECT LANDSCAPE</h2><p>Rollout phase and live service health across the operation.</p></div>
+        <div className="status-landscape__counts" aria-label="Project health counts">
+          <div><b>{projects.length}</b><span>PROJECTS</span></div><div><b>{counts.clear}</b><span>CLEAR</span></div>
+          <div><b>{counts.check}</b><span>CHECK</span></div><div><b>{counts.unmonitored}</b><span>NO PROBE</span></div>
+        </div>
+      </div>
+      {error ? <p className="status-center__muted">Project health is unavailable while Core telemetry is disconnected.</p> : !document ? <p className="status-center__muted">Loading mission grid…</p> : projects.length === 0 ? <p className="status-center__muted">Core has not published the project landscape yet.</p> :
+        <div className="status-landscape__grid">{projects.map((project, index) => {
+          const health = projectHealthCounts(project)
+          const history = project.history
+          return <article key={project.id} className={`status-landscape__card status-landscape__card--${project.health.toLowerCase()}`}>
+            <div className="status-landscape__card-top"><span className="status-landscape__number">{String(index + 1).padStart(2, "0")} / {String(projects.length).padStart(2, "0")}</span><span className="status-landscape__health"><StatusBadge state={badge(project.health)} /><b>{project.health}</b></span></div>
+            <h3>{project.name}</h3><div className="status-landscape__phase">{project.phase}</div><p>{project.summary}</p>
+            <div className="status-landscape__score"><div><span>HEALTHY</span><b>{health.healthy} / {health.expected}</b></div><div><span>MONITORED</span><b>{health.monitored} / {health.expected}</b></div></div>
+            <div className="status-landscape__meter" aria-label={`${health.healthy} of ${health.expected} scoped services healthy`}><i style={{ width: health.expected ? `${100 * health.healthy / health.expected}%` : "0%" }} /></div>
+            {health.unknown > 0 && <p className="status-landscape__unknown">{health.unknown} service{health.unknown === 1 ? "" : "s"} awaiting current evidence</p>}
+            <div className="mission-history__label"><span>PAST 24 HOURS</span><small>{history?.observed_since ? `Sampling since ${timeLabel(history.observed_since)}` : "Collecting first sample"}</small></div>
+            <div className="mission-history" role="img" aria-label={`24-hour sampled history for ${project.name}; gaps mean no recorded sample`}>
+              {(history?.bins ?? Array.from({ length: 48 }, () => "NO_DATA")).map((state, i) => <i key={i} className={`mission-history__bin mission-history__bin--${state.toLowerCase()}`} title={`${state} · ${history ? new Date(Date.parse(history.window_start) + i * history.bin_seconds * 1000).toLocaleString() : "no sample"}`} />)}
+            </div>
+            <details><summary>VIEW SIGNALS <span>{project.services.length}</span></summary><ul>{project.services.map((service) => <li key={service.id}><span>{service.name}<small>{service.host}</small></span><b className={`status-landscape__signal status-landscape__signal--${service.state.toLowerCase()}`} title={service.state_reason ?? undefined}>{service.state}</b></li>)}</ul>
+              {project.missing_services.length > 0 && <p className="status-landscape__missing">Missing probes: {project.missing_services.join(", ")}</p>}
+            </details>
+            <p className="status-landscape__note">{project.note}</p>
+            {project.links.length > 0 && <div className="status-landscape__links">{project.links.map((link) => <a key={link.id} href={link.url} target="_blank" rel="noreferrer">{link.name} ↗</a>)}</div>}
+          </article>
+        })}</div>}
+    </section>
+    <div className="mission-ops-panels">
+      <section className="mission-panel" aria-label="Shared host impact"><div className="mission-panel__title"><span>IMPACT RADAR</span><h2>SHARED HOST SIGNALS</h2></div><p>Host state and projects with weak signals on that host. Association does not prove the host caused a project issue.</p>
+        {impacts.length === 0 ? <p>No host relationships available.</p> : <div className="mission-impact-list">{impacts.map((host) => <article key={host.id}><div><b>{host.name}</b><StatusBadge state={badge(host.state)} /></div><small>{host.state} · {host.affected.length} with weak signals of {host.projects.length} linked projects</small><p>{host.affected.length ? host.affected.join(" · ") : host.projects.join(" · ")}</p>{host.reason && <em>{host.reason}</em>}</article>)}</div>}
+      </section>
+      <section className="mission-panel" aria-label="Chase readiness"><div className="mission-panel__title"><span>PRE-FLIGHT</span><h2>CHASE SIGNALS <b>{readiness?.state ?? "UNKNOWN"}</b></h2></div><p>Telemetry checklist for launch decisions. It does not assess storm safety.</p>
+        <div className="mission-check-list">{readiness?.checks.map((check) => <article key={check.id}><span className={`mission-check mission-check--${check.state.toLowerCase()}`}>{check.state}</span><div><b>{check.label}</b><small>{check.detail}</small></div></article>) ?? <p>Waiting for Core telemetry…</p>}</div>
+      </section>
+    </div>
+  </>
+}

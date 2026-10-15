@@ -1,0 +1,24 @@
+.status-landscape__score{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.1);margin-top:auto}
+.status-landscape__score>div{display:flex;justify-content:space-between;gap:6px;padding:8px;background:#101922}
+.status-landscape__score span,.mission-history__label span{font-size:8px;font-weight:900;letter-spacing:.12em;color:#879eaa}
+.status-landscape__score b{font-size:11px;font-variant-numeric:tabular-nums;color:#e8f0f3}
+.status-landscape__card .status-landscape__unknown{font-size:9px;color:#f5bd70}
+.mission-history__label{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.mission-history__label small{font-size:8px;color:#8296a3}
+.mission-history{display:grid;grid-template-columns:repeat(48,minmax(0,1fr));gap:2px;height:14px;align-items:stretch}
+.mission-history__bin{background:#303d46;border-radius:1px}
+.mission-history__bin--healthy{background:#39d69e}.mission-history__bin--degraded{background:#ff625d}.mission-history__bin--unknown{background:#f4b860}.mission-history__bin--unmonitored{background:#5d7180}
+.mission-ops-panels{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.mission-panel{padding:18px;border:1px solid rgba(149,174,187,.22);border-top:2px solid var(--cb-red);background:linear-gradient(150deg,#121b23,#0c1219)}
+.mission-panel__title>span{font-size:9px;font-weight:900;letter-spacing:.18em;color:var(--cb-red)}
+.mission-panel__title h2{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:6px 0 8px;font-size:16px;letter-spacing:.08em}
+.mission-panel__title h2 b{font-size:10px;color:#f3bb68}
+.mission-panel>p{margin:0 0 13px;color:#8fa3ae;font-size:10px;line-height:1.5}
+.mission-impact-list,.mission-check-list{display:grid;gap:6px;max-height:365px;overflow:auto}
+.mission-impact-list article,.mission-check-list article{padding:10px 11px;background:#101921;border:1px solid rgba(255,255,255,.08)}
+.mission-impact-list article>div{display:flex;align-items:center;justify-content:space-between;gap:8px}.mission-impact-list b,.mission-check-list b{font-size:11px}
+.mission-impact-list small,.mission-check-list small{display:block;margin-top:5px;font-size:9px;line-height:1.45;color:#91a6b1}
+.mission-impact-list p{margin:6px 0 0;color:#c5d2d8;font-size:10px}.mission-impact-list em{display:block;margin-top:5px;color:#edac74;font-size:9px;font-style:normal}
+.mission-check-list article{display:flex;align-items:start;gap:11px}.mission-check{min-width:68px;padding:4px 5px;text-align:center;font-size:9px;font-weight:900;color:#ecb264;border:1px solid #a77b44}
+.mission-check--pass{color:#3cdda8;border-color:#248b68}.mission-check--blocked{color:#ff756e;border-color:#c84440}.mission-check--unknown{color:#a7b4be;border-color:#647784}
+@media(max-width:900px){.mission-ops-panels{grid-template-columns:1fr}}

@@ -15,6 +15,29 @@ export interface StatusAttention {
   title: string
   detail?: string
   since?: string
+  source?: string
+  link?: string | null
+  status_only?: boolean
+  operator?: { acknowledged_at?: string | null; snoozed_until?: string | null }
+}
+
+export interface StatusService {
+  id: string
+  name: string
+  host: string
+  state: string
+  state_reason?: string | null
+  last_success?: string | null
+  last_error?: string | null
+  telemetry?: { last_success?: string | null; stale?: boolean }
+}
+
+export interface ProjectHistory {
+  window_start: string
+  bin_seconds: number
+  bins: string[]
+  observed_since: string | null
+  persisted: boolean
 }
 
 export interface StatusProject {
@@ -26,6 +49,10 @@ export interface StatusProject {
   health: string
   monitored_count: number
   expected_count: number
+  healthy_count: number
+  troubled_count: number
+  unknown_count: number
+  history?: ProjectHistory
   services: Array<{ id: string; name: string; state: string; host: string; state_reason?: string | null }>
   missing_services: string[]
   links: Array<{ id: string; name: string; url: string; access: string }>
@@ -36,6 +63,8 @@ export interface StatusCenterDocument {
   summary?: { overall?: string; attention_count?: number; tiles?: StatusTile[] }
   attention?: StatusAttention[]
   projects?: StatusProject[]
+  services?: StatusService[]
+  hosts?: Array<{ id: string; name: string; state: string; state_reason?: string | null }>
   radar?: Record<string, unknown>
   streaming?: Record<string, unknown>
   weather?: Record<string, unknown>
