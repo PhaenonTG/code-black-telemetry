@@ -78,7 +78,7 @@ class MesonetStatusTests(unittest.TestCase):
         fleet = server.build_status()["esp_fleet"]
         self.assertEqual([d["role"] for d in fleet["devices"]],
                          ["wind", "weather", "striker-weather", "striker-nav"])
-        self.assertEqual({d["management"] for d in fleet["devices"]}, {"core-private", "core-private-pending"})
+        self.assertEqual({d["management"] for d in fleet["devices"]}, {"core-private"})
         self.assertTrue(all(d["service"] in {s["id"] for s in server.SERVICES} for d in fleet["devices"]))
         self.assertFalse(any(k in json.dumps(fleet).lower() for k in ('"password"', '"token"', '"latitude"', '"longitude"')))
         self.assertTrue(all(d["report_age_s"] is None or d["report_age_s"] >= 0 for d in fleet["devices"]))
@@ -133,15 +133,18 @@ class MesonetStatusTests(unittest.TestCase):
             self.assertEqual(server.status_session_actor("cb_status_session=" + cookie, at=1001), "glenn")
             self.assertIsNone(server.status_session_actor("cb_status_session=" + cookie + "bad", at=1001))
             self.assertIsNone(server.status_session_actor("cb_status_session=" + cookie,
-                                                            at=1000 + server.STATUS_SESSION_SECONDS + 1))
+                                                            at=1000 + server.STATUS_SESSION_MAX_SECONDS + 1))
 
-    def test_status_sign_in_delegates_to_existing_operator_account(self):
-        with patch.object(server.urllib.request, "urlopen", return_value=Response({})) as fetch:
-            self.assertTrue(server.status_verify_operator("glenn", "test-password"))
-        request = fetch.call_args.args[0]
-        self.assertEqual(request.full_url, "http://127.0.0.1:8796/services")
-        self.assertTrue(request.get_header("Authorization").startswith("Basic "))
-        self.assertFalse(server.status_verify_operator("", "test-password"))
+    def test_status_sign_in_uses_existing_ops_provider_and_active_profile(self):
+        with patch.object(server, "SUPABASE_OPS_URL", "https://ops.example"), \
+             patch.object(server, "SUPABASE_OPS_PUBLISHABLE_KEY", "publishable-test"), \
+             patch.object(server, "token_expiry", return_value=2000), \
+             patch.object(server.urllib.request, "urlopen",
+                          side_effect=[Response({"id": "operator-1"}), Response([{"active": True}])]) as fetch:
+            self.assertEqual(server.verify_supabase_ops_token("x" * 40), (("operator-1", 2000), None))
+        self.assertEqual(fetch.call_count, 2)
+        self.assertEqual(fetch.call_args.args[0].get_header("Authorization"), "Bearer " + "x" * 40)
+        self.assertEqual(server.verify_supabase_ops_token(""), (None, "Operations sign-in is unavailable."))
 
 
 if __name__ == "__main__":

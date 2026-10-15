@@ -14,7 +14,7 @@ block whose `stale` is true must NOT be shown green (render `STALE TELEMETRY`). 
 
 ## Top level
 ```
-{ schema, generated_at, backend, summary, attention[], hosts[], services[], streaming, radar, weather, dns, ai, labs,
+{ schema, generated_at, backend, summary, attention[], projects[], hosts[], services[], streaming, radar, weather, dns, ai, labs,
   compute, network, storage, notifications, esp_fleet, links[], address_book[] }
 ```
 - `backend`: `{version, host, uptime_s, probes_total, probes_stale, probes_failing, refresh_hints:{fast_s, host_s, slow_s}}`
@@ -23,12 +23,21 @@ block whose `stale` is true must NOT be shown green (render `STALE TELEMETRY`). 
 - `attention[]`: `{id, severity, title, detail, source, since, link|null, status_only:boolean, operator:{acknowledged_at?, snoozed_until?}}` sorted CRITICAL, WARNING, INFO. Intentional states
   (e.g. TESSA/STRIKER offline when nobody streams) are INFO only. Status-only entries (`offline_status_only` in the registry: HYTETOWER and Nick ESP offline) have no Actions link or push notification.
 
+## projects[]
+`{id,name,phase,summary,note,health,monitored_count,expected_count,services:[{id,name,state,host,state_reason}],missing_services:[id],links:[link]}`.
+Project scope and rollout phase are curated registry notes. `health` is recalculated from
+every scoped service on each status build, including devices marked informational in
+the platform alert rollup. A project with no scoped services is `UNMONITORED`; missing
+registered services or a failing service makes it `DEGRADED`; unknown evidence is
+`UNKNOWN`. The page presents phase separately from health. `GET /api/status/projects`
+returns only this section.
+
 ## esp_fleet
 `{cadence_s, operator_note, core_ingest:state, devices:[{id,name,owner,role,service,mac_suffix,last_verified_firmware,target_firmware,ota,management,sensors[],networks:[[ssid,priority]],state,state_reason,telemetry,report_age_s}]}`.
 Only `state` and `report_age_s` are live Core observations. Firmware, pins, and SSID
 priorities are documented handoff snapshots. No sensor values, coordinates, network
 passwords, or operator credentials appear. `management` is `core-private` for Nick
-or `core-private-pending` for a board awaiting its signed update. The fleet list is
+for each managed board. The fleet list is
 registry-driven; another ESP can be added without changing dashboard layout, but
 Core and firmware still need a unique managed role before it can receive commands.
 The ESP command pane uses separate `GET /api/esp-management/{role}` and

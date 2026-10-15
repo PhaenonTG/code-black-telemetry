@@ -53,7 +53,12 @@ WEATHER_ALERT_CONTROL_TOKEN = os.environ.get("WEATHER_ALERT_CONTROL_TOKEN", "")
 ESP_MANAGEMENT_URL = os.environ.get("ESP_MANAGEMENT_URL", "http://127.0.0.1:8000/api/mesonet/v1/manage").rstrip("/")
 ESP_COMMAND_ORIGIN = os.environ.get("ESP_COMMAND_ORIGIN", "https://codeblack-core.tail1d0673.ts.net")
 ESP_ADMIN_TOKEN_FILE = os.environ.get("ESP_ADMIN_TOKEN_FILE", "/srv/codeblack/config/status-esp/admin.token")
-STATUS_SESSION_SECONDS = 30 * 24 * 60 * 60
+# Status Center sessions are deliberately bounded to the verified Supabase access
+# token lifetime (and never longer than one hour).  Do not turn this into a
+# long-lived local credential: Ops remains the authorization authority.
+STATUS_SESSION_MAX_SECONDS = 60 * 60
+SUPABASE_OPS_URL = os.environ.get("SUPABASE_OPS_URL", "").rstrip("/")
+SUPABASE_OPS_PUBLISHABLE_KEY = os.environ.get("SUPABASE_OPS_PUBLISHABLE_KEY", "")
 RADAR_CONTROL_CONFIG_PATH = os.environ.get("RADAR_CONTROL_CONFIG_PATH", "/srv/codeblack/data/radar-worker/radar-control.json")
 RADAR_CONTROL_INTERVALS = (300, 600, 900, 1800)
 
@@ -1262,6 +1267,37 @@ def alert_action_state():
         return {}
 
 
+def build_projects(service_by_id, links):
+    """Combine curated project scope with current, status-only service evidence."""
+    links_by_id = {item["id"]: item for item in links}
+    projects = []
+    for entry in REG.get("projects", []):
+        monitored = [service_by_id[sid] for sid in entry["service_ids"] if sid in service_by_id]
+        missing = [sid for sid in entry["service_ids"] if sid not in service_by_id]
+        # Project cards show every scoped service, including field devices whose
+        # outages are informational to the platform-wide alert rollup.
+        states = [service["state"] for service in monitored]
+        if not monitored:
+            health = "UNMONITORED"
+        elif not states:
+            health = "UNKNOWN"
+        elif missing or any(state in ("OFFLINE", "FAILED", "CRITICAL", "DEGRADED", "WARNING") for state in states):
+            health = "DEGRADED"
+        elif any(state not in ("HEALTHY", "LIVE", "ONLINE") for state in states):
+            health = "UNKNOWN"
+        else:
+            health = "HEALTHY"
+        projects.append({"id": entry["id"], "name": entry["name"], "phase": entry["phase"],
+                         "summary": entry["summary"], "note": entry["note"], "health": health,
+                         "monitored_count": len(monitored), "expected_count": len(entry["service_ids"]),
+                         "services": [{"id": service["id"], "name": service["name"],
+                                       "state": service["state"], "host": service["host"],
+                                       "state_reason": service["state_reason"]} for service in monitored],
+                         "missing_services": missing,
+                         "links": [links_by_id[lid] for lid in entry["link_ids"] if lid in links_by_id]})
+    return projects
+
+
 def build_status():
     services = [build_service(s) for s in SERVICES if not s.get("labs") or True]
     sby = {s["id"]: s for s in services}
@@ -1295,6 +1331,7 @@ def build_status():
     overall = "OFFLINE" if hby["core"]["state"] == "OFFLINE" else "UNKNOWN" if hby["core"]["state"] == "UNKNOWN" else ("DEGRADED" if crit or any(s in ("DEGRADED", "OFFLINE") for s in host_states) or any(a["severity"] == "WARNING" for a in attention) else "HEALTHY")
     probes = list(PROBES.values())
     links = [{"id": l["id"], "name": l["name"], "purpose": l["purpose"], "host": l["host"], "access": l["access"], "url": l["url"], "group": l["group"], "verified": link_state(l)} for l in REG["links"]]
+    projects = build_projects(sby, links)
     esp_fleet = {"cadence_s": REG["esp_fleet"]["cadence_s"], "operator_note": REG["esp_fleet"]["operator_note"],
                  "core_ingest": sby["core-api"]["state"],
                  "devices": [{**device, "state": sby[device["service"]]["state"],
@@ -1314,7 +1351,7 @@ def build_status():
             "summary": {"overall": overall, "attention_count": sum(1 for a in attention if a["severity"] != "INFO"), "tiles": tiles}, "attention": attention, "hosts": hosts,
             "services": [s for s in services if True], "streaming": streaming, "radar": radar, "weather": weather, "dns": dns, "ai": ai, "labs": labs, "compute": compute,
             "network": network, "storage": storage, "notifications": build_notifications(sby), "esp_fleet": esp_fleet,
-            "links": links, "address_book": book}
+            "links": links, "address_book": book, "projects": projects}
 
 
 def status_doc():
@@ -1503,13 +1540,15 @@ def changelog_loop():
 
 
 # ------------------------------------------------------------------------------------------------ http
-SECTIONS = {"hosts", "services", "network", "streaming", "radar", "weather", "ai", "labs", "dns", "storage", "links", "compute", "attention", "summary", "esp_fleet"}
+SECTIONS = {"hosts", "services", "network", "streaming", "radar", "weather", "ai", "labs", "dns", "storage", "links", "compute", "attention", "summary", "esp_fleet", "projects"}
 
 
 def weather_alert_control(method, body=None, resource="settings"):
-    """Proxy the allowlisted alert settings or read-only runtime status to Edge."""
+    """Proxy only the fixed weather-alert settings or read-only status resource."""
     if not WEATHER_ALERT_CONTROL_URL or not WEATHER_ALERT_CONTROL_TOKEN:
         raise RuntimeError("weather alert control is not configured")
+    if resource not in ("settings", "status") or (resource == "status" and method != "GET"):
+        raise ValueError("invalid weather alert resource")
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(WEATHER_ALERT_CONTROL_URL + "/v1/" + resource, data=data, method=method,
                                      headers={"X-CodeBlack-Alert-Control": WEATHER_ALERT_CONTROL_TOKEN,
@@ -1570,6 +1609,20 @@ def radar_control_origin_ok(headers):
     return headers.get("Origin") == ESP_COMMAND_ORIGIN and headers.get("Sec-Fetch-Site") != "cross-site" and headers.get("X-CodeBlack-Radar-Control") == "1"
 
 
+def internal_status_bridge_ok(handler):
+    """Permit the fixed Core bridge only from this machine's loopback listener.
+
+    This is intentionally not a browser-facing authentication mechanism. OPS has already
+    validated the user's Supabase session and active profile before Core reaches this route;
+    the extra marker prevents accidental use by another local client and keeps the existing
+    Status Center session/origin rules intact for its private UI.
+    """
+    return (
+        handler.client_address[0] == "127.0.0.1"
+        and handler.headers.get("X-CodeBlack-Internal-Status-Bridge") == "1"
+    )
+
+
 def esp_managed_roles():
     """Inventory drives the bridge; Core remains the authority on valid roles."""
     return {item["role"] for item in REG["esp_fleet"]["devices"]
@@ -1584,11 +1637,14 @@ def esp_admin_token():
     return token if 16 <= len(token) <= 512 and all(33 <= ord(char) <= 126 for char in token) else None
 
 
-def status_session(actor, at=None):
+def status_session(actor, expires_at=None, at=None):
     token = esp_admin_token()
     if not token:
         raise RuntimeError("ESP operator credential unavailable")
-    expiry = int((now() if at is None else at) + STATUS_SESSION_SECONDS)
+    issued = now() if at is None else at
+    expiry = int(expires_at if expires_at is not None else issued + STATUS_SESSION_MAX_SECONDS)
+    if not actor or expiry <= issued or expiry > issued + STATUS_SESSION_MAX_SECONDS:
+        raise ValueError("invalid status session")
     raw = f"{actor}|{expiry}|{secrets.token_hex(12)}".encode()
     encoded = base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
     signature = hmac.new(token.encode(), b"status-session-v1:" + raw, hashlib.sha256).hexdigest()
@@ -1613,32 +1669,70 @@ def status_session_actor(header, at=None):
     return None
 
 
+def authenticated_status_actor(header):
+    return status_session_actor(header)
+
+
 def status_login_page(error=""):
-    message = '<p role="alert">' + html.escape(error) + '</p>' if error else ""
-    return ("<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
-            "<title>Code Black · Status sign-in</title><style>:root{color-scheme:dark;font-family:system-ui}"
-            "body{margin:0;min-height:100vh;display:grid;place-items:center;background:#09090b;color:#e9e9ec}"
-            "main{width:min(440px,92vw);padding:30px;border:1px solid #33333c;border-radius:14px;background:#17171b}"
-            "h1{margin:0 0 10px}p{color:#abb5c3}label{display:block;margin:16px 0 5px}"
-            "input{width:100%;box-sizing:border-box;padding:12px;background:#0d0d10;color:white;border:1px solid #555;border-radius:6px}"
-            "button{margin-top:20px;padding:12px 16px;border:0;border-radius:6px;background:#e5252a;color:white;font:inherit;font-weight:700}"
-            "</style><main><h1>Code Black Status</h1><p>Sign in once with your existing operations account."
-            " Your session stays active for 30 days unless the Core credential changes.</p>" + message
-            + "<form method=post action='/status/login'><label>Username<input name=username autocomplete=username required></label>"
-            "<label>Password<input name=password type=password autocomplete=current-password required></label>"
-            "<button type=submit>Sign in</button></form></main></html>").encode()
+    """A minimal same-provider sign-in page; passwords are posted only to Supabase."""
+    message = '<p id="message" role="alert">' + html.escape(error) + '</p>' if error else '<p id="message" role="alert"></p>'
+    config = json.dumps({"url": SUPABASE_OPS_URL, "key": SUPABASE_OPS_PUBLISHABLE_KEY}).replace("<", "\\u003c")
+    return ("<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover'>"
+            "<meta name=theme-color content='#020203'><title>Code Black · Operations</title><style>"
+            ":root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;--black:#020203;--panel:#0d0e11;--low:#050608;--line:rgba(255,255,255,.09);--red:#ff2a0c;--text:#f4f6fa;--muted:#8b929f;--dim:#757c85;--radius:6px}"
+            "*{box-sizing:border-box}body{margin:0;background:var(--black);color:var(--text)}.auth-screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px;background:var(--black);background-image:radial-gradient(ellipse 900px 600px at 50% 35%,rgba(255,45,53,.05),transparent 70%),linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:auto,34px 34px,34px 34px}.auth-screen:before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 100% 100% at 50% 50%,transparent 40%,var(--black) 92%)}"
+            ".auth-card{position:relative;width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:32px 28px 28px;display:flex;flex-direction:column;align-items:center;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.5)}.auth-card:before{content:'';position:absolute;top:0;left:16px;right:16px;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent)}.auth-card__shield{width:52px;height:52px;object-fit:contain;margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(255,45,53,.18))}.auth-card__kicker{font-size:10px;font-weight:800;letter-spacing:.22em;color:var(--red);margin:0 0 8px}.auth-card__title{font-size:19px;font-weight:800;letter-spacing:.01em;margin:0 0 24px;color:var(--text)}"
+            ".auth-card form{width:100%;display:flex;flex-direction:column;gap:16px;text-align:left}.auth-field{display:flex;flex-direction:column;gap:7px}.auth-field span{font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--dim)}.auth-field input{appearance:none;-webkit-appearance:none;width:100%;background:var(--low);border:1px solid var(--line);border-radius:var(--radius);color:var(--text);font:inherit;font-size:16px!important;line-height:1.35;padding:11px 13px;transform:translateZ(0)}.auth-field input:focus{outline:none;border-color:var(--red)}.auth-field__password{position:relative;display:flex}.auth-field__password input{flex:1;padding-right:42px}.auth-field__toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--dim);padding:6px;cursor:pointer;display:flex}.auth-field__toggle:hover{color:var(--muted)}"
+            ".auth-submit{width:100%;background:var(--red);color:#0a0304;border:0;border-radius:var(--radius);font-size:12px;font-weight:800;letter-spacing:.1em;padding:13px;cursor:pointer}.auth-submit:disabled{opacity:.55;cursor:default}.auth-card__link{background:transparent;border:0;color:var(--muted);font-size:11.5px;text-align:center;padding:4px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}.auth-card__link:hover{color:var(--text)}.auth-card__status{font-size:11.5px;line-height:1.6;margin:0;text-align:center}.auth-card__status:empty{display:none}.auth-card__status--error{color:var(--red)}.auth-card__status--ok{color:#20e36c}.auth-screen__status{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;row-gap:6px;max-width:320px;font-size:9.5px;font-weight:800;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}.auth-screen__status span{white-space:nowrap}.auth-screen__status span:not(:last-child):after{content:'·';margin-left:10px;color:var(--line)}.auth-screen__tagline{color:var(--muted)}@media(max-width:420px){.auth-card{padding:26px 20px 22px}}"
+            "</style><main class=auth-screen><div class=auth-card><img src=codeblack-shield.png alt='Code Black WX' class=auth-card__shield><p class=auth-card__kicker>CODE BLACK OPS</p><h1 class=auth-card__title>Secure operations terminal</h1>"
+            + message + "<form id=login><label class=auth-field><span>EMAIL</span><input id=email type=email inputmode=email autocomplete=username autocapitalize=none spellcheck=false required></label>"
+            "<label class=auth-field><span>PASSWORD</span><span class=auth-field__password><input id=password type=password autocomplete=current-password required><button id=toggle type=button class=auth-field__toggle aria-label='Show password'><svg width=20 height=20 viewBox='0 0 24 24' fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path d='M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z'/><circle cx=12 cy=12 r=2.5/></svg></button></span></label>"
+            "<button id=submit type=submit class=auth-submit>AUTHENTICATE</button><button id=forgot type=button class=auth-card__link>Forgot password?</button></form></div><div class=auth-screen__status><span>Secure session</span><span>Code Black WX</span><span class=auth-screen__tagline>From watching to warning</span></div></main><script>"
+            "const cfg=" + config + ";const form=document.querySelector('#login'),msg=document.querySelector('#message'),button=document.querySelector('#submit'),email=document.querySelector('#email'),password=document.querySelector('#password'),toggle=document.querySelector('#toggle'),forgot=document.querySelector('#forgot');"
+            "async function establish(accessToken){const session=await fetch('api/supabase-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({access_token:accessToken})});const result=await session.json().catch(()=>({}));if(!session.ok)throw Error(result.error||'This Operations account is not authorized for Status Center.');window.location.replace('./')}"
+            "toggle.addEventListener('click',()=>{const show=password.type==='password';password.type=show?'text':'password';toggle.setAttribute('aria-label',show?'Hide password':'Show password')});"
+            "forgot.addEventListener('click',async()=>{const value=email.value.trim();if(!value){msg.className='auth-card__status auth-card__status--error';msg.textContent='ENTER YOUR EMAIL TO RESET ACCESS.';email.focus();return}forgot.disabled=true;try{const r=await fetch(cfg.url+'/auth/v1/recover',{method:'POST',headers:{'apikey':cfg.key,'Content-Type':'application/json'},body:JSON.stringify({email:value,redirect_to:'https://ops.codeblackwx.com/update-password'})});if(!r.ok)throw Error();msg.className='auth-card__status auth-card__status--ok';msg.textContent='IF THAT EMAIL IS ON FILE, A RECOVERY LINK IS ON THE WAY.'}catch(_){msg.className='auth-card__status auth-card__status--error';msg.textContent='RESET REQUEST FAILED.'}finally{forgot.disabled=false}});"
+            "form.addEventListener('submit',async event=>{event.preventDefault();msg.textContent='';button.disabled=true;"
+            "try{if(!cfg.url||!cfg.key)throw Error('Operations sign-in is not configured.');const r=await fetch(cfg.url+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':cfg.key,'Content-Type':'application/json'},body:JSON.stringify({email:email.value,password:password.value})});const data=await r.json().catch(()=>({}));if(!r.ok||!data.access_token)throw Error('Incorrect email or password.');await establish(data.access_token)}catch(error){msg.textContent=error.message||'Sign-in failed.';password.value='';button.disabled=false;}});"
+            "const handoff=new URLSearchParams(window.location.hash.slice(1)).get('access_token');if(handoff){history.replaceState(null,'',location.pathname);button.disabled=true;email.disabled=true;password.disabled=true;forgot.disabled=true;msg.className='auth-card__status';msg.textContent='VERIFYING OPS SESSION…';establish(handoff).catch(error=>{msg.className='auth-card__status auth-card__status--error';msg.textContent=error.message||'OPS HANDOFF FAILED.';button.disabled=false;email.disabled=false;password.disabled=false;forgot.disabled=false})}"
+            "</script></html>").encode()
 
 
-def status_verify_operator(username, password):
-    if not username or not password or len(username) > 128 or len(password) > 512:
-        return False
-    encoded = base64.b64encode((username + ":" + password).encode()).decode()
-    request = urllib.request.Request("http://127.0.0.1:8796/services", headers={"Authorization": "Basic " + encoded})
+def token_expiry(token):
+    """Read only exp after provider verification; never treat this as signature validation."""
     try:
+        payload = token.split(".")[1]
+        decoded = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
+        expiry = int(json.loads(decoded).get("exp"))
+        return expiry if expiry > now() else None
+    except (IndexError, ValueError, TypeError, UnicodeError, binascii.Error, json.JSONDecodeError):
+        return None
+
+
+def verify_supabase_ops_token(token):
+    """Mirror the existing Ops gateway check with the caller's bearer token and RLS."""
+    if not isinstance(token, str) or not 32 <= len(token) <= 8192 or not SUPABASE_OPS_URL or not SUPABASE_OPS_PUBLISHABLE_KEY:
+        return None, "Operations sign-in is unavailable."
+    headers = {"Authorization": "Bearer " + token, "apikey": SUPABASE_OPS_PUBLISHABLE_KEY, "User-Agent": "CodeBlack-StatusCenter/1.0"}
+    try:
+        request = urllib.request.Request(SUPABASE_OPS_URL + "/auth/v1/user", headers=headers)
         with urllib.request.urlopen(request, timeout=5) as response:
-            return response.status == 200
-    except (urllib.error.HTTPError, OSError, ValueError):
-        return False
+            user = json.loads(response.read(131_073))
+        user_id = user.get("id") if isinstance(user, dict) else None
+        if not isinstance(user_id, str) or not user_id:
+            return None, "Operations sign-in could not be verified."
+        profile_url = SUPABASE_OPS_URL + "/rest/v1/profiles?select=active&user_id=eq." + urllib.parse.quote(user_id, safe="")
+        request = urllib.request.Request(profile_url, headers=headers)
+        with urllib.request.urlopen(request, timeout=5) as response:
+            rows = json.loads(response.read(131_073))
+        if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict) or rows[0].get("active") is not True:
+            return None, "This Operations account is not authorized for Status Center."
+        expiry = token_expiry(token)
+        if not expiry:
+            return None, "Operations session has expired."
+        return (user_id, expiry), None
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError, UnicodeError, json.JSONDecodeError):
+        return None, "Operations sign-in could not be verified."
 
 
 def esp_management_request(role, command=None):
@@ -1708,29 +1802,40 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         try:
             if path == "/login":
-                return self.send_bytes(200, status_login_page(), "text/html; charset=utf-8", "no-store")
+                return self.send_bytes(200, status_login_page(), "text/html; charset=utf-8", "no-store", {
+                    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src " + SUPABASE_OPS_URL + " 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"})
             if path == "/logout":
                 return self.send_bytes(303, b"", "text/plain", "no-store", {
                     "Location": "/status/login", "Set-Cookie": "cb_status_session=; Path=/status; Secure; HttpOnly; SameSite=Strict; Max-Age=0"})
             match = re.fullmatch(r"/api/esp-management/([a-z][a-z0-9-]{0,31})", path)
             if match:
-                if not status_session_actor(self.headers.get("Cookie")):
+                if not authenticated_status_actor(self.headers.get("Cookie")):
                     return self.send_bytes(401, b'{"error":"status sign-in required"}', "application/json", "no-store")
                 status, payload = esp_management_request(match.group(1))
                 return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
-            if path in ("/", "/index.html") and not status_session_actor(self.headers.get("Cookie")):
+            if path in ("/", "/index.html") and not authenticated_status_actor(self.headers.get("Cookie")):
                 return self.send_bytes(303, b"", "text/plain", "no-store", {"Location": "/status/login"})
             if path == "/api/health":
                 return self.send_bytes(200, json.dumps({"ok": True, "version": VERSION, "uptime_s": int(now() - START), "probes": len(PROBES)}).encode(), "application/json", "no-store")
             if path == "/api/status":
                 return self.send_bytes(200, json.dumps(status_doc()).encode(), "application/json", "no-store")
+            if path == "/api/internal/ops-status":
+                if not internal_status_bridge_ok(self):
+                    return self.send_bytes(403, b'{"error":"private bridge required"}', "application/json", "no-store")
+                return self.send_bytes(200, json.dumps(status_doc()).encode(), "application/json", "no-store")
             if path == "/api/weather-alert-settings":
                 status, payload = weather_alert_control("GET")
                 return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
-            if path == "/api/weather-alert-status":
+            if path == "/api/internal/weather-alert-status":
+                if not internal_status_bridge_ok(self):
+                    return self.send_bytes(403, b'{"error":"private bridge required"}', "application/json", "no-store")
                 status, payload = weather_alert_control("GET", resource="status")
                 return self.send_bytes(status, json.dumps(payload).encode(), "application/json", "no-store")
             if path == "/api/radar-control-settings":
+                return self.send_bytes(200, json.dumps(radar_control_settings()).encode(), "application/json", "no-store")
+            if path == "/api/internal/radar-control-settings":
+                if not internal_status_bridge_ok(self):
+                    return self.send_bytes(403, b'{"error":"private bridge required"}', "application/json", "no-store")
                 return self.send_bytes(200, json.dumps(radar_control_settings()).encode(), "application/json", "no-store")
             if path in ("/api/changes", "/api/status/changes"):
                 q = parse_qs(urlparse(self.path).query)
@@ -1749,12 +1854,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
-        if path == "/login":
-            return self.status_login()
+        if path == "/api/supabase-session":
+            return self.supabase_session()
         match = re.fullmatch(r"/api/esp-management/([a-z][a-z0-9-]{0,31})/commands", path)
         if not match:
             return self.send_bytes(404, b'{"error":"not found"}', "application/json", "no-store")
-        if not status_session_actor(self.headers.get("Cookie")):
+        if not authenticated_status_actor(self.headers.get("Cookie")):
             return self.send_bytes(401, b'{"error":"status sign-in required"}', "application/json", "no-store")
         if self.headers.get("Origin") != ESP_COMMAND_ORIGIN or self.headers.get("Sec-Fetch-Site") == "cross-site" or self.headers.get("X-Mesonet-UI") != "1":
             return self.send_bytes(403, b'{"error":"origin check failed"}', "application/json", "no-store")
@@ -1772,34 +1877,45 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return self.send_bytes(503, b'{"error":"Core management unavailable"}', "application/json", "no-store")
 
-    def status_login(self):
-        if self.headers.get("Sec-Fetch-Site") == "cross-site" or (self.headers.get("Origin") and self.headers.get("Origin") != ESP_COMMAND_ORIGIN):
-            return self.send_bytes(403, status_login_page("Origin check failed."), "text/html; charset=utf-8", "no-store")
-        referer = self.headers.get("Referer", "")
-        if referer and not referer.startswith(ESP_COMMAND_ORIGIN + "/status/"):
-            return self.send_bytes(403, status_login_page("Origin check failed."), "text/html; charset=utf-8", "no-store")
-        if not self.headers.get("Content-Type", "").startswith("application/x-www-form-urlencoded"):
-            return self.send_bytes(415, status_login_page("Form required."), "text/html; charset=utf-8", "no-store")
+    def supabase_session(self):
+        if self.headers.get("Origin") != ESP_COMMAND_ORIGIN or self.headers.get("Sec-Fetch-Site") == "cross-site":
+            return self.send_bytes(403, b'{"error":"origin check failed"}', "application/json", "no-store")
+        if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+            return self.send_bytes(415, b'{"error":"JSON required"}', "application/json", "no-store")
         try:
             size = int(self.headers.get("Content-Length", "0"))
-            if not 1 <= size <= 2048:
-                raise ValueError("invalid form")
-            form = parse_qs(self.rfile.read(size).decode("utf-8"), keep_blank_values=True)
-            username = form.get("username", [""])[0]
-            password = form.get("password", [""])[0]
-            if not status_verify_operator(username, password):
-                return self.send_bytes(401, status_login_page("Incorrect username or password."), "text/html; charset=utf-8", "no-store")
-            cookie = status_session(username)
-            return self.send_bytes(303, b"", "text/plain", "no-store", {
-                "Location": "/status/", "Set-Cookie": f"cb_status_session={cookie}; Path=/status; Secure; HttpOnly; SameSite=Strict; Max-Age={STATUS_SESSION_SECONDS}"})
-        except (ValueError, UnicodeError, RuntimeError):
-            return self.send_bytes(400, status_login_page("Sign-in unavailable."), "text/html; charset=utf-8", "no-store")
+            if not 2 <= size <= 16_384:
+                raise ValueError("invalid body")
+            data = json.loads(self.rfile.read(size))
+            verified, error = verify_supabase_ops_token(data.get("access_token") if isinstance(data, dict) else None)
+            if not verified:
+                return self.send_bytes(401, json.dumps({"error": error}).encode(), "application/json", "no-store")
+            actor, expiry = verified
+            cookie = status_session(actor, expires_at=expiry)
+            max_age = max(1, min(STATUS_SESSION_MAX_SECONDS, int(expiry - now())))
+            return self.send_bytes(200, b'{"ok":true}', "application/json", "no-store", {
+                "Set-Cookie": f"cb_status_session={cookie}; Path=/status; Secure; HttpOnly; SameSite=Strict; Max-Age={max_age}"})
+        except (ValueError, UnicodeError, RuntimeError, json.JSONDecodeError):
+            return self.send_bytes(400, b'{"error":"invalid sign-in request"}', "application/json", "no-store")
 
     def do_PUT(self):
         path = self.path.split("?", 1)[0]
+        if path == "/api/internal/radar-control-settings":
+            if not internal_status_bridge_ok(self):
+                return self.send_bytes(403, b'{"error":"private bridge required"}', "application/json", "no-store")
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 2 <= size <= 1_024 or self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+                    raise ValueError("invalid radar control request")
+                response = update_radar_control_settings(json.loads(self.rfile.read(size)))
+                return self.send_bytes(200, json.dumps(response).encode(), "application/json", "no-store")
+            except (ValueError, json.JSONDecodeError) as exc:
+                return self.send_bytes(400, json.dumps({"error": str(exc)[:120]}).encode(), "application/json", "no-store")
+            except Exception as exc:  # noqa: BLE001
+                return self.send_bytes(503, json.dumps({"error": type(exc).__name__}).encode(), "application/json", "no-store")
         if path not in ("/api/weather-alert-settings", "/api/radar-control-settings"):
             return self.send_bytes(404, b'{"error":"not found"}', "application/json", "no-store")
-        if not status_session_actor(self.headers.get("Cookie")):
+        if not authenticated_status_actor(self.headers.get("Cookie")):
             return self.send_bytes(401, b'{"error":"status sign-in required"}', "application/json", "no-store")
         try:
             size = int(self.headers.get("Content-Length", "0"))

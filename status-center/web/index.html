@@ -71,6 +71,11 @@ main{padding:14px 16px 30px;max-width:2200px;margin:0 auto}
 .sect.labs>header{border-bottom-color:#33295f}
 .sect.labs>header h2{color:var(--labs)}
 .cards{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
+.project-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(310px,1fr))}
+.project-card .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.project-card .hd h3{flex:1;min-width:150px}
+.project-card .phase{font-size:10px;letter-spacing:.09em;color:var(--info);font-weight:700}
+.project-card .project-services{margin:8px 0 0;padding-left:17px;font-size:11px;color:var(--muted)}
+.project-card .project-services li{margin:2px 0}.project-card .project-services b{color:var(--text)}
 .card{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:10px 11px;min-width:0}
 .card.stale,.srow.stale{border-color:#7a5a12}
 .card>.hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
@@ -182,6 +187,7 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 .lane{display:grid;grid-template-columns:52px auto minmax(0,1fr);gap:8px;align-items:center;padding:2px 0}
 .contend{margin:8px 0;padding:8px 10px;border:1px solid var(--warn);background:#2c2208;color:#ffd98a;border-radius:6px;font-weight:700}
 .futurecard{border-style:dashed;color:var(--muted)}
+.radar-settings{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,220px);gap:8px;align-items:end;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}.radar-settings label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:11px}.radar-settings label.check{flex-direction:row;align-items:center;gap:8px;padding:7px 0;color:var(--text)}.radar-settings select,.radar-settings button{background:#0d0d10;color:var(--text);border:1px solid var(--line2);border-radius:5px;padding:7px 8px;font:inherit;font-size:12px}.radar-settings button{background:#152032;color:#bfdaff;border-color:#4a6688;cursor:pointer}.radar-settings button:disabled{opacity:.5}.radar-settings .feedback{grid-column:1/-1;font-size:11px;color:var(--muted)}.radar-settings .feedback.error{color:var(--bad)}.radar-settings .feedback.ok{color:var(--ok)}
 .alert-control{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.alert-control fieldset{margin:0;padding:10px;border:1px solid var(--line2);border-radius:6px;min-width:0}.alert-control legend{color:#cfcfd6;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}.alert-control label{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;font-size:12px}.alert-control input,.alert-control select{max-width:120px;background:#0d0d10;color:var(--text);border:1px solid var(--line2);border-radius:4px;padding:5px 6px;font:inherit}.alert-control .wide{display:grid;grid-template-columns:1fr 1fr;gap:8px}.alert-control .wide input{max-width:none;width:100%}.alert-save{display:flex;align-items:center;gap:10px;margin-top:10px}.alert-save button{background:var(--red);color:white;border:0;border-radius:4px;padding:7px 11px;font:700 12px var(--sans);cursor:pointer}.alert-save button:disabled{opacity:.5;cursor:wait}.alert-state{font-size:11px;color:var(--muted)}
 .foot{padding:12px 16px 24px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);max-width:2200px;margin:0 auto}
 #empty{padding:30px;text-align:center;color:var(--muted);font-size:14px}
@@ -247,6 +253,7 @@ a.linkcard:hover{border-color:var(--red);text-decoration:none}
 <div id="agebanner" class="banner warn" hidden></div>
 <main id="app" class="">
   <section class="sect" id="s-tiles"><header><h2>Global state</h2><button id="tileview" class="tileview" type="button" aria-controls="b-tiles" aria-expanded="false">Show all states</button></header><div class="body"><div id="b-tiles" class="tiles"></div></div></section>
+  <section class="sect" id="s-projects"><header><h2>Project landscape</h2><span class="sub">Live service evidence and project phase</span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-projects"></div></section>
   <section class="sect" id="s-attention"><header><h2>Needs attention</h2><span id="attsum" class="attsum"></span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-attention"></div></section>
   <section class="sect" id="s-notifications"><header><h2>Notifications</h2><span class="sub">ntfy &amp; alert delivery</span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-notifications"></div></section>
   <section class="sect" id="s-esp"><header><h2>ESP32 fleet console</h2><span class="sub">Live Core freshness, handoff, and safe management paths</span><button class="tog" type="button" aria-label="Toggle section">-</button></header><div class="body" id="b-esp"></div></section>
@@ -775,6 +782,12 @@ R.radar = (d) => {
     kv('Private configuration UI', chip(caps.configuration_ui || 'UNKNOWN')),
     h('div', 'small muted wrap', 'Locations are intentionally not shown here. This read-only panel reports only operational selection telemetry.'),
   ], C.telemetry));
+  const cfg=C.configuration||{}, toggle=h('input',null,null,{type:'checkbox','aria-label':'Enable primary radar prewarm'}); toggle.checked=cfg.primary_prewarm_enabled!==false;
+  const select=h('select',null,null,{'aria-label':'Primary radar prewarm interval'}), interval=[300,600,900,1800].includes(Number(cfg.primary_interval_seconds))?Number(cfg.primary_interval_seconds):300;
+  [[300,'Every 5 minutes'],[600,'Every 10 minutes'],[900,'Every 15 minutes'],[1800,'Every 30 minutes']].forEach(([v,l])=>{const o=h('option',null,l,{value:v});o.selected=v===interval;select.appendChild(o)});
+  const save=h('button',null,'Save primary policy',{type:'button'}), feedback=h('div','feedback','Private Operations-controlled policy. Secondary sites remain disabled.');
+  save.addEventListener('click',async()=>{save.disabled=true;try{const r=await fetch('api/radar-control-settings',{method:'PUT',headers:{'Content-Type':'application/json','X-CodeBlack-Radar-Control':'1'},body:JSON.stringify({primary_prewarm_enabled:toggle.checked,primary_interval_seconds:Number(select.value)})});if(!r.ok)throw Error();feedback.className='feedback ok';feedback.textContent='Saved. Applied before the next prewarm cycle.';load()}catch(_){feedback.className='feedback error';feedback.textContent='Settings were not saved.'}finally{save.disabled=false}});
+  box.appendChild(card('',[h('div','hd',[h('h3',null,'Primary prewarm policy'),chip('PRIVATE')]),h('div','radar-settings',[h('label','check',[toggle,'Enable sequential primary prewarming']),h('label',null,['Interval',select]),save,feedback]),h('div','small muted wrap','Only the two selected primary sites run, one at a time. Secondary sites cannot be enabled here.')],C.telemetry));
 };
 R.weather = (d) => {
   const box = $('#b-weather'); box.replaceChildren();
@@ -930,6 +943,26 @@ R.inventory = (d) => {
     box.appendChild(h('div', 'srow f-item', [h('div', null, [h('div', 'sn', s.name), h('div', 'sub', s.host + ' / ' + (s.category || ''))]), h('div', null, chip(s.state, s.telemetry, { informational: s.informational })), h('div', 'small mono wrap', nz(s.release || s.version)), h('div', 'small muted', dur(s.uptime_s)), h('div', 'linkrow', links.length ? links : h('span', 'muted small', 'no URLs'))]));
   });
 };
+R.projects = (d) => {
+  const box = $('#b-projects'); box.replaceChildren();
+  const projects = Array.isArray(d.projects) ? d.projects : [];
+  if (!projects.length) { box.appendChild(h('div', 'emptynote', 'Project scope is not available from this backend. See the full inventory below.')); return; }
+  const grid = h('div', 'project-grid');
+  projects.forEach((p) => {
+    const services = Array.isArray(p.services) ? p.services : [];
+    const issues = services.filter((s) => s.state !== 'HEALTHY').slice(0, 4);
+    const facts = [h('div', 'hd', [h('h3', null, p.name), chip(p.health)]),
+      h('div', 'phase', p.phase), h('p', 'reason', p.summary),
+      kv('Coverage', (p.monitored_count || 0) + ' / ' + (p.expected_count || 0) + ' services monitored'),
+      h('p', 'note', p.note)];
+    if (issues.length) facts.push(h('ul', 'project-services', issues.map((s) => h('li', null, [h('b', null, s.name), ' — ' + s.state + ' on ' + s.host]))));
+    else facts.push(h('p', 'note', p.health === 'UNMONITORED' ? 'No live health probe is registered.' : 'All listed monitored services report healthy.'));
+    const links = (p.links || []).filter((l) => safeUrl(l.url)).slice(0, 4).map((l) => lnk(l.name, l.url));
+    if (links.length) facts.push(h('div', 'linkrow', links));
+    grid.appendChild(card('project-card', facts));
+  });
+  box.appendChild(grid);
+};
 R.footer = (d) => {
   const f = $('#foot'); f.replaceChildren();
   const b = d.backend || {};
@@ -937,7 +970,7 @@ R.footer = (d) => {
     'probes ' + (isNull(b.probes_total) ? '?' : b.probes_total) + ' total / ' + (isNull(b.probes_stale) ? '?' : b.probes_stale) + ' stale / ' + (isNull(b.probes_failing) ? '?' : b.probes_failing) + ' failing',
     'generated ' + (d.generated_at || '?'), 'read-only view'].join('  |  ')));
 };
-const SECTIONS = [['tiles', (d) => d.summary], ['attention', (d) => d.attention], ['notifications', (d) => d.notifications], ['esp', (d) => d.esp_fleet], ['hosts', (d) => d.hosts], ['services', (d) => d.services], ['streaming', (d) => d.streaming], ['radar', (d) => d.radar],
+const SECTIONS = [['tiles', (d) => d.summary], ['projects', (d) => d.projects], ['attention', (d) => d.attention], ['notifications', (d) => d.notifications], ['esp', (d) => d.esp_fleet], ['hosts', (d) => d.hosts], ['services', (d) => d.services], ['streaming', (d) => d.streaming], ['radar', (d) => d.radar],
   ['weather', (d) => d.weather], ['compute', (d) => d.compute], ['network', (d) => d.network], ['dns', (d) => d.dns], ['storage', (d) => d.storage], ['ai', (d) => d.ai], ['labs', (d) => d.labs],
   ['launchpad', (d) => d.links], ['address', (d) => d.address_book], ['inventory', (d) => [d.hosts, d.services]], ['footer', (d) => [d.backend, d.schema]]];
 const RELTIME = new Set(['hosts', 'services', 'esp', 'streaming', 'radar', 'weather', 'compute', 'network', 'dns', 'storage', 'ai', 'labs', 'attention', 'notifications']);
