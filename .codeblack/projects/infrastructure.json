@@ -1,0 +1,102 @@
+{
+  "schema": "codeblack.project.v1",
+  "id": "infrastructure",
+  "name": "Infrastructure & recovery",
+  "summary": "Edge status, network access, DNS, reliability probes, and backup verification.",
+  "phase": "LIVE",
+  "note": "See attention and storage panels for individual failure evidence.",
+  "services": [
+    {
+      "id": "edge-status",
+      "host": "edge",
+      "name": "Edge Status API",
+      "unit": "codeblack-edge-status.service"
+    },
+    {
+      "id": "edge-dashboard",
+      "host": "edge",
+      "name": "Edge Dashboard",
+      "unit": "codeblack-edge-dashboard.service"
+    },
+    {
+      "id": "edge-functional-probes",
+      "host": "edge",
+      "name": "Edge Functional Probes",
+      "unit": "codeblack-functional-probes.timer"
+    },
+    {
+      "id": "edge-reliability",
+      "host": "edge",
+      "name": "Edge Reliability",
+      "unit": "codeblack-edge-reliability.timer"
+    },
+    {
+      "id": "edge-core-backup",
+      "host": "edge",
+      "name": "Core Backup Pull",
+      "unit": "codeblack-core-backup.timer"
+    },
+    {
+      "id": "edge-backup-verify",
+      "host": "edge",
+      "name": "Backup Verification",
+      "unit": "codeblack-backup-verify.timer"
+    },
+    {
+      "id": "pihole-ftl",
+      "host": "edge",
+      "name": "Pi-hole FTL (DNS)",
+      "unit": "pihole-FTL.service"
+    },
+    {
+      "id": "cloudflared",
+      "host": "core",
+      "name": "cloudflared",
+      "unit": "cloudflared.service"
+    },
+    {
+      "id": "tailscaled-core",
+      "host": "core",
+      "name": "Tailscale (Core)",
+      "unit": "tailscaled.service"
+    },
+    {
+      "id": "edge-status-collect",
+      "host": "edge",
+      "name": "Edge Status Collect",
+      "unit": "codeblack-edge-status-collect.timer"
+    },
+    {
+      "id": "edge-ops-infrastructure",
+      "host": "edge",
+      "name": "Edge Ops Infrastructure",
+      "unit": "codeblack-ops-infrastructure.timer"
+    },
+    {
+      "id": "edge-fleet-presence",
+      "host": "edge",
+      "name": "Edge Fleet Presence",
+      "unit": "codeblack-fleet-presence.timer"
+    },
+    {
+      "id": "edge-project-collector",
+      "host": "edge",
+      "name": "Edge project collector",
+      "unit": "codeblack-project-collector.service"
+    }
+  ],
+  "links": [
+    {
+      "id": "edge-dashboard",
+      "name": "Edge Dashboard",
+      "url": "https://codeblack-edge.tail1d0673.ts.net/",
+      "access": "PRIVATE"
+    },
+    {
+      "id": "pihole-edge-ts",
+      "name": "Pi-hole (Edge) - Tailscale",
+      "url": "http://100.88.198.67/admin/",
+      "access": "PRIVATE"
+    }
+  ]
+}

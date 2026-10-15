@@ -1,0 +1,10 @@
+{
+  "schema": "codeblack.project.v1",
+  "id": "mobile-companion",
+  "name": "Mobile companion",
+  "summary": "Native phone and tablet companion work.",
+  "phase": "DEVELOPMENT",
+  "note": "No live deployment probe is registered; development phase is a project note, not a health check.",
+  "services": [],
+  "links": []
+}

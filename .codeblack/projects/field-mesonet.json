@@ -1,0 +1,68 @@
+{
+  "schema": "codeblack.project.v1",
+  "id": "field-mesonet",
+  "name": "Field mesonets",
+  "summary": "Spencer STRIKER and Nick ESP boards, Core ingest, and MQTT transport.",
+  "phase": "FIELD VALIDATION",
+  "note": "Live state comes from Core reports. Sensor wiring and calibration remain device-specific.",
+  "services": [
+    {
+      "id": "core-api",
+      "host": "core",
+      "name": "Core API",
+      "unit": "codeblack-core-api.service"
+    },
+    {
+      "id": "spencer-striker-weather",
+      "host": "core",
+      "name": "Spencer \u00b7 STRIKER Weather ESP"
+    },
+    {
+      "id": "spencer-striker-nav",
+      "host": "core",
+      "name": "Spencer \u00b7 STRIKER Vane/Nav ESP"
+    },
+    {
+      "id": "nick-mesonet-wind",
+      "host": "core",
+      "name": "Nick Mesonet \u00b7 WIND"
+    },
+    {
+      "id": "nick-mesonet-weather",
+      "host": "core",
+      "name": "Nick Mesonet \u00b7 WEATHER"
+    },
+    {
+      "id": "mqtt-broker",
+      "host": "core",
+      "name": "MQTT Broker",
+      "unit": "codeblack-mqtt-broker.service"
+    },
+    {
+      "id": "mqtt-bridge",
+      "host": "core",
+      "name": "MQTT Bridge",
+      "unit": "codeblack-mqtt-bridge.service"
+    },
+    {
+      "id": "owntracks-bridge",
+      "host": "core",
+      "name": "OwnTracks / Mobile Mesonet Bridge",
+      "unit": "codeblack-owntracks-bridge.service"
+    },
+    {
+      "id": "nick-mesonet-ntfy-bridge",
+      "host": "core",
+      "name": "Nick Mesonet iPhone Alerts",
+      "unit": "codeblack-mesonet-ntfy-bridge.timer"
+    }
+  ],
+  "links": [
+    {
+      "id": "ops",
+      "name": "OPS",
+      "url": "https://ops.codeblackwx.com/",
+      "access": "PRIVATE"
+    }
+  ]
+}

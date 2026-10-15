@@ -15,7 +15,10 @@ function timeLabel(value: string | null | undefined): string {
 }
 
 export function MissionGrid({ document, error }: { document: StatusCenterDocument | null; error: string | null }) {
-  const projects = document?.projects ?? []
+  const allProjects = document?.projects ?? []
+  const projects = allProjects.filter((project) => project.registration !== "DISCOVERED")
+  const discovered = allProjects.filter((project) => project.registration === "DISCOVERED")
+  const coverage = document?.project_coverage
   const counts = projects.reduce((count, project) => {
     if (project.health === "HEALTHY") count.clear += 1
     else if (project.health === "UNMONITORED") count.unmonitored += 1
@@ -40,7 +43,8 @@ export function MissionGrid({ document, error }: { document: StatusCenterDocumen
           const history = project.history
           return <article key={project.id} className={`status-landscape__card status-landscape__card--${project.health.toLowerCase()}`}>
             <div className="status-landscape__card-top"><span className="status-landscape__number">{String(index + 1).padStart(2, "0")} / {String(projects.length).padStart(2, "0")}</span><span className="status-landscape__health"><StatusBadge state={badge(project.health)} /><b>{project.health}</b></span></div>
-            <h3>{project.name}</h3><div className="status-landscape__phase">{project.phase}</div><p>{project.summary}</p>
+            <h3>{project.name}</h3><div className="status-landscape__phase">MILESTONE: {project.declared_phase ?? project.phase}</div><p>{project.summary}</p>
+            <div className="mission-deployment-state">DEPLOYMENT: {project.deployment_state ?? "UNVERIFIED"} · {project.registration ?? "REGISTRY"}</div>
             <div className="status-landscape__score"><div><span>HEALTHY</span><b>{health.healthy} / {health.expected}</b></div><div><span>MONITORED</span><b>{health.monitored} / {health.expected}</b></div></div>
             <div className="status-landscape__meter" aria-label={`${health.healthy} of ${health.expected} scoped services healthy`}><i style={{ width: health.expected ? `${100 * health.healthy / health.expected}%` : "0%" }} /></div>
             {health.unknown > 0 && <p className="status-landscape__unknown">{health.unknown} service{health.unknown === 1 ? "" : "s"} awaiting current evidence</p>}
@@ -48,13 +52,23 @@ export function MissionGrid({ document, error }: { document: StatusCenterDocumen
             <div className="mission-history" role="img" aria-label={`24-hour sampled history for ${project.name}; gaps mean no recorded sample`}>
               {(history?.bins ?? Array.from({ length: 48 }, () => "NO_DATA")).map((state, i) => <i key={i} className={`mission-history__bin mission-history__bin--${state.toLowerCase()}`} title={`${state} · ${history ? new Date(Date.parse(history.window_start) + i * history.bin_seconds * 1000).toLocaleString() : "no sample"}`} />)}
             </div>
-            <details><summary>VIEW SIGNALS <span>{project.services.length}</span></summary><ul>{project.services.map((service) => <li key={service.id}><span>{service.name}<small>{service.host}</small></span><b className={`status-landscape__signal status-landscape__signal--${service.state.toLowerCase()}`} title={service.state_reason ?? undefined}>{service.state}</b></li>)}</ul>
+            <details><summary>VIEW SIGNALS <span>{project.services.length}</span></summary><ul>{project.services.map((service) => <li key={service.id}><span>{service.name}<small>{service.host}{service.monitoring_kind === "PROCESS_ONLY" ? " · process check only" : ""}</small>{service.deployment && <small>{service.deployment.state} · {service.deployment.release ?? "release unavailable"}<br />{service.deployment.commit ? `Git ${service.deployment.commit.slice(0, 12)} · deployed ${service.deployment.deployed_at ? new Date(service.deployment.deployed_at).toLocaleString() : "time unknown"}` : "Awaiting a matching deployment record"}{service.deployment.last_attempt && <><br />Last attempt: {service.deployment.last_attempt.result} · {new Date(service.deployment.last_attempt.reported_at).toLocaleString()}</>}</small>}</span><b className={`status-landscape__signal status-landscape__signal--${service.state.toLowerCase()}`} title={service.state_reason ?? undefined}>{service.state}</b></li>)}</ul>
               {project.missing_services.length > 0 && <p className="status-landscape__missing">Missing probes: {project.missing_services.join(", ")}</p>}
             </details>
             <p className="status-landscape__note">{project.note}</p>
             {project.links.length > 0 && <div className="status-landscape__links">{project.links.map((link) => <a key={link.id} href={link.url} target="_blank" rel="noreferrer">{link.name} ↗</a>)}</div>}
           </article>
         })}</div>}
+    </section>
+    <section className="mission-panel mission-coverage" aria-label="Project discovery coverage">
+      <div className="mission-panel__title"><span>AUTOMATIC REGISTRATION</span><h2>DEPLOYMENT WATCH <b>{coverage?.finding_count ?? "—"} TO REVIEW</b></h2></div>
+      <p>Project manifests and running releases refresh automatically. Milestones describe plans; verified deployment status requires a matching clean Git record and current health evidence.</p>
+      <div className="mission-coverage__hosts">{coverage?.hosts.map((host) => <span key={host.host}>{host.host.toUpperCase()} · {host.state}{host.observed_at ? ` · ${timeLabel(host.observed_at)}` : " · no discovery report"}</span>) ?? <span>Waiting for discovery coverage…</span>}</div>
+      {error && <p>Core telemetry is disconnected; these observations may be stale.</p>}
+      <details><summary>DISCOVERED PROJECTS / SERVICES · {discovered.length}</summary>
+        {discovered.length ? <div className="mission-discovered">{discovered.map((project) => <article key={project.id}><b>{project.name}</b><span>{project.health} · UNVERIFIED</span><small>{project.services.map((service) => `${service.host} · ${service.name} · ${service.deployment?.release ?? "release unknown"}`).join(" / ")}</small><p>{project.note}</p></article>)}</div> : <p>No unregistered services in the available host reports.</p>}
+      </details>
+      <details><summary>COVERAGE FINDINGS · {coverage?.finding_count ?? 0}</summary><ul>{coverage?.findings.map((finding, i) => <li key={`${finding.kind}-${i}`}><b>{finding.kind.replaceAll("_", " ")}</b> · {finding.host ?? finding.project ?? "inventory"}<small>{finding.detail ?? "Check the project manifest."}</small></li>)}</ul></details>
     </section>
     <div className="mission-ops-panels">
       <section className="mission-panel" aria-label="Shared host impact"><div className="mission-panel__title"><span>IMPACT RADAR</span><h2>SHARED HOST SIGNALS</h2></div><p>Host state and projects with weak signals on that host. Association does not prove the host caused a project issue.</p>

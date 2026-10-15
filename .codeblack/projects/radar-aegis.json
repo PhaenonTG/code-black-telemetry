@@ -1,0 +1,59 @@
+{
+  "schema": "codeblack.project.v1",
+  "id": "radar-aegis",
+  "name": "Radar & AEGIS",
+  "summary": "Radar product, worker, health watchdog, AEGIS screening, and local AI.",
+  "phase": "LIVE / EXPANDING",
+  "note": "Radar and AEGIS have separate service health; unknown AI state is not a radar outage.",
+  "services": [
+    {
+      "id": "radar-product",
+      "host": "core",
+      "name": "Radar Product (server-side)",
+      "unit": "codeblack-radar-product.service"
+    },
+    {
+      "id": "radar-worker",
+      "host": "core",
+      "name": "Radar Worker (KSGF single-site)",
+      "unit": "codeblack-radar-worker.service"
+    },
+    {
+      "id": "radar-health-watchdog",
+      "host": "core",
+      "name": "Radar HTTP Recovery Watchdog",
+      "unit": "codeblack-radar-health-watchdog.timer"
+    },
+    {
+      "id": "core-ai",
+      "host": "core",
+      "name": "Code Black Intelligence",
+      "unit": "codeblack-ai.service"
+    },
+    {
+      "id": "ai-router",
+      "host": "phaenon3",
+      "name": "AI Router / AEGIS"
+    }
+  ],
+  "links": [
+    {
+      "id": "radar-product",
+      "name": "Radar product manifest",
+      "url": "https://codeblack-core.tail1d0673.ts.net/radar-product/v1/composite/latest.json",
+      "access": "PRIVATE"
+    },
+    {
+      "id": "radar-worker",
+      "name": "Radar worker health (KSGF)",
+      "url": "https://codeblack-core.tail1d0673.ts.net/radar/api/v1/radar/health",
+      "access": "PRIVATE"
+    },
+    {
+      "id": "aegis-health",
+      "name": "AEGIS / AI router health",
+      "url": "https://phaenon3.tail1d0673.ts.net/ai/health",
+      "access": "PRIVATE"
+    }
+  ]
+}

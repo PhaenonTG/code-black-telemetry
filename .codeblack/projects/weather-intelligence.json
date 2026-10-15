@@ -1,0 +1,51 @@
+{
+  "schema": "codeblack.project.v1",
+  "id": "weather-intelligence",
+  "name": "Weather intelligence",
+  "summary": "Forecast ingest, weather worker, official alerts, and watcher freshness.",
+  "phase": "LIVE",
+  "note": "Freshness warnings remain visible even when the services themselves are running.",
+  "services": [
+    {
+      "id": "edge-weather-ingest",
+      "host": "edge",
+      "name": "HRRR Weather Ingest",
+      "unit": "codeblack-weather-ingest.timer"
+    },
+    {
+      "id": "edge-weather-watcher",
+      "host": "edge",
+      "name": "HRRR Publication Watcher",
+      "unit": "codeblack-weather-publication-watcher.timer"
+    },
+    {
+      "id": "weather-worker",
+      "host": "phaenon3",
+      "name": "Weather Worker (PHAENON3)"
+    },
+    {
+      "id": "weather-watchdog",
+      "host": "phaenon3",
+      "name": "Weather Worker Watchdog"
+    },
+    {
+      "id": "weather-alert-feed",
+      "host": "edge",
+      "name": "Official Weather Alerts"
+    },
+    {
+      "id": "nick-mesonet-alerts",
+      "host": "core",
+      "name": "Nick Mesonet Alerts",
+      "unit": "codeblack-mesonet-alerts.service"
+    }
+  ],
+  "links": [
+    {
+      "id": "ops",
+      "name": "OPS",
+      "url": "https://ops.codeblackwx.com/",
+      "access": "PRIVATE"
+    }
+  ]
+}

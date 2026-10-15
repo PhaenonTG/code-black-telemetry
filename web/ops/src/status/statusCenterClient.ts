@@ -32,6 +32,17 @@ export interface StatusService {
   telemetry?: { last_success?: string | null; stale?: boolean }
 }
 
+export interface ProjectDeployment {
+  unit: string
+  state: string
+  release: string | null
+  commit: string | null
+  deployed_at: string | null
+  observed_at: string | null
+  runtime_started_at?: string | null
+  last_attempt?: { result: string; reported_at: string; release: string; dirty?: boolean } | null
+}
+
 export interface ProjectHistory {
   window_start: string
   bin_seconds: number
@@ -53,7 +64,12 @@ export interface StatusProject {
   troubled_count: number
   unknown_count: number
   history?: ProjectHistory
-  services: Array<{ id: string; name: string; state: string; host: string; state_reason?: string | null }>
+  registration?: "REGISTRY" | "MANIFEST" | "DISCOVERED"
+  declared_phase?: string
+  phase_source?: string
+  deployment_state?: string
+  deployments?: ProjectDeployment[]
+  services: Array<{ id: string; name: string; state: string; host: string; state_reason?: string | null; deployment?: ProjectDeployment | null; monitoring_kind?: string | null }>
   missing_services: string[]
   links: Array<{ id: string; name: string; url: string; access: string }>
 }
@@ -63,6 +79,13 @@ export interface StatusCenterDocument {
   summary?: { overall?: string; attention_count?: number; tiles?: StatusTile[] }
   attention?: StatusAttention[]
   projects?: StatusProject[]
+  project_coverage?: {
+    hosts: Array<{ host: string; state: string; observed_at?: string | null }>
+    findings: Array<{ kind: string; host?: string; project?: string; detail?: string }>
+    finding_count: number
+    registered_projects: number
+    discovered_projects: number
+  }
   services?: StatusService[]
   hosts?: Array<{ id: string; name: string; state: string; state_reason?: string | null }>
   radar?: Record<string, unknown>

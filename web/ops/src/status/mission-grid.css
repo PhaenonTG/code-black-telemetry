@@ -22,3 +22,7 @@
 .mission-check-list article{display:flex;align-items:start;gap:11px}.mission-check{min-width:68px;padding:4px 5px;text-align:center;font-size:9px;font-weight:900;color:#ecb264;border:1px solid #a77b44}
 .mission-check--pass{color:#3cdda8;border-color:#248b68}.mission-check--blocked{color:#ff756e;border-color:#c84440}.mission-check--unknown{color:#a7b4be;border-color:#647784}
 @media(max-width:900px){.mission-ops-panels{grid-template-columns:1fr}}
+.mission-deployment-state{font-size:10px;color:#aab6c8;letter-spacing:.08em;margin:8px 0}
+.mission-coverage{margin:18px 0}.mission-coverage__hosts{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.mission-coverage__hosts span{font-size:11px;background:#111820;border:1px solid #344050;padding:7px 9px;border-radius:4px}
+.mission-coverage details{border-top:1px solid #344050;margin-top:10px;padding-top:10px}.mission-coverage summary{cursor:pointer;font-size:11px;font-weight:800;letter-spacing:.08em}.mission-coverage li{margin:10px 0;font-size:12px}.mission-coverage small{display:block;color:#aab6c8;margin-top:5px;overflow-wrap:anywhere}
+.mission-discovered{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:10px;margin-top:12px}.mission-discovered article{background:#0b1017;border:1px solid #344050;padding:12px;border-radius:5px;min-width:0}.mission-discovered b{overflow-wrap:anywhere}.mission-discovered span{display:block;font-size:10px;color:#e4b961;margin-top:7px}
