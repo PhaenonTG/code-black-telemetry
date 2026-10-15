@@ -1,0 +1,32 @@
+{
+  "reference_id": "inspeed-reed-anemometer-2020-02",
+  "manufacturer": "Inspeed",
+  "document": "Reed Switch Anemometers",
+  "document_revision": "February 2020",
+  "source_url": "https://cdn.shopify.com/s/files/1/0785/9050/9339/files/Reed_Switch_Sensor_Instructions.pdf?v=1701386468",
+  "source_sha256": "d12b94d2f966e90e74b37462a9930468c8f7698ffb7cfaef24297e2eca191f95",
+  "retrieved_date": "2026-10-15",
+  "signal": {
+    "type": "normally_open_reed_switch",
+    "pulses_per_rotation_standard": 1,
+    "external_sensor_power_required": false
+  },
+  "conversions": [
+    {"body": "Classic straight 1.25 inch", "rotor": "D2 or D3 plastic", "mph_per_hz": 2.85, "mps_per_hz": 1.274064},
+    {"body": "WS2 bottle shaped", "rotor": "D2 or D3 plastic", "mph_per_hz": 2.7, "mps_per_hz": 1.207008},
+    {"body": "WS2 bottle shaped", "rotor": "metal cups", "mph_per_hz": 2.45, "mps_per_hz": 1.095248}
+  ],
+  "striker_nav": {
+    "identified_from_photo_date": "2026-10-15",
+    "body": "WS2 bottle shaped",
+    "rotor": "D2 or D3 plastic",
+    "mount": "two roof magnets; separate from pulse magnet",
+    "pulse_gpio": 25,
+    "selected_mph_per_hz": 2.7,
+    "selected_mps_per_hz": 1.207008,
+    "firmware_version": "0.1.8",
+    "functional_check": "Hand spin produced approximately 0.7 to 7.7 Hz and corresponding 0.9 to 9.3 m/s; Core accepted telemetry with HTTP 200.",
+    "calibration_status": "manufacturer factor selected by photo; no field comparison or wind tunnel validation"
+  }
+}
+
