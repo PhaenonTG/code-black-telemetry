@@ -100,6 +100,16 @@ class ProjectAutomationTests(unittest.TestCase):
         self.assertEqual(len(projects), 1)
         self.assertEqual(coverage["discovered_projects"], 0)
 
+    def test_manifest_membership_replaces_old_scope_and_can_bind_http_service_unit(self):
+        base = {"id": "test-project", "name": "Old", "phase": "DEVELOPMENT", "summary": "Old", "note": "Old", "service_ids": ["old"], "link_ids": ["old-link"]}
+        configs = [{"id": "test-service", "host": "core"}]
+        services = {"test-service": {"id": "test-service", "name": "Test", "host": "core", "state": "DEGRADED", "state_reason": "HTTP probe failed"}}
+        projects, coverage = landscape.reconcile([base], configs, services, [], {"core": (document(), True)})
+        self.assertEqual(projects[0]["service_ids"], ["test-service"])
+        self.assertEqual(projects[0]["link_ids"], [])
+        self.assertEqual(projects[0]["health"], "DEGRADED")  # retain the functional probe authority
+        self.assertEqual(coverage["discovered_projects"], 0)
+
     def test_discovery_failure_preserves_previous_inventory(self):
         if sys.platform == "win32":
             self.skipTest("Linux collector discovery is validated on target")

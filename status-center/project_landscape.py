@@ -40,6 +40,7 @@ def reconcile(base_projects, service_config, service_by_id, links, inventories):
         entry = entries.setdefault(pid, {"id": pid, "service_ids": [], "link_ids": []})
         entry.update({k: manifest[k] for k in ("name", "phase", "summary", "note")})
         entry["registration"] = "MANIFEST"
+        entry["service_ids"], entry["link_ids"] = [], []
         for item in manifest["services"]:
             sid, host = item["id"], item["host"]
             if sid in configs and configs[sid].get("host") != host:
@@ -53,9 +54,10 @@ def reconcile(base_projects, service_config, service_by_id, links, inventories):
                 observation = doc.get("units", {}).get(item.get("unit"))
                 services[sid] = dynamic_service(item, doc, observation, bool(fresh and doc.get("available")))
             if item.get("unit"):
-                configs.setdefault(sid, {"id": sid, "host": host, "unit": item["unit"]})
+                configs[sid] = {**configs.get(sid, {}), "id": sid, "host": host, "unit": item["unit"]}
                 doc, fresh = inventories.get(host, ({}, False))
                 observation = (doc or {}).get("units", {}).get(item["unit"])
+                services[sid] = {**services[sid], "deployment": deployment(doc or {}, item["unit"], observation, bool(fresh and (doc or {}).get("available")))}
                 if fresh and (doc or {}).get("available") and (not observation or not observation.get("installed", True)):
                     findings.append({"kind": "MISSING_UNIT", "host": host, "detail": f"{item['unit']} is declared but not installed."})
             elif sid not in service_by_id:
