@@ -18,12 +18,12 @@ export function resolveModotUrl(requestUrl: URL): URL | null {
   return upstream;
 }
 
-export async function handleModotRequest(request: Request): Promise<Response> {
+export async function handleModotRequest(request: Request, fetchImpl: typeof fetch = fetch): Promise<Response> {
   if (request.method !== "GET") return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: { "Content-Type": "application/json" } });
   const upstream = resolveModotUrl(new URL(request.url));
   if (!upstream) return new Response(JSON.stringify({ error: "ROUTE_NOT_ALLOWED" }), { status: 404, headers: { "Content-Type": "application/json" } });
   try {
-    const response = await fetch(upstream, { headers: { Accept: "application/geo+json, application/json" }, cf: { cacheTtl: 60, cacheEverything: true } } as RequestInit);
+    const response = await fetchImpl(upstream, { headers: { Accept: "application/geo+json, application/json" }, cf: { cacheTtl: 60, cacheEverything: true } } as RequestInit);
     if (!response.ok) return new Response(JSON.stringify({ error: "PROVIDER_UNAVAILABLE" }), { status: 502, headers: { "Content-Type": "application/json" } });
     return new Response(response.body, {
       status: 200,

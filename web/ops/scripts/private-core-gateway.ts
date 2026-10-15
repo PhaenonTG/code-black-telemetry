@@ -1,6 +1,11 @@
 import { createHash, createHmac } from "node:crypto";
 import { ARDOT_RELAY_PREFIX, handleArdotCameraStream } from "../functions/lib/ardotCameraRelay";
 import { CAMERA_HEALTH_PATH, handleCameraHealth } from "../functions/lib/cameraHealthRelay";
+import { KANDRIVE_PATH, handleKandriveRequest } from "../functions/lib/kandriveRelay";
+import { MODOT_PREFIX, handleModotRequest } from "../functions/lib/modotRelay";
+import { ODOT_PREFIX, handleOdotRequest } from "../functions/lib/odotRelay";
+import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
+import { privateProviderFetch } from "./private-provider-fetch";
 import {
   gatewayErrorResponse,
   resolveAllowlistRoute,
@@ -12,6 +17,7 @@ export interface PrivateCoreEnv extends GatewayEnv {
   OPS_PRIVATE_CORE_BASE_URL?: string;
   OPS_PRIVATE_WRITE_SECRET?: string;
   MAPBOX_PUBLIC_TOKEN?: string;
+  ODOT_WZDX_ACCESS_TOKEN?: string;
 }
 
 const prefix = "/api/core/";
@@ -171,5 +177,9 @@ export function handlePrivateApiRequest(request: Request, env: PrivateCoreEnv, f
   if (path.startsWith("/overlay-core/")) return handlePrivateOverlayRequest(request, env, fetchImpl);
   if (path === CAMERA_HEALTH_PATH) return handleCameraHealth(request);
   if (path === ARDOT_RELAY_PREFIX) return handleArdotCameraStream(request);
+  if (path === KANDRIVE_PATH) return handleKandriveRequest(request, privateProviderFetch);
+  if (path.startsWith(MODOT_PREFIX)) return handleModotRequest(request, privateProviderFetch);
+  if (path.startsWith(ODOT_PREFIX)) return handleOdotRequest(request, env, privateProviderFetch);
+  if (path.startsWith(TDOT_PREFIX)) return handleTdotRequest(request, privateProviderFetch);
   return Promise.resolve(gatewayErrorResponse(404, "ROUTE_NOT_ALLOWED"));
 }

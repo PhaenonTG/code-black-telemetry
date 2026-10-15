@@ -17,12 +17,12 @@ export function resolveTdotEndpoint(requestUrl: URL): URL | null {
   return new URL(endpoint, TDOT_ORIGIN);
 }
 
-export async function handleTdotRequest(request: Request): Promise<Response> {
+export async function handleTdotRequest(request: Request, fetchImpl: typeof fetch = fetch): Promise<Response> {
   if (request.method !== "GET") return Response.json({ error: "METHOD_NOT_ALLOWED" }, { status: 405 });
   const upstream = resolveTdotEndpoint(new URL(request.url));
   if (!upstream) return Response.json({ error: "ROUTE_NOT_ALLOWED" }, { status: 404 });
   try {
-    const response = await fetch(upstream, {
+    const response = await fetchImpl(upstream, {
       headers: { Accept: "application/json", "X-API-Key": TDOT_PUBLIC_API_KEY },
       cf: { cacheTtl: 60, cacheEverything: true },
     } as RequestInit);

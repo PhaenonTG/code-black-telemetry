@@ -46,12 +46,12 @@ function inside(root, target) {
 
 async function sendCoreResponse(request, response, gateway) {
   let body;
-  if (request.method === "POST" || request.method === "PUT") {
+    if (request.method === "POST" || request.method === "PUT") {
     const chunks = [];
     let size = 0;
     for await (const chunk of request) {
       size += chunk.length;
-      if (size > 4096) { json(response, 413, { error: "REQUEST_TOO_LARGE" }); return; }
+      if (size > (request.url?.startsWith("/api/kandrive/graphql") ? 24_000 : 4096)) { json(response, 413, { error: "REQUEST_TOO_LARGE" }); return; }
       chunks.push(chunk);
     }
     body = Buffer.concat(chunks);
@@ -81,7 +81,9 @@ export function createPrivateOpsServer({ distDir = defaultDist, apiGateway, tls,
       if (hostname !== allowedHostname.toLowerCase()) { json(response, 421, { error: "INVALID_HOST" }); return; }
     }
     if (request.url?.startsWith("/api/core/") || request.url?.startsWith("/overlay-core/") ||
-        request.url?.startsWith("/api/camera-health") || request.url?.startsWith("/api/ardot-camera-stream")) {
+        request.url?.startsWith("/api/camera-health") || request.url?.startsWith("/api/ardot-camera-stream") ||
+        request.url?.startsWith("/api/kandrive/") || request.url?.startsWith("/api/modot/") ||
+        request.url?.startsWith("/api/odot/") || request.url?.startsWith("/api/tdot/")) {
       if (!apiGateway) { json(response, 503, { error: "PRIVATE_ROUTE_NOT_MIGRATED" }); return; }
       try { await sendCoreResponse(request, response, apiGateway); }
       catch { if (!response.headersSent) json(response, 502, { error: "CORE_UNAVAILABLE" }); else response.destroy(); }
@@ -165,6 +167,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
       VITE_SUPABASE_PUBLISHABLE_KEY: process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
       MAPBOX_PUBLIC_TOKEN: process.env.MAPBOX_PUBLIC_TOKEN,
+      ODOT_WZDX_ACCESS_TOKEN: process.env.ODOT_WZDX_ACCESS_TOKEN,
     };
     apiGateway = request => handlePrivateApiRequest(request, env);
   }
