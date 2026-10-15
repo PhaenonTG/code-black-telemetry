@@ -132,7 +132,7 @@ export default function StatusCenter() {
         </div>
         {error ? <p className="status-center__muted">Project health is unavailable while Core telemetry is disconnected.</p> : !document ? <p className="status-center__muted">Loading mission grid…</p> : projects.length === 0 ? <p className="status-center__muted">Core has not published the project landscape yet.</p> :
           <div className="status-landscape__grid">{projects.map((project: StatusProject, index) => <article key={project.id} className={`status-landscape__card status-landscape__card--${project.health.toLowerCase()}`}>
-            <div className="status-landscape__card-top"><span className="status-landscape__number">{String(index + 1).padStart(2, "0")} / {String(projects.length).padStart(2, "0")}</span><StatusBadge state={stateForBadge(project.health)} /></div>
+            <div className="status-landscape__card-top"><span className="status-landscape__number">{String(index + 1).padStart(2, "0")} / {String(projects.length).padStart(2, "0")}</span><span className="status-landscape__health"><StatusBadge state={stateForBadge(project.health)} /><b>{project.health}</b></span></div>
             <h3>{project.name}</h3>
             <div className="status-landscape__phase">{project.phase}</div>
             <p>{project.summary}</p>
