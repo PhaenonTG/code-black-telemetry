@@ -56,7 +56,8 @@ async function sendCoreResponse(request, response, gateway) {
     }
     body = Buffer.concat(chunks);
   }
-  const origin = `http://127.0.0.1${request.url}`;
+  const scheme = request.socket.encrypted ? "https" : "http";
+  const origin = `${scheme}://${request.headers.host || "127.0.0.1"}${request.url}`;
   const webRequest = new Request(origin, {
     method: request.method,
     headers: request.headers,
@@ -79,7 +80,8 @@ export function createPrivateOpsServer({ distDir = defaultDist, apiGateway, tls,
       catch { json(response, 400, { error: "INVALID_HOST" }); return; }
       if (hostname !== allowedHostname.toLowerCase()) { json(response, 421, { error: "INVALID_HOST" }); return; }
     }
-    if (request.url?.startsWith("/api/core/") || request.url?.startsWith("/overlay-core/")) {
+    if (request.url?.startsWith("/api/core/") || request.url?.startsWith("/overlay-core/") ||
+        request.url?.startsWith("/api/camera-health") || request.url?.startsWith("/api/ardot-camera-stream")) {
       if (!apiGateway) { json(response, 503, { error: "PRIVATE_ROUTE_NOT_MIGRATED" }); return; }
       try { await sendCoreResponse(request, response, apiGateway); }
       catch { if (!response.headersSent) json(response, 502, { error: "CORE_UNAVAILABLE" }); else response.destroy(); }

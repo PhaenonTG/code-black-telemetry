@@ -1,4 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
+import { ARDOT_RELAY_PREFIX, handleArdotCameraStream } from "../functions/lib/ardotCameraRelay";
+import { CAMERA_HEALTH_PATH, handleCameraHealth } from "../functions/lib/cameraHealthRelay";
 import {
   gatewayErrorResponse,
   resolveAllowlistRoute,
@@ -164,7 +166,10 @@ export async function handlePrivateOverlayRequest(
 }
 
 export function handlePrivateApiRequest(request: Request, env: PrivateCoreEnv, fetchImpl: typeof fetch = fetch): Promise<Response> {
-  return new URL(request.url).pathname.startsWith("/api/core/")
-    ? handlePrivateCoreRequest(request, env, fetchImpl)
-    : handlePrivateOverlayRequest(request, env, fetchImpl);
+  const path = new URL(request.url).pathname;
+  if (path.startsWith("/api/core/")) return handlePrivateCoreRequest(request, env, fetchImpl);
+  if (path.startsWith("/overlay-core/")) return handlePrivateOverlayRequest(request, env, fetchImpl);
+  if (path === CAMERA_HEALTH_PATH) return handleCameraHealth(request);
+  if (path === ARDOT_RELAY_PREFIX) return handleArdotCameraStream(request);
+  return Promise.resolve(gatewayErrorResponse(404, "ROUTE_NOT_ALLOWED"));
 }

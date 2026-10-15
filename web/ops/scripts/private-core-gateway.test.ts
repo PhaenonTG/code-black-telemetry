@@ -1,6 +1,6 @@
 import { createHmac, createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { handlePrivateCoreRequest, handlePrivateOverlayRequest, type PrivateCoreEnv } from "./private-core-gateway";
+import { handlePrivateApiRequest, handlePrivateCoreRequest, handlePrivateOverlayRequest, type PrivateCoreEnv } from "./private-core-gateway";
 
 const userId = "4b10eb9e-af64-4077-a659-2fe4adf69b12";
 const env: PrivateCoreEnv = {
@@ -91,5 +91,16 @@ describe("private overlay routes", () => {
     const result = await handlePrivateOverlayRequest(new Request(path), { ...env, MAPBOX_PUBLIC_TOKEN: "pk.test" });
     expect(await result.json()).toEqual({ token: "pk.test" });
     expect((await handlePrivateOverlayRequest(new Request(path, { method: "OPTIONS" }), env)).status).toBe(204);
+  });
+});
+
+describe("private camera routes", () => {
+  it("keeps camera relays explicit and rejects unapproved upstream hosts", async () => {
+    const health = await handlePrivateApiRequest(new Request("http://localhost/api/camera-health?url=https%3A%2F%2Fevil.test%2Fimage.jpg"), env);
+    expect(health.status).toBe(400);
+    const stream = await handlePrivateApiRequest(new Request("http://localhost/api/ardot-camera-stream"), env);
+    expect(stream.status).toBe(400);
+    const unknown = await handlePrivateApiRequest(new Request("http://localhost/api/unknown"), env);
+    expect(unknown.status).toBe(404);
   });
 });
