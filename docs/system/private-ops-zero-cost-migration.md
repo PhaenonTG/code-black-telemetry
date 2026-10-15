@@ -1,6 +1,6 @@
 # Private Ops migration with zero new recurring cost
 
-Status: planning and first local candidate, 2026-10-14. No production routing change has been made.
+Status: locked working baseline and first local candidate, 2026-10-14. No production routing change has been made. Change this baseline with a documented revision, not an implicit route or cost change.
 
 ## Goal and constraints
 
@@ -9,6 +9,8 @@ Keep the Ops website, Producer controls, live PROGRAM preview with audio, Core d
 The proposed first access path is Cloudflare One **private network routing** on its Free plan, with the Cloudflare One Client on operator devices. This is a private tunnel to a service on Core or a colocated host, not a public hostname Worker route. Cloudflare documents private-network routes as exempt from its public-video restriction. Free-plan eligibility, user count, device enrollment, media behavior, and actual traffic must be verified in the account before cutover. Tailscale is an existing technical path, but its free Personal plan is explicitly for noncommercial use, so it is not the zero-cost production assumption. A self-hosted WireGuard path remains the Cloudflare-independent fallback if Core has reachable ingress or an already-funded public relay.
 
 This plan does not promise every third-party source is unlimited. Supabase Auth, Mapbox, and weather/map sources retain their own availability, quotas, and terms. The cost gate is **zero new recurring bill** for the migration, verified against the actual account configuration.
+
+Known existing defect: the operator reports that the local 30B review of drafts fails every time. The current chase setup workflow calls `qwen3-coder:30b` after Aegis, allows a longer 225-second transport window, and marks the workflow `incomplete` when either review is unavailable. The existing approval gate then blocks posting a Reviewed Briefing. The private-site migration must not conceal that state or turn a failed model result into a passing review. This defect is in scope for diagnosis and repair before declaring draft workflows fully functional. No paid fallback may run automatically; any replacement reviewer must be local/free, evidence-bounded, and validated against the same safety rules. Confirm whether tropical drafts share the symptom before changing that separate workflow.
 
 ## Current dependencies found in source
 
@@ -22,6 +24,7 @@ This plan does not promise every third-party source is unlimited. Supabase Auth,
 | Chase `/api/chase/*` | Chase Gateway Worker; Core VPC binding | Inventory field phone, public-location, Facebook, comments and OTA callers individually. Do not move or remove public ingress until the field devices have a tested private route. |
 | Facebook OAuth/replies | Chase Gateway Worker and Core broker | Keep a valid redirect URL, callback/session security and connected account state. Confirm the private origin works with the provider's registered redirect before switching. |
 | Chase OTA release assets | Gateway Worker assets | Preserve version 22 and archive; migrate only after download and hash checks from field devices. |
+| Draft advisory review | Core review job, PHAENON3 local `qwen3:8b` and `qwen3-coder:30b` | Diagnose persistent 30B failure and make the local reviewer reliable or explicitly replace it with a validated free local model. Preserve failure visibility, evidence validation, revision binding and human approval. |
 
 Observed load source: the OBS bridge runs a two-second cycle with three gateway calls (status, capabilities, commands). At full cadence this alone could create 129,600 Worker requests/day; JPEG and HLS uploads add more. Moving only browser polling cannot remove that load.
 
@@ -42,8 +45,9 @@ Read-only host check on 2026-10-14: Core is online in the existing tailnet with 
 - Capture current production versions, route list, Workers request volume by route, Core service health, OBS bridge state, free-plan/user counts, DNS, and rollback artifacts without printing secrets.
 - Record all active worktrees and staged changes. Work only in isolated checkouts; never reset, clean, or overwrite another agent's work.
 - Verify Cloudflare One Free account eligibility and the private route's behavior. If there is a cost, usage, or device compatibility blocker, use the WireGuard feasibility track before committing to an access method.
+- Capture one failed draft-review attempt's model-specific reason, elapsed time and validation result without copying private draft prose or credentials into logs. Separate model availability, timeout/resource exhaustion, response shape, and guard rejection. Check both the chase setup and tropical draft workflows rather than assuming one root cause.
 
-Gate: exact current versions and a genuine $0 access path are documented.
+Gate: exact current versions, a genuine $0 access path, and a reproducible 30B failure classification are documented.
 
 ### 1. Private site skeleton
 
@@ -60,6 +64,14 @@ Gate: private site loads on all operator devices and only authorized users can u
 - Automate route-contract checks so an API path returns its expected content type and status, never the SPA HTML fallback.
 
 Gate: map/radar, weather, alerts, soundings, Aegis, status, cameras, road layers and overlays match production from the private origin.
+
+### 2a. Restore free draft review
+
+- Reproduce a bounded private draft review against the local model path and record only diagnostic metadata. Inspect PHAENON3 model availability, queueing, memory/offload pressure, 225-second deadline, output schema, and post-response claim guards.
+- Correct the actual failure in the Core-to-PHAENON3 call or response handling. If `qwen3-coder:30b` cannot complete reliably on the available hardware, qualify a smaller **local** second reviewer and update the model identity and tests explicitly. Keep Aegis and the second review independent.
+- Show the specific safe failure category in Ops and retain retry controls. Do not convert `unavailable` to `ready`, remove the second-review requirement, or auto-spend on a paid model.
+
+Gate: repeated reviews of current bounded drafts complete or fail with an accurate actionable reason; a failed review still blocks posting, and a successful review passes the existing evidence and revision checks. Verify the tropical draft path separately if affected.
 
 ### 3. Producer service and workstation shadowing
 
@@ -84,7 +96,7 @@ Gate: field GPS, configuration, Facebook state and release downloads work from r
 - Monitor request counts, bandwidth, service errors, producer media freshness, command acknowledgments, auth failures and device reconnection.
 - Restore the fast Producer experience only after the private path demonstrates stable delivery. Retire old routes only after the dependency inventory and rollback window are complete.
 
-Gate: full production workflow passes on the private site and no new recurring charge appears.
+Gate: full production workflow, including draft review, passes on the private site and no new recurring charge appears.
 
 ## Rollback
 
@@ -94,6 +106,7 @@ The current Pages site, Chase Gateway Worker, Durable Object and OBS bridge conf
 
 1. Confirm the Cloudflare One account's Free eligibility and device enrollment; select a non-production hostname and one pilot device.
 2. Build and run `web/ops/scripts/serve-private.mjs` in an isolated Core release directory, with no DNS or production process change. It binds only to loopback, serves a supplied `dist` directory, exposes `/health`, and returns JSON 503 for unmigrated `/api/*` and `/overlay-core/*` instead of the SPA. A local test already verifies static assets, SPA routes, route rejection and health. For a manual pilot: set `OPS_PRIVATE_PORT` to a free unprivileged port and `OPS_PRIVATE_DIST` to the exact candidate build directory, then run `node web/ops/scripts/serve-private.mjs` from the checkout. Do not point the production domain at it while APIs are unmigrated.
-3. Write and run the route-contract matrix against both current production and the candidate, then migrate the least stateful Core relays before Producer.
+3. Classify the recurring local 30B draft-review failure from one real attempt's bounded diagnostics, then repair or qualify a free local replacement in a separate isolated Core checkout. Preserve the current approval gate throughout.
+4. Write and run the route-contract matrix against both current production and the candidate, then migrate the least stateful Core relays before Producer.
 
 No production cutover occurs until the relevant gate passes.
