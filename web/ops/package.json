@@ -10,6 +10,7 @@
     "test": "vitest run --exclude scripts/serve-private.test.mjs && node --test scripts/serve-private.test.mjs",
     "build": "vite build && node scripts/verify-pages-build.mjs",
     "build:private-gateway": "node scripts/build-private-gateway.mjs",
+    "check:private-routes": "node scripts/check-private-route-contract.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
