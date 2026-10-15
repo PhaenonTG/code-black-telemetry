@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build as bundleWorker } from 'esbuild'
+import { assertProductionEnv } from './scripts/productionEnv.ts'
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 // The repo root, three levels up (web/ops -> web -> repo root). Reused OPS
@@ -13,6 +14,7 @@ const repoRoot = path.resolve(dirname, '../..')
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, dirname, "")
+  if (mode === 'production') assertProductionEnv(env)
   const coreProxyTarget = (env.CODEBLACK_CORE_PROXY_TARGET || "http://127.0.0.1:8000").replace(/\/+$/, "")
   return {
   // Pages production has previously served the SPA fallback for /api/core/*
