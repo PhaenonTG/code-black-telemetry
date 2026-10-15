@@ -33,6 +33,22 @@ function envWith(overrides: Partial<Env> = {}): Env {
 }
 
 describe("codeblack-chase-gateway", () => {
+  it("retains production Mesonet OTA authentication and forwarding", async () => {
+    const core = mockCoreVpc(() => new Response("firmware", { headers: { "Content-Type": "application/octet-stream" } }));
+    const env = envWith({ CORE_VPC: core });
+    const url = "https://x/api/chase/mesonet/ota/image/wind/1.2.3?device=test";
+    expect((await handleRequest(new Request(url), env)).status).toBe(401);
+    const response = await handleRequest(new Request(url, { headers: { Authorization: "Bearer device-test" } }), env);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(core.fetch).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("/api/mesonet/v1/ota/image/wind/1.2.3?device=test"), { headers: { Authorization: "Bearer device-test" } });
+  });
+  it("retains Mesonet public calibration gating and read credential", async () => {
+    const core = mockCoreVpc(() => new Response(JSON.stringify({ wind: { calibration_verified: false, readings: { wind_mps: 12, gust_mps: 18 } }, weather: { readings: { temperature_c: 25 } } })));
+    const response = await handleRequest(new Request("https://x/api/chase/mesonet/public"), envWith({ CORE_VPC: core, MESONET_READ_TOKEN: "test-read" }));
+    expect(await response.json()).toMatchObject({ wind_mps: null, gust_mps: null, wind_calibration_verified: false, temperature_c: 25 });
+    expect(core.fetch).toHaveBeenCalledWith(expect.stringContaining("/api/mesonet/v1/latest"), { headers: { Authorization: "Bearer test-read" } });
+  });
   it("503s every route when CORE_VPC binding is absent", async () => {
     const res = await handleRequest(new Request("https://x/api/chase/location/public"), {});
     expect(res.status).toBe(503);

@@ -348,8 +348,9 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
   }
   if (path === "/api/producer/v1/workstation/commands" && request.method === "GET") {
     const commands = await storage.get<StoredCommand[]>(COMMANDS_KEY) ?? [];
-    for (const command of commands) if (command.state === "queued" && Date.now() - Date.parse(command.createdAt) > 15_000) { command.state = "timed_out"; command.completedAt = new Date().toISOString(); }
-    await storage.put(COMMANDS_KEY, commands);
+    let changed = false;
+    for (const command of commands) if (command.state === "queued" && Date.now() - Date.parse(command.createdAt) > 15_000) { command.state = "timed_out"; command.completedAt = new Date().toISOString(); changed = true; }
+    if (changed) await storage.put(COMMANDS_KEY, commands);
     return json(200, { commands: commands.filter((item) => item.state === "queued").slice(0, 20) });
   }
   if (path === "/api/producer/v1/workstation/ack" && request.method === "POST") {
@@ -374,8 +375,23 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
 }
 
 export class ProducerBridge implements DurableObject {
+  // Serialize read/modify/write operations without resetting the entire object
+  // when one upload is aborted or a storage operation rejects. Never replay a
+  // failed request: a write may already have committed before it rejected.
+  private requestQueue: Promise<void> = Promise.resolve();
   constructor(private readonly state: DurableObjectState) {}
   fetch(request: Request): Promise<Response> {
-    return this.state.blockConcurrencyWhile(() => handleProducerStateRequest(request, this.state.storage));
+    const response = this.requestQueue.then(async () => {
+      try {
+        return await handleProducerStateRequest(request, this.state.storage);
+      } catch {
+        // Deliberately omit headers, URL/query, payload, and exception text:
+        // this object also handles OAuth and encrypted Page credentials.
+        console.error("PRODUCER_REQUEST_FAILED", { method: request.method });
+        return json(503, { error: "PRODUCER_REQUEST_FAILED", outcome: "unknown" });
+      }
+    });
+    this.requestQueue = response.then(() => undefined, () => undefined);
+    return response;
   }
 }
