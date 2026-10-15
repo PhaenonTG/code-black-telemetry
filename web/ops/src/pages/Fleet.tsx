@@ -6,7 +6,7 @@ import type { FabricPresenceState } from "../../../../src/services/fabric/types"
 import { ageText } from "../../../../src/services/radar"
 import { Link } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { formatStrikerReading, STRIKER_SENSORS, strikerDevice, strikerReading, strikerReadingAge, strikerReportAge } from "./strikerReadings"
+import { displayedStrikerReading, formatStrikerReading, STRIKER_SENSORS, strikerDevice, strikerReading, strikerReadingAge, strikerReportAge, type LastValidStrikerReading } from "./strikerReadings"
 
 // FabricPresenceState has one member OpsConnectionState doesn't (NOT_CONFIGURED) -- map it to
 // the closest existing pill tone rather than casting past the type system.
@@ -28,10 +28,24 @@ export default function Fleet() {
   const snapshot = state.fabric.units
   const units = snapshot?.units ?? []
   const [now, setNow] = useState(() => Date.now())
+  const [lastValid, setLastValid] = useState<Record<string, LastValidStrikerReading>>({})
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1_000)
     return () => window.clearInterval(timer)
   }, [])
+  useEffect(() => {
+    const checkedAt = Date.now()
+    const updates: Record<string, LastValidStrikerReading> = {}
+    for (const sensor of STRIKER_SENSORS) {
+      const device = strikerDevice(snapshot, sensor.id)
+      for (const field of sensor.fields) {
+        const value = strikerReading(device, field.key, checkedAt)
+        const age = strikerReadingAge(device, field.key, checkedAt)
+        if (value !== null && age !== null) updates[`${sensor.id}:${field.key}`] = { value, observedAt: checkedAt - age }
+      }
+    }
+    if (Object.keys(updates).length > 0) setLastValid((previous) => ({ ...previous, ...updates }))
+  }, [snapshot])
 
   return (
     <div className="page page-fleet">
@@ -41,7 +55,7 @@ export default function Fleet() {
         <Link to="/stream">STREAMS</Link>
       </nav>
       <section className="striker-readings" aria-label="Striker ESP live readings">
-        <div className="striker-readings__heading"><div><p>STRIKER · CORE MESONET</p><h2>ESP readings</h2></div><span>Recent values show their age · unavailable sensors show —</span></div>
+        <div className="striker-readings__heading"><div><p>STRIKER · CORE MESONET</p><h2>ESP readings</h2></div><span>Reading age is shown · unavailable sensors show —</span></div>
         <div className="striker-readings__grid">
           {STRIKER_SENSORS.map((sensor) => {
             const device = strikerDevice(snapshot, sensor.id)
@@ -51,14 +65,13 @@ export default function Fleet() {
               <header><h3>{sensor.title}</h3><strong className={live ? "is-live" : ""}>{live ? "REPORTING" : "NO FRESH REPORT"}</strong></header>
               <p>{reportAge === null ? "No Core report" : `Core report ${Math.ceil(reportAge / 1000)}s ago`}</p>
               <dl>{sensor.fields.map((field) => {
-                const value = strikerReading(device, field.key, now)
-                const readingAge = value === null ? null : strikerReadingAge(device, field.key, now)
-                return <div key={field.key}><dt>{field.label}</dt><dd>{formatStrikerReading(field.key, value)}<small>{readingAge === null ? "Unavailable" : `${Math.ceil(readingAge / 1000)}s old`}</small></dd></div>
+                const reading = displayedStrikerReading(device, field.key, now, lastValid[`${sensor.id}:${field.key}`])
+                return <div key={field.key}><dt>{field.label}</dt><dd className={reading?.source === "last_valid" ? "is-last-valid" : ""}>{formatStrikerReading(field.key, reading?.value ?? null)}<small>{reading === null ? "Unavailable" : reading.source === "last_valid" ? `Last valid ${Math.ceil(reading.ageMs / 1000)}s ago` : `${Math.ceil(reading.ageMs / 1000)}s old`}</small></dd></div>
               })}</dl>
             </article>
           })}
         </div>
-        <p className="striker-readings__note">Recent readings remain visible for up to 30 seconds during uplink delays, with their age shown. Core source values are displayed in °F, mph, and inHg where applicable. Wind pulses remain raw Hz. Reporting does not confirm sensor calibration or wiring.</p>
+        <p className="striker-readings__note">Recent readings remain visible during uplink delays. If a sensor stops reporting, its last valid value is labeled and held for up to one minute. Core source values are displayed in °F, mph, and inHg where applicable. Wind pulses remain raw Hz.</p>
       </section>
       {units.length === 0 ? (
         <div className="empty-state empty-state--centered">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { FabricDeviceState } from "../../../../src/services/fabric/types"
-import { formatStrikerReading, strikerReading, strikerReadingAge } from "./strikerReadings"
+import { displayedStrikerReading, formatStrikerReading, strikerReading, strikerReadingAge } from "./strikerReadings"
 
 const now = Date.parse("2026-10-15T12:00:00Z")
 const device = {
@@ -35,5 +35,15 @@ describe("Striker ESP readings", () => {
     expect(strikerReading({ ...device, metadata: { quality: { temperature_c: { state: "unavailable", observed_at: new Date(now).toISOString() } } } }, "temperature_c", now)).toBeNull()
     expect(strikerReading({ ...device, last_seen: now - 31_000 }, "temperature_c", now)).toBeNull()
     expect(strikerReading({ ...device, connected: false }, "temperature_c", now)).toBeNull()
+  })
+
+  it("labels a last valid value during a sensor dropout and expires it after one minute", () => {
+    const unavailable = { ...device, latest: { mesonet: { temperature_c: null } }, metadata: {
+      quality: { temperature_c: { state: "unavailable", observed_at: new Date(now).toISOString() } },
+    } }
+    const saved = { value: 22.4, observedAt: now - 10_000 }
+    expect(displayedStrikerReading(unavailable, "temperature_c", now, saved)).toEqual({ value: 22.4, ageMs: 10_000, source: "last_valid" })
+    expect(displayedStrikerReading(unavailable, "temperature_c", now + 51_000, saved)).toBeNull()
+    expect(displayedStrikerReading(unavailable, "temperature_c", now)).toBeNull()
   })
 })

@@ -124,6 +124,7 @@
 .striker-readings__card dt{color:var(--cb-muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
 .striker-readings__card dd{margin:4px 0 0;font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
 .striker-readings__card dd small{display:block;min-height:14px;margin-top:2px;color:var(--cb-muted);font-size:10px;font-weight:500}
+.striker-readings__card dd.is-last-valid,.striker-readings__card dd.is-last-valid small{color:var(--cb-amber)}
 @media(max-width:700px){.striker-readings__heading{display:block}.striker-readings__grid{grid-template-columns:1fr}}
 
 /* ---- Phase 3 Storm Intel workspace ---- */
