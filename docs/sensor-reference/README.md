@@ -40,3 +40,13 @@ sample, only GPIO16 (RS485 receive), GPIO17 (RS485 transmit), and GPIO2
 (status LED) changed level. The GPS UART on GPIO27 had no valid NMEA and the
 legacy vane ADC remained zero. This detects no second active sensor; quiet I2C
 devices or other RS485 addresses cannot be ruled out by passive sampling.
+
+Signed Weather firmware 0.1.8 completed active discovery on 2026-10-15 while
+keeping the Seeed probe and Core reporting live. The 50 kHz I2C probe on
+SDA21/SCL22 found no acknowledged address from 0x08 through 0x77. The 9600 baud
+RS485 sweep queried slave addresses 1 through 247 with Modbus functions 3 and
+4, reading one register at address 0. Only slave 1 replied (both functions);
+there were no exception replies from another address. This does not test other
+I2C pin pairs, RS485 baud rates or register maps, or a dormant sensor.
+The preserved original Weather image names `wind_vane_adc` and
+`wind_dir_source=adc_gpio34`, but today's ADC1 sweep found no vane voltage.
