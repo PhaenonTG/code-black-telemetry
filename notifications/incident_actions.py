@@ -46,6 +46,7 @@ SESSIONS = {}
 SESSION_TTL = 12 * 60 * 60
 TEST_COOLDOWN = 300
 LAST_TEST = 0
+BOT_RESTART_COOLDOWN = 600
 
 
 def utc(epoch=None):
@@ -228,6 +229,64 @@ def apply_bot_action(payload, guild_id):
     state = apply_action(alert_id, action, minutes, request_id=request_id)
     audit("discord:" + actor_id, action, alert_id, "ok")
     return state.get(alert_id, {})
+
+
+def apply_bot_restart(payload, guild_id):
+    """Restart one Core service after an exact, audited Discord confirmation."""
+    if not isinstance(payload, dict) or str(payload.get("guild_id")) != guild_id:
+        raise ValueError("guild mismatch")
+    actor_id, request_id = str(payload.get("actor_id", "")), str(payload.get("interaction_id", ""))
+    if not re.fullmatch(r"[0-9]{15,22}", actor_id) or not re.fullmatch(r"[0-9]{15,22}", request_id):
+        raise ValueError("invalid actor or interaction")
+    unit = payload.get("unit")
+    if unit not in UNITS or payload.get("confirmation") != "RESTART " + unit:
+        raise ValueError("unit or confirmation invalid")
+    alert_id = payload.get("alert_id")
+    if alert_id is not None and (not isinstance(alert_id, str) or not ID.fullmatch(alert_id)):
+        raise ValueError("invalid alert ID")
+    actor = "discord:" + actor_id
+    with LOCK:
+        target = ROOT / "bot-restarts.json"
+        try:
+            receipts = json.loads(target.read_text(encoding="utf-8"))
+            if not isinstance(receipts, dict):
+                receipts = {}
+        except (OSError, ValueError):
+            receipts = {}
+        if request_id in receipts:
+            return receipts[request_id]
+        now = time.time()
+        for receipt in receipts.values():
+            if receipt.get("unit") == unit and now - receipt.get("requested_epoch", 0) < BOT_RESTART_COOLDOWN:
+                raise ValueError("service restart cooldown active")
+        receipts = {key: value for key, value in receipts.items()
+                    if now - value.get("requested_epoch", 0) < 86400}
+        result = {"ok": False, "unit": unit, "alert_id": alert_id,
+                  "requested_at": utc(now), "requested_epoch": now, "state": "pending"}
+        receipts[request_id] = result
+
+        def save_receipts():
+            ROOT.mkdir(parents=True, exist_ok=True)
+            temp = ROOT / "bot-restarts.json.tmp"
+            temp.write_text(json.dumps(receipts, sort_keys=True) + "\n", encoding="utf-8")
+            temp.chmod(0o640)
+            os.replace(temp, target)
+
+        save_receipts()  # A lost response cannot trigger another restart.
+        audit(actor, "restart", unit, "requested" + (":" + alert_id if alert_id else ""))
+        try:
+            command = subprocess.run(["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "restart", unit],
+                                     capture_output=True, timeout=25, check=False)
+            status = subprocess.run(["/usr/bin/systemctl", "is-active", unit],
+                                    capture_output=True, timeout=5, check=False)
+            result["ok"] = command.returncode == 0 and status.returncode == 0 and status.stdout.strip() == b"active"
+            result["state"] = "active" if result["ok"] else "failed"
+        except subprocess.TimeoutExpired:
+            result["state"] = "unknown_after_timeout"
+        result["checked_at"] = utc()
+        save_receipts()
+        audit(actor, "restart", unit, result["state"])
+        return result
 
 
 def audit(actor, action, target, result):
@@ -525,6 +584,8 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/bot/action":
             return self.handle_bot_action()
+        if parsed.path == "/api/bot/restart":
+            return self.handle_bot_restart()
         if parsed.path == "/login":
             return self.handle_login()
         actor = self.actor("/alert-actions/services")
@@ -582,6 +643,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, json.dumps({"ok": True, "state": state}).encode(), "application/json")
         except (ValueError, TypeError, UnicodeError):
             return self.respond(400, b'{"error":"INVALID_ACTION"}', "application/json")
+
+    def handle_bot_restart(self):
+        guild_id = verify_bot_token(self.headers.get("Authorization"))
+        if guild_id is None:
+            return self.respond(401, b'{"error":"UNAUTHORIZED"}', "application/json")
+        if self.headers.get("Origin") or self.headers.get("Content-Type", "").split(";", 1)[0] != "application/json":
+            return self.respond(415, b'{"error":"JSON_REQUIRED"}', "application/json")
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if size < 2 or size > 2048:
+                raise ValueError("invalid request size")
+            result = apply_bot_restart(json.loads(self.rfile.read(size)), guild_id)
+            return self.respond(200 if result["ok"] else 502, json.dumps(result).encode(), "application/json")
+        except (ValueError, TypeError, UnicodeError):
+            return self.respond(400, b'{"error":"INVALID_RESTART"}', "application/json")
 
     def send_test_notification(self, actor):
         global LAST_TEST

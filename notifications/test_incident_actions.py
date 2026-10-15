@@ -103,6 +103,26 @@ class IncidentActionsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             actions.apply_bot_action({**payload, "action": "restart"}, "1516679001043898408")
 
+    def test_bot_restart_requires_exact_unit_confirmation_and_deduplicates(self):
+        payload = {"guild_id": "1516679001043898408", "actor_id": "1516686074871545976",
+                   "interaction_id": "1516686074871545977", "unit": "codeblack-mqtt-bridge.service",
+                   "confirmation": "RESTART codeblack-mqtt-bridge.service", "alert_id": "svc:mqtt"}
+        completed = [type("Result", (), {"returncode": 0, "stdout": b""})(),
+                     type("Result", (), {"returncode": 0, "stdout": b"active\n"})()]
+        with patch.object(actions.subprocess, "run", side_effect=completed) as run:
+            first = actions.apply_bot_restart(payload, payload["guild_id"])
+            second = actions.apply_bot_restart(payload, payload["guild_id"])
+            self.assertEqual(run.call_count, 2)
+        self.assertEqual(first, second)
+        self.assertTrue(first["ok"])
+        self.assertEqual(first["state"], "active")
+        self.assertIn("restart", (actions.ROOT / "audit.jsonl").read_text())
+        with self.assertRaises(ValueError):
+            actions.apply_bot_restart({**payload, "interaction_id": "1516686074871545978"}, payload["guild_id"])
+        for bad in ({"unit": "ssh.service"}, {"confirmation": "yes"}, {"guild_id": "1"}):
+            with self.assertRaises(ValueError):
+                actions.apply_bot_restart({**payload, **bad, "interaction_id": "1516686074871545979"}, payload["guild_id"])
+
     def test_alert_history_tracks_open_change_and_resolution(self):
         original = {"id": "svc:radar", "title": "Radar worker", "severity": "WARNING", "status_only": False}
         self.assertEqual(actions.record_attention([original], at="2026-10-10T00:00:00Z")[0]["event"], "observed")
