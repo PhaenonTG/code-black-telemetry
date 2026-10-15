@@ -63,7 +63,7 @@ export default function Fleet() {
                 <div className="ops-fleet-card__readings" aria-label={`${unit.operator_name || unit.display_name} live conditions`}>
                   <div className="ops-fleet-card__readings-heading"><strong>LIVE CONDITIONS</strong><span>{`${Math.ceil(Math.max(...readings.map((reading) => reading.ageMs)) / 1000)}s ago`}</span></div>
                   <dl>{readings.map((reading) => (
-                    <div key={reading.key}><dt>{reading.label}</dt><dd>{reading.value}</dd>{reading.note && <small>{reading.note}</small>}</div>
+                    <div key={reading.key}><dt>{reading.label}</dt><dd>{reading.value}</dd></div>
                   ))}</dl>
                 </div>
               )}

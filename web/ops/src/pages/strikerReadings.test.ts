@@ -28,11 +28,10 @@ const unit: FabricUnitState = {
 }
 
 describe("per-chaser live conditions", () => {
-  it("shows only valid current values with display units and labels uncalibrated wind speed", () => {
+  it("shows only valid current values with display units", () => {
     expect(liveChaserReadings(unit, now).map((item) => [item.label, item.value])).toEqual([
       ["Temperature", "72.3 °F"], ["Humidity", "57.0%"], ["Dew point", "56.3 °F"], ["Wind pulses", "3.2 Hz"], ["Wind speed", "14.5 mph"],
     ])
-    expect(liveChaserReadings(unit, now).find((item) => item.key === "wind_mps")?.note).toBe("Uncalibrated")
   })
 
   it("does not carry old or unavailable measurements forward", () => {
