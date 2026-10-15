@@ -19,10 +19,10 @@ older Vortex reference and is **not** the selected WS2 factor. Hand spinning
 verified signal and conversion, not aerodynamic accuracy.
 
 Other devices still need physical identification before a model-specific
-reference can be saved: the RS485 wind vane, optional GPS module, and any
-analog vane/resistor network. The Seeed probe is identified by a purchase
-record and live response; its physical supply and RS485 interface board have
-not been inspected.
+reference can be saved: the planned Nav wind vane, optional GPS module, and any
+additional Weather hardware. Glenn confirmed no vane is connected to the
+Weather ESP. The Seeed probe is identified by a purchase record and live
+response; its physical supply and RS485 interface board have not been inspected.
 
 Live Weather ESP check on 2026-10-15: firmware 0.1.6, Core HTTP 200, and
 Seeed slave 1 returned 19.79 degC and 98.85 %RH. Address 42 had returned no
@@ -30,8 +30,6 @@ data. GPS remains unavailable and legacy ADC GPIO34 had raw value zero.
 The passive GPIO scan saw only board-driven status LED and UART TX activity;
 it could not detect a silent RS485 receive line. The Modbus response established
 the actual working address and register scaling.
-
-
 
 Follow-up 2026-10-15 scan after probe activation: sequential ADC1 trials on
 GPIO32, 33, 34, 35, 36, and 39 all read raw zero. GPIO34 was restored and Core
@@ -49,4 +47,10 @@ RS485 sweep queried slave addresses 1 through 247 with Modbus functions 3 and
 there were no exception replies from another address. This does not test other
 I2C pin pairs, RS485 baud rates or register maps, or a dormant sensor.
 The preserved original Weather image names `wind_vane_adc` and
-`wind_dir_source=adc_gpio34`, but today's ADC1 sweep found no vane voltage.
+`wind_dir_source=adc_gpio34`, but Glenn confirmed no wind vane is connected to
+this Weather ESP. The old setting is not physical sensor evidence; today's
+ADC1 sweep read zero on all six tested pins. The only active sensor discovered
+remotely is the Seeed temperature/humidity probe. Physical attachments remain
+unverified; a silent device could escape these scans.
+
+
