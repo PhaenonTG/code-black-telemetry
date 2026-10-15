@@ -472,6 +472,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, b'{"ok":true}', "application/json")
         if parsed.path == "/api/state":
             return self.respond(200, json.dumps(public_state()).encode(), "application/json")
+        if parsed.path == "/api/bot/recent":
+            if verify_bot_token(self.headers.get("Authorization")) is None:
+                return self.respond(401, b'{"error":"UNAUTHORIZED"}', "application/json")
+            return self.respond(200, json.dumps({"events": recent_history(20)}).encode(), "application/json")
         if parsed.path == "/login":
             destination = safe_next(urllib.parse.parse_qs(parsed.query).get("next", [""])[0])
             existing = session_actor(self.headers.get("Cookie"))

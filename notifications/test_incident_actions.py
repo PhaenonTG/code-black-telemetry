@@ -112,6 +112,13 @@ class IncidentActionsTests(unittest.TestCase):
         self.assertEqual(actions.record_attention([], at="2026-10-10T00:03:00Z")[0]["event"], "resolved")
         self.assertEqual([item["event"] for item in actions.recent_history()], ["resolved", "changed", "observed"])
 
+    def test_bot_recent_history_excludes_status_only_devices(self):
+        actions.record_attention([{"id": "host:hytetower", "title": "HYTETOWER offline",
+                                   "severity": "INFO", "status_only": True},
+                                  {"id": "svc:radar", "title": "Radar worker",
+                                   "severity": "WARNING", "status_only": False}], at="2026-10-10T00:00:00Z")
+        self.assertEqual([item["id"] for item in actions.recent_history(20)], ["svc:radar"])
+
     def test_operations_page_escapes_status_content(self):
         snapshot = {"summary": {"overall": "DEGRADED"}, "generated_at": "now",
                     "hosts": [{"name": "Core", "state": "HEALTHY", "state_reason": "up"}],
