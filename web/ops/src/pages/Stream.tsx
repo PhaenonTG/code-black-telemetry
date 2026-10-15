@@ -19,6 +19,10 @@ interface StreamHealth {
   broadcast: { state?: string; detail?: string }
 }
 
+const youtubeChannelUrl = "https://www.youtube.com/channel/UCafIaG7PZnEI3b5PsKiblfw/live"
+const configuredVideoId = (import.meta.env.VITE_YOUTUBE_LIVE_VIDEO_ID as string | undefined)?.trim() ?? ""
+const youtubeVideoId = /^[A-Za-z0-9_-]{11}$/.test(configuredVideoId) ? configuredVideoId : null
+
 function parseStreamHealth(value: unknown): StreamHealth | null {
   if (!value || typeof value !== "object") return null
   const stream = value as Record<string, unknown>
@@ -31,18 +35,11 @@ function parseStreamHealth(value: unknown): StreamHealth | null {
   }
 }
 
-// Was a click-to-load Twitch embed (`player.twitch.tv/?channel=codeblackwx`) -- OBS's primary
-// stream output moved to Facebook Live only a while back (Twitch removed entirely from the OBS
-// config), so "LOAD PROGRAM FEED" loaded a channel nobody streams to anymore. No public Facebook
-// Page/video URL is known to this codebase to embed instead (the social-gateway worker only holds
-// a private Page ID, not a public share link), so rather than guess one or point at another stale
-// destination, this shows an honest "not configured" state until a real embeddable source is
-// wired up. See CHANGELOG/memory for the open "embed Facebook Live on the website" and "pull the
-// MediaMTX feed directly + composite the overlay in-browser" follow-up ideas.
 export default function Stream() {
   const { config } = useCoreOps()
   const [health, setHealth] = useState<StreamHealth | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loadYoutubePlayer, setLoadYoutubePlayer] = useState(false)
   const refresh = useCallback(async () => {
     try {
       const status = await fetchStatusCenter(config)
@@ -61,18 +58,30 @@ export default function Stream() {
 
   return (
     <div className="page page-stream">
-      <PageHeader title="PROGRAM STATUS" kicker="FIELD · STREAM INFRASTRUCTURE" description="Review field ingest status here. Use Producer for the authenticated private PROGRAM monitor and output controls." actions={<Link className="page-action-link" to="/producer">OPEN PRODUCER</Link>} />
+      <PageHeader title="PROGRAM STATUS" kicker="FIELD · STREAM INFRASTRUCTURE" description="Watch the Code Black WX YouTube broadcast and review field ingest status. Use Producer for the private PROGRAM monitor and output controls." actions={<Link className="page-action-link" to="/producer">OPEN PRODUCER</Link>} />
       <nav className="section-tabs" aria-label="Chase Operations sections">
         <Link to="/chase">FLEET</Link><span className="active">STREAMS</span>
       </nav>
       <section className="stream-stage">
-        <div className="stream-stage__label"><i /> PROGRAM FEED · NOT CONFIGURED</div>
-        <div className="stream-stage__standby">
-          <strong>PRIVATE MONITOR LIVES IN PRODUCER</strong>
-          <p>This status page intentionally does not expose the authenticated PROGRAM feed. Open Producer to monitor video, audio, and Facebook output readiness.</p>
-          <Link className="page-action-link" to="/producer">Open private PROGRAM monitor →</Link>
-        </div>
+        <div className="stream-stage__label"><i /> YOUTUBE PROGRAM FEED</div>
+        {youtubeVideoId && loadYoutubePlayer ? (
+          <iframe
+            title="Code Black WX YouTube broadcast"
+            src={`https://www.youtube-nocookie.com/embed/${youtubeVideoId}`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        ) : (
+          <div className="stream-stage__standby">
+            <strong>{youtubeVideoId ? "CODE BLACK WX ON YOUTUBE" : "YOUTUBE LIVE SETUP IN PROGRESS"}</strong>
+            <p>{youtubeVideoId ? "Load the current broadcast here, or open it directly on YouTube." : "The channel is ready to link here once YouTube live access is verified and a broadcast is scheduled."}</p>
+            {youtubeVideoId && <button type="button" className="page-action-link" onClick={() => setLoadYoutubePlayer(true)}>Load YouTube player</button>}
+            <a className="page-action-link" href={youtubeChannelUrl} target="_blank" rel="noopener noreferrer">Open Code Black WX on YouTube ↗</a>
+          </div>
+        )}
       </section>
+      {youtubeVideoId && loadYoutubePlayer && <a className="page-action-link" href={`https://www.youtube.com/watch?v=${youtubeVideoId}`} target="_blank" rel="noopener noreferrer">Open broadcast on YouTube ↗</a>}
       <section className="stream-health" aria-label="Stream infrastructure status">
         <div className="stream-health__heading"><h2>LIVE SOURCE STATUS</h2><button type="button" onClick={() => { void refresh() }}>REFRESH</button></div>
         <p>{error ?? health?.summary ?? "Checking ingest telemetry…"} · Offline field sources are informational until a broadcast is scheduled.</p>
