@@ -1,0 +1,99 @@
+# Private Ops migration with zero new recurring cost
+
+Status: planning and route audit, 2026-10-14. No production routing change is authorized by this document.
+
+## Goal and constraints
+
+Keep the Ops website, Producer controls, live PROGRAM preview with audio, Core data, weather/radar, Chase field functions, and account authorization functional without a new recurring subscription or a Cloudflare Workers request quota dependency. Internal-only access from enrolled operator devices is acceptable. Keep the current public Ops deployment available until the private replacement passes end-to-end checks. Preserve all current branches, uncommitted work, Worker/Durable Object state, and OTA assets.
+
+The proposed first access path is Cloudflare One **private network routing** on its Free plan, with the Cloudflare One Client on operator devices. This is a private tunnel to a service on Core or a colocated host, not a public hostname Worker route. Cloudflare documents private-network routes as exempt from its public-video restriction. Free-plan eligibility, user count, device enrollment, media behavior, and actual traffic must be verified in the account before cutover. Tailscale is an existing technical path, but its free Personal plan is explicitly for noncommercial use, so it is not the zero-cost production assumption. A self-hosted WireGuard path remains the Cloudflare-independent fallback if Core has reachable ingress or an already-funded public relay.
+
+This plan does not promise every third-party source is unlimited. Supabase Auth, Mapbox, and weather/map sources retain their own availability, quotas, and terms. The cost gate is **zero new recurring bill** for the migration, verified against the actual account configuration.
+
+## Current dependencies found in source
+
+| Surface | Current location | Migration requirement |
+| --- | --- | --- |
+| Ops static React app and login | Cloudflare Pages `web/ops`; Supabase Auth and `profiles` | Serve the exact built assets privately; keep Supabase authorization and update password reset URLs for the private origin. |
+| Ops `/api/core/*` and fabric stream | Pages Advanced Mode Worker, fixed Core allowlist and Supabase token validation | Implement equivalent same-origin routes on Core, preserving allowlist, methods, limits, auth, streaming and error semantics. |
+| Public hurricane, Mapbox token, road/camera, and overlay relays | Pages Worker and functions | Inventory each caller and replace with Core-side relay or direct safe provider access; preserve overlays that run without an Ops login. |
+| Producer `/api/producer/v1/*` | Chase Gateway Worker plus Durable Object | Move status, capabilities, lease, commands, acknowledgments, Facebook state, JPEG, HLS manifest and segments to a persistent private service. Preserve command idempotency, lease, state revision and freshness rules. |
+| OBS workstation bridge | `ObsProducerBridge/src/bridge.cjs`, fixed public gateway base | Add a configurable, authenticated private endpoint only after its server exists. Never restart the running OBS bridge during shadow tests. |
+| Chase `/api/chase/*` | Chase Gateway Worker; Core VPC binding | Inventory field phone, public-location, Facebook, comments and OTA callers individually. Do not move or remove public ingress until the field devices have a tested private route. |
+| Facebook OAuth/replies | Chase Gateway Worker and Core broker | Keep a valid redirect URL, callback/session security and connected account state. Confirm the private origin works with the provider's registered redirect before switching. |
+| Chase OTA release assets | Gateway Worker assets | Preserve version 22 and archive; migrate only after download and hash checks from field devices. |
+
+Observed load source: the OBS bridge runs a two-second cycle with three gateway calls (status, capabilities, commands). At full cadence this alone could create 129,600 Worker requests/day; JPEG and HLS uploads add more. Moving only browser polling cannot remove that load.
+
+Read-only host check on 2026-10-14: Core is online in the existing tailnet with 127 GB free disk and roughly 3 GB available RAM. `cloudflared` and `tailscaled` are active. Tailscale Serve already owns the Core tailnet HTTPS origin and several paths; a candidate must use a separate hostname/port and must not replace this mapping. The workstation tailnet also shows Core, an iPhone and an iPad online. These observations confirm a reachable pilot environment, but do not establish the Cloudflare One account's plan or any device's Cloudflare One enrollment.
+
+## Target architecture
+
+1. Build `web/ops` as today, then serve its static output on Core behind a private HTTPS origin. Serve API routes from the same origin to avoid browser private-network and CORS problems. Keep its Supabase login and profile check.
+2. Put a dedicated private Producer service near Core. OBS workstation and operator browser both reach this service over the private network. Store commands and state durably on Core; use a persistent push connection for live status where it improves responsiveness. Keep HLS/preview media on the private route.
+3. Route operator devices through Cloudflare One Client and a **private network** Cloudflare Tunnel. Restrict enrollment and per-route access. Validate iPhone, iPad and desktop connectivity, including coexistence with the currently active Tailscale client.
+4. Keep public brand content separate. Keep necessary public Chase/Facebook/OTA endpoints on the current path until equivalent access is validated. Do not treat moving the operator site as authorization to break field ingestion or Facebook callback.
+5. After traffic is measured, retire only the Worker routes that have complete replacement and no remaining callers. If a Cloudflare-free path becomes necessary, replace the private tunnel with self-hosted WireGuard without changing the same-origin application contracts.
+
+## Work sequence and release gates
+
+### 0. Baseline and account check
+
+- Capture current production versions, route list, Workers request volume by route, Core service health, OBS bridge state, free-plan/user counts, DNS, and rollback artifacts without printing secrets.
+- Record all active worktrees and staged changes. Work only in isolated checkouts; never reset, clean, or overwrite another agent's work.
+- Verify Cloudflare One Free account eligibility and the private route's behavior. If there is a cost, usage, or device compatibility blocker, use the WireGuard feasibility track before committing to an access method.
+
+Gate: exact current versions and a genuine $0 access path are documented.
+
+### 1. Private site skeleton
+
+- Deploy a candidate static Ops build and a health endpoint on Core at a private hostname, behind an authenticated private network route.
+- Preserve the current `ops.codeblackwx.com` deployment. Configure the private origin in Supabase allowed redirects and validate login, logout, password reset, profile authorization and session refresh.
+- Test desktop, iPhone and iPad, including reconnect after changing networks and coexistence with Tailscale.
+
+Gate: private site loads on all operator devices and only authorized users can use it; current site still works.
+
+### 2. Core and provider route parity
+
+- Move `/api/core/*` with the same allowlist, Supabase token verification, body limits, timeout behavior and fabric stream semantics.
+- Replace Pages-only public hurricane, Mapbox-token, road/camera and overlay relays where used. Audit provider terms and caching before choosing direct calls versus Core proxy.
+- Automate route-contract checks so an API path returns its expected content type and status, never the SPA HTML fallback.
+
+Gate: map/radar, weather, alerts, soundings, Aegis, status, cameras, road layers and overlays match production from the private origin.
+
+### 3. Producer service and workstation shadowing
+
+- Port Durable Object data rules to a durable private store: latest status/capabilities; frame and HLS freshness; bounded command journal; lease owner/expiry; command idempotency; acknowledgments; revision checks; Facebook safety interlocks.
+- Build a private client endpoint for the OBS bridge and an operator endpoint for the browser. Keep credentials server-side. Add a read-only shadow feed first; it must not consume or execute commands.
+- Test live preview and PROGRAM HLS with audio, disconnect/reconnect, stale frame rejection, command ordering and explicit emergency stop. Keep Facebook output off during qualification.
+- Switch a single running bridge only in a planned window with its command journal backed up and a known rollback target. Never run two active command consumers at once.
+
+Gate: sustained live preview/audio and actual authenticated command acknowledgments; safe rollback tested; Worker request rate falls below the free quota with margin.
+
+### 4. Chase, Facebook and OTA
+
+- Identify every field device and external callback using `/api/chase/*`. Decide per caller whether to enroll its device on the private route or retain a small public ingress.
+- Preserve Facebook OAuth redirects and broker state. Validate connect, status, comments and replies without publishing a stream.
+- Preserve OTA version 22 and release archive; verify identical bytes/hash on the selected access path before migrating download routes.
+
+Gate: field GPS, configuration, Facebook state and release downloads work from real devices; no active caller depends on a route being removed.
+
+### 5. Cutover and observation
+
+- Roll out privately to one device, then the operator set. Keep old Ops and gateway deployments intact during observation.
+- Monitor request counts, bandwidth, service errors, producer media freshness, command acknowledgments, auth failures and device reconnection.
+- Restore the fast Producer experience only after the private path demonstrates stable delivery. Retire old routes only after the dependency inventory and rollback window are complete.
+
+Gate: full production workflow passes on the private site and no new recurring charge appears.
+
+## Rollback
+
+The current Pages site, Chase Gateway Worker, Durable Object and OBS bridge configuration remain available until cutover is proven. A failed private pilot routes operators back to the unchanged public site. A failed bridge switch stops the private bridge, restores the original gateway endpoint and journal, then verifies status and command acknowledgments before resuming controls. Do not roll back by overwriting the Durable Object, deleting release assets or starting duplicate workstation consumers.
+
+## Immediate next engineering slice
+
+1. Confirm current Core hosting and free private-route account facts; select a non-production hostname and one pilot device.
+2. Build a static-site plus `/health` candidate on Core in an isolated release directory, with no DNS or production process change.
+3. Write and run the route-contract matrix against both current production and the candidate, then migrate the least stateful Core relays before Producer.
+
+No production cutover occurs until the relevant gate passes.
