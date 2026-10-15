@@ -26,19 +26,54 @@
     "default_parity": "none",
     "default_stop_bits": 1,
     "default_slave_address": "1 or 42 according to manufacturer; verify actual probe",
-    "read_functions": [3, 4],
+    "read_functions": [
+      3,
+      4
+    ],
     "registers": [
-      {"address": 0, "field": "air_temperature", "raw_type": "int16", "scale": 0.01, "unit": "degC", "range": [-40, 80], "accuracy": "+/-0.3 degC"},
-      {"address": 1, "field": "relative_humidity", "raw_type": "uint16", "scale": 0.01, "unit": "%RH", "range": [0, 100], "accuracy": "+/-3 %RH"},
-      {"address": 2, "field": "dew_point", "raw_type": "int16", "scale": 0.01, "unit": "degC", "range": [-40, 80]}
+      {
+        "address": 0,
+        "field": "air_temperature",
+        "raw_type": "int16",
+        "scale": 0.01,
+        "unit": "degC",
+        "range": [
+          -40,
+          80
+        ],
+        "accuracy": "+/-0.3 degC"
+      },
+      {
+        "address": 1,
+        "field": "relative_humidity",
+        "raw_type": "uint16",
+        "scale": 0.01,
+        "unit": "%RH",
+        "range": [
+          0,
+          100
+        ],
+        "accuracy": "+/-3 %RH"
+      },
+      {
+        "address": 2,
+        "field": "dew_point",
+        "raw_type": "int16",
+        "scale": 0.01,
+        "unit": "degC",
+        "range": [
+          -40,
+          80
+        ]
+      }
     ]
   },
   "striker_weather": {
     "configured_uart_rx_gpio": 16,
     "configured_uart_tx_gpio": 17,
     "configured_rs485_driver_enable_gpio": 4,
-    "configured_slave_address": 42,
+    "configured_slave_address": 1,
     "configured_read_function": 4,
-    "status": "manufacturer specification matches legacy software settings; wiring, transceiver, power source, and live response have not yet been verified"
+    "status": "live Modbus response verified on 2026-10-15; address 42 produced no reply, address 1 reported 19.79 degC and 98.85 %RH; Core accepted telemetry with HTTP 200; physical power and interface-board labels were not inspected"
   }
 }
