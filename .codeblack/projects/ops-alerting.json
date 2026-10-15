@@ -15,7 +15,8 @@
     {
       "id": "alert-actions",
       "host": "core",
-      "name": "Alert Action Console"
+      "name": "Alert Action Console",
+      "unit": "codeblack-alert-actions.service"
     },
     {
       "id": "ntfy-private",
