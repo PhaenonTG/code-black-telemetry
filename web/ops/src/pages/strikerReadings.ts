@@ -16,7 +16,6 @@ export interface LiveChaserReading {
   label: string
   value: string
   ageMs: number
-  note?: string
 }
 
 function timestamp(value: unknown): number | null {
@@ -59,10 +58,7 @@ export function liveChaserReadings(unit: FabricUnitState, now: number): LiveChas
   return FIELDS.flatMap(({ key, label }) => {
     for (const device of unit.devices) {
       const reading = liveValue(device, key, now)
-      if (reading) return [{
-        key, label, value: formatChaserReading(key, reading.value), ageMs: reading.ageMs,
-        note: key === "wind_mps" && device.metadata?.calibration_verified !== true ? "Uncalibrated" : undefined,
-      }]
+      if (reading) return [{ key, label, value: formatChaserReading(key, reading.value), ageMs: reading.ageMs }]
     }
     return []
   })
