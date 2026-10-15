@@ -76,6 +76,7 @@ main{padding:14px 16px 30px;max-width:2200px;margin:0 auto}
 .project-card .phase{font-size:10px;letter-spacing:.09em;color:var(--info);font-weight:700}
 .project-card .project-services{margin:8px 0 0;padding-left:17px;font-size:11px;color:var(--muted)}
 .project-card .project-services li{margin:2px 0}.project-card .project-services b{color:var(--text)}
+.project-history{display:grid;grid-template-columns:repeat(48,minmax(0,1fr));gap:2px;height:10px;margin:7px 0}.project-history span{background:#303d46}.project-history .healthy{background:#39d69e}.project-history .degraded{background:#ff625d}.project-history .unknown{background:#f4b860}.project-history .unmonitored{background:#5d7180}
 .card{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:10px 11px;min-width:0}
 .card.stale,.srow.stale{border-color:#7a5a12}
 .card>.hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
@@ -953,8 +954,12 @@ R.projects = (d) => {
     const issues = services.filter((s) => s.state !== 'HEALTHY').slice(0, 4);
     const facts = [h('div', 'hd', [h('h3', null, p.name), chip(p.health)]),
       h('div', 'phase', p.phase), h('p', 'reason', p.summary),
-      kv('Coverage', (p.monitored_count || 0) + ' / ' + (p.expected_count || 0) + ' services monitored'),
+      kv('Healthy', (p.healthy_count ?? services.filter((s) => s.state === 'HEALTHY').length) + ' / ' + (p.expected_count || 0) + ' services'),
+      kv('Monitored', (p.monitored_count || 0) + ' / ' + (p.expected_count || 0) + ' services'),
       h('p', 'note', p.note)];
+    const bins = Array.isArray(p.history?.bins) ? p.history.bins : [];
+    facts.push(h('div', 'small muted', 'Past 24 hours · ' + (p.history?.observed_since ? 'sampling since ' + new Date(p.history.observed_since).toLocaleTimeString() : 'collecting first sample')));
+    facts.push(h('div', 'project-history', (bins.length ? bins : Array(48).fill('NO_DATA')).map((state) => h('span', ['HEALTHY','DEGRADED','UNKNOWN','UNMONITORED'].includes(state) ? state.toLowerCase() : '', null, {title:state}))));
     if (issues.length) facts.push(h('ul', 'project-services', issues.map((s) => h('li', null, [h('b', null, s.name), ' — ' + s.state + ' on ' + s.host]))));
     else facts.push(h('p', 'note', p.health === 'UNMONITORED' ? 'No live health probe is registered.' : 'All listed monitored services report healthy.'));
     const links = (p.links || []).filter((l) => safeUrl(l.url)).slice(0, 4).map((l) => lnk(l.name, l.url));

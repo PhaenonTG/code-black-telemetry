@@ -1277,6 +1277,9 @@ def build_projects(service_by_id, links):
         # Project cards show every scoped service, including field devices whose
         # outages are informational to the platform-wide alert rollup.
         states = [service["state"] for service in monitored]
+        healthy_count = sum(state in ("HEALTHY", "LIVE", "ONLINE") for state in states)
+        troubled_count = sum(state in ("OFFLINE", "FAILED", "CRITICAL", "DEGRADED", "WARNING") for state in states)
+        unknown_count = len(states) - healthy_count - troubled_count
         if not monitored:
             health = "UNMONITORED"
         elif not states:
@@ -1290,6 +1293,8 @@ def build_projects(service_by_id, links):
         projects.append({"id": entry["id"], "name": entry["name"], "phase": entry["phase"],
                          "summary": entry["summary"], "note": entry["note"], "health": health,
                          "monitored_count": len(monitored), "expected_count": len(entry["service_ids"]),
+                         "healthy_count": healthy_count, "troubled_count": troubled_count,
+                         "unknown_count": unknown_count,
                          "services": [{"id": service["id"], "name": service["name"],
                                        "state": service["state"], "host": service["host"],
                                        "state_reason": service["state_reason"]} for service in monitored],
@@ -1332,6 +1337,9 @@ def build_status():
     probes = list(PROBES.values())
     links = [{"id": l["id"], "name": l["name"], "purpose": l["purpose"], "host": l["host"], "access": l["access"], "url": l["url"], "group": l["group"], "verified": link_state(l)} for l in REG["links"]]
     projects = build_projects(sby, links)
+    history = PROJECT_HISTORY.summary(projects)
+    for project in projects:
+        project["history"] = history[project["id"]]
     esp_fleet = {"cadence_s": REG["esp_fleet"]["cadence_s"], "operator_note": REG["esp_fleet"]["operator_note"],
                  "core_ingest": sby["core-api"]["state"],
                  "devices": [{**device, "state": sby[device["service"]]["state"],
@@ -1518,7 +1526,70 @@ class ChangeLog:
                     "persisted": self.persist_ok, "pending_unconfirmed": len(self.pending), "events": ev[-max(1, min(int(limit), CHANGE_MAX_EVENTS)):]}
 
 
+class ProjectHistory:
+    """Small, bounded snapshots for the mission grid; no raw sensor data."""
+
+    SAMPLE_S = 300
+    WINDOW_S = 86400
+    BIN_S = 1800
+    BIN_COUNT = WINDOW_S // BIN_S
+    RANK = {"NO_DATA": -1, "UNMONITORED": 0, "HEALTHY": 1, "UNKNOWN": 2, "DEGRADED": 3}
+
+    def __init__(self, path):
+        self.path, self.lock = path, threading.Lock()
+        self.samples = []
+        self.persist_ok = True
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            self.samples = [row for row in data.get("samples", [])
+                            if isinstance(row, dict) and isinstance(row.get("states"), dict)
+                            and parse_ts(row.get("t")) is not None]
+        except (OSError, ValueError, TypeError):
+            pass
+
+    def observe(self, projects, ts=None):
+        ts = ts or now()
+        with self.lock:
+            if self.samples and ts - (parse_ts(self.samples[-1]["t"]) or 0) < self.SAMPLE_S:
+                return
+            self.samples.append({"t": iso(ts), "states": {p["id"]: p["health"] for p in projects}})
+            self.samples = [row for row in self.samples if (parse_ts(row["t"]) or 0) >= ts - self.WINDOW_S - self.BIN_S]
+            try:
+                os.makedirs(os.path.dirname(self.path), exist_ok=True)
+                tmp = self.path + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as fh:
+                    json.dump({"schema": "codeblack.status.project-history.v1", "samples": self.samples}, fh)
+                os.replace(tmp, self.path)
+                self.persist_ok = True
+            except OSError:
+                self.persist_ok = False
+
+    def summary(self, projects, ts=None):
+        ts = ts or now()
+        window_start = ts - self.WINDOW_S
+        with self.lock:
+            samples = list(self.samples)
+            persisted = self.persist_ok
+        result = {}
+        for project in projects:
+            bins = ["NO_DATA"] * self.BIN_COUNT
+            for sample in samples:
+                stamp = parse_ts(sample["t"])
+                if stamp is None or stamp < window_start or stamp > ts:
+                    continue
+                index = min(self.BIN_COUNT - 1, int((stamp - window_start) // self.BIN_S))
+                state = sample["states"].get(project["id"], "NO_DATA")
+                if self.RANK.get(state, -1) > self.RANK[bins[index]]:
+                    bins[index] = state
+            result[project["id"]] = {"window_start": iso(window_start), "bin_seconds": self.BIN_S,
+                                     "bins": bins, "observed_since": samples[0]["t"] if samples else None,
+                                     "persisted": persisted}
+        return result
+
+
 CHANGELOG = ChangeLog(os.path.join(STATE_DIR, "changes.json"))
+PROJECT_HISTORY = ProjectHistory(os.path.join(STATE_DIR, "project-history.json"))
 
 
 def probes_warmed():
@@ -1533,7 +1604,9 @@ def changelog_loop():
         time.sleep(2)
     while True:
         try:
-            CHANGELOG.observe(status_doc())
+            doc = status_doc()
+            CHANGELOG.observe(doc)
+            PROJECT_HISTORY.observe(doc["projects"])
         except Exception as exc:  # noqa: BLE001 - history must never affect serving
             print("changelog error:", collector.sanitize(exc, 120), flush=True)
         time.sleep(5)

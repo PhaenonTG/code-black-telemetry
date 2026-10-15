@@ -24,13 +24,19 @@ block whose `stale` is true must NOT be shown green (render `STALE TELEMETRY`). 
   (e.g. TESSA/STRIKER offline when nobody streams) are INFO only. Status-only entries (`offline_status_only` in the registry: HYTETOWER and Nick ESP offline) have no Actions link or push notification.
 
 ## projects[]
-`{id,name,phase,summary,note,health,monitored_count,expected_count,services:[{id,name,state,host,state_reason}],missing_services:[id],links:[link]}`.
+`{id,name,phase,summary,note,health,monitored_count,expected_count,healthy_count,troubled_count,unknown_count,history,services:[{id,name,state,host,state_reason}],missing_services:[id],links:[link]}`.
 Project scope and rollout phase are curated registry notes. `health` is recalculated from
 every scoped service on each status build, including devices marked informational in
 the platform alert rollup. A project with no scoped services is `UNMONITORED`; missing
 registered services or a failing service makes it `DEGRADED`; unknown evidence is
 `UNKNOWN`. The page presents phase separately from health. `GET /api/status/projects`
 returns only this section.
+`healthy_count` is independent of monitoring coverage, so a connected but unhealthy
+device does not make a full coverage bar look healthy. `history` contains 48
+half-hour bins covering the previous 24 hours, sampled from project health every
+five minutes into a bounded Core state file. A bin with no sample is `NO_DATA`;
+older history is never invented. The file contains project states only, no sensor
+readings or credentials.
 
 ## esp_fleet
 `{cadence_s, operator_note, core_ingest:state, devices:[{id,name,owner,role,service,mac_suffix,last_verified_firmware,target_firmware,ota,management,sensors[],networks:[[ssid,priority]],state,state_reason,telemetry,report_age_s}]}`.
