@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { currentMediaTimestamp, isProgramMediaUrl, currentProgramRender, mediaCompositionMatches, PROGRAM_PREVIEW_POLL_MS, PROGRAM_STATUS_POLL_MS } from "./programMonitorPolicy"
+import { currentMediaTimestamp, isProgramMediaUrl, currentProgramRender, mediaCompositionMatches, monitorRecoveryDelay, PROGRAM_PREVIEW_POLL_MS, PROGRAM_STATUS_POLL_MS } from "./programMonitorPolicy"
 describe("PROGRAM monitor request policy", () => {
+  it("bounds reconnect attempts and never retries auth or unexpected HTTP failures", () => {
+    expect([1,2,3,4,5,6].map(n => monitorRecoveryDelay(n,404))).toEqual([2000,4000,8000,16000,30000,30000])
+    for (const status of [401,403,400,422]) expect(monitorRecoveryDelay(1,status)).toBeNull()
+    for (const n of [0,7,-1,NaN,1.5]) expect(monitorRecoveryDelay(n)).toBeNull()
+    for (const status of [0,408,409,429,500,502,503,504]) expect(monitorRecoveryDelay(1,status)).toBe(2000)
+  })
   const origin = "https://ops.codeblackwx.com"
   it("allows only authenticated same-origin playlist and segment routes", () => {
     expect(isProgramMediaUrl("/api/producer/v1/preview/hls/index.m3u8", origin)).toBe(true)
