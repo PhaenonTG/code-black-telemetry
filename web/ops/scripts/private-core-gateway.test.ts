@@ -1,6 +1,6 @@
 import { createHmac, createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { handlePrivateCoreRequest, type PrivateCoreEnv } from "./private-core-gateway";
+import { handlePrivateCoreRequest, handlePrivateOverlayRequest, type PrivateCoreEnv } from "./private-core-gateway";
 
 const userId = "4b10eb9e-af64-4077-a659-2fe4adf69b12";
 const env: PrivateCoreEnv = {
@@ -67,5 +67,29 @@ describe("private Core gateway", () => {
     const admin = mockFetch();
     expect((await handlePrivateCoreRequest(req, { ...env, OPS_PRIVATE_WRITE_SECRET: undefined }, admin.fetcher)).status).toBe(502);
     expect(admin.calls).toHaveLength(2);
+  });
+});
+
+describe("private overlay routes", () => {
+  it("forwards only public Storm Intel paths and allowed coordinates", async () => {
+    const calls: string[] = [];
+    const fetcher = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return Response.json({ status: "available" });
+    }) as typeof fetch;
+    const result = await handlePrivateOverlayRequest(new Request("http://localhost/overlay-core/api/storm-intel/v1/point?latitude=35&longitude=-97&unit_id=secret"), env, fetcher);
+    expect(result.status).toBe(200);
+    expect(calls).toEqual(["http://127.0.0.1:8000/api/storm-intel/v1/point?latitude=35&longitude=-97"]);
+    const blocked = await handlePrivateOverlayRequest(new Request("http://localhost/overlay-core/api/fabric/v1/units"), env, fetcher);
+    expect(blocked.status).toBe(404);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("serves only a configured public Mapbox token and handles preflight", async () => {
+    const path = "http://localhost/overlay-core/mapbox-token";
+    expect((await handlePrivateOverlayRequest(new Request(path), env)).status).toBe(503);
+    const result = await handlePrivateOverlayRequest(new Request(path), { ...env, MAPBOX_PUBLIC_TOKEN: "pk.test" });
+    expect(await result.json()).toEqual({ token: "pk.test" });
+    expect((await handlePrivateOverlayRequest(new Request(path, { method: "OPTIONS" }), env)).status).toBe(204);
   });
 });

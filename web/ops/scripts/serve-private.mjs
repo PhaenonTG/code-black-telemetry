@@ -68,12 +68,12 @@ async function sendCoreResponse(request, response, gateway) {
   stream.on("error", () => response.destroy()).pipe(response);
 }
 
-export function createPrivateOpsServer({ distDir = defaultDist, coreGateway } = {}) {
+export function createPrivateOpsServer({ distDir = defaultDist, apiGateway } = {}) {
   const root = resolve(distDir);
   return createServer(async (request, response) => {
-    if (request.url?.startsWith("/api/core/")) {
-      if (!coreGateway) { json(response, 503, { error: "PRIVATE_ROUTE_NOT_MIGRATED" }); return; }
-      try { await sendCoreResponse(request, response, coreGateway); }
+    if (request.url?.startsWith("/api/core/") || request.url?.startsWith("/overlay-core/")) {
+      if (!apiGateway) { json(response, 503, { error: "PRIVATE_ROUTE_NOT_MIGRATED" }); return; }
+      try { await sendCoreResponse(request, response, apiGateway); }
       catch { if (!response.headersSent) json(response, 502, { error: "CORE_UNAVAILABLE" }); else response.destroy(); }
       return;
     }
@@ -133,18 +133,19 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     throw new Error("OPS_PRIVATE_PORT must be an unprivileged TCP port");
   }
   const distDir = process.env.OPS_PRIVATE_DIST || defaultDist;
-  let coreGateway;
+  let apiGateway;
   if (process.env.OPS_PRIVATE_CORE_BASE_URL) {
-    const { handlePrivateCoreRequest } = await import("../dist-private/core-gateway.mjs");
+    const { handlePrivateApiRequest } = await import("../dist-private/core-gateway.mjs");
     const env = {
       OPS_PRIVATE_CORE_BASE_URL: process.env.OPS_PRIVATE_CORE_BASE_URL,
       OPS_PRIVATE_WRITE_SECRET: process.env.OPS_PRIVATE_WRITE_SECRET,
       VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
       VITE_SUPABASE_PUBLISHABLE_KEY: process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      MAPBOX_PUBLIC_TOKEN: process.env.MAPBOX_PUBLIC_TOKEN,
     };
-    coreGateway = request => handlePrivateCoreRequest(request, env);
+    apiGateway = request => handlePrivateApiRequest(request, env);
   }
-  createPrivateOpsServer({ distDir, coreGateway }).listen(port, "127.0.0.1", () => {
+  createPrivateOpsServer({ distDir, apiGateway }).listen(port, "127.0.0.1", () => {
     console.log(`Private Ops candidate listening on 127.0.0.1:${port}`);
   });
 }

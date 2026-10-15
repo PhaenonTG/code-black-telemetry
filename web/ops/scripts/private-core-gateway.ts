@@ -9,11 +9,14 @@ import {
 export interface PrivateCoreEnv extends GatewayEnv {
   OPS_PRIVATE_CORE_BASE_URL?: string;
   OPS_PRIVATE_WRITE_SECRET?: string;
+  MAPBOX_PUBLIC_TOKEN?: string;
 }
 
 const prefix = "/api/core/";
 const maxWriteBytes = 4096;
 const maxResponseBytes = 2_000_000;
+const overlayPrefix = "/overlay-core";
+const overlayCors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS" };
 
 function localCoreUrl(base: string | undefined): URL | null {
   if (!base) return null;
@@ -109,4 +112,59 @@ export async function handlePrivateCoreRequest(
     return gatewayErrorResponse(error instanceof DOMException && error.name === "AbortError" ? 504 : 502,
       error instanceof DOMException && error.name === "AbortError" ? "CORE_TIMEOUT" : "CORE_UNAVAILABLE");
   } finally { clearTimeout(timer); }
+}
+
+export async function handlePrivateOverlayRequest(
+  request: Request,
+  env: PrivateCoreEnv,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Response> {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith(`${overlayPrefix}/`)) return gatewayErrorResponse(404, "ROUTE_NOT_ALLOWED");
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: overlayCors });
+  if (request.method !== "GET") return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), {
+    status: 405, headers: { "Content-Type": "application/json", ...overlayCors },
+  });
+  if (url.pathname === "/overlay-core/mapbox-token") {
+    return new Response(JSON.stringify(env.MAPBOX_PUBLIC_TOKEN ? { token: env.MAPBOX_PUBLIC_TOKEN } : { error: "MAPBOX_TOKEN_NOT_CONFIGURED" }), {
+      status: env.MAPBOX_PUBLIC_TOKEN ? 200 : 503,
+      headers: { "Content-Type": "application/json", "Cache-Control": env.MAPBOX_PUBLIC_TOKEN ? "public, max-age=3600" : "no-store", ...overlayCors },
+    });
+  }
+  const path = url.pathname.slice(overlayPrefix.length);
+  const params = path === "/api/storm-intel/v1/health" ? [] :
+    path === "/api/storm-intel/v1/point" ? ["latitude", "longitude"] : null;
+  if (!params) return new Response(JSON.stringify({ error: "ROUTE_NOT_ALLOWED" }), {
+    status: 404, headers: { "Content-Type": "application/json", ...overlayCors },
+  });
+  const base = localCoreUrl(env.OPS_PRIVATE_CORE_BASE_URL);
+  if (!base) return new Response(JSON.stringify({ error: "CORE_UNAVAILABLE" }), {
+    status: 502, headers: { "Content-Type": "application/json", ...overlayCors },
+  });
+  const target = new URL(path, base);
+  for (const key of params) {
+    const value = url.searchParams.get(key);
+    if (value !== null) target.searchParams.set(key, value);
+  }
+  try {
+    const upstream = await fetchImpl(target, { headers: { Accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(25_000) });
+    if (!upstream.ok || Number(upstream.headers.get("Content-Length") ?? 0) > maxResponseBytes)
+      throw new Error("Core unavailable");
+    const text = await upstream.text();
+    if (Buffer.byteLength(text) > maxResponseBytes) throw new Error("Core response too large");
+    const body = JSON.parse(text);
+    return new Response(JSON.stringify(body), { status: 200, headers: {
+      "Content-Type": "application/json", "Cache-Control": "no-store", ...overlayCors,
+    } });
+  } catch {
+    return new Response(JSON.stringify({ error: "CORE_UNAVAILABLE" }), {
+      status: 502, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...overlayCors },
+    });
+  }
+}
+
+export function handlePrivateApiRequest(request: Request, env: PrivateCoreEnv, fetchImpl: typeof fetch = fetch): Promise<Response> {
+  return new URL(request.url).pathname.startsWith("/api/core/")
+    ? handlePrivateCoreRequest(request, env, fetchImpl)
+    : handlePrivateOverlayRequest(request, env, fetchImpl);
 }

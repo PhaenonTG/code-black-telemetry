@@ -48,7 +48,7 @@ test("health, missing assets and unsafe paths are bounded", async () => {
 });
 
 test("configured Core gateway receives API requests without SPA fallback", async () => {
-  const privateServer = createPrivateOpsServer({ distDir: root, coreGateway: async request => {
+  const privateServer = createPrivateOpsServer({ distDir: root, apiGateway: async request => {
     assert.equal(new URL(request.url).pathname, "/api/core/api/forecast/v1/chase-setup-review");
     assert.equal(request.method, "POST");
     assert.equal(await request.text(), '{"setup_id":"sample"}');
