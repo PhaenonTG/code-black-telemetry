@@ -46,7 +46,7 @@ function inside(root, target) {
 
 async function sendCoreResponse(request, response, gateway) {
   let body;
-    if (request.method === "POST" || request.method === "PUT") {
+  if (request.method === "POST" || request.method === "PUT") {
     const chunks = [];
     let size = 0;
     const maxBytes = request.method === "PUT" ? 64 * 1024 :
@@ -82,7 +82,7 @@ export function createPrivateOpsServer({ distDir = defaultDist, apiGateway, tls,
       catch { json(response, 400, { error: "INVALID_HOST" }); return; }
       if (hostname !== allowedHostname.toLowerCase()) { json(response, 421, { error: "INVALID_HOST" }); return; }
     }
-    if (request.url?.startsWith("/api/core/") || request.url?.startsWith("/overlay-core/") ||
+    if (request.url?.startsWith("/api/core/") || request.url?.startsWith("/api/producer/v1/") || request.url?.startsWith("/overlay-core/") ||
         request.url?.startsWith("/api/camera-health") || request.url?.startsWith("/api/ardot-camera-stream") ||
         request.url?.startsWith("/api/kandrive/") || request.url?.startsWith("/api/modot/") ||
         request.url?.startsWith("/api/odot/") || request.url?.startsWith("/api/tdot/")) {
@@ -161,11 +161,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const tls = tlsCert ? { cert: await readFile(tlsCert), key: await readFile(tlsKey) } : undefined;
   const distDir = process.env.OPS_PRIVATE_DIST || defaultDist;
   let apiGateway;
-  if (process.env.OPS_PRIVATE_CORE_BASE_URL) {
+  if (process.env.OPS_PRIVATE_CORE_BASE_URL || process.env.OPS_PRIVATE_PRODUCER_BASE_URL) {
     const { handlePrivateApiRequest } = await import("../dist-private/core-gateway.mjs");
     const env = {
       OPS_PRIVATE_CORE_BASE_URL: process.env.OPS_PRIVATE_CORE_BASE_URL,
       OPS_PRIVATE_WRITE_SECRET: process.env.OPS_PRIVATE_WRITE_SECRET,
+      OPS_PRIVATE_PRODUCER_BASE_URL: process.env.OPS_PRIVATE_PRODUCER_BASE_URL,
+      OPS_PRIVATE_PRODUCER_TOKEN: process.env.OPS_PRIVATE_PRODUCER_TOKEN,
       VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
       VITE_SUPABASE_PUBLISHABLE_KEY: process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
       MAPBOX_PUBLIC_TOKEN: process.env.MAPBOX_PUBLIC_TOKEN,

@@ -6,6 +6,7 @@ import { MODOT_PREFIX, handleModotRequest } from "../functions/lib/modotRelay";
 import { ODOT_PREFIX, handleOdotRequest } from "../functions/lib/odotRelay";
 import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
 import { privateProviderFetch } from "./private-provider-fetch";
+import { handlePrivateProducerRead, type PrivateProducerEnv } from "./private-producer-gateway";
 import {
   gatewayErrorResponse,
   resolveAllowlistRoute,
@@ -13,7 +14,7 @@ import {
   type GatewayEnv,
 } from "../functions/lib/coreGateway";
 
-export interface PrivateCoreEnv extends GatewayEnv {
+export interface PrivateCoreEnv extends GatewayEnv, PrivateProducerEnv {
   OPS_PRIVATE_CORE_BASE_URL?: string;
   OPS_PRIVATE_WRITE_SECRET?: string;
   MAPBOX_PUBLIC_TOKEN?: string;
@@ -176,6 +177,7 @@ export async function handlePrivateOverlayRequest(
 export function handlePrivateApiRequest(request: Request, env: PrivateCoreEnv, fetchImpl: typeof fetch = fetch): Promise<Response> {
   const path = new URL(request.url).pathname;
   if (path.startsWith("/api/core/")) return handlePrivateCoreRequest(request, env, fetchImpl);
+  if (path.startsWith("/api/producer/v1/")) return handlePrivateProducerRead(request, env, fetchImpl);
   if (path.startsWith("/overlay-core/")) return handlePrivateOverlayRequest(request, env, fetchImpl);
   if (path === CAMERA_HEALTH_PATH) return handleCameraHealth(request);
   if (path === ARDOT_RELAY_PREFIX) return handleArdotCameraStream(request);

@@ -66,6 +66,25 @@ test("configured Core gateway receives API requests without SPA fallback", async
   }
 });
 
+test("configured Producer gateway receives reads and refuses commands without SPA fallback", async () => {
+  const privateServer = createPrivateOpsServer({ distDir: root, apiGateway: async request => {
+    if (new URL(request.url).pathname === "/api/producer/v1/status") return Response.json({ bridge: "ONLINE" });
+    return Response.json({ error: "SHADOW_READ_ONLY" }, { status: 503 });
+  } });
+  await new Promise(resolve => privateServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${privateServer.address().port}/api/producer/v1`;
+    const status = await fetch(`${base}/status`, { headers: { Accept: "text/html" } });
+    assert.equal(status.status, 200);
+    assert.deepEqual(await status.json(), { bridge: "ONLINE" });
+    const command = await fetch(`${base}/commands`, { method: "POST", body: "{}" });
+    assert.equal(command.status, 503);
+    assert.match(command.headers.get("content-type"), /application\/json/);
+  } finally {
+    await new Promise(resolve => privateServer.close(resolve));
+  }
+});
+
 test("private Core PUT accepts settings larger than the POST limit and bounds the body", async () => {
   const privateServer = createPrivateOpsServer({ distDir: root, apiGateway: async request => {
     assert.equal(request.method, "PUT");
