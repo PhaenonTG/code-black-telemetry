@@ -32,3 +32,11 @@ it could not detect a silent RS485 receive line. The Modbus response established
 the actual working address and register scaling.
 
 
+
+Follow-up 2026-10-15 scan after probe activation: sequential ADC1 trials on
+GPIO32, 33, 34, 35, 36, and 39 all read raw zero. GPIO34 was restored and Core
+accepted the restored configuration at revision 13. Over a 12-second digital
+sample, only GPIO16 (RS485 receive), GPIO17 (RS485 transmit), and GPIO2
+(status LED) changed level. The GPS UART on GPIO27 had no valid NMEA and the
+legacy vane ADC remained zero. This detects no second active sensor; quiet I2C
+devices or other RS485 addresses cannot be ruled out by passive sampling.
