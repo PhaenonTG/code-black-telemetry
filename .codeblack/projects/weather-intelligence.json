@@ -86,6 +86,18 @@
       "host": "edge",
       "name": "HRRR publication watcher job result",
       "unit": "codeblack-weather-publication-watcher.service"
+    },
+    {
+      "id": "core-tornado-potential",
+      "host": "core",
+      "name": "Independent tornado environment grids",
+      "unit": "codeblack-tornado-potential.service"
+    },
+    {
+      "id": "core-tornado-potential-schedule",
+      "host": "core",
+      "name": "Independent tornado environment grids schedule",
+      "unit": "codeblack-tornado-potential.timer"
     }
   ],
   "links": [

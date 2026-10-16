@@ -70,3 +70,6 @@ Later coverage findings remain visible. This assignment does not suppress unknow
 
 - Phaenon3 Tailscale reports a coordination-server connection fault while direct IPv4/IPv6 control-plane checks and its protocol handshake succeed. Refreshing endpoint discovery did not resolve it; restarting the Windows Tailscale service requires an administrator session. No VPN/security settings were changed.
 - The old OBS live test has no triggers and last failed on September 30; it was not relaunched because a test may affect live output.
+
+- Newly installed Core `chase-auto-aegis` service/timer belong to Chase planning & reviews (private setup advisory); `tornado-potential` service/timer belong to Weather intelligence (independent environment grids). Both bindings were checked against live unit descriptions and module entrypoints.
+- Repaired Edge ingest completed at 00:45 UTC: F00–F04 promoted successfully; F05/F06 were not yet published. The publication watcher completed successfully under its existing timer.

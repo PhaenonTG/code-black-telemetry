@@ -59,6 +59,18 @@
       "host": "phaenon3",
       "name": "Approved Chase Day review worker",
       "task": "CodeBlack-ChasePaidReview"
+    },
+    {
+      "id": "core-chase-auto-aegis",
+      "host": "core",
+      "name": "Automatic private Aegis setup advisory review",
+      "unit": "codeblack-chase-auto-aegis.service"
+    },
+    {
+      "id": "core-chase-auto-aegis-schedule",
+      "host": "core",
+      "name": "Automatic private Aegis setup advisory review schedule",
+      "unit": "codeblack-chase-auto-aegis.timer"
     }
   ],
   "links": [
