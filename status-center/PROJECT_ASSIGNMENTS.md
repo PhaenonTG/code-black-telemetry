@@ -73,3 +73,6 @@ Later coverage findings remain visible. This assignment does not suppress unknow
 
 - Newly installed Core `chase-auto-aegis` service/timer belong to Chase planning & reviews (private setup advisory); `tornado-potential` service/timer belong to Weather intelligence (independent environment grids). Both bindings were checked against live unit descriptions and module entrypoints.
 - Repaired Edge ingest completed at 00:45 UTC: F00–F04 promoted successfully; F05/F06 were not yet published. The publication watcher completed successfully under its existing timer.
+
+- Both Edge weather services completed successful scheduled runs after deployment (watcher 00:41 UTC; ingest 00:47 UTC).
+- Phaenon3 C: is approximately 97% used (28 GB free). Scratch/temp bundles are small; the largest staging item is a 5 GB partial model download under a current review checkout. It was left intact because its owning job was not verified idle.
