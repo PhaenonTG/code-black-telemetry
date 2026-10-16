@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { currentAccessToken } from "../core/client"
 import { readProducerResponse } from "./producerResponse"
 import { producerReadAllowed, producerRetryMessage } from "./producerRateLimit"
+import ObsOutputControls from "./ObsOutputControls"
+import type { ObsOutputStatus } from "./obsOutputPolicy"
 
-type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: { stateRevision: number; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; archive?: { camera?: { state?: string; recording?: boolean } }; lowerThird?: { active?: boolean; text?: string }; audio?: { available?: boolean; silence?: boolean; clipping?: boolean } } }
+type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: ObsOutputStatus & { stateRevision: number; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; archive?: { camera?: { state?: string; recording?: boolean } }; lowerThird?: { active?: boolean; text?: string }; audio?: { available?: boolean; state?: string; silence?: boolean; clipping?: boolean } } }
 type Lifecycle = { enabled: boolean; permission: boolean; canManage: boolean; broadcast: { id: string; title: string; description: string; status: string; facebookProducerUrl: string } | null; operation?: { state: string; action: string } | null }
 type Command = { commandId: string; state: string; result?: { error?: string } }
 async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> {
@@ -58,11 +60,20 @@ export default function ProducerControls() {
     return () => window.clearInterval(timer)
   }, [pending, refresh])
   async function lease(release = false) { setBusy(true); try { await api("control-lease", release ? "DELETE" : "POST"); setMessage(release ? "Control released." : "You have control."); await refresh() } catch (error) { setMessage(error instanceof Error ? error.message : "Control unavailable") } finally { setBusy(false) } }
-  async function command(action: string, confirmed = false) {
+  async function command(action: string, confirmed = false, expectedComposition?: string) {
     setBusy(true); setConfirmStart(false)
     try {
       const latest = await api<Status>("status"); setStatus(latest)
       if (!Number.isSafeInteger(latest.status?.stateRevision)) throw new Error("No current broadcaster revision.")
+      const output = /^obs\.output\.(facebook|youtube)\.(start|stop)$/.exec(action)
+      if (output) {
+        const compositionId = latest.status?.composition?.id
+        if (!/^[a-f0-9]{24}$/.test(compositionId ?? "")) throw new Error("No current PROGRAM composition.")
+        if (output[2] === "start" && expectedComposition !== compositionId) throw new Error("PROGRAM changed after confirmation. Review the preview and confirm again.")
+        const next = await api<Command>("commands", "POST", { commandId: crypto.randomUUID(), action, expectedStateRevision: latest.status!.stateRevision, confirmed, payload: { destination: output[1], compositionId, confirmed } })
+        setPending(next); setMessage("QUEUED — waiting for OBS output acknowledgment.")
+        return
+      }
       const next = await api<Command>("commands", "POST", { commandId: crypto.randomUUID(), action, expectedStateRevision: latest.status!.stateRevision, confirmed, ...(action === "lowerThird.set" ? { payload: { text: text.trim() } } : action === "facebook.output.start" && facebook?.broadcast ? { payload: { videoId: facebook.broadcast.id } } : {}) })
       setPending(next); setMessage("QUEUED — waiting for broadcaster acknowledgment.")
     } catch (error) { setMessage(error instanceof Error ? error.message : "Command delivery unknown; check status before retrying.") } finally { setBusy(false) }
@@ -91,11 +102,12 @@ export default function ProducerControls() {
     <p>{owner ? "You have control. Lease renews while this tab is visible." : status?.controlLease && status.controlLease.expiresAt > checkedAt ? `Controlled by ${status.controlLease.operator}` : "No operator holds control."}</p>
     <button type="button" disabled={!allowed || busy || (!owner && !online)} onClick={() => void lease(owner)}>{owner ? "Release control" : "Take control"}</button>
     {!allowed && <p className="workspace-note">Controls are restricted to approved producer accounts and must be enabled by the gateway.</p>}
+    {status?.status?.engine === "obs" && <ObsOutputControls status={status.status} owner={owner} allowed={allowed} online={online} busy={blocked} onCommand={command} />}
     <div className="producer-controls__grid">
       <button type="button" disabled={!canStart} onClick={() => void command("preview.start")}>Arm / recover preview</button>
-      <button type="button" disabled={!allowed} onClick={() => void command("preview.stop")}>Stop preview + output</button>
-      <button type="button" disabled={!canStart || status?.status?.source_state !== "SOURCE_LIVE" || !audioHealthy || !managedSynced || Boolean(managedTerminal) || managedEnding || unresolved} onClick={() => setConfirmStart(true)}>{managed ? "Send to Facebook preview…" : "Start Facebook output…"}</button>
-      <button type="button" disabled={!owner || !online || blocked || !facebookSending} onClick={() => void command("facebook.output.stop")}>STOP Facebook output</button>
+      <button type="button" disabled={!allowed} onClick={() => void command("preview.stop")}>{status?.status?.engine === "obs" ? "Stop private monitor" : "Stop preview + output"}</button>
+      {status?.status?.engine !== "obs" && <><button type="button" disabled={!canStart || status?.status?.source_state !== "SOURCE_LIVE" || !audioHealthy || !managedSynced || Boolean(managedTerminal) || managedEnding || unresolved} onClick={() => setConfirmStart(true)}>{managed ? "Send to Facebook preview…" : "Start Facebook output…"}</button>
+      <button type="button" disabled={!owner || !online || blocked || !facebookSending} onClick={() => void command("facebook.output.stop")}>STOP Facebook output</button></>}
       <button type="button" disabled={!canStart || cameraRecording} onClick={() => void command("archive.camera.start")}>Start camera recording</button>
       <button type="button" disabled={!owner || !online || blocked || !cameraRecording} onClick={() => void command("archive.camera.stop")}>Stop camera recording</button>
     </div>
@@ -105,6 +117,7 @@ export default function ProducerControls() {
     <p role="status" aria-live="polite">{message}</p>
     <p>Source: {status?.status?.source_state ?? "UNKNOWN"} · Facebook encoder: {status?.status?.broadcast?.state ?? "UNKNOWN"}</p>
     <p>Audio: {status?.status?.audio?.clipping ? "CLIPPING — reduce input level" : !status?.status?.audio?.available ? "UNAVAILABLE" : status.status.audio.silence ? "SILENT — check microphone" : "ACTIVE"}</p>
+    {status?.status?.engine === "obs" ? <p className="workspace-note">Encoder SENDING does not prove a platform is public. Verify on <a href="https://www.facebook.com/live/producer" target="_blank" rel="noreferrer">Facebook Live Producer</a> and <a href="https://studio.youtube.com/channel/UCafIaG7PZnEI3b5PsKiblfw/livestreaming" target="_blank" rel="noreferrer">Code Black WX YouTube Studio</a>. Stopping output is separate from ending a platform broadcast.</p> : <>
     <h3>Facebook broadcast</h3>
     <p>Destination: Storm Chaser Nick Mounce</p>
     {facebookError && <p className="workspace-warning">{facebookError}</p>}
@@ -126,5 +139,6 @@ export default function ProducerControls() {
       <button type="button" disabled={busy || (confirmFacebook === "publish" && !programConfirmed)} onClick={() => void facebookAction(confirmFacebook)}>Confirm {confirmFacebook === "publish" ? "public Go Live" : confirmFacebook}</button><button type="button" onClick={() => setConfirmFacebook(null)}>Cancel</button>
     </div>}
     <p className="workspace-note">Encoder SENDING does not prove the Facebook Page is public. Use Check Facebook status after publishing/ending. Changing a lower third currently reconnects the Facebook encoder briefly. 360 controls are not connected.</p>
+    </>}
   </section>
 }

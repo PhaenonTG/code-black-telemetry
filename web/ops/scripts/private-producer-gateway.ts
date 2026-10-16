@@ -154,7 +154,7 @@ export async function handlePrivateProducerRead(
       } });
     }
     const headers = new Headers({ "Content-Type": allowed.type, "Cache-Control": "no-store, no-transform", "X-Content-Type-Options": "nosniff" });
-    if (allowed.type === "image/jpeg") {
+    if (["image/jpeg", "application/vnd.apple.mpegurl", "video/mp2t"].includes(allowed.type)) {
       for (const name of ["X-Producer-Frame-At", "X-Producer-Composition"]) {
         const value = upstream.headers.get(name);
         if (value && /^[\x20-\x7e]{1,256}$/.test(value)) headers.set(name, value);
