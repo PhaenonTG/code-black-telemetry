@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { PageHeader } from "../components/PageHeader"
 import { StatusBadge } from "../components/StatusBadge"
+import StreamingWorkTracking from "../status/StreamingWorkTracking"
 import { useCoreOps } from "../core/useCoreOps"
 import { getAegisPolicy, getAegisStatus, type AegisPolicyStatus, type AegisStatus } from "../core/aegisFeed"
 import {
@@ -95,6 +96,7 @@ export default function StatusCenter() {
       />
 
       {error && <p className="status-center__error" role="alert">{error}</p>}
+      <StreamingWorkTracking />
 
       <section className="status-center__summary" aria-label="Platform summary">
         <div className="status-center__overall">
