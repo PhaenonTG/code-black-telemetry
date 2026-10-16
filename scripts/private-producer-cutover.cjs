@@ -26,16 +26,16 @@ async function noPublicCommands(){
  const response=await fetch('https://ops.codeblackwx.com/api/producer/v1/workstation/commands',{headers:{Authorization:'Bearer '+credential('producer-bridge.credentials.json')},redirect:'error',signal:AbortSignal.timeout(8000)});
  if(!response.ok)throw Error('PUBLIC_HANDOFF_CHECK_FAILED');const body=await response.json();if(!Array.isArray(body.commands)||body.commands.length)throw Error('PUBLIC_COMMANDS_PENDING');
 }
-async function stage(){
+async function stage(resume=false){
  off();await noPublicCommands();const ids=allowlist(),token=privateToken();
  if(run('git',['-C',path.resolve(PACKAGE,'../..'),'status','--porcelain']).trim())throw Error('BACKEND_RELEASE_NOT_CLEAN');
- ssh(`test ! -e '${RELEASE}' && test ! -e '${BACKUP}' && test ! -e /srv/codeblack/config/private-producer/control-primary.env && test ! -e /etc/systemd/system/codeblack-private-ops.service.d/zzzz-private-producer-primary.conf && test ! -e /etc/systemd/system/codeblack-private-producer-shadow.service.d/zzzz-private-producer-primary.conf`);
+ ssh(`test ! -e '${RELEASE}' && ${resume?`test -d '${BACKUP}' && sudo -n cmp -s /etc/systemd/system/codeblack-private-producer-shadow.service '${BACKUP}/producer.unit'`:`test ! -e '${BACKUP}'`} && test ! -e /srv/codeblack/config/private-producer/control-primary.env && test ! -e /etc/systemd/system/codeblack-private-ops.service.d/zzzz-private-producer-primary.conf && test ! -e /etc/systemd/system/codeblack-private-producer-shadow.service.d/zzzz-private-producer-primary.conf`);
  run(NODE,['scripts/build-private-producer.mjs'],{cwd:PACKAGE});
  const archive='C:/CodeBlack/backups/private-producer-primary-74f6c69-20261015.tgz';
  if(fs.existsSync(archive))throw Error('ARCHIVE_ALREADY_EXISTS');
  run('tar',['-czf',archive,'-C',PACKAGE,'dist-private','scripts/private-producer-shadow.mjs']);
  run('scp',[archive,'codeblack-core:/tmp/private-producer-primary-74f6c69-20261015.tgz']);
- ssh(`sudo -n install -d -m 0700 '${BACKUP}' && sudo -n cp -p /etc/systemd/system/codeblack-private-producer-shadow.service '${BACKUP}/producer.unit' && sudo -n cp -p /srv/codeblack/data/private-producer-shadow/state.json '${BACKUP}/state.before.json' && sudo -n cp -p /etc/systemd/system/codeblack-private-ops.service.d/zzzz-landscape.conf '${BACKUP}/ops.override' && sudo -n install -d -m 0755 '${RELEASE}' && sudo -n tar -xzf /tmp/private-producer-primary-74f6c69-20261015.tgz -C '${RELEASE}' && sudo -n chown -R root:root '${RELEASE}' && sudo -n chmod -R a+rX '${RELEASE}'`);
+ ssh(`sudo -n install -d -m 0700 '${BACKUP}' && sudo -n cp -p /etc/systemd/system/codeblack-private-producer-shadow.service '${BACKUP}/producer.unit' && (if sudo -n test -f /srv/codeblack/data/private-producer-shadow/state.json; then sudo -n cp -p /srv/codeblack/data/private-producer-shadow/state.json '${BACKUP}/state.before.json'; else sudo -n touch '${BACKUP}/state.was-absent'; fi) && sudo -n cp -p /etc/systemd/system/codeblack-private-ops.service.d/zzzz-landscape.conf '${BACKUP}/ops.override' && sudo -n install -d -m 0755 '${RELEASE}' && sudo -n tar -xzf /tmp/private-producer-primary-74f6c69-20261015.tgz -C '${RELEASE}' && sudo -n chown -R root:root '${RELEASE}' && sudo -n chmod -R a+rX '${RELEASE}'`);
  ssh('sudo -n install -m 0600 /dev/stdin /srv/codeblack/config/private-producer/control-primary.env',`OPS_PRIVATE_PRODUCER_CONTROLS_ENABLED=true\nOPS_PRIVATE_PRODUCER_OPERATOR_IDS=${ids}\n`);
  const privateFile=NATIVE+'/runtime/private-producer.credentials.json';
  if(fs.existsSync(privateFile)){if(credential('private-producer.credentials.json')!==token)throw Error('EXISTING_PRIVATE_CREDENTIAL_MISMATCH');}
@@ -57,6 +57,6 @@ async function activateWorkstation(){
  off();await noPublicCommands();
  console.log(run('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','RemoteSigned','-File',path.join(__dirname,'switch-private-producer-workstation.ps1')]).trim());
 }
-const phases={stage,core:activateCore,workstation:activateWorkstation};
+const phases={stage,'resume-stage':()=>stage(true),core:activateCore,workstation:activateWorkstation};
 if(!phases[process.argv[2]])throw Error('FIXED_PHASE_REQUIRED');
 phases[process.argv[2]]().catch(error=>{console.error(/^[A-Z0-9_]+$/.test(error.message)?error.message:'PRIVATE_CUTOVER_FAILED_INSPECT_ROLLBACK');process.exitCode=1;});
