@@ -1,5 +1,6 @@
 import type { BridgeStorage } from "./producer-bridge";
 import { COMPOSITION_ID, compositionMatches, programEligible, type MediaStatus } from "./media-proof";
+import { requestPreview } from "./preview-demand";
 
 const PREFIX = "/api/producer/v1/preview/hls/";
 const NAME = /^program-[0-9a-f]{32}-([0-9]{1,16})\.ts$/;
@@ -71,6 +72,7 @@ export async function handleProgramMedia(request: Request, storage: BridgeStorag
     return new Response(null, { status: 202, headers: { "Cache-Control": "no-store" } });
   }
   if (ingest || request.method !== "GET") return json(405, "METHOD_NOT_ALLOWED");
+  if (name === "index.m3u8") await requestPreview(storage, "hls");
   const [status, manifest] = await Promise.all([
     storage.get<{ receivedAt: string; body: MediaStatus }>("status"),
     storage.get<Manifest>("program-hls-manifest"),

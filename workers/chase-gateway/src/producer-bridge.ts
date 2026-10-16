@@ -2,6 +2,7 @@ import { handleProgramMedia } from "./program-media";
 import { COMPOSITION_ID, compositionMatches, mediaFresh, programEligible } from "./media-proof";
 import { OBS_ACTIONS, obsActionAdvertised, validObsPayload } from "./obs-command-policy";
 import { handlePcLauncher } from "./pc-launcher";
+import { previewDemand, requestPreview } from "./preview-demand";
 
 const STATUS_KEY = "status";
 const CAPABILITIES_KEY = "capabilities";
@@ -77,6 +78,21 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
   if (launcher) return launcher;
   const url = new URL(request.url);
   const path = url.pathname;
+  if (path === "/api/producer/v1/workstation/heartbeat" && request.method === "POST") {
+    const body = await jsonBody(request);
+    const status = body?.status;
+    const capabilities = body?.capabilities;
+    const object = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
+    if (!object(status) || !object(capabilities)) return json(400, { error: "INVALID_HEARTBEAT" });
+    const receivedAt = new Date().toISOString();
+    await storage.put(STATUS_KEY, { receivedAt, body: status } satisfies StoredDocument);
+    const prior = await storage.get<StoredDocument>(CAPABILITIES_KEY);
+    if (JSON.stringify(prior?.body) !== JSON.stringify(capabilities)) {
+      await storage.put(CAPABILITIES_KEY, { receivedAt, body: capabilities } satisfies StoredDocument);
+    }
+    const commands = await queuedCommands(storage);
+    return json(200, { commands, previewDemandMs: await previewDemand(storage) });
+  }
   const media = await handleProgramMedia(request, storage);
   if (media) return media;
 
@@ -295,9 +311,11 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
   }
   if (path === "/api/producer/v1/capabilities" && request.method === "GET") {
     const value = await storage.get<StoredDocument>(CAPABILITIES_KEY);
-    return json(200, { bridge: bridgeState(value), observedAt: value?.receivedAt ?? null, capabilities: value?.body ?? null });
+    const status = await storage.get<StoredDocument>(STATUS_KEY);
+    return json(200, { bridge: bridgeState(status ?? value), observedAt: (status ?? value)?.receivedAt ?? null, capabilities: value?.body ?? null });
   }
   if (path === "/api/producer/v1/preview/program.jpg" && request.method === "GET") {
+    await requestPreview(storage, "jpeg");
     const [status, frame] = await Promise.all([storage.get<StoredDocument>(STATUS_KEY), storage.get<StoredFrame>(FRAME_KEY)]);
     const current = frame && mediaFresh(frame.receivedAt, 5000) && mediaFresh(frame.frameAt, 5000);
     if (!programEligible(status) || !status || !current || !frame || !compositionMatches(status.body, frame.compositionId)) return json(404, { error: "PREVIEW_NOT_CURRENT" });
@@ -363,10 +381,7 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
     return json(202, command);
   }
   if (path === "/api/producer/v1/workstation/commands" && request.method === "GET") {
-    const commands = await storage.get<StoredCommand[]>(COMMANDS_KEY) ?? [];
-    for (const command of commands) if (command.state === "queued" && Date.now() - Date.parse(command.createdAt) > 15_000) { command.state = "timed_out"; command.completedAt = new Date().toISOString(); }
-    await storage.put(COMMANDS_KEY, commands);
-    return json(200, { commands: commands.filter((item) => item.state === "queued").slice(0, 20) });
+    return json(200, { commands: await queuedCommands(storage) });
   }
   if (path === "/api/producer/v1/workstation/ack" && request.method === "POST") {
     const body = await jsonBody(request, 4096);
@@ -390,8 +405,29 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
 }
 
 export class ProducerBridge implements DurableObject {
+  private requestQueue: Promise<void> = Promise.resolve();
   constructor(private readonly state: DurableObjectState) {}
   fetch(request: Request): Promise<Response> {
-    return this.state.blockConcurrencyWhile(() => handleProducerStateRequest(request, this.state.storage));
+    const response = this.requestQueue.then(async () => {
+      try { return await handleProducerStateRequest(request, this.state.storage); }
+      catch {
+        console.error("PRODUCER_REQUEST_FAILED", { method: request.method });
+        return json(503, { error: "PRODUCER_REQUEST_FAILED", outcome: "unknown" });
+      }
+    });
+    this.requestQueue = response.then(() => undefined, () => undefined);
+    return response;
   }
+}
+
+async function queuedCommands(storage: BridgeStorage): Promise<StoredCommand[]> {
+  const commands = await storage.get<StoredCommand[]>(COMMANDS_KEY) ?? [];
+  let changed = false;
+  for (const command of commands) {
+    if (command.state === "queued" && Date.now() - Date.parse(command.createdAt) > 15_000) {
+      command.state = "timed_out"; command.completedAt = new Date().toISOString(); changed = true;
+    }
+  }
+  if (changed) await storage.put(COMMANDS_KEY, commands);
+  return commands.filter(item => item.state === "queued").slice(0, 20);
 }

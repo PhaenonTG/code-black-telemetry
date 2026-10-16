@@ -38,3 +38,5 @@ native/**/target/
 *.njsproj
 *.sln
 *.sw?
+workers/chase-gateway/dist-private/
+workers/chase-gateway/dist-worker-check/
