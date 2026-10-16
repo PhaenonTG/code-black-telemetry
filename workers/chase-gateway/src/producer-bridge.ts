@@ -1,6 +1,7 @@
 import { handleProgramMedia } from "./program-media";
 import { COMPOSITION_ID, compositionMatches, mediaFresh, programEligible } from "./media-proof";
 import { OBS_ACTIONS, obsActionAdvertised, validObsPayload } from "./obs-command-policy";
+import { handlePcLauncher } from "./pc-launcher";
 
 const STATUS_KEY = "status";
 const CAPABILITIES_KEY = "capabilities";
@@ -72,6 +73,8 @@ function bridgeState(document: StoredDocument | undefined): "ONLINE" | "OFFLINE"
 }
 
 export async function handleProducerStateRequest(request: Request, storage: BridgeStorage): Promise<Response> {
+  const launcher = await handlePcLauncher(request, storage);
+  if (launcher) return launcher;
   const url = new URL(request.url);
   const path = url.pathname;
   const media = await handleProgramMedia(request, storage);

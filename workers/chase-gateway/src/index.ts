@@ -666,7 +666,7 @@ async function handleProducerRoute(request: Request, url: URL, env: Env): Promis
   headers.set("X-Producer-Operator", operator);
   if (userId) headers.set("X-Producer-UserId", userId);
   const response = await stub.fetch(new Request(request.url, { method: request.method, headers, body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body }));
-  if (!workstation && request.method === "GET" && url.pathname === "/api/producer/v1/status" && response.ok) {
+  if (!workstation && request.method === "GET" && ["/api/producer/v1/status", "/api/producer/v1/launcher"].includes(url.pathname) && response.ok) {
     const document = await response.json() as Record<string, unknown>;
     if (!("status" in document) && "producer" in document) document.status = document.producer;
     document.controlAccess = { allowed: controlAllowed, userId };
