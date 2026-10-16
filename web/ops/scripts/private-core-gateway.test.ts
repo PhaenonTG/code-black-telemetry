@@ -1,5 +1,5 @@
 import { createHmac, createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { handlePrivateApiRequest, handlePrivateCoreRequest, handlePrivateOverlayRequest, type PrivateCoreEnv } from "./private-core-gateway";
 
 const userId = "4b10eb9e-af64-4077-a659-2fe4adf69b12";
@@ -102,5 +102,76 @@ describe("private camera routes", () => {
     expect(stream.status).toBe(400);
     const unknown = await handlePrivateApiRequest(new Request("http://localhost/api/unknown"), env);
     expect(unknown.status).toBe(404);
+  });
+});
+
+
+describe("telemetry reliability boundaries", () => {
+  afterEach(() => vi.useRealTimers());
+  const request = (signal?: AbortSignal) => new Request("http://localhost/api/core/api/ops/status-center/v1/status", {
+    headers: { Authorization: "Bearer concurrent-test-token" }, signal,
+  });
+
+  it("bounds a stalled auth provider before the browser deadline and fails closed", async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | null | undefined;
+    const fetcher = ((_input, init) => { signal = init?.signal; return new Promise(() => {}); }) as typeof fetch;
+    const pending = handlePrivateCoreRequest(request(), env, fetcher);
+    await vi.advanceTimersByTimeAsync(6_000);
+    const response = await pending;
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "AUTH_PROVIDER_UNAVAILABLE" });
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it("shares concurrent auth work but rechecks revoked access on the next request", async () => {
+    let release!: (response: Response) => void;
+    let active = true;
+    let authCalls = 0;
+    let profileCalls = 0;
+    let coreCalls = 0;
+    const fetcher = (async (input) => {
+      const url = String(input);
+      if (url.endsWith("/auth/v1/user")) {
+        authCalls += 1;
+        return authCalls === 1 ? await new Promise<Response>((resolve) => { release = resolve; }) : Response.json({ id: userId });
+      }
+      if (url.includes("/rest/v1/profiles?")) { profileCalls += 1; return Response.json([{ active, role: "ADMIN" }]); }
+      coreCalls += 1;
+      return Response.json({ ok: true });
+    }) as typeof fetch;
+    const first = handlePrivateCoreRequest(request(), env, fetcher);
+    const second = handlePrivateCoreRequest(request(), env, fetcher);
+    expect(authCalls).toBe(1);
+    release(Response.json({ id: userId }));
+    expect((await Promise.all([first, second])).map((response) => response.status)).toEqual([200, 200]);
+    expect(profileCalls).toBe(1);
+    expect(coreCalls).toBe(2);
+    active = false;
+    expect((await handlePrivateCoreRequest(request(), env, fetcher)).status).toBe(403);
+    expect(authCalls).toBe(2);
+    expect(coreCalls).toBe(2);
+  });
+
+  it("bounds a stalled telemetry upstream and propagates browser cancellation", async () => {
+    vi.useFakeTimers();
+    let upstreamSignal: AbortSignal | null | undefined;
+    const fetcher = (async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/auth/v1/user")) return Response.json({ id: userId });
+      if (url.includes("/rest/v1/profiles?")) return Response.json([{ active: true, role: "ADMIN" }]);
+      upstreamSignal = init?.signal;
+      return await new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true }));
+    }) as typeof fetch;
+    const pending = handlePrivateCoreRequest(request(), env, fetcher);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect((await pending).status).toBe(504);
+    expect(upstreamSignal?.aborted).toBe(true);
+    const client = new AbortController();
+    const cancelled = handlePrivateCoreRequest(request(client.signal), env, fetcher);
+    await vi.advanceTimersByTimeAsync(0);
+    client.abort();
+    expect((await cancelled).status).toBe(504);
+    expect(upstreamSignal?.aborted).toBe(true);
   });
 });

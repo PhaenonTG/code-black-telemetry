@@ -108,7 +108,8 @@ const RADAR_SETTINGS_PATH = "/api/ops/status-center/v1/radar-control-settings"
 
 async function statusRequest<T>(config: OpsCoreConfig, path: string, init?: RequestInit): Promise<T> {
   if (!coreConfigured(config)) throw new OpsCoreClientError("Core gateway is unavailable")
-  const token = await currentAccessToken()
+  const token = await currentAccessToken(init?.signal ?? undefined)
+  if (init?.signal?.aborted) throw new DOMException("Request cancelled", "AbortError")
   const response = await fetch(`${config.coreBaseUrl}${path}`, {
     ...init,
     cache: "no-store",

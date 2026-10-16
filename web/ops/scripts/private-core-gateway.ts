@@ -5,12 +5,12 @@ import { KANDRIVE_PATH, handleKandriveRequest } from "../functions/lib/kandriveR
 import { MODOT_PREFIX, handleModotRequest } from "../functions/lib/modotRelay";
 import { ODOT_PREFIX, handleOdotRequest } from "../functions/lib/odotRelay";
 import { TDOT_PREFIX, handleTdotRequest } from "../functions/lib/tdotRelay";
+import { verifyPrivateAuth } from "./private-auth";
 import { privateProviderFetch } from "./private-provider-fetch";
 import { handlePrivateProducerRead, handlePrivateProducerWrite, type PrivateProducerEnv } from "./private-producer-gateway";
 import {
   gatewayErrorResponse,
   resolveAllowlistRoute,
-  verifyOpsAuth,
   type GatewayEnv,
 } from "../functions/lib/coreGateway";
 
@@ -54,7 +54,9 @@ export async function handlePrivateCoreRequest(
   env: PrivateCoreEnv,
   fetchImpl: typeof fetch = fetch,
 ): Promise<Response> {
-  const auth = await verifyOpsAuth(request.headers.get("Authorization"), env, fetchImpl);
+  const started = performance.now();
+  const auth = await verifyPrivateAuth(request, env, fetchImpl);
+  const authMs = performance.now() - started;
   if (!auth.ok) return gatewayErrorResponse(auth.status, auth.reason);
 
   const incomingUrl = new URL(request.url);
@@ -90,7 +92,11 @@ export async function handlePrivateCoreRequest(
     ...(route.opsWrite ? signedActorHeaders(route.upstreamPath, body ?? "", auth.userId, auth.role!, env.OPS_PRIVATE_WRITE_SECRET!) : {}),
   };
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), route.upstreamPath === "/api/fabric/v1/stream" ? 120_000 : 25_000);
+  const cancel = () => controller.abort();
+  request.signal.addEventListener("abort", cancel, { once: true });
+  if (request.signal.aborted) controller.abort();
+  const telemetry = route.upstreamPath.startsWith("/api/ops/status-center/v1/");
+  const timer = setTimeout(cancel, route.upstreamPath === "/api/fabric/v1/stream" ? 120_000 : telemetry ? 5_000 : 25_000);
   try {
     const upstream = await fetchImpl(target, { method: request.method, body, headers, signal: controller.signal, redirect: "manual" });
     if (route.upstreamPath === "/api/fabric/v1/stream") {
@@ -118,11 +124,11 @@ export async function handlePrivateCoreRequest(
       }
       return gatewayErrorResponse(502, "CORE_UNAVAILABLE");
     }
-    return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+    return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Server-Timing": `auth;dur=${authMs.toFixed(1)},core;dur=${(performance.now() - started - authMs).toFixed(1)}` } });
   } catch (error) {
     return gatewayErrorResponse(error instanceof DOMException && error.name === "AbortError" ? 504 : 502,
       error instanceof DOMException && error.name === "AbortError" ? "CORE_TIMEOUT" : "CORE_UNAVAILABLE");
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); if (route.upstreamPath !== "/api/fabric/v1/stream") request.signal.removeEventListener("abort", cancel); }
 }
 
 export async function handlePrivateOverlayRequest(

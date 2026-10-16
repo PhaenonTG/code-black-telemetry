@@ -52,7 +52,8 @@ export const MissionGrid = memo(function MissionGrid({ document, error }: { docu
         </div>
         <input type="search" aria-label="Search projects" placeholder="Search project or host…" value={query} onChange={(event) => setQuery(event.target.value)} />
       </div>
-      {error ? <p className="status-center__muted">Project health is unavailable while Core telemetry is disconnected.</p> : !document ? <p className="status-center__muted">Loading mission grid…</p> : projects.length === 0 ? <p className="status-center__muted">Core has not published the project landscape yet.</p> :
+      {error && document && <p className="status-center__error" role="status">Showing last received project signals while reconnecting. These are not current health checks.</p>}
+      {error && !document ? <p className="status-center__muted">Project health is unavailable while Core telemetry is disconnected.</p> : !document ? <p className="status-center__muted">Loading mission grid…</p> : projects.length === 0 ? <p className="status-center__muted">Core has not published the project landscape yet.</p> :
         <><p className="mission-result-count" role="status">{shown.length} of {projects.length} projects · expand for evidence and history</p>
         <div className="status-landscape__grid">{shown.map((project) => <ProjectCard key={project.id} project={project} />)}</div>
         {shown.length === 0 && <p className="mission-empty">No matching projects. <button type="button" onClick={() => { setFilter("all"); setQuery("") }}>Clear filters</button></p>}</>}

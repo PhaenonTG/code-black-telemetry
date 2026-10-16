@@ -59,3 +59,14 @@ describe("currentAccessToken (Supabase session wiring)", () => {
     expect(buildCoreRequestHeaders(token)).toEqual({ Accept: "application/json" });
   });
 });
+
+
+it("cancels session lookup so optional telemetry cannot hold the refresh gate forever", async () => {
+  getSessionMock.mockImplementation(() => new Promise(() => {}));
+  const controller = new AbortController();
+  const request = currentAccessToken(controller.signal);
+  controller.abort();
+  await expect(request).rejects.toMatchObject({ name: "AbortError" });
+  getSessionMock.mockResolvedValue({ data: { session: { access_token: "new-session" } } });
+  await expect(currentAccessToken()).resolves.toBe("new-session");
+});

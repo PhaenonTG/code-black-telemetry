@@ -14,8 +14,10 @@ Push-Location $opsDirectory
 try {
   & npm.cmd run build:private
   if ($LASTEXITCODE -ne 0) { throw 'Private OPS build or sign-in verification failed.' }
+  & npm.cmd run build:private-gateway
+  if ($LASTEXITCODE -ne 0) { throw 'Private gateway build failed.' }
   $bundlePath = Join-Path ([IO.Path]::GetTempPath()) "codeblack-$Version.tgz"
-  & tar -czf $bundlePath dist
+  & tar -czf $bundlePath dist dist-private scripts/serve-private.mjs
   if ($LASTEXITCODE -ne 0) { throw 'Could not package private OPS.' }
   & scp $bundlePath "${CoreHost}:/tmp/codeblack-$Version.tgz"
   if ($LASTEXITCODE -ne 0) { throw 'Private OPS upload failed.' }
@@ -23,7 +25,7 @@ try {
   & ssh $CoreHost "test ! -e '$releasePath' && sudo mkdir -p '$releasePath' && sudo tar -xzf '/tmp/codeblack-$Version.tgz' -C '$releasePath' && sudo chown -R root:root '$releasePath' && sudo chmod -R a+rX '$releasePath' && test -f '$releasePath/dist/index.html'"
   if ($LASTEXITCODE -ne 0) { throw 'Release must be new and contain the built entry page.' }
   $overridePath = Join-Path ([IO.Path]::GetTempPath()) "codeblack-$Version.conf"
-  [IO.File]::WriteAllText($overridePath, "[Service]`nEnvironment=OPS_PRIVATE_DIST=$releasePath/dist`n", [Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText($overridePath, "[Service]`nWorkingDirectory=$releasePath`nExecStart=`nExecStart=/usr/bin/node $releasePath/scripts/serve-private.mjs`nEnvironment=OPS_PRIVATE_DIST=$releasePath/dist`n", [Text.UTF8Encoding]::new($false))
   & scp $overridePath "${CoreHost}:/tmp/codeblack-$Version.conf"
   if ($LASTEXITCODE -ne 0) { throw 'Could not upload the release configuration.' }
   & ssh $CoreHost "sudo install -m 0644 '/tmp/codeblack-$Version.conf' /etc/systemd/system/codeblack-private-ops.service.d/zzzz-landscape.conf && sudo systemctl daemon-reload && sudo systemctl restart codeblack-private-ops.service && systemctl is-active --quiet codeblack-private-ops.service"

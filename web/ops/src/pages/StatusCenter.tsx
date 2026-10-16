@@ -40,13 +40,19 @@ export default function StatusCenter() {
   const [settings, setSettings] = useState<RadarControlSettings | null>(null)
   const [aegis, setAegis] = useState<AegisStatus | null>(null)
   const [aegisPolicy, setAegisPolicy] = useState<AegisPolicyStatus | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [requestError, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const requestRef = useRef<AbortController | null>(null)
   const settingsDirty = useRef(false)
   const settingsRevision = useRef(0)
+  const nextRefreshAt = useRef(0)
+  const retryDelay = useRef(3_000)
+  const [clock, setClock] = useState(Date.now)
+  const reportTime = Date.parse(document?.generated_at ?? "")
+  const error = requestError ?? (document && (!Number.isFinite(reportTime) || clock - reportTime > 90_000)
+    ? "The last telemetry report is over 90 seconds old. Reconnecting to Core…" : null)
 
   const refresh = useCallback(async () => {
     if (requestRef.current) return
@@ -54,12 +60,13 @@ export default function StatusCenter() {
     requestRef.current = controller
     setRefreshing(true)
     const timeout = window.setTimeout(() => controller.abort(), 15_000)
+    let received = false
     const policyRevision = settingsRevision.current
     const current = () => requestRef.current === controller
     // Main telemetry does not depend on optional controls or Aegis requests.
     await Promise.allSettled([
       fetchStatusCenter(config, controller.signal).then((next) => {
-        if (current()) { setDocument(next); setError(null) }
+        if (current()) { received = true; setDocument(next); setClock(Date.now()); setError(null) }
       }).catch((reason) => {
         if (current()) setError(controller.signal.aborted ? "Telemetry refresh timed out. Try Refresh; automatic updates will retry." : reason instanceof Error ? reason.message : "Status Center is unavailable")
       }),
@@ -70,13 +77,22 @@ export default function StatusCenter() {
       getAegisPolicy(config, controller.signal).then((next) => { if (current()) setAegisPolicy(next) }).catch(() => { if (current()) setAegisPolicy(null) }),
     ])
     window.clearTimeout(timeout)
-    if (current()) { requestRef.current = null; setRefreshing(false) }
+    if (current()) {
+      requestRef.current = null
+      nextRefreshAt.current = Date.now() + (received ? 30_000 : retryDelay.current)
+      retryDelay.current = received ? 3_000 : Math.min(30_000, retryDelay.current * 2)
+      setRefreshing(false)
+    }
   }, [config])
 
   useEffect(() => {
     void refresh()
-    const visibleRefresh = () => { if (!window.document.hidden) void refresh() }
-    const timer = window.setInterval(visibleRefresh, 30_000)
+    const visibleRefresh = () => { if (!window.document.hidden) { setClock(Date.now()); void refresh() } }
+    const timer = window.setInterval(() => {
+      if (window.document.hidden) return
+      setClock(Date.now())
+      if (Date.now() >= nextRefreshAt.current) void refresh()
+    }, 3_000)
     window.document.addEventListener("visibilitychange", visibleRefresh)
     return () => {
       window.clearInterval(timer)
@@ -118,7 +134,7 @@ export default function StatusCenter() {
       <PageHeader
         title="STATUS CENTER"
         kicker="LIVE PLATFORM TELEMETRY"
-        description={error ? "Verified Core telemetry unavailable" : document?.generated_at ? `Verified Core telemetry · updated ${new Date(document.generated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "Loading verified Core telemetry…"}
+        description={document?.generated_at ? `${error ? "Last received report" : "Verified Core telemetry"} · updated ${new Date(document.generated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : error ? "Core telemetry unavailable · reconnecting" : "Loading verified Core telemetry…"}
         actions={<button type="button" className="page-action-link" disabled={refreshing} onClick={() => { void refresh() }}>{refreshing ? "REFRESHING…" : "REFRESH"}</button>}
       />
 
@@ -127,8 +143,8 @@ export default function StatusCenter() {
       <section className="status-center__summary" aria-label="Platform summary">
         <div className="status-center__overall">
           <span>PLATFORM STATE</span>
-          <b>{error ? "UNAVAILABLE" : document?.summary?.overall ?? "CHECKING"}</b>
-          <small>{error ? "Current attention count unavailable" : document?.summary ? `${document.summary.attention_count} active attention item(s)` : "Attention count unavailable"}</small>
+          <b>{error ? (document ? "RECONNECTING" : "UNAVAILABLE") : document?.summary?.overall ?? "CHECKING"}</b>
+          <small>{error ? (document?.summary ? `Last report: ${document.summary.attention_count} attention item(s)` : "Current attention count unavailable") : document?.summary ? `${document.summary.attention_count} active attention item(s)` : "Attention count unavailable"}</small>
         </div>
         <StatusDisclosure className="status-center__platform-fold" label="Platform signals" title={<><b>PLATFORM SIGNALS</b><span>{tiles.length} SIGNALS · AUTO 30s</span></>}>
         <div className="status-center__tiles">

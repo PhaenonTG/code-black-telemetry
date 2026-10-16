@@ -1,3 +1,4 @@
+import { abortable } from "./abortable";
 import { normalizeStormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/normalize";
 import type { StormIntelSnapshot } from "../../../../web/overlay/src/stormIntel/types";
 import type { FabricNormalizedState } from "../../../../src/services/fabric";
@@ -42,9 +43,9 @@ export interface FabricEvent {
 // network round trip of its own. Returns null for "no session" and "expired with failed refresh"
 // alike; both cases correctly fall through to the gateway's own 401, which each caller below
 // already surfaces as an honest UNAVAILABLE detail rather than fabricating a different failure.
-export async function currentAccessToken(): Promise<string | null> {
+export async function currentAccessToken(signal?: AbortSignal): Promise<string | null> {
   if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
+  const { data } = await abortable(supabase.auth.getSession(), signal);
   return data.session?.access_token ?? null;
 }
 
@@ -55,7 +56,7 @@ export function buildCoreRequestHeaders(token: string | null): Record<string, st
 }
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const token = await currentAccessToken();
+  const token = await currentAccessToken(signal);
   const response = await fetch(url, {
     cache: "no-store",
     signal,
@@ -205,7 +206,7 @@ export async function consumeFabricStream(
   signal: AbortSignal,
   onEvent: (event: FabricEvent) => void,
 ): Promise<void> {
-  const token = await currentAccessToken();
+  const token = await currentAccessToken(signal);
   const response = await fetch(`${config.coreBaseUrl}/api/fabric/v1/stream`, {
     cache: "no-store",
     signal,
@@ -269,7 +270,7 @@ export function setupWorkflowErrorMessage(status: number, body: unknown): string
 export async function postSetupWorkflow<T>(config: OpsCoreConfig, path: "chase-setup-review" | "chase-setup-decision" | "chase-setup-policy" | "chase-setup-paid-review", body: unknown): Promise<T> {
   if (!coreConfigured(config)) throw new OpsCoreClientError("Live Core is not configured");
   return withTimeout(async (signal) => {
-    const token = await currentAccessToken();
+    const token = await currentAccessToken(signal);
     const response = await fetch(`${config.coreBaseUrl}/api/forecast/v1/${path}`, {
       method: "POST", cache: "no-store", signal,
       headers: { ...buildCoreRequestHeaders(token), "Content-Type": "application/json" },

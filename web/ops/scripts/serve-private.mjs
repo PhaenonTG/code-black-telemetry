@@ -45,6 +45,16 @@ function inside(root, target) {
 }
 
 async function sendCoreResponse(request, response, gateway) {
+  const controller = new AbortController();
+  const cleanup = () => {
+    request.removeListener("aborted", abort);
+    response.removeListener("close", abort);
+    response.removeListener("finish", cleanup);
+  };
+  const abort = () => { controller.abort(); cleanup(); };
+  request.once("aborted", abort);
+  response.once("close", abort);
+  response.once("finish", cleanup);
   let body;
   if (request.method === "POST" || request.method === "PUT") {
     const chunks = [];
@@ -68,9 +78,11 @@ async function sendCoreResponse(request, response, gateway) {
   const webRequest = new Request(origin, {
     method: request.method,
     headers: request.headers,
+    signal: controller.signal,
     ...(body === undefined ? {} : { body }),
   });
   const upstream = await gateway(webRequest);
+  if (response.destroyed) { await upstream.body?.cancel(); return; }
   response.writeHead(upstream.status, Object.fromEntries(upstream.headers));
   if (!upstream.body) { response.end(); return; }
   const stream = Readable.fromWeb(upstream.body);

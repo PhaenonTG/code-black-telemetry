@@ -134,3 +134,49 @@ test("private hostname rejects an unexpected Host header", async () => {
     await new Promise(resolve => privateServer.close(resolve));
   }
 });
+
+
+test("browser disconnect cancels a pending upstream before headers", { timeout: 3000 }, async () => {
+  let started;
+  let cancelled;
+  const ready = new Promise(resolve => { started = resolve; });
+  const stopped = new Promise(resolve => { cancelled = resolve; });
+  const privateServer = createPrivateOpsServer({ distDir: root, apiGateway: request => {
+    started();
+    return new Promise((_resolve, reject) => request.signal.addEventListener("abort", () => {
+      cancelled(); reject(new DOMException("aborted", "AbortError"));
+    }, { once: true }));
+  } });
+  await new Promise(resolve => privateServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const client = get(`http://127.0.0.1:${privateServer.address().port}/api/core/health`);
+    client.on("error", () => {});
+    await ready;
+    client.destroy();
+    await stopped;
+  } finally { await new Promise(resolve => privateServer.close(resolve)); }
+});
+
+test("disconnecting a live feed cancels its upstream body", { timeout: 3000 }, async () => {
+  let cancelled;
+  let upstreamSignal;
+  const stopped = new Promise(resolve => { cancelled = resolve; });
+  const privateServer = createPrivateOpsServer({ distDir: root, apiGateway: request => {
+    upstreamSignal = request.signal;
+    return new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode('frame\n')); },
+      cancel() { cancelled(); },
+    }), { headers: { "Content-Type": "application/x-ndjson" } });
+  } });
+  await new Promise(resolve => privateServer.listen(0, "127.0.0.1", resolve));
+  try {
+    await new Promise((resolve, reject) => {
+      const client = get(`http://127.0.0.1:${privateServer.address().port}/api/core/api/fabric/v1/stream`, response => {
+        response.once("data", () => { response.destroy(); client.destroy(); resolve(); });
+      });
+      client.on("error", reject);
+    });
+    await stopped;
+    assert.equal(upstreamSignal.aborted, true);
+  } finally { await new Promise(resolve => privateServer.close(resolve)); }
+});
