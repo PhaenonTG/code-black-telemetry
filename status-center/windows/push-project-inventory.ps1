@@ -8,5 +8,8 @@ $inventory = $document.project_inventory
 $inventory | Add-Member -NotePropertyName source_host -NotePropertyValue 'phaenon3' -Force
 $payload = $inventory | ConvertTo-Json -Depth 20 -Compress
 if ([Text.Encoding]::UTF8.GetByteCount($payload) -gt 524288) { throw 'Discovery document exceeds limit.' }
-$payload | & ssh -o BatchMode=yes -o ConnectTimeout=10 codeblack-core 'python3 /srv/codeblack/services/project-landscape/receive_inventory.py phaenon3'
-if ($LASTEXITCODE -ne 0) { throw 'Core did not accept the discovery report.' }
+foreach ($target in @('codeblack-core', 'codeblack-core-lan')) {
+  $payload | & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 $target 'python3 /srv/codeblack/services/project-landscape/receive_inventory.py phaenon3'
+  if ($LASTEXITCODE -eq 0) { return }
+}
+throw 'Core did not accept the discovery report over either verified connection.'
