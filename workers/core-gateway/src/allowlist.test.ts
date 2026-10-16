@@ -11,6 +11,9 @@ describe("resolveRoute", () => {
     expect(resolveRoute("/api/storm-intel/v1/health")).toEqual(ALLOWLIST["/api/storm-intel/v1/health"]);
     expect(resolveRoute("/api/storm-intel/v1/point")).toEqual(ALLOWLIST["/api/storm-intel/v1/point"]);
     expect(resolveRoute("/api/forecast/v1/chase-setups")).toEqual(ALLOWLIST["/api/forecast/v1/chase-setups"]);
+    expect(resolveRoute("/api/forecast/v1/tornado-potential")).toEqual({
+      upstreamPath: "/api/forecast/v1/tornado-potential", allowedQueryParams: ["frame"],
+    });
     expect(resolveRoute("/api/forecast/v1/chase-setup")).toEqual(ALLOWLIST["/api/forecast/v1/chase-setup"]);
     expect(resolveRoute("/api/forecast/v1/chase-setup-policy")).toEqual({
       upstreamPath: "/api/forecast/v1/chase-setup-policy", allowedQueryParams: [],
@@ -29,6 +32,11 @@ describe("resolveRoute", () => {
 });
 
 describe("validateQueryParams", () => {
+  it("allows only retained frame identities for the independent map", () => {
+    const route = ALLOWLIST["/api/forecast/v1/tornado-potential"];
+    expect(validateQueryParams(route, new URL("https://internal/api/forecast/v1/tornado-potential?frame=2026101523-f02"))).toEqual({ ok: true });
+    expect(validateQueryParams(route, new URL("https://internal/api/forecast/v1/tornado-potential?frame=../../secret"))).toEqual({ ok: false, reason: "INVALID_FRAME" });
+  });
   const pointRoute = ALLOWLIST["/api/storm-intel/v1/point"];
   const noParamRoute = ALLOWLIST["/health"];
   const chaseRoute = ALLOWLIST["/api/forecast/v1/chase-setup"];

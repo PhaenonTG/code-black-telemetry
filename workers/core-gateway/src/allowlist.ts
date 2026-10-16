@@ -26,6 +26,7 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
   "/api/forecast/v1/verified-events": { upstreamPath: "/api/forecast/v1/verified-events", allowedQueryParams: ["latitude", "longitude", "radius_miles", "year"] },
   "/api/forecast/v1/hurricane-watch": { upstreamPath: "/api/forecast/v1/hurricane-watch", allowedQueryParams: [] },
   "/api/forecast/v1/chase-setups": { upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [] },
+  "/api/forecast/v1/tornado-potential": { upstreamPath: "/api/forecast/v1/tornado-potential", allowedQueryParams: ["frame"] },
   "/api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id", "revision"] },
   "/api/forecast/v1/chase-setup-review": { upstreamPath: "/api/forecast/v1/chase-setup-review", allowedQueryParams: [], methods: ["POST"], opsWrite: "review" },
   "/api/forecast/v1/chase-setup-decision": { upstreamPath: "/api/forecast/v1/chase-setup-decision", allowedQueryParams: [], methods: ["POST"], opsWrite: "decision" },
@@ -86,6 +87,10 @@ function parseFiniteNumber(value: string | null): number | null {
 // passes for them. Kept generic (keyed on upstreamPath) so a future parameterized route does
 // not silently skip validation.
 export function validateQueryParams(route: AllowlistRoute, url: URL): QueryValidationResult {
+  if (route.upstreamPath === "/api/forecast/v1/tornado-potential") {
+    const frame = url.searchParams.get("frame");
+    return frame === null || /^\d{10}-f\d{2}$/.test(frame) ? { ok: true } : { ok: false, reason: "INVALID_FRAME" };
+  }
   if (route.upstreamPath === "/api/forecast/v1/chase-setup") {
     if (!/^setup-\d{8}-[0-9a-f]{10}$/.test(url.searchParams.get("setup_id") ?? "")) {
       return { ok: false, reason: "INVALID_SETUP_ID" };

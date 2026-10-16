@@ -79,7 +79,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       const signature = hex(await crypto.subtle.sign("HMAC", key, encoder.encode([request.method, route.upstreamPath, timestamp, actor, role, bodyHash].join("\n"))));
       Object.assign(actorHeaders, { "X-Ops-User-Id": actor, "X-Ops-Role": role, "X-Ops-Timestamp": timestamp, "X-Ops-Signature": signature });
     }
-    return await env.CORE_VPC.fetch(targetUrl, {
+    const response = await env.CORE_VPC.fetch(targetUrl, {
       method: request.method,
       body,
       headers: {
@@ -89,7 +89,10 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       },
       signal: request.signal,
     });
+    if (!response.ok) console.warn("Core gateway upstream status", route.upstreamPath, response.status);
+    return response;
   } catch {
+    console.warn("Core gateway transport unavailable", route.upstreamPath);
     // Never surface the underlying exception (which could contain internal network detail) to
     // the caller -- map every VPC transport failure to one generic, safe reason.
     return jsonResponse(502, { error: "CORE_TRANSPORT_UNAVAILABLE" });

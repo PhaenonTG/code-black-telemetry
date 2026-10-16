@@ -5,7 +5,7 @@ export type PotentialPayload = {
   type: "FeatureCollection"; features: PotentialFeature[]; notice: string;
   frames: Array<{ frame_id: string; valid_time: string; run_time: string; forecast_hour: number }>;
   coverage?: { native_land_points_evaluated: number; display_cells_shaded: number; resolution_degrees: number };
-  automatic_aegis?: { status: string; checked_at?: string; setups: Array<{ setup_id: string; revision: number; status: string; summary?: string; reason?: string; completed_at?: string }> };
+  automatic_aegis?: { status: string; checked_at?: string; setups: Array<{ setup_id: string; revision: number; status: string; summary?: string; reason?: string; completed_at?: string; previous_summary?: string; previous_revision?: number }> };
 }
 export function parsePotential(value: unknown): PotentialPayload {
   const data = value as PotentialPayload
