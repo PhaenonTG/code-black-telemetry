@@ -32,6 +32,15 @@ def document(**changes):
 
 
 class ProjectAutomationTests(unittest.TestCase):
+    def test_completed_enabled_boot_job_requires_execution_evidence(self):
+        item = {"id": "boot", "name": "Boot", "host": "core", "unit": "boot.service"}
+        observed = {"state": "IDLE", "unit_file_state": "enabled", "condition_passed": True,
+                    "runtime_started_at": "start", "runtime_finished_at": "finish", "exit_status": "0", "result": "success"}
+        self.assertEqual(landscape.dynamic_service(item, document(), observed, True)["state"], "HEALTHY")
+        for change in ({"runtime_started_at": None}, {"condition_passed": False}, {"exit_status": "1"}, {"unit_file_state": "disabled"}):
+            self.assertEqual(landscape.dynamic_service(item, document(), {**observed, **change}, True)["state"], "UNKNOWN")
+        self.assertEqual(landscape.dynamic_service(item, document(), observed, False)["state"], "UNKNOWN")
+
     def test_new_manifest_appears_without_registry_or_restart(self):
         projects, coverage = landscape.reconcile([], [], {}, [], {"core": (document(), True)})
         self.assertEqual(projects[0]["id"], "test-project")
@@ -133,7 +142,7 @@ class ProjectAutomationTests(unittest.TestCase):
             manifest.write_text(json.dumps(MANIFEST))
             argv = ["deploy_with_status.py", "--host", "codeblack-core", "--manifest", str(manifest), "--unit", "codeblack-test", "--release", "test/v2", "--", "deploy-command"]
             reported = []
-            with patch.object(sys, "argv", argv), patch.object(wrapper, "git_value", side_effect=lambda *args: "abcdef1234567" if args[0] == "rev-parse" else ""), patch.object(wrapper, "report", side_effect=lambda host, payload: reported.append(copy.deepcopy(payload))), patch.object(wrapper.subprocess, "run", return_value=SimpleNamespace(returncode=17)):
+            with patch.object(sys, "argv", argv), patch.object(wrapper, "git_value", side_effect=lambda *args, **kwargs: "abcdef1234567" if args[0] == "rev-parse" else ""), patch.object(wrapper, "report", side_effect=lambda host, payload: reported.append(copy.deepcopy(payload))), patch.object(wrapper.subprocess, "run", return_value=SimpleNamespace(returncode=17)):
                 self.assertEqual(wrapper.main(), 17)
             self.assertEqual([r["result"] for r in reported], ["started", "failed"])
             self.assertEqual(reported[0]["attempt"], reported[1]["attempt"])

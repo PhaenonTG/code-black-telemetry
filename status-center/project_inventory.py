@@ -183,7 +183,7 @@ def discover_units(expected=(), user=False):
         raise RuntimeError("systemd inventory exceeds 256-unit limit")
     if not names:
         return {}
-    fields = ["Id", "LoadState", "ActiveState", "SubState", "Result", "Type", "ExecMainStartTimestamp", "WorkingDirectory", "ExecStart", "Environment", "Triggers"]
+    fields = ["Id", "LoadState", "ActiveState", "SubState", "Result", "Type", "ExecMainStartTimestamp", "ExecMainExitTimestamp", "ExecMainStatus", "UnitFileState", "ConditionResult", "WorkingDirectory", "ExecStart", "Environment", "Triggers"]
     raw = run(ctl + ["show", "--no-pager", "--property=" + ",".join(fields), *sorted(names)])
     result = {}
     for block in raw.strip().split("\n\n"):
@@ -195,7 +195,7 @@ def discover_units(expected=(), user=False):
         state = "UNKNOWN" if props.get("LoadState") != "loaded" else "DEGRADED" if active == "failed" else "HEALTHY" if active == "active" else "BUSY" if active in ("activating", "reloading") else "IDLE" if props.get("Type") == "oneshot" and props.get("Result") == "success" else "OFFLINE"
         release = release_of(props)
         result[name] = {"unit": name, "state": state, "scope": "user" if user else "system", "installed": props.get("LoadState") == "loaded", "active": active, "sub": props.get("SubState"),
-                        "result": props.get("Result"), "runtime_started_at": props.get("ExecMainStartTimestamp") or None,
+                        "result": props.get("Result"), "unit_file_state": props.get("UnitFileState"), "condition_passed": props.get("ConditionResult") == "yes", "exit_status": props.get("ExecMainStatus"), "runtime_finished_at": props.get("ExecMainExitTimestamp") or None, "runtime_started_at": props.get("ExecMainStartTimestamp") or None,
                         "release": release, "artifact_fingerprint": fingerprint(release), "triggers": [x for x in props.get("Triggers", "").split() if UNIT.fullmatch(x)],
                         "evidence": "systemd process state; functional health requires a registered probe"}
     return result

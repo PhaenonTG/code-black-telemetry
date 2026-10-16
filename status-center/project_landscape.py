@@ -151,10 +151,11 @@ def deployment(doc, unit, observation, fresh):
 
 def dynamic_service(item, doc, observation, fresh):
     state = (observation or {}).get("state", "UNKNOWN") if fresh else "UNKNOWN"
-    # Inactive one-shot jobs are healthy only with a live schedule and an observed successful run.
+    # Completed jobs need execution evidence; enabled boot jobs do not require a timer.
     if state == "IDLE":
         scheduled = any(u.get("state") == "HEALTHY" and item.get("unit") in u.get("triggers", []) for name, u in doc.get("units", {}).items() if name.endswith(".timer"))
-        state = "HEALTHY" if scheduled and observation.get("runtime_started_at") and observation.get("result") == "success" else "UNKNOWN"
+        boot_completed = observation.get("unit_file_state") == "enabled" and observation.get("condition_passed") and observation.get("runtime_finished_at") and str(observation.get("exit_status")) == "0"
+        state = "HEALTHY" if (scheduled or boot_completed) and observation.get("runtime_started_at") and observation.get("result") == "success" else "UNKNOWN"
     return {"id": item["id"], "name": item["name"], "host": item["host"], "state": state,
             "state_reason": f"{(observation or {}).get('active', 'unavailable')}/{(observation or {}).get('sub', 'unknown')}; process/schedule evidence only" if fresh else "Host discovery telemetry unavailable",
             "monitoring_kind": "PROCESS_ONLY", "deployment": deployment(doc, item.get("unit", ""), observation, fresh)}

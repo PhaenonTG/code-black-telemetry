@@ -74,6 +74,18 @@
       "host": "edge",
       "name": "Weather alert settings control",
       "unit": "codeblack-weather-alert-control.service"
+    },
+    {
+      "id": "edge-weather-ingest-job",
+      "host": "edge",
+      "name": "HRRR ingest job result",
+      "unit": "codeblack-weather-ingest.service"
+    },
+    {
+      "id": "edge-weather-watcher-job",
+      "host": "edge",
+      "name": "HRRR publication watcher job result",
+      "unit": "codeblack-weather-publication-watcher.service"
     }
   ],
   "links": [

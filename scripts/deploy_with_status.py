@@ -13,8 +13,8 @@ sys.path.insert(0, str(ROOT / "status-center"))
 from project_inventory import validate_manifest, UNIT  # noqa: E402
 
 
-def git_value(*args):
-    result = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, timeout=10)
+def git_value(*args, root=ROOT):
+    result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=10)
     return result.stdout.strip() if result.returncode == 0 else None
 
 
@@ -36,6 +36,7 @@ def main():
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--unit", required=True)
     parser.add_argument("--release", required=True, help="family/version under /srv/codeblack/releases")
+    parser.add_argument("--source-root", default=str(ROOT), help="Source checkout whose Git revision is being deployed")
     parser.add_argument("--report-only", choices=("succeeded", "failed"))
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -49,7 +50,7 @@ def main():
     if not command and not args.report_only:
         parser.error("Supply the deployment command after --")
     payload = {"manifest": manifest, "host": args.host_id, "unit": unit, "release": args.release,
-               "commit": git_value("rev-parse", "HEAD"), "dirty": bool(git_value("status", "--porcelain")),
+               "commit": git_value("rev-parse", "HEAD", root=args.source_root), "dirty": bool(git_value("status", "--porcelain", root=args.source_root)),
                "attempt": uuid.uuid4().hex, "result": "started"}
     try:
         report(args.host, payload)
