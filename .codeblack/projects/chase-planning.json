@@ -1,0 +1,78 @@
+{
+  "schema": "codeblack.project.v1",
+  "id": "chase-planning",
+  "name": "Chase planning & reviews",
+  "summary": "Chase model/surface ingestion, SPC setup drafts, invitations and approval-gated reviews.",
+  "phase": "DEPLOYED / PRIVATE WORKFLOWS",
+  "note": "Registration describes deployed scope. Process/schedule checks do not qualify forecast guidance; review approval gates remain authoritative.",
+  "services": [
+    {
+      "id": "core-chase-ingestion",
+      "host": "core",
+      "name": "Chase model and surface ingestion",
+      "unit": "codeblack-chase-ingestion.service"
+    },
+    {
+      "id": "core-chase-ingestion-schedule",
+      "host": "core",
+      "name": "Chase model and surface ingestion schedule",
+      "unit": "codeblack-chase-ingestion.timer"
+    },
+    {
+      "id": "core-chase-setup-discovery",
+      "host": "core",
+      "name": "SPC chase setup draft discovery",
+      "unit": "codeblack-chase-setup-discovery.service"
+    },
+    {
+      "id": "core-chase-setup-discovery-schedule",
+      "host": "core",
+      "name": "SPC chase setup draft discovery schedule",
+      "unit": "codeblack-chase-setup-discovery.timer"
+    },
+    {
+      "id": "core-chase-setup-ntfy",
+      "host": "core",
+      "name": "Chase setup invitations",
+      "unit": "codeblack-chase-setup-ntfy.service"
+    },
+    {
+      "id": "core-chase-setup-ntfy-schedule",
+      "host": "core",
+      "name": "Chase setup invitations schedule",
+      "unit": "codeblack-chase-setup-ntfy.timer"
+    },
+    {
+      "id": "core-chase-setup-paid-review",
+      "host": "core",
+      "name": "Approved Chase Day review dispatcher",
+      "unit": "codeblack-chase-setup-paid-review.service"
+    },
+    {
+      "id": "core-chase-setup-paid-review-schedule",
+      "host": "core",
+      "name": "Approved Chase Day review dispatcher schedule",
+      "unit": "codeblack-chase-setup-paid-review.timer"
+    },
+    {
+      "id": "phaenon3-chase-review-worker",
+      "host": "phaenon3",
+      "name": "Approved Chase Day review worker",
+      "task": "CodeBlack-ChasePaidReview"
+    }
+  ],
+  "links": [
+    {
+      "id": "analysis",
+      "name": "Setup review",
+      "url": "https://ops-private.codeblackwx.com/analysis",
+      "access": "PRIVATE"
+    },
+    {
+      "id": "chase-desk",
+      "name": "Chase Desk",
+      "url": "https://ops-private.codeblackwx.com/workspace/chase",
+      "access": "PRIVATE"
+    }
+  ]
+}

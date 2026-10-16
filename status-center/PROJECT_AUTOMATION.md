@@ -36,6 +36,15 @@ Collectors load it automatically. Registration-only projects can be published
 through the installed helper's `register` command over SSH, with JSON on stdin.
 No dashboard restart or browser build is needed for new entries.
 
+For a reviewed batch of project assignments, run
+`py -3 status-center/ops/publish_project_manifests.py` from Phaenon3. It validates
+all manifests and rejects conflicting service identities before writing any
+host. It publishes through the existing SSH access to Core/Edge and updates
+Phaenon3's local metadata atomically. Existing collectors load the changes within
+their normal cadence. Metadata registration does not alter application runtime
+code or overwrite a running application's source/deployment receipt. See
+`PROJECT_ASSIGNMENTS.md` for the reviewed ownership of the initial 47 findings.
+
 ## Report a deployment
 
 ```sh

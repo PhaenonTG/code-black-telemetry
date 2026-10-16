@@ -38,6 +38,42 @@
       "host": "core",
       "name": "Nick Mesonet Alerts",
       "unit": "codeblack-mesonet-alerts.service"
+    },
+    {
+      "id": "core-hrrr-ingest",
+      "host": "core",
+      "name": "Core HRRR forecast ingestion",
+      "unit": "codeblack-hrrr-ingest.service"
+    },
+    {
+      "id": "core-ncei-sync",
+      "host": "core",
+      "name": "NCEI Storm Events verification sync",
+      "unit": "codeblack-ncei-sync.service"
+    },
+    {
+      "id": "core-ncei-sync-schedule",
+      "host": "core",
+      "name": "NCEI Storm Events verification sync schedule",
+      "unit": "codeblack-ncei-sync.timer"
+    },
+    {
+      "id": "core-weather-forwarder",
+      "host": "core",
+      "name": "Weather snapshot forwarder",
+      "unit": "codeblack-weather-forwarder.service"
+    },
+    {
+      "id": "core-weather-forwarder-schedule",
+      "host": "core",
+      "name": "Weather snapshot forwarder schedule",
+      "unit": "codeblack-weather-forwarder.timer"
+    },
+    {
+      "id": "edge-weather-alert-control",
+      "host": "edge",
+      "name": "Weather alert settings control",
+      "unit": "codeblack-weather-alert-control.service"
     }
   ],
   "links": [

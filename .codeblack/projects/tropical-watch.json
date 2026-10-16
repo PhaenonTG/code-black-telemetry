@@ -1,0 +1,66 @@
+{
+  "schema": "codeblack.project.v1",
+  "id": "tropical-watch",
+  "name": "Hurricane & tropical watch",
+  "summary": "NHC/NWS hurricane watch, tropical discovery, storm-specific evidence and local Aegis reviews.",
+  "phase": "DEPLOYED / PRIVATE WORKFLOWS",
+  "note": "Official source freshness and storm evidence remain separate from process health. Registration does not enable alerts or approve a review.",
+  "services": [
+    {
+      "id": "core-hurricane-watch",
+      "host": "core",
+      "name": "NHC and NWS hurricane watch",
+      "unit": "codeblack-hurricane-watch.service"
+    },
+    {
+      "id": "core-hurricane-watch-schedule",
+      "host": "core",
+      "name": "NHC and NWS hurricane watch schedule",
+      "unit": "codeblack-hurricane-watch.timer"
+    },
+    {
+      "id": "core-tropical-discovery",
+      "host": "core",
+      "name": "NHC tropical development discovery",
+      "unit": "codeblack-tropical-discovery.service"
+    },
+    {
+      "id": "core-tropical-discovery-schedule",
+      "host": "core",
+      "name": "NHC tropical development discovery schedule",
+      "unit": "codeblack-tropical-discovery.timer"
+    },
+    {
+      "id": "core-tropical-review",
+      "host": "core",
+      "name": "Local Aegis tropical evidence review",
+      "unit": "codeblack-tropical-review.service"
+    },
+    {
+      "id": "core-tropical-review-schedule",
+      "host": "core",
+      "name": "Local Aegis tropical evidence review schedule",
+      "unit": "codeblack-tropical-review.timer"
+    },
+    {
+      "id": "core-tropical-systems",
+      "host": "core",
+      "name": "Storm-specific NHC and model evidence",
+      "unit": "codeblack-tropical-systems.service"
+    },
+    {
+      "id": "core-tropical-systems-schedule",
+      "host": "core",
+      "name": "Storm-specific NHC and model evidence schedule",
+      "unit": "codeblack-tropical-systems.timer"
+    }
+  ],
+  "links": [
+    {
+      "id": "hurricane",
+      "name": "Hurricane Watch",
+      "url": "https://ops-private.codeblackwx.com/hurricane",
+      "access": "PRIVATE"
+    }
+  ]
+}

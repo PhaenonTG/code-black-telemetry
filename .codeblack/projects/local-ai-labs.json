@@ -4,7 +4,7 @@
   "name": "Local AI & Spencer Labs",
   "summary": "Core and Phaenon3 inference, model work, Media Lab, and image sandbox.",
   "phase": "LIVE / EXPERIMENTAL",
-  "note": "Phaenon3 reachability can make this status unknown; it does not establish a model failure.",
+  "note": "Includes the controlled weather/radar VLM adapter pipeline as model-development work. Registration starts no training; Phaenon3 reachability does not establish a model failure.",
   "services": [
     {
       "id": "core-ai",
@@ -80,6 +80,12 @@
       "host": "phaenon3",
       "name": "Wan 2.2 Q4 Download Recovery",
       "task": "Spencer Labs Wan 2.2 Q4 Download Recovery"
+    },
+    {
+      "id": "phaenon3-weather-radar-vlm-training",
+      "host": "phaenon3",
+      "name": "Weather/radar VLM adapter training pipeline",
+      "task": "CodeBlack Weather Radar VLM Pipeline"
     }
   ],
   "links": [
