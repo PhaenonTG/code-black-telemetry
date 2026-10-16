@@ -32,8 +32,8 @@ async function stage(resume=false){
  ssh(`test ! -e '${RELEASE}' && ${resume?`test -d '${BACKUP}' && sudo -n cmp -s /etc/systemd/system/codeblack-private-producer-shadow.service '${BACKUP}/producer.unit'`:`test ! -e '${BACKUP}'`} && test ! -e /srv/codeblack/config/private-producer/control-primary.env && test ! -e /etc/systemd/system/codeblack-private-ops.service.d/zzzz-private-producer-primary.conf && test ! -e /etc/systemd/system/codeblack-private-producer-shadow.service.d/zzzz-private-producer-primary.conf`);
  run(NODE,['scripts/build-private-producer.mjs'],{cwd:PACKAGE});
  const archive='C:/CodeBlack/backups/private-producer-primary-74f6c69-20261015.tgz';
- if(fs.existsSync(archive))throw Error('ARCHIVE_ALREADY_EXISTS');
- run('tar',['-czf',archive,'-C',PACKAGE,'dist-private','scripts/private-producer-shadow.mjs']);
+ if(fs.existsSync(archive)&&!resume)throw Error('ARCHIVE_ALREADY_EXISTS');
+ if(!resume)run('tar',['-czf',archive,'-C',PACKAGE,'dist-private','scripts/private-producer-shadow.mjs']);
  run('scp',[archive,'codeblack-core:/tmp/private-producer-primary-74f6c69-20261015.tgz']);
  ssh(`sudo -n install -d -m 0700 '${BACKUP}' && sudo -n cp -p /etc/systemd/system/codeblack-private-producer-shadow.service '${BACKUP}/producer.unit' && (if sudo -n test -f /srv/codeblack/data/private-producer-shadow/state.json; then sudo -n cp -p /srv/codeblack/data/private-producer-shadow/state.json '${BACKUP}/state.before.json'; else sudo -n touch '${BACKUP}/state.was-absent'; fi) && sudo -n cp -p /etc/systemd/system/codeblack-private-ops.service.d/zzzz-landscape.conf '${BACKUP}/ops.override' && sudo -n install -d -m 0755 '${RELEASE}' && sudo -n tar -xzf /tmp/private-producer-primary-74f6c69-20261015.tgz -C '${RELEASE}' && sudo -n chown -R root:root '${RELEASE}' && sudo -n chmod -R a+rX '${RELEASE}'`);
  ssh('sudo -n install -m 0600 /dev/stdin /srv/codeblack/config/private-producer/control-primary.env',`OPS_PRIVATE_PRODUCER_CONTROLS_ENABLED=true\nOPS_PRIVATE_PRODUCER_OPERATOR_IDS=${ids}\n`);
