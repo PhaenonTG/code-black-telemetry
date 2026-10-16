@@ -67,3 +67,6 @@ Later coverage findings remain visible. This assignment does not suppress unknow
 - Tropical review was enabled but stopped; its timer was started and the next local review completed successfully.
 - The newest Core backup on Edge passed the existing inventory/completion-marker verification. This does not establish a restore test.
 - Disabled temporary KRAX watch, disabled legacy weather forwarder, failed OBS live test, and disconnected ESP reports remain visible pending purpose/hardware verification.
+
+- Phaenon3 Tailscale reports a coordination-server connection fault while direct IPv4/IPv6 control-plane checks and its protocol handshake succeed. Refreshing endpoint discovery did not resolve it; restarting the Windows Tailscale service requires an administrator session. No VPN/security settings were changed.
+- The old OBS live test has no triggers and last failed on September 30; it was not relaunched because a test may affect live output.
