@@ -14,6 +14,14 @@ export type SetupDraft = {
   official: { risk_label: string; source_url: string; issued_at: string }
   model: { status: string; source: string; notice: string; target_points: Array<{ latitude: number; longitude: number; valid_time: string; run_time: string; score_index: number; classification: string }> }
   review: { required: boolean; decision: string | null; reason: string }
+  tornado_tracking_map?: {
+    schema: string; status: string; boundary_source: string; source_url: string | null
+    issued_at: string | null; valid_from: string; valid_until: string
+    aegis_status: string; aegis_summary: string | null; numeric_point_samples: number
+    matched_numeric_fields: number; notice: string
+    setup_focus_numeric_lead: { lead_model: string; valid_time: string } | null
+    features: Array<{ type: "Feature"; geometry: { type: "Polygon" | "MultiPolygon"; coordinates: number[][][] | number[][][][] }; properties: { official_risk_label: string; official_risk_code: number; tracking_state: string; numeric_model_context: boolean } }>
+  }
 }
 
 async function get<T>(config: OpsCoreConfig, path: string, signal?: AbortSignal): Promise<T> {

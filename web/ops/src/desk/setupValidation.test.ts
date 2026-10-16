@@ -17,4 +17,14 @@ describe("private setup payload integrity", () => {
     expect(() => validateSetupDraft({ ...draft, model: { ...draft.model, status: {} } }, id)).toThrow()
     expect(() => validateSetupDraft({ ...draft, official: { source_url: "javascript:alert(1)" } }, id)).toThrow()
   })
+  it("accepts a sourced tornado tracking polygon and rejects malformed geometry", () => {
+    const draft = { setup_id: id, summary: "Test", generated_at: at, bounds: [-96, 35, -92, 38],
+      model: { target_points: [] }, official: {}, review: {}, tornado_tracking_map: {
+        schema: "codeblack.chase.tornado-tracking-map.v1", features: [{ type: "Feature",
+          geometry: { type: "Polygon", coordinates: [[[-96, 35], [-95, 35], [-95, 36], [-96, 35]]] },
+          properties: { official_risk_label: "5%", official_risk_code: 5 } }] } }
+    expect(validateSetupDraft(draft, id).tornado_tracking_map?.features).toHaveLength(1)
+    draft.tornado_tracking_map.features[0].geometry.coordinates[0][0][0] = 300
+    expect(() => validateSetupDraft(draft, id)).toThrow("Malformed tornado tracking map")
+  })
 })

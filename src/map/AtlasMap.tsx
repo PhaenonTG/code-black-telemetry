@@ -133,6 +133,7 @@ type AtlasMapProps = {
   layerScope?: "shared" | "situation" | "radar";
   deskControls?: boolean;
   contextTargets?: Array<{ lat: number; lon: number }>;
+  contextRiskAreas?: Array<{ type: "Feature"; geometry: { type: "Polygon" | "MultiPolygon"; coordinates: number[][][] | number[][][][] }; properties: { official_risk_label: string; official_risk_code: number; tracking_state: string; numeric_model_context: boolean } }>;
   contextBounds?: [number, number, number, number] | null;
   contextFocus?: { lat: number; lon: number } | null;
   // Optional published dominant-echo observation. Never a tornado or forecast marker.
@@ -255,6 +256,7 @@ export function AtlasMap({
   deskControls = false,
   teamPositions: suppliedTeamPositions,
   contextTargets,
+  contextRiskAreas,
   contextBounds,
   contextFocus,
   contextEcho,
@@ -801,6 +803,20 @@ export function AtlasMap({
       map.addLayer({ id: "atlas-context-targets", type: "circle", source: "atlas-context-targets", paint: { "circle-radius": 7, "circle-color": "#15171b", "circle-stroke-color": "#e62429", "circle-stroke-width": 2 } });
     }
   }, [contextTargets, loaded]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    const data = { type: "FeatureCollection" as const, features: contextRiskAreas ?? [] };
+    const source = map.getSource("atlas-context-tornado-outlook") as mapboxgl.GeoJSONSource | undefined;
+    if (source) { source.setData(data as mapboxgl.GeoJSONSourceSpecification["data"]); return; }
+    if (!data.features.length) return;
+    map.addSource("atlas-context-tornado-outlook", { type: "geojson", data: data as mapboxgl.GeoJSONSourceSpecification["data"] });
+    const before = map.getLayer("atlas-context-targets") ? "atlas-context-targets" : undefined;
+    map.addLayer({ id: "atlas-context-tornado-fill", type: "fill", source: "atlas-context-tornado-outlook",
+      paint: { "fill-color": ["step", ["get", "official_risk_code"], "#e6b653", 5, "#e87840", 10, "#df4e52", 15, "#b73b81"], "fill-opacity": 0.19 } }, before);
+    map.addLayer({ id: "atlas-context-tornado-line", type: "line", source: "atlas-context-tornado-outlook",
+      paint: { "line-color": ["step", ["get", "official_risk_code"], "#e6b653", 5, "#e87840", 10, "#df4e52", 15, "#b73b81"], "line-width": 2.1, "line-opacity": 0.85 } }, before);
+  }, [contextRiskAreas, loaded]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;

@@ -11,7 +11,7 @@ import { MapSituationPanel } from "../components/MapSituationPanel"
 import { Panel } from "./DeskPanels"
 import { ageLabel, freshUnitLocation, numberField } from "./format"
 
-export function DeskMap({ radar = false, active = true, receiveEvents = true, targetPoints, bounds, onRadarFrame }: { radar?: boolean; active?: boolean; receiveEvents?: boolean; targetPoints?: Array<{ lat: number; lon: number }>; bounds?: [number, number, number, number]; onRadarFrame?: (frame: RadarFrame | null) => void }) {
+export function DeskMap({ radar = false, active = true, receiveEvents = true, targetPoints, riskAreas, bounds, onRadarFrame }: { radar?: boolean; active?: boolean; receiveEvents?: boolean; targetPoints?: Array<{ lat: number; lon: number }>; riskAreas?: NonNullable<import("./setupSources").SetupDraft["tornado_tracking_map"]>["features"]; bounds?: [number, number, number, number]; onRadarFrame?: (frame: RadarFrame | null) => void }) {
   const { reference, referenceLabel, activeUnit, unitPosition, units, now, alerts, preferences, updatePreferences, pinnedCameras, togglePin, choosePoint, setRadarFrame, cell } = useDesk()
   const { selectedPoint } = useCoreOps()
   const [camera, setCamera] = useState<TrafficCamera | null>(null)
@@ -33,7 +33,7 @@ export function DeskMap({ radar = false, active = true, receiveEvents = true, ta
     return !point || unit.unit_id === activeUnit?.unit_id ? [] : [{ ...point, id: unit.unit_id, name: unit.operator_name || unit.display_name, updatedAtText: ageLabel(unit.last_seen, now), group: unit.display_name, phone: "", email: "" }]
   }), [units, activeUnit?.unit_id, now])
   return <Panel title={radar ? "Radar" : "Situation"} meta={<Link to={radar ? "/radar" : "/map"}>Full workspace ↗</Link>} className={`desk-map ${radar ? "desk-map--radar" : ""}`}>
-    <div className="desk-map__screen"><AtlasMap deskControls active={active} gps={gps} teamPositions={teamPositions} rangeRings="off" statusLines={[referenceLabel]} controlsVariant={radar ? "full" : "compact"} layerScope={radar ? "radar" : "situation"} contextTargets={targetPoints} contextBounds={bounds} contextFocus={targetPoints?.some((point) => point.lat === selectedPoint?.lat && point.lon === selectedPoint?.lon) ? selectedPoint : null} contextEcho={echo} alerts={alerts} selectedPoint={selectedPoint} onPointSelect={(point) => choosePoint(point)} onRadarFrame={radar ? receiveFrame : undefined} />
+    <div className="desk-map__screen"><AtlasMap deskControls active={active} gps={gps} teamPositions={teamPositions} rangeRings="off" statusLines={[referenceLabel]} controlsVariant={radar ? "full" : "compact"} layerScope={radar ? "radar" : "situation"} contextTargets={targetPoints} contextRiskAreas={riskAreas} contextBounds={bounds} contextFocus={targetPoints?.some((point) => point.lat === selectedPoint?.lat && point.lon === selectedPoint?.lon) ? selectedPoint : null} contextEcho={echo} alerts={alerts} selectedPoint={selectedPoint} onPointSelect={(point) => choosePoint(point)} onRadarFrame={radar ? receiveFrame : undefined} />
     {camera && <MapCameraViewer camera={camera} onClose={() => setCamera(null)} pinned={pinnedCameras.some((row) => row.id === camera.id)} onTogglePin={() => togglePin(camera)} lowBandwidth={preferences.snapshotMode} onLowBandwidthChange={(snapshotMode) => updatePreferences({ snapshotMode })} />}
     {selection && <MapSituationPanel selection={selection} onClose={() => setSelection(null)} />}</div>
   </Panel>
