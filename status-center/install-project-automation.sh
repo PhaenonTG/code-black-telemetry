@@ -7,6 +7,7 @@ ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 if [ "$HOST_ID" = core ]; then
   sudo install -d -m 0755 /srv/codeblack/services/project-landscape /srv/codeblack/config/project-landscape/projects.d
   sudo install -m 0644 "$ROOT/status-center/project_inventory.py" /srv/codeblack/services/project-landscape/project_inventory.py
+  sudo install -m 0644 "$ROOT/status-center/receive_inventory.py" /srv/codeblack/services/project-landscape/receive_inventory.py
   for manifest in "$ROOT"/.codeblack/projects/*.json; do
     sudo python3 /srv/codeblack/services/project-landscape/project_inventory.py register < "$manifest" >/dev/null
   done

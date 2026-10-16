@@ -1,9 +1,19 @@
 """Merge declared projects with fresh deployment and discovery evidence."""
 from copy import deepcopy
+import hashlib
+import re
 
 
 def unit_name(value):
     return value if value.endswith((".service", ".timer")) else value + ".service"
+
+
+def binding(config, host, inventories):
+    task = config.get("task")
+    document = (inventories.get(host) or ({}, False))[0] or {}
+    if task or (config.get("unit") and (document.get("platform") == "windows" or host == "phaenon3")):
+        return "task:\\" + (task or config["unit"]).lstrip("\\")
+    return unit_name(config["unit"]) if config.get("unit") else None
 
 
 def reconcile(base_projects, service_config, service_by_id, links, inventories):
@@ -16,7 +26,7 @@ def reconcile(base_projects, service_config, service_by_id, links, inventories):
         doc, fresh = info
         doc = doc or {}
         available = bool(fresh and doc.get("available"))
-        host_status.append({"host": host, "state": "CURRENT" if available else "UNAVAILABLE", "observed_at": doc.get("generated_at")})
+        host_status.append({"host": host, "state": "CURRENT" if available else "UNAVAILABLE", "observed_at": doc.get("generated_at"), "transport": doc.get("transport", "COLLECTOR")})
         if not available:
             findings.append({"kind": "DISCOVERY_UNAVAILABLE", "host": host, "detail": "Inventory cannot establish new deployments on this host."})
         for error in doc.get("errors", []):
@@ -33,7 +43,7 @@ def reconcile(base_projects, service_config, service_by_id, links, inventories):
         for sid, config in configs.items():
             if config.get("host") != host or not config.get("unit") or sid not in services:
                 continue
-            unit = unit_name(config["unit"])
+            unit = binding(config, host, inventories)
             observation = doc.get("units", {}).get(unit)
             services[sid] = {**services[sid], "deployment": deployment(doc, unit, observation, available)}
     for pid, manifest in manifests.items():
@@ -51,15 +61,16 @@ def reconcile(base_projects, service_config, service_by_id, links, inventories):
             if sid not in services:
                 doc, fresh = inventories.get(host, ({}, False))
                 doc = doc or {}
-                observation = doc.get("units", {}).get(item.get("unit"))
+                observation = doc.get("units", {}).get(binding(item, host, inventories))
                 services[sid] = dynamic_service(item, doc, observation, bool(fresh and doc.get("available")))
-            if item.get("unit"):
-                configs[sid] = {**configs.get(sid, {}), "id": sid, "host": host, "unit": item["unit"]}
+            if item.get("unit") or item.get("task"):
+                configs[sid] = {**configs.get(sid, {}), **item}
+                key = binding(item, host, inventories)
                 doc, fresh = inventories.get(host, ({}, False))
-                observation = (doc or {}).get("units", {}).get(item["unit"])
-                services[sid] = {**services[sid], "deployment": deployment(doc or {}, item["unit"], observation, bool(fresh and (doc or {}).get("available")))}
+                observation = (doc or {}).get("units", {}).get(key)
+                services[sid] = {**services[sid], "deployment": deployment(doc or {}, key, observation, bool(fresh and (doc or {}).get("available")))}
                 if fresh and (doc or {}).get("available") and (not observation or not observation.get("installed", True)):
-                    findings.append({"kind": "MISSING_UNIT", "host": host, "detail": f"{item['unit']} is declared but not installed."})
+                    findings.append({"kind": "MISSING_UNIT", "host": host, "detail": f"{key} is declared but not installed."})
             elif sid not in service_by_id:
                 findings.append({"kind": "UNMONITORED_SERVICE", "host": host, "detail": f"{sid} has neither a functional probe nor a process check."})
         for link in manifest["links"]:
@@ -68,7 +79,7 @@ def reconcile(base_projects, service_config, service_by_id, links, inventories):
             if link["id"] not in entry["link_ids"]:
                 entry["link_ids"].append(link["id"])
     scoped = {sid for project in entries.values() for sid in project["service_ids"]}
-    covered_units = {(config["host"], unit_name(config["unit"])) for sid, config in configs.items() if sid in scoped and config.get("unit")}
+    covered_units = {(config["host"], binding(config, config["host"], inventories)) for sid, config in configs.items() if sid in scoped and (config.get("unit") or config.get("task"))}
     for host, (doc, _fresh) in inventories.items():
         for unit, observed in (doc or {}).get("units", {}).items():
             if unit.endswith(".timer") and (host, unit) in covered_units:
@@ -79,10 +90,12 @@ def reconcile(base_projects, service_config, service_by_id, links, inventories):
         available = bool(fresh and doc.get("available"))
         units = doc.get("units", {})
         for unit, observation in units.items():
-            if not unit.startswith("codeblack") or (host, unit) in covered_units:
+            if not (unit.startswith("codeblack") or observation.get("scope") in ("windows-task", "windows-service")) or (host, unit) in covered_units:
                 continue
             # A service and its timer form one discovered project.
             stem = unit.rsplit(".", 1)[0]
+            if observation.get("scope", "").startswith("windows-"):
+                stem = re.sub(r"[^a-z0-9-]+", "-", unit.lower()).strip("-")[:65] + "-" + hashlib.sha256(unit.encode()).hexdigest()[:8]
             pid = f"discovered-{host}-{stem}"
             sid = f"auto-{host}-{unit}"
             item = {"id": sid, "name": unit, "host": host, "unit": unit}

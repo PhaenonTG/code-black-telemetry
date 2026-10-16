@@ -50,7 +50,8 @@
     {
       "id": "silas-aegis-notify",
       "host": "phaenon3",
-      "name": "Silas / AEGIS Notify Watcher"
+      "name": "Silas / AEGIS Notify Watcher",
+      "task": "CodeBlack-Silas-Aegis-Notify"
     },
     {
       "id": "private-ops",

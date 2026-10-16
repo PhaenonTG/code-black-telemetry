@@ -37,6 +37,7 @@ from http.cookies import SimpleCookie
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import collector  # noqa: E402
 import project_landscape  # noqa: E402
+import project_inventory  # noqa: E402
 
 VERSION = "1.0.4"
 SCHEMA = "codeblack.status.v1"
@@ -1315,6 +1316,9 @@ def build_status():
         inventory = (document or {}).get("project_inventory")
         observed = parse_ts((inventory or {}).get("generated_at"))
         inventories[host_id] = (inventory, bool(fresh and observed and now() - observed < 180))
+        pushed = project_inventory.external_inventory(os.path.join(STATE_DIR, "external-project-inventory", host_id + ".json"), host_id)
+        if pushed and (not inventories[host_id][1] or parse_ts(pushed["generated_at"]) > (observed or 0)):
+            inventories[host_id] = (pushed, True)
     projects, project_coverage = build_projects(sby, links, inventories, with_coverage=True)
     history = PROJECT_HISTORY.summary(projects)
     for project in projects:

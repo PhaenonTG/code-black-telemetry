@@ -138,6 +138,39 @@ class ProjectAutomationTests(unittest.TestCase):
             self.assertEqual([r["result"] for r in reported], ["started", "failed"])
             self.assertEqual(reported[0]["attempt"], reported[1]["attempt"])
 
+    def test_windows_task_health_requires_an_observed_run_and_schedule(self):
+        rows = [{"kind": "task", "name": "\\CodeBlack-NeverRun", "state": "Ready", "result": 0, "last_run": None, "scheduled": True},
+                {"kind": "task", "name": "\\CodeBlack-Ready", "state": "Ready", "result": 0, "last_run": "2026-10-15T00:00:00Z", "scheduled": True},
+                {"kind": "task", "name": "\\CodeBlack-Failed", "state": "Ready", "result": 1, "last_run": "2026-10-15T00:00:00Z", "scheduled": True},
+                {"kind": "service", "name": "CodeBlack-Service", "state": "Running", "Arguments": "do-not-expose"}]
+        units = inventory.normalize_windows(rows)
+        self.assertEqual(units["task:\\CodeBlack-NeverRun"]["state"], "UNKNOWN")
+        self.assertEqual(units["task:\\CodeBlack-Ready"]["state"], "HEALTHY")
+        self.assertEqual(units["task:\\CodeBlack-Failed"]["state"], "DEGRADED")
+        self.assertNotIn("do-not-expose", json.dumps(units))
+
+    def test_windows_registered_tasks_are_not_duplicate_discoveries(self):
+        config = [{"id": "ai", "host": "phaenon3", "unit": "CodeBlack-AI-Router"}]
+        project = {"id": "ai", "name": "AI", "phase": "DEVELOPMENT", "summary": "AI", "note": "AI", "service_ids": ["ai"], "link_ids": []}
+        services = {"ai": {"id": "ai", "name": "AI", "host": "phaenon3", "state": "UNKNOWN", "state_reason": "No HTTP report"}}
+        units = inventory.normalize_windows([{"kind": "task", "name": "\\CodeBlack-AI-Router", "state": "Running"}, {"kind": "task", "name": "\\CodeBlack-New", "state": "Running"}])
+        doc = document(platform="windows", projects=[], units=units)
+        projects, coverage = landscape.reconcile([project], config, services, [], {"phaenon3": (doc, True)})
+        self.assertEqual(len(projects), 2)
+        self.assertEqual(projects[0]["health"], "UNKNOWN")  # no invented HTTP success
+        self.assertEqual(coverage["discovered_projects"], 1)
+
+    def test_outbound_inventory_rejects_stale_wrong_host_and_future_reports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "report.json"
+            value = document(source_host="phaenon3", platform="windows", projects=[])
+            inventory.atomic_json(path, value)
+            at = inventory.datetime.fromisoformat(value["generated_at"].replace("Z", "+00:00")).timestamp()
+            self.assertEqual(inventory.external_inventory(path, "phaenon3", at=at)["transport"], "SSH PUSH")
+            self.assertIsNone(inventory.external_inventory(path, "phaenon3", at=at+181))
+            self.assertIsNone(inventory.external_inventory(path, "phaenon3", at=at-60))
+            self.assertIsNone(inventory.external_inventory(path, "core", at=at))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,7 +7,9 @@ $ErrorActionPreference = "Stop"
 $src = Split-Path -Parent $MyInvocation.MyCommand.Path | Split-Path -Parent
 $dst = "C:\CodeBlack\services\status-collector"
 New-Item -ItemType Directory -Force $dst | Out-Null
-Copy-Item "$src\collector.py","$src\registry.json" $dst -Force
+Copy-Item "$src\collector.py","$src\project_inventory.py","$src\registry.json" $dst -Force
+New-Item -ItemType Directory -Force "$dst\windows" | Out-Null
+Copy-Item "$src\windows\discover-projects.ps1" "$dst\windows\discover-projects.ps1" -Force
 $py = (Get-Command pythonw.exe -ErrorAction SilentlyContinue).Source
 if (-not $py) { $py = "C:\Users\glenn\AppData\Local\Programs\Python\Python312\pythonw.exe" }
 $action = New-ScheduledTaskAction -Execute $py -Argument "`"$dst\collector.py`" --host phaenon3" -WorkingDirectory $dst

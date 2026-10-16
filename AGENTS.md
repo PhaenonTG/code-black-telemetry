@@ -2,7 +2,7 @@
 
 Every new deployable Code Black project must include a `codeblack.project.v1`
 manifest under `.codeblack/projects/` with its host IDs, service IDs, systemd
-units and operator links. Use existing project IDs when extending an existing
+units (or Windows scheduled task names) and operator links. Use existing project IDs when extending an existing
 project. Preserve declared planning milestones; runtime presence is not release
 qualification.
 
@@ -13,8 +13,10 @@ before deploying so the running version can be attributed accurately. Include
 the actual health check in the wrapped command; a copy or restart alone is not
 proof of a successful deployment.
 
-The Core and Edge collectors discover installed Code Black systemd units and
-running release labels automatically. Inspect the Status Center coverage panel
+Core and Edge discover installed Code Black systemd units; Phaenon3 discovers
+Code Black/Spencer Labs scheduled tasks and Windows services. The Windows
+collector also sends bounded discovery reports through existing SSH access.
+Inspect the Status Center coverage panel
 after deploying. Unregistered units remain visible as discovered/unverified;
 register their purpose and functional checks before treating them as qualified.
 
