@@ -58,6 +58,7 @@ export default function App() {
                         <Route path="/producer" element={<ProducerWorkspace />} />
                         <Route path="/workspace/chase" element={<ChaseWorkspace />} />
                         <Route path="/analysis" element={<AnalysisWorkspace />} />
+                        <Route path="/analysis/potential" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/drafts" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/drafts/:setupId" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/briefings" element={<AnalysisWorkspace />} />

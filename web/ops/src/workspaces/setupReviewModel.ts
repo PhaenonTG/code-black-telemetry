@@ -3,6 +3,7 @@ export type AdvisoryReview = {
   supporting_factors?: string[]; limiting_factors?: string[]; uncertainties?: string[];
   missing_information?: string[]; attention?: string[]; primary_hazards?: string[];
   storm_mode?: string; initiation?: string;
+  automatic?: boolean; completed_at?: string;
 };
 export type SetupDecision = { id: string; decision: string; note: string; actor_role: string; decided_at: string; revision: number };
 export type PaidSetupReview = {

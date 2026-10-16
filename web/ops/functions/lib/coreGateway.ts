@@ -57,6 +57,7 @@ export const CORE_GATEWAY_ALLOWLIST: Record<string, AllowlistRoute> = {
   "api/forecast/v1/verified-events": { upstreamPath: "/api/forecast/v1/verified-events", allowedQueryParams: ["latitude", "longitude", "radius_miles", "year"] },
   "api/forecast/v1/hurricane-watch": { upstreamPath: "/api/forecast/v1/hurricane-watch", allowedQueryParams: [] },
   "api/forecast/v1/chase-setups": { upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [] },
+  "api/forecast/v1/tornado-potential": { upstreamPath: "/api/forecast/v1/tornado-potential", allowedQueryParams: ["frame"] },
   "api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id", "revision"] },
   "api/forecast/v1/chase-setup-review": { upstreamPath: "/api/forecast/v1/chase-setup-review", allowedQueryParams: [], methods: ["POST"], opsWrite: "review" },
   "api/forecast/v1/chase-setup-decision": { upstreamPath: "/api/forecast/v1/chase-setup-decision", allowedQueryParams: [], methods: ["POST"], opsWrite: "decision" },
