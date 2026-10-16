@@ -57,3 +57,13 @@ Timers and their triggered services are registered as separate signals so a heal
 Chase planning/reviews and hurricane/tropical watch are separate project entries because they have independent deployed workflows and OPS workspaces. Their declared phase is DEPLOYED / PRIVATE WORKFLOWS; missing source receipts and functional qualification remain unverified.
 
 Later coverage findings remain visible. This assignment does not suppress unknown services, stale hosts, absent checks, or health failures.
+
+## Health repair pass — 2026-10-15
+
+- Edge weather workers now accept the configured F00–F06 window; explicit worker service bindings expose failures alongside their timers.
+- Successful enabled boot jobs require start/finish, zero exit and passing condition evidence before they count as healthy.
+- Phaenon3 inventory delivery retries verified LAN SSH when Tailnet delivery fails.
+- The newly discovered `CodeBlack-Stream-Prepare-Agent` task runs from the stream preparation checkout and belongs to Broadcast & Producer.
+- Tropical review was enabled but stopped; its timer was started and the next local review completed successfully.
+- The newest Core backup on Edge passed the existing inventory/completion-marker verification. This does not establish a restore test.
+- Disabled temporary KRAX watch, disabled legacy weather forwarder, failed OBS live test, and disconnected ESP reports remain visible pending purpose/hardware verification.

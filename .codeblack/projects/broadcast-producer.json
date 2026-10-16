@@ -59,6 +59,12 @@
       "host": "phaenon3",
       "name": "Stream process priority guard",
       "task": "CodeBlack-StreamPriorityGuard"
+    },
+    {
+      "id": "phaenon3-stream-prepare-agent",
+      "host": "phaenon3",
+      "name": "Stream preparation agent",
+      "task": "CodeBlack-Stream-Prepare-Agent"
     }
   ],
   "links": [
