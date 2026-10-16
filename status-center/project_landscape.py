@@ -100,7 +100,7 @@ def reconcile(base_projects, service_config, service_by_id, links, inventories):
             sid = f"auto-{host}-{unit}"
             item = {"id": sid, "name": unit, "host": host, "unit": unit}
             services[sid] = dynamic_service(item, doc, observation, available)
-            entry = entries.setdefault(pid, {"id": pid, "name": stem, "phase": "DISCOVERED / UNVERIFIED",
+            entry = entries.setdefault(pid, {"id": pid, "name": observation.get("name", stem).lstrip("\\"), "phase": "DISCOVERED / UNVERIFIED",
                 "summary": f"Automatically discovered on {host}. Register a project manifest to declare its purpose and functional checks.",
                 "note": "Process state only. Runtime presence does not establish a qualified deployment.",
                 "service_ids": [], "link_ids": [], "registration": "DISCOVERED"})
