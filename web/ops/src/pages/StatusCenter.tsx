@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import StreamingWorkTracking from "../status/StreamingWorkTracking"
 import { PageHeader } from "../components/PageHeader"
 import { StatusBadge } from "../components/StatusBadge"
 import { IncidentDesk } from "../status/IncidentDesk"
@@ -96,6 +97,7 @@ export default function StatusCenter() {
         actions={<button type="button" className="page-action-link" onClick={() => { void refresh() }}>REFRESH</button>}
       />
 
+      <StreamingWorkTracking />
       {error && <p className="status-center__error" role="alert">{error}</p>}
 
       <section className="status-center__summary" aria-label="Platform summary">

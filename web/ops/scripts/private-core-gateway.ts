@@ -174,8 +174,13 @@ export async function handlePrivateOverlayRequest(
   }
 }
 
-export function handlePrivateApiRequest(request: Request, env: PrivateCoreEnv, fetchImpl: typeof fetch = fetch): Promise<Response> {
+export async function handlePrivateApiRequest(request: Request, env: PrivateCoreEnv & import("./private-producer-control").ProducerControlEnv, fetchImpl: typeof fetch = fetch): Promise<Response> {
   const path = new URL(request.url).pathname;
+  if (path.startsWith("/api/producer/v1/")) {
+    const { handlePrivateProducerControl } = await import("./private-producer-control");
+    const response = await handlePrivateProducerControl(request, env, fetchImpl);
+    if (response) return response;
+  }
   if (path.startsWith("/api/core/")) return handlePrivateCoreRequest(request, env, fetchImpl);
   if (path.startsWith("/api/producer/v1/workstation/")) return handlePrivateProducerWrite(request, env, fetchImpl);
   if (path.startsWith("/api/producer/v1/")) return handlePrivateProducerRead(request, env, fetchImpl);
