@@ -4,7 +4,7 @@
   "name": "Radar & AEGIS",
   "summary": "Radar product, worker, health watchdog, AEGIS screening, and local AI.",
   "phase": "LIVE / EXPANDING",
-  "note": "Radar and AEGIS have separate service health; unknown AI state is not a radar outage.",
+  "note": "Radar and AEGIS retain separate health evidence. GOES ingest and the temporary KRAX validation watch are included; process health does not establish radar freshness.",
   "services": [
     {
       "id": "radar-product",
@@ -35,6 +35,60 @@
       "host": "phaenon3",
       "name": "AI Router / AEGIS",
       "task": "CodeBlack-AI-Router"
+    },
+    {
+      "id": "core-aegis-feed",
+      "host": "core",
+      "name": "Private Aegis radar feed and replay",
+      "unit": "codeblack-aegis-feed.service"
+    },
+    {
+      "id": "core-aegis-observation",
+      "host": "core",
+      "name": "Bounded AEGIS observation executor",
+      "unit": "codeblack-aegis-observation.service"
+    },
+    {
+      "id": "core-aegis-observation-schedule",
+      "host": "core",
+      "name": "Bounded AEGIS observation executor schedule",
+      "unit": "codeblack-aegis-observation.timer"
+    },
+    {
+      "id": "core-aegis-warning",
+      "host": "core",
+      "name": "Warning-triggered Aegis radar screening",
+      "unit": "codeblack-aegis-warning.service"
+    },
+    {
+      "id": "core-aegis-warning-schedule",
+      "host": "core",
+      "name": "Warning-triggered Aegis radar screening schedule",
+      "unit": "codeblack-aegis-warning.timer"
+    },
+    {
+      "id": "core-goes-ingest",
+      "host": "core",
+      "name": "NOAA GOES ABI evidence ingest",
+      "unit": "codeblack-goes-ingest.service"
+    },
+    {
+      "id": "core-goes-ingest-schedule",
+      "host": "core",
+      "name": "NOAA GOES ABI evidence ingest schedule",
+      "unit": "codeblack-goes-ingest.timer"
+    },
+    {
+      "id": "core-krax-watch",
+      "host": "core",
+      "name": "KRAX completed-volume validation watch",
+      "unit": "codeblack-krax-watch.service"
+    },
+    {
+      "id": "core-krax-watch-schedule",
+      "host": "core",
+      "name": "KRAX completed-volume validation watch schedule",
+      "unit": "codeblack-krax-watch.timer"
     }
   ],
   "links": [

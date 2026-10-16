@@ -86,15 +86,69 @@
     },
     {
       "id": "phaenon3-project-collector",
-      "name": "Phaenon3 discovery collector",
       "host": "phaenon3",
+      "name": "Phaenon3 discovery collector",
       "task": "CodeBlack-StatusCollector"
     },
     {
       "id": "phaenon3-inventory-push",
-      "name": "Phaenon3 outbound inventory",
       "host": "phaenon3",
+      "name": "Phaenon3 outbound inventory",
       "task": "CodeBlack-ProjectInventoryPush"
+    },
+    {
+      "id": "core-core-maintenance",
+      "host": "core",
+      "name": "Core overnight maintenance",
+      "unit": "codeblack-core-maintenance.service"
+    },
+    {
+      "id": "core-core-maintenance-schedule",
+      "host": "core",
+      "name": "Core overnight maintenance schedule",
+      "unit": "codeblack-core-maintenance.timer"
+    },
+    {
+      "id": "core-ddns",
+      "host": "core",
+      "name": "SRT hostname dynamic DNS",
+      "unit": "codeblack-ddns.service"
+    },
+    {
+      "id": "core-ddns-schedule",
+      "host": "core",
+      "name": "SRT hostname dynamic DNS schedule",
+      "unit": "codeblack-ddns.timer"
+    },
+    {
+      "id": "core-wifi-boot-select",
+      "host": "core",
+      "name": "Dual Wi-Fi boot selector",
+      "unit": "codeblack-wifi-boot-select.service"
+    },
+    {
+      "id": "edge-core-health",
+      "host": "edge",
+      "name": "Core reachability from Edge",
+      "unit": "codeblack-core-health.service"
+    },
+    {
+      "id": "edge-core-health-schedule",
+      "host": "edge",
+      "name": "Core reachability from Edge schedule",
+      "unit": "codeblack-core-health.timer"
+    },
+    {
+      "id": "edge-edge-health",
+      "host": "edge",
+      "name": "Edge health snapshot",
+      "unit": "codeblack-edge-health.service"
+    },
+    {
+      "id": "edge-edge-health-schedule",
+      "host": "edge",
+      "name": "Edge health snapshot schedule",
+      "unit": "codeblack-edge-health.timer"
     }
   ],
   "links": [

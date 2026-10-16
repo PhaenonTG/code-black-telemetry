@@ -2,9 +2,9 @@
   "schema": "codeblack.project.v1",
   "id": "broadcast-producer",
   "name": "Broadcast & Producer",
-  "summary": "Stream monitor, MediaMTX, broadcast overlays, and private Producer shadow.",
+  "summary": "Stream monitor, MediaMTX, overlays, OBS sessions, Producer bridge and Fieldline support.",
   "phase": "LIVE / SHADOW PILOT",
-  "note": "Private Producer commands remain outside this service-health rollup until the pilot qualifies them.",
+  "note": "Process checks include recovery helpers and the retained legacy OBS test. Their task results do not establish on-air stream health; private Producer remains a shadow pilot.",
   "services": [
     {
       "id": "stream-monitor",
@@ -29,6 +29,36 @@
       "host": "core",
       "name": "Overlay (dev)",
       "unit": "codeblack-overlay-dev.service"
+    },
+    {
+      "id": "phaenon3-nick-fieldline-helper",
+      "host": "phaenon3",
+      "name": "Nick Fieldline weather/GPS overlay helper",
+      "task": "CodeBlack-Nick-Fieldline-Recovery"
+    },
+    {
+      "id": "phaenon3-nick-obs-visible",
+      "host": "phaenon3",
+      "name": "Nick visible OBS session task",
+      "task": "CodeBlack-Nick-OBS-Visible-20261015"
+    },
+    {
+      "id": "phaenon3-obs-live-test",
+      "host": "phaenon3",
+      "name": "OBS live test (legacy task)",
+      "task": "CodeBlack-OBS-CodeBlackLiveTest"
+    },
+    {
+      "id": "phaenon3-obs-bridge-recovery",
+      "host": "phaenon3",
+      "name": "OBS Producer bridge recovery",
+      "task": "CodeBlack-OBS-Producer-Bridge-Recovery"
+    },
+    {
+      "id": "phaenon3-stream-priority-guard",
+      "host": "phaenon3",
+      "name": "Stream process priority guard",
+      "task": "CodeBlack-StreamPriorityGuard"
     }
   ],
   "links": [

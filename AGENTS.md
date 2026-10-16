@@ -21,3 +21,9 @@ after deploying. Unregistered units remain visible as discovered/unverified;
 register their purpose and functional checks before treating them as qualified.
 
 See `status-center/PROJECT_AUTOMATION.md` for deployment and rollback examples.
+
+For metadata-only project assignments, use
+`status-center/ops/publish_project_manifests.py`. It validates the complete batch
+and atomically registers it on Core, Edge and Phaenon3 without restarting any
+application or replacing its deployment receipt. Keep executable deployments
+on the deployment wrapper described above.
