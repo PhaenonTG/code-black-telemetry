@@ -35,7 +35,7 @@ async function stage(){
  if(fs.existsSync(archive))throw Error('ARCHIVE_ALREADY_EXISTS');
  run('tar',['-czf',archive,'-C',PACKAGE,'dist-private','scripts/private-producer-shadow.mjs']);
  run('scp',[archive,'codeblack-core:/tmp/private-producer-primary-74f6c69-20261015.tgz']);
- ssh(`sudo -n install -d -m 0700 '${BACKUP}' && sudo -n cp -p /etc/systemd/system/codeblack-private-producer-shadow.service '${BACKUP}/producer.unit' && sudo -n cp -p /etc/systemd/system/codeblack-private-ops.service.d/zzzz-landscape.conf '${BACKUP}/ops.override' && sudo -n install -d -m 0755 '${RELEASE}' && sudo -n tar -xzf /tmp/private-producer-primary-74f6c69-20261015.tgz -C '${RELEASE}' && sudo -n chown -R root:root '${RELEASE}' && sudo -n chmod -R a+rX '${RELEASE}'`);
+ ssh(`sudo -n install -d -m 0700 '${BACKUP}' && sudo -n cp -p /etc/systemd/system/codeblack-private-producer-shadow.service '${BACKUP}/producer.unit' && sudo -n cp -p /srv/codeblack/data/private-producer-shadow/state.json '${BACKUP}/state.before.json' && sudo -n cp -p /etc/systemd/system/codeblack-private-ops.service.d/zzzz-landscape.conf '${BACKUP}/ops.override' && sudo -n install -d -m 0755 '${RELEASE}' && sudo -n tar -xzf /tmp/private-producer-primary-74f6c69-20261015.tgz -C '${RELEASE}' && sudo -n chown -R root:root '${RELEASE}' && sudo -n chmod -R a+rX '${RELEASE}'`);
  ssh('sudo -n install -m 0600 /dev/stdin /srv/codeblack/config/private-producer/control-primary.env',`OPS_PRIVATE_PRODUCER_CONTROLS_ENABLED=true\nOPS_PRIVATE_PRODUCER_OPERATOR_IDS=${ids}\n`);
  const privateFile=NATIVE+'/runtime/private-producer.credentials.json';
  if(fs.existsSync(privateFile)){if(credential('private-producer.credentials.json')!==token)throw Error('EXISTING_PRIVATE_CREDENTIAL_MISMATCH');}
