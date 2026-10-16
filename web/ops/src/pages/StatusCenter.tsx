@@ -1,3 +1,4 @@
+import StreamingWorkTracking from "../status/StreamingWorkTracking"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { PageHeader } from "../components/PageHeader"
 import { StatusBadge } from "../components/StatusBadge"
@@ -115,6 +116,7 @@ export default function StatusCenter() {
 
   return (
     <div className="page page-status-center">
+      <StreamingWorkTracking />
       <PageHeader
         title="STATUS CENTER"
         kicker="LIVE PLATFORM TELEMETRY"

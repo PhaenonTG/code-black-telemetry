@@ -7,6 +7,7 @@ import { chooseProducerSource, parseProducerSources } from "../workspaces/produc
 import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
 import FacebookProducerPanel from "../workspaces/FacebookProducerPanel"
 import ProducerControls from "../workspaces/ProducerControls"
+import PreparePcControls from "../workspaces/PreparePcControls"
 import ProgramMonitor from "../workspaces/ProgramMonitor"
 import { currentMediaTimestamp, currentProgramRender, mediaCompositionMatches, PROGRAM_PREVIEW_POLL_MS, PROGRAM_STATUS_POLL_MS } from "../workspaces/programMonitorPolicy"
 import { readProducerResponse } from "../workspaces/producerResponse"
@@ -232,6 +233,7 @@ export default function ProducerWorkspace() {
           <ProgramMonitor key={producerStatus?.composition?.id ?? "legacy"} active={producerBridgeState === "ONLINE" && Boolean(producerStatus?.composition?.id)} canStart={sourceFresh(producerStatus)} compositionId={producerStatus?.composition?.id} fallback={heldFrame ? <><img src={programFrameUrl} alt={programCurrent ? "Current PROGRAM preview" : "Last verified PROGRAM frame"} />{!programCurrent && <span className="producer-stage__held-label">LAST VERIFIED FRAME · awaiting fresh PROGRAM proof</span>}</> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
           <div className="producer-stage__foot"><div><strong>{producerStatus?.state ?? "NO BROADCASTER STATUS"}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>{producerStatus?.broadcast?.state ?? "OUTPUT UNKNOWN"}</span></div>
         </section>
+        <PreparePcControls />
         <ProducerControls />
         <section className="workspace-panel producer-stage" aria-label="Selected live stream camera">
           <header><h2>Live camera</h2><span className={playing ? "workspace-live" : "workspace-muted"}>{playing ? "PUBLISHING" : statusError ? "STATUS UNAVAILABLE" : "NO LIVE PUBLISHER"}</span></header>
