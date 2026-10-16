@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { handlePrivateProducerRead, handlePrivateProducerWrite, type PrivateProducerEnv } from "./private-producer-gateway";
 
 const userId = "4b10eb9e-af64-4077-a659-2fe4adf69b12";
@@ -56,6 +56,43 @@ describe("private Producer workstation shadow ingest", () => {
 });
 
 describe("private Producer operator relay", () => {
+  it("warms a cold authenticated manifest without changing auth or composition headers", async () => {
+    vi.useFakeTimers();
+    try {
+      let reads = 0;
+      const fetcher = (async (input) => {
+        const url = String(input);
+        if (url.endsWith("/auth/v1/user")) return Response.json({ id: userId });
+        if (url.includes("/rest/v1/profiles?")) return Response.json([{ active: true, role: "OPERATOR" }]);
+        reads++;
+        return reads === 1 ? Response.json({ error: "PROGRAM_MEDIA_NOT_CURRENT" }, { status: 404 }) : new Response("#EXTM3U\n", { headers: { "Content-Type": "application/vnd.apple.mpegurl", "X-Producer-Composition": "a".repeat(24) } });
+      }) as typeof fetch;
+      const pending = handlePrivateProducerRead(request("/api/producer/v1/preview/hls/index.m3u8"), env, fetcher);
+      await vi.advanceTimersByTimeAsync(250);
+      const response = await pending;
+      expect(response.status).toBe(200); expect(reads).toBe(2);
+      expect(response.headers.get("X-Producer-Composition")).toBe("a".repeat(24));
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("bounds missing-media warmup and never retries segment errors", async () => {
+    vi.useFakeTimers();
+    try {
+      let reads = 0;
+      const fetcher = (async (input) => {
+        const url = String(input);
+        if (url.endsWith("/auth/v1/user")) return Response.json({ id: userId });
+        if (url.includes("/rest/v1/profiles?")) return Response.json([{ active: true, role: "OPERATOR" }]);
+        reads++; return Response.json({ error: "PROGRAM_MEDIA_NOT_CURRENT" }, { status: 404 });
+      }) as typeof fetch;
+      const pending = handlePrivateProducerRead(request("/api/producer/v1/preview/hls/index.m3u8"), env, fetcher);
+      await vi.advanceTimersByTimeAsync(4000);
+      expect((await pending).status).toBe(404); expect(reads).toBe(17);
+      reads = 0;
+      expect((await handlePrivateProducerRead(request(`/api/producer/v1/preview/hls/program-${"a".repeat(32)}-1.ts`), env, fetcher)).status).toBe(404);
+      expect(reads).toBe(1);
+    } finally { vi.useRealTimers(); }
+  });
   it("requires a valid operator session before reaching the private service", async () => {
     const mock = mockFetch();
     expect((await handlePrivateProducerRead(request("/api/producer/v1/status", "GET", false), env, mock.fetcher)).status).toBe(401);

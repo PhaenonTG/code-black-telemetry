@@ -53,6 +53,15 @@ function boundedSignal(request: Request) {
   return { signal: controller.signal, dispose: () => { clearTimeout(timer); request.signal.removeEventListener("abort", abort); } };
 }
 
+function waitForMedia(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const abort = () => { clearTimeout(timer); signal.removeEventListener("abort", abort); reject(new Error("PRIVATE_MEDIA_REQUEST_CANCELLED")); };
+    const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, 250);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+  });
+}
+
 export async function handlePrivateProducerWrite(
   request: Request,
   env: PrivateProducerEnv,
@@ -134,12 +143,22 @@ export async function handlePrivateProducerRead(
   const target = new URL(url.pathname, base);
   const bounded = boundedSignal(request);
   try {
-    const upstream = await fetchImpl(target, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}`, Accept: allowed.type },
-      redirect: "manual",
-      signal: bounded.signal,
-    });
+    // The first authenticated manifest request starts a short viewer lease.
+    // Give the next native heartbeat/upload a bounded chance to warm the media.
+    // Each request releases the backend queue; never wait inside its serializer.
+    const warmUntil = Date.now() + 4000;
+    let upstream: Response;
+    for (;;) {
+      upstream = await fetchImpl(target, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}`, Accept: allowed.type },
+        redirect: "manual",
+        signal: bounded.signal,
+      });
+      if (upstream.status !== 404 || url.pathname !== `${prefix}preview/hls/index.m3u8` || Date.now() >= warmUntil) break;
+      await upstream.body?.cancel();
+      await waitForMedia(bounded.signal);
+    }
     if (!upstream.ok) {
       await upstream.body?.cancel();
       return gatewayErrorResponse(upstream.status === 404 ? 404 : 502,
