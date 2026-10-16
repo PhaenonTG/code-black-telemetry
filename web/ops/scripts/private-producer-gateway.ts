@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { gatewayErrorResponse, verifyOpsAuth, type GatewayEnv } from "../functions/lib/coreGateway";
+import { gatewayErrorResponse, type GatewayEnv } from "../functions/lib/coreGateway";
+import { verifyPrivateAuth } from "./private-auth";
 
 export interface PrivateProducerEnv extends GatewayEnv {
   OPS_PRIVATE_PRODUCER_BASE_URL?: string;
@@ -43,6 +44,15 @@ function localProducerUrl(raw: string | undefined): URL | null {
   } catch { return null; }
 }
 
+function boundedSignal(request: Request) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const timer = setTimeout(abort, 5000);
+  request.signal.addEventListener("abort", abort, { once: true });
+  if (request.signal.aborted) abort();
+  return { signal: controller.signal, dispose: () => { clearTimeout(timer); request.signal.removeEventListener("abort", abort); } };
+}
+
 export async function handlePrivateProducerWrite(
   request: Request,
   env: PrivateProducerEnv,
@@ -65,9 +75,10 @@ export async function handlePrivateProducerWrite(
     const value = request.headers.get(name);
     if (value && /^[\x20-\x7e]{1,256}$/.test(value)) headers.set(name, value);
   }
+  const bounded = boundedSignal(request);
   try {
     const upstream = await fetchImpl(new URL(path, base), {
-      method: "POST", headers, body, redirect: "error", signal: AbortSignal.timeout(5_000),
+      method: "POST", headers, body, redirect: "error", signal: bounded.signal,
     });
     await upstream.body?.cancel();
     if (upstream.ok) return Response.json({ accepted: true }, { headers: { "Cache-Control": "no-store" } });
@@ -75,7 +86,7 @@ export async function handlePrivateProducerWrite(
       upstream.status === 413 ? "REQUEST_TOO_LARGE" : "CORE_UNAVAILABLE");
   } catch {
     return gatewayErrorResponse(502, "CORE_UNAVAILABLE");
-  }
+  } finally { bounded.dispose(); }
 }
 
 async function boundedBody(response: Response, limit: number): Promise<Uint8Array | null> {
@@ -115,18 +126,19 @@ export async function handlePrivateProducerRead(
     status: 503, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 
-  const auth = await verifyOpsAuth(request.headers.get("Authorization"), env, fetchImpl);
+  const auth = await verifyPrivateAuth(request, env, fetchImpl);
   if (!auth.ok) return gatewayErrorResponse(auth.status, auth.reason);
   const base = localProducerUrl(env.OPS_PRIVATE_PRODUCER_BASE_URL);
   const token = env.OPS_PRIVATE_PRODUCER_TOKEN;
   if (!base || !token || token.length < 32) return gatewayErrorResponse(502, "CORE_UNAVAILABLE");
   const target = new URL(url.pathname, base);
+  const bounded = boundedSignal(request);
   try {
     const upstream = await fetchImpl(target, {
       method: "GET",
       headers: { Authorization: `Bearer ${token}`, Accept: allowed.type },
       redirect: "manual",
-      signal: AbortSignal.timeout(5_000),
+      signal: bounded.signal,
     });
     if (!upstream.ok) {
       await upstream.body?.cancel();
@@ -163,5 +175,5 @@ export async function handlePrivateProducerRead(
     return new Response(bytes, { status: 200, headers });
   } catch {
     return gatewayErrorResponse(502, "CORE_UNAVAILABLE");
-  }
+  } finally { bounded.dispose(); }
 }

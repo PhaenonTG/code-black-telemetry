@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { verifyOpsAuth } from "../functions/lib/coreGateway";
+import { verifyPrivateAuth } from "./private-auth";
 import type { PrivateProducerEnv } from "./private-producer-gateway";
 
 export interface ProducerControlEnv extends PrivateProducerEnv {
@@ -36,7 +36,7 @@ export async function handlePrivateProducerControl(request: Request, env: Produc
     const supplied = request.headers.get("Authorization") ?? "";
     if (!timingSafeEqual(createHash("sha256").update(supplied).digest(), createHash("sha256").update(`Bearer ${token}`).digest())) return fail(401, "AUTH_REQUIRED");
   } else {
-    const auth = await verifyOpsAuth(request.headers.get("Authorization"), env, fetchImpl);
+    const auth = await verifyPrivateAuth(request, env, fetchImpl);
     if (!auth.ok) return fail(auth.status, auth.reason);
     userId = auth.userId;
     allowed = (env.OPS_PRIVATE_PRODUCER_OPERATOR_IDS ?? "").split(",").map(value => value.trim()).filter(Boolean).includes(userId);
@@ -57,8 +57,13 @@ export async function handlePrivateProducerControl(request: Request, env: Produc
     // Never enable the legacy Facebook lifecycle/output path on this adapter.
     if (typeof command?.action !== "string" || !(command.action.startsWith("obs.") || ["preview.start", "preview.stop"].includes(command.action))) return fail(400, "PRIVATE_OBS_COMMAND_REQUIRED");
   }
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const timer = setTimeout(abort, 5000);
+  request.signal.addEventListener("abort", abort, { once: true });
+  if (request.signal.aborted) abort();
   try {
-    const upstream = await fetchImpl(new URL(url.pathname, base), { method: request.method, headers, body, redirect: "error", signal: AbortSignal.timeout(5000) });
+    const upstream = await fetchImpl(new URL(url.pathname, base), { method: request.method, headers, body, redirect: "error", signal: controller.signal });
     const reader = upstream.body?.getReader(); let size = 0; const chunks: Uint8Array[] = [];
     if (reader) try {
       for (;;) { const item = await reader.read(); if (item.done) break; size += item.value.byteLength; if (size > 65536) { await reader.cancel(); return fail(502, "PRIVATE_PRODUCER_RESPONSE_INVALID"); } chunks.push(item.value); }
@@ -72,4 +77,5 @@ export async function handlePrivateProducerControl(request: Request, env: Produc
     }
     return json(upstream.status, payload);
   } catch { return fail(503, "PRIVATE_PRODUCER_UNAVAILABLE_OUTCOME_UNKNOWN"); }
+  finally { clearTimeout(timer); request.signal.removeEventListener("abort", abort); }
 }
