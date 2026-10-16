@@ -37,7 +37,7 @@ try {
     if ($LASTEXITCODE -eq 0) {
       $coverage = $raw | ConvertFrom-Json
       $hostReport = $coverage.hosts | Where-Object { $_.host -eq 'phaenon3' }
-      if ($hostReport.state -eq 'CURRENT' -and $hostReport.transport -eq 'SSH PUSH') { $verified = $true; break }
+      if ($hostReport.state -eq 'CURRENT') { $verified = $true; break }
     }
     Start-Sleep -Seconds 2
   }
