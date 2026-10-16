@@ -33,7 +33,8 @@
     {
       "id": "ai-router",
       "host": "phaenon3",
-      "name": "AI Router / AEGIS"
+      "name": "AI Router / AEGIS",
+      "task": "CodeBlack-AI-Router"
     }
   ],
   "links": [

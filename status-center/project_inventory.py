@@ -17,8 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-CONFIG = Path(os.environ.get("CODEBLACK_PROJECT_CONFIG", "/srv/codeblack/config/project-landscape"))
-STATE = Path(os.environ.get("CODEBLACK_PROJECT_STATE", "/srv/codeblack/data/status-center/project-inventory"))
+CONFIG = Path(os.environ.get("CODEBLACK_PROJECT_CONFIG", "C:/CodeBlack/config/project-landscape" if os.name == "nt" else "/srv/codeblack/config/project-landscape"))
+STATE = Path(os.environ.get("CODEBLACK_PROJECT_STATE", "C:/CodeBlack/Data/status-collector/project-inventory" if os.name == "nt" else "/srv/codeblack/data/status-center/project-inventory"))
 ID = re.compile(r"[a-z0-9][a-z0-9-]{0,79}\Z")
 UNIT = re.compile(r"[a-zA-Z0-9@_.:-]{1,160}\.(service|timer)\Z")
 COMMIT = re.compile(r"[0-9a-f]{7,40}\Z")
@@ -87,6 +87,10 @@ def validate_manifest(value):
             if not UNIT.fullmatch(unit):
                 raise ValueError("invalid systemd unit")
             service["unit"] = unit
+        if item.get("task"):
+            service["task"] = text(item["task"], 180)
+            if ":" in service["task"] or ".." in service["task"]:
+                raise ValueError("invalid scheduled task")
         result["services"].append(service)
     for item in links:
         url = text(item.get("url"), 300)
@@ -110,8 +114,25 @@ def manifests(config=CONFIG):
     return values, errors
 
 
-def run(argv):
-    result = subprocess.run(argv, capture_output=True, text=True, timeout=8)
+def external_inventory(path, host, at=None):
+    value = read_json(path)
+    if not isinstance(value, dict) or value.get("source_host") != host or value.get("available") is not True:
+        return None
+    try:
+        observed = datetime.fromisoformat(value["generated_at"].replace("Z", "+00:00")).timestamp()
+        age = (time.time() if at is None else at) - observed
+        if not -30 <= age < 180 or not isinstance(value.get("units"), dict) or len(value["units"]) > 256:
+            return None
+        if not all(isinstance(item, dict) for item in value["units"].values()):
+            return None
+        value["projects"] = [validate_manifest(item) for item in value.get("projects", [])]
+    except (KeyError, TypeError, ValueError):
+        return None
+    return {**value, "transport": "SSH PUSH"}
+
+
+def run(argv, timeout=8):
+    result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, creationflags=(0x08000000 if os.name == "nt" else 0))
     if result.returncode:
         raise RuntimeError("systemd inventory unavailable")
     return result.stdout
@@ -196,22 +217,63 @@ def observe_changes(units, state_dir=STATE):
     return events[-100:]
 
 
+def normalize_windows(rows):
+    """Convert filtered OS records, without exposing action arguments or paths."""
+    result = {}
+    for row in rows:
+        name = row.get("name", "")
+        if not isinstance(name, str) or not name or len(name) > 200 or any(ord(c) < 32 for c in name):
+            continue
+        kind = row.get("kind")
+        if kind not in ("task", "service"):
+            continue
+        key = kind + ":" + ("\\" + name.lstrip("\\") if kind == "task" else name)
+        active = str(row.get("state", "Unknown"))
+        ran = bool(row.get("last_run"))
+        if kind == "task":
+            state = "HEALTHY" if active == "Running" else "OFFLINE" if active == "Disabled" else "DEGRADED" if ran and row.get("result") not in (0, None, 267009, 267011) else "HEALTHY" if active == "Ready" and ran and row.get("result") == 0 and row.get("scheduled") else "UNKNOWN"
+        else:
+            state = "HEALTHY" if active == "Running" else "OFFLINE" if active == "Stopped" else "UNKNOWN"
+        release = row.get("release")
+        if not isinstance(release, str) or not re.fullmatch(r"[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+", release):
+            release = None
+        result[key] = {"unit": key, "name": name, "kind": kind, "scope": "windows-" + kind,
+                       "state": state, "installed": True, "active": active, "sub": "scheduled" if row.get("scheduled") else kind,
+                       "result": row.get("result"), "runtime_started_at": row.get("last_run"), "release": release,
+                       "artifact_fingerprint": None, "triggers": [],
+                       "evidence": "Windows task/service state; functional health requires a registered probe"}
+    return result
+
+
+def discover_windows():
+    # The script itself filters Code Black jobs/services and emits only safe
+    # metadata. Task arguments, service command lines and environment never leave
+    # the OS query process. The JSON document is bounded to 256 records.
+    script = Path(__file__).with_name("windows") / "discover-projects.ps1"
+    raw = run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)], timeout=20)
+    rows = json.loads(raw.lstrip("\ufeff"))
+    if not isinstance(rows, list) or len(rows) > 256:
+        raise RuntimeError("Windows inventory exceeds limit")
+    return normalize_windows(rows)
+
+
 def collect(config=CONFIG, state_dir=STATE, expected=(), host="core"):
-    if os.name == "nt":
-        return {"generated_at": stamp(), "available": False, "error": "systemd discovery is not supported on this host", "projects": [], "units": {}}
     with LOCK:
         if CACHE["value"] is not None and time.time() - CACHE["at"] < 60:
             return CACHE["value"]
         projects, errors = manifests(config)
         all_expected = list(expected) + [s["unit"] for p in projects for s in p["services"] if s.get("unit") and s["host"] == host]
         try:
-            units = discover_units(all_expected)
-            try:
-                for name, value in discover_units(user=True).items():
-                    if not units.get(name, {}).get("installed"):
-                        units[name] = value
-            except (OSError, RuntimeError, subprocess.SubprocessError):
-                pass  # A system collector need not have a user-session bus.
+            if os.name == "nt":
+                units = discover_windows()
+            else:
+                units = discover_units(all_expected)
+                try:
+                    for name, value in discover_units(user=True).items():
+                        if not units.get(name, {}).get("installed"):
+                            units[name] = value
+                except (OSError, RuntimeError, subprocess.SubprocessError):
+                    pass  # A system collector need not have a user-session bus.
             try:
                 events = observe_changes(units, state_dir)
             except OSError:
@@ -219,7 +281,7 @@ def collect(config=CONFIG, state_dir=STATE, expected=(), host="core"):
             receipts = read_json(Path(config) / "deployments.json", {})
             if not isinstance(receipts, dict):
                 receipts = {}
-            value = {"generated_at": stamp(), "available": True, "projects": projects, "units": units,
+            value = {"generated_at": stamp(), "available": True, "platform": "windows" if os.name == "nt" else "linux", "projects": projects, "units": units,
                      "deployments": {unit: {k: v for k, v in value.items() if k in ("latest_attempt", "last_success")} for unit, value in receipts.items() if isinstance(value, dict)}, "events": events, "errors": errors}
             try:
                 atomic_json(Path(state_dir) / "last-inventory.json", value)

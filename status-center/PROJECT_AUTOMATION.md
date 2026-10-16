@@ -5,14 +5,27 @@ Core and Edge collect installed and loaded `codeblack*.service` and
 status feed; OPS refreshes that feed every 30 seconds. Discovered services appear
 even if a deployment did not use the reporting wrapper. A stopped/offline host
 cannot supply new inventory; retained observations become UNKNOWN after 180
-seconds instead of staying green. Phaenon3's existing collector does not yet
-support this Linux inventory and is shown as unavailable for discovery.
+seconds instead of staying green. Phaenon3 discovers Code Black/Spencer Labs
+scheduled tasks and Windows services using a fixed PowerShell query. Only task
+identity, state, last run/result, schedule presence and a release label are
+returned. Commands, action arguments, environment and unrelated personal tasks
+are excluded.
+
+Phaenon3 also pushes its discovery document every minute over the existing
+authenticated SSH connection to Core. This works when Core cannot reach the
+Windows collector over Tailscale. Core chooses the newest current report and
+rejects reports older than 180 seconds or over 30 seconds in the future. This
+does not replace functional service probes or change host connectivity status.
+The cloud Codex peer was identified, but SSH was unreachable on 2026-10-15; its
+installation was deferred at the operator's request.
 
 ## Register a project
 
 Keep a `codeblack.project.v1` JSON file in `.codeblack/projects/`. Existing
 manifests are examples. Required fields are schema, id, name and summary.
-Services declare id, host, name, and an optional systemd unit. Existing service
+Services declare id, host, name, and an optional systemd unit or Windows `task`.
+Windows tasks use their scheduler name, including a leading task folder if
+needed. Existing service
 IDs retain their functional probes. New units initially have process/schedule
 checks only, which OPS labels explicitly. Links are metadata, never probe targets.
 
@@ -77,6 +90,9 @@ its existing service account and directory permissions. Each unit retains
 inventory and 100 observed release changes. These are small metadata records;
 existing heavy sensor, incident and GPIO logs continue using Edge storage.
 No source, environment values, prompts, secrets or log contents are exposed.
+Windows metadata lives under `C:\CodeBlack\config\project-landscape` and
+`C:\CodeBlack\Data\status-collector\project-inventory`. Core keeps only the last
+outbound discovery document in `data/status-center/external-project-inventory`.
 
 ## Installation and rollback
 
@@ -95,3 +111,10 @@ previous collector files remain in `services/status-collector`; its cron
 keepalive uses the managed collector when available. To roll back Edge,
 disable/stop the user service and restore/run
 `services/status-collector/keepalive.pre-project-automation.sh`.
+
+For Phaenon3, run `windows/update-phaenon3-discovery.ps1` through a wrapped
+deployment. It preserves the installed registry and task configuration, backs
+up the previous collector, restarts only `CodeBlack-StatusCollector`, and adds
+the current-user `CodeBlack-ProjectInventoryPush` task. Restore the backed-up
+collector and stop the push task to roll back. The existing inbound collector
+address and its access policy are unchanged.

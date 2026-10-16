@@ -21,7 +21,8 @@
     {
       "id": "ai-router",
       "host": "phaenon3",
-      "name": "AI Router / AEGIS"
+      "name": "AI Router / AEGIS",
+      "task": "CodeBlack-AI-Router"
     },
     {
       "id": "ollama-phaenon3",
@@ -31,12 +32,14 @@
     {
       "id": "ailab-runner",
       "host": "phaenon3",
-      "name": "AI Lab Deployment Runner"
+      "name": "AI Lab Deployment Runner",
+      "task": "CodeBlack-AILab-Deploy"
     },
     {
       "id": "media-lab",
       "host": "phaenon3",
-      "name": "Media Lab"
+      "name": "Media Lab",
+      "task": "Spencer Labs Media Lab"
     },
     {
       "id": "image-sandbox",
@@ -46,12 +49,14 @@
     {
       "id": "aegis-factory-watchdog",
       "host": "phaenon3",
-      "name": "Aegis Factory Watchdog"
+      "name": "Aegis Factory Watchdog",
+      "task": "CodeBlack Aegis Factory Watchdog"
     },
     {
       "id": "ailab-healthwatch",
       "host": "phaenon3",
-      "name": "AI Lab Health Watch"
+      "name": "AI Lab Health Watch",
+      "task": "CodeBlack-AILab-HealthWatch"
     },
     {
       "id": "sandbox-comfyui",
@@ -61,17 +66,20 @@
     {
       "id": "q4-status-monitor",
       "host": "phaenon3",
-      "name": "Wan 2.2 Q4 Status Monitor"
+      "name": "Wan 2.2 Q4 Status Monitor",
+      "task": "Spencer Labs Wan 2.2 Q4 Status Monitor"
     },
     {
       "id": "q4-verification-watcher",
       "host": "phaenon3",
-      "name": "Wan 2.2 Q4 Verification Watcher"
+      "name": "Wan 2.2 Q4 Verification Watcher",
+      "task": "Spencer Labs Wan 2.2 Q4 Verification Watcher"
     },
     {
       "id": "q4-download-recovery",
       "host": "phaenon3",
-      "name": "Wan 2.2 Q4 Download Recovery"
+      "name": "Wan 2.2 Q4 Download Recovery",
+      "task": "Spencer Labs Wan 2.2 Q4 Download Recovery"
     }
   ],
   "links": [

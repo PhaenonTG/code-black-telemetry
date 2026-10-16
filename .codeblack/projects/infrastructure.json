@@ -83,6 +83,18 @@
       "host": "edge",
       "name": "Edge project collector",
       "unit": "codeblack-project-collector.service"
+    },
+    {
+      "id": "phaenon3-project-collector",
+      "name": "Phaenon3 discovery collector",
+      "host": "phaenon3",
+      "task": "CodeBlack-StatusCollector"
+    },
+    {
+      "id": "phaenon3-inventory-push",
+      "name": "Phaenon3 outbound inventory",
+      "host": "phaenon3",
+      "task": "CodeBlack-ProjectInventoryPush"
     }
   ],
   "links": [
