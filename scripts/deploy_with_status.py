@@ -13,8 +13,8 @@ sys.path.insert(0, str(ROOT / "status-center"))
 from project_inventory import validate_manifest, UNIT  # noqa: E402
 
 
-def git_value(*args):
-    result = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, timeout=10)
+def git_value(*args, root=ROOT):
+    result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=10)
     return result.stdout.strip() if result.returncode == 0 else None
 
 
@@ -37,6 +37,7 @@ def main():
     parser.add_argument("--unit", required=True)
     parser.add_argument("--release", required=True, help="family/version under /srv/codeblack/releases")
     parser.add_argument("--report-only", choices=("succeeded", "failed"))
+    parser.add_argument("--source-root", type=Path, default=ROOT, help="Exact clean Git worktree containing the deployed package")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     if args.host.startswith("-") or any(c.isspace() for c in args.host):
@@ -48,8 +49,14 @@ def main():
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command and not args.report_only:
         parser.error("Supply the deployment command after --")
+    source_root = args.source_root.resolve()
+    top = git_value("rev-parse", "--show-toplevel", root=source_root)
+    commit = git_value("rev-parse", "HEAD", root=source_root)
+    dirty = git_value("status", "--porcelain", root=source_root)
+    if not top or Path(top).resolve() != source_root or not commit or dirty is None:
+        parser.error("Source root must be a readable Git worktree root")
     payload = {"manifest": manifest, "host": args.host_id, "unit": unit, "release": args.release,
-               "commit": git_value("rev-parse", "HEAD"), "dirty": bool(git_value("status", "--porcelain")),
+               "commit": commit, "dirty": bool(dirty),
                "attempt": uuid.uuid4().hex, "result": "started"}
     try:
         report(args.host, payload)

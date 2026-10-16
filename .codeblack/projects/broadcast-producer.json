@@ -7,6 +7,12 @@
   "note": "Process checks include recovery helpers and the retained legacy OBS test. Their task results do not establish on-air stream health; private Producer remains a shadow pilot.",
   "services": [
     {
+      "id": "private-producer",
+      "host": "core",
+      "name": "Private Producer backend",
+      "unit": "codeblack-private-producer-shadow.service"
+    },
+    {
       "id": "stream-monitor",
       "host": "core",
       "name": "Stream Monitor",
