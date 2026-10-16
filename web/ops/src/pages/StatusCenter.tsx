@@ -61,7 +61,7 @@ export default function StatusCenter() {
       fetchStatusCenter(config, controller.signal).then((next) => {
         if (current()) { setDocument(next); setError(null) }
       }).catch((reason) => {
-        if (current()) setError(reason instanceof Error ? reason.message : "Status Center is unavailable")
+        if (current()) setError(controller.signal.aborted ? "Telemetry refresh timed out. Try Refresh; automatic updates will retry." : reason instanceof Error ? reason.message : "Status Center is unavailable")
       }),
       fetchRadarControlSettings(config, controller.signal).then((next) => {
         if (current()) { if (!settingsDirty.current && settingsRevision.current === policyRevision) setSettings(next); setSettingsError(null) }
