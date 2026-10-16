@@ -1,0 +1,47 @@
+.page-status-center{gap:12px}
+.page-status-center .page-header{margin-bottom:0}
+.status-center__summary{grid-template-columns:minmax(260px,.8fr) minmax(0,1.2fr);align-items:stretch}
+.status-center__overall{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;padding:14px 16px;border-top-color:#e8534c}
+.status-center__overall>span{align-self:center}.status-center__overall>b{font-size:17px;text-align:right;color:#f1c071}.status-center__overall>small{grid-column:1/-1}
+.status-disclosure>summary{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer;list-style:none;font-size:10px;font-weight:800;letter-spacing:.09em;color:#cedce5}
+.status-disclosure>summary::-webkit-details-marker{display:none}
+.status-disclosure>summary>span:not(.status-disclosure__chevron){margin-left:auto;color:#9eb0bd;font-size:9px;letter-spacing:.05em}
+.status-disclosure__chevron{margin-left:auto;color:#fa7b72;font-size:19px;transition:transform .15s}
+.status-disclosure[open]>summary>.status-disclosure__chevron{transform:rotate(180deg)}
+.status-disclosure__body{padding-top:14px}
+.status-disclosure>summary:focus-visible,.mission-filters button:focus-visible,.mission-toolbar input:focus-visible{outline:2px solid #f4b860;outline-offset:4px}
+.status-center__platform-fold{padding:8px 16px;background:var(--cb-panel);border:1px solid var(--cb-line)}
+.status-center__platform-fold .status-center__tiles{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.status-center__tile{min-height:88px;padding:12px}
+.page-status-center .status-landscape{padding:18px}
+.status-landscape__grid{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:12px}
+.status-landscape__card{gap:10px;padding:16px;box-shadow:none}
+.mission-card-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;min-height:38px}
+.mission-card-heading h3{font-size:15px;line-height:1.35;margin:0}
+.mission-state{flex-shrink:0;white-space:nowrap;padding:4px 6px;border:1px solid #806c41;background:#2b251b;color:#f0bc6b;font-size:8px;font-weight:900;letter-spacing:.06em;border-radius:3px}
+.mission-state--healthy{color:#60deb2;border-color:#286c54;background:#122c25}.mission-state--degraded,.mission-state--offline{color:#ff928a;border-color:#8c4541;background:#301e22}.mission-state--unmonitored{color:#a5b7c4;border-color:#425563;background:#19232b}
+.status-landscape__card>.status-landscape__phase{font-size:8px;background:transparent;color:#a6b6c2;padding:0}
+.status-landscape__card>p:not(.status-landscape__unknown){min-height:33px;line-height:1.5}
+.status-landscape__score{margin-top:0;background:none;gap:10px}.status-landscape__score>div{background:transparent;padding:4px 0}
+.status-landscape__card .mission-project-details{padding-top:0;margin-top:auto}
+.status-landscape__card .mission-project-details>summary{min-height:34px;font-size:9px}
+.mission-project-details .status-disclosure__body{padding-top:0}
+.mission-project-details h4{font-size:9px;letter-spacing:.08em;color:#a7bac5;margin:16px 0 8px}
+.status-landscape__card ul{max-height:350px;gap:0;overscroll-behavior:contain;scrollbar-width:thin}
+.status-landscape__card li{padding:10px 0;border-bottom:1px solid #24323d;min-width:0}.status-landscape__card li>span{min-width:0;overflow-wrap:anywhere}
+.status-landscape__card li small{font-size:9px;line-height:1.5;text-transform:none;color:#94aab8}
+.status-landscape__card .mission-service-release{border:0;padding:6px 0 0}.status-landscape__card .mission-service-release summary{font-size:8px;letter-spacing:.03em;color:#a5b5c0;display:list-item;list-style:disclosure-closed}.status-landscape__card .mission-service-release[open] summary{list-style:disclosure-open}
+.status-landscape__signal{font-size:9px;flex-shrink:0;max-width:none}.status-landscape__note{line-height:1.5}
+.mission-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:16px 0 10px;flex-wrap:wrap}
+.mission-filters{display:flex;gap:5px;flex-wrap:wrap}.mission-filters button,.mission-empty button{background:#111c26;border:1px solid #35434f;color:#b7c5cf;padding:8px 10px;cursor:pointer;font-size:11px;border-radius:4px}
+.mission-filters button[aria-pressed=true]{border-color:#dd655d;background:#322023;color:#ffb0a6}.mission-filters button span{font-variant-numeric:tabular-nums;margin-left:5px;color:#91a8b8}
+.mission-toolbar input{border:1px solid #35434f;background:#0c151d;color:#d9e5ed;padding:9px 11px;min-width:220px;border-radius:4px;font-size:12px}
+.mission-result-count{font-size:10px;color:#94a9b7;margin:0 0 12px}.mission-empty{font-size:12px;padding:18px;color:#b7c5cf}
+.mission-panel.mission-coverage{margin:0;padding:8px 16px}.mission-insights{padding:8px 16px}.mission-insights .mission-panel{border-top:1px solid var(--cb-line);box-shadow:none}
+.status-center__panel.status-center__radar-fold,.status-center__telemetry.status-disclosure{padding:8px 16px}
+.status-center__telemetry>.status-disclosure__body{display:block;background:transparent}.status-center__telemetry .status-disclosure__body>div{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;background:var(--cb-line)}
+.incident-desk>h2{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.incident-desk>h2>span{font-size:9px;color:#eeb96a}
+.incident-desk__list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:280px;overscroll-behavior:contain;scrollbar-width:thin}
+.incident-desk__list article{position:relative;padding-right:135px;min-width:0}.incident-desk__list article button{position:absolute;right:12px;top:12px;margin:0;min-height:36px}
+.status-center__facts{margin-bottom:8px}
+@media(max-width:1150px){.status-landscape__grid{grid-template-columns:repeat(2,minmax(0,1fr))}.incident-desk__list{grid-template-columns:1fr}}
+@media(max-width:700px){.status-center__summary{grid-template-columns:1fr}.page-status-center .status-landscape{padding:14px}.status-landscape__grid{grid-template-columns:1fr}.mission-toolbar{gap:10px}.mission-toolbar input{width:100%;min-width:0}.mission-filters{width:100%;display:grid;grid-template-columns:1fr 1fr}.mission-filters button{min-height:40px}.status-landscape__counts{display:none}.mission-card-heading h3{font-size:16px}.status-disclosure>summary{letter-spacing:.04em;flex-wrap:wrap}.status-disclosure>summary>span:not(.status-disclosure__chevron){font-size:8px}.incident-desk__list article{padding-right:12px}.incident-desk__list article button{position:static;margin-top:8px}.status-landscape__header p{font-size:11px}}

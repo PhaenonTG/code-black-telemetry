@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { memo, useState } from "react"
 import type { StatusAttention, StatusCenterDocument } from "./statusCenterClient"
 import "./incident-desk.css"
 
@@ -10,7 +10,7 @@ function serviceFor(item: StatusAttention, document: StatusCenterDocument) {
   return item.id.startsWith("svc:") ? document.services?.find((service) => service.id === item.id.slice(4)) : undefined
 }
 
-export function IncidentDesk({ document, error }: { document: StatusCenterDocument | null; error: string | null }) {
+export const IncidentDesk = memo(function IncidentDesk({ document, error }: { document: StatusCenterDocument | null; error: string | null }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const incidents = document?.attention ?? []
@@ -28,7 +28,7 @@ export function IncidentDesk({ document, error }: { document: StatusCenterDocume
   }
 
   return <section className="status-center__panel incident-desk" aria-label="Attention queue">
-    <h2>ATTENTION QUEUE</h2>
+    <h2>ATTENTION QUEUE <span>{error || !document ? "—" : incidents.length} ACTIVE</span></h2>
     {error ? <p className="status-center__muted">Current attention queue unavailable. Previously received items may be out of date.</p> : !document ? <p className="status-center__muted">Loading attention queue…</p> : incidents.length === 0 ? <p className="status-center__muted">No active operator attention items.</p> : <div className="status-center__attention incident-desk__list">
       {incidents.map((item) => <article key={item.id}>
         <span>{item.severity ?? "NOTICE"}</span><b>{item.title}</b><p>{item.detail ?? "No detail provided"}</p>
@@ -51,4 +51,4 @@ export function IncidentDesk({ document, error }: { document: StatusCenterDocume
       <small>Use /luna repair in Discord #infrastructure-alerts and select the matching alert. Safe fixes can run there; other exact commands require your approval. Core and Discord alert IDs may differ.</small>
     </div>}
   </section>
-}
+})

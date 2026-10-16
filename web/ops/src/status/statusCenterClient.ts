@@ -119,12 +119,12 @@ async function statusRequest<T>(config: OpsCoreConfig, path: string, init?: Requ
   try { return await response.json() as T } catch { throw new OpsCoreClientError("Status Center returned invalid data.") }
 }
 
-export function fetchStatusCenter(config: OpsCoreConfig): Promise<StatusCenterDocument> {
-  return statusRequest<StatusCenterDocument>(config, STATUS_PATH)
+export function fetchStatusCenter(config: OpsCoreConfig, signal?: AbortSignal): Promise<StatusCenterDocument> {
+  return statusRequest<StatusCenterDocument>(config, STATUS_PATH, { signal })
 }
 
-export function fetchRadarControlSettings(config: OpsCoreConfig): Promise<RadarControlSettings> {
-  return statusRequest<RadarControlSettings>(config, RADAR_SETTINGS_PATH)
+export function fetchRadarControlSettings(config: OpsCoreConfig, signal?: AbortSignal): Promise<RadarControlSettings> {
+  return statusRequest<RadarControlSettings>(config, RADAR_SETTINGS_PATH, { signal })
 }
 
 export function saveRadarControlSettings(config: OpsCoreConfig, settings: RadarControlSettings): Promise<RadarControlSettings> {
