@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PageHeader } from "../components/PageHeader";
 import { AnalogMatchesPanel } from "../components/AnalogMatchesPanel";
 import { AsyncViewState } from "../components/AsyncViewState";
 import { Hodograph } from "../components/Hodograph";
@@ -212,6 +213,7 @@ export default function SoundingsWorkspace() {
 
   return (
     <div className="soundings-workspace soundings-workspace--brand">
+      <PageHeader className="soundings-workspace__header" kicker="ANALYSIS · UPPER AIR" title="Soundings" description="Point soundings for any location: Skew-T, hodograph, derived parameters, and historical analogs." />
       <aside className="soundings-sidebar">
         <section className="soundings-panel">
           <header className="soundings-panel__header">
