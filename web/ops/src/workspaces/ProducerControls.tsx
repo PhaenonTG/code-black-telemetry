@@ -8,7 +8,7 @@ import ConfirmDialog from "../components/ConfirmDialog"
 import ObsOutputControls from "./ObsOutputControls"
 import type { ObsOutputStatus } from "./obsOutputPolicy"
 
-type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: ObsOutputStatus & { stateRevision: number; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; archive?: { camera?: { state?: string; recording?: boolean } }; lowerThird?: { active?: boolean; text?: string }; audio?: { available?: boolean; state?: string; silence?: boolean; clipping?: boolean } } }
+type Status = { bridge: string; observedAt?: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: ObsOutputStatus & { stateRevision: number; previews?: { program?: { state?: string } }; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; archive?: { camera?: { state?: string; recording?: boolean } }; lowerThird?: { active?: boolean; text?: string }; audio?: { available?: boolean; state?: string; silence?: boolean; clipping?: boolean } } }
 type Lifecycle = { enabled: boolean; permission: boolean; canManage: boolean; broadcast: { id: string; title: string; description: string; status: string; facebookProducerUrl: string } | null; operation?: { state: string; action: string } | null }
 type Command = { commandId: string; state: string; result?: { error?: string } }
 async function api<T>(path: string, method = "GET", body?: unknown, signal?: AbortSignal, beforeSend?: () => void): Promise<T> {
@@ -22,7 +22,7 @@ async function api<T>(path: string, method = "GET", body?: unknown, signal?: Abo
   return readProducerResponse<T>(response)
 }
 
-export default function ProducerControls() {
+export default function ProducerControls({ monitorRunning = false }: { monitorRunning?: boolean }) {
   const [status, setStatus] = useState<Status | null>(null)
   const [message, setMessage] = useState("")
   const [pending, setPending] = useState<Command | null>(null)
@@ -38,7 +38,8 @@ export default function ProducerControls() {
   const [checkedAt, setCheckedAt] = useState(() => Date.now())
   const renewing = useRef(false)
   const owner = Boolean(status?.controlLease && status.controlLease.expiresAt > checkedAt && status.controlLease.userId === status.controlAccess?.userId)
-  const online = status?.bridge === "ONLINE"
+  const observedAt = status?.observedAt ?? status?.status?.observedAt
+  const online = status?.bridge === "ONLINE" && (observedAt === undefined || (Number.isFinite(Date.parse(observedAt)) && checkedAt - Date.parse(observedAt) <= 120_000))
   const allowed = status?.controlAccess?.allowed === true
   // Snapshot every identity shown by the confirmation, including the encoder destination.
   const encoderIdentity = JSON.stringify([status?.status?.engine, status?.status?.composition?.id, status?.status?.broadcast?.managedVideoId, status?.status?.outputs?.facebook?.destination])
@@ -144,7 +145,7 @@ export default function ProducerControls() {
     {status?.status?.engine === "obs" && <ObsOutputControls status={status.status} owner={owner} allowed={allowed} online={online} busy={blocked} onCommand={command} />}
     <div className="producer-controls__grid">
       <button type="button" disabled={!canStart} onClick={() => void command("preview.start")}>Arm / recover preview</button>
-      <button type="button" disabled={!allowed} onClick={() => void command("preview.stop")}>{status?.status?.engine === "obs" ? "Stop private monitor" : "Stop preview + output"}</button>
+      <button type="button" disabled={!allowed || (status?.status?.engine === "obs" && (!online || blocked || !monitorRunning || status.status.previews?.program?.state !== "ACTIVE"))} onClick={() => void command("preview.stop")}>{status?.status?.engine === "obs" ? "Stop private monitor" : "Stop preview + output"}</button>
       {status?.status?.engine !== "obs" && <><button type="button" disabled={!canStart || status?.status?.source_state !== "SOURCE_LIVE" || !audioHealthy || !managedSynced || Boolean(managedTerminal) || managedEnding || unresolved} onClick={() => setConfirmStart(facebookIdentity)}>{managed ? "Send to Facebook preview…" : "Start Facebook output…"}</button>
       <button type="button" disabled={!owner || !online || blocked || !facebookSending} onClick={() => void command("facebook.output.stop")}>STOP Facebook output</button></>}
       <button type="button" disabled={!canStart || cameraRecording} onClick={() => void command("archive.camera.start")}>Start camera recording</button>
@@ -154,7 +155,7 @@ export default function ProducerControls() {
     <label>Lower third<input maxLength={120} value={text} onChange={event => setText(event.target.value)} placeholder="On-screen text" /></label>
     <div className="producer-controls__grid"><button type="button" disabled={!canStart || !text.trim()} onClick={() => void command("lowerThird.set")}>Show lower third</button><button type="button" disabled={!canStart || !lowerThirdActive} onClick={() => void command("lowerThird.hide")}>Hide lower third</button></div>
     <p role="status" aria-live="polite">{message}</p>
-    <p>Source: {status?.status?.source_state ?? "UNKNOWN"} · Facebook encoder: {status?.status?.broadcast?.state ?? "UNKNOWN"}</p>
+    <p>Source: {online ? status?.status?.source_state ?? "UNKNOWN" : "OFFLINE"} · Facebook encoder: {status?.status?.broadcast?.state ?? "UNKNOWN"}</p>
     <p>Audio: {status?.status?.audio?.clipping ? "CLIPPING — reduce input level" : !status?.status?.audio?.available ? "UNAVAILABLE" : status.status.audio.silence ? "SILENT — check microphone" : "ACTIVE"}</p>
     {status?.status?.engine === "obs" ? <p className="workspace-note">Encoder SENDING does not prove a platform is public. Verify on <a href="https://www.facebook.com/live/producer" target="_blank" rel="noreferrer">Facebook Live Producer</a> and <a href="https://studio.youtube.com/channel/UCafIaG7PZnEI3b5PsKiblfw/livestreaming" target="_blank" rel="noreferrer">Code Black WX YouTube Studio</a>. Stopping output is separate from ending a platform broadcast.</p> : <>
     <h3>Facebook broadcast</h3>

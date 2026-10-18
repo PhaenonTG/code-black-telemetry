@@ -1,6 +1,6 @@
 import { PageHeader } from "../components/PageHeader"
 import { OpsStatusPill } from "../components/OpsStatusPill"
-import { useCoreOps } from "../core/useCoreOps"
+import { useSharedOpsStatus, statusAge } from "../core/useSharedOpsStatus"
 import type { OpsConnectionState } from "../core/types"
 import type { FabricPresenceState } from "../../../../src/services/fabric/types"
 import { ageText } from "../../../../src/services/radar"
@@ -24,8 +24,8 @@ export function lastSeenLabel(lastSeen: number | string | null): string {
 }
 
 export default function Fleet() {
-  const { state } = useCoreOps()
-  const snapshot = state.fabric.units
+  const { fabric, now: statusNow } = useSharedOpsStatus()
+  const snapshot = fabric.units
   const units = snapshot?.units ?? []
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -39,11 +39,12 @@ export default function Fleet() {
         <Link className="active" to="/chase" aria-current="page">TEAM & DEVICES</Link>
         <Link to="/stream">PROGRAM STATUS</Link>
       </nav>
+      {fabric.state === "STALE" && <p role="status">STALE Fabric snapshot · {statusAge(fabric.unitsReceivedAt ?? fabric.lastContactAt ?? fabric.checkedAt, statusNow)}</p>}
       {units.length === 0 ? (
         <div className="empty-state empty-state--centered">
           <p className="empty-state__title">{snapshot ? "NO UNITS REGISTERED" : "NO FABRIC UNIT SNAPSHOT"}</p>
           <p className="empty-state__body">
-            {snapshot ? "Fabric is reachable, but no units are registered yet." : `${state.fabric.detail}. Units appear here when Fabric supplies a snapshot.`}
+            {snapshot ? "Fabric is reachable, but no units are registered yet." : `${fabric.detail}. Units appear here when Fabric supplies a snapshot.`}
           </p>
           <div className="empty-state__actions"><Link to="/">OPEN OPERATIONS MAP</Link><Link to="/system">VIEW SYSTEM HEALTH</Link></div>
         </div>
