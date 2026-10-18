@@ -7,3 +7,12 @@ export const STREAM_WORK=[
  {id:"dual-output",title:"Facebook + YouTube controls",state:"AVAILABLE · QUALIFICATION PENDING",detail:"Confirmed OBS destination controls are available. Public starts stay separate from preparation; YouTube destination and real camera/audio checks are still pending.",next:"Verify the actual destination and PROGRAM picture/audio before any explicitly approved public start."},
  {id:"readiness",title:"Streaming PC preparation",state:"REMOTE PREPARATION",detail:"Prepare the existing PC setup from an approved OPS account. Starts missing OBS/support components only; never restarts running services or starts public streaming.",next:"PC must be powered on with its Windows helper running. A browser cannot wake a powered-off PC."},
 ] as const
+
+export function preparationDisabledReason(doc: PcLauncher | null, busy: boolean): string {
+ if (!doc?.online) return "Helper offline / unknown"
+ if (!doc.controlAccess?.allowed) return "Remote preparation requires an approved producer account"
+ if (busy) return "Request in progress"
+ if (preparationPending(doc)) return "Waiting for the current request"
+ if (doc.last?.state === "unknown") return "Previous delivery uncertain; use Check PC only"
+ return ""
+}
