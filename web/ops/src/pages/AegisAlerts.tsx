@@ -9,6 +9,9 @@ import { getAegisFeed, getAegisObservationPlan, getAegisStatus, replayAegisPolic
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles";
 import "../styles/aegis.css";
 
+import { getRadarStatus, type RadarStatus } from "../../../../src/services/radar";
+import { interpretRadarStatus } from "../status/externalHealth";
+
 const REFRESH_MS = 10_000;
 
 function utc(value: string | undefined): string {
@@ -47,6 +50,21 @@ function EvidenceMap({ alert }: { alert: AegisRadarAlert }) {
 
 export default function AegisAlerts() {
   const { config } = useCoreOps();
+  const [radarStatus, setRadarStatus] = useState<RadarStatus | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
+    const poll = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try { const next = await getRadarStatus("AUTO", "REF"); if (!cancelled) setRadarStatus(next); }
+      finally { inFlight = false; }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), REFRESH_MS);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+  const radarHealth = radarStatus ? interpretRadarStatus(radarStatus) : null;
   const [status, setStatus] = useState<AegisStatus | null>(null);
   const [plan, setPlan] = useState<AegisObservationPlan | null>(null);
   const [alerts, setAlerts] = useState<AegisRadarAlert[]>([]);
@@ -120,8 +138,9 @@ export default function AegisAlerts() {
       {plan ? <>
         <p className="aegis-empty">Last executor check {utc(plan.executor.last_checked_at ?? undefined)} · {plan.setup_drafts.length} setup draft{plan.setup_drafts.length === 1 ? "" : "s"} under observation · {plan.live_chasers.length} live chaser{plan.live_chasers.length === 1 ? "" : "s"}.</p>
         <div className="aegis-review__products" aria-label="Observation evidence gates">
-          {Object.entries(plan.gates).map(([gate, state]) => <span key={gate} className={state.includes("ready") ? "available" : "missing"}>{gate.replaceAll("_", " ")} · {state.replaceAll("_", " ")}</span>)}
-          <span className={plan.radar?.available ? "available" : "missing"}>radar · {plan.radar?.dominant_cell?.available ? "tracked cell" : plan.radar?.dominant_cell?.freshness_state?.replaceAll("_", " ") || "unavailable"}</span>
+          {Object.entries(plan.gates).map(([gate, state]) => <span key={gate} className={state.includes("ready") ? "available" : "missing"}>{gate === "radar" ? "Shadow screening gate" : gate.replaceAll("_", " ")} · {state.replaceAll("_", " ")}</span>)}
+          <span className={radarHealth?.state === "LIVE" ? "available" : "missing"}>radar · {radarHealth?.state ?? "CHECKING"} · {radarHealth?.detail ?? "Awaiting radar health"}</span>
+          <span>Shadow screening · {plan.radar?.dominant_cell?.freshness_state?.replaceAll("_", " ") || "unavailable"} · not radar health</span>
           <span className={plan.satellite?.state === "available_metadata_only" ? "available" : "missing"}>satellite · {plan.satellite?.satellite || plan.satellite?.analysis_state || "unavailable"}</span>
         </div>
         <p className="aegis-empty">{plan.executor.notice || "Observation evidence is recorded without routing a vehicle or issuing an official warning."}</p>
