@@ -46,8 +46,10 @@ export default function Stream() {
   const refresh = useCallback(async () => {
     try {
       const status = await fetchStatusCenter(config)
-      setHealth(parseStreamHealth(status.streaming))
-      setError(null)
+      const parsed = parseStreamHealth(status.streaming)
+      setHealth(parsed)
+      // A response without per-source status is not "still checking".
+      setError(parsed ? null : "Status Center responded without per-source stream status")
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Stream telemetry unavailable")
     }
@@ -62,11 +64,11 @@ export default function Stream() {
   return (
     <div className="page page-stream">
       <PageHeader title="PROGRAM STATUS" kicker="FIELD · STREAM INFRASTRUCTURE" description="Review field ingest status here. Use Producer for the authenticated private PROGRAM monitor and output controls." actions={<Link className="page-action-link" to="/producer">OPEN PRODUCER</Link>} />
-      <nav className="section-tabs" aria-label="Chase Operations sections">
-        <Link to="/chase">FLEET</Link><span className="active">STREAMS</span>
+      <nav className="section-tabs" aria-label="Field operations sections">
+        <Link to="/chase">TEAM & DEVICES</Link><span className="active" aria-current="page">PROGRAM STATUS</span>
       </nav>
       <section className="stream-stage">
-        <div className="stream-stage__label"><i /> PROGRAM FEED · NOT CONFIGURED</div>
+        <div className="stream-stage__label"><i /> PROGRAM FEED · MONITORED IN PRODUCER</div>
         <div className="stream-stage__standby">
           <strong>PRIVATE MONITOR LIVES IN PRODUCER</strong>
           <p>This status page intentionally does not expose the authenticated PROGRAM feed. Open Producer to monitor video, audio, and Facebook output readiness.</p>

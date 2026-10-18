@@ -30,7 +30,7 @@ export default function ChaseWorkspace() {
     : locationMode === "chaser" ? (referenceIsStale ? "Last known chaser fix" : referenceIsFallback ? "Waiting for chaser GPS" : "Live chaser GPS")
       : referenceIsFallback ? "Fallback reference" : "Map-selected point"
   return <section className="chase-workspace">
-    <header className="workspace-heading"><div><h1>Chase Desk</h1><p>Field position, official alerts, and radar context</p></div><nav aria-label="Chase tools"><button type="button" aria-pressed={choosingDestination} onClick={() => setChoosingDestination((value) => !value)}>{choosingDestination ? "Tap destination on map" : "Set route destination"}</button>{destination && <button type="button" onClick={() => { setDestination(null); setChoosingDestination(false) }}>Clear route</button>}<Link to="/radar">Radar Lab ↗</Link><Link to="/chase">Team & devices ↗</Link></nav></header>
+    <header className="workspace-heading"><div><h1>Chase Desk</h1><p>Field position, official alerts, and radar context</p></div><nav aria-label="Chase tools"><button type="button" aria-pressed={choosingDestination} onClick={() => setChoosingDestination((value) => !value)}>{choosingDestination ? "Tap destination on map" : "Set route destination"}</button>{destination && <button type="button" onClick={() => { setDestination(null); setChoosingDestination(false) }}>Clear route</button>}<Link to="/radar">Radar Lab →</Link><Link to="/chase">Team & devices →</Link></nav></header>
     <nav className="chase-reference-bar" aria-label="Chase location reference">
       <span>FOLLOW</span>
       <button type="button" aria-pressed={locationMode === "follow"} onClick={followDeviceLocation}>My device</button>

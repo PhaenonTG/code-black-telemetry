@@ -46,7 +46,7 @@ export default function CoordinationPanel({ load = loadSnapshot }: { load?: (sig
   const queue = snapshot?.queue.filter(q => project === "all" || q.project_id === project) ?? []
   return <section className="coordination" aria-label="Session coordination">
     <header className="coordination__header">
-      <div><span className="coordination__eyebrow">CODE BLACK / EXECUTION EVIDENCE</span><h2>SESSION COORDINATION</h2>
+      <div><span className="coordination__eyebrow">CODE BLACK / EXECUTION EVIDENCE</span><h1>COORDINATION</h1>
         <p>Read-only handoffs alongside the project tracker. The 31-item audit remains authoritative.</p></div>
       <button type="button" onClick={() => { void refresh() }} disabled={busy}>{busy ? "Refreshing…" : "Refresh evidence"}</button>
     </header>

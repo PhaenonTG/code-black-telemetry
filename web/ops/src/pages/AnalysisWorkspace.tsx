@@ -37,7 +37,7 @@ export default function AnalysisWorkspace() {
     : "Official warnings first · Aegis findings are internal"
   return <section className="analysis-workspace">
     <header className="workspace-heading"><div><h1>Setup Review</h1><p>{subtitle}</p></div><div className="analysis-mode" role="group" aria-label="Analysis mode"><button type="button" aria-pressed={mode === "outlooks"} onClick={() => chooseMode("outlooks")}>Outlook timeline</button><button type="button" aria-pressed={mode === "potential"} onClick={() => chooseMode("potential")}>Tornado potential</button><button type="button" aria-pressed={mode === "drafts"} onClick={() => chooseMode("drafts")}>Drafts</button><button type="button" aria-pressed={mode === "briefings"} onClick={() => chooseMode("briefings")}>Reviewed briefings</button><button type="button" aria-pressed={mode === "surveillance"} onClick={() => chooseMode("surveillance")}>Surveillance</button></div></header>
-    <div className="analysis-context"><span>{context}</span><nav aria-label="Analysis tools"><Link to="/weather">Weather analysis ↗</Link><Link to="/radar">Radar Lab ↗</Link></nav></div>
+    <div className="analysis-context"><span>{context}</span><nav aria-label="Analysis tools"><Link to="/weather">Weather analysis →</Link><Link to="/radar">Radar Lab →</Link></nav></div>
     {mode === "outlooks" ? <Suspense fallback={<p>Loading outlook timeline.</p>}><HorizonCatalog /></Suspense> : mode === "potential" ? <Suspense fallback={<p>Loading tornado potential…</p>}><TornadoPotential /></Suspense>
       : mode === "drafts" ? <ChaseSetups queue="drafts" detailBasePath="/analysis/drafts" />
       : mode === "briefings" ? <ChaseSetups queue="briefings" detailBasePath="/analysis/briefings" />

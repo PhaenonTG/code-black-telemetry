@@ -34,10 +34,10 @@ export default function Fleet() {
   }, [])
   return (
     <div className="page page-fleet">
-      <PageHeader title="CHASE OPERATIONS" kicker="FLEET · STREAMS · ACTIVE UNITS" description="Track active chase units, onboard systems, and the live program feed." />
-      <nav className="section-tabs" aria-label="Chase Operations sections">
-        <Link className="active" to="/chase">FLEET</Link>
-        <Link to="/stream">STREAMS</Link>
+      <PageHeader title="TEAM & DEVICES" kicker="FIELD OPERATIONS · CHASERS · VEHICLES" description="Active chase units, their onboard devices, and when each last reported." />
+      <nav className="section-tabs" aria-label="Field operations sections">
+        <Link className="active" to="/chase" aria-current="page">TEAM & DEVICES</Link>
+        <Link to="/stream">PROGRAM STATUS</Link>
       </nav>
       {units.length === 0 ? (
         <div className="empty-state empty-state--centered">
