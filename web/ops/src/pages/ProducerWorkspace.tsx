@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PageHeader } from "../components/PageHeader"
 import { Link } from "react-router-dom"
 import { useCoreOps } from "../core/useCoreOps"
-import { currentAccessToken, buildCoreRequestHeaders } from "../core/client"
+import { currentAccessToken, fetchForecast } from "../core/client"
 import { fetchStatusCenter, type StatusCenterDocument } from "../status/statusCenterClient"
 import { chooseProducerSource, parseProducerSources } from "../workspaces/producerSources"
 import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
@@ -11,7 +11,6 @@ import ProducerControls from "../workspaces/ProducerControls"
 import PreparePcControls from "../workspaces/PreparePcControls"
 import ProgramMonitor from "../workspaces/ProgramMonitor"
 import { currentMediaTimestamp, currentProgramRender, mediaCompositionMatches, PROGRAM_PREVIEW_POLL_MS, PROGRAM_STATUS_POLL_MS } from "../workspaces/programMonitorPolicy"
-import { coreConfigured } from "../core/config"
 import { useProducerRead } from "../workspaces/useProducerRead"
 import { createProducerPoll } from "../workspaces/producerPolling"
 import { readProducerResponse } from "../workspaces/producerResponse"
@@ -121,14 +120,8 @@ export default function ProducerWorkspace() {
     const load = async () => {
       if (document.hidden) return
       const params = new URLSearchParams({ latitude: String(alertLatitude), longitude: String(alertLongitude) })
-      await poll.run(async signal => {
-        if (!coreConfigured(config)) throw new Error("Live Core is not configured")
-        const token = await currentAccessToken()
-        signal.throwIfAborted()
-        const response = await fetch(`${config.coreBaseUrl}/api/forecast/v1/alerts?${params}`, { cache: "no-store", signal, headers: buildCoreRequestHeaders(token) })
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return await response.json() as OfficialAlertResponse
-      }, next => { setAlertSnapshot({ key: `${alertLatitude.toFixed(4)},${alertLongitude.toFixed(4)}`, value: next }); setAlertError("") }, () => setAlertError("Official alert check failed; last received alerts may be stale."), 25_000)
+      // fetchForecast keeps the shared read cache and its own bounded timeout; the lane adds abort + deadline.
+      await poll.run(signal => fetchForecast<OfficialAlertResponse>(config, `alerts?${params}`, signal), next => { setAlertSnapshot({ key: `${alertLatitude.toFixed(4)},${alertLongitude.toFixed(4)}`, value: next }); setAlertError("") }, () => setAlertError("Official alert check failed; last received alerts may be stale."), 25_000)
     }
     const initial = window.setTimeout(() => void load(), 0)
     const timer = window.setInterval(() => void load(), 60_000)
