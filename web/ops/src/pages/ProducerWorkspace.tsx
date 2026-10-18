@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { PageHeader } from "../components/PageHeader"
 import { Link } from "react-router-dom"
 import { useCoreOps } from "../core/useCoreOps"
 import { currentAccessToken, fetchForecast } from "../core/client"
@@ -225,7 +226,7 @@ export default function ProducerWorkspace() {
   }
 
   return <section className="workspace-page producer-workspace">
-    <header className="workspace-heading"><div><h1>Producer</h1><p>Live stream control desk</p></div><button type="button" onClick={() => void refreshStatus()}>Refresh sources</button></header>
+    <PageHeader className="workspace-heading" kicker="STREAM · PROGRAM CONTROL" title="Producer" description="Live stream control desk" actions={<button type="button" onClick={() => void refreshStatus()}>Refresh sources</button>} />
     <div className="producer-layout">
       <div className="producer-main">
         <section className="workspace-panel producer-stage" aria-label="PROGRAM preview">
