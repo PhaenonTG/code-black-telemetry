@@ -1,21 +1,7 @@
 import { Link, useLocation } from "react-router-dom"
 import { Icon } from "../components/Icon"
 import { PHONE_ROUTES, activePhoneRoute } from "./phoneRoutes"
-
-// Component-scoped brand styling; motion only under prefers-reduced-motion: no-preference.
-const BOTTOM_NAV_BRAND_CSS = `
-.shell .bottom-nav--brand{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0) 45%),repeating-linear-gradient(90deg,rgba(255,255,255,.014) 0 1px,transparent 1px 3px),linear-gradient(180deg,var(--cb-panel-hi),var(--cb-shell))}
-.shell .bottom-nav--brand::before{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;background:linear-gradient(90deg,transparent,var(--cb-red) 20%,var(--cb-red) 80%,transparent);box-shadow:0 0 8px rgba(255,42,12,.6);pointer-events:none}
-.shell .bottom-nav--brand .bottom-nav__link{position:relative;border-radius:12px}
-.shell .bottom-nav--brand .bottom-nav__link span{font-family:Anton,Inter,ui-sans-serif,system-ui,sans-serif;font-weight:400;letter-spacing:.08em}
-.shell .bottom-nav--brand .bottom-nav__link.active{color:var(--cb-text);background:radial-gradient(60% 80% at 50% 100%,rgba(255,42,12,.16),transparent 70%)}
-.shell .bottom-nav--brand .bottom-nav__link.active svg{color:var(--cb-red);filter:drop-shadow(0 0 5px rgba(255,42,12,.75))}
-.shell .bottom-nav--brand .bottom-nav__link:focus-visible{outline:2px solid var(--cb-red);outline-offset:-2px}
-@media (prefers-reduced-motion:no-preference){
-.shell .bottom-nav--brand .bottom-nav__link{transition:color 180ms cubic-bezier(.2,.8,.2,1),background 220ms cubic-bezier(.2,.8,.2,1)}
-.shell .bottom-nav--brand .bottom-nav__link:active svg{transform:scale(.92)}
-}
-`
+import "./BottomNav.css"
 
 // Phone navigation is deliberately separate from the desktop sidebar.  Five
 // destinations preserve a one-handed layout; deeper weather/field controls live
@@ -27,7 +13,6 @@ export function BottomNav() {
   const activePath = activePhoneRoute(pathname)
   return (
     <nav className="bottom-nav bottom-nav--brand" aria-label="Primary">
-      <style href="cb-brand-bottom-nav" precedence="default">{BOTTOM_NAV_BRAND_CSS}</style>
       {PHONE_ROUTES.map((r) => (
         <Link key={r.path} to={r.path} className={`bottom-nav__link${activePath === r.path ? " active" : ""}`} aria-current={activePath === r.path ? "page" : undefined} title={r.title}>
           <Icon name={r.icon} />

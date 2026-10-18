@@ -14,33 +14,7 @@ import {
   type StatusCenterDocument,
   type StatusTile,
 } from "../status/statusCenterClient"
-
-
-// Page-scoped brand styling (no Status Center CSS file is in the allowed list). Only this page's
-// own panels are styled (embedded inventory/streaming components are left as they are). Motion
-// only under prefers-reduced-motion: no-preference, transform/opacity only.
-const STATUS_BRAND_CSS = `
-.shell .page-status-center--brand .page-header h1{font-family:Anton,Inter,ui-sans-serif,system-ui,sans-serif;font-weight:400;letter-spacing:.04em}
-.shell .page-status-center--brand :is(.status-center__overall,.status-center__panel,.status-center__telemetry){position:relative;overflow:hidden;border:1px solid var(--cb-line);border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,0) 38%),repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px),linear-gradient(160deg,var(--cb-panel-hi),var(--cb-panel) 70%);box-shadow:0 10px 28px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.05)}
-.shell .page-status-center--brand :is(.status-center__overall,.status-center__panel,.status-center__telemetry)::before{content:"";position:absolute;left:16px;right:16px;top:0;height:1px;background:linear-gradient(90deg,transparent,var(--cb-red) 15%,var(--cb-red) 85%,transparent);box-shadow:0 0 10px rgba(255,42,12,.7);pointer-events:none}
-.shell .page-status-center--brand .status-center__tiles{border-radius:14px;overflow:hidden;border:1px solid var(--cb-line)}
-.shell .page-status-center--brand .status-center__tile{background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,0) 38%),repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px),linear-gradient(160deg,var(--cb-panel-hi),var(--cb-panel) 70%)}
-.shell .page-status-center--brand .status-center__overall>b{font-family:Anton,Inter,ui-sans-serif,system-ui,sans-serif;font-weight:400;letter-spacing:.04em;font-size:26px}
-.shell .page-status-center--brand :is(.status-center__panel,.status-center__telemetry)>h2{color:var(--cb-gray);letter-spacing:.16em}
-.shell .page-status-center--brand .status-center__facts{border-radius:10px;overflow:hidden}
-.shell .page-status-center--brand .status-center__attention article{border-radius:8px;box-shadow:inset 2px 0 0 var(--cb-red),-1px 0 10px -4px rgba(255,42,12,.7)}
-.shell .page-status-center--brand .status-center__admin summary{cursor:pointer}
-.shell .page-status-center--brand .status-center__select select{border-radius:8px}
-.shell .page-status-center--brand .settings-save,.shell .page-status-center--brand .page-action-link{border-radius:8px;border:1px solid rgba(255,42,12,.55);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0))}
-.shell .page-status-center--brand .settings-save:hover:not(:disabled),.shell .page-status-center--brand .page-action-link:hover{border-color:var(--cb-red);box-shadow:0 0 14px -4px rgba(255,42,12,.85)}
-.shell .page-status-center--brand a:focus-visible,.shell .page-status-center--brand button:focus-visible,.shell .page-status-center--brand summary:focus-visible{outline:2px solid var(--cb-red);outline-offset:2px}
-@media (prefers-reduced-motion:no-preference){
-.shell .page-status-center--brand :is(.status-center__summary,.status-center__grid>section,.status-center__telemetry){animation:cb-status-in 380ms cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--cb-i,0) * 70ms)}
-.shell .page-status-center--brand :is(.settings-save,.page-action-link){transition:box-shadow 220ms cubic-bezier(.2,.8,.2,1),border-color 180ms,transform 160ms}
-.shell .page-status-center--brand :is(.settings-save,.page-action-link):active{transform:scale(.98)}
-@keyframes cb-status-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-}
-`
+import "./StatusCenter.css"
 
 const INTERVALS: Array<RadarControlSettings["primary_interval_seconds"]> = [300, 600, 900, 1800]
 
@@ -142,7 +116,6 @@ export default function StatusCenter() {
 
   return (
     <div className="page page-status-center page-status-center--brand">
-      <style href="cb-brand-status-center" precedence="default">{STATUS_BRAND_CSS}</style>
       <PageHeader
         title="STATUS CENTER"
         kicker="LIVE PLATFORM TELEMETRY"
