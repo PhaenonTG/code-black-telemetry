@@ -1,13 +1,14 @@
 import {useEffect,useRef,useState} from 'react'
-import {fetchForecast} from '../../core/client'
+import {loadHorizonCatalog} from './horizonCatalogRead'
 import {useCoreOps} from '../../core/useCoreOps'
+// @ts-expect-error Existing JavaScript poller has no declaration file.
 import {visibleSnapshotPoller} from '../../pages/visibleSnapshotPoller.mjs'
 import topology from './us-states.topo.json'
 import './horizons.css'
 
 type Source={day:number;status:string;reason?:string;source_url?:string;issued_at?:string;valid_from?:string;valid_until?:string;checked_at?:string;last_success_at?:string}
 type Region={catalog_id:string;day:number;kind:string;label:string;official_code?:number;source:string;source_url:string;issued_at:string;valid_from:string;valid_until:string;data_status:string;uncertainty:string;geometry:{type:'Polygon'|'MultiPolygon';coordinates:any[]}}
-type Catalog={schema:string;checked_at:string|null;revision:number;cache_state:string;acquisition_note:string;records:Region[];sources:Source[];history:Array<{at:string;revision:number;added:string[];changed:string[];removed:string[]}>}
+export type Catalog={schema:string;checked_at:string|null;revision:number;cache_state:string;acquisition_note:string;records:Region[];sources:Source[];history:Array<{at:string;revision:number;added:string[];changed:string[];removed:string[]}>}
 const time=(v?:string|null)=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('en-US',{timeZone:'UTC'})+' UTC':'Not supplied'
 const date=(v?:string)=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleDateString('en-US',{timeZone:'UTC',month:'short',day:'numeric'}):'Window unknown'
 const label=(s?:string)=>({available:'Available',no_delineated_area:'No delineated area',insufficient_input:'Withheld — insufficient inputs',unavailable:'Unavailable',stale:'Stale'}[s??'']??'Unknown')
@@ -31,13 +32,13 @@ export function HorizonCatalogView({catalog,error,onRefresh}:{catalog:Catalog|nu
  const source=catalog?.sources.find(s=>s.day===day),rows=catalog?.records.filter(r=>r.day===day)??[],row=rows.find(r=>r.catalog_id===selected)??rows[0],shape=mapShape(coverage),href=sourceLink(row?.source_url??source?.source_url)
  return <section className="setup-horizons" aria-label="Setup Review outlook timeline">
   <header className="setup-horizons__heading"><div><h2>Outlook timeline</h2><p>Official Days 1–8 · separately labeled speculative Days 9–14</p></div><button type="button" onClick={onRefresh}>Refresh saved snapshot</button></header>
-  <p className="setup-horizons__notice" role="status">{error?'Saved-source refresh failed; any previous snapshot retains its original time. ':''}{catalog?.acquisition_note??'Loading saved official-source catalog.'}<br/>Snapshot: {time(catalog?.checked_at)} · {catalog?.cache_state??'UNAVAILABLE'}</p>
+  <p className="setup-horizons__notice" role="status">{error?'Saved-source refresh failed; any previous snapshot retains its original time. ':''}{catalog?.acquisition_note??(error?'Saved official-source catalog unavailable.':'Loading saved official-source catalog.')}<br/>Snapshot: {time(catalog?.checked_at)} · {catalog?.cache_state??'UNAVAILABLE'}</p>
   <div className="setup-horizons__timeline" role="group" aria-label="Outlook days">{Array.from({length:14},(_,i)=>i+1).map(value=>{const s=catalog?.sources.find(r=>r.day===value);return <button key={value} type="button" aria-pressed={day===value} aria-label={`Day ${value}, ${label(s?.status)}`} onClick={()=>{setDay(value);setSelected(null)}}><strong>D{value}</strong><span>{s?.valid_from?date(s.valid_from):'—'}</span></button>})}</div>
   <div className="setup-horizons__grid" data-expanded={expanded}>
    <section className="setup-horizons__map-panel" aria-label="Outlook map">
     <header><strong>Day {day} · {day<=8?'Official outlook':'Speculative pattern'}</strong><button ref={expandButton} type="button" aria-expanded={expanded} onClick={()=>setExpanded(v=>!v)}>{expanded?'Collapse map':'Expand map'}</button></header>
     <label className="setup-horizons__coverage">Map coverage <select value={coverage} onChange={e=>setCoverage(e.target.value)}><option value="conus">Contiguous US</option><option value="alaska">Alaska</option><option value="hawaii">Hawaii</option></select></label>
-    <svg viewBox="0 0 1000 600" role="img" aria-label={`${coverage} state boundaries and selected outlook areas`}><g>{shape.selected.map(s=><path key={s.id} d={shape.path(s.polygons)} className="setup-horizons__state"/>)}</g>{coverage==='conus'&&rows.map(r=><path key={r.catalog_id} d={shape.path(r.geometry.type==='Polygon'?[r.geometry.coordinates]:r.geometry.coordinates)} className={r.catalog_id===row?.catalog_id?'setup-horizons__region is-selected':'setup-horizons__region'} fillRule="evenodd" role="button" tabIndex={0} aria-label={`${r.label}, Day ${r.day}`} onClick={()=>setSelected(r.catalog_id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelected(r.catalog_id)}}}/>)}</svg>
+    <svg viewBox="0 0 1000 600" role="group" aria-label={`${coverage} state boundaries and selected outlook areas`}><g>{shape.selected.map(s=><path key={s.id} d={shape.path(s.polygons)} className="setup-horizons__state"/>)}</g>{coverage==='conus'&&rows.map(r=><path key={r.catalog_id} d={shape.path(r.geometry.type==='Polygon'?[r.geometry.coordinates]:r.geometry.coordinates)} className={r.catalog_id===row?.catalog_id?'setup-horizons__region is-selected':'setup-horizons__region'} fillRule="evenodd" role="button" tabIndex={0} aria-label={`${r.label}, Day ${r.day}`} onClick={()=>setSelected(r.catalog_id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelected(r.catalog_id)}}}/>)}</svg>
     <p>{coverage!=='conus'?'No supported SPC/model coverage established for this map view.':rows.length?'Area outlines show source geometry; category/severity is given by the source label.':day>=9?'Pattern withheld: no sufficient matching ensemble inputs and verified validity anchor.':source?.status==='no_delineated_area'?'No area delineated in this product; this is not an all-clear.':'Source unavailable or unknown. No replacement forecast is invented.'}</p>
     <small>State boundaries: US Census / us-atlas, ISC license. No map-tile or routing request.</small>
    </section>
@@ -49,6 +50,6 @@ export function HorizonCatalogView({catalog,error,onRefresh}:{catalog:Catalog|nu
 }
 export default function HorizonCatalog(){
  const {config}=useCoreOps(),[catalog,setCatalog]=useState<Catalog|null>(null),[error,setError]=useState<string|null>(null),refresh=useRef<(()=>void)|null>(null)
- useEffect(()=>{const poll=visibleSnapshotPoller({intervalMs:30000,load:async(signal:AbortSignal)=>{const value=await fetchForecast<Catalog>(config,'chase-horizons',signal);if(value.schema!=='codeblack.chase.horizon-catalog.v1'||!Array.isArray(value.records)||value.records.length>1600||!Array.isArray(value.sources)||value.sources.length>14||!Array.isArray(value.history))throw Error('Invalid catalog');return value},onData:(value:Catalog)=>{setCatalog(value);setError(null)},onError:()=>setError('UNAVAILABLE')});refresh.current=poll.refresh;return()=>{poll.stop();refresh.current=null}},[config])
+ useEffect(()=>{const poll=visibleSnapshotPoller({intervalMs:30000,load:(signal:AbortSignal)=>loadHorizonCatalog(config,signal),onData:(value:Catalog)=>{setCatalog(value);setError(null)},onError:()=>setError('UNAVAILABLE')});refresh.current=poll.refresh;return()=>{poll.stop();refresh.current=null}},[config])
  return <HorizonCatalogView catalog={catalog} error={error} onRefresh={()=>refresh.current?.()}/>
 }
