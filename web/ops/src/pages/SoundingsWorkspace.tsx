@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalogMatchesPanel } from "../components/AnalogMatchesPanel";
+import { AsyncViewState } from "../components/AsyncViewState";
 import { Hodograph } from "../components/Hodograph";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { SkewT } from "../components/SkewT";
@@ -292,7 +293,7 @@ export default function SoundingsWorkspace() {
           <span className="soundings-status-bar__point">{point ? point.label : "No location selected"}</span>
         </div>
 
-        {phase === "idle" && <div className="soundings-empty">Select a location to load a sounding.</div>}
+        {phase === "idle" && <AsyncViewState state="empty" title="No sounding loaded" message="Select a location to load a sounding." />}
         {phase === "loading" && !result && (
           <div className="soundings-empty soundings-loading" role="status">
             <strong>{startedAt && clock - startedAt > 45_000 ? "Deriving the vertical profile…" : startedAt && clock - startedAt > 15_000 ? "Acquiring HRRR model levels…" : "Starting sounding request…"}</strong>
@@ -301,14 +302,23 @@ export default function SoundingsWorkspace() {
           </div>
         )}
         {phase === "unavailable" && (
-          <div className="soundings-empty soundings-empty--error">
-            {error ?? "Sounding unavailable."}
-            {point && (
-              <button type="button" className="soundings-retry" onClick={() => void loadSounding(point)}>
-                Retry
-              </button>
-            )}
-          </div>
+          <AsyncViewState
+            state="error"
+            title="Sounding unavailable"
+            message={error ?? "Sounding unavailable."}
+            onRetry={point ? () => void loadSounding(point) : undefined}
+          />
+        )}
+        {phase === "stale" && result && (
+          <AsyncViewState
+            compact
+            state="stale"
+            title="Sounding may be out of date"
+            message={`This profile was received more than ${STALE_AFTER_MS / 60_000} minutes ago and is no longer marked current.`}
+            lastUpdated={loadedAt !== null ? new Date(loadedAt) : undefined}
+            onRetry={point ? () => void loadSounding(point) : undefined}
+            retryLabel="Reload sounding"
+          />
         )}
 
         {result && (
