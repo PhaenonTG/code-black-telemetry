@@ -19,3 +19,66 @@
   white-space: nowrap;
 }
 
+@media (max-width: 480px) {
+  /* Expand the hit box without moving text or changing its decoration. Map
+     controls/markers and embedded reserved workspaces are deliberately excluded. */
+  :is(.hurricane-watch__header, .hurricane-watch__panel, .hurricane-watch__sources,
+      .hurricane-watch__image-dialog-actions, .chase-official, .chase-intel,
+      .chase-workspace > .page-header, .page-operations, .potential-aegis,
+      .automation-lab) a,
+  .hurricane-watch__panel summary,
+  :is(.hurricane-watch__toolbar, .hurricane-watch__image-dialog,
+      .chase-reference-bar, .chase-radar__controls,
+      .chase-workspace > .page-header, .page-operations, .automation-lab) button {
+    position: relative;
+  }
+
+  :is(.hurricane-watch__header, .hurricane-watch__panel, .hurricane-watch__sources,
+      .hurricane-watch__image-dialog-actions, .chase-official, .chase-intel,
+      .chase-workspace > .page-header, .page-operations, .potential-aegis,
+      .automation-lab) a::before,
+  .hurricane-watch__panel summary::before,
+  :is(.hurricane-watch__toolbar, .hurricane-watch__image-dialog,
+      .chase-reference-bar, .chase-radar__controls,
+      .chase-workspace > .page-header, .page-operations, .automation-lab) button::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    min-width: 24px;
+    min-height: 24px;
+    transform: translateY(-50%);
+  }
+
+  /* Native range tracks keep their appearance inside a comfortable input box.
+     Checkboxes already have wrapping labels: enlarge those clickable labels. */
+  .automation-lab .automation-lab__fields input[type="range"],
+  .automation-lab .automation-lab__check {
+    min-height: 44px;
+  }
+  .automation-lab .automation-lab__check { cursor: pointer; }
+
+  /* An explicit floor for small copy, leaving headings and values at their
+     existing larger sizes. No selectors reach into the maps. */
+  .hurricane-watch :is(.hurricane-watch__guidance-head > span,
+      .hurricane-watch__guidance-prior, .hurricane-watch__image-dialog-head p),
+  .chase-workspace :is(.chase-official small, .chase-official a, .chase-intel a,
+      .chase-radar__controls button, .chase-radar__controls select),
+  .page-operations :is(.page-action-link, .section-tabs > *) {
+    font-size: 11px;
+  }
+
+  .hurricane-watch :is(.hurricane-watch__guidance-title small, .hurricane-watch__guidance-values b small,
+      .hurricane-watch__metrics small, .hurricane-watch__metrics span,
+      .hurricane-watch__trend-stats small, .hurricane-watch__guidance-values > div > span,
+      .hurricane-watch__guidance-comparison small, .hurricane-watch__guidance-comparison span),
+  .chase-workspace :is(.chase-intel__items span, .chase-intel__items small,
+      .chase-radar > header span, .chase-radar > footer span, .chase-reference-bar > span, .chase-unit-strip span,
+      .chase-official > div > span, .chase-intel .workspace-panel > header span,
+      .chase-intel .workspace-panel > header a, .chase-radar__controls label),
+  .page-operations :is(.ops-system-grid section > span, .status-row__label, .ops-status-badge) {
+    font-size: 12px;
+  }
+}

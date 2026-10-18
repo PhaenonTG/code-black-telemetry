@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { renderToString } from "react-dom/server"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -70,4 +71,15 @@ describe("phone accessibility", () => {
     expect(html).toContain('role="img" aria-label="Schematic forecast positions; live radar is unavailable without a map token"')
   })
 
+  it("gives the selected radar product at least 4.5:1 text contrast", () => {
+    const css = readFileSync(new URL("./Workspaces.css", import.meta.url), "utf8")
+    const rule = css.match(/\.chase-radar__controls button\[aria-pressed=true\]\{([^}]+)\}/)?.[1] ?? ""
+    const background = rule.match(/background:(#[a-f\d]{6});/i)?.[1]
+    expect(background).toBeDefined()
+    expect(rule).toContain("color:#fff")
+    const channels = background!.slice(1).match(/../g)!.map(hex => parseInt(hex, 16) / 255)
+      .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+    const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+    expect(1.05 / (luminance + 0.05)).toBeGreaterThanOrEqual(4.5)
+  })
 })
