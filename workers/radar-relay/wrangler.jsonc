@@ -1,0 +1,31 @@
+{
+  // Standalone public relay for radar-worker (single-site NEXRAD Level II/III tiles), reachable
+  // over the codeblack-core-gateway Tunnel's VPC Service the same way chase-gateway and the Core
+  // gateway are. NOT the OPS Pages project -- see ../../web/ops for that. Public routes (unlike
+  // ../core-gateway, which is Service-Binding-only) because radar-worker's own data is already
+  // fully public NOAA/NEXRAD data with no secret to protect -- see README.md.
+  "name": "codeblack-radar-relay",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-08",
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "ops.codeblackwx.com/api/v1/radar/*",
+      "zone_name": "codeblackwx.com"
+    }
+  ],
+  // Points at the "codeblack-radar-worker" VPC Service, bound to the codeblack-core-gateway
+  // Tunnel (35a17aa9-2532-4583-98ca-00f5b7a20c85) targeting 127.0.0.1:8787 HTTP, where the
+  // radar-worker systemd service (radar-worker/worker.cjs) runs on the same host as Core.
+  "vpc_services": [
+    {
+      "binding": "RADAR_VPC",
+      "service_id": "01a08007-aa4a-7883-bc69-916b7fdb56fc",
+      "remote": true
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

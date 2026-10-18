@@ -1,0 +1,212 @@
+import mapboxgl from "mapbox-gl";
+import type { Map as MapboxMap, Marker, Popup } from "mapbox-gl";
+import type { NearbyCategory, NearbyPlace } from "../services/nearby";
+import type { CustomPoiPin } from "../services/settings";
+import iconFuel from "../assets/poi-icons/icon-fuel.svg";
+import iconLodging from "../assets/poi-icons/icon-lodging.svg";
+import iconHospital from "../assets/poi-icons/icon-hospital.svg";
+import iconFood from "../assets/poi-icons/icon-food.svg";
+
+// Separate from AtlasPinMarkers.ts (spotter/team position pins) rather than extended to share it --
+// that helper applies one PinStyle to every point in a call, but POIs need per-point styling
+// (which custom brand matched, the fixed ER look, or a "closest of category" pick) and a different
+// popup body (hours/distance, not a "last ping" age). Same overall shape (mapboxgl.Marker + DOM
+// element, WeakMap-keyed latest-data cache for fresh-on-click popups, create/update/remove-by-id
+// sync) since that pattern is already proven here.
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function hoursLabel(place: NearbyPlace) {
+  if (place.hoursStatus === "open") return "OPEN";
+  if (place.hoursStatus === "closed") return "CLOSED";
+  if (place.hoursStatus === "typical-open") return "TYPICALLY OPEN";
+  return "HOURS UNKNOWN";
+}
+
+const activePopups = new WeakMap<MapboxMap, Popup>();
+
+function showPoiPopup(map: MapboxMap, place: NearbyPlace) {
+  activePopups.get(map)?.remove();
+  const html = `<strong>${escapeHtml(place.name)}</strong><span>${place.distanceMiles.toFixed(1)} mi &middot; ${hoursLabel(place)}</span>`;
+  const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: true, offset: 14, className: "atlas-pin-popup" })
+    .setLngLat([place.lon, place.lat])
+    .setHTML(html)
+    .addTo(map);
+  activePopups.set(map, popup);
+}
+
+// Owner: "I don't want that to list every available option, I want the ability to change that
+// myself" -- gas/food/hospital places from the broader list only render at all when they match a
+// curated custom pin (by name substring, same matching approach teamRoster always used) or are the
+// single closest-of-category pick already shown on the Nearby card; everything else in the raw
+// Overpass feed is simply not shown here. Hospitals used to bypass this entirely and render every
+// one in range -- owner: "Nearby layer on the dash map needs to only include what is listed on the
+// nearby tab" (which only ever shows the one closest ER) -- so hospitals now go through the same
+// best-pick gate as gas/lodging/food instead of a special always-on case.
+function matchCustomPin(place: NearbyPlace, customPins: CustomPoiPin[]): CustomPoiPin | null {
+  const name = place.name.toLowerCase();
+  for (const pin of customPins) {
+    const match = pin.matchText.trim().toLowerCase();
+    if (match && name.includes(match)) return pin;
+  }
+  return null;
+}
+
+const ER_COLOR = "#ff2d35";
+// Category glyph, always used regardless of color -- a fuel pump reads as "gas" no matter which
+// category's color scheme is behind it, so this is separate from BEST_PICK_COLOR below rather than
+// bundled into it (hospital doesn't go through the best-pick gate but still needs its icon).
+const CATEGORY_ICON: Record<NearbyCategory, string> = {
+  gas: iconFuel,
+  lodging: iconLodging,
+  hospital: iconHospital,
+  food: iconFood,
+};
+// Closest-of-category picks (gas/lodging/food) get their own fixed, un-configurable color -- these
+// aren't curated by the owner the way custom pins are, they're just "whatever's actually nearest
+// right now" mirroring the Nearby card's own best-pick tiles, so a color per category plus its
+// fixed icon is enough to tell them apart from custom brand pins at a glance. No blue (this app's
+// palette rule); red is reserved for ER/vehicle/warnings. Food was the same green as Team's default
+// pin color (#3ddc70) -- different shape/icon, but a fast glance at high speed shouldn't have to
+// rely on that; teal keeps it in the same "fresh/positive" register without the collision.
+const BEST_PICK_COLOR: Partial<Record<NearbyCategory, string>> = {
+  gas: "#ffbe3c",
+  hospital: "#ff2d35",
+  lodging: "#b26bff",
+  food: "#2dd4bf",
+};
+
+// Icons render as background-image on the same colored rounded-square treatment the old letter
+// pins used, sized well below 100% so there's breathing room between the glyph and the pin's own
+// border/glow -- at this marker size (22px) any icon detail finer than a bold silhouette won't
+// survive anyway, so the source SVGs (src/assets/poi-icons/) are deliberately simple/blocky.
+function applyIconPinStyle(el: HTMLDivElement, color: string, iconUrl: string) {
+  const size = 24;
+  el.style.width = `${size}px`;
+  el.style.height = `${size}px`;
+  el.style.backgroundColor = color;
+  el.style.backgroundImage = "";
+  el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
+  el.style.borderRadius = "50% 50% 50% 2px";
+  el.style.transform = "rotate(-45deg)";
+  el.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.65)";
+  el.style.display = "grid";
+  el.style.placeItems = "center";
+  el.style.color = "";
+  el.style.font = "";
+  el.innerHTML = `<img src="${iconUrl}" alt="" style="width:60%;height:60%;transform:rotate(45deg)" />`;
+  el.style.cursor = "pointer";
+}
+
+function poiOpacityForZoom(zoom: number) {
+  const t = Math.min(1, Math.max(0, (zoom - 3) / 7));
+  return 0.22 + t * 0.48;
+}
+
+function applyPoiStyle(el: HTMLDivElement, place: NearbyPlace, customPin: CustomPoiPin | null, zoom: number) {
+  el.style.opacity = String(poiOpacityForZoom(zoom));
+  if (customPin?.imageDataUrl) {
+    const size = 28;
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.display = "block";
+    el.textContent = "";
+    el.style.font = "";
+    el.style.color = "";
+    el.style.backgroundImage = `url(${customPin.imageDataUrl})`;
+    el.style.backgroundSize = "cover";
+    el.style.backgroundPosition = "center";
+    el.style.backgroundColor = "";
+    el.style.borderRadius = "6px";
+    el.style.border = "2px solid rgba(0, 0, 0, 0.65)";
+    el.style.boxShadow = "0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 8px 2px rgba(255, 255, 255, 0.5)";
+    el.style.cursor = "pointer";
+    return;
+  }
+
+  const color = customPin?.color ?? BEST_PICK_COLOR[place.category] ?? ER_COLOR;
+  applyIconPinStyle(el, color, CATEGORY_ICON[place.category]);
+}
+
+// Per-map marker registry, same WeakMap-keyed-by-instance pattern AtlasSpotterLayer.ts/
+// AtlasTeamLayer.ts already use -- safe when more than one AtlasMap is mounted at once (Weather +
+// Locate pages both render one).
+const poiMarkers = new WeakMap<MapboxMap, Record<string, Marker>>();
+const latestPlacesByMarkers = new WeakMap<Record<string, Marker>, Record<string, NearbyPlace>>();
+const zoomListenerAttached = new WeakSet<MapboxMap>();
+
+export function updateAtlasPoiLayer(
+  map: MapboxMap,
+  places: NearbyPlace[],
+  nearbyBest: Partial<Record<NearbyCategory, NearbyPlace>>,
+  customPins: CustomPoiPin[],
+  visible: boolean,
+) {
+  let markers = poiMarkers.get(map);
+  if (!markers) {
+    markers = {};
+    poiMarkers.set(map, markers);
+  }
+  let latest = latestPlacesByMarkers.get(markers);
+  if (!latest) {
+    latest = {};
+    latestPlacesByMarkers.set(markers, latest);
+  }
+  if (!zoomListenerAttached.has(map)) {
+    zoomListenerAttached.add(map);
+    map.on("zoom", () => {
+      const opacity = String(poiOpacityForZoom(map.getZoom()));
+      for (const marker of Object.values(poiMarkers.get(map) ?? {})) marker.getElement().style.opacity = opacity;
+    });
+  }
+  const seen = new Set<string>();
+  if (visible) {
+    // Merge the general POI list with the Nearby card's own closest-per-category picks -- a best
+    // pick that also happens to be in the general list (common for gas/food, since both come from
+    // the same Overpass data) shouldn't render as two overlapping markers. Best-pick entries win
+    // the merge (they carry the "closest of category" styling) when the same id shows up in both.
+    const merged = new Map<string, NearbyPlace>();
+    for (const place of places) merged.set(place.id, place);
+    for (const place of Object.values(nearbyBest)) {
+      if (place) merged.set(place.id, place);
+    }
+    const bestPickIds = new Set(Object.values(nearbyBest).filter(Boolean).map((place) => place!.id));
+
+    for (const place of merged.values()) {
+      const isBestPick = bestPickIds.has(place.id);
+      const customPin = matchCustomPin(place, customPins);
+      if (!isBestPick && !customPin) continue;
+      seen.add(place.id);
+      latest[place.id] = place;
+      let marker = markers[place.id];
+      if (!marker) {
+        const el = document.createElement("div");
+        el.classList.add("atlas-poi-marker");
+        el.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const current = latest![place.id];
+          if (current) showPoiPopup(map, current);
+        });
+        marker = new mapboxgl.Marker({ element: el }).setLngLat([place.lon, place.lat]).addTo(map);
+        markers[place.id] = marker;
+      } else {
+        marker.setLngLat([place.lon, place.lat]);
+      }
+      applyPoiStyle(marker.getElement() as HTMLDivElement, place, customPin, map.getZoom());
+    }
+  }
+  for (const id of Object.keys(markers)) {
+    if (!seen.has(id)) {
+      markers[id].remove();
+      delete markers[id];
+      delete latest[id];
+    }
+  }
+}

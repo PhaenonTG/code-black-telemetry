@@ -1,0 +1,105 @@
+/* OPS chrome and content refinement. Keep shared map geometry and semantic states intact. */
+.shell {
+  --cb-radius: 8px;
+  --ops-ease: cubic-bezier(.2,.8,.2,1);
+  --ops-shadow: 0 8px 24px rgba(0,0,0,.12);
+  --ops-surface: linear-gradient(145deg, var(--cb-panel-hi), var(--cb-panel) 60%);
+}
+.shell[data-theme="light"] { --ops-shadow: 0 4px 18px rgba(24,39,58,.06); }
+.shell__content { overscroll-behavior-y: contain; }
+/* The imported native stylesheet uses !important page padding at tablet/phone widths.
+   Scope this exception to OPS pages so those native rules cannot erase the content gutters. */
+.shell .page { min-width: 0; padding: 28px 28px 36px !important; }
+.shell .page-header { margin-bottom: 10px; align-items: center; }
+.shell .page-header h1 { font-size: clamp(24px,2.1vw,28px); line-height: 1.15; letter-spacing: -.025em; }
+.shell .page-header__description { font-size: 13px; line-height: 1.65; max-width: 760px; }
+.shell .page-header__kicker { margin-bottom: 8px; font-size: 10px; }
+.sidebar { padding: 18px 10px 12px; }
+.sidebar__brand { flex-shrink: 0; border-bottom: 1px solid var(--cb-line); margin-bottom: 10px; padding-bottom: 18px; }
+.sidebar__links { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0 0 8px; }
+.sidebar--rail .sidebar__links { width: 100%; }
+.sidebar__section { margin-bottom: 16px; }
+.sidebar__section:last-child { margin-top: 0; }
+.sidebar__section-label { font-size: 9px; margin: 8px 10px; color: var(--cb-muted); }
+.sidebar__link { min-height: 40px; border-radius: 6px; clip-path: none; font-size: 12px; letter-spacing: .015em; }
+.sidebar__link svg { width: 18px; height: 18px; flex-shrink: 0; }
+.sidebar__link.active { background: var(--cb-panel-hi); box-shadow: inset 2px 0 var(--cb-red); }
+.sidebar__collapse-toggle { flex-shrink: 0; margin-top: 12px; min-height: 40px; border-radius: 6px; }
+.statusbar { padding: 0 24px; }
+.shell .ops-pill { clip-path: none; border-radius: 4px; font-size: 9px; padding: 5px 8px; }
+.shell :is(.settings-group,.ops-system-grid section,.ops-fleet-card,.ops-dev-panel,.empty-state--centered,.status-center__panel,.status-center__telemetry) {
+  clip-path: none; border-radius: var(--cb-radius); background: var(--ops-surface); box-shadow: var(--ops-shadow);
+}
+.shell .settings-group { padding: 20px; }
+.shell .settings-group h2 { font-size: 11px; letter-spacing: .12em; }
+.shell .settings-toggle-row { padding: 13px 0; }
+.shell .settings-toggle-row__description { font-size: 12px; line-height: 1.5; }
+.shell .settings-toggle-list h3 { font-size: 10px; padding-bottom: 10px; }
+.shell .settings-group--data p { font-size: 13px; line-height: 1.65; }
+.shell .page-settings { gap: 18px; grid-template-columns: minmax(0,1fr) minmax(290px,360px); }
+.shell :is(.page-action-link,.settings-logout,.empty-state__actions a) { border-radius: 6px; min-height: 40px; padding: 0 14px; font-size: 10px; }
+.shell .segmented { padding: 3px; gap: 2px; background: var(--cb-panel-low); }
+.shell .segmented button { border-radius: 4px; min-height: 32px; padding: 6px 10px; }
+.shell .segmented button.active { box-shadow: 0 2px 6px rgba(0,0,0,.18); }
+.shell .section-tabs { flex-wrap: wrap; gap: 8px; }
+.shell .section-tabs :is(a,span) { border-radius: 5px; }
+.ops-more-section { margin-bottom: 22px; }
+.ops-more-section h2 { margin: 0 0 10px; color: var(--cb-muted); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.ops-more-section .ops-more-grid__item { margin-bottom: 6px; }
+.ops-skip-link { position: fixed; z-index: 100; top: 10px; left: 10px; padding: 12px 18px; border-radius: 6px; background: var(--cb-panel); color: var(--cb-text); border: 1px solid var(--cb-red); transform: translateY(-160%); }
+.ops-skip-link:focus { transform: translateY(0); }
+/* Aegis uses the same surface and typography tokens, including light and night modes. */
+.shell :is(.aegis-page,.automation-lab) { color: var(--cb-text); }
+.shell :is(.aegis-summary,.aegis-panel,.automation-lab__panel,.automation-lab__policy>div) { background: var(--ops-surface); border-color: var(--cb-line); border-radius: var(--cb-radius); box-shadow: var(--ops-shadow); }
+.shell :is(.aegis-summary,.aegis-empty,.aegis-evidence,.automation-lab__note,.automation-lab__empty,.automation-lab__fields label,.automation-lab__trace span,.automation-lab__destinations span,.automation-lab__policy span,.automation-lab__scan) { color: var(--cb-muted); }
+.shell :is(.aegis-summary b,.automation-lab__live b,.automation-lab__scan b) { color: var(--cb-text); }
+.shell :is(.aegis-alert-item,.aegis-map-unavailable,.automation-lab__live>div,.automation-lab__presets button,.automation-lab__fields select,.automation-lab__fields input[type="number"],.automation-lab__destinations,.automation-lab__secondary) { color: var(--cb-text); background: var(--cb-panel-low); border-color: var(--cb-line); }
+.shell :is(.automation-lab__live,.aegis-map) { border-color: var(--cb-line); border-radius: var(--cb-radius); }
+.shell .automation-lab__live { background: var(--cb-line); }
+.shell :is(.automation-lab__live small,.aegis-alert-item small,.automation-lab__policy small) { color: var(--cb-muted); }
+.shell :is(.automation-lab__panel-heading span,.automation-lab__fields label b,.automation-lab__destinations b,.automation-lab__policy strong,.aegis-evidence b,.aegis-alert-item__top span) { color: var(--cb-amber); }
+.shell :is(.aegis-evidence a,.automation-lab__feed-link) { color: var(--cb-blue); text-decoration: underline; text-underline-offset: 4px; }
+.shell .automation-lab__trace li { border-color: var(--cb-line); }
+.shell .automation-lab__trace li::before { background: var(--cb-panel-hi); color: var(--cb-text); border: 1px solid var(--cb-line); }
+.shell .automation-lab__decision { background: color-mix(in srgb,var(--cb-amber) 10%,var(--cb-panel)); border-color: var(--cb-amber); }
+.shell :is(.aegis-error,.automation-lab__error) { color: var(--cb-text); background: color-mix(in srgb,var(--cb-red) 10%,var(--cb-panel)); border-left: 3px solid var(--cb-red); }
+.shell .aegis-alert-item.selected { border-color: var(--cb-amber); background: var(--cb-panel-hi); }
+.shell :is(.automation-lab__presets button,.automation-lab__run,.automation-lab__secondary) { min-height: 40px; }
+.shell .automation-lab__run { color: var(--cb-text); background: var(--cb-panel-hi); border-color: var(--cb-amber); }
+.shell .automation-lab__fields input[type="range"],.shell .automation-lab__check input { accent-color: var(--cb-amber); }
+.auth-card { border-radius: 10px; }
+.auth-card__subtitle { line-height: 1.6; }
+@media (hover:hover) {
+  .shell :is(.page-action-link,.settings-logout,.empty-state__actions a):hover { background: var(--cb-panel-hi); border-color: var(--cb-red); }
+  .shell :is(.ops-more-grid__item,.aegis-alert-item,.automation-lab__presets button):hover { background: var(--cb-panel-hi); border-color: var(--cb-line-strong); }
+  .sidebar__link:hover svg { color: var(--cb-red); }
+}
+@media (prefers-reduced-motion:no-preference) {
+  .shell :is(.sidebar__link,.bottom-nav__link,.page-action-link,.settings-logout,.segmented button,.ops-more-grid__item,.aegis-alert-item,.automation-lab__presets button,.automation-lab__run,.automation-lab__secondary) {
+    transition: background-color 180ms var(--ops-ease),color 180ms var(--ops-ease),border-color 180ms var(--ops-ease),box-shadow 180ms var(--ops-ease);
+  }
+  .shell :is(.bottom-nav__link svg,.ops-more-grid__chevron) { transition: transform 180ms var(--ops-ease); }
+  .bottom-nav__link.active svg { transform: translateY(-2px); }
+  .ops-more-grid__item:hover .ops-more-grid__chevron { transform: translateX(3px); }
+  .auth-card { animation: ops-panel-in 260ms cubic-bezier(.2,.8,.2,1); }
+  .ops-phone-sheet[open] { animation: ops-sheet-in 220ms cubic-bezier(.2,.8,.2,1); }
+}
+@keyframes ops-panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ops-sheet-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width:1100px) { .shell .page-settings { grid-template-columns: 1fr; } .shell .settings-group--layers { grid-row: auto; } }
+@media (max-width:767px) {
+  .shell .page { padding: 24px 18px 30px !important; }
+  .shell .page-header { margin-bottom: 16px; align-items: flex-start; }
+  .shell .page-header__description { font-size: 14px; }
+  .shell .settings-group { padding: 18px; }
+  .shell .page-settings { gap: 16px; }
+  .shell .settings-toggle-row__description { font-size: 12px; }
+  .shell .segmented button { min-height: 44px; }
+  .shell :is(.page-action-link,.settings-logout,.automation-lab__presets button,.automation-lab__run,.automation-lab__secondary) { min-height: 44px; }
+  .shell .automation-lab__panel { padding: 18px; }
+  .shell .automation-lab__fields :is(select,input[type="number"]) { font-size: 16px; }
+  .ops-more-section .ops-more-grid__item { margin-bottom: 0; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .shell *, .shell *::before, .shell *::after, .auth-screen *, .auth-screen *::before, .auth-screen *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

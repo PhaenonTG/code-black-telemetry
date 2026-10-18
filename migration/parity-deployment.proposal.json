@@ -1,0 +1,94 @@
+{
+  "schema": "codeblack.private-parity.deployment-proposal.v1",
+  "productionApproved": false,
+  "productionApplied": false,
+  "design": "Dedicated fixed VPC Service on existing tunnel; separate read-only Node origin; no Core or Producer mount/replacement",
+  "pages": {
+    "project": "codeblack-ops",
+    "binding": "PRIVATE_PARITY_ORIGIN",
+    "proposedTarget": "codeblack-private-parity-adapter",
+    "environment": "production",
+    "otherBindingChanges": []
+  },
+  "worker": {
+    "proposedName": "codeblack-private-parity-adapter",
+    "workersDev": false,
+    "publicRoutes": [],
+    "binding": "PARITY_VPC",
+    "vpcServiceId": null,
+    "actualCloudflareVersion": null
+  },
+  "newVpcService": {
+    "proposedName": "codeblack-private-parity-origin",
+    "type": "http",
+    "tunnelId": "35a17aa9-2532-4583-98ca-00f5b7a20c85",
+    "ipv4": "127.0.0.1",
+    "proposedHttpPort": 8791,
+    "portAndNamespaceVerified": false,
+    "created": false,
+    "existingCoreServiceIdMustNotChange": "01a07ab2-e9b9-7072-8d86-bb514e27712c"
+  },
+  "origin": {
+    "runtime": "Node.js >=22",
+    "launcher": "origin-cli.mjs",
+    "host": "127.0.0.1",
+    "listenPortEnv": "PARITY_LISTEN_PORT",
+    "defaultPort": null,
+    "existingNodeExecutableReceipt": null,
+    "serviceIdentity": null,
+    "supervisedLaunchArtifact": null,
+    "releaseDirectory": null,
+    "envReferenceValues": "NOT_INSPECTED_OR_CAPTURED",
+    "requiredExistingSettings": [
+      "VITE_SUPABASE_URL",
+      "VITE_SUPABASE_PUBLISHABLE_KEY"
+    ],
+    "snapshotSetting": "OPS_PRIVATE_COORDINATION_SNAPSHOT",
+    "snapshotArtifactAndPath": null,
+    "radarBase": "http://127.0.0.1:8787",
+    "site": "KSRX",
+    "existingNonRootAccountRequired": true
+  },
+  "boundaries": {
+    "workerDeadlineMs": 11500,
+    "originDeadlineMs": 11000,
+    "workerInflightPerIsolate": 8,
+    "originInflightPerProcess": 8,
+    "radarJsonBytes": 131072,
+    "pngBytes": 1048576,
+    "coordinationBytes": 262144,
+    "nodeHeaderBytes": 16384,
+    "newBusinessMutationRoutes": 0
+  },
+  "auth": {
+    "corePolicyPatchApplied": false,
+    "patchSha256": "71b7f29c51ac38a0de7d1fae08bc331f449108df45fca44aa6c4ea880d85fe3a",
+    "originVerifiesEveryRequest": "Existing Supabase user + active recognized OWNER/ADMIN/OPERATOR; no trusted asserted role/header",
+    "newCredentialsCreated": false,
+    "authConfigurationChanged": false
+  },
+  "preserved": [
+    "Core/Fabric Pages pipeline and CORE_GATEWAY_WORKER",
+    "Core VPC service",
+    "codeblack-chase-gateway Producer/Chase/DO/OTA/OBS",
+    "private r19 service and operator",
+    "radar production V2"
+  ],
+  "cost": {
+    "planAndHeadroom": "UNVERIFIED_PENDING_BROWSER_RECEIPT",
+    "noPurchaseOrUpgrade": true,
+    "noFreeServiceGuarantee": true,
+    "newPolling": false,
+    "newProducerMediaProxy": false,
+    "concurrencyIsNotGlobalSpendCap": true
+  },
+  "rollback": {
+    "approval": "REQUIRED_NOT_EXECUTABLE",
+    "sequence": [
+      "detach only new Pages binding / restore approved preflight Pages code+config",
+      "remove traffic from new internal adapter",
+      "restore/stop only approved dedicated origin/new adapter version as expressly authorized"
+    ],
+    "doNotRollbackExistingCoreProducerRadarOrR19": true
+  }
+}

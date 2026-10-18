@@ -1,0 +1,226 @@
+import { useEffect, useMemo, useRef, useState } from "react"
+import Hls from "hls.js"
+import type { TrafficCamera } from "../../../../src/services/mapLayerModels"
+import { fetchKandriveLiveCameraSource } from "../../../../src/services/mapLayerModels"
+
+type CameraMediaKind = "hls" | "mjpeg" | "video" | "image" | "unavailable"
+
+function mediaFor(camera: TrafficCamera): { kind: CameraMediaKind; url: string | null } {
+  const stream = camera.streamUrl?.trim() || null
+  const image = camera.previewUrl?.trim() || camera.imageUrl?.trim() || camera.thumbnailUrl?.trim() || null
+
+  if (stream) {
+    // The ARDOT relay's own URL is /api/ardot-camera-stream?url=<encoded upstream m3u8> -- the
+    // literal ".m3u8" only shows up percent-encoded inside that query value, not as this URL's own
+    // suffix, so it needs its own check rather than relying on the plain suffix match below.
+    if (stream.startsWith("/api/ardot-camera-stream") || /\.m3u8(?:$|\?)/i.test(stream)) return { kind: "hls", url: stream }
+    if (/mjpeg|mjpg|multipart|axis-cgi\/mjpg/i.test(stream)) return { kind: "mjpeg", url: stream }
+    if (/\.(?:mp4|webm|ogg)(?:$|\?)/i.test(stream)) return { kind: "video", url: stream }
+  }
+  if (image) return { kind: "image", url: image }
+  return { kind: "unavailable", url: null }
+}
+
+function ageLabel(timestamp: number | null) {
+  if (!timestamp) return "Update time not reported"
+  const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60_000))
+  if (minutes < 1) return "Updated just now"
+  if (minutes < 60) return `Updated ${minutes}m ago`
+  return `Updated ${Math.round(minutes / 60)}h ago`
+}
+
+export function MapCameraViewer({
+  camera,
+  onClose,
+  pinned = false,
+  onTogglePin,
+  lowBandwidth = false,
+  onLowBandwidthChange,
+}: {
+  camera: TrafficCamera
+  onClose: () => void
+  pinned?: boolean
+  onTogglePin?: () => void
+  lowBandwidth?: boolean
+  onLowBandwidthChange?: (enabled: boolean) => void
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [mediaError, setMediaError] = useState("")
+  const [imageTick, setImageTick] = useState(0)
+  const [liveStreamUrl, setLiveStreamUrl] = useState<string | null>(null)
+
+  // KanDrive cameras never carry a streamUrl from the viewport list/cache fetch -- its live HLS
+  // URLs are short-lived signed tokens that would go stale sitting in that cache. Fetch one fresh,
+  // on demand, only now that the viewer is actually open. Silent no-op on failure: the snapshot
+  // fallback below already covers it, so there's nothing to surface as an error.
+  useEffect(() => {
+    setLiveStreamUrl(null)
+    if (camera.providerId !== "kandrive-kdot" || camera.streamUrl) return
+    const controller = new AbortController()
+    void fetchKandriveLiveCameraSource({ lat: camera.lat, lon: camera.lon, providerRecordId: camera.providerRecordId }, controller.signal)
+      .then((url) => { if (!controller.signal.aborted) setLiveStreamUrl(url) })
+      .catch(() => undefined)
+    return () => controller.abort()
+  }, [camera.providerId, camera.providerRecordId, camera.lat, camera.lon, camera.streamUrl])
+
+  const effectiveCamera = useMemo(
+    () => (liveStreamUrl ? { ...camera, streamUrl: liveStreamUrl } : camera),
+    [camera, liveStreamUrl],
+  )
+  const media = useMemo(() => {
+    const selected = mediaFor(effectiveCamera)
+    if (!lowBandwidth) return selected
+    const image = camera.previewUrl?.trim() || camera.imageUrl?.trim() || camera.thumbnailUrl?.trim() || null
+    return image ? { kind: "image" as const, url: image } : selected
+  }, [effectiveCamera, camera, lowBandwidth])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onClose])
+
+  useEffect(() => {
+    setMediaError("")
+    if (media.kind !== "hls" || !media.url || !videoRef.current) return
+
+    const video = videoRef.current
+
+    // Prefer hls.js (MSE-based) whenever it's actually supported -- Chrome/Firefox/Edge report
+    // canPlayType("application/vnd.apple.mpegurl") as "maybe" despite having no real native HLS
+    // demuxer, so trusting that check first silently handed those browsers an m3u8 as a native
+    // <video src>, which failed with DEMUXER_ERROR_COULD_NOT_PARSE and left the player frozen at
+    // 0:00 with no network request and no visible error. Only fall back to native playback when
+    // hls.js genuinely isn't supported (older Safari/iOS without full MSE).
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 30,
+      })
+      hls.loadSource(media.url)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        void video.play().catch(() => undefined)
+      })
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) setMediaError("Live stream unavailable.")
+      })
+      return () => hls.destroy()
+    }
+
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = media.url
+      void video.play().catch(() => undefined)
+      return () => {
+        video.pause()
+        video.removeAttribute("src")
+        video.load()
+      }
+    }
+
+    setMediaError("HLS playback is not supported in this browser.")
+  }, [media])
+
+  useEffect(() => {
+    if (media.kind !== "image") return
+    const timer = window.setInterval(() => setImageTick((tick) => tick + 1), 30_000)
+    return () => window.clearInterval(timer)
+  }, [media.kind, camera.id])
+
+  const fallbackImage = camera.previewUrl ?? camera.imageUrl ?? camera.thumbnailUrl
+
+  return (
+    <div className="map-camera-viewer__backdrop" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose()
+    }}>
+    <aside className="map-camera-viewer" role="dialog" aria-modal="true" aria-label={`${camera.name} camera`}>
+      <header className="map-camera-viewer__header">
+        <div>
+          <p>PUBLIC CAMERA</p>
+          <h2>{camera.name}</h2>
+        </div>
+        <div className="map-camera-viewer__actions">
+          {onTogglePin && <button type="button" onClick={onTogglePin}>{pinned ? "UNPIN" : "PIN"}</button>}
+          <button type="button" className="map-camera-viewer__close" onClick={onClose} aria-label="Close camera viewer">×</button>
+        </div>
+      </header>
+
+      <div className="map-camera-viewer__media">
+        {(media.kind === "hls" || media.kind === "video") && media.url && (
+          <video
+            ref={videoRef}
+            src={media.kind === "video" ? media.url : undefined}
+            controls
+            autoPlay
+            muted
+            playsInline
+            onError={() => setMediaError("Live stream unavailable.")}
+          />
+        )}
+
+        {media.kind === "mjpeg" && media.url && (
+          <img
+            src={media.url}
+            alt={`${camera.name} live camera`}
+            referrerPolicy="no-referrer"
+            onError={() => setMediaError("Live camera image unavailable.")}
+          />
+        )}
+
+        {media.kind === "image" && media.url && (
+          <img
+            key={`${camera.id}-${imageTick}`}
+            src={media.url}
+            alt={`${camera.name} camera`}
+            referrerPolicy="no-referrer"
+            onError={() => setMediaError("Camera image unavailable.")}
+          />
+        )}
+
+        {mediaError && fallbackImage && media.kind !== "image" && (
+          <img
+            src={fallbackImage}
+            alt={`${camera.name} fallback snapshot`}
+            referrerPolicy="no-referrer"
+            onError={() => undefined}
+          />
+        )}
+
+        {(media.kind === "unavailable" || (mediaError && !fallbackImage)) && (
+          <div className="map-camera-viewer__unavailable">
+            <strong>CAMERA MEDIA UNAVAILABLE</strong>
+            <span>{mediaError || "This provider does not expose embeddable media."}</span>
+          </div>
+        )}
+
+        <span className={`map-camera-viewer__media-badge ${camera.freshness === "stale" ? "stale" : ""}`}>
+          {media.kind === "hls" || media.kind === "video" || media.kind === "mjpeg" ? "LIVE" : "CAMERA"}
+        </span>
+      </div>
+
+      <div className="map-camera-viewer__meta">
+        <div><span>ROAD</span><b>{camera.roadway ?? "Not reported"}</b></div>
+        <div><span>VIEW</span><b>{camera.direction ?? "Not reported"}</b></div>
+        <div><span>STATUS</span><b>{camera.availability.toUpperCase()}</b></div>
+        <div><span>AGE</span><b>{ageLabel(camera.lastUpdateAt)}</b></div>
+      </div>
+
+      <footer className="map-camera-viewer__footer">
+        <label className="map-camera-viewer__bandwidth">
+          <input type="checkbox" checked={lowBandwidth} onChange={(event) => onLowBandwidthChange?.(event.target.checked)} />
+          SNAPSHOT MODE
+        </label>
+        <span>{camera.provider.displayLabel} · {camera.attribution}</span>
+        {camera.sourceUrl && (
+          <a href={camera.sourceUrl} target="_blank" rel="noopener noreferrer">
+            PROVIDER
+          </a>
+        )}
+      </footer>
+    </aside>
+    </div>
+  )
+}

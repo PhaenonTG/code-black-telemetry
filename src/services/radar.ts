@@ -1,0 +1,440 @@
+import { Capacitor, registerPlugin } from "@capacitor/core";
+
+export type RadarProduct = "REF" | "VEL" | "SRV" | "CC";
+export type RadarFreshness = "LIVE" | "DELAYED" | "STALE" | "CACHED" | "OFFLINE" | "INCOMPLETE" | "SITE DOWN";
+
+export interface RadarSite {
+  id: string;
+  name: string;
+  state: string;
+  lat: number;
+  lon: number;
+  distanceMi?: number;
+}
+
+export interface StormMotion {
+  directionDegrees: number;
+  speedKnots: number;
+  source: string;
+  updatedAt?: string | number;
+}
+
+export interface RadarFrame {
+  frameId: string;
+  site: RadarSite;
+  product: RadarProduct;
+  sourceLevel: string;
+  tilt: number | null;
+  availableTilts: number[];
+  elevationAngle: number | null;
+  time: string;
+  ageSeconds: number;
+  freshness: RadarFreshness;
+  vcp: number | null;
+  nyquistVelocity: number | null;
+  quality: string;
+  processingDurationMs: number;
+  legend: { units: string; stops: number[] };
+  tileTemplate?: string;
+  imageUrl?: string;
+  bounds?: { west: number; south: number; east: number; north: number };
+  // Additive diagnostic-only provenance from radar-worker's real-time Level II chunk assembler
+  // (V1) -- present only on a chunk-derived frame (sourceLevel === "LEVEL II (chunk)"), absent
+  // on a completed-volume frame. NEVER use these to determine freshness or trust yourself --
+  // that gate is entirely server-side (see `trustworthy`, which the server only ever sets true
+  // after already applying it); `freshness`/`ageSeconds` above remain the sole freshness
+  // authority regardless of source.
+  trustworthy?: boolean;
+  chunkVolume?: number;
+  chunkComplete?: boolean;
+  chunkCount?: number;
+  radialCount?: number;
+  maxAzimuthGapDeg?: number;
+}
+
+export interface RadarStatus {
+  backendState: string;
+  backendVersion: string;
+  selectedSite: string;
+  siteMode: "AUTO" | "MANUAL";
+  availableProducts: RadarProduct[];
+  selectedProduct: RadarProduct;
+  sourceLevel: string;
+  selectedTilt: number | null;
+  availableTilts: number[];
+  currentFrameId: string | null;
+  frameTime: string | null;
+  dataAgeSeconds: number | null;
+  frameCount: number;
+  cacheState: string;
+  processingState: string;
+  latestError: string;
+  stormMotion: StormMotion | null;
+  reconnectState: string;
+}
+
+interface RadarNativePlugin {
+  initialize(): Promise<{ ok: boolean; engine: string; version: string; decoderState: string }>;
+  getStatus(): Promise<RadarStatus>;
+  getSites(): Promise<{ sites: RadarSite[] }>;
+  getNearestSites(options: { lat: number; lon: number }): Promise<{ sites: RadarSite[] }>;
+  selectSite(options: { siteId: string }): Promise<RadarStatus>;
+  selectProduct(options: { product: RadarProduct }): Promise<RadarStatus>;
+  selectTilt(options: { tilt: number }): Promise<RadarStatus>;
+  getAvailableTilts(): Promise<{ tilts: number[]; source: string }>;
+  getFrames(options: { site: string; product: RadarProduct; tilt?: number | null; limit?: number }): Promise<{ frames: RadarFrame[]; latestError?: string }>;
+  setStormMotion(options: { directionDegrees: number; speedKnots: number; source?: string }): Promise<StormMotion>;
+  clearCache(): Promise<{ ok: boolean; cacheState: string }>;
+  getCacheStatus(): Promise<{ usedBytes: number; limitBytes: number; sites: number; frames: number; oldestFrame: string | null; newestFrame: string | null }>;
+  startLiveUpdates(): Promise<RadarStatus>;
+  stopLiveUpdates(): Promise<RadarStatus>;
+  addListener(eventName: "radarStatusChanged", listenerFunc: (status: RadarStatus) => void): Promise<{ remove: () => Promise<void> }>;
+}
+
+const RadarNative = registerPlugin<RadarNativePlugin>("RadarNative");
+
+const fallbackSites: RadarSite[] = [
+  { id: "KSRX", name: "Fort Smith", state: "AR", lat: 35.2904, lon: -94.3619 },
+  { id: "KINX", name: "Tulsa", state: "OK", lat: 36.1751, lon: -95.5643 },
+  { id: "KTLX", name: "Oklahoma City", state: "OK", lat: 35.3331, lon: -97.2778 },
+  { id: "KSGF", name: "Springfield", state: "MO", lat: 37.2352, lon: -93.4006 },
+  { id: "KLZK", name: "Little Rock", state: "AR", lat: 34.8365, lon: -92.2622 },
+];
+
+let initialized = false;
+let lastStatus: RadarStatus | null = null;
+
+// Web builds (and native, once a device has network access) talk to the standalone
+// radar-worker/ Node process over plain HTTP instead of the on-device native decoder --
+// see radar-worker/worker.cjs. OPS exposes that worker through its same-origin /api/v1/radar
+// gateway, so production does not need a second public hostname or build-time setting.
+export function radarWorkerBase(): string {
+  const configured = ((import.meta.env.VITE_RADAR_WORKER_URL as string | undefined) ?? "").trim().replace(/\/+$/, "");
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname.toLowerCase();
+    if (hostname === "ops.codeblackwx.com") return window.location.origin;
+    // Pages previews do not have the production zone's radar-relay route.
+    // Reuse its existing public, CORS-enabled NOAA gateway rather than receiving
+    // the preview's SPA HTML in place of frame JSON.
+    if (hostname === "codeblack-ops.pages.dev" || hostname.endsWith(".codeblack-ops.pages.dev")) return "https://ops.codeblackwx.com";
+  }
+  return configured;
+}
+
+export function webRadarEnabled() {
+  return !Capacitor.isNativePlatform() && radarWorkerBase() !== "";
+}
+
+// radar-worker can now serve a trustworthy Level II real-time-chunk-derived frame roughly
+// every ~20-30s during an active scan (vs. waiting the full ~5-6min for a completed volume) --
+// a web dashboard on wall/wifi power should poll fast enough to actually realize that gain,
+// but a phone on battery/cellular (native) has no reason to pay that same polling cost just to
+// shave time off a freshness gain a chaser glancing at their phone every so often won't notice
+// the same way an OPS operator staring at a live dashboard would. Centralized here (not a
+// Capacitor check scattered into AtlasMap.tsx) since this module already owns every other
+// native-vs-web radar branch.
+export function recommendedRadarRefreshMs() {
+  return Capacitor.isNativePlatform() ? 90_000 : 8_000;
+}
+
+// True only for the specific "single-site radar will never load here" case: a web build with no
+// worker URL configured. Native always has a path to real data (its own on-device decoder) so
+// this is deliberately narrower than `!webRadarEnabled()`, which is also false on native for an
+// unrelated reason and would otherwise misreport native as unconfigured too.
+export function radarWorkerMissingOnWeb() {
+  return !Capacitor.isNativePlatform() && radarWorkerBase() === "";
+}
+
+async function ensureInitialized() {
+  if (initialized) return;
+  initialized = true;
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await RadarNative.initialize();
+    } catch {
+      initialized = false;
+    }
+  }
+}
+
+async function workerFetch<T>(path: string): Promise<T> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20_000);
+  let response: Response;
+  try {
+    response = await fetch(`${radarWorkerBase()}${path}`, { signal: controller.signal, cache: "no-store" });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+  if (!response.ok) throw new Error(`radar worker ${response.status}`);
+  return response.json() as Promise<T>;
+}
+
+function attachTileTemplate<T extends { frameId: string }>(frame: T): T & { tileTemplate: string } {
+  return { ...frame, tileTemplate: `${radarWorkerBase()}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png` };
+}
+
+function distanceMiles(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
+  const r = 3958.8;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(h));
+}
+
+function offlineStatus(site = "AUTO", product: RadarProduct = "REF", message = "ON-DEVICE RADAR DECODER NOT INSTALLED"): RadarStatus {
+  return {
+    backendState: "ON_DEVICE",
+    backendVersion: "0.1.0-web-fallback",
+    selectedSite: site,
+    siteMode: site === "AUTO" ? "AUTO" : "MANUAL",
+    availableProducts: ["REF", "VEL", "SRV", "CC"],
+    selectedProduct: product,
+    sourceLevel: "LEVEL II",
+    selectedTilt: 0.5,
+    availableTilts: [0.5],
+    currentFrameId: null,
+    frameTime: null,
+    dataAgeSeconds: null,
+    frameCount: 0,
+    cacheState: "EMPTY",
+    processingState: "DECODER_NOT_INSTALLED",
+    latestError: message,
+    stormMotion: { directionDegrees: 245, speedKnots: 32, source: "MANUAL" },
+    reconnectState: "NO_REMOTE_SERVER_REQUIRED",
+  };
+}
+
+export function onRadarEndpointChange(listener: (endpoint: string) => void) {
+  listener("ON_DEVICE");
+  return () => undefined;
+}
+
+export async function radarBase() {
+  return "ON_DEVICE";
+}
+
+export function resetRadarEndpointLoad() {
+  initialized = false;
+}
+
+export function radarTileUrl(frameId: string, z: number, x: number, y: number) {
+  const frame = lastFrameById.get(frameId);
+  if (frame?.tileTemplate) return frame.tileTemplate.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+  return "";
+}
+
+const lastFrameById = new Map<string, RadarFrame>();
+
+function atlasFixtureEnabled() {
+  return ((import.meta.env.VITE_ATLAS_RADAR_FIXTURE as string | undefined) ?? "").trim() === "1";
+}
+
+function fixtureFrame(siteId: string, product: RadarProduct): RadarFrame {
+  const site = fallbackSites.find((item) => item.id === siteId) ?? fallbackSites[0];
+  const time = new Date(Date.now() - 4 * 60 * 1000).toISOString();
+  return {
+    frameId: `atlas-fixture-${site.id}-${product}`,
+    site,
+    product,
+    sourceLevel: "QA FIXTURE",
+    tilt: 0.5,
+    availableTilts: [0.5],
+    elevationAngle: 0.5,
+    time,
+    ageSeconds: 240,
+    freshness: "CACHED",
+    vcp: null,
+    nyquistVelocity: product === "REF" || product === "CC" ? null : 32,
+    quality: "DEBUG_ONLY_FIXTURE",
+    processingDurationMs: 0,
+    legend: product === "CC" ? { units: "CC", stops: [0.5, 0.7, 0.8, 0.9, 1] } : product === "REF" ? { units: "dBZ", stops: [-10, 20, 35, 50, 65, 80] } : { units: "kt", stops: [-80, -40, 0, 40, 80] },
+    imageUrl: "/atlas-fixture-ref.svg",
+    bounds: { west: site.lon - 1.8, south: site.lat - 1.45, east: site.lon + 1.8, north: site.lat + 1.45 },
+  };
+}
+
+export async function getRadarStatus(site: string, product: RadarProduct, tilt?: number | null) {
+  await ensureInitialized();
+  if (atlasFixtureEnabled()) {
+    const frame = fixtureFrame(site === "AUTO" ? "KSRX" : site, product);
+    return {
+      ...offlineStatus(site, product, ""),
+      backendState: "QA_FIXTURE",
+      backendVersion: "atlas-recovery-fixture",
+      selectedSite: frame.site.id,
+      sourceLevel: "QA FIXTURE",
+      selectedTilt: frame.elevationAngle,
+      availableTilts: frame.availableTilts,
+      currentFrameId: frame.frameId,
+      frameTime: frame.time,
+      dataAgeSeconds: frame.ageSeconds,
+      frameCount: 1,
+      cacheState: "QA_FIXTURE",
+      processingState: "READY",
+      latestError: "",
+    };
+  }
+  if (webRadarEnabled()) {
+    try {
+      // The worker's own AUTO->KSRX fallback only kicks in when the `site` param is absent
+      // entirely -- passing the literal string "AUTO" through is treated as a real (unknown)
+      // site id and 500s, so omit it here rather than forwarding it.
+      const params = new URLSearchParams({ product });
+      if (site !== "AUTO") params.set("site", site);
+      if (tilt != null) params.set("tilt", String(tilt));
+      lastStatus = await workerFetch<RadarStatus>(`/api/v1/radar/status?${params}`);
+      return lastStatus;
+    } catch (error) {
+      lastStatus = offlineStatus(site, product, error instanceof Error ? error.message : "RADAR WORKER UNREACHABLE");
+      return lastStatus;
+    }
+  }
+  if (!Capacitor.isNativePlatform()) {
+    lastStatus = offlineStatus(site, product);
+    return lastStatus;
+  }
+  try {
+    await RadarNative.selectSite({ siteId: site });
+    await RadarNative.selectProduct({ product });
+    if (tilt != null) await RadarNative.selectTilt({ tilt });
+    lastStatus = await RadarNative.getStatus();
+    return lastStatus;
+  } catch (error) {
+    lastStatus = offlineStatus(site, product, error instanceof Error ? error.message : "ON-DEVICE RADAR UNAVAILABLE");
+    return lastStatus;
+  }
+}
+
+export async function getRadarFrames(site: string, product: RadarProduct, tilt?: number | null, limit = 6) {
+  await ensureInitialized();
+  if (atlasFixtureEnabled()) {
+    const frame = fixtureFrame(site === "AUTO" ? "KSRX" : site, product);
+    lastFrameById.set(frame.frameId, frame);
+    return [frame];
+  }
+  if (webRadarEnabled()) {
+    try {
+      const params = new URLSearchParams({ product, limit: String(limit) });
+      if (site !== "AUTO") params.set("site", site);
+      if (tilt != null) params.set("tilt", String(tilt));
+      const list = await workerFetch<RadarFrame[]>(`/api/v1/radar/frames?${params}`);
+      const withTiles = list.map(attachTileTemplate);
+      withTiles.forEach((frame) => lastFrameById.set(frame.frameId, frame));
+      return withTiles;
+    } catch {
+      return [];
+    }
+  }
+  if (!Capacitor.isNativePlatform()) return [];
+  try {
+    const result = await RadarNative.getFrames({ site, product, tilt, limit });
+    result.frames.forEach((frame) => {
+      if (frame.imageUrl) frame.imageUrl = Capacitor.convertFileSrc(frame.imageUrl);
+    });
+    result.frames.forEach((frame) => lastFrameById.set(frame.frameId, frame));
+    return result.frames;
+  } catch {
+    return [];
+  }
+}
+
+export async function getNearestRadarSites(lat: number, lon: number) {
+  await ensureInitialized();
+  if (webRadarEnabled()) {
+    try {
+      return await workerFetch<RadarSite[]>(`/api/v1/radar/sites/nearest?lat=${lat}&lon=${lon}`);
+    } catch {
+      // Use bundled web fallback below.
+    }
+  }
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const result = await RadarNative.getNearestSites({ lat, lon });
+      return result.sites;
+    } catch {
+      // Use bundled web fallback below.
+    }
+  }
+  return fallbackSites
+    .map((site) => ({ ...site, distanceMi: distanceMiles({ lat, lon }, site) }))
+    .sort((a, b) => (a.distanceMi ?? 0) - (b.distanceMi ?? 0));
+}
+
+// radar-relay gates POST /api/v1/radar/storm-motion (and /selection) with this same value -- see
+// the comment in workers/radar-relay/src/index.js for the full reasoning. It's deliberately a
+// plain constant rather than pulled from a build-time env var: it ends up embedded in the public
+// client bundle either way once built, so routing it through Cloudflare Pages' separate build-env
+// pipeline would add real deploy-coordination complexity for zero actual security gain. This is
+// not a cryptographic secret -- it exists to stop the endpoint being bare-curlable by anyone who
+// finds the URL, not to withstand a determined attacker willing to read the bundle.
+const RADAR_MUTATION_KEY = "d481a23868768b337acd43108cb782b7e6efcc79d3fa9e91";
+
+export async function setRadarStormMotion(motion: { directionDegrees: number; speedKnots: number; source?: string }) {
+  await ensureInitialized();
+  if (webRadarEnabled()) {
+    const response = await fetch(`${radarWorkerBase()}/api/v1/radar/storm-motion`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-radar-mutation-key": RADAR_MUTATION_KEY },
+      body: JSON.stringify(motion),
+    });
+    if (!response.ok) throw new Error(`radar worker ${response.status}`);
+    return response.json() as Promise<StormMotion>;
+  }
+  if (!Capacitor.isNativePlatform()) return { ...motion, source: motion.source ?? "MANUAL", updatedAt: Date.now() };
+  return RadarNative.setStormMotion(motion);
+}
+
+export interface StormMotionEstimate {
+  ok: boolean;
+  reason?: string;
+  framesAvailable?: number;
+  directionDegrees?: number;
+  speedKnots?: number;
+  confidence?: "LOW" | "MEDIUM" | "HIGH";
+  sampleSpanMinutes?: number;
+}
+
+// Weighted-centroid tracking across two REF frames, computed server-side where the raw radial data
+// already lives -- not a substitute for reading the storm yourself, but realistic to actually use
+// while driving instead of typing a bearing into a number field at highway speed.
+export async function getStormMotionEstimate(site: string): Promise<StormMotionEstimate> {
+  if (!webRadarEnabled()) return { ok: false, reason: "WORKER_NOT_CONFIGURED" };
+  try {
+    const params = new URLSearchParams();
+    if (site !== "AUTO") params.set("site", site);
+    const response = await fetch(`${radarWorkerBase()}/api/v1/radar/storm-motion/estimate?${params}`);
+    if (!response.ok) return { ok: false, reason: `HTTP_${response.status}` };
+    return response.json() as Promise<StormMotionEstimate>;
+  } catch {
+    return { ok: false, reason: "REQUEST_FAILED" };
+  }
+}
+
+export async function getRadarCacheStatus() {
+  await ensureInitialized();
+  if (!Capacitor.isNativePlatform()) return { usedBytes: 0, limitBytes: 750 * 1024 * 1024, sites: 0, frames: 0, oldestFrame: null, newestFrame: null };
+  return RadarNative.getCacheStatus();
+}
+
+export async function clearRadarCache() {
+  await ensureInitialized();
+  if (!Capacitor.isNativePlatform()) return { ok: true, cacheState: "EMPTY" };
+  return RadarNative.clearCache();
+}
+
+export async function testRadarEndpoint() {
+  await ensureInitialized();
+  return { ok: Capacitor.isNativePlatform(), status: Capacitor.isNativePlatform() ? 200 : 0, base: "ON_DEVICE" };
+}
+
+export function ageText(seconds: number | null | undefined) {
+  if (seconds == null) return "--";
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (minutes < 60) return `${minutes}:${String(secs).padStart(2, "0")}`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}

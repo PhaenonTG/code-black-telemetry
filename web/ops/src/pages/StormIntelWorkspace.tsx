@@ -1,0 +1,161 @@
+import { useEffect, useMemo, useState } from "react";
+import { AtlasMap, type AtlasSelectedPoint } from "../../../../src/map/AtlasMap";
+import type { AtlasGpsPoint } from "../../../../src/map/types";
+import { useAlertProducts } from "../../../../src/hooks/useAlertProducts";
+import { useNearbyPlaces } from "../../../../src/hooks/useNearbyPlaces";
+import { useNearbyPoiList } from "../../../../src/hooks/useNearbyPoiList";
+import { useSpotters } from "../../../../src/hooks/useSpotters";
+import type { LocationState } from "../adapters";
+import { OpsStatusPill } from "../components/OpsStatusPill";
+import { PointHistory } from "../components/PointHistory";
+import { PointInspector } from "../components/PointInspector";
+import { StormIntelMetricBoard } from "../components/StormIntelMetricBoard";
+import { useCoreOps } from "../core/useCoreOps";
+import { firstAvailableSource, stormIntelSummary } from "../stormIntel/format";
+import { getReverseLocality, type LocalityResult } from "../../../../src/services/situational";
+import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings";
+import { mapWorkspaceVisibility } from "../mapWorkspace";
+import { ForecastTimeline } from "../components/ForecastTimeline";
+import { ForecastTargets } from "../components/ForecastTargets";
+
+function toAtlasGps(s: LocationState): AtlasGpsPoint | null {
+  if (s.status !== "ready") return null;
+  return { lat: s.lat, lon: s.lon, accuracyM: s.accuracyM, headingDeg: s.headingDeg, speedMph: s.speedMph };
+}
+
+function coord(point: { lat: number; lon: number } | null | undefined, precision = 4): string {
+  return point ? `${point.lat.toFixed(precision)}, ${point.lon.toFixed(precision)}` : "NO POINT";
+}
+
+function isoShort(value: string | null | undefined): string {
+  if (!value) return "UNAVAILABLE";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "UNAVAILABLE";
+  return date.toISOString().replace(".000", "");
+}
+
+export default function StormIntelWorkspace() {
+  const [locality, setLocality] = useState<LocalityResult | null>(null);
+  const { config, state: coreState, selectedPoint, pointHistory, selectPoint, selectHistoryPoint, deviceLocation: gps, locationMode, referenceUnitId, referenceIsFallback, refreshPoint, followDeviceLocation } = useCoreOps();
+  const snapshot = coreState.stormIntel.pointSnapshot;
+  const source = firstAvailableSource(snapshot);
+  const summary = !selectedPoint
+    ? "Select a map point for Storm Intel."
+    : coreState.stormIntel.pointLoading
+      ? "Loading Storm Intel for selected point…"
+      : coreState.stormIntel.pointError ?? stormIntelSummary(snapshot);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadMapLayerVisibility().then((current) => {
+      if (!cancelled) void saveMapLayerVisibility(mapWorkspaceVisibility(current, "weather"));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const atlasGps = locationMode === "follow" && !referenceIsFallback ? toAtlasGps(gps) : null;
+
+  useEffect(() => {
+    if (!selectedPoint) { setLocality(null); return; }
+    let cancelled = false;
+    void getReverseLocality({ lat: selectedPoint.lat, lon: selectedPoint.lon }).then((result) => {
+      if (!cancelled) setLocality(result);
+    });
+    return () => { cancelled = true; };
+  }, [selectedPoint]);
+
+  const contextPoint = useMemo(() => selectedPoint ?? (atlasGps ? { lat: atlasGps.lat, lon: atlasGps.lon } : null), [atlasGps, selectedPoint]);
+  const spotters = useSpotters(contextPoint);
+  const poi = useNearbyPoiList(contextPoint);
+  const nearby = useNearbyPlaces(contextPoint);
+  const alertProducts = useAlertProducts(contextPoint);
+  const resolved = source?.resolvedLatitude != null && source.resolvedLongitude != null
+    ? { lat: source.resolvedLatitude, lon: source.resolvedLongitude }
+    : null;
+
+  return (
+    <div className="storm-workspace">
+      <header className="storm-workspace__header">
+        <div>
+          <span>WEATHER ANALYSIS</span>
+          <h1>{selectedPoint ? (locality?.displayName ?? "RESOLVING LOCATION…") : "SELECT A MAP POINT"}</h1>
+          <p>{selectedPoint ? `${coord(selectedPoint, 3)} · ${summary}` : summary}</p>
+        </div>
+        <div className="storm-workspace__status">
+          <OpsStatusPill state={coreState.stormIntel.state} label={`INTEL ${coreState.stormIntel.state}`} />
+          <button type="button" className="page-action-link" onClick={followDeviceLocation}>My location</button>
+          <button type="button" className="page-action-link" disabled={!selectedPoint || coreState.stormIntel.pointLoading} onClick={refreshPoint}>{coreState.stormIntel.pointError ? "Retry" : "Refresh"}</button>
+        </div>
+      </header>
+
+      <main className="storm-workspace__body">
+        <section className="storm-workspace__map" aria-label="Storm Intel map selector">
+          <AtlasMap
+            gps={atlasGps}
+            referencePoint={locationMode === "manual" ? null : selectedPoint}
+            referenceKey={`${locationMode}:${referenceUnitId}`}
+            rangeRings="off"
+            statusLines={[coreState.stormIntel.pointLoading ? "POINT REQUEST ACTIVE" : "CLICK MAP FOR POINT INTEL"]}
+            controlsVariant="full"
+            spotters={spotters.spotters}
+            showAllActiveSpotters
+            poiPlaces={poi.places}
+            nearbyBest={nearby.places}
+            alerts={alertProducts.products}
+            selectedPoint={selectedPoint}
+            onPointSelect={(point: AtlasSelectedPoint) => selectPoint(point)}
+          />
+          <div className="storm-map-command">
+            <div>
+              <span>REQUESTED</span>
+              <b>{coord(selectedPoint)}</b>
+              {selectedPoint && locality && <small>{locality.displayName}</small>}
+            </div>
+            <div>
+              <span>RESOLVED GRID</span>
+              <b>{coord(resolved)}</b>
+            </div>
+            <div>
+              <span>VALID</span>
+              <b>{isoShort(source?.validTime)}</b>
+            </div>
+          </div>
+        </section>
+
+        <aside className="storm-workspace__context">
+          <section className="storm-provenance">
+            <header>
+              <span>PROVENANCE</span>
+              <b>{source?.dataClass ?? snapshot?.metrics.find((metric) => metric.dataClass)?.dataClass ?? "UNAVAILABLE"}</b>
+            </header>
+            <dl>
+              <div><dt>Requested</dt><dd>{coord(selectedPoint)}</dd></div>
+              <div><dt>Location</dt><dd>{selectedPoint ? (locality?.displayName ?? "RESOLVING…") : "UNAVAILABLE"}</dd></div>
+              <div><dt>Resolved grid</dt><dd>{coord(resolved)}</dd></div>
+              <div><dt>Grid distance</dt><dd>{source?.gridDistanceKm != null ? `${source.gridDistanceKm.toFixed(2)} km` : "UNAVAILABLE"}</dd></div>
+              <div><dt>Provider</dt><dd>{source?.provider ?? snapshot?.providerName ?? "UNAVAILABLE"}</dd></div>
+              <div><dt>Model/product</dt><dd>{source?.product ?? "UNAVAILABLE"}</dd></div>
+              <div><dt>Run</dt><dd>{isoShort(source?.runTime)}</dd></div>
+              <div><dt>Valid</dt><dd>{isoShort(source?.validTime)}</dd></div>
+              <div><dt>Forecast hour</dt><dd>{source?.forecastHour ?? "UNAVAILABLE"}</dd></div>
+              <div><dt>Data class</dt><dd>{source?.dataClass ?? "UNAVAILABLE"}</dd></div>
+              <div><dt>Generated</dt><dd>{isoShort(snapshot?.generatedAt)}</dd></div>
+            </dl>
+            {coreState.stormIntel.pointLoading && <p className="ops-loading">Loading newest selected point...</p>}
+            {coreState.stormIntel.pointError && <p className="ops-error-text">{coreState.stormIntel.pointError}</p>}
+            {config.mode === "SIMULATION" && <p className="ops-error-text">EXPLICIT SIMULATION MODE — NOT LIVE CORE</p>}
+          </section>
+          <PointHistory history={pointHistory} onSelect={selectHistoryPoint} />
+        </aside>
+      </main>
+
+      {import.meta.env.VITE_FORECAST_TIMELINE_ENABLED === "1" && selectedPoint && <ForecastTimeline config={config} latitude={selectedPoint.lat} longitude={selectedPoint.lon} />}
+      {import.meta.env.VITE_FORECAST_TARGETS_ENABLED === "1" && selectedPoint && <ForecastTargets key={`${selectedPoint.lat},${selectedPoint.lon}`} config={config} latitude={selectedPoint.lat} longitude={selectedPoint.lon} />}
+      {snapshot && <>
+        {(coreState.stormIntel.pointLoading || coreState.stormIntel.pointError) && <p className="ops-retained-result">Showing the previous result while the requested point is unavailable. Its location and valid time remain in Point details below.</p>}
+        <StormIntelMetricBoard coreState={coreState} />
+      </>}
+      <PointInspector selectedPoint={selectedPoint} coreState={coreState} onRetry={refreshPoint} onFollow={followDeviceLocation} />
+    </div>
+  );
+}

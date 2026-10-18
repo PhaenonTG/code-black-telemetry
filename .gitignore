@@ -1,0 +1,42 @@
+# Ad-hoc on-device verification screenshots/logcat dumps from past sessions -- 617MB tracked
+# across 408 files as of this commit, none of it meant to be a permanent record. Slows every
+# clone (including Codemagic's CI checkout) for no benefit. Untracked below; not purged from
+# history here since that needs a force-push, which needs an explicit go-ahead first.
+qa-screenshots/
+artifacts/
+.claude/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+.env
+android/app/src/main/res/values/mapbox_access_token.xml
+android/.gradle/
+android/app/build/
+android/tmp-*/
+native/**/target/
+.atlas-vite.*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+/dist-parity/
