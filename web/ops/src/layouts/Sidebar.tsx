@@ -18,11 +18,23 @@ export function Sidebar({ rail, collapsible, onToggleCollapse }: { rail: boolean
     label: NAV_SECTION_LABELS[name],
     routes: ROUTES.filter((route) => route.inSidebar && route.section === name),
   }))
-  // Short viewports (e.g. 1024x594) scroll the link list. Keep the active destination visible
-  // without jumping: "nearest" only scrolls when the active link is actually out of view.
+  // Short viewports (e.g. 1024x594) scroll the link list. Never scroll on initial load, so the
+  // top (Workspaces) section stays in view; on later route/rail changes, scroll the list itself
+  // (not the page) by the minimum amount, and only when the active link is outside its visible area.
+  const lastNav = useRef<string | null>(null)
   useEffect(() => {
-    const active = linksRef.current?.querySelector<HTMLElement>(".sidebar__link.active")
-    if (active && typeof active.scrollIntoView === "function") active.scrollIntoView({ block: "nearest", inline: "nearest" })
+    const key = `${pathname}|${rail}`
+    const previous = lastNav.current
+    lastNav.current = key
+    // First render (and StrictMode's repeated mount effect for the same key) never scrolls.
+    if (previous === null || previous === key) return
+    const container = linksRef.current
+    const active = container?.querySelector<HTMLElement>(".sidebar__link.active")
+    if (!container || !active) return
+    const box = container.getBoundingClientRect()
+    const link = active.getBoundingClientRect()
+    if (link.top >= box.top && link.bottom <= box.bottom) return
+    container.scrollTop += link.top < box.top ? link.top - box.top : link.bottom - box.bottom
   }, [pathname, rail])
   return (
     <nav className={rail ? "sidebar sidebar--rail" : "sidebar"} aria-label="Primary">
