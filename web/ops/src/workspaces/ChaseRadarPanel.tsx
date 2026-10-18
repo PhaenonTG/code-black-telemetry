@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles"
@@ -14,6 +14,7 @@ type Point = { lat: number; lon: number }
 const PRODUCTS: RadarProduct[] = ["REF", "VEL", "SRV", "CC"]
 
 export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
+  const descriptionId = useId()
   const [product, setProduct] = useState<RadarProduct>("REF")
   const [siteOverride, setSiteOverride] = useState("")
   const [sites, setSites] = useState<RadarSite[]>([])
@@ -137,7 +138,8 @@ export function ChaseRadarPanel({ focus }: { focus: Point | null }) {
       <label>Site <select aria-label="Radar site" value={siteOverride} onChange={(event) => { setFrame(null); setSiteOverride(event.target.value) }}><option value="">Auto · nearest healthy</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.id} · {site.name}</option>)}</select></label>
       <div role="group" aria-label="Radar product">{PRODUCTS.map((item) => <button type="button" key={item} aria-pressed={product === item} disabled={item === "SRV" && !stormMotionReady} title={item === "SRV" && !stormMotionReady ? "Storm motion is required for storm-relative velocity" : undefined} onClick={() => { setFrame(null); setProduct(item) }}>{item}</button>)}</div>
     </div>
-    <div className="chase-radar__viewport">{hasMapboxToken() ? <div ref={container} className="chase-radar__map" role="img" aria-label={`${product} radar from ${frame?.site.id ?? chosenSite?.id ?? "unavailable site"}`} /> : <div className="chase-radar__empty">Mapbox is not configured in this build.</div>}{(!frame || error || siteDiscoveryError) && <div className="chase-radar__message">{error || siteDiscoveryError || "Checking radar frames…"}</div>}</div>
+    <span id={descriptionId} className="a11y-caption">{`${product} radar from ${frame?.site.id ?? chosenSite?.id ?? "unavailable site"}`}</span>
+    <div className="chase-radar__viewport">{hasMapboxToken() ? <div ref={container} className="chase-radar__map" aria-describedby={descriptionId} /> : <div className="chase-radar__empty">Mapbox is not configured in this build.</div>}{(!frame || error || siteDiscoveryError) && <div className="chase-radar__message">{error || siteDiscoveryError || "Checking radar frames…"}</div>}</div>
     <div className="chase-radar__legend"><AtlasRadarLegend product={product} /></div>
     <footer><span>{frame ? `${frame.sourceLevel} · ${frame.freshness} · ${ageText(ageSeconds)} old` : checkedAt ? "No scan available" : "Checking…"}</span><span>{frame && Number.isFinite(scanTime) ? new Date(scanTime).toLocaleTimeString() : "Scan time unavailable"}</span></footer>
   </section>
