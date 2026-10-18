@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { currentAccessToken, buildCoreRequestHeaders } from "../../core/client"
+import { AsyncViewState } from "../../components/AsyncViewState"
 import { LABELS, PROJECTS, validateCoordination, type CoordinationView } from "./contract"
 import "./coordination.css"
 
@@ -50,7 +51,7 @@ export default function CoordinationPanel({ load = loadSnapshot }: { load?: (sig
       <button type="button" onClick={() => { void refresh() }} disabled={busy}>{busy ? "Refreshing…" : "Refresh evidence"}</button>
     </header>
     <p className="coordination__notice" role="status">{error ? "STALE / UNAVAILABLE" : snapshot ? `FRESHNESS ${snapshot.stale_state.state}` : "EVIDENCE UNAVAILABLE"} · Session activity does not establish deployment or health.</p>
-    {error && <p role="alert" className="coordination__error">{error}</p>}
+    {error && snapshot && <AsyncViewState compact state="stale" title="Showing last received evidence" message={error} />}
     {snapshot ? <>
       <dl className="coordination__times"><div><dt>Source observed</dt><dd>{time(snapshot.source_observed_at_utc)}</dd></div><div><dt>Snapshot exported</dt><dd>{time(snapshot.generated_at_utc)}</dd></div></dl>
       <p className="coordination__muted">{LABELS[snapshot.stale_state.reason]}</p>
@@ -69,9 +70,12 @@ export default function CoordinationPanel({ load = loadSnapshot }: { load?: (sig
         </details>
       </article>)}</div>
       <div className="coordination__queue"><h3>REVIEW / HANDOFF QUEUE</h3><p>Only the coordinator assigns turns after reviewing a saved handoff. Age and silence never release ownership or promote a request.</p>
-        {queue.length ? <ul>{queue.map(q => <li key={q.request_id}><strong>{q.state.replaceAll("_", " ")}</strong> · {PROJECTS[q.project_id]}<br /><span className="coordination__id">{q.session_id}</span><br /><small>{q.evidence_class} · {time(q.observed_at_utc)} · {q.request_id}{q.decision_id ? ` · Decision ${q.decision_id}` : " · No coordinator decision"}</small></li>)}</ul> : <p>No curated queue requests in this snapshot. This does not prove the canonical queue is empty.</p>}
+        {queue.length ? <ul>{queue.map(q => <li key={q.request_id}><strong>{q.state.replaceAll("_", " ")}</strong> · {PROJECTS[q.project_id]}<br /><span className="coordination__id">{q.session_id}</span><br /><small>{q.evidence_class} · {time(q.observed_at_utc)} · {q.request_id}{q.decision_id ? ` · Decision ${q.decision_id}` : " · No coordinator decision"}</small></li>)}</ul> : <AsyncViewState compact state="empty" title="No queue requests" message="No curated queue requests in this snapshot. This does not prove the canonical queue is empty." />}
       </div>
       <footer className="coordination__muted">Snapshot <span className="coordination__id">{snapshot.source_snapshot_id.slice(0, 16)}</span> · Derived view; canonical log remains the source.</footer>
-    </> : <p className="coordination__muted">No approved snapshot received. Queue, ownership, tests and deployment are unknown.</p>}
+    </> : error
+      ? <AsyncViewState compact state="error" title="Coordination evidence unavailable" message={<>{error} No approved snapshot received. Queue, ownership, tests and deployment are unknown.</>} />
+      // No snapshot and no error only while the mount refresh is in flight (refresh() always ends in a snapshot or an error).
+      : <AsyncViewState compact state="loading" title="Loading coordination evidence" message="Requesting the approved snapshot. Queue, ownership, tests and deployment are unknown until it arrives." />}
   </section>
 }
