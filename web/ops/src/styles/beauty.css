@@ -66,7 +66,7 @@
   margin: 0; font-family: var(--cb-font-display); font-weight: 400; font-size: var(--cb-h1-size); line-height: 1.05; letter-spacing: .035em; text-transform: uppercase; overflow-wrap: anywhere;
 }
 .shell .page-header__description, .shell .workspace-heading .page-header__description { max-width: 72ch; margin: var(--cb-sp-2) 0 0; color: var(--cb-muted); font-size: 14px; font-weight: 500; line-height: 1.55; }
-.shell .page-header__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cb-sp-2); flex: 0 1 auto; max-width: 100%; }
+.shell .page-header__actions { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--cb-sp-2); flex: 0 1 auto; max-width: 100%; }
 .shell .page-header__actions > :is(nav, div) { display: flex; flex-wrap: wrap; gap: var(--cb-sp-2); }
 .shell :is(.chase-workspace, .analysis-workspace) > .page-header { margin-bottom: var(--cb-sp-3); }
 .shell .radar-lab .page-header { margin-bottom: 0; }
@@ -89,6 +89,7 @@
   .shell .page-header { margin-bottom: var(--cb-sp-5); align-items: flex-start; }
   .shell .page-header > div:first-child { flex-basis: 100%; }
   .shell .page-header__description { font-size: 15px; }
+  .shell .analysis-workspace .page-header__actions { flex-basis: 100%; width: 100%; }
 }
 
 /* ---- Brushed-steel surfaces, rounded, with a red laser top edge. ---- */

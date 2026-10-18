@@ -221,19 +221,21 @@ export default function SoundingsWorkspace() {
           </header>
           <div className="soundings-location-form">
             <input
+              aria-label="Sounding location city"
               placeholder="City"
               value={cityInput}
               onChange={(e) => setCityInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && void handleSearch()}
             />
             <input
+              aria-label="Sounding location state"
               placeholder="ST"
               maxLength={2}
               value={stateInput}
               onChange={(e) => setStateInput(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && void handleSearch()}
             />
-            <button type="button" onClick={() => void handleSearch()} disabled={searchBusy}>
+            <button type="button" aria-label="Search sounding locations" onClick={() => void handleSearch()} disabled={searchBusy}>
               {searchBusy ? "…" : "Search"}
             </button>
           </div>
