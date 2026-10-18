@@ -3,7 +3,7 @@ import type Hls from "hls.js"
 import { currentAccessToken } from "../core/client"
 import { currentMediaTimestamp, isProgramMediaUrl, mediaCompositionMatches, monitorRecoveryDelay } from "./programMonitorPolicy"
 
-export default function ProgramMonitor({ active, canStart, fallback, compositionId }: { active: boolean; canStart: boolean; fallback: ReactNode; compositionId?: string }) {
+export default function ProgramMonitor({ active, canStart, fallback, compositionId, onRunningChange }: { active: boolean; canStart: boolean; fallback: ReactNode; compositionId?: string; onRunningChange?: (running: boolean) => void }) {
   const video = useRef<HTMLVideoElement>(null)
   const player = useRef<Hls | null>(null)
   const sessionActive = useRef(false)
@@ -46,7 +46,7 @@ export default function ProgramMonitor({ active, canStart, fallback, composition
     sessionActive.current = true
     const stop = (reason: string, recover = false, status = 0) => {
       if (cancelled) return
-      cancelled = true; sessionActive.current = false
+      cancelled = true; sessionActive.current = false; onRunningChange?.(false)
       const delay = recover ? monitorRecoveryDelay(++failures.current, status) : null
       setState(delay === null ? reason : `${reason} Reconnecting private monitor in ${delay / 1000}s…`); setPlaying(false); setMuted(true)
       if (delay === null) { setEnabled(false); setRetryAt(null) } else setRetryAt(Date.now() + delay)
@@ -84,7 +84,7 @@ export default function ProgramMonitor({ active, canStart, fallback, composition
           const code = data.response?.code ?? 0
           if (data.fatal || [401, 403, 404, 409, 429].includes(code)) stop("PROGRAM monitor unavailable. Check source and OPS sign-in; snapshot fallback.", true, code)
         })
-        hls.on(HlsPlayer.Events.MANIFEST_PARSED, () => { void media.play().catch(() => { if (!cancelled) setState("Press the video Play control to start monitoring.") }) })
+        hls.on(HlsPlayer.Events.MANIFEST_PARSED, () => { if (!cancelled) onRunningChange?.(true); void media.play().catch(() => { if (!cancelled) setState("Press the video Play control to start monitoring.") }) })
         hls.attachMedia(media)
         hls.loadSource(new URL("/api/producer/v1/preview/hls/index.m3u8", window.location.origin).href)
         setState("Connecting to authenticated PROGRAM monitor…")
@@ -97,11 +97,11 @@ export default function ProgramMonitor({ active, canStart, fallback, composition
       else if (!media.paused && Date.now() - lastMovementAt > 5000) stop("PROGRAM playback stalled. Snapshot fallback.", true)
     }, 1000)
     return () => {
-      cancelled = true; sessionActive.current = false; window.clearInterval(watchdog)
+      cancelled = true; sessionActive.current = false; onRunningChange?.(false); window.clearInterval(watchdog)
       player.current?.destroy(); player.current = null
       media.pause(); media.removeAttribute("src"); media.load()
     }
-  }, [displayVideo, compositionId])
+  }, [displayVideo, compositionId, onRunningChange])
 
   const listen = () => {
     const media = video.current

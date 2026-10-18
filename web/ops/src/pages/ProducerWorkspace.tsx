@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useSharedOpsStatus, statusAge } from "../core/useSharedOpsStatus"
+import "./ProducerWorkspace.css"
 import { PageHeader } from "../components/PageHeader"
 import { Link } from "react-router-dom"
 import { useCoreOps } from "../core/useCoreOps"
@@ -62,8 +64,11 @@ function expiry(timestamp: string | undefined, now: number): string {
 
 function bridgeState(document: ProducerBridgeStatus | null): string {
   const state = document?.bridgeState ?? document?.bridge_state ?? (typeof document?.bridge === "string" ? document.bridge : document?.bridge?.state)
-  if (typeof state === "string" && state.trim()) return state.toUpperCase()
-  return document?.observedAt ? "ONLINE" : "OFFLINE"
+  if (typeof state === "string" && state.trim()) {
+    if (state.toUpperCase() === "ONLINE" && (!document?.observedAt || !Number.isFinite(Date.parse(document.observedAt)) || Date.now() - Date.parse(document.observedAt) > 120_000)) return "STALE"
+    return state.toUpperCase()
+  }
+  return "OFFLINE"
 }
 
 function unwrapBridgeStatus(document: ProducerBridgeStatus): ProducerBridgeStatus {
@@ -72,11 +77,12 @@ function unwrapBridgeStatus(document: ProducerBridgeStatus): ProducerBridgeStatu
 }
 
 function sourceFresh(document: ProducerBridgeStatus | null): boolean {
-  return currentProgramRender(document)
+  return bridgeState(document) === "ONLINE" && currentProgramRender(document)
 }
 
 export default function ProducerWorkspace() {
-  const { config, state, selectedPoint, selectPoint } = useCoreOps()
+  const { config, selectedPoint, selectPoint } = useCoreOps()
+  const { fabric } = useSharedOpsStatus()
   const [status, setStatus] = useState<StatusCenterDocument | null>(null)
   const [statusCheckedAt, setStatusCheckedAt] = useState(0)
   const [now, setNow] = useState(() => Date.now())
@@ -86,6 +92,7 @@ export default function ProducerWorkspace() {
   const [alertError, setAlertError] = useState("")
   const [producerStatus, setProducerStatus] = useState<ProducerBridgeStatus | null>(null)
   const [producerError, setProducerError] = useState("")
+  const [monitorRunning, setMonitorRunning] = useState(false)
   const [programFrameUrl, setProgramFrameUrl] = useState("")
   const [programFrameAt, setProgramFrameAt] = useState("")
   const [programFrameState, setProgramFrameState] = useState("Waiting for broadcaster status")
@@ -216,10 +223,10 @@ export default function ProducerWorkspace() {
   const generatedAt = status?.generated_at ? Date.parse(status.generated_at) : 0
   const statusFresh = !statusError && statusCheckedAt > 0 && now - statusCheckedAt < 60_000 && generatedAt > 0 && now - generatedAt < 60_000
   const playing = statusFresh && selected?.publisherOnline && selected.playerUrl
-  const units = state.fabric.units?.units ?? []
+  const units = fabric.units?.units ?? []
   const producerBridgeState = bridgeState(producerStatus)
   const programCurrent = programFrameState === "CURRENT" && sourceFresh(producerStatus) && programFrameComposition === producerStatus?.composition?.id && Boolean(programFrameUrl) && Boolean(currentMediaTimestamp(programFrameAt))
-  const heldFrameAge = Date.now() - Date.parse(programFrameAt)
+  const heldFrameAge = now - Date.parse(programFrameAt)
   const heldFrame = Boolean(programFrameUrl) && programFrameComposition === producerStatus?.composition?.id && Number.isFinite(heldFrameAge) && heldFrameAge >= -2000 && heldFrameAge <= 30_000
   const programStateLabel = programCurrent ? "CURRENT" : producerBridgeState === "ONLINE" && producerStatus?.engine === "obs" ? sourceFresh(producerStatus) ? "OBS PROGRAM READY" : "WAITING FOR PROGRAM" : producerBridgeState === "ONLINE" && producerStatus?.source_state !== "SOURCE_LIVE" ? "RELAY READY · WAITING FOR SOURCE" : producerBridgeState
 
@@ -234,11 +241,11 @@ export default function ProducerWorkspace() {
       <div className="producer-main">
         <section className="workspace-panel producer-stage" aria-label="PROGRAM preview">
           <header><h2>PROGRAM</h2><span className={programCurrent || producerBridgeState === "ONLINE" ? "workspace-live" : "workspace-muted"}>{programStateLabel}</span></header>
-          <ProgramMonitor key={producerStatus?.composition?.id ?? "legacy"} active={producerBridgeState === "ONLINE" && Boolean(producerStatus?.composition?.id)} canStart={sourceFresh(producerStatus)} compositionId={producerStatus?.composition?.id} fallback={heldFrame ? <><img src={programFrameUrl} alt={programCurrent ? "Current PROGRAM preview" : "Last verified PROGRAM frame"} />{!programCurrent && <span className="producer-stage__held-label">LAST VERIFIED FRAME · awaiting fresh PROGRAM proof</span>}</> : <div className="producer-stage__standby"><strong>{programFrameState}</strong><p>{producerError || (producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
-          <div className="producer-stage__foot"><div><strong>{producerStatus?.state ?? "NO BROADCASTER STATUS"}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>{producerStatus?.broadcast?.state ?? "OUTPUT UNKNOWN"}</span></div>
+          <ProgramMonitor onRunningChange={setMonitorRunning} key={producerStatus?.composition?.id ?? "legacy"} active={producerBridgeState === "ONLINE" && Boolean(producerStatus?.composition?.id)} canStart={sourceFresh(producerStatus)} compositionId={producerStatus?.composition?.id} fallback={heldFrame ? <><img src={programFrameUrl} alt={programCurrent ? "Current PROGRAM preview" : "Last verified PROGRAM frame"} />{!programCurrent && <span className="producer-stage__held-label">LAST VERIFIED FRAME · awaiting fresh PROGRAM proof</span>}</> : <div className="producer-stage__standby"><strong>{producerBridgeState === "ONLINE" ? programFrameState : `Bridge ${producerBridgeState.toLowerCase()}`}</strong><p>{producerError || (producerBridgeState !== "ONLINE" ? `Last seen ${age(producerStatus?.observedAt, now)}` : producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
+          <div className="producer-stage__foot"><div><strong>{producerBridgeState === "ONLINE" ? producerStatus?.state ?? "NO BROADCASTER STATUS" : producerBridgeState}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>{producerBridgeState === "ONLINE" ? producerStatus?.broadcast?.state ?? "OUTPUT UNKNOWN" : "OUTPUT UNVERIFIED"}</span></div>
         </section>
         <PreparePcControls />
-        <ProducerControls />
+        <ProducerControls monitorRunning={monitorRunning} />
         <section className="workspace-panel producer-stage" aria-label="Selected live stream camera">
           <header><h2>Live camera</h2><span className={playing ? "workspace-live" : "workspace-muted"}>{playing ? "PUBLISHING" : statusError ? "STATUS UNAVAILABLE" : "NO LIVE PUBLISHER"}</span></header>
           <div className="producer-stage__viewport">
@@ -254,7 +261,7 @@ export default function ProducerWorkspace() {
         <section className="workspace-panel producer-map-link"><header><h2>Situation map</h2><Link to="/">Operations map →</Link></header><ProducerSituationMap selectedPoint={selectedPoint} units={units} onPointSelect={selectPoint} /><p>{selectedPoint ? `Selected point ${selectedPoint.lat.toFixed(3)}, ${selectedPoint.lon.toFixed(3)} · official alerts in the rail.` : "Select a point to check official alerts."} Radar and road cameras remain in Operations Map.</p><Link to="/radar">Open single-site radar →</Link></section>
       </div>
       <aside className="producer-rail">
-        <section className="workspace-panel"><header><h2>Team</h2><Link to="/chase">Team & devices →</Link></header><div className="workspace-list">{units.length === 0 ? <p>No Fabric units reported.</p> : units.map((unit) => <div key={unit.unit_id}><strong>{unit.operator_name || unit.display_name}</strong><span>{unit.overall_health} · {age(unit.last_seen, now)}</span></div>)}</div></section>
+        <section className="workspace-panel"><header><h2>Team</h2><Link to="/chase">Team & devices →</Link></header>{fabric.state === "STALE" && <p role="status">STALE Fabric snapshot · {statusAge(fabric.unitsReceivedAt ?? fabric.lastContactAt ?? fabric.checkedAt, now)}</p>}<div className="workspace-list">{units.length === 0 ? <p>No Fabric units reported.</p> : units.map((unit) => <div key={unit.unit_id}><strong>{unit.operator_name || unit.display_name}</strong><span>{unit.overall_health} · {age(unit.last_seen, now)}</span></div>)}</div></section>
         <section className="workspace-panel"><header><h2>Official alerts</h2><Link to="/weather">Weather analysis →</Link></header>{alertError && <p className="workspace-warning">{alertError}</p>}{!selectedPoint ? <p>Select a map point to check official alerts for that area.</p> : alerts?.alerts.length ? <div className="workspace-list">{alerts.alerts.slice(0, 4).map((alert, index) => <div key={alert.id ?? index}><strong>{alert.event || alert.headline || "Official alert"}</strong><span>{alert.severity || "NWS"}{alert.expires ? ` · ${expiry(alert.expires, now)}` : ""}</span></div>)}</div> : <p>{alerts ? "No active alerts returned for the selected point." : "Checking NWS alerts…"}</p>}</section>
         <section className="workspace-panel"><header><h2>Aegis · internal</h2><Link to="/aegis-alerts">Aegis alerts →</Link></header><p>Radar findings are advisory and separate from official warnings. Team-wide delivery remains behind the review policy.</p></section>
         <section className="workspace-panel"><header><h2>Broadcast health</h2><Link to="/stream">Program status →</Link></header><p>{statusError || (status?.streaming as { summary?: string } | undefined)?.summary || "Checking stream infrastructure…"}</p></section>

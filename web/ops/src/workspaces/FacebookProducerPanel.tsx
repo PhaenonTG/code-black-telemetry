@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import ConfirmDialog from "../components/ConfirmDialog"
 import { currentAccessToken } from "../core/client"
 import { createProducerPoll } from "./producerPolling"
 import { noteProducerResponse, producerReadAllowed, producerRetryMessage } from "./producerRateLimit"
@@ -27,6 +28,7 @@ export default function FacebookProducerPanel() {
   const [connection, setConnection] = useState<Connection | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
+  const [confirmConnect, setConfirmConnect] = useState(false)
   const [message, setMessage] = useState("")
   const cursor = useRef("")
   const mounted = useRef(true)
@@ -102,7 +104,8 @@ export default function FacebookProducerPanel() {
   return <section className="workspace-panel producer-facebook" aria-label="Facebook comments and replies">
     <header><h2>Facebook comments</h2><span>{feedState}</span></header>
     <p>{connection?.page?.label || "Storm Chaser Nick Mounce"} · {connection?.state || "Connection status unavailable"}</p>
-    {connection?.canConnect && <button type="button" disabled={busy} onClick={() => void connect()}>{connection.state === "connected" ? "Reconnect Facebook" : "Connect Facebook"}</button>}
+    {connection?.canConnect && <button type="button" disabled={busy} onClick={() => setConfirmConnect(true)}>{connection.state === "connected" ? "Reconnect Facebook" : "Connect Facebook"}</button>}
+    {confirmConnect && <ConfirmDialog title="Confirm Facebook connection" consequence="Open Facebook to connect or reconnect this Page? You will leave the Producer desk to review Facebook permissions." onCancel={() => setConfirmConnect(false)}><button type="button" disabled={busy || !connection?.canConnect} onClick={() => { setConfirmConnect(false); void connect() }}>Confirm Facebook connection</button></ConfirmDialog>}
     {message && <p role="status">{message}</p>}
     <div className="producer-facebook__comments">{comments.length ? comments.slice(-30).map(comment => <article key={comment.id}>
       <strong>{comment.author || "Viewer"}</strong><time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleTimeString()}</time>
