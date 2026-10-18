@@ -17,9 +17,6 @@ export interface RouteDef {
 }
 
 export const ROUTES: RouteDef[] = [
-  { path: "/radar-r3", label: "RADAR R3 CANDIDATE", icon: "radar", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
-  { path: "/coordination", label: "COORDINATION", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
-  { path: "/vehicle-weather", label: "VEHICLE WEATHER", icon: "fleet", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/producer", label: "PRODUCER", icon: "stream", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "WORKSPACES" },
   { path: "/workspace/chase", label: "CHASE DESK", icon: "fleet", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "WORKSPACES" },
   { path: "/analysis", label: "SETUP REVIEW", icon: "models", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "WORKSPACES" },
@@ -30,15 +27,18 @@ export const ROUTES: RouteDef[] = [
   { path: "/radar", label: "RADAR LAB", icon: "radar", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "ANALYSIS" },
   { path: "/models", label: "MODELS", icon: "models", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/soundings", label: "SOUNDINGS", icon: "sounding", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
+  { path: "/radar-r3", label: "RADAR R3 CANDIDATE", icon: "radar", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: true, section: "ANALYSIS" },
   { path: "/consensus", label: "CONSENSUS", icon: "consensus", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/targets", label: "TARGETS", icon: "target", state: "DEVELOPMENT", inPhoneNav: false, inSidebar: false, section: "ANALYSIS" },
   { path: "/chase", label: "TEAM & DEVICES", icon: "fleet", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
+  { path: "/vehicle-weather", label: "VEHICLE WEATHER", icon: "fleet", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/field", label: "FIELD MAP", icon: "radio", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/stream", label: "PROGRAM STATUS", icon: "stream", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FIELD" },
   { path: "/system", label: "SYSTEM", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
   { path: "/directory", label: "SITE DIRECTORY", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
   { path: "/status-center", label: "STATUS CENTER", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
   { path: "/automation-lab", label: "AUTOMATION LAB", icon: "ops", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
+  { path: "/coordination", label: "COORDINATION", icon: "system", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
   { path: "/settings", label: "SETTINGS", icon: "settings", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "SYSTEM" },
 ]
 

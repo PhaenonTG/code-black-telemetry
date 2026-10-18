@@ -3,8 +3,10 @@ import { ROUTES, type RouteDef } from "../app/routes"
 export const PHONE_ROUTES = [
   { path: "/", label: "HOME", icon: "home" as const, title: "Home" },
   { path: "/radar", label: "RADAR", icon: "radar" as const, title: "Radar Lab" },
-  { path: "/system", label: "OPS", icon: "system" as const, title: "System health" },
-  { path: "/ai", label: "AEGIS", icon: "ops" as const, title: "Aegis console" },
+  { path: "/system", label: "SYSTEM", icon: "system" as const, title: "System health" },
+  // The console handoff (/ai) is disabled in production, so the tab opens the live Aegis radar
+  // alert feed; /ai itself stays routable.
+  { path: "/aegis-alerts", label: "AEGIS", icon: "ops" as const, title: "Aegis radar alerts" },
   { path: "/more", label: "MORE", icon: "more" as const, title: "More destinations" },
 ]
 
@@ -50,6 +52,13 @@ export const NAV_DETAILS: Partial<Record<string, string>> = {
   "/system": "Core, providers and connectivity",
   "/status-center": "Platform telemetry and attention queue",
   "/directory": "Code Black destinations and access",
+  "/hurricane": "Latest NHC advisory and watch-point alerts",
+  "/aegis-alerts": "Internal radar evidence · unconfirmed",
+  "/soundings": "Model soundings for a point",
+  "/vehicle-weather": "On-vehicle sensors per chaser",
+  "/coordination": "Agent sessions and handoff queue",
+  "/automation-lab": "Rehearse Aegis alert routing",
+  "/settings": "Display, map layers and alerts",
 }
 
 export function navLabel(route: Pick<RouteDef, "path" | "label">): string {

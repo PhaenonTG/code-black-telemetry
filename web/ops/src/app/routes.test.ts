@@ -15,18 +15,23 @@ describe("OPS workstation routes", () => {
       "RADAR LAB",
       "MODELS",
       "SOUNDINGS",
+      "RADAR R3 CANDIDATE",
       "CONSENSUS",
       "TARGETS",
       "TEAM & DEVICES",
+      "VEHICLE WEATHER",
       "FIELD MAP",
       "PROGRAM STATUS",
       "SYSTEM",
+      "SITE DIRECTORY",
       "STATUS CENTER",
       "AUTOMATION LAB",
+      "COORDINATION",
       "SETTINGS",
     ]);
     expect(ROUTES.filter((route) => route.state === "DEVELOPMENT").map((route) => route.label)).toEqual([
       "MODELS",
+      "RADAR R3 CANDIDATE",
       "CONSENSUS",
       "TARGETS",
     ]);
@@ -36,12 +41,12 @@ describe("OPS workstation routes", () => {
   });
 
   it("keeps the phone nav bounded to five destinations", () => {
-    expect(PHONE_ROUTES.map((route) => route.label)).toEqual(["HOME", "RADAR", "OPS", "AEGIS", "MORE"]);
+    expect(PHONE_ROUTES.map((route) => route.label)).toEqual(["HOME", "RADAR", "SYSTEM", "AEGIS", "MORE"]);
     expect([...ROUTES.filter((route) => route.inPhoneNav), MORE_ROUTE].map((route) => route.label)).toEqual([
       "OPERATIONS MAP", "RADAR LAB", "MORE",
     ]);
     expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual([
-      "WEATHER ANALYSIS", "HURRICANE WATCH", "AEGIS RADAR ALERTS", "SOUNDINGS", "TEAM & DEVICES", "FIELD MAP", "PROGRAM STATUS", "SYSTEM", "STATUS CENTER", "AUTOMATION LAB", "SETTINGS",
+      "WEATHER ANALYSIS", "HURRICANE WATCH", "AEGIS RADAR ALERTS", "SOUNDINGS", "RADAR R3 CANDIDATE", "TEAM & DEVICES", "VEHICLE WEATHER", "FIELD MAP", "PROGRAM STATUS", "SYSTEM", "SITE DIRECTORY", "STATUS CENTER", "AUTOMATION LAB", "COORDINATION", "SETTINGS",
     ]);
   });
 });

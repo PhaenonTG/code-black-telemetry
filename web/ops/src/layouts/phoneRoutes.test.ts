@@ -36,13 +36,13 @@ describe("More / sidebar navigation parity", () => {
   })
 
   it("never repeats bottom-bar destinations or development placeholders", () => {
-    for (const path of ["/", "/radar", "/ai", "/more"]) expect(morePaths).not.toContain(path)
+    for (const path of ["/", "/radar", "/aegis-alerts", "/ai", "/more"]) expect(morePaths).not.toContain(path)
     for (const path of ["/models", "/consensus", "/targets"]) expect(morePaths).not.toContain(path)
     expect(ROUTES.filter((route) => route.state === "DEVELOPMENT" && route.path !== "/radar-r3").some(isMoreDestination)).toBe(false)
   })
 
-  it("does not duplicate System health in More because the OPS tab opens it", () => {
-    // /system is in the bottom bar as OPS, so it is not duplicated in More.
+  it("does not duplicate System health in More because the SYSTEM tab opens it", () => {
+    // /system is in the bottom bar as SYSTEM, so it is not duplicated in More.
     expect(morePaths).not.toContain("/system")
     expect(PHONE_ROUTES.find((route) => route.path === "/system")?.title).toBe("System health")
   })
@@ -62,5 +62,16 @@ describe("More / sidebar navigation parity", () => {
     expect(navDetail({ path: "/field" })).toMatch(/field/i)
     expect(navDetail({ path: "/" })).toMatch(/operations map/i)
     expect(navDetail({ path: "/field" })).not.toEqual(navDetail({ path: "/" }))
+  })
+})
+
+describe("phone AEGIS tab", () => {
+  it("opens the live Aegis radar alert feed rather than the disabled console handoff", () => {
+    const aegis = PHONE_ROUTES.find((route) => route.label === "AEGIS")
+    expect(aegis?.path).toBe("/aegis-alerts")
+    expect(ROUTES.some((route) => route.path === aegis?.path)).toBe(true)
+  })
+  it("gives every More destination a one-line detail", () => {
+    for (const group of MORE_SECTIONS) for (const route of group.routes) expect(navDetail(route)).toBeTruthy()
   })
 })
