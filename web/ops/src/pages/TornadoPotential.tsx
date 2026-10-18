@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
@@ -10,7 +10,8 @@ import "./TornadoPotential.css"
 
 const time = (value?: string) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : "Unavailable"
 
-function PotentialMap({ data, stormOnly }: { data: PotentialPayload | null; stormOnly: boolean }) {
+export function PotentialMap({ data, stormOnly }: { data: PotentialPayload | null; stormOnly: boolean }) {
+  const descriptionId = useId()
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<InstanceType<typeof mapboxgl.Map> | null>(null)
   const latest = useRef({ data, stormOnly })
@@ -55,7 +56,7 @@ function PotentialMap({ data, stormOnly }: { data: PotentialPayload | null; stor
   }, [])
   useEffect(update, [data, stormOnly])
   if (!hasMapboxToken()) return <p>Map token is unavailable in this build.</p>
-  return <div className="potential-map-wrap"><div ref={container} className="potential-map" role="img" aria-label="Independent Code Black HRRR tornado environment screening map" />{error && <span className="potential-map-error">{error}</span>}</div>
+  return <div className="potential-map-wrap"><div ref={container} className="potential-map" aria-describedby={descriptionId} /><span id={descriptionId} className="a11y-caption">Independent Code Black HRRR tornado environment screening map</span>{error && <span className="potential-map-error">{error}</span>}</div>
 }
 
 export default function TornadoPotential() {

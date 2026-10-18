@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Link } from "react-router-dom";
@@ -8,6 +8,7 @@ import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
 import { createHurricaneBriefingImage } from "./hurricaneBriefingImage";
 import { hurricaneCategory } from "../../../shared/hurricaneCategory";
+import { PageHeader } from "../components/PageHeader";
 import "./HurricaneWatch.css";
 
 type TrackPoint = { hour: number; latitude: number; longitude: number; wind_mph: number | null };
@@ -42,7 +43,8 @@ const line = (points: { latitude: number; longitude: number }[]) => ({
   type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) },
 });
 
-function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisible, printMap }: { data: HurricaneSnapshot; registerCapture: (capture: (() => string | null) | null) => void; onRadarStatus: (status: MosaicStatus) => void; onRadarVisible: (visible: boolean) => void; printMap: string | null }) {
+export function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisible, printMap }: { data: HurricaneSnapshot; registerCapture: (capture: (() => string | null) | null) => void; onRadarStatus: (status: MosaicStatus) => void; onRadarVisible: (visible: boolean) => void; printMap: string | null }) {
+  const descriptionId = useId();
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<InstanceType<typeof mapboxgl.Map> | null>(null);
   const visible = useRef(true);
@@ -157,7 +159,7 @@ function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisible, pr
       <text x="15" y="326" fill="#90a5b4" fontSize="11">Schematic only · live radar unavailable</text>
     </svg>;
   }
-  return <div className="hurricane-watch__map-wrap"><div ref={host} className="hurricane-watch__map" role="img" aria-label="Current IEM NEXRAD radar mosaic, NHC cone, observed and forecast track, and Grand Bay watch location" />
+  return <div className="hurricane-watch__map-wrap"><div ref={host} className="hurricane-watch__map" aria-describedby={descriptionId} /><span id={descriptionId} className="a11y-caption">Current IEM NEXRAD radar mosaic, NHC cone, observed and forecast track, and Grand Bay watch location</span>
     {printMap && <img className="hurricane-watch__print-map" src={printMap} alt="Captured radar map for this briefing" />}
     <div className="hurricane-watch__radar"><span className={`hurricane-watch__radar-dot hurricane-watch__radar-dot--${radarStatus}`} /> Radar {radarOn ? radarStatus : "off"}<button type="button" aria-pressed={radarOn} onClick={() => setRadarOn((on) => !on)}>{radarOn ? "Hide" : "Show"}</button></div>
     <div className="hurricane-watch__legend"><span><i className="hurricane-watch__legend-observed" />Observed</span><span><i className="hurricane-watch__legend-forecast" />NHC forecast</span><span><i className="hurricane-watch__legend-watch" />Watch point</span></div>
@@ -327,7 +329,7 @@ export default function HurricaneWatch() {
   const sourceAgeHours = Number.isFinite(sourceTime) ? (Date.now() - sourceTime) / 3_600_000 : null
   const sourceIsOld = sourceAgeHours !== null && sourceAgeHours > 12
   return <section className="hurricane-watch">
-    <header className="hurricane-watch__header"><div><h1>{data?.storm ? <><span>{data.storm.classification === "HU" ? "Hurricane" : "Storm"}</span> <em>{data.storm.name ?? "Gulf"}</em></> : <><span>Hurricane</span> <em>Watch</em></>}</h1><p>{category === null ? "" : `${data?.status === "active" ? "NHC Category" : "Last NHC Category"} ${category} · `}Grand Bay watch · source checks about every five minutes</p></div><Link to="/weather">Weather →</Link></header>
+    <PageHeader className="hurricane-watch__header" kicker="TROPICAL WEATHER · GRAND BAY WATCH" title={data?.storm ? `${data.storm.classification === "HU" ? "Hurricane" : "Storm"} ${data.storm.name ?? "Gulf"}` : "Hurricane Watch"} description={`${category === null ? "" : `${data?.status === "active" ? "NHC Category" : "Last NHC Category"} ${category} · `}Grand Bay watch · source checks about every five minutes`} actions={<Link to="/weather">Weather →</Link>} />
     {error && <p role="alert" className="hurricane-watch__error">{error}</p>}
     {!data && !error && <p role="status">Loading the latest assessment…</p>}
     {data?.status === "pending" && <p role="status">{data.notice}</p>}
