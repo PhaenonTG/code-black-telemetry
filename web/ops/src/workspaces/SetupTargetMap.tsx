@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useId } from "react"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles"
@@ -13,6 +13,7 @@ function validPoint(point: SetupCandidatePoint) {
 }
 
 export function SetupTargetMap({ geometry, trackingMap, bounds, points, selectedKey }: Props) {
+  const descriptionId = useId()
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<InstanceType<typeof mapboxgl.Map> | null>(null)
   useEffect(() => {
@@ -57,5 +58,5 @@ export function SetupTargetMap({ geometry, trackingMap, bounds, points, selected
   }, [points, selectedKey])
 
   if (!hasMapboxToken()) return <div className="setup-target-map__unavailable">Mapbox is not configured in this build.</div>
-  return <div ref={container} className="setup-target-map" role="img" aria-label="Official SPC tornado outlook areas with Code Black model context and experimental HRRR screening points" />
+  return <><span id={descriptionId} className="sr-only">Official SPC tornado outlook areas with Code Black model context and experimental HRRR screening points</span><div ref={container} className="setup-target-map" aria-describedby={descriptionId} /></>
 }

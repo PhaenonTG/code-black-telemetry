@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MORE_PAGE_LINKS, MORE_ROUTE, ROUTES } from "./routes";
+import { MORE_ROUTE, ROUTES } from "./routes";
 import { PHONE_ROUTES } from "../layouts/phoneRoutes";
 
 describe("OPS workstation routes", () => {
@@ -44,9 +44,6 @@ describe("OPS workstation routes", () => {
     expect(PHONE_ROUTES.map((route) => route.label)).toEqual(["HOME", "RADAR", "SYSTEM", "AEGIS", "MORE"]);
     expect([...ROUTES.filter((route) => route.inPhoneNav), MORE_ROUTE].map((route) => route.label)).toEqual([
       "OPERATIONS MAP", "RADAR LAB", "MORE",
-    ]);
-    expect(MORE_PAGE_LINKS.map((route) => route.label)).toEqual([
-      "WEATHER ANALYSIS", "HURRICANE WATCH", "AEGIS RADAR ALERTS", "SOUNDINGS", "RADAR R3 CANDIDATE", "TEAM & DEVICES", "VEHICLE WEATHER", "FIELD MAP", "PROGRAM STATUS", "SYSTEM", "SITE DIRECTORY", "STATUS CENTER", "AUTOMATION LAB", "COORDINATION", "SETTINGS",
     ]);
   });
 });

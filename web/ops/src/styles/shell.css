@@ -89,3 +89,7 @@ body{font-variant-numeric:tabular-nums}
   .shell__content{padding-bottom:0}
   .page{padding:16px 16px 24px}
 }
+
+.location-control { flex-wrap: wrap; }
+.location-control__fallback { flex: 1 1 100%; min-width: 0; min-height: 44px; max-width: 100%; padding: 6px 8px; border: 1px solid var(--cb-line-strong); grid-column: 1 / -1; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 11px; text-align: left; overflow-wrap: anywhere; }
+.location-control__fallback span { text-decoration: underline; }

@@ -46,4 +46,9 @@ export const ROUTES: RouteDef[] = [
 // doesn't deserve its own bottom-nav slot) -- desktop/tablet reach those directly from the sidebar.
 export const MORE_ROUTE: RouteDef = { path: "/more", label: "MORE", icon: "more", state: "LIVE", inPhoneNav: true, inSidebar: false, section: "SYSTEM" }
 
-export const MORE_PAGE_LINKS = ROUTES.filter((r) => !r.inPhoneNav && (r.state === "LIVE" || r.path === "/radar-r3") && r.section !== "WORKSPACES")
+export const ROUTE_ALIASES = {
+  "/setup-review": "/analysis",
+  "/program-status": "/stream",
+  "/team": "/chase",
+  "/chase-desk": "/workspace/chase",
+} as const
