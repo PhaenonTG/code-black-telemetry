@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react"
-import { buildSystemStatus, type ObservableHealth } from "../status/systemStatus"
+import { buildSystemStatus, probeSystemHealth, retainHealth, plainHealthDetail, systemTelemetry, type ObservableHealth } from "../status/systemStatus"
 import {
-  probeExternalHealth,
   readMapHealth,
   type ExternalHealthSnapshot,
 } from "../status/externalHealth"
+import { OpsStatusPill } from "../components/OpsStatusPill"
 import { StatusBadge } from "../components/StatusBadge"
 import { PageHeader } from "../components/PageHeader"
 import { useCoreOps } from "../core/useCoreOps"
@@ -46,8 +46,11 @@ export default function Operations() {
       // Map runtime health is local/observable and can update as soon as the user visits Map.
       setHealth((current) => ({ ...current, map: readMapHealth() }))
 
-      const next = await probeExternalHealth(config)
-      if (!cancelled) setHealth(next)
+      const next = await probeSystemHealth(config)
+      if (!cancelled) setHealth((previous) => ({ ...next,
+        forecast: retainHealth(previous.forecast, next.forecast, next.checkedAt),
+        hurricane: retainHealth(previous.hurricane, next.hurricane, next.checkedAt),
+      }))
     }
 
     void refresh()
@@ -78,7 +81,8 @@ export default function Operations() {
   }, [config, refreshNonce])
 
   const rows = buildSystemStatus({
-    coreReachable: coreState.core.state === "LIVE",
+    core: coreState.core,
+    telemetry: systemTelemetry(coreState.fabric.units?.units ?? [], coreState.fabric.state, coreState.refreshedAt),
     fabric: coreState.fabric,
     map: health.map,
     radar: health.radar,
@@ -91,30 +95,25 @@ export default function Operations() {
 
   return (
     <div className="page page-operations">
-      <PageHeader title="SYSTEM HEALTH" kicker="HEALTH · PROVIDERS · CONFIGURATION" description={`Independent checks for Core, Fabric, radar, weather, alerts, and map providers${health.checkedAt ? ` · last checked ${new Date(health.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}.`} actions={<><Link className="page-action-link" to="/status-center">STATUS CENTER</Link><button type="button" className="page-action-link" onClick={() => { setHealth(initialHealth()); setRefreshNonce((value) => value + 1) }}>REFRESH CHECKS</button></>} />
+      <PageHeader title="SYSTEM HEALTH" kicker="HEALTH · PROVIDERS · CONFIGURATION" description={`Independent checks for Core, Fabric, radar, weather, alerts, and map providers${health.checkedAt ? ` · last checked ${new Date(health.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}.`} actions={<><Link className="page-action-link" to="/status-center">STATUS CENTER</Link><button type="button" className="page-action-link" onClick={() => { setRefreshNonce((value) => value + 1) }}>REFRESH CHECKS</button></>} />
       <nav className="section-tabs" aria-label="System sections"><span className="active">HEALTH</span><Link to="/settings">SETTINGS</Link></nav>
       <div className="ops-system-grid">
         <section>
-          <span>CORE HEALTH</span>
-          <b>{coreState.core.state}</b>
-          <p>{coreState.core.detail}</p>
-        </section>
-        <section>
           <span>FABRIC FEED</span>
           <b>{coreState.fabric.streamState.toUpperCase()}</b>
-          <p>{coreState.fabric.detail}</p>
+          <p>{plainHealthDetail(coreState.fabric.detail)}</p>
         </section>
         <section>
           <span>STORM INTEL</span>
           <b>{coreState.stormIntel.state}</b>
-          <p>{coreState.stormIntel.detail}</p>
+          <p>{plainHealthDetail(coreState.stormIntel.detail)}</p>
         </section>
       </div>
       <div className="status-table">
         {rows.map((row) => (
           <div key={row.key} className="status-row">
             <span className="status-row__label">{row.label}</span>
-            <StatusBadge state={row.state} />
+            {row.state === "DEVELOPMENT" ? <OpsStatusPill state={row.state} label={row.state} /> : <StatusBadge state={row.state} />}
             <span className="status-row__detail">{row.detail}</span>
           </div>
         ))}
@@ -124,7 +123,7 @@ export default function Operations() {
         {providerDiagnostics.length === 0 ? <p>Open the map with Roads or Cameras enabled to collect provider diagnostics.</p> : [...providerDiagnostics].sort((a, b) => a.name.localeCompare(b.name)).map((provider) => <div className="status-row" key={`${provider.layer}:${provider.id}`}>
           <span className="status-row__label">{provider.name} · {provider.layer.toUpperCase()}</span>
           <StatusBadge state={provider.state === "error" ? "UNAVAILABLE" : provider.state === "cached" ? "DEGRADED" : "LIVE"} />
-          <span className="status-row__detail">{provider.count} records · {provider.latencyMs ? `${provider.latencyMs} ms` : provider.detail}</span>
+          <span className="status-row__detail">{provider.count} records · {provider.latencyMs ? `${provider.latencyMs} ms` : plainHealthDetail(provider.detail)}</span>
         </div>)}
       </section>
     </div>

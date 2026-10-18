@@ -324,3 +324,16 @@ export async function searchSoundingLocation(
     throw error;
   }
 }
+
+/** Retry a read once after a brief cold-start timeout or gateway failure. */
+export async function retryOnceOnTransient<T>(read: () => Promise<T>, backoffMs = 250): Promise<T> {
+  try { return await read(); }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const transient = (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError"))
+      || /timeout|timed out|HTTP (502|503|504)\b/i.test(message);
+    if (!transient) throw error;
+    await new Promise<void>((resolve) => setTimeout(resolve, backoffMs));
+    return read();
+  }
+}
