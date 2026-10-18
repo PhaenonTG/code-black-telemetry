@@ -65,7 +65,7 @@ export default function Stream() {
     <div className="page page-stream">
       <PageHeader title="PROGRAM STATUS" kicker="FIELD · STREAM INFRASTRUCTURE" description="Review field ingest status here. Use Producer for the authenticated private PROGRAM monitor and output controls." actions={<Link className="page-action-link" to="/producer">OPEN PRODUCER</Link>} />
       <nav className="section-tabs" aria-label="Field operations sections">
-        <Link to="/chase">TEAM & DEVICES</Link><span className="active" aria-current="page">PROGRAM STATUS</span>
+        <Link to="/chase" aria-label="Team and devices">TEAM & DEVICES</Link><span className="active" aria-current="page">PROGRAM STATUS</span>
       </nav>
       <section className="stream-stage">
         <div className="stream-stage__label"><i /> PROGRAM FEED · MONITORED IN PRODUCER</div>
