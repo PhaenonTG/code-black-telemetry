@@ -9,6 +9,8 @@ import { getAegisPolicy, getAegisStatus, type AegisPolicyStatus, type AegisStatu
 import {
   fetchRadarControlSettings,
   fetchStatusCenter,
+  mergePolledSettings,
+  radarSettingsEqual,
   saveRadarControlSettings,
   type RadarControlSettings,
   type StatusCenterDocument,
@@ -57,7 +59,13 @@ function detailFor(tile: StatusTile): string {
 export default function StatusCenter() {
   const { config, state } = useCoreOps()
   const [document, setDocument] = useState<StatusCenterDocument | null>(null)
-  const [settings, setSettings] = useState<RadarControlSettings | null>(null)
+  // Keep the server copy and draft together so polls compare against the latest state.
+  const [{ savedSettings, settings }, setRadarSettings] = useState<{
+    savedSettings: RadarControlSettings | null
+    settings: RadarControlSettings | null
+  }>({ savedSettings: null, settings: null })
+  const setSettings = (draft: RadarControlSettings) => setRadarSettings(current => ({ ...current, settings: draft }))
+  const settingsDirty = settings !== null && !radarSettingsEqual(settings, savedSettings)
   const [aegis, setAegis] = useState<AegisStatus | null>(null)
   const [aegisPolicy, setAegisPolicy] = useState<AegisPolicyStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +78,7 @@ export default function StatusCenter() {
         fetchRadarControlSettings(config),
       ])
       setDocument(nextDocument)
-      setSettings(nextSettings)
+      setRadarSettings(current => mergePolledSettings(current.savedSettings, current.settings, nextSettings))
       setError(null)
       try { setAegis(await getAegisStatus(config)) } catch { setAegis(null) }
       try { setAegisPolicy(await getAegisPolicy(config)) } catch { setAegisPolicy(null) }
@@ -89,7 +97,8 @@ export default function StatusCenter() {
     if (!settings) return
     setSaving(true)
     try {
-      setSettings(await saveRadarControlSettings(config, settings))
+      const saved = await saveRadarControlSettings(config, settings)
+      setRadarSettings({ savedSettings: saved, settings: saved })
       setError(null)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to save radar control settings")
@@ -172,6 +181,7 @@ export default function StatusCenter() {
           </div>
           <p className="status-center__muted"><a href="/aegis-alerts">Open Aegis radar alert feed and evidence map</a> · <a href="/automation-lab">Rehearse alert workflow</a> · Supplemental, not an official warning.</p>
           {settings ? <details className="status-center__admin"><summary>Admin radar policy</summary><div className="status-center__controls">
+            {settingsDirty && <p className="status-center__muted">Unsaved changes <button type="button" className="page-action-link" disabled={saving} onClick={() => setRadarSettings(current => ({ ...current, settings: current.savedSettings }))}>DISCARD CHANGES</button></p>}
             <label className="settings-toggle-row">
               <span className="settings-toggle-row__text"><b className="settings-toggle-row__label">Primary-site prewarm</b><small className="settings-toggle-row__description">Prewarm the closest active radar site before acquisition.</small></span>
               <span className={`switch ${settings.primary_prewarm_enabled ? "switch--on" : ""}`}><input type="checkbox" checked={settings.primary_prewarm_enabled} onChange={(event) => setSettings({ ...settings, primary_prewarm_enabled: event.target.checked })} /><i /></span>
