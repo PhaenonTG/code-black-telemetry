@@ -16,6 +16,30 @@ const MAX_RECENT = 6;
 // as the point-intel lookup, past which we call it stale rather than keep waiting silently.
 const STALE_AFTER_MS = 6 * 60 * 1000;
 
+// Page-scoped brand styling (no Soundings CSS file is in the allowed list). Chart SVGs, data
+// colours and provenance borders are untouched; motion only under prefers-reduced-motion:
+// no-preference and limited to panel entrance/hover (transform/opacity).
+const SOUNDINGS_BRAND_CSS = `
+.soundings-workspace--brand .soundings-sidebar{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0) 30%),var(--cb-shell)}
+.soundings-workspace--brand :is(.soundings-panel,.soundings-chart-block){position:relative;border:1px solid var(--cb-line);border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 38%),repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px),linear-gradient(160deg,var(--cb-panel-hi),var(--cb-panel) 70%);box-shadow:0 8px 22px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.05)}
+.soundings-workspace--brand .soundings-panel::before{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,var(--cb-red) 15%,var(--cb-red) 85%,transparent);box-shadow:0 0 8px rgba(255,42,12,.65);pointer-events:none}
+.soundings-workspace--brand .soundings-panel__header h2,.soundings-workspace--brand .soundings-chart-block h3{font-family:Anton,Inter,ui-sans-serif,system-ui,sans-serif;font-weight:400;letter-spacing:.08em}
+.soundings-workspace--brand .soundings-location-form input{border-radius:8px;min-height:34px}
+.soundings-workspace--brand .soundings-location-form button{border-radius:8px;box-shadow:0 0 12px -3px rgba(255,42,12,.8)}
+.soundings-workspace--brand :is(.soundings-quick-locations,.soundings-recent) button{border-radius:8px}
+.soundings-workspace--brand :is(.soundings-quick-locations,.soundings-recent) button:hover:not(:disabled){border-color:rgba(255,42,12,.5);box-shadow:0 0 12px -5px rgba(255,42,12,.85)}
+.soundings-workspace--brand .soundings-param-card{border-radius:8px}
+.soundings-workspace--brand .soundings-profile-table-wrap{border-radius:10px;overflow:auto}
+.soundings-workspace--brand :is(input,button):focus-visible{outline:2px solid var(--cb-red);outline-offset:2px}
+@media (prefers-reduced-motion:no-preference){
+.soundings-workspace--brand .soundings-sidebar>.soundings-panel{animation:cb-soundings-in 360ms cubic-bezier(.2,.8,.2,1) both}
+.soundings-workspace--brand .soundings-sidebar>.soundings-panel+.soundings-panel{animation-delay:80ms}
+.soundings-workspace--brand :is(.soundings-quick-locations,.soundings-recent,.soundings-location-form) button{transition:border-color 180ms,box-shadow 220ms cubic-bezier(.2,.8,.2,1),transform 160ms}
+.soundings-workspace--brand :is(.soundings-quick-locations,.soundings-recent,.soundings-location-form) button:active:not(:disabled){transform:scale(.98)}
+@keyframes cb-soundings-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+}
+`;
+
 interface RecentLocation {
   label: string;
   lat: number;
@@ -210,7 +234,8 @@ export default function SoundingsWorkspace() {
   }, [result]);
 
   return (
-    <div className="soundings-workspace">
+    <div className="soundings-workspace soundings-workspace--brand">
+      <style href="cb-brand-soundings" precedence="default">{SOUNDINGS_BRAND_CSS}</style>
       <aside className="soundings-sidebar">
         <section className="soundings-panel">
           <header className="soundings-panel__header">

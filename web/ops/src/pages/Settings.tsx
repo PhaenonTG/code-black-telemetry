@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type CSSProperties } from "react"
 import { loadAppTheme, saveAppTheme, subscribeAppTheme, type AppThemeMode } from "../../../../src/services/settings"
 import { loadMapLayerVisibility, saveMapLayerVisibility, subscribeMapLayerVisibility, type MapLayerVisibility } from "../../../../src/services/settings"
 import { PageHeader } from "../components/PageHeader"
@@ -7,6 +7,31 @@ import { useAuth } from "../auth/AuthProvider"
 import { Link } from "react-router-dom"
 import { loadWeatherAlertRuntimeStatus, loadWeatherAlertSettings, saveWeatherAlertSettings, type WeatherAlertRuntimeStatus, type WeatherAlertSettings } from "../weatherAlertSettings"
 import { useCoreOps } from "../core/useCoreOps"
+
+
+// Page-scoped brand styling (no Settings CSS file is in the allowed list). Motion only under
+// prefers-reduced-motion: no-preference, transform/opacity only.
+const SETTINGS_BRAND_CSS = `
+.shell .page-settings--brand .page-header h1{font-family:Anton,Inter,ui-sans-serif,system-ui,sans-serif;font-weight:400;letter-spacing:.04em}
+.shell .page-settings--brand .settings-group{position:relative;overflow:hidden;border:1px solid var(--cb-line);border-top:1px solid var(--cb-line);border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,0) 38%),repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px),linear-gradient(160deg,var(--cb-panel-hi),var(--cb-panel) 70%);box-shadow:0 10px 28px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.05)}
+.shell .page-settings--brand .settings-group::before{content:"";position:absolute;left:16px;right:16px;top:0;height:1px;background:linear-gradient(90deg,transparent,var(--cb-red) 15%,var(--cb-red) 85%,transparent);box-shadow:0 0 10px rgba(255,42,12,.7);pointer-events:none}
+.shell .page-settings--brand .settings-group h2{color:var(--cb-gray);letter-spacing:.16em}
+.shell .page-settings--brand .settings-toggle-list h3{color:var(--cb-amber)}
+.shell .page-settings--brand .segmented{border-radius:10px;background:var(--cb-panel-low)}
+.shell .page-settings--brand .segmented button.active{background:var(--cb-red);color:#000;box-shadow:0 0 12px -2px rgba(255,42,12,.8)}
+.shell .page-settings--brand .switch--on i{box-shadow:0 0 10px -1px rgba(255,42,12,.85)}
+.shell .page-settings--brand .settings-number input{border-radius:8px;border:1px solid var(--cb-line);background:var(--cb-panel-low);color:var(--cb-text);padding:6px 10px}
+.shell .page-settings--brand .settings-number input:focus-visible{outline:2px solid var(--cb-red);outline-offset:2px}
+.shell .page-settings--brand .settings-save,.shell .page-settings--brand .page-action-link{border-radius:8px;border:1px solid rgba(255,42,12,.55);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0))}
+.shell .page-settings--brand .settings-save:hover:not(:disabled),.shell .page-settings--brand .page-action-link:hover{border-color:var(--cb-red);box-shadow:0 0 14px -4px rgba(255,42,12,.85)}
+.shell .page-settings--brand .settings-logout{border-radius:8px}
+@media (prefers-reduced-motion:no-preference){
+.shell .page-settings--brand .settings-group{animation:cb-settings-in 380ms cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--cb-i,0) * 70ms)}
+.shell .page-settings--brand :is(.settings-save,.page-action-link,.segmented button){transition:box-shadow 220ms cubic-bezier(.2,.8,.2,1),border-color 180ms,background 180ms,transform 160ms}
+.shell .page-settings--brand :is(.settings-save,.page-action-link):active{transform:scale(.98)}
+@keyframes cb-settings-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+}
+`
 
 const THEME_OPTIONS: AppThemeMode[] = ["dark", "night", "system", "light"]
 
@@ -82,10 +107,11 @@ export default function Settings() {
   }, [])
 
   return (
-    <div className="page page-settings">
+    <div className="page page-settings page-settings--brand">
+      <style href="cb-brand-settings" precedence="default">{SETTINGS_BRAND_CSS}</style>
       <PageHeader title="SETTINGS" kicker="DISPLAY · MAP · ALERTS · SESSION" description="Display and map-layer defaults apply immediately and persist on this device. Weather alert controls change the shared alert pipeline and apply only after you save them." />
 
-      <section className="settings-group">
+      <section className="settings-group" style={{ "--cb-i": 0 } as CSSProperties}>
         <h2>Display</h2>
         <p className="settings-alert-copy">Applies immediately on this device.</p>
         <div className="settings-row">
@@ -100,7 +126,7 @@ export default function Settings() {
         </div>
       </section>
 
-      <section className="settings-group settings-group--layers">
+      <section className="settings-group settings-group--layers" style={{ "--cb-i": 1 } as CSSProperties}>
         <h2>Map layer defaults</h2>
         <p className="settings-alert-copy">Applies immediately and persists on this device.</p>
         {layers ? (
@@ -122,13 +148,13 @@ export default function Settings() {
         )}
       </section>
 
-      <section className="settings-group settings-group--data">
+      <section className="settings-group settings-group--data" style={{ "--cb-i": 2 } as CSSProperties}>
         <h2>Data & diagnostics</h2>
         <p>Provider health, radar availability, camera totals, and Core connectivity are tracked on the System page.</p>
         <Link className="page-action-link" to="/system">OPEN SYSTEM HEALTH</Link>
       </section>
 
-      <section className="settings-group settings-group--alerts">
+      <section className="settings-group settings-group--alerts" style={{ "--cb-i": 3 } as CSSProperties}>
         <h2>Weather alert controls</h2>
         <p className="settings-alert-copy">These settings control Discord alert intake and routing. Edits here are not applied until you select SAVE WEATHER ALERT CONTROLS; then they apply to the live alert pipeline.</p>
         {alertRuntime && <div className="settings-layer-grid settings-alert-telemetry">
@@ -168,7 +194,7 @@ export default function Settings() {
       </section>
 
       {auth.status === "authorized" && (
-        <section className="settings-group">
+        <section className="settings-group" style={{ "--cb-i": 4 } as CSSProperties}>
           <h2>Session</h2>
           <div className="settings-row">
             <span>{auth.session.user.email}</span>
