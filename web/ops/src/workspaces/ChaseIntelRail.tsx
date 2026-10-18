@@ -9,7 +9,7 @@ import { chaseIntelRefreshKey, distanceMiles, nearbyRoadConditions, routeRoadCon
 import type { useChaseRoute } from "./useChaseRoute"
 
 type OfficialResponse = { status: string; queried_at?: string; alerts?: OfficialAlert[]; notice?: string }
-type Snapshot = { point: ChasePoint; checkedAt: number; official: OfficialResponse | null; officialError: boolean; nearby: NearbyThreatCoverage | null; roads: ViewportLayerResult<RoadConditionEvent> | null; aegis: AegisAlertFeed | null }
+type Snapshot = { point: ChasePoint; checkedAt: number; official: OfficialResponse | null; officialError: boolean; nearby: NearbyThreatCoverage | null; nearbyError?: boolean; roads: ViewportLayerResult<RoadConditionEvent> | null; aegis: AegisAlertFeed | null }
 
 function safeLink(value: string | undefined) { return value?.startsWith("https://api.weather.gov/") ? value : null }
 function timeLabel(value: number) { return new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }
@@ -43,7 +43,7 @@ export function useChaseIntel(config: OpsCoreConfig, point: ChasePoint | null) {
       if (!cancelled) setSnapshot({ point, checkedAt, official, officialError, nearby: null, roads: null, aegis: null })
       const [nearbyResult, roadResult, aegisResult] = await context
       const nearby = nearbyResult.status === "fulfilled" ? nearbyResult.value : null
-      if (!cancelled) setSnapshot({ point, checkedAt, official, officialError, nearby,
+      if (!cancelled) setSnapshot({ point, checkedAt, official, officialError, nearby, nearbyError: nearbyResult.status === "rejected",
         roads: roadResult.status === "fulfilled" ? roadResult.value : null,
         aegis: aegisResult.status === "fulfilled" ? aegisResult.value : null })
       inFlight = false
@@ -77,7 +77,7 @@ export function ChaseIntelRail({ intel, point, vehiclePosition, route, routeOrig
   }).slice(0, 2) : []
   return <aside className="chase-intel" aria-label="Chase field intelligence">
     <section className="workspace-panel"><header><h2>Nearby warnings</h2><span>NWS · approximate</span></header>
-      {!point ? <p>Waiting for a reference location.</p> : !intel ? <p>Checking nearby warning polygons…</p> : intel.nearby === null ? <p>Checking nearby warning coverage…</p> : <>{!intel.nearby.complete && <p>Nearby warning coverage incomplete. Check the NWS source before making a field decision.</p>}{intel.nearby.threats.length === 0 ? <p>No polygon warnings returned for {intel.nearby.states.join(", ") || "the reference area"}. This is not an all-clear.</p> : <div className="chase-intel__items">{intel.nearby.threats.map(({ alert, inside, distanceMi, bearingCardinal }) => <div key={alert.id}><strong>{alert.title}</strong><span>{inside ? "Reference point inside polygon" : `~${Math.round(distanceMi)} mi ${bearingCardinal} · nearest polygon vertex`}</span><small>{alert.area}</small>{safeLink(alert.id) && <a href={alert.id} target="_blank" rel="noreferrer">NWS product ↗</a>}</div>)}</div>}</>}
+      {!point ? <p>Waiting for a reference location.</p> : !intel ? <p>Checking nearby warning polygons…</p> : intel.nearby === null ? <p>{intel.nearbyError ? "Nearby warning coverage unavailable right now. Check the NWS source before making a field decision." : "Checking nearby warning coverage…"}</p> : <>{!intel.nearby.complete && <p>Nearby warning coverage incomplete. Check the NWS source before making a field decision.</p>}{intel.nearby.threats.length === 0 ? <p>No polygon warnings returned for {intel.nearby.states.join(", ") || "the reference area"}. This is not an all-clear.</p> : <div className="chase-intel__items">{intel.nearby.threats.map(({ alert, inside, distanceMi, bearingCardinal }) => <div key={alert.id}><strong>{alert.title}</strong><span>{inside ? "Reference point inside polygon" : `~${Math.round(distanceMi)} mi ${bearingCardinal} · nearest polygon vertex`}</span><small>{alert.area}</small>{safeLink(alert.id) && <a href={alert.id} target="_blank" rel="noreferrer">NWS product ↗</a>}</div>)}</div>}</>}
     </section>
     <section className="workspace-panel"><header><h2>Road conditions</h2><span>DOT · within ~25 mi</span></header>
       {!point ? <p>Waiting for a reference location.</p> : !intel ? <p>Checking providers…</p> : !intel.roads || !["ready", "empty", "stale"].includes(intel.roads.status) ? <p>{intel.roads?.message || "Road provider unavailable."}</p> : roads.length === 0 ? <p>No nearby provider events returned. Road coverage is not a route-safety check.</p> : <div className="chase-intel__items">{roads.map(({ road, distanceMi }) => <div key={road.id}><strong>{road.roadway || road.title}</strong><span>~{Math.round(distanceMi)} mi · {road.closureState} · {road.freshness}</span><small>{road.title}</small>{road.sourceUrl?.startsWith("https://") && <a href={road.sourceUrl} target="_blank" rel="noreferrer">Provider ↗</a>}</div>)}</div>}

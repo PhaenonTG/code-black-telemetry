@@ -52,6 +52,8 @@ export default function AegisAlerts() {
   const [alerts, setAlerts] = useState<AegisRadarAlert[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // No feed conclusion ("no alerts", "shadow") is shown before Core has answered once.
+  const [loaded, setLoaded] = useState(false);
   const [recorded, setRecorded] = useState<AegisRecordedReplay | null>(null);
   const [recordedError, setRecordedError] = useState<string | null>(null);
   const [selectedVolume, setSelectedVolume] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export default function AegisAlerts() {
           getAegisObservationPlan(config, controller.signal),
         ]);
         if (controller.signal.aborted) return;
-        setStatus(state); setPlan(observationPlan); setAlerts(feed.items.slice().reverse()); setError(null);
+        setStatus(state); setPlan(observationPlan); setAlerts(feed.items.slice().reverse()); setError(null); setLoaded(true);
       } catch (caught) {
         if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Feed unavailable");
       }
@@ -101,7 +103,7 @@ export default function AegisAlerts() {
       description="Warning-triggered radar evidence. Always follow official NWS warnings; Aegis never issues or cancels one." />
     <div className="aegis-summary">
       <span className={status?.delivery_enabled ? "aegis-state live" : "aegis-state shadow"}>
-        {status?.delivery_enabled ? "LIVE DELIVERY" : "SHADOW / NO DELIVERY"}</span>
+        {status?.delivery_enabled ? "LIVE DELIVERY" : status ? "SHADOW / NO DELIVERY" : error ? "DELIVERY STATE UNKNOWN" : "CONNECTING TO CORE"}</span>
       <span>Evidence cutoff <b>{status?.screen.cutoff ?? "—"}/100</b></span>
       <span>Last screen <b>{utc(status?.screen.checked_at)}</b></span>
       <span>Sites <b>{status?.screen.sites?.join(", ") || "none"}</b></span>
@@ -128,7 +130,7 @@ export default function AegisAlerts() {
     <div className="aegis-grid">
       <section className="aegis-panel" aria-label="Aegis alert feed">
         <h2>Alert feed</h2>
-        {!alerts.length && <p className="aegis-empty">{error ? "Alert feed unavailable; this is not an all-clear." : "No qualifying Aegis alerts in the feed. This does not mean there are no official warnings or hazards."}</p>}
+        {!alerts.length && <p className="aegis-empty">{error ? "Alert feed unavailable; this is not an all-clear." : !loaded ? "Loading the Aegis alert feed…" : "No qualifying Aegis alerts in the feed. This does not mean there are no official warnings or hazards."}</p>}
         {alerts.map((item) => <button key={item.id} type="button"
           className={`aegis-alert-item${selected?.id === item.id ? " selected" : ""}`}
           onClick={() => setSelectedId(item.id)}>
