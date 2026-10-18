@@ -6,7 +6,7 @@ vi.mock("../../../../src/services/mapTiles", () => ({hasMapboxToken:()=>true,atl
 describe("Setup Review map accessibility", () => {
  it("describes the map without hiding its interactive controls behind an image role", () => {
   const html = renderToString(<SetupTargetMap geometry={null} bounds={undefined} points={[]}/>)
-  const id = /<span id="([^"]+)" class="sr-only"/.exec(html)?.[1]
+  const id = /<span id="([^"]+)" class="a11y-caption"/.exec(html)?.[1]
   expect(id).toBeTruthy()
   expect(html).toContain(`class="setup-target-map" aria-describedby="${id}"`)
   expect(html).toContain("Official SPC tornado outlook areas")

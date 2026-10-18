@@ -58,5 +58,5 @@ export function SetupTargetMap({ geometry, trackingMap, bounds, points, selected
   }, [points, selectedKey])
 
   if (!hasMapboxToken()) return <div className="setup-target-map__unavailable">Mapbox is not configured in this build.</div>
-  return <><span id={descriptionId} className="sr-only">Official SPC tornado outlook areas with Code Black model context and experimental HRRR screening points</span><div ref={container} className="setup-target-map" aria-describedby={descriptionId} /></>
+  return <><div ref={container} className="setup-target-map" aria-describedby={descriptionId} /><span id={descriptionId} className="a11y-caption">Official SPC tornado outlook areas with Code Black model context and experimental HRRR screening points</span></>
 }
