@@ -33,6 +33,7 @@ const AutomationLab = lazy(() => import("../pages/AutomationLab"))
 const ProducerWorkspace = lazy(() => import("../pages/ProducerWorkspace"))
 const ChaseWorkspace = lazy(() => import("../pages/ChaseWorkspace"))
 const AnalysisWorkspace = lazy(() => import("../pages/AnalysisWorkspace"))
+const NotFound = lazy(() => import("../pages/NotFound"))
 
 function LegacyChaseSetupRedirect() {
   const { setupId } = useParams()
@@ -98,7 +99,7 @@ export default function App() {
                         <Route path="/directory" element={<SiteDirectory />} />
                         <Route path="/settings" element={<Settings />} />
                         <Route path="/more" element={<More />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
+                        <Route path="*" element={<NotFound />} />
                       </Routes>
                     </Suspense></RouteLoadBoundary>
                   </AppShell>
