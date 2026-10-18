@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PageHeader } from "../components/PageHeader"
 import { Link } from "react-router-dom"
 import { useCoreOps } from "../core/useCoreOps"
-import { currentAccessToken, fetchForecast } from "../core/client"
+import { currentAccessToken, buildCoreRequestHeaders } from "../core/client"
 import { fetchStatusCenter, type StatusCenterDocument } from "../status/statusCenterClient"
 import { chooseProducerSource, parseProducerSources } from "../workspaces/producerSources"
 import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
@@ -11,6 +11,9 @@ import ProducerControls from "../workspaces/ProducerControls"
 import PreparePcControls from "../workspaces/PreparePcControls"
 import ProgramMonitor from "../workspaces/ProgramMonitor"
 import { currentMediaTimestamp, currentProgramRender, mediaCompositionMatches, PROGRAM_PREVIEW_POLL_MS, PROGRAM_STATUS_POLL_MS } from "../workspaces/programMonitorPolicy"
+import { coreConfigured } from "../core/config"
+import { useProducerRead } from "../workspaces/useProducerRead"
+import { createProducerPoll } from "../workspaces/producerPolling"
 import { readProducerResponse } from "../workspaces/producerResponse"
 import { noteProducerResponse, producerReadAllowed, producerRetryMessage } from "../workspaces/producerRateLimit"
 import "./Workspaces.css"
@@ -92,17 +95,13 @@ export default function ProducerWorkspace() {
   const producerStatusRef = useRef<ProducerBridgeStatus | null>(null)
   useEffect(() => { producerStatusRef.current = producerStatus }, [producerStatus])
 
+  const statusRead = useProducerRead()
   const refreshStatus = useCallback(async () => {
     if (document.hidden) return
-    try {
-      const next = await fetchStatusCenter(config)
-      setStatus(next)
-      setStatusCheckedAt(Date.now())
-      setStatusError("")
-    } catch (reason) {
-      setStatusError(reason instanceof Error ? reason.message : "Stream status unavailable")
-    }
-  }, [config])
+    await statusRead.run(signal => fetchStatusCenter(config, { signal }), next => {
+      setStatus(next); setStatusCheckedAt(Date.now()); setStatusError("")
+    }, reason => setStatusError(reason instanceof Error ? reason.message : "Stream status unavailable"))
+  }, [config, statusRead])
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refreshStatus(), 0)
@@ -110,61 +109,59 @@ export default function ProducerWorkspace() {
     const clock = window.setInterval(() => setNow(Date.now()), 15_000)
     const visible = () => { if (!document.hidden) void refreshStatus() }
     document.addEventListener("visibilitychange", visible)
-    return () => { window.clearTimeout(initial); window.clearInterval(timer); window.clearInterval(clock); document.removeEventListener("visibilitychange", visible) }
-  }, [refreshStatus])
+    return () => { statusRead.cancel(); window.clearTimeout(initial); window.clearInterval(timer); window.clearInterval(clock); document.removeEventListener("visibilitychange", visible) }
+  }, [refreshStatus, statusRead])
 
   const alertLatitude = selectedPoint?.lat
   const alertLongitude = selectedPoint?.lon
   const alertKey = selectedPoint ? `${selectedPoint.lat.toFixed(4)},${selectedPoint.lon.toFixed(4)}` : ""
   useEffect(() => {
     if (alertLatitude == null || alertLongitude == null) return
-    let cancelled = false
+    const poll = createProducerPoll()
     const load = async () => {
       if (document.hidden) return
       const params = new URLSearchParams({ latitude: String(alertLatitude), longitude: String(alertLongitude) })
-      try {
-        const next = await fetchForecast<OfficialAlertResponse>(config, `alerts?${params}`)
-        if (!cancelled) { setAlertSnapshot({ key: `${alertLatitude.toFixed(4)},${alertLongitude.toFixed(4)}`, value: next }); setAlertError("") }
-      } catch {
-        if (!cancelled) setAlertError("Official alert check failed; last received alerts may be stale.")
-      }
+      await poll.run(async signal => {
+        if (!coreConfigured(config)) throw new Error("Live Core is not configured")
+        const token = await currentAccessToken()
+        signal.throwIfAborted()
+        const response = await fetch(`${config.coreBaseUrl}/api/forecast/v1/alerts?${params}`, { cache: "no-store", signal, headers: buildCoreRequestHeaders(token) })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return await response.json() as OfficialAlertResponse
+      }, next => { setAlertSnapshot({ key: `${alertLatitude.toFixed(4)},${alertLongitude.toFixed(4)}`, value: next }); setAlertError("") }, () => setAlertError("Official alert check failed; last received alerts may be stale."), 25_000)
     }
     const initial = window.setTimeout(() => void load(), 0)
     const timer = window.setInterval(() => void load(), 60_000)
-    return () => { cancelled = true; window.clearTimeout(initial); window.clearInterval(timer) }
+    return () => { poll.dispose(); window.clearTimeout(initial); window.clearInterval(timer) }
   }, [config, alertLatitude, alertLongitude])
 
   useEffect(() => {
-    let cancelled = false
+    const poll = createProducerPoll()
     let inFlight = false
     const load = async () => {
       if (document.hidden || inFlight || !producerReadAllowed()) return
       inFlight = true
-      try {
+      try { await poll.run(async signal => {
         const token = await currentAccessToken()
+        signal.throwIfAborted()
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
-        const statusResponse = await fetch("/api/producer/v1/status", { cache: "no-store", headers })
-        const nextStatus = await readProducerResponse<ProducerBridgeStatus>(statusResponse)
-        if (cancelled) return
-        setProducerStatus(unwrapBridgeStatus(nextStatus)); setProducerError("")
-      } catch (reason) {
-        if (!cancelled) setProducerError(reason instanceof Error ? reason.message : "Producer bridge unavailable")
-      } finally { inFlight = false }
+        const response = await fetch("/api/producer/v1/status", { cache: "no-store", headers, signal })
+        return readProducerResponse<ProducerBridgeStatus>(response)
+      }, next => { setProducerStatus(unwrapBridgeStatus(next)); setProducerError("") }, reason => setProducerError(reason instanceof Error ? reason.message : "Producer bridge unavailable")) } finally { inFlight = false }
     }
     void load()
     const timer = window.setInterval(() => void load(), PROGRAM_STATUS_POLL_MS)
     const visible = () => { if (!document.hidden) void load() }
     document.addEventListener("visibilitychange", visible)
-    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", visible) }
+    return () => { poll.dispose(); window.clearInterval(timer); document.removeEventListener("visibilitychange", visible) }
   }, [])
 
   useEffect(() => {
-    let cancelled = false
+    const poll = createProducerPoll()
     let inFlight = false
     const clearFrame = () => {
       if (programObjectUrl.current) URL.revokeObjectURL(programObjectUrl.current)
       programObjectUrl.current = ""
-      setProgramFrameUrl("")
     }
     const load = async () => {
       if (document.hidden || inFlight) return
@@ -173,38 +170,51 @@ export default function ProducerWorkspace() {
       if (!sourceFresh(currentStatus)) { setProgramFrameState(currentStatus ? "Waiting for current PROGRAM rendering" : "Waiting for broadcaster status"); return }
       inFlight = true
       try {
-        const token = await currentAccessToken()
-        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
-        const response = await fetch(`/api/producer/v1/preview/program.jpg?t=${Date.now()}`, { cache: "no-store", headers })
-        noteProducerResponse(response)
-        if (response.status === 429) throw new Error(producerRetryMessage())
-        if (response.status === 404) { setProgramFrameState("No current PROGRAM frame"); return }
-        if (!response.ok) throw new Error(`Preview returned ${response.status}`)
-        const frameAt = response.headers.get("X-Producer-Frame-At") ?? ""
-        const frameComposition = response.headers.get("X-Producer-Composition")
-        if (!currentMediaTimestamp(frameAt)) { setProgramFrameState("PROGRAM frame is stale"); return }
-        if (!mediaCompositionMatches(currentStatus?.composition?.id, frameComposition)) { clearFrame(); setProgramFrameState("PROGRAM composition mismatch"); return }
-        const blob = await response.blob()
-        if (cancelled) return
-        if (producerStatusRef.current?.composition?.id !== currentStatus?.composition?.id) { clearFrame(); setProgramFrameState("PROGRAM changed during capture"); return }
-        if (!sourceFresh(producerStatusRef.current)) { setProgramFrameState("Waiting for current PROGRAM rendering"); return }
-        const nextUrl = URL.createObjectURL(blob)
-        try { const preload = new Image(); preload.src = nextUrl; await preload.decode() }
-        catch { URL.revokeObjectURL(nextUrl); setProgramFrameState("PROGRAM frame could not be decoded"); return }
-        if (cancelled || producerStatusRef.current?.composition?.id !== currentStatus?.composition?.id) { URL.revokeObjectURL(nextUrl); return }
-        const previousUrl = programObjectUrl.current
-        programObjectUrl.current = nextUrl
-        setProgramFrameUrl(nextUrl); setProgramFrameAt(frameAt); setProgramFrameComposition(currentStatus?.composition?.id); setProgramFrameState("CURRENT")
-        if (previousUrl) window.setTimeout(() => URL.revokeObjectURL(previousUrl), 2000)
-      } catch (reason) {
-        if (!cancelled) setProgramFrameState(reason instanceof Error ? reason.message : "PROGRAM preview unavailable")
+        await poll.run(async signal => {
+          const token = await currentAccessToken()
+          signal.throwIfAborted()
+          const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+          const response = await fetch(`/api/producer/v1/preview/program.jpg?t=${Date.now()}`, { cache: "no-store", headers, signal })
+          signal.throwIfAborted()
+          noteProducerResponse(response)
+          if (response.status === 429) throw new Error(producerRetryMessage())
+          if (response.status === 404) throw new Error("No current PROGRAM frame")
+          if (!response.ok) throw new Error(`Preview returned ${response.status}`)
+          const frameAt = response.headers.get("X-Producer-Frame-At") ?? ""
+          const frameComposition = response.headers.get("X-Producer-Composition")
+          if (!currentMediaTimestamp(frameAt)) throw new Error("PROGRAM frame is stale")
+          if (!mediaCompositionMatches(currentStatus?.composition?.id, frameComposition)) throw new Error("PROGRAM composition mismatch")
+          const blob = await response.blob()
+          signal.throwIfAborted()
+          if (producerStatusRef.current?.composition?.id !== currentStatus?.composition?.id) throw new Error("PROGRAM changed during capture")
+          if (!sourceFresh(producerStatusRef.current)) throw new Error("Waiting for current PROGRAM rendering")
+          const nextUrl = URL.createObjectURL(blob)
+          // Release pending decode URLs on deadline/cleanup as well as on decode failure.
+          const revoke = () => URL.revokeObjectURL(nextUrl)
+          signal.addEventListener("abort", revoke, { once: true })
+          try {
+            const preload = new Image(); preload.src = nextUrl; await preload.decode()
+            signal.throwIfAborted()
+            if (producerStatusRef.current?.composition?.id !== currentStatus?.composition?.id) throw new Error("PROGRAM changed during capture")
+            return { nextUrl, frameAt, composition: currentStatus?.composition?.id }
+          } catch (reason) { revoke(); throw reason }
+          finally { signal.removeEventListener("abort", revoke) }
+        }, next => {
+          const previousUrl = programObjectUrl.current
+          programObjectUrl.current = next.nextUrl
+          setProgramFrameUrl(next.nextUrl); setProgramFrameAt(next.frameAt); setProgramFrameComposition(next.composition); setProgramFrameState("CURRENT")
+          if (previousUrl) window.setTimeout(() => URL.revokeObjectURL(previousUrl), 2000)
+        }, reason => {
+          if (reason instanceof Error && reason.message === "PROGRAM composition mismatch") { clearFrame(); setProgramFrameUrl("") }
+          setProgramFrameState(reason instanceof Error ? reason.message : "PROGRAM preview unavailable")
+        })
       } finally { inFlight = false }
     }
     void load()
     const timer = window.setInterval(() => void load(), PROGRAM_PREVIEW_POLL_MS)
     const visible = () => { if (!document.hidden) void load() }
     document.addEventListener("visibilitychange", visible)
-    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); clearFrame() }
+    return () => { poll.dispose(); window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); clearFrame() }
   }, [producerStatus?.composition?.id])
 
   const sources = useMemo(() => parseProducerSources(status?.streaming), [status?.streaming])

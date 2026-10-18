@@ -2,17 +2,21 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { currentAccessToken } from "../core/client"
 import { readProducerResponse } from "./producerResponse"
 import { producerReadAllowed, producerRetryMessage } from "./producerRateLimit"
+import { useProducerRead } from "./useProducerRead"
+import { pollProducerCommand } from "./producerPolling"
 import ObsOutputControls from "./ObsOutputControls"
 import type { ObsOutputStatus } from "./obsOutputPolicy"
 
 type Status = { bridge: string; controlAccess?: { allowed: boolean; userId: string }; controlLease?: { userId: string; operator: string; expiresAt: number } | null; status?: ObsOutputStatus & { stateRevision: number; source_state?: string; broadcast?: { state?: string; managedVideoId?: string | null }; archive?: { camera?: { state?: string; recording?: boolean } }; lowerThird?: { active?: boolean; text?: string }; audio?: { available?: boolean; state?: string; silence?: boolean; clipping?: boolean } } }
 type Lifecycle = { enabled: boolean; permission: boolean; canManage: boolean; broadcast: { id: string; title: string; description: string; status: string; facebookProducerUrl: string } | null; operation?: { state: string; action: string } | null }
 type Command = { commandId: string; state: string; result?: { error?: string } }
-async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+async function api<T>(path: string, method = "GET", body?: unknown, signal?: AbortSignal): Promise<T> {
   if (method === "GET" && !producerReadAllowed()) throw new Error(producerRetryMessage())
   const token = await currentAccessToken()
+  signal?.throwIfAborted()
   if (!token) throw new Error("Sign in to OPS again.")
-  const response = await fetch(`/api/producer/v1/${path}`, { method, cache: "no-store", headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(10_000) })
+  const response = await fetch(`/api/producer/v1/${path}`, { method, cache: "no-store", headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), signal: signal ?? AbortSignal.timeout(10_000) })
+  signal?.throwIfAborted()
   return readProducerResponse<T>(response)
 }
 
@@ -34,57 +38,76 @@ export default function ProducerControls() {
   const owner = Boolean(status?.controlLease && status.controlLease.expiresAt > checkedAt && status.controlLease.userId === status.controlAccess?.userId)
   const online = status?.bridge === "ONLINE"
   const allowed = status?.controlAccess?.allowed === true
-  const refresh = useCallback(async () => { try { setStatus(await api<Status>("status")); setCheckedAt(Date.now()) } catch (error) { setStatus(null); setMessage(String(error instanceof Error ? error.message : error)) } }, [])
-  useEffect(() => { const initial = window.setTimeout(() => void refresh(), 0); const timer = window.setInterval(() => { if (!document.hidden && producerReadAllowed()) void refresh() }, 30_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refresh])
-  const refreshFacebook = useCallback(async () => { try { setFacebook(await api<Lifecycle>("facebook")); setFacebookError("") } catch (error) { setFacebookError(error instanceof Error ? error.message : "Facebook management unavailable") } }, [])
-  useEffect(() => { const initial = window.setTimeout(() => void refreshFacebook(), 0); const timer = window.setInterval(() => { if (!document.hidden && producerReadAllowed()) void refreshFacebook() }, 60_000); return () => { window.clearTimeout(initial); window.clearInterval(timer) } }, [refreshFacebook])
+  const statusRead = useProducerRead()
+  const facebookRead = useProducerRead()
+  const leaseRead = useProducerRead()
+  const actionRead = useProducerRead()
+  const refresh = useCallback(() => statusRead.run(signal => api<Status>("status", "GET", undefined, signal), next => { setStatus(next); setCheckedAt(Date.now()) }, error => { setStatus(null); setMessage(error instanceof Error ? error.message : String(error)) }), [statusRead])
+  useEffect(() => { const initial = window.setTimeout(() => void refresh(), 0); const timer = window.setInterval(() => { if (!document.hidden && producerReadAllowed()) void refresh() }, 30_000); return () => { statusRead.cancel(); window.clearTimeout(initial); window.clearInterval(timer) } }, [refresh, statusRead])
+  const refreshFacebook = useCallback(() => facebookRead.run(signal => api<Lifecycle>("facebook", "GET", undefined, signal), next => { setFacebook(next); setFacebookError("") }, error => setFacebookError(error instanceof Error ? error.message : "Facebook management unavailable")), [facebookRead])
+  useEffect(() => { const initial = window.setTimeout(() => void refreshFacebook(), 0); const timer = window.setInterval(() => { if (!document.hidden && producerReadAllowed()) void refreshFacebook() }, 60_000); return () => { facebookRead.cancel(); window.clearTimeout(initial); window.clearInterval(timer) } }, [refreshFacebook, facebookRead])
   useEffect(() => {
     if (!owner) return
     const timer = window.setInterval(async () => {
       if (renewing.current || document.visibilityState !== "visible") return
       renewing.current = true
-      try { await api("control-lease", "POST"); await refresh() } catch { setMessage("Control lease lost. Take control again before sending commands.") } finally { renewing.current = false }
+      try { await leaseRead.run(signal => api("control-lease", "POST", undefined, signal), () => { void refresh() }, () => setMessage("Control lease lost. Take control again before sending commands.")) } finally { renewing.current = false }
     }, 10_000)
-    return () => window.clearInterval(timer)
-  }, [owner, refresh])
+    return () => { leaseRead.cancel(); window.clearInterval(timer) }
+  }, [owner, refresh, leaseRead])
   useEffect(() => {
     if (!pending || pending.state !== "queued") return
     const started = Date.now()
-    const timer = window.setInterval(async () => {
-      try {
-        const next = await api<Command>(`commands/${pending.commandId}`)
+    return pollProducerCommand(
+      signal => api<Command>(`commands/${pending.commandId}`, "GET", undefined, signal),
+      next => next.state !== "queued" || Date.now() - started > 20_000,
+      next => {
         if (next.state !== "queued") { setPending(next); setMessage(`${next.state.toUpperCase()}${next.result?.error ? `: ${next.result.error}` : " — check live status below."}`); void refresh() }
         else if (Date.now() - started > 20_000) { setPending({ ...next, state: "unknown" }); setMessage("Delivery unconfirmed. Check output status before trying another start command.") }
-      } catch { if (Date.now() - started > 20_000) { setPending({ ...pending, state: "unknown" }); setMessage("Delivery unconfirmed. Connection lost; check status before retrying.") } }
-    }, 1_500)
-    return () => window.clearInterval(timer)
+      },
+      reason => {
+        if (Date.now() - started > 20_000) { setPending({ ...pending, state: "unknown" }); setMessage("Delivery unconfirmed. Connection lost; check status before retrying."); return true }
+        setMessage(reason instanceof Error ? reason.message : "Command status unavailable; delivery unconfirmed.")
+        return false
+      },
+    )
   }, [pending, refresh])
-  async function lease(release = false) { setBusy(true); try { await api("control-lease", release ? "DELETE" : "POST"); setMessage(release ? "Control released." : "You have control."); await refresh() } catch (error) { setMessage(error instanceof Error ? error.message : "Control unavailable") } finally { setBusy(false) } }
+  async function lease(release = false) {
+    setBusy(true)
+    await actionRead.run(signal => api("control-lease", release ? "DELETE" : "POST", undefined, signal), () => {
+      setMessage(release ? "Control released." : "You have control."); setBusy(false); void refresh()
+    }, error => { setMessage(error instanceof Error ? error.message : "Control unavailable"); setBusy(false) })
+  }
   async function command(action: string, confirmed = false, expectedComposition?: string) {
     setBusy(true); setConfirmStart(false)
-    try {
-      const latest = await api<Status>("status"); setStatus(latest)
+    await actionRead.run(async signal => {
+      const latest = await api<Status>("status", "GET", undefined, signal)
+      signal.throwIfAborted()
       if (!Number.isSafeInteger(latest.status?.stateRevision)) throw new Error("No current broadcaster revision.")
       const output = /^obs\.output\.(facebook|youtube)\.(start|stop)$/.exec(action)
       if (output) {
         const compositionId = latest.status?.composition?.id
         if (!/^[a-f0-9]{24}$/.test(compositionId ?? "")) throw new Error("No current PROGRAM composition.")
         if (output[2] === "start" && expectedComposition !== compositionId) throw new Error("PROGRAM changed after confirmation. Review the preview and confirm again.")
-        const next = await api<Command>("commands", "POST", { commandId: crypto.randomUUID(), action, expectedStateRevision: latest.status!.stateRevision, confirmed, payload: { destination: output[1], compositionId, confirmed } })
-        setPending(next); setMessage("QUEUED — waiting for OBS output acknowledgment.")
-        return
+        const next = await api<Command>("commands", "POST", { commandId: crypto.randomUUID(), action, expectedStateRevision: latest.status!.stateRevision, confirmed, payload: { destination: output[1], compositionId, confirmed } }, signal)
+        return { latest, next, obs: true }
       }
-      const next = await api<Command>("commands", "POST", { commandId: crypto.randomUUID(), action, expectedStateRevision: latest.status!.stateRevision, confirmed, ...(action === "lowerThird.set" ? { payload: { text: text.trim() } } : action === "facebook.output.start" && facebook?.broadcast ? { payload: { videoId: facebook.broadcast.id } } : {}) })
-      setPending(next); setMessage("QUEUED — waiting for broadcaster acknowledgment.")
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Command delivery unknown; check status before retrying.") } finally { setBusy(false) }
+      const next = await api<Command>("commands", "POST", { commandId: crypto.randomUUID(), action, expectedStateRevision: latest.status!.stateRevision, confirmed, ...(action === "lowerThird.set" ? { payload: { text: text.trim() } } : action === "facebook.output.start" && facebook?.broadcast ? { payload: { videoId: facebook.broadcast.id } } : {}) }, signal)
+      return { latest, next, obs: false }
+    }, ({ latest, next, obs }) => {
+      setStatus(latest); setPending(next); setMessage(obs ? "QUEUED — waiting for OBS output acknowledgment." : "QUEUED — waiting for broadcaster acknowledgment."); setBusy(false)
+    }, error => { setMessage(error instanceof Error ? error.message : "Command delivery unknown; check status before retrying."); setBusy(false) })
   }
   async function facebookAction(action: "prepare" | "publish" | "end" | "refresh") {
     setBusy(true); setConfirmFacebook(null)
-    try {
-      await api(`facebook/${action}`, "POST", { requestId: crypto.randomUUID(), confirmed: true, videoId: facebook?.broadcast?.id, title: title.trim(), description, programConfirmed })
+    const finish = () => { setBusy(false); setProgramConfirmed(false); void refreshFacebook(); void refresh() }
+    await actionRead.run(signal => api(`facebook/${action}`, "POST", { requestId: crypto.randomUUID(), confirmed: true, videoId: facebook?.broadcast?.id, title: title.trim(), description, programConfirmed }, signal), () => {
       setMessage(action === "prepare" ? "Non-public broadcast prepared. Wait for the encoder destination to synchronize, then send PROGRAM to Facebook preview." : action === "refresh" ? "Facebook status checked." : `${action.toUpperCase()} acknowledged by Meta. Check Facebook status to confirm the final state.`)
-    } catch (error) { setMessage(error instanceof Error && !["TypeError", "TimeoutError", "AbortError"].includes(error.name) ? error.message : "Meta delivery unconfirmed. Do not retry; check Facebook directly before taking another action.") }
-    finally { setBusy(false); setProgramConfirmed(false); void refreshFacebook(); void refresh() }
+      finish()
+    }, error => {
+      setMessage(error instanceof Error && !["TypeError", "TimeoutError", "AbortError"].includes(error.name) ? error.message : "Meta delivery unconfirmed. Do not retry; check Facebook directly before taking another action.")
+      finish()
+    })
   }
   const blocked = busy || pending?.state === "queued"
   const canStart = owner && online && !blocked

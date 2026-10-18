@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from "react"
 import { currentAccessToken } from "../core/client"
+import { createProducerPoll } from "./producerPolling"
 import { noteProducerResponse, producerReadAllowed, producerRetryMessage } from "./producerRateLimit"
 
 type Comment = { id: string; author: string; message: string; createdAt: string }
 type Connection = { state: string; page?: { label?: string }; canConnect?: boolean; canReply?: boolean }
 type Draft = { comment: Comment; message: string; requestId: string; confirming: boolean; attempted: boolean }
 
-async function request(path: string, body?: unknown): Promise<Response> {
+async function request(path: string, body?: unknown, signal?: AbortSignal): Promise<Response> {
   if (body === undefined && !producerReadAllowed()) throw new Error(producerRetryMessage())
   const token = await currentAccessToken()
+  signal?.throwIfAborted()
   if (!token) throw new Error("Sign in to OPS first.")
   const response = await fetch(`/api/chase/v1/${path}`, {
-    method: body === undefined ? "GET" : "POST", cache: "no-store", signal: AbortSignal.timeout(body === undefined ? 12_000 : 25_000),
+    method: body === undefined ? "GET" : "POST", cache: "no-store", signal: signal ?? AbortSignal.timeout(body === undefined ? 12_000 : 25_000),
     headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
@@ -32,14 +34,16 @@ export default function FacebookProducerPanel() {
   useEffect(() => {
     mounted.current = true
     let cancelled = false; let timer = 0
+    const commentsRead = createProducerPoll()
+    const connectionRead = createProducerPoll()
     const poll = async () => {
       let delay = 30_000
       if (document.hidden || !producerReadAllowed()) { if (!cancelled) timer = window.setTimeout(() => void poll(), delay); return }
-      try {
-        const response = await request(`comments?after=${encodeURIComponent(cursor.current)}`)
+      await commentsRead.run(async signal => {
+        const response = await request(`comments?after=${encodeURIComponent(cursor.current)}`, undefined, signal)
         if (!response.ok) throw new Error(response.status === 401 ? "Sign-in required" : response.status === 429 ? producerRetryMessage() : "Unavailable")
-        const next = await response.json() as { state?: string; cursor?: string; comments?: Comment[]; pollAfterMs?: number; page?: { live?: boolean } }
-        if (cancelled) return
+        return await response.json() as { state?: string; cursor?: string; comments?: Comment[]; pollAfterMs?: number; page?: { live?: boolean } }
+      }, next => {
         setFeedState(next.state === "ok" ? next.page?.live ? "Live" : "No active Facebook Live" : next.state || "Unavailable")
         if (typeof next.cursor === "string") cursor.current = next.cursor
         setComments(prior => {
@@ -48,23 +52,22 @@ export default function FacebookProducerPanel() {
           return [...unique.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)).slice(-100)
         })
         delay = Math.max(15_000, Math.min(60_000, Number(next.pollAfterMs) || 30_000))
-      } catch (error) { if (!cancelled) setFeedState(error instanceof Error ? error.message : "Unavailable"); delay = 30_000 }
+      }, error => { setFeedState(error instanceof Error ? error.message : "Unavailable"); delay = 30_000 }, 12_000)
       if (!cancelled) timer = window.setTimeout(() => void poll(), delay)
     }
     const status = async () => {
       if (document.hidden || !producerReadAllowed()) return
-      try {
-        const response = await request("facebook/status")
+      await connectionRead.run(async signal => {
+        const response = await request("facebook/status", undefined, signal)
         if (!response.ok) throw new Error()
-        const next = await response.json() as Connection
-        if (!cancelled) setConnection(next)
-      } catch { if (!cancelled) setConnection(null) }
+        return await response.json() as Connection
+      }, setConnection, () => setConnection(null), 12_000)
     }
     void poll(); void status()
     const statusTimer = window.setInterval(() => void status(), 60_000)
     const focus = () => void status()
     window.addEventListener("focus", focus)
-    return () => { cancelled = true; mounted.current = false; window.clearTimeout(timer); window.clearInterval(statusTimer); window.removeEventListener("focus", focus) }
+    return () => { cancelled = true; commentsRead.dispose(); connectionRead.dispose(); mounted.current = false; window.clearTimeout(timer); window.clearInterval(statusTimer); window.removeEventListener("focus", focus) }
   }, [])
 
   const connect = async () => {

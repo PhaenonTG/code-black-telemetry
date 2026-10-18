@@ -3,22 +3,24 @@ import {currentAccessToken} from "../core/client"
 import {readProducerResponse} from "./producerResponse"
 import {producerReadAllowed} from "./producerRateLimit"
 import {canPrepare,preparationPending,type PcLauncher} from "./pcPreparation"
+import {useProducerRead} from "./useProducerRead"
 import "./pc-preparation.css"
-async function api<T>(method="GET",body?:unknown):Promise<T>{
- const token=await currentAccessToken();if(!token)throw Error("Sign in to OPS again.")
- const response=await fetch(`/api/producer/v1/launcher${method==="POST"?"/prepare":""}`,{method,cache:"no-store",headers:{Authorization:`Bearer ${token}`,...(body?{"Content-Type":"application/json"}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(10000)})
+async function api<T>(method="GET",body?:unknown,signal?:AbortSignal):Promise<T>{
+ const token=await currentAccessToken();signal?.throwIfAborted();if(!token)throw Error("Sign in to OPS again.")
+ const response=await fetch(`/api/producer/v1/launcher${method==="POST"?"/prepare":""}`,{method,cache:"no-store",headers:{Authorization:`Bearer ${token}`,...(body?{"Content-Type":"application/json"}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:signal??AbortSignal.timeout(10000)})
+ signal?.throwIfAborted()
  return readProducerResponse<T>(response)
 }
 export default function PreparePcControls(){
  const [doc,setDoc]=useState<PcLauncher|null>(null),[error,setError]=useState(""),[busy,setBusy]=useState(false),[confirm,setConfirm]=useState(false),[message,setMessage]=useState("")
  const pending=preparationPending(doc)
- const refresh=useCallback(async()=>{try{const next=await api<PcLauncher>();if(!next.online||next.controlAccess?.allowed!==true)setConfirm(false);setDoc(next);setError("")}catch(e){setDoc(null);setConfirm(false);setError(e instanceof Error?e.message:"Preparation helper unavailable")}},[])
- useEffect(()=>{const initial=window.setTimeout(()=>void refresh(),0);const timer=window.setInterval(()=>{if(!document.hidden&&producerReadAllowed())void refresh()},pending?5000:30000);return()=>{window.clearTimeout(initial);window.clearInterval(timer)}},[refresh,pending])
+ const statusRead=useProducerRead()
+ const actionRead=useProducerRead()
+ const refresh=useCallback(()=>statusRead.run(signal=>api<PcLauncher>("GET",undefined,signal),next=>{if(!next.online||next.controlAccess?.allowed!==true)setConfirm(false);setDoc(next);setError("")},e=>{setDoc(null);setConfirm(false);setError(e instanceof Error?e.message:"Preparation helper unavailable")}),[statusRead])
+ useEffect(()=>{const initial=window.setTimeout(()=>void refresh(),0);const timer=window.setInterval(()=>{if(!document.hidden&&!statusRead.isPending()&&producerReadAllowed())void refresh()},pending?5000:30000);return()=>{statusRead.cancel();window.clearTimeout(initial);window.clearInterval(timer)}},[refresh,pending,statusRead])
  async function request(action:"prepare"|"check"){
   setBusy(true);setConfirm(false)
-  try{await api("POST",{requestId:crypto.randomUUID(),confirmed:true,action});setMessage("Request queued. Waiting for PHAENON3; typically up to 30 seconds. No automatic retry.");await refresh()}
-  catch(e){setMessage(e instanceof Error?e.message:"Delivery unconfirmed. Check status; do not retry blindly.");await refresh()}
-  finally{setBusy(false)}
+  await actionRead.run(signal=>api("POST",{requestId:crypto.randomUUID(),confirmed:true,action},signal),()=>{setMessage("Request queued. Waiting for PHAENON3; typically up to 30 seconds. No automatic retry.");setBusy(false);void refresh()},e=>{setMessage(e instanceof Error?e.message:"Delivery unconfirmed. Check status; do not retry blindly.");setBusy(false);void refresh()})
  }
  const result=doc?.last?.result
  return <section className="pc-prepare" aria-label="Prepare streaming PC">
