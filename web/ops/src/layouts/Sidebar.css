@@ -23,3 +23,5 @@
 .shell .sidebar--brand .sidebar__section{animation:cb-sidebar-in 360ms cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--cb-i,0) * 60ms)}
 @keyframes cb-sidebar-in{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
 }
+/* Desktop viewports up to 1100px tall: compact the labeled list so all four sections fit without scrolling at 1920x1080 and 1440x900; the rail and phone are unchanged. */
+@media (min-width: 1200px) and (max-height: 1100px){.shell .sidebar--brand:not(.sidebar--rail) .sidebar__link{min-height:29px;padding-top:4px;padding-bottom:4px}.shell .sidebar--brand:not(.sidebar--rail) .sidebar__section{margin-bottom:8px}.shell .sidebar--brand:not(.sidebar--rail) .sidebar__section-label{margin-top:4px;margin-bottom:4px}}
