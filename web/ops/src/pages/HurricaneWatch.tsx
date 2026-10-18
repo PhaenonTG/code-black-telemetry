@@ -151,7 +151,7 @@ function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisible, pr
       {data.cone && <polygon points={data.cone.map(([lon, lat]) => `${x(lon)},${y(lat)}`).join(" ")} fill="#d5e4ee" fillOpacity=".13" stroke="#a8c7d8" />}
       {data.observed_track && <polyline fill="none" stroke="#56d5cf" strokeWidth="3" points={data.observed_track.map((point) => `${x(point.longitude)},${y(point.latitude)}`).join(" ")} />}
       <polyline fill="none" stroke="#ff6b58" strokeWidth="3" strokeDasharray="7 5" points={data.track.map((point) => `${x(point.longitude)},${y(point.latitude)}`).join(" ")} />
-      {data.track.map((point) => <g key={point.hour}><circle cx={x(point.longitude)} cy={y(point.latitude)} r="6" fill="#ff6b58" stroke="white" strokeWidth="2" /><text x={x(point.longitude) + 10} y={y(point.latitude) - 9} fill="#fff" fontSize="12">+{point.hour}h · {point.wind_mph ?? "?"} mph</text></g>)}
+      {data.track.map((point) => <g key={point.hour}><circle cx={x(point.longitude)} cy={y(point.latitude)} r="6" fill="#ff6b58" stroke="white" strokeWidth="2" /><text x={x(point.longitude) + 10} y={y(point.latitude) - 9} fill="#fff" fontSize="12">+{point.hour}h{point.wind_mph == null ? "" : ` · ${point.wind_mph} mph`}</text></g>)}
       <circle cx={x(data.watch_point.longitude)} cy={y(data.watch_point.latitude)} r="8" fill="#35d5ce" stroke="white" strokeWidth="3" />
       <text x={Math.min(460, x(data.watch_point.longitude) + 12)} y={y(data.watch_point.latitude) + 4} fill="#aefbf7" fontSize="13">Grand Bay watch</text>
       <text x="15" y="326" fill="#90a5b4" fontSize="11">Schematic only · live radar unavailable</text>
