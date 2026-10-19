@@ -104,7 +104,7 @@ export async function drawShareImage(input:ShareInput,preset:SharePreset,zoom?:b
  ctx.restore()}
  ctx.strokeStyle=color;ctx.lineWidth=width+5/scale;ctx.shadowColor=color;ctx.shadowBlur=12;ctx.globalAlpha=.55;ctx.stroke(path);ctx.globalAlpha=1;ctx.shadowBlur=0
  ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=width+3/scale;ctx.stroke(path)
- ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(cat.key==='tstm'||cat.key==='spec'?[10/scale,6/scale]:[]);ctx.stroke(path);ctx.setLineDash([])
+ ctx.strokeStyle='#'+[1,3,5].map(i=>Math.round(parseInt(color.slice(i,i+2),16)*.55+255*.45).toString(16).padStart(2,'0')).join('');ctx.lineWidth=width;ctx.setLineDash(cat.key==='tstm'||cat.key==='spec'?[10/scale,6/scale]:[]);ctx.stroke(path);ctx.setLineDash([])
  }
  ctx.strokeStyle='rgba(0,0,0,.38)';ctx.lineWidth=2/scale;for(const d of input.states)ctx.stroke(new Path2D(d))
  ctx.restore()

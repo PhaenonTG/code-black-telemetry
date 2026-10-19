@@ -106,3 +106,22 @@
   --cb-button-compact-text: var(--cb-text-min);
   --cb-button-compact-height: 32px;
 }
+
+/* r2-c Outlook overlay: append-only category/chrome tokens. */
+:root {
+  --cb-outlook-tstm: #A7F0A7;
+  --cb-outlook-mrgl: #3DDC84;
+  --cb-outlook-slgt: #FFE24A;
+  --cb-outlook-enh: #FF9A2E;
+  --cb-outlook-mdt: #FF6F91;
+  --cb-outlook-high: #F04BFF;
+  --cb-outlook-spec: #B7A8FF;
+  --cb-outlook-none: #8b929f;
+  --cb-outlook-unknown: var(--cb-outlook-none);
+  --cb-outlook-land: #1f2a35;
+  --cb-outlook-land-bottom: #17202a;
+  --cb-outlook-state: #6a7a8a;
+  --cb-outlook-sea: #030507;
+  --cb-outlook-label-bg: rgba(7,9,11,.88);
+  --cb-outlook-laser: var(--cb-red);
+}

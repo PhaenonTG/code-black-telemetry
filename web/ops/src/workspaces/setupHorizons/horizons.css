@@ -1,1 +1,166 @@
-.setup-horizons{max-width:1280px;margin:0 auto;color:var(--cb-text);font:14px/1.5 Inter,system-ui,sans-serif}.setup-horizons button,.setup-horizons select,.setup-horizons input{min-height:44px;background:var(--cb-panel,#0d0e11);color:inherit;border:1px solid var(--cb-muted,#8b929f);border-radius:8px;padding:8px;font:inherit}.setup-horizons button{cursor:pointer}.setup-horizons button[aria-pressed=true]{border-color:var(--cb-red,#ff2a0c)}.setup-horizons :is(button,input,select,summary,path):focus-visible{outline:3px solid var(--cb-blue,#12a8ff);outline-offset:3px}.setup-horizons__heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.setup-horizons h2{margin:0;font-size:20px}.setup-horizons__notice{padding:12px;border:1px solid var(--cb-line,#303238);border-radius:10px;color:var(--cb-muted,#a6adb8)}.setup-horizons__timeline{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:4px;margin:14px 0}.setup-horizons__timeline button{padding:7px 3px;min-width:0}.setup-horizons__timeline span{display:block;font-size:11px}.setup-horizons__grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(280px,2fr);gap:16px;align-items:start}.setup-horizons__map-panel,.setup-horizons__source{min-width:0;border:1px solid var(--cb-line,#303238);background:var(--cb-panel,#0d0e11);border-radius:12px;padding:12px}.setup-horizons__map-panel>header{display:flex;justify-content:space-between;align-items:center;gap:8px}.setup-horizons__coverage{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:12px}.setup-horizons__map-panel svg{display:block;width:100%;height:352px;background:#0c1821;border-radius:8px;margin-top:10px}.setup-horizons__state{fill:#192b38;stroke:#70808e;stroke-width:1}.setup-horizons__region{fill:#8cd3ff33;stroke:#8cd3ff;stroke-width:2.5;cursor:pointer}.setup-horizons__region.is-selected{stroke:#f4f6fa;stroke-width:3}.setup-horizons__map-panel p,.setup-horizons__source p{font-size:13px}.setup-horizons__map-panel small{font-size:11px;color:var(--cb-muted,#a6adb8)}.setup-horizons__source h3{font-size:16px;margin-top:0}.setup-horizons__source dl{margin:0}.setup-horizons__source dt{color:var(--cb-muted,#a6adb8);font-size:12px;margin-top:8px}.setup-horizons__source dd{margin:2px 0;overflow-wrap:anywhere}.setup-horizons__source a{text-decoration:underline}.setup-horizons__source button{margin:6px 6px 0 0}.setup-horizons__grid[data-expanded=true]{grid-template-columns:minmax(0,1fr)}.setup-horizons__grid[data-expanded=true] svg{height:70vh}.setup-horizons__grid[data-expanded=true]>.setup-horizons__source{display:none}.setup-horizons details{border-top:1px solid var(--cb-line,#303238);padding-block:10px;margin-top:14px}.setup-horizons summary{min-height:44px;cursor:pointer;padding:10px 0}.setup-horizons__preferences label{display:inline-flex;flex-direction:column;gap:4px;margin:8px 12px 8px 0}.setup-horizons__preferences input{font-size:16px}.setup-horizons__preferences p{color:var(--cb-muted,#a6adb8)}@media(max-width:900px){.setup-horizons__grid{grid-template-columns:minmax(0,1fr)}.setup-horizons__timeline{grid-template-columns:repeat(7,minmax(0,1fr))}.setup-horizons__map-panel svg{height:282px}}@media(max-width:480px){.setup-horizons__heading{align-items:flex-start}.setup-horizons__heading button{max-width:136px;font-size:12px}.setup-horizons__coverage select{max-width:180px}.setup-horizons__preferences label{display:flex;margin-right:0}.setup-horizons__timeline span{font-size:10px}}
+.setup-horizons {
+  max-width: 1280px;
+  margin: 0 auto;
+  color: var(--cb-text);
+  font: 15px/1.5 var(--cb-font-ui, Rajdhani, sans-serif);
+}
+.setup-horizons :is(button, select, input) {
+  min-height: 44px;
+  background: var(--cb-panel);
+  color: inherit;
+  border: 1px solid var(--cb-muted);
+  border-radius: 6px;
+  padding: 8px;
+  font: inherit;
+}
+.setup-horizons button { cursor: pointer; }
+.setup-horizons button:disabled { opacity: .5; cursor: wait; }
+.setup-horizons :is(button,input,select,summary,path):focus-visible { outline: 3px solid var(--cb-blue); outline-offset: 3px; }
+.setup-horizons__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.setup-horizons h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.setup-horizons__heading p { margin: 4px 0; }
+.setup-horizons small { font-size: 11px; color: var(--cb-muted); }
+.outlook-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.shell .setup-horizons .outlook-share-primary { background: var(--cb-red-deep); color: var(--cb-text); border-color: var(--cb-red); font-size: 14px; box-shadow: none; }
+.setup-horizons__notice { padding: 14px; border: 1px solid var(--cb-line); border-radius: 14px; margin-top: 14px; }
+.setup-horizons[data-stale=true] .setup-horizons__notice { border-left: 3px solid var(--cb-amber); }
+.setup-horizons .setup-horizons__notice details { display: inline; margin: 0 0 0 8px; padding: 0; border: 0; }
+.setup-horizons .setup-horizons__notice summary { display: inline-block; min-height: 44px; padding: 10px 0; }
+.setup-horizons__timeline { display: flex; gap: 28px; margin: 14px 0; }
+.outlook-day-group { min-width: 0; flex: 8; }
+.outlook-day-group[data-spec=true] { flex: 6; border-left: 1px solid var(--cb-outlook-spec); padding-left: 14px; }
+.outlook-day-group>p { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 1.6px; }
+.outlook-day-group[data-spec=true]>p { color: var(--cb-outlook-spec); }
+.outlook-day-group>div { display: grid; grid-template-columns: repeat(8,minmax(0,1fr)); gap: 4px; }
+.outlook-day-group[data-spec=true]>div { grid-template-columns: repeat(6,minmax(0,1fr)); }
+.setup-horizons__timeline button { position: relative; min-width: 0; min-height: 84px; padding: 7px 3px; border-bottom: 4px solid var(--cat,var(--cb-outlook-none)); }
+.setup-horizons__timeline button[data-empty=true] { opacity: .65; }
+.setup-horizons__timeline button[data-expired=true] { border-bottom-color: var(--cb-amber); }
+.setup-horizons__timeline button[aria-pressed=true] { border: 2px solid var(--cb-red); border-bottom-width: 4px; box-shadow: var(--cb-laser-glow); opacity: 1; }
+.setup-horizons__timeline span { display: block; font-size: 11px; overflow-wrap: anywhere; }
+.setup-horizons__timeline strong { font-size: 17px; }
+.outlook-day-group[data-spec=true] button { border-style: dashed; border-color: var(--cb-outlook-spec); }
+.outlook-day-group[data-spec=true] button[aria-pressed=true] { border-color: var(--cb-red); }
+.outlook-share-options { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.outlook-share-options label { display: flex; align-items: center; gap: 8px; }
+.outlook-share-options select { max-width: 100%; }
+.setup-horizons__grid { display: grid; grid-template-columns: minmax(0,3fr) minmax(280px,2fr); gap: 16px; align-items: start; }
+.setup-horizons__map-panel, .setup-horizons__source { min-width: 0; border: 1px solid var(--cb-line); background: var(--cb-steel,var(--cb-panel)); border-radius: 14px; padding: 20px; }
+.setup-horizons__map-panel>header { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; }
+.setup-horizons__map-panel>header button { font-size: 12px; letter-spacing: normal; text-transform: none; }
+.setup-horizons__coverage { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12px; }
+/* Existing SVG container sizes and expanded geometry are retained. */
+.setup-horizons__map-panel svg { display: block; width: 100%; height: 352px; background: repeating-linear-gradient(0deg,transparent 0 39px,#ffffff06 39px 40px),repeating-linear-gradient(90deg,transparent 0 39px,#ffffff06 39px 40px),radial-gradient(#0a1016,var(--cb-outlook-sea)); border-radius: 8px; margin-top: 10px; }
+.setup-horizons__state { fill: var(--cb-outlook-land); stroke: var(--cb-outlook-state); stroke-width: 1; }
+.setup-horizons__region { fill: transparent; stroke: var(--cat); stroke-width: var(--weight); cursor: pointer; }
+.outlook-area[data-cat=tstm] .setup-horizons__region { stroke-dasharray: 6 4; }
+.outlook-area[data-cat=spec] .setup-horizons__region { stroke-dasharray: 10 6; }
+.outlook-glow { fill: none; stroke: var(--cat); stroke-width: calc(var(--weight) * 2 + 6px); opacity: .55; pointer-events: none; }
+.outlook-map-art { position: relative; container-type: inline-size; }
+.outlook-map-title { position: absolute; z-index: 1; top: 14px; left: 14px; right: 14px; pointer-events: none; padding: 4px; background: var(--cb-outlook-label-bg); }
+.outlook-map-title strong { display: block; font: 23px var(--cb-font-display,Anton,sans-serif); letter-spacing: 1px; text-transform: uppercase; }
+.outlook-map-title span { display: block; font-size: 13px; }
+.outlook-area-label { background: var(--cb-outlook-label-bg); color: var(--cat); border: 1.2px solid var(--cat); border-radius: 6px; text-align: center; font: 700 13px Rajdhani,sans-serif; padding: 3px; }
+.outlook-watermark { opacity: .16; transform: rotate(-18deg); font: 72px Anton,sans-serif; color: var(--cb-outlook-spec); text-align: center; }
+.setup-horizons .outlook-legend { position: absolute; z-index: 2; bottom: 16px; left: 16px; width: min(260px,90%); padding: 14px; margin: 0; border: 1px solid var(--cb-line); border-radius: 14px; background: var(--cb-steel,var(--cb-panel)); }
+.outlook-legend>strong { font-size: 11px; letter-spacing: 1.6px; }
+.setup-horizons .outlook-legend summary { min-height: 0; padding: 0; font-size: 11px; }
+.setup-horizons .outlook-legend button { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 21px; border: 0; background: transparent; padding: 0; text-align: left; font-size: 11px; }
+.outlook-legend b { color: var(--cat); white-space: nowrap; font-size: 13px; }
+.outlook-legend i { width: 24px; height: 14px; flex-shrink: 0; background: var(--cat); border: 2px solid var(--cat); }
+[data-pattern=hatch], [data-pattern=spec] { background-image: repeating-linear-gradient(45deg,transparent 0 4px,#0008 4px 6px)!important; }
+[data-pattern=cross], [data-pattern=dense] { background-image: repeating-linear-gradient(45deg,transparent 0 4px,#0008 4px 6px),repeating-linear-gradient(-45deg,transparent 0 4px,#0008 4px 6px)!important; }
+.outlook-legend [data-cat=tstm] i { background: transparent; border-style: dashed; }
+@container (max-width: 419px) {
+  .setup-horizons .outlook-legend { width: auto; max-width: calc(100% - 20px); max-height: 240px; overflow: auto; bottom: 10px; left: 10px; padding: 4px 10px; }
+  .outlook-legend>strong, .outlook-legend button, .outlook-legend>p { display: none!important; }
+  .setup-horizons .outlook-legend summary { min-height: 44px; padding: 10px 0; }
+  .outlook-legend[open]>strong, .outlook-legend[open] button, .outlook-legend[open]>p { display: flex!important; }
+}
+.outlook-coverage-empty { position: absolute; left: 14px; right: 14px; bottom: 14px; }
+.setup-horizons__map-panel p,.setup-horizons__source p { font-size: 13px; }
+.setup-horizons__source h3 { font-size: 20px; margin: 8px 0; }
+.setup-horizons__source dl { margin: 0; }
+.setup-horizons__source dt { color: var(--cb-muted); font-size: 11px; margin-top: 8px; text-transform: uppercase; letter-spacing: 1.6px; }
+.setup-horizons__source dd { margin: 2px 0; overflow-wrap: anywhere; }
+.setup-horizons__source a { text-decoration: underline; color: var(--cb-red); }
+.setup-horizons__source button { margin: 6px 6px 0 0; border-color: var(--cat,var(--cb-muted)); }
+.setup-horizons__grid[data-expanded=true] { grid-template-columns: minmax(0,1fr); }
+.setup-horizons__grid[data-expanded=true] svg { height: 70vh; }
+.setup-horizons__grid[data-expanded=true]>.setup-horizons__source { display: none; }
+.setup-horizons details { border-top: 1px solid var(--cb-line); padding-block: 10px; margin-top: 14px; }
+.setup-horizons summary { min-height: 44px; cursor: pointer; padding: 10px 0; }
+.setup-horizons__preferences label { display: inline-flex; flex-direction: column; gap: 4px; margin: 8px 12px 8px 0; }
+.setup-horizons__preferences input { font-size: 16px; }
+.setup-horizons__preferences p { color: var(--cb-muted); }
+.outlook-evidence { font-size: 13px; overflow-wrap: anywhere; }
+.setup-horizons .outlook-evidence summary { display: inline-block; font-size: 11px; border: 1px solid var(--cb-line); border-radius: 999px; padding: 10px; }
+[data-cat=tstm] { --cat: var(--cb-outlook-tstm); }
+[data-cat=mrgl] { --cat: var(--cb-outlook-mrgl); }
+[data-cat=slgt] { --cat: var(--cb-outlook-slgt); }
+[data-cat=enh] { --cat: var(--cb-outlook-enh); }
+[data-cat=mdt] { --cat: var(--cb-outlook-mdt); }
+[data-cat=high] { --cat: var(--cb-outlook-high); }
+[data-cat=spec] { --cat: var(--cb-outlook-spec); }
+[data-cat=unknown] { --cat: var(--cb-outlook-unknown); }
+.analysis-workspace:has(.setup-horizons[data-stale=true]) .analysis-mode a[href$="/outlook"]::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: var(--cb-amber); }
+@media (prefers-reduced-motion: no-preference) {
+  .outlook-regions { animation: outlook-arrive 220ms cubic-bezier(.2,.8,.2,1); transform-origin: center; }
+  .outlook-glow.is-top { opacity: .7; animation: outlook-pulse 2.4s ease-in-out 3; }
+  .analysis-tab-panel[hidden] .outlook-glow { animation-play-state: paused; }
+  .setup-horizons__timeline button { transition: opacity 160ms, transform 160ms; }
+}
+@keyframes outlook-arrive { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: scale(1); } }
+@keyframes outlook-pulse { 0%,100% { opacity: .55; } 50% { opacity: .9; } }
+@media (max-width: 900px) {
+  .setup-horizons__grid { grid-template-columns: minmax(0,1fr); }
+  .setup-horizons__timeline { display: block; }
+  .outlook-day-group[data-spec=true] { padding-left: 0; border-left: 0; border-top: 1px solid var(--cb-outlook-spec); margin-top: 14px; padding-top: 10px; }
+  .setup-horizons__map-panel svg { height: 282px; }
+  .outlook-day-group>div { grid-template-columns: repeat(8,minmax(0,1fr)); }
+}
+@media (max-width: 480px) {
+  .setup-horizons__heading { align-items: flex-start; flex-wrap: wrap; }
+  .outlook-actions { margin-left: auto; }
+  .setup-horizons__map-panel,.setup-horizons__source { padding: 14px; }
+  .setup-horizons__coverage select { max-width: 180px; }
+  .setup-horizons__preferences label { display: flex; margin-right: 0; }
+  .outlook-share-options label { display: grid; width: 100%; }
+  .setup-horizons__timeline { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 4px; }
+  .outlook-day-group, .outlook-day-group>div { display: contents; }
+  .outlook-day-group>p { grid-row: 1; grid-column: 1 / span 4; letter-spacing: .4px; }
+  .outlook-day-group[data-spec=true]>p { grid-column: 5 / span 3; border-left: 1px solid var(--cb-outlook-spec); padding-left: 6px; }
+  .outlook-day-group:first-child button { grid-row: 2; }
+  .outlook-day-group:first-child button:nth-child(8) { grid-row: 3; grid-column: 1; }
+  .outlook-day-group[data-spec=true] button { grid-row: 3; }
+  .outlook-day-unavailable .outlook-day-full { display: none; }
+  .outlook-day-unavailable .outlook-day-dash { display: inline; }
+  .setup-horizons__timeline button { min-height: 62px; }
+}
+@media (pointer: coarse) { .setup-horizons .outlook-legend button { min-height: 44px; } }
+
+.outlook-host[data-paused=true] .outlook-glow { animation-play-state: paused; }
+
+.outlook-map-labels { position: absolute; inset: 10px 0 0; pointer-events: none; }
+.outlook-map-labels .outlook-area-label { position: absolute; transform: translate(-50%,-50%); min-width: 70px; padding: 3px 8px; }
+
+.setup-horizons__timeline .outlook-day-dash { display: none; }
+@media (max-width: 480px) { .setup-horizons__timeline .outlook-day-unavailable .outlook-day-dash { display: inline; } }
+
+.outlook-regions-old { display: none; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .outlook-regions-old { display: block; animation: outlook-depart 140ms ease-out both; }
+  .outlook-legend button { animation: outlook-arrive 220ms both; }
+  .outlook-legend button:nth-of-type(2) { animation-delay: 30ms; }
+  .outlook-legend button:nth-of-type(3) { animation-delay: 60ms; }
+  .outlook-legend button:nth-of-type(4) { animation-delay: 90ms; }
+  .outlook-legend button:nth-of-type(5) { animation-delay: 120ms; }
+  .outlook-legend button:nth-of-type(6) { animation-delay: 150ms; }
+}
+@keyframes outlook-depart { to { opacity: 0; } }
+
+.setup-horizons .outlook-share-options { position: relative; display: block; border: 0; padding: 0; margin: 0; }
+.setup-horizons .outlook-share-options summary { min-height: 44px; border: 1px solid var(--cb-muted); border-radius: 6px; padding: 8px; font-size: 14px; }
+.outlook-share-options>div { position: absolute; right: 0; top: 100%; z-index: 5; width: min(320px,85vw); border: 1px solid var(--cb-line); border-radius: 14px; padding: 14px; background: var(--cb-steel,var(--cb-panel)); box-shadow: var(--cb-steel-shadow); }
+.outlook-share-options label { display: grid; margin: 8px 0; }
+.outlook-share-options select { min-width: 0; }
