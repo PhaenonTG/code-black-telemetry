@@ -86,3 +86,9 @@
 .producer-workspace .producer-controls h2 { font-size: var(--cb-section-title); text-transform: none; }
 
 .producer-main > .workspace-panel:not(.producer-map-link), .producer-rail > .workspace-panel { padding: var(--cb-card-padding); }
+
+.chase-warnings { flex: 0 0 auto; padding: var(--cb-card-compact); border-radius: var(--cb-card-radius); }
+.chase-warnings > header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.chase-warnings > header h2 { font-size: var(--cb-section-title); text-transform: none; }
+.chase-warnings > header span, .chase-warnings__nearby h3, .chase-unit-strip small { font-size: var(--cb-text-min); }
+.chase-warnings__nearby { border-top: 1px solid var(--cb-line); padding-top: var(--cb-card-compact); }

@@ -1,3 +1,4 @@
+import { ErrorState } from "../components/AsyncViewState"
 import { useEffect, useState, type CSSProperties } from "react"
 import { loadAppTheme, saveAppTheme, subscribeAppTheme, type AppThemeMode } from "../../../../src/services/settings"
 import { loadMapLayerVisibility, saveMapLayerVisibility, subscribeMapLayerVisibility, type MapLayerVisibility } from "../../../../src/services/settings"
@@ -162,7 +163,7 @@ export default function Settings() {
             <AlertNumber label="Minimum hail (in)" value={alertSettings.filters.lsr_min_hail_inches} step="0.25" onChange={(value) => setAlertSettings({ ...alertSettings, filters: { ...alertSettings.filters, lsr_min_hail_inches: value } })} />
             <AlertNumber label="Minimum wind (mph)" value={alertSettings.filters.lsr_min_wind_mph} onChange={(value) => setAlertSettings({ ...alertSettings, filters: { ...alertSettings.filters, lsr_min_wind_mph: value } })} />
           </div></div>
-          {alertError && <p className="page-empty" role="alert">{alertError}</p>}
+          {alertError && <ErrorState compact message={alertError} />}
           <p className="settings-alert-copy" role="status">{alertSaving ? "Saving weather alert controls…" : alertDirty ? "Unsaved changes. The live alert pipeline still uses the last saved controls." : alertSavedNotice ? "Saved. The live alert pipeline now uses these controls." : "No unsaved changes."}</p>
           <button type="button" className="page-action-link settings-save ops-button-primary" disabled={alertSaving} onClick={() => void saveAlerts()}>{alertSaving ? "Saving…" : "Save weather alert controls"}</button>
         </> : <p className="page-empty">{alertError ?? "Loading…"}</p>}
