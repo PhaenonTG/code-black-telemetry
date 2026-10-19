@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { renderToString } from "react-dom/server"
 import { describe, expect, it } from "vitest"
-import { ROUTES, ROUTE_ALIASES, routeEyebrow } from "./routes"
+import { ROUTES, ROUTE_ALIASES, routeEyebrow, routeMatchesQuery } from "./routes"
 import { NAV_DETAILS, activePhoneRoute, PHONE_ROUTES } from "../layouts/phoneRoutes"
 import { PageHeader } from "../components/PageHeader"
 
@@ -42,4 +42,8 @@ describe("locked navigation", () => {
     expect(ROUTE_ALIASES).not.toHaveProperty("/field")
     expect(activePhoneRoute("/field")).toBe("/more")
   })
+})
+
+it.each([["System health", "/status"], ["Program Status", "/producer"], ["workspace chase", "/chase-desk"], ["fleet", "/team"]])("finds old bookmark %s in page search", (query, destination) => {
+  expect(ROUTES.filter(route => route.inSidebar && routeMatchesQuery(route, query)).map(route => route.path)).toContain(destination)
 })

@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { Icon } from "../components/Icon"
 import { PageHeader } from "../components/PageHeader"
-import { ROUTES } from "../app/routes"
+import { ROUTES, routeMatchesQuery } from "../app/routes"
 import { MORE_SECTIONS, navDetail, navLabel } from "../layouts/phoneRoutes"
 import "./More.css"
 
@@ -11,7 +11,7 @@ export default function More() {
   return <div className="page page-more page-more--brand">
     <PageHeader routePath="/more" title="" description="Find maps, forecasts, team status, and tools." />
     <label className="ops-page-search">Search pages<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search pages" /></label>
-    {query && <div className="ops-page-search__results">{ROUTES.filter(route => route.inSidebar && `${route.label} ${route.path} ${navDetail(route) ?? ""}`.toLowerCase().includes(query.toLowerCase())).map(route => <Link key={route.path} to={route.path}>{route.label} →</Link>)}</div>}
+    {query && <div className="ops-page-search__results">{ROUTES.filter(route => route.inSidebar && routeMatchesQuery(route, query, navDetail(route))).map(route => <Link key={route.path} to={route.path}>{route.label} →</Link>)}</div>}
     <div className="ops-more-grid">
       {MORE_SECTIONS.map(group => {
         const links = group.routes.map(route => <Link key={route.path} to={route.path} className="ops-more-grid__item">

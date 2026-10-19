@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { PageHeader } from "../components/PageHeader"
-import { ROUTES } from "../app/routes"
+import { navDetail } from "../layouts/phoneRoutes"
+import { ROUTES, routeMatchesQuery } from "../app/routes"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import "./NotFound.css"
 
@@ -20,7 +21,7 @@ export default function NotFound() {
         </p>
         <p className="ops-not-found__hint">Your session is unchanged. Choose a destination below.</p>
         <label className="ops-page-search">Search pages<input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
-        {query && <div className="ops-page-search__results">{ROUTES.filter(route => route.inSidebar && `${route.label} ${route.path}`.toLowerCase().includes(query.toLowerCase())).map(route => <Link to={route.path} key={route.path}>{route.label} →</Link>)}</div>}
+        {query && <div className="ops-page-search__results">{ROUTES.filter(route => route.inSidebar && routeMatchesQuery(route, query, navDetail(route))).map(route => <Link to={route.path} key={route.path}>{route.label} →</Link>)}</div>}
         <div className="ops-not-found__actions">
           <Link to="/" className="ops-not-found__primary">Open Ops Map</Link>
           <Link to="/status/health">Status</Link>

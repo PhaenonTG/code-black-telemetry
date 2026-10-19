@@ -60,7 +60,7 @@ export function SourcesContent({ health, error, units, onRefresh }: { health: St
             <span className={source.publisher_online ? "stream-health__dot stream-health__dot--live" : "stream-health__dot"} />
             <strong>{source.name}</strong>
             <StatusBadge state={source.publisher_online === undefined ? "Unknown, no report" : source.publisher_online ? "LIVE" : "OFFLINE"} />
-            <small>{source.lastSeen ? `Last seen ${formatOpsTimestamp(source.lastSeen)}` : source.publisher_online ? `${source.readers ?? 0} viewer(s)` : source.reason === "Unknown - no report" ? "No report yet" : source.reason ?? "No publisher connected"}</small>
+            <small>{source.lastSeen ? `Last seen ${formatOpsTimestamp(source.lastSeen)}` : source.publisher_online ? source.readers == null ? `— viewer(s) · ${statusWord("UNAVAILABLE")}` : `${source.readers} viewer(s)` : source.reason === "Unknown - no report" ? "No report yet" : source.reason ?? "No publisher connected"}</small>
           </article>)}
         </div>
         <p>Ingest: SRT {statusWord(health?.ingest.srt?.state)} · WebRTC {statusWord(health?.ingest.webrtc?.state)} · Facebook availability {statusWord(health?.broadcast.state)}</p>

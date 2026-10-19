@@ -49,3 +49,10 @@ describe("Producer Sources carry-over", () => {
   expect(html).toContain(">Retry</button>")
  })
 })
+
+it("does not invent zero viewers when the publisher omitted its reader count", () => {
+ const health = parseStreamHealth({ sources: [{ id: "srt", name: "SRT field", publisher_online: true }] })
+ const html = renderToString(<MemoryRouter><SourcesContent health={health} error={null} units={[]} onRefresh={() => {}} /></MemoryRouter>)
+ expect(html).toContain("— viewer(s) · Unavailable")
+ expect(html).not.toContain("0 viewer(s)")
+})

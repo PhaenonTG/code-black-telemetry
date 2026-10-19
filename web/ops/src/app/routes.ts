@@ -59,3 +59,9 @@ export function routeForPath(path: string): RouteDef | undefined {
 export function routeEyebrow(route: RouteDef): string {
   return route.section.toLowerCase() === route.label.toLowerCase() ? route.section : `${route.section} · ${route.label}`
 }
+
+export function routeMatchesQuery(route: RouteDef, query: string, detail = ""): boolean {
+  const aliases = Object.entries(ROUTE_ALIASES).filter(([, target]) => routeForPath(target)?.path === route.path)
+  const text = [route.label, route.path, detail, ...aliases.flat()].join(" ").toLowerCase().replace(/[/_-]/g, " ")
+  return query.toLowerCase().replace(/[/_-]/g, " ").split(/\s+/).filter(Boolean).every(word => text.includes(word))
+}
