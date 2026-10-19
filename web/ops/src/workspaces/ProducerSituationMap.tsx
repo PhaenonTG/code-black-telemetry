@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
+import "./ProducerSituationMap.css"
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles"
 import { tuneAtlasStyle } from "../../../../src/map/AtlasStyleManager"
 import type { FabricUnitState } from "../../../../src/services/fabric"
@@ -30,7 +31,9 @@ export function ProducerSituationMap({ selectedPoint, units, onPointSelect }: { 
   useEffect(() => {
     if (!container.current || !hasMapboxToken()) return
     mapboxgl.accessToken = mapboxAccessToken()
-    const instance = new mapboxgl.Map({ container: container.current, style: atlasStyleUri(), center: [center.lon, center.lat], zoom: selectedPoint ? 7 : positions.length ? 6 : 4.5, attributionControl: false })
+    // Let a single touch scroll the page; retain two-finger pan/pinch and desktop mouse gestures.
+    const cooperativeGestures = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches
+    const instance = new mapboxgl.Map({ container: container.current, style: atlasStyleUri(), center: [center.lon, center.lat], zoom: selectedPoint ? 7 : positions.length ? 6 : 4.5, attributionControl: false, cooperativeGestures })
     map.current = instance
     instance.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right")
     instance.on("style.load", () => tuneAtlasStyle(instance as unknown as Parameters<typeof tuneAtlasStyle>[0]))
