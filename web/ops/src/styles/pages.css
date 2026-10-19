@@ -30,7 +30,8 @@
    already renders its own GPS/mode/mosaic status strip pinned top-left (.radar-strip /
    .atlas-radar-strip in src/index.css). Spanning this overlay left:18/right:18 used to sit
    directly on top of that strip, causing visible text collision on every OPS map view. */
-.ops-map-overlay{position:absolute;z-index:20;right:18px;left:auto;display:flex;align-items:center;gap:10px;pointer-events:none;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 200px)}
+/* Reserve the right-hand map controls column, including on portrait tablets. */
+.ops-map-overlay{position:absolute;z-index:20;right:100px;left:auto;display:flex;align-items:center;gap:10px;pointer-events:none;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 282px)}
 .ops-map-overlay--top{top:14px}
 .ops-map-overlay>div{background:rgba(0,0,0,.86);border:1px solid var(--cb-line);border-top:2px solid var(--cb-red);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);padding:9px 14px;min-width:180px}
 /* Scoped to >div>span (the FOCUS/VALID TIME eyebrow labels only), not a bare descendant
@@ -182,13 +183,6 @@
      forcing a long scroll past a mostly-empty map. */
   .ops-map-stage{height:clamp(330px,48dvh,460px);min-height:330px;flex:0 0 auto}
   .ops-inspector{border-left:0;border-top:1px solid var(--cb-line);overflow:visible}
-  /* One quiet title is enough on a phone. The desktop selector/status/voice controls compete
-     with native map controls and were producing the stacked boxes in the mobile viewport. */
-  .ops-map-overlay{left:12px;right:88px;top:12px;display:block;max-width:none;pointer-events:none}
-  .ops-map-overlay>div{min-width:0;width:max-content;max-width:100%;padding:7px 10px;border-top-width:2px}
-  .ops-map-overlay>div>span{display:none}
-  .ops-map-overlay h1{margin:0;font-size:13px;line-height:1.2;letter-spacing:.07em}
-  .ops-map-overlay .ops-pill,.ops-nearby-reference,.ops-voice-toggle{display:none}
   /* Same clearance reasoning as the desktop rule above -- AtlasMap's own control stack is
      bottom-right anchored here too. */
   .ops-timeline{left:12px;right:88px;bottom:12px;padding:8px 10px;display:block}
@@ -206,6 +200,16 @@
   .storm-map-command>div{padding:7px 9px}
   .storm-workspace__metrics{grid-template-columns:1fr}
   .storm-provenance dl{grid-template-columns:1fr}
+}
+
+/* Keep the compact overlay on short landscape screens too, without changing the
+   workstation or map geometry. Leave the native map controls column clear. */
+@media (max-width:767px), (max-height:500px){
+  .ops-map-overlay{left:12px;right:100px;top:12px;display:block;max-width:none;pointer-events:none}
+  .ops-map-overlay>div{min-width:0;width:max-content;max-width:100%;padding:7px 10px;border-top-width:2px}
+  .ops-map-overlay>div>span{display:none}
+  .ops-map-overlay h1{margin:0;font-size:13px;line-height:1.2;letter-spacing:.07em}
+  .ops-map-overlay .ops-pill,.ops-nearby-reference,.ops-voice-toggle{display:none}
 }
 
 /* A map setup/rendering issue should be legible and calm on a small screen, not a raw internal
