@@ -3,12 +3,12 @@ export type Category={key:CategoryKey;code:string;name:string;rank:number;patter
 export const CATEGORIES:Category[]=[
  // Spec §4's .12–.30 alpha cannot meet §8's 3:1 fill/land contrast.
  // These minima meet §8 against the brighter end of the unchanged land gradient.
- {key:'tstm',code:'TSTM',name:'General thunderstorms',rank:0,pattern:'none',width:1.25,opacity:.42},
- {key:'mrgl',code:'MRGL',name:'Marginal Risk (1 of 5)',rank:1,pattern:'none',width:1.5,opacity:.49},
- {key:'slgt',code:'SLGT',name:'Slight Risk (2 of 5)',rank:2,pattern:'none',width:2,opacity:.41},
- {key:'enh',code:'ENH',name:'Enhanced Risk (3 of 5)',rank:3,pattern:'hatch',width:2.5,opacity:.56},
- {key:'mdt',code:'MDT',name:'Moderate Risk (4 of 5)',rank:4,pattern:'cross',width:3,opacity:.65},
- {key:'high',code:'HIGH',name:'High Risk (5 of 5)',rank:5,pattern:'dense',width:3.5,opacity:.70},
+ {key:'tstm',code:'TSTM',name:'General thunderstorms',rank:0,pattern:'none',width:1.25,opacity:.45},
+ {key:'mrgl',code:'MRGL',name:'Marginal Risk (1 of 5)',rank:1,pattern:'none',width:1.5,opacity:.53},
+ {key:'slgt',code:'SLGT',name:'Slight Risk (2 of 5)',rank:2,pattern:'none',width:2,opacity:.53},
+ {key:'enh',code:'ENH',name:'Enhanced Risk (3 of 5)',rank:3,pattern:'hatch',width:2.5,opacity:.60},
+ {key:'mdt',code:'MDT',name:'Moderate Risk (4 of 5)',rank:4,pattern:'cross',width:3,opacity:.69},
+ {key:'high',code:'HIGH',name:'High Risk (5 of 5)',rank:5,pattern:'dense',width:3.5,opacity:.75},
  {key:'unknown',code:'?',name:'Unknown category',rank:-1,pattern:'none',width:1.5,opacity:.12},
  {key:'spec',code:'PATTERN SIGNAL',name:'Pattern signal · not an SPC risk',rank:-1,pattern:'spec',width:2,opacity:.10},
 ]

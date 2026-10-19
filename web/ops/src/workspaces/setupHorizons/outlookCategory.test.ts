@@ -1,5 +1,5 @@
 import {describe,it,expect,vi} from 'vitest'
-import {categoryOf} from './outlookCategory'
+import {CATEGORIES,categoryOf} from './outlookCategory'
 
 describe('SPC category semantics',()=>{
  it.each([[2,'tstm',0],[3,'mrgl',1],[4,'slgt',2],[5,'enh',3],[6,'mdt',4],[8,'high',5]] as const)('maps DN %s independently of tornado probabilities',(official_code,key,rank)=>{
@@ -15,5 +15,12 @@ describe('SPC category semantics',()=>{
   expect(categoryOf({day:11,official_code:8,label:'High risk'}).key).toBe('spec')
   expect(categoryOf({label:'Unrecognized'}).key).toBe('unknown')
   warn.mockRestore()
+ })
+ it('SPC fill opacities never decrease TSTM to HIGH and are all >= 0.45',()=>{
+  const opacities=['TSTM','MRGL','SLGT','ENH','MDT','HIGH'].map(code=>CATEGORIES.find(c=>c.code===code)!.opacity)
+  opacities.forEach((opacity,i)=>{
+   expect(opacity).toBeGreaterThanOrEqual(0.45)
+   if(i>0)expect(opacity).toBeGreaterThanOrEqual(opacities[i-1])
+  })
  })
 })
