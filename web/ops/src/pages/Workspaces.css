@@ -125,6 +125,7 @@
 .analysis-workspace .chase-setups :is(h2,h3) { font-size:18px; text-transform:none; }
 .analysis-workspace .chase-setups :is(small,time,dt,th,.chase-setups__section-head span,.setup-review-desk__steps li,.setup-revisions__changes,.setup-synthesis header > span,.setup-synthesis__chips span) { font-size:11px; }
 .analysis-workspace .chase-surveillance :is(.setup-synthesis header > span,.setup-synthesis__chips span) { font-size:11px; }
+.analysis-workspace :is(.setup-synthesis__matrix section > div,.setup-synthesis__corridor p,.chase-surveillance__meta span,.setup-review-desk__review-weights span,.setup-rrfs header > span,.setup-rrfs__bands span,.setup-rrfs__meta span,.setup-rrfs table) { font-size:11px; }
 .analysis-workspace :is(.chase-setups__list,.chase-setups__detail,.chase-setups__activity,.chase-surveillance__status) { border-radius:14px; }
 .analysis-workspace :is(.chase-setups__detail h2,.chase-setups__activity h2,.chase-surveillance h2,.chase-surveillance h3,.potential-aegis h3,.cd-grid h3) { font-size:18px; text-transform:none; }
 .analysis-workspace :is(.chase-setups__labels span,.setup-target-area p) { font-size:11px; }
