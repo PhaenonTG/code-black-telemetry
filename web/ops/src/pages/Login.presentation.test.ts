@@ -91,3 +91,12 @@ describe("RIP-20 auth status announcements", () => {
     }
   })
 })
+
+describe("RIP-22 account guidance readability (partial)", () => {
+  it("keeps administrator guidance at 13px beyond phone widths without inventing a contact destination", () => {
+    expect(rule(".auth-card__body")).toContain("font-size:13px")
+    expect(page("Unauthorized")).toContain("Contact the OPS administrator to request access.")
+    expect(page("Unauthorized")).toContain("SIGN OUT")
+    expect(page("Unauthorized")).not.toContain("mailto:")
+  })
+})

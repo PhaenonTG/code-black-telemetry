@@ -31,7 +31,7 @@
 .auth-card__kicker{font-size:12px;font-weight:800;letter-spacing:.22em;color:var(--cb-red);margin:0 0 8px}
 .auth-card__title{font-size:19px;font-weight:800;letter-spacing:.01em;margin:0 0 24px;color:var(--cb-text)}
 .auth-card__subtitle{font-size:12px;font-weight:700;letter-spacing:.14em;color:var(--cb-muted);text-transform:uppercase;margin:0 0 26px}
-.auth-card__body{font-size:12px;line-height:1.6;color:var(--cb-muted);margin:0 0 22px}
+.auth-card__body{font-size:13px;line-height:1.6;color:var(--cb-muted);margin:0 0 22px}
 
 .auth-card form{width:100%;display:flex;flex-direction:column;gap:16px;text-align:left}
 .auth-field{display:flex;flex-direction:column;gap:7px}
