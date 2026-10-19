@@ -1,6 +1,7 @@
+import { formatOpsTimestamp } from "../core/timeFormat";
 import { revisionChanges, revisionHasDisplayedChange, type SetupRevisionEntry, type SetupRevisionHistory } from "./setupRevisionModel"
 
-const when = (value: string) => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : "Unavailable"
+const when = (value: string) => Number.isFinite(Date.parse(value)) ? <time dateTime={value} title={new Date(value).toISOString()}>{formatOpsTimestamp(value)}</time> : "\u2014"
 
 export function SetupRevisionTimeline({ history, selectedRevision, currentRevision, onSelect }: {
   history?: SetupRevisionHistory; selectedRevision: number; currentRevision: number;
@@ -10,7 +11,7 @@ export function SetupRevisionTimeline({ history, selectedRevision, currentRevisi
     <button type="button" aria-pressed={selectedRevision === entry.revision}
       onClick={() => onSelect(entry.revision === currentRevision ? null : entry.revision)}>
       <strong>Revision {entry.revision}{entry.revision === currentRevision ? " · Current" : ""}</strong>
-      <time dateTime={entry.captured_at}>{when(entry.captured_at)}</time>
+      {when(entry.captured_at)}
       <span>Day {entry.day} · {entry.risk_label}</span>
       <small>{entry.candidate_count} retained HRRR points</small>
     </button>

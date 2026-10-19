@@ -1,3 +1,4 @@
+import { SetupReviewTime } from "../pages/SetupReviewTitle";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { fetchForecast, postSetupWorkflow } from "../core/client";
@@ -95,8 +96,8 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
     <button type="button" className="setup-review-desk__run" onClick={() => void submit()}
       disabled={!current || !fingerprint || !role || busy || workflow?.status === "pending" || workflow?.status === "ready"}>
       {workflow?.status === "pending" ? "Review in progress…" : busyAction === "review" ? "Starting reviews…" : workflow?.status === "ready" ? "Reviews saved" : workflow?.status === "not_requested" || !workflow ? "Run required advisory reviews" : "Retry advisory reviews"}</button>
-    {workflow?.started_at && <p className="setup-review-desk__time">Started {new Date(workflow.started_at).toLocaleString()}
-      {workflow.completed_at && ` · Completed ${new Date(workflow.completed_at).toLocaleString()}`}</p>}
+    {workflow?.started_at && <p className="setup-review-desk__time">Started <SetupReviewTime value={workflow.started_at} />
+      {workflow.completed_at && <> · Completed <SetupReviewTime value={workflow.completed_at} /></>}</p>}
     <div className="chase-setups__reviews">{[["aegis", "Aegis analysis"], ["local_30b", "Local 30B review"]].map(([key, title]) => {
       const review = workflow?.reviewers[key];
       return <div key={key}><h4>{title}</h4><small>{review?.model ?? (key === "aegis" ? "qwen3:8b" : "qwen3-coder:30b")} · {reviewStatus(review?.status)}{review?.automatic ? " · Automatic" : ""}</small>
@@ -121,9 +122,9 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
     </div>
     <div className="setup-review-desk__decision"><h3>Post to Reviewed Briefings</h3>
       {workflow?.decision ? <div className="setup-review-desk__saved"><strong>{workflow.decision.decision === "approved" ? "Approved for this revision" : "Changes requested"}</strong>
-        <p>{workflow.decision.note}</p><small>{workflow.decision.actor_role} · {new Date(workflow.decision.decided_at).toLocaleString()}</small>
+        <p>{workflow.decision.note}</p><small>{workflow.decision.actor_role} · <SetupReviewTime value={workflow.decision.decided_at} /></small>
         {workflow.decision.decision === "approved" && <p>Automation armed: this revision is in Reviewed Briefings and is eligible for the hourly private review while its evidence and weight policy remain current.</p>}</div> : <p>No operator decision saved for revision {revision}.</p>}
-      {workflow?.decision_history && workflow.decision_history.length > 1 && <details><summary>Decision history ({workflow.decision_history.length} recent)</summary><ol>{workflow.decision_history.map(event => <li key={event.id}><strong>{event.decision.replaceAll("_", " ")}</strong> · {new Date(event.decided_at).toLocaleString()}<p>{event.note}</p></li>)}</ol></details>}
+      {workflow?.decision_history && workflow.decision_history.length > 1 && <details><summary>Decision history ({workflow.decision_history.length} recent)</summary><ol>{workflow.decision_history.map(event => <li key={event.id}><strong>{event.decision.replaceAll("_", " ")}</strong> · <SetupReviewTime value={event.decided_at} /><p>{event.note}</p></li>)}</ol></details>}
       {!current ? <p>Historical revisions are read only. Return to the current revision to review or decide.</p>
         : !decisionRole ? <p>OWNER or ADMIN access is required to save an operator decision.</p> : <>
           <label htmlFor="setup-review-note">Review note</label><textarea id="setup-review-note" value={note} maxLength={800} rows={3} onChange={event => setNote(event.target.value)} placeholder="Explain your decision and any evidence that still needs checking." />
@@ -142,7 +143,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
       {workflow?.paid_review?.status === "ready" ? <div className="setup-review-desk__saved">
         <strong>{workflow.paid_review.verdict === "ready" ? "Evidence-bounded second opinion" : "Second opinion withheld"}</strong>
         <p>{workflow.paid_review.summary}</p>
-        <small>{workflow.paid_review.model} · {workflow.paid_review.confidence ?? "confidence unavailable"} · {workflow.paid_review.reviewed_at ? new Date(workflow.paid_review.reviewed_at).toLocaleString() : "time unavailable"}</small>
+        <small>{workflow.paid_review.model} · {workflow.paid_review.confidence ?? "confidence unavailable"} · {workflow.paid_review.reviewed_at ? <SetupReviewTime value={workflow.paid_review.reviewed_at} /> : "time unavailable"}</small>
         {workflow.paid_review.uncertainties && workflow.paid_review.uncertainties.length > 0 && <details><summary>Uncertainties ({workflow.paid_review.uncertainties.length})</summary><ul>{workflow.paid_review.uncertainties.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
         {workflow.paid_review.next_hour_triggers && workflow.paid_review.next_hour_triggers.length > 0 && <details><summary>Check next hour ({workflow.paid_review.next_hour_triggers.length})</summary><ul>{workflow.paid_review.next_hour_triggers.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
       </div> : <p>Available hourly or on owner/admin request only after approval of this exact current revision. It stays private and does not publish a briefing.</p>}

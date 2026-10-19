@@ -1,4 +1,4 @@
-import { useEffect, useRef, useId } from "react"
+import { useState, useEffect, useRef, useId } from "react"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles"
@@ -13,6 +13,7 @@ function validPoint(point: SetupCandidatePoint) {
 }
 
 export function SetupTargetMap({ geometry, trackingMap, bounds, points, selectedKey }: Props) {
+  const [error, setError] = useState("")
   const descriptionId = useId()
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<InstanceType<typeof mapboxgl.Map> | null>(null)
@@ -22,6 +23,7 @@ export function SetupTargetMap({ geometry, trackingMap, bounds, points, selected
     const validBounds = bounds?.length === 4 && bounds.every(Number.isFinite) && bounds[0] < bounds[2] && bounds[1] < bounds[3]
     const center: [number, number] = validBounds ? [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2] : [PEA_RIDGE_REFERENCE.lon, PEA_RIDGE_REFERENCE.lat]
     const map = new mapboxgl.Map({ container: container.current, style: atlasStyleUri(), center, zoom: 4.5, attributionControl: false })
+    map.on("error", () => setError("Some setup map evidence could not load."))
     mapRef.current = map
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right")
     map.on("load", () => {
@@ -58,5 +60,5 @@ export function SetupTargetMap({ geometry, trackingMap, bounds, points, selected
   }, [points, selectedKey])
 
   if (!hasMapboxToken()) return <div className="setup-target-map__unavailable">Mapbox is not configured in this build.</div>
-  return <><div ref={container} className="setup-target-map" aria-describedby={descriptionId} /><span id={descriptionId} className="a11y-caption">Official SPC tornado outlook areas with Code Black model context and experimental HRRR screening points</span></>
+  return <>{error && <p role="status">{error}</p>}<div ref={container} className="setup-target-map" aria-describedby={descriptionId} /><span id={descriptionId} className="a11y-caption">Official SPC tornado outlook areas with Code Black model context and experimental HRRR screening points</span></>
 }

@@ -1,3 +1,4 @@
+import { formatOpsTimestamp } from "../core/timeFormat";
 import { useState } from "react";
 
 type Field = { value?: number; unit?: string };
@@ -18,7 +19,7 @@ const fields = [
 
 const when = (value?: string) => {
   const date = value ? new Date(value) : null;
-  return date && Number.isFinite(date.getTime()) ? date.toLocaleString() : "Unavailable";
+  return date && Number.isFinite(date.getTime()) ? <time dateTime={date.toISOString()} title={date.toISOString()}>{formatOpsTimestamp(date)}</time> : "\u2014";
 };
 const fieldValue = (row?: Field) => {
   if (!row || typeof row.value !== "number" || !Number.isFinite(row.value)) return "—";
