@@ -95,3 +95,6 @@
 
 /* Recovery has no session-status sibling to balance its mobile auto margin. */
 .auth-screen--recovery .auth-card{margin-block:auto}
+
+/* Unauthorized also renders a standalone card. */
+.auth-screen--unauthorized .auth-card{margin-block:auto}

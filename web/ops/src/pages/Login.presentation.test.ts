@@ -29,3 +29,11 @@ describe("RIP-14 recovery card centering", () => {
     expect(page("UpdatePassword")).toContain('phase === "done"')
   })
 })
+
+describe("RIP-15 unauthorized card centering", () => {
+  it("balances the standalone account card and retains sign out", () => {
+    expect(page("Unauthorized")).toContain('className="auth-screen auth-screen--unauthorized"')
+    expect(rule(".auth-screen--unauthorized .auth-card")).toContain("margin-block:auto")
+    expect(page("Unauthorized")).toContain('onClick={() => void signOut()}')
+  })
+})

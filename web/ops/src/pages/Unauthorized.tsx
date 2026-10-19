@@ -8,7 +8,7 @@ export default function Unauthorized() {
   const { signOut } = useAuth()
 
   return (
-    <div className="auth-screen">
+    <div className="auth-screen auth-screen--unauthorized">
       <div className="auth-card">
         <img src={shield} alt="Code Black WX" className="auth-card__shield" />
         <p className="auth-card__kicker">CODE BLACK OPS</p>
