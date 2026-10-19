@@ -1,5 +1,5 @@
 import { formatOpsTimestamp } from "../core/timeFormat"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSharedOpsStatus, statusAge } from "../core/useSharedOpsStatus"
 import "./ProducerWorkspace.css"
 import { StatusBadge } from "../components/StatusBadge"
@@ -11,7 +11,7 @@ import { useCoreOps } from "../core/useCoreOps"
 import { currentAccessToken, fetchForecast } from "../core/client"
 import { fetchStatusCenter, type StatusCenterDocument } from "../status/statusCenterClient"
 import { chooseProducerSource, parseProducerSources } from "../workspaces/producerSources"
-import { ProducerSituationMap } from "../workspaces/ProducerSituationMap"
+import { DeferredPanel } from "../components/DeferredPanel"
 import FacebookProducerPanel from "../workspaces/FacebookProducerPanel"
 import ProducerControls from "../workspaces/ProducerControls"
 import PreparePcControls from "../workspaces/PreparePcControls"
@@ -22,6 +22,8 @@ import { createProducerPoll } from "../workspaces/producerPolling"
 import { readProducerResponse } from "../workspaces/producerResponse"
 import { noteProducerResponse, producerReadAllowed, producerRetryMessage } from "../workspaces/producerRateLimit"
 import "./Workspaces.css"
+
+const ProducerSituationMap = lazy(() => import("../workspaces/ProducerSituationMap").then(module => ({ default: module.ProducerSituationMap })))
 
 const SELECTION_KEY = "codeblack.ops.producer.source.v1"
 type OfficialAlert = { id?: string; event?: string; headline?: string; severity?: string; expires?: string }
@@ -266,7 +268,7 @@ export default function ProducerWorkspace() {
         </section>
         <ProducerControls monitorRunning={monitorRunning} />
         <PreparePcControls />
-        <section className="workspace-panel producer-map-link"><header><h2>Situation map</h2><Link to="/">Operations map →</Link></header><ProducerSituationMap selectedPoint={selectedPoint} units={units} onPointSelect={selectPoint} /><p>{selectedPoint ? `Selected point ${selectedPoint.lat.toFixed(3)}, ${selectedPoint.lon.toFixed(3)} · official alerts in the rail.` : "Select a point to check official alerts."} Radar and road cameras remain in Operations Map.</p><Link to="/radar">Open single-site radar →</Link></section>
+        <section className="workspace-panel producer-map-link"><header><h2>Situation map</h2><Link to="/">Operations map →</Link></header><DeferredPanel title="Situation map" minHeight={260}><ProducerSituationMap selectedPoint={selectedPoint} units={units} onPointSelect={selectPoint} /></DeferredPanel><p>{selectedPoint ? `Selected point ${selectedPoint.lat.toFixed(3)}, ${selectedPoint.lon.toFixed(3)} · official alerts in the rail.` : "Select a point to check official alerts."} Radar and road cameras remain in Operations Map.</p><Link to="/radar">Open single-site radar →</Link></section>
       </div>
       <aside className="producer-rail">
         <section className="workspace-panel"><header><h2>Team</h2><Link to="/team">Team →</Link></header>{fabric.state === "STALE" && <p role="status">Stale Fabric snapshot · {statusAge(fabric.unitsReceivedAt ?? fabric.lastContactAt ?? fabric.checkedAt, now)}</p>}<div className="workspace-list">{units.length === 0 ? <p>No Fabric units reported.</p> : units.map((unit) => <div key={unit.unit_id}><strong>{unit.operator_name || unit.display_name}</strong><span>{statusWord(unit.overall_health)} · {age(unit.last_seen, now)}</span></div>)}</div></section>
