@@ -3,7 +3,7 @@ import { formatOpsTimestamp } from "../core/timeFormat"
 import { PageHeader } from "../components/PageHeader"
 import { useCoreOps } from "../core/useCoreOps"
 import { DeferredPanel } from "../components/DeferredPanel"
-import { AsyncViewState } from "../components/AsyncViewState"
+import { WorkspaceSkeleton } from "../components/WorkspaceSkeleton"
 import { ChaseIntelRail, ChaseOfficialBanner, useChaseIntel } from "../workspaces/ChaseIntelRail"
 
 import "./Workspaces.css"
@@ -46,7 +46,7 @@ export default function ChaseWorkspace() {
     </nav>
     <div className="chase-unit-strip" aria-label="Active location reference"><div><span>LOCATION REFERENCE</span><strong>{referenceLabel}</strong><small>{radarFocus ? `${radarFocus.lat.toFixed(3)}, ${radarFocus.lon.toFixed(3)} · ${vehiclePosition ? "reported unit position" : "map reference; unit position unavailable"}` : "No unit position or selected point."}</small></div><div><span>GPS / SOURCE</span><strong>{locationDetail}</strong></div><div><span>FABRIC</span><strong>{active?.overall_health ?? state.fabric.state}</strong></div><div><span>{locationMode === "chaser" ? "CHASER FIX" : "REFERENCE UPDATED"}</span><strong>{locationMode === "chaser" ? (lastFix ? formatOpsTimestamp(lastFix) : "Awaiting GPS") : deviceLocation.status === "ready" ? formatOpsTimestamp(deviceLocation.at) : "Unavailable"}</strong></div></div>
 
-    <div className="chase-workspace__split"><div className="chase-map-frame"><DeferredPanel title="Chase situation" minHeight={510}><OpsWorkstation focus="CHASE SITUATION" embedded routeOverlay={destination ? route.path : undefined} onChaseDestinationSelect={choosingDestination ? (point) => { setDestination(point); setChoosingDestination(false) } : undefined} /></DeferredPanel></div><Suspense fallback={<div className="chase-radar"><AsyncViewState state="loading" title="Radar context" /></div>}><ChaseRadarPanel focus={radarFocus} /></Suspense><ChaseIntelRail intel={intel} point={radarFocus} vehiclePosition={vehiclePosition} route={route} routeOrigin={origin} routeDestination={destination} /></div>
+    <div className="chase-workspace__split"><div className="chase-map-frame"><DeferredPanel title="Chase situation" minHeight={510}><OpsWorkstation focus="CHASE SITUATION" embedded routeOverlay={destination ? route.path : undefined} onChaseDestinationSelect={choosingDestination ? (point) => { setDestination(point); setChoosingDestination(false) } : undefined} /></DeferredPanel></div><Suspense fallback={<div className="chase-radar"><WorkspaceSkeleton title="Opening radar context" /></div>}><ChaseRadarPanel focus={radarFocus} /></Suspense><ChaseIntelRail intel={intel} point={radarFocus} vehiclePosition={vehiclePosition} route={route} routeOrigin={origin} routeDestination={destination} /></div>
     <p className="workspace-note chase-workspace__note">Official point alerts are authoritative for the reference point. Nearby polygon distance is approximate; road feeds may be incomplete. Aegis candidates are internal and unconfirmed.</p>
   </section>
 }

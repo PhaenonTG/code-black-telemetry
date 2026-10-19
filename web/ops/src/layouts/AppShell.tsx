@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { Link, useLocation } from "react-router-dom"
 import { useViewport } from "../hooks/useViewport"
 import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings"
+import { prefetchLinkedWorkspace } from "../app/workspaceChunks"
 import { Sidebar } from "./Sidebar"
 import { BottomNav } from "./BottomNav"
 import { StatusBar } from "./StatusBar"
@@ -61,7 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (viewport === "phone") {
     return (
-      <div className="shell shell--phone" data-theme={theme}>
+      <div className="shell shell--phone" data-theme={theme} onMouseOver={prefetchLinkedWorkspace} onFocus={prefetchLinkedWorkspace} onTouchStart={prefetchLinkedWorkspace}>
         <a className="ops-skip-link" href="#ops-main">Skip to content</a>
         <div className="shell__location"><LocationControl /><Link className="phone-health-dot" to="/status/health" aria-label={`Core: ${statusPresentation(core.state).word}. Open Status`}><i style={{ background: statusPresentation(core.state).color }} /></Link></div>
         <main id="ops-main" tabIndex={-1} ref={contentRef} className="shell__content">{children}</main>
@@ -80,7 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     })
   }
   return (
-    <div className={rail ? "shell shell--tablet" : "shell shell--desktop"} data-theme={theme}>
+    <div className={rail ? "shell shell--tablet" : "shell shell--desktop"} data-theme={theme} onMouseOver={prefetchLinkedWorkspace} onFocus={prefetchLinkedWorkspace} onTouchStart={prefetchLinkedWorkspace}>
       <a className="ops-skip-link" href="#ops-main">Skip to content</a>
       <Sidebar rail={rail} collapsible={collapsible} onToggleCollapse={collapsible ? toggleCollapsed : undefined} />
       <div className="shell__main">

@@ -1,4 +1,6 @@
 import { Suspense, lazy } from "react"
+import { RouteLoading } from "../components/WorkspaceSkeleton"
+import { loadChaseWorkspace, loadAnalysisWorkspace } from "./workspaceChunks"
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom"
 import { AuthProvider } from "../auth/AuthProvider"
 import { AuthGate } from "../components/AuthGate"
@@ -33,8 +35,8 @@ const HurricaneWatch = lazy(() => import("../pages/HurricaneWatch"))
 const AegisAlerts = lazy(() => import("../pages/AegisAlerts"))
 const AutomationLab = lazy(() => import("../pages/AutomationLab"))
 const ProducerWorkspace = lazy(() => import("../pages/ProducerWorkspace"))
-const ChaseWorkspace = lazy(() => import("../pages/ChaseWorkspace"))
-const AnalysisWorkspace = lazy(() => import("../pages/AnalysisWorkspace"))
+const ChaseWorkspace = lazy(loadChaseWorkspace)
+const AnalysisWorkspace = lazy(loadAnalysisWorkspace)
 const NotFound = lazy(() => import("../pages/NotFound"))
 
 // /update-password is reachable regardless of auth state -- it's the landing page for a
@@ -53,7 +55,7 @@ export default function App() {
               <AuthGate>
                 <CoreOpsProvider>
                   <AppShell>
-                    <RouteLoadBoundary><Suspense fallback={<div className="page-empty">Loading…</div>}>
+                    <RouteLoadBoundary><Suspense fallback={<RouteLoading />}>
                       <Routes>
                         {Object.entries(ROUTE_ALIASES).map(([alias, canonical]) => <Route key={alias} path={alias} element={alias === "/analysis" ? <LegacyAnalysisRedirect /> : <AliasRedirect to={canonical} />} />)}
                         <Route path="/" element={<MobileHome />} />

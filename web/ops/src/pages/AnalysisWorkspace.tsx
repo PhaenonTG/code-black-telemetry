@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react"
 import { Icon } from "../components/Icon"
 import { PageHeader } from "../components/PageHeader"
-import { AsyncViewState } from "../components/AsyncViewState"
+import { WorkspaceSkeleton } from "../components/WorkspaceSkeleton"
 import { Link, useLocation } from "react-router-dom"
 import { SETUP_TABS, type SetupTab } from "../workspaces/chaseDay/setupReview/SetupReviewModel"
 import { useViewport } from "../hooks/useViewport"
@@ -33,7 +33,7 @@ export default function AnalysisWorkspace() {
     <PageHeader className="workspace-heading" routePath="/setup-review" title="Setup Review" description="Forecast setups from outlook to briefing" actions={related && <details className="analysis-related" open={viewport !== "phone"}><summary aria-label="Related tools"><Icon name="more" /><span className="analysis-related-label">Related tools</span></summary><nav aria-label="Related tools">{related}</nav></details>} />
     <nav ref={tabs} className="analysis-mode" aria-label="Setup Review tabs">{SETUP_TABS.map(tab => <Link key={tab} to={`/setup-review/${tab}`} aria-current={mode === tab ? "page" : undefined}>{names[tab]}</Link>)}</nav>
     {visited.map(tab => <div key={tab} className="analysis-tab-panel" data-tab={tab} hidden={mode !== tab}>
-      <Suspense fallback={<AsyncViewState compact state="loading" title={`Opening ${names[tab]}`} />}>
+      <Suspense fallback={<WorkspaceSkeleton title={`Opening ${names[tab]}`} />}>
         {tab === "today" ? <ChaseDayBriefingCard /> : tab === "outlook" ? <HorizonCatalog /> : tab === "potential" ? <TornadoPotential />
           : tab === "drafts" || tab === "briefings" ? <ChaseSetups queue={tab} active={mode === tab} detailBasePath={`/setup-review/${tab}`} /> : <ChaseSurveillance />}
       </Suspense>
