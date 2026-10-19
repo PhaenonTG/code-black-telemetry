@@ -1,3 +1,8 @@
+import { EmptyState } from "../components/AsyncViewState"
+import { statusWord } from "../core/statusWords"
+import { fetchStatusCenter } from "../status/statusCenterClient"
+import { parseStreamHealth } from "../status/streamSources"
+import { formatOpsTimestamp } from "../core/timeFormat"
 import { useEffect, useState } from "react"
 import { buildSystemStatus, probeSystemHealth, retainHealth, plainHealthDetail, systemTelemetry, type ObservableHealth } from "../status/systemStatus"
 import {
@@ -35,6 +40,7 @@ function initialHealth(): ExternalHealthSnapshot {
 // hard-coded READY state.
 export default function Operations() {
   const [health, setHealth] = useState<ExternalHealthSnapshot>(initialHealth)
+  const [broadcast, setBroadcast] = useState("CHECKING")
   const [refreshNonce, setRefreshNonce] = useState(0)
   const { config, state: coreState } = useCoreOps()
   const [providerDiagnostics, setProviderDiagnostics] = useState<MapProviderDiagnostic[]>(() => readMapProviderDiagnostics())
@@ -46,6 +52,9 @@ export default function Operations() {
       // Map runtime health is local/observable and can update as soon as the user visits Map.
       setHealth((current) => ({ ...current, map: readMapHealth() }))
 
+      void fetchStatusCenter(config).then(document => {
+        if (!cancelled) setBroadcast(parseStreamHealth(document.streaming).broadcast.state ?? "UNAVAILABLE")
+      }).catch(() => { if (!cancelled) setBroadcast("UNAVAILABLE") })
       const next = await probeSystemHealth(config)
       if (!cancelled) setHealth((previous) => ({ ...next,
         forecast: retainHealth(previous.forecast, next.forecast, next.checkedAt),
@@ -95,35 +104,40 @@ export default function Operations() {
 
   return (
     <div className="page page-operations">
-      <PageHeader title="SYSTEM HEALTH" kicker="HEALTH · PROVIDERS · CONFIGURATION" description={`Independent checks for Core, Fabric, radar, weather, alerts, and map providers${health.checkedAt ? ` · last checked ${new Date(health.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}.`} actions={<><Link className="page-action-link" to="/status-center">STATUS CENTER</Link><button type="button" className="page-action-link" onClick={() => { setRefreshNonce((value) => value + 1) }}>REFRESH CHECKS</button></>} />
-      <nav className="section-tabs" aria-label="System sections"><span className="active">HEALTH</span><Link to="/settings">SETTINGS</Link></nav>
+      <PageHeader routePath="/status" title="" description={`Independent checks for Core, Fabric, radar, weather, alerts, and map providers${health.checkedAt ? ` · last checked ${formatOpsTimestamp(health.checkedAt)}` : ""}.`} actions={<><Link className="page-action-link" to="/settings">Settings</Link><button type="button" className="page-action-link" title="Reload system health checks" onClick={() => { setRefreshNonce((value) => value + 1) }}>Refresh</button></>} />
+      <div className="ops-health-summary" aria-label="System summary">
+        <section><h2>Core</h2><StatusBadge state={coreState.core.state} /></section>
+        <section><h2>Fabric</h2><StatusBadge state={coreState.fabric.state} /></section>
+        <section><h2>Storm Intel</h2><StatusBadge state={coreState.stormIntel.state} /></section>
+        <section><h2>Fleet</h2><strong>{coreState.fabric.units?.units.length ?? "—"}</strong>{!coreState.fabric.units && <StatusBadge state="UNAVAILABLE" />}</section>
+      </div>
       <div className="ops-system-grid">
         <section>
-          <span>FABRIC FEED</span>
-          <b>{coreState.fabric.streamState.toUpperCase()}</b>
+          <span>Fabric feed</span>
+          <StatusBadge state={coreState.fabric.streamState} />
           <p>{plainHealthDetail(coreState.fabric.detail)}</p>
         </section>
         <section>
-          <span>STORM INTEL</span>
-          <b>{coreState.stormIntel.state}</b>
+          <span>Storm Intel</span>
+          <StatusBadge state={coreState.stormIntel.state} />
           <p>{plainHealthDetail(coreState.stormIntel.detail)}</p>
         </section>
       </div>
       <div className="status-table">
-        {rows.map((row) => (
+        {[...rows].sort((a, b) => Number(statusWord(a.state) === "Live" || a.state === "DEVELOPMENT") - Number(statusWord(b.state) === "Live" || b.state === "DEVELOPMENT")).map((row) => (
           <div key={row.key} className="status-row">
-            <span className="status-row__label">{row.label}</span>
-            {row.state === "DEVELOPMENT" ? <OpsStatusPill state={row.state} label={row.state} /> : <StatusBadge state={row.state} />}
-            <span className="status-row__detail">{row.detail}</span>
+            <span className="status-row__label">{row.key === "streaming" ? "Broadcast" : row.label}</span>
+            {row.state === "DEVELOPMENT" ? <OpsStatusPill state={row.state} label={row.state} /> : <StatusBadge state={row.key === "streaming" ? broadcast : row.state} />}
+            <span className="status-row__detail">{row.detail.replace("Program Status", "Producer › Sources")}{row.key === "streaming" && <> · <Link to="/producer/sources">Open Producer › Sources →</Link></>}{(row.state === "NOT_CONFIGURED" || /not configured|configuration required|missing config/i.test(row.detail)) && <> · <Link to="/settings">Configure →</Link></>}</span>
           </div>
         ))}
       </div>
       <section className="provider-diagnostics">
-        <h2>MAP PROVIDERS</h2>
-        {providerDiagnostics.length === 0 ? <p>Open the map with Roads or Cameras enabled to collect provider diagnostics.</p> : [...providerDiagnostics].sort((a, b) => a.name.localeCompare(b.name)).map((provider) => <div className="status-row" key={`${provider.layer}:${provider.id}`}>
+        <h2>Map providers</h2>
+        {providerDiagnostics.length === 0 ? <EmptyState title="No map provider diagnostics" message="Open the map with Roads or Cameras enabled to collect provider diagnostics." /> : [...providerDiagnostics].sort((a, b) => a.name.localeCompare(b.name)).map((provider) => <div className="status-row" key={`${provider.layer}:${provider.id}`}>
           <span className="status-row__label">{provider.name} · {provider.layer.toUpperCase()}</span>
           <StatusBadge state={provider.state === "error" ? "UNAVAILABLE" : provider.state === "cached" ? "DEGRADED" : "LIVE"} />
-          <span className="status-row__detail">{provider.count} records · {provider.latencyMs ? `${provider.latencyMs} ms` : plainHealthDetail(provider.detail)}</span>
+          <span className="status-row__detail">{provider.count} records · {provider.latencyMs != null ? `${provider.latencyMs} ms` : plainHealthDetail(provider.detail)}</span>
         </div>)}
       </section>
     </div>

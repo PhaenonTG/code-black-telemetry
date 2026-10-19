@@ -8,9 +8,10 @@ vi.mock("../core/useCoreOps", () => ({ useCoreOps: () => ({ config: {} }) }))
 vi.mock("../status/statusCenterClient", () => ({ fetchStatusCenter: vi.fn() }))
 
 describe("internal navigation indicators", () => {
-  it("keeps the Stream team tab in the current application", () => {
+  it("keeps the Sources Control tab in the current application", () => {
     const html = renderToString(<MemoryRouter><Stream /></MemoryRouter>)
-    expect(html).toContain('aria-label="Team and devices" href="/chase"')
+    expect(html).toContain('href="/producer"')
+    expect(html).toContain('aria-label="Producer tabs"')
     expect(html).not.toContain('target="_blank"')
     expect(html).not.toContain("\u2197")
   })

@@ -1,6 +1,10 @@
+import { formatOpsTimestamp } from "../core/timeFormat"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSharedOpsStatus, statusAge } from "../core/useSharedOpsStatus"
 import "./ProducerWorkspace.css"
+import { StatusBadge } from "../components/StatusBadge"
+import { EmptyState, ErrorState } from "../components/AsyncViewState"
+import { statusWord } from "../core/statusWords"
 import { PageHeader } from "../components/PageHeader"
 import { Link } from "react-router-dom"
 import { useCoreOps } from "../core/useCoreOps"
@@ -52,6 +56,7 @@ function age(timestamp: number | string | null | undefined, now: number): string
   const time = typeof timestamp === "number" ? (timestamp < 100_000_000_000 ? timestamp * 1000 : timestamp) : Date.parse(timestamp)
   if (!Number.isFinite(time)) return "Time unavailable"
   const minutes = Math.max(0, Math.round((now - time) / 60_000))
+  if (minutes >= 60) return formatOpsTimestamp(time, now)
   return minutes < 1 ? "Just now" : `${minutes} min ago`
 }
 
@@ -236,35 +241,38 @@ export default function ProducerWorkspace() {
   }
 
   return <section className="workspace-page producer-workspace">
-    <PageHeader className="workspace-heading" kicker="STREAM · PROGRAM CONTROL" title="Producer" description="Live stream control desk" actions={<button type="button" onClick={() => void refreshStatus()}>Refresh sources</button>} />
+    <PageHeader routePath="/producer" className="workspace-heading" title="" description="Live stream control desk" actions={<button type="button" title="Reload source telemetry" onClick={() => void refreshStatus()}>Refresh</button>} />
+    <nav className="section-tabs" aria-label="Producer tabs"><Link className="active" aria-current="page" to="/producer">Control</Link><Link to="/producer/sources">Sources</Link></nav>
+    {statusError && <ErrorState compact message="Source telemetry could not be refreshed." details={statusError} onRetry={() => { void refreshStatus() }} />}
+    {producerError && <ErrorState compact message="The private monitor is unavailable." details={producerError} />}
     <div className="producer-layout">
       <div className="producer-main">
         <section className="workspace-panel producer-stage" aria-label="PROGRAM preview">
-          <header><h2>PROGRAM</h2><span className={programCurrent || producerBridgeState === "ONLINE" ? "workspace-live" : "workspace-muted"}>{programStateLabel}</span></header>
-          <ProgramMonitor onRunningChange={setMonitorRunning} key={producerStatus?.composition?.id ?? "legacy"} active={producerBridgeState === "ONLINE" && Boolean(producerStatus?.composition?.id)} canStart={sourceFresh(producerStatus)} compositionId={producerStatus?.composition?.id} fallback={heldFrame ? <><img src={programFrameUrl} alt={programCurrent ? "Current PROGRAM preview" : "Last verified PROGRAM frame"} />{!programCurrent && <span className="producer-stage__held-label">LAST VERIFIED FRAME · awaiting fresh PROGRAM proof</span>}</> : <div className="producer-stage__standby"><strong>{producerBridgeState === "ONLINE" ? programFrameState : `Bridge ${producerBridgeState.toLowerCase()}`}</strong><p>{producerError || (producerBridgeState !== "ONLINE" ? `Last seen ${age(producerStatus?.observedAt, now)}` : producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
-          <div className="producer-stage__foot"><div><strong>{producerBridgeState === "ONLINE" ? producerStatus?.state ?? "NO BROADCASTER STATUS" : producerBridgeState}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>{producerBridgeState === "ONLINE" ? producerStatus?.broadcast?.state ?? "OUTPUT UNKNOWN" : "OUTPUT UNVERIFIED"}</span></div>
+          <header><h2>PROGRAM</h2><span title={programStateLabel}><StatusBadge state={programCurrent ? "LIVE" : producerBridgeState === "ONLINE" ? "CHECKING" : producerBridgeState} /></span></header>
+          <ProgramMonitor onRunningChange={setMonitorRunning} key={producerStatus?.composition?.id ?? "legacy"} active={producerBridgeState === "ONLINE" && Boolean(producerStatus?.composition?.id)} canStart={sourceFresh(producerStatus)} compositionId={producerStatus?.composition?.id} fallback={heldFrame ? <><img src={programFrameUrl} alt={programCurrent ? "Current PROGRAM preview" : "Last verified PROGRAM frame"} />{!programCurrent && <span className="producer-stage__held-label">Last verified frame · awaiting fresh PROGRAM proof</span>}</> : <div className="producer-stage__standby"><strong>{producerBridgeState === "ONLINE" ? programFrameState : `Bridge ${producerBridgeState.toLowerCase()}`}</strong><p>{(producerError ? "Private monitor unavailable. See Details above." : "") || (producerBridgeState !== "ONLINE" ? `Last seen ${age(producerStatus?.observedAt, now)}` : producerStatus?.source_state ? `Source: ${producerStatus.source_state} · Preview: ${producerStatus.previews?.program?.state ?? "UNKNOWN"}` : "The authenticated broadcaster bridge has not supplied a current frame.")}</p></div>} />
+          <div className="producer-stage__foot"><div><strong>{statusWord(producerBridgeState === "ONLINE" ? producerStatus?.state ?? "CHECKING" : producerBridgeState)}</strong><span>{programCurrent && programFrameAt ? `Frame ${age(programFrameAt, now)}` : `Bridge ${producerBridgeState}`}</span></div><span>Output: {statusWord(producerBridgeState === "ONLINE" ? producerStatus?.broadcast?.state ?? "CHECKING" : "UNAVAILABLE")}</span></div>
         </section>
-        <PreparePcControls />
-        <ProducerControls monitorRunning={monitorRunning} />
         <section className="workspace-panel producer-stage" aria-label="Selected live stream camera">
-          <header><h2>Live camera</h2><span className={playing ? "workspace-live" : "workspace-muted"}>{playing ? "PUBLISHING" : statusError ? "STATUS UNAVAILABLE" : "NO LIVE PUBLISHER"}</span></header>
+          <header><h2>Live camera</h2><StatusBadge state={playing ? "LIVE" : statusError ? "UNAVAILABLE" : selected?.publisherOnline === false ? "OFFLINE" : "CHECKING"} /></header>
           <div className="producer-stage__viewport">
             {playing ? <iframe key={selected.id} title={`${selected.name} live stream`} src={selected.playerUrl!} allow="autoplay; fullscreen" allowFullScreen referrerPolicy="no-referrer" /> :
-              <div className="producer-stage__standby"><strong>{selected ? `${selected.name} is not publishing` : "No field stream sources reported"}</strong><p>{statusError || selected?.reason || "Waiting for source telemetry from Core."}</p></div>}
+              <div className="producer-stage__standby"><strong>{selected ? `${selected.name} is not publishing` : "No field stream sources reported"}</strong><p>{(statusError ? "Source telemetry unavailable. See Details above." : "") || selected?.reason || "Waiting for source telemetry from Core."}</p></div>}
           </div>
-          <div className="producer-stage__foot"><div><strong>{selected?.name ?? "NO SOURCE"}</strong><span>{statusFresh ? `Core source check ${age(statusCheckedAt, now)}` : "Source status stale or unavailable"}</span></div>{selected?.playerUrl && <a href={selected.playerUrl} target="_blank" rel="noreferrer">Open private player ↗</a>}</div>
+          <div className="producer-stage__foot"><div><strong>{selected?.name ?? "No source"}</strong><span>{statusFresh ? `Core source check ${age(statusCheckedAt, now)}` : "Source status stale or unavailable"}</span></div>{selected?.playerUrl && <a href={selected.playerUrl} target="_blank" rel="noreferrer">Open private player ↗</a>}</div>
         </section>
         <section className="workspace-panel producer-sources" aria-label="Live stream camera sources"><header><h2>Camera sources</h2><span>{sources.filter((source) => source.publisherOnline).length} publishing</span></header>
-          <div className="producer-sources__rail">{sources.map((source) => <button type="button" key={source.id} className={selected?.id === source.id ? "is-selected" : ""} aria-pressed={selected?.id === source.id} onClick={() => selectSource(source.id)}><span className={statusFresh && source.publisherOnline ? "workspace-dot workspace-dot--live" : "workspace-dot"} /><strong>{source.name}</strong><small>{!statusFresh ? "STATUS STALE" : source.publisherOnline ? "PUBLISHING" : source.state}</small></button>)}{sources.length === 0 && <p>Source inventory unavailable. The Producer desk does not substitute road cameras for field streams.</p>}</div>
+          <div className="producer-sources__rail">{sources.map((source) => <button type="button" key={source.id} className={selected?.id === source.id ? "is-selected" : ""} aria-pressed={selected?.id === source.id} onClick={() => selectSource(source.id)}><span className={statusFresh && source.publisherOnline ? "workspace-dot workspace-dot--live" : "workspace-dot"} /><strong>{source.name}</strong><small>{statusWord(!statusFresh ? "STALE" : source.publisherOnline ? "LIVE" : source.state)}</small></button>)}{sources.length === 0 && <EmptyState compact title="Source inventory unavailable" message="The Producer desk does not substitute road cameras for field streams." />}</div>
           <p className="workspace-note">These are the STRIKER and TESSA live-stream feeds. Road cameras remain on the operations map as supporting context. Playback currently requires access to Core’s private Tailscale player; being signed into OPS alone does not grant media access.</p>
         </section>
+        <ProducerControls monitorRunning={monitorRunning} />
+        <PreparePcControls />
         <section className="workspace-panel producer-map-link"><header><h2>Situation map</h2><Link to="/">Operations map →</Link></header><ProducerSituationMap selectedPoint={selectedPoint} units={units} onPointSelect={selectPoint} /><p>{selectedPoint ? `Selected point ${selectedPoint.lat.toFixed(3)}, ${selectedPoint.lon.toFixed(3)} · official alerts in the rail.` : "Select a point to check official alerts."} Radar and road cameras remain in Operations Map.</p><Link to="/radar">Open single-site radar →</Link></section>
       </div>
       <aside className="producer-rail">
-        <section className="workspace-panel"><header><h2>Team</h2><Link to="/chase">Team & devices →</Link></header>{fabric.state === "STALE" && <p role="status">STALE Fabric snapshot · {statusAge(fabric.unitsReceivedAt ?? fabric.lastContactAt ?? fabric.checkedAt, now)}</p>}<div className="workspace-list">{units.length === 0 ? <p>No Fabric units reported.</p> : units.map((unit) => <div key={unit.unit_id}><strong>{unit.operator_name || unit.display_name}</strong><span>{unit.overall_health} · {age(unit.last_seen, now)}</span></div>)}</div></section>
+        <section className="workspace-panel"><header><h2>Team</h2><Link to="/team">Team →</Link></header>{fabric.state === "STALE" && <p role="status">Stale Fabric snapshot · {statusAge(fabric.unitsReceivedAt ?? fabric.lastContactAt ?? fabric.checkedAt, now)}</p>}<div className="workspace-list">{units.length === 0 ? <p>No Fabric units reported.</p> : units.map((unit) => <div key={unit.unit_id}><strong>{unit.operator_name || unit.display_name}</strong><span>{statusWord(unit.overall_health)} · {age(unit.last_seen, now)}</span></div>)}</div></section>
         <section className="workspace-panel"><header><h2>Official alerts</h2><Link to="/weather">Weather analysis →</Link></header>{alertError && <p className="workspace-warning">{alertError}</p>}{!selectedPoint ? <p>Select a map point to check official alerts for that area.</p> : alerts?.alerts.length ? <div className="workspace-list">{alerts.alerts.slice(0, 4).map((alert, index) => <div key={alert.id ?? index}><strong>{alert.event || alert.headline || "Official alert"}</strong><span>{alert.severity || "NWS"}{alert.expires ? ` · ${expiry(alert.expires, now)}` : ""}</span></div>)}</div> : <p>{alerts ? "No active alerts returned for the selected point." : "Checking NWS alerts…"}</p>}</section>
         <section className="workspace-panel"><header><h2>Aegis · internal</h2><Link to="/aegis-alerts">Aegis alerts →</Link></header><p>Radar findings are advisory and separate from official warnings. Team-wide delivery remains behind the review policy.</p></section>
-        <section className="workspace-panel"><header><h2>Broadcast health</h2><Link to="/stream">Program status →</Link></header><p>{statusError || (status?.streaming as { summary?: string } | undefined)?.summary || "Checking stream infrastructure…"}</p></section>
+        <p className="workspace-panel producer-broadcast-summary">Broadcast: {(statusError ? "Unavailable" : "") || (status?.streaming as { summary?: string } | undefined)?.summary || "Waiting for stream telemetry"} · <Link to="/producer/sources">Open Producer › Sources →</Link></p>
         <FacebookProducerPanel />
       </aside>
     </div>

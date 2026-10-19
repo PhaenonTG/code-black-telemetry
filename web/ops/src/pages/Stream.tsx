@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
+import { StatusBadge } from "../components/StatusBadge"
+import { EmptyState, ErrorState } from "../components/AsyncViewState"
+import { formatOpsTimestamp } from "../core/timeFormat"
+import { statusWord } from "../core/statusWords"
 import { PageHeader } from "../components/PageHeader"
 import { useCoreOps } from "../core/useCoreOps"
 import { fetchStatusCenter } from "../status/statusCenterClient"
 
-import { parseStreamHealth, type StreamHealth } from "../status/streamSources"
+import { parseStreamHealth, type StreamHealth, type KnownStreamUnit } from "../status/streamSources"
 
 // Was a click-to-load Twitch embed (`player.twitch.tv/?channel=codeblackwx`) -- OBS's primary
 // stream output moved to Facebook Live only a while back (Twitch removed entirely from the OBS
@@ -36,35 +40,32 @@ export default function Stream() {
     return () => { window.clearTimeout(initial); window.clearInterval(timer) }
   }, [refresh])
 
-  const displayedHealth = health?.hasSourceReports ? health : parseStreamHealth(null, state?.fabric.units?.units ?? [])
+  return <SourcesContent health={health} error={error} units={state?.fabric?.units?.units ?? []} onRefresh={() => { void refresh() }} />
+}
+
+export function SourcesContent({ health, error, units, onRefresh }: { health: StreamHealth | null; error: string | null; units: KnownStreamUnit[]; onRefresh: () => void }) {
+  const displayedHealth = health?.hasSourceReports ? health : parseStreamHealth(null, units)
 
   return (
     <div className="page page-stream">
-      <PageHeader title="PROGRAM STATUS" kicker="FIELD · STREAM INFRASTRUCTURE" description="Review field ingest status here. Use Producer for the authenticated private PROGRAM monitor and output controls." actions={<Link className="page-action-link" to="/producer">OPEN PRODUCER</Link>} />
-      <nav className="section-tabs" aria-label="Field operations sections">
-        <Link to="/chase" aria-label="Team and devices">TEAM & DEVICES</Link><span className="active" aria-current="page">PROGRAM STATUS</span>
-      </nav>
-      <section className="stream-stage">
-        <div className="stream-stage__label"><i /> PROGRAM FEED · MONITORED IN PRODUCER</div>
-        <div className="stream-stage__standby">
-          <strong>PRIVATE MONITOR LIVES IN PRODUCER</strong>
-          <p>This status page intentionally does not expose the authenticated PROGRAM feed. Open Producer to monitor video, audio, and Facebook output readiness.</p>
-          <Link className="page-action-link" to="/producer">Open private PROGRAM monitor →</Link>
-        </div>
-      </section>
+      <PageHeader routePath="/producer" title="" description="Review field ingest status. Sources is read-only; the private monitor and output controls are in Control." />
+      <nav className="section-tabs" aria-label="Producer tabs"><Link to="/producer">Control</Link><Link className="active" aria-current="page" to="/producer/sources">Sources</Link></nav>
       <section className="stream-health" aria-label="Stream infrastructure status">
-        <div className="stream-health__heading"><h2>LIVE SOURCE STATUS</h2><button type="button" onClick={() => { void refresh() }}>REFRESH</button></div>
-        <p>{error ?? health?.summary ?? "Checking ingest telemetry…"} · Offline field sources are informational until a broadcast is scheduled.</p>
+        <div className="stream-health__heading"><h2>Live Source Status</h2><button type="button" title="Reload source and ingest telemetry" onClick={onRefresh}>Refresh</button></div>
+        <p>{error ? "Source telemetry unavailable" : health?.summary ?? "Waiting for ingest telemetry…"} · Offline field sources are informational until a broadcast is scheduled.</p>
+        {error && <ErrorState message="Source telemetry could not be refreshed. Last received sources remain below." details={error} onRetry={onRefresh} />}
+        {displayedHealth.sources.length === 0 && <EmptyState title="No sources reported" message="Sources appear here when ingest telemetry is available." />}
         <div className="stream-health__grid">
           {displayedHealth.sources.map((source) => <article key={source.id} className="stream-health__source">
             <span className={source.publisher_online ? "stream-health__dot stream-health__dot--live" : "stream-health__dot"} />
             <strong>{source.name}</strong>
-            <span>{source.publisher_online === undefined ? "Unknown - no report" : source.publisher_online ? "PUBLISHING" : "OFFLINE"}</span>
-            <small>{source.lastSeen ? `Last seen ${source.lastSeen}` : source.publisher_online ? `${source.readers ?? 0} viewer(s)` : source.reason ?? "No publisher connected"}</small>
+            <StatusBadge state={source.publisher_online === undefined ? "Unknown, no report" : source.publisher_online ? "LIVE" : "OFFLINE"} />
+            <small>{source.lastSeen ? `Last seen ${formatOpsTimestamp(source.lastSeen)}` : source.publisher_online ? `${source.readers ?? 0} viewer(s)` : source.reason === "Unknown - no report" ? "No report yet" : source.reason ?? "No publisher connected"}</small>
           </article>)}
         </div>
-        {health && <p>Ingest: SRT {health.ingest.srt?.state ?? "UNKNOWN"} · WebRTC {health.ingest.webrtc?.state ?? "UNKNOWN"} · Facebook availability {health.broadcast.state ?? "UNKNOWN"}</p>}
+        <p>Ingest: SRT {statusWord(health?.ingest.srt?.state)} · WebRTC {statusWord(health?.ingest.webrtc?.state)} · Facebook availability {statusWord(health?.broadcast.state)}</p>
       </section>
+      <aside className="stream-monitor-notice"><p>This page does not expose the authenticated PROGRAM feed. Use Control to monitor private video, audio, and Facebook output readiness.</p><Link to="/producer">Open private PROGRAM monitor →</Link></aside>
     </div>
   );
 }
