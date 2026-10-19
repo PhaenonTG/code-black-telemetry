@@ -52,3 +52,14 @@ describe("RIP-16 landscape auth scrolling", () => {
     expect(css.indexOf("overflow-y:auto")).toBeLessThan(css.indexOf("@media"))
   })
 })
+
+describe("RIP-17 recovery link height", () => {
+  it("gives both button and anchor recovery actions a centered 44px box at all widths", () => {
+    const link = rule(".auth-card__link")
+    for (const declaration of ["display:inline-flex", "align-items:center", "justify-content:center", "min-height:44px", "box-sizing:border-box"]) {
+      expect(link).toContain(declaration)
+    }
+    expect(page("Login")).toContain('className="auth-card__link" onClick={onBack}')
+    expect(page("UpdatePassword")).toContain('<Link to="/" className="auth-card__link">')
+  })
+})
