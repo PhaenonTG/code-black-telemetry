@@ -8,6 +8,9 @@
 .shell .page-settings--brand .segmented button.active{background:var(--cb-red);color:#000;box-shadow:0 0 12px -2px rgba(255,42,12,.8)}
 .shell .page-settings--brand .switch--on i{box-shadow:0 0 10px -1px rgba(255,42,12,.85)}
 .shell .page-settings--brand .settings-number input{border-radius:8px;border:1px solid var(--cb-line);background:var(--cb-panel-low);color:var(--cb-text);padding:6px 10px}
+@media (max-width:767px){
+  .page-settings input,.page-settings select{font-size:16px}
+}
 .shell .page-settings--brand .settings-number input:focus-visible{outline:2px solid var(--cb-red);outline-offset:2px}
 .shell .page-settings--brand .settings-save,.shell .page-settings--brand .page-action-link{border-radius:8px;border:1px solid rgba(255,42,12,.55);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0))}
 .shell .page-settings--brand .settings-save:hover:not(:disabled),.shell .page-settings--brand .page-action-link:hover{border-color:var(--cb-red);box-shadow:0 0 14px -4px rgba(255,42,12,.85)}

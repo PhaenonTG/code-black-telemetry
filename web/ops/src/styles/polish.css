@@ -13,7 +13,7 @@
 .shell .page-header { margin-bottom: 10px; align-items: center; }
 .shell .page-header h1 { font-size: clamp(24px,2.1vw,28px); line-height: 1.15; letter-spacing: -.025em; }
 .shell .page-header__description { font-size: 13px; line-height: 1.65; max-width: 760px; }
-.shell .page-header__kicker { margin-bottom: 8px; font-size: 10px; }
+.shell .page-header__kicker { margin-bottom: 8px; font-size: 12px; }
 .sidebar { padding: 18px 10px 12px; }
 .sidebar__brand { flex-shrink: 0; border-bottom: 1px solid var(--cb-line); margin-bottom: 10px; padding-bottom: 18px; }
 .sidebar__links { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0 0 8px; }
@@ -26,7 +26,7 @@
 .sidebar__link.active { background: var(--cb-panel-hi); box-shadow: inset 2px 0 var(--cb-red); }
 .sidebar__collapse-toggle { flex-shrink: 0; margin-top: 12px; min-height: 40px; border-radius: 6px; }
 .statusbar { padding: 0 24px; }
-.shell .ops-pill { clip-path: none; border-radius: 4px; font-size: 9px; padding: 5px 8px; }
+.shell .ops-pill { clip-path: none; border-radius: 4px; font-size: 12px; padding: 5px 8px; }
 .shell :is(.settings-group,.ops-system-grid section,.ops-fleet-card,.ops-dev-panel,.empty-state--centered,.status-center__panel,.status-center__telemetry) {
   clip-path: none; border-radius: var(--cb-radius); background: var(--ops-surface); box-shadow: var(--ops-shadow);
 }
@@ -39,7 +39,7 @@
 .shell .page-settings { gap: 18px; grid-template-columns: minmax(0,1fr) minmax(290px,360px); }
 .shell :is(.page-action-link,.settings-logout,.empty-state__actions a) { border-radius: 6px; min-height: 40px; padding: 0 14px; font-size: 10px; }
 .shell .segmented { padding: 3px; gap: 2px; background: var(--cb-panel-low); }
-.shell .segmented button { border-radius: 4px; min-height: 32px; padding: 6px 10px; }
+.shell .segmented button { border-radius: 4px; min-height: 32px; min-width: 44px; padding: 6px 10px; }
 .shell .segmented button.active { box-shadow: 0 2px 6px rgba(0,0,0,.18); }
 .shell .section-tabs { flex-wrap: wrap; gap: 8px; }
 .shell .section-tabs :is(a,span) { border-radius: 5px; }
