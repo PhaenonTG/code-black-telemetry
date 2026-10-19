@@ -20,10 +20,20 @@ type SetupRow = {
 };
 type SetupIndex = { status: string; checked_at?: string; last_source_check_at?: string; items: SetupRow[] };
 type SetupQueue = "drafts" | "briefings";
+export type TornadoTrackingMap = {
+  schema: string; status: string; boundary_source: string; source_url?: string;
+  issued_at?: string; valid_from: string; valid_until: string;
+  aegis_status: string; aegis_summary: string | null; numeric_point_samples: number;
+  matched_numeric_fields: number; notice: string;
+  setup_focus_numeric_lead: { lead_model: string; valid_time: string } | null;
+  features: Array<{ type: "Feature"; geometry: { type: "Polygon" | "MultiPolygon"; coordinates: number[][][] | number[][][][] };
+    properties: { official_risk_label: string; official_risk_code: number; tracking_state: string; numeric_model_context: boolean } }>;
+};
 type SetupDetail = {
   setup_id: string; publication_state: string; revision: number; generated_at: string;
   source_fingerprint?: string; workflow?: SetupWorkflow;
   weighted_synthesis?: WeightedSynthesis | null;
+  tornado_tracking_map?: TornadoTrackingMap;
   model_priority?: ModelPriority;
   ingestion?: { models?: { rrfs?: RrfsEvidence } };
   current_revision?: number; is_current_revision?: boolean; revision_history?: SetupRevisionHistory;
@@ -236,7 +246,10 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
            </>}
         </article>
         <aside className="chase-setups__activity" aria-label={isBriefings ? "Briefing activity" : "Draft activity"}>
-          {detail && <section className="setup-target-area" aria-label="Setup screening area"><h2>Target area</h2><SetupTargetMap geometry={detail.official.geometry} bounds={detail.bounds} points={points} selectedKey={selectedCandidateKey} /><p>SPC area: official outlook. Gold dots: experimental HRRR screening candidates, not precise chase targets. Select a table row to focus one.</p></section>}
+          {detail && <section className="setup-target-area" aria-label="Tornado potential tracking area"><h2>Tornado potential tracking</h2><SetupTargetMap geometry={detail.official.geometry} trackingMap={detail.tornado_tracking_map} bounds={detail.bounds} points={points} selectedKey={selectedCandidateKey} />
+            <p>Shaded boundaries: official SPC tornado outlook. Gold dots: experimental HRRR screening candidates. Code Black does not generate these boundaries or a separate probability.</p>
+            {detail.tornado_tracking_map?.status === "available" && <div className="setup-tracking-context"><strong>Code Black area review</strong><span>Aegis: {detail.tornado_tracking_map.aegis_status.replaceAll("_", " ")}</span><span>{detail.tornado_tracking_map.numeric_point_samples} numeric model point samples · {detail.tornado_tracking_map.matched_numeric_fields} matched fields</span>{detail.tornado_tracking_map.setup_focus_numeric_lead && <span>Numeric lead near setup time: {detail.tornado_tracking_map.setup_focus_numeric_lead.lead_model.toUpperCase()}</span>}{detail.tornado_tracking_map.aegis_summary && <p>{detail.tornado_tracking_map.aegis_summary}</p>}</div>}
+          </section>}
           {detail && <SetupRevisionTimeline history={detail.revision_history} selectedRevision={detail.revision}
             currentRevision={detail.current_revision ?? detail.revision} onSelect={selectRevision} />}
           <h2>Source chronology</h2>

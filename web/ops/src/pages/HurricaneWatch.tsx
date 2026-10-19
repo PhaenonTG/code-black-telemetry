@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Link } from "react-router-dom";
@@ -8,6 +8,7 @@ import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
 import { createHurricaneBriefingImage } from "./hurricaneBriefingImage";
 import { hurricaneCategory } from "../../../shared/hurricaneCategory";
+import { PageHeader } from "../components/PageHeader";
 import "./HurricaneWatch.css";
 
 type TrackPoint = { hour: number; latitude: number; longitude: number; wind_mph: number | null };
@@ -42,7 +43,8 @@ const line = (points: { latitude: number; longitude: number }[]) => ({
   type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) },
 });
 
-function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisible, printMap }: { data: HurricaneSnapshot; registerCapture: (capture: (() => string | null) | null) => void; onRadarStatus: (status: MosaicStatus) => void; onRadarVisible: (visible: boolean) => void; printMap: string | null }) {
+export function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisible, printMap }: { data: HurricaneSnapshot; registerCapture: (capture: (() => string | null) | null) => void; onRadarStatus: (status: MosaicStatus) => void; onRadarVisible: (visible: boolean) => void; printMap: string | null }) {
+  const descriptionId = useId();
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<InstanceType<typeof mapboxgl.Map> | null>(null);
   const visible = useRef(true);
@@ -54,6 +56,9 @@ function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisible, pr
   const models = useMemo(() => data.model_guidance?.models ?? [], [data.model_guidance]);
   const mapKey = JSON.stringify([data.storm?.id, data.assessment?.advisory, data.track, data.cone, data.observed_track, data.watch_point, data.model_guidance]);
   useEffect(() => { visible.current = radarOn; onRadarVisible(radarOn); }, [radarOn, onRadarVisible]);
+  // Without a map token only the schematic renders and radar never starts; report that instead of
+  // leaving the image export waiting on a radar load that cannot happen.
+  useEffect(() => { if (!token) onRadarStatus("unavailable"); }, [token, onRadarStatus]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -148,13 +153,13 @@ function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisible, pr
       {data.cone && <polygon points={data.cone.map(([lon, lat]) => `${x(lon)},${y(lat)}`).join(" ")} fill="#d5e4ee" fillOpacity=".13" stroke="#a8c7d8" />}
       {data.observed_track && <polyline fill="none" stroke="#56d5cf" strokeWidth="3" points={data.observed_track.map((point) => `${x(point.longitude)},${y(point.latitude)}`).join(" ")} />}
       <polyline fill="none" stroke="#ff6b58" strokeWidth="3" strokeDasharray="7 5" points={data.track.map((point) => `${x(point.longitude)},${y(point.latitude)}`).join(" ")} />
-      {data.track.map((point) => <g key={point.hour}><circle cx={x(point.longitude)} cy={y(point.latitude)} r="6" fill="#ff6b58" stroke="white" strokeWidth="2" /><text x={x(point.longitude) + 10} y={y(point.latitude) - 9} fill="#fff" fontSize="12">+${point.hour}h · ${point.wind_mph ?? "?"} mph</text></g>)}
+      {data.track.map((point) => <g key={point.hour}><circle cx={x(point.longitude)} cy={y(point.latitude)} r="6" fill="#ff6b58" stroke="white" strokeWidth="2" /><text x={x(point.longitude) + 10} y={y(point.latitude) - 9} fill="#fff" fontSize="12">+{point.hour}h{point.wind_mph == null ? "" : ` · ${point.wind_mph} mph`}</text></g>)}
       <circle cx={x(data.watch_point.longitude)} cy={y(data.watch_point.latitude)} r="8" fill="#35d5ce" stroke="white" strokeWidth="3" />
       <text x={Math.min(460, x(data.watch_point.longitude) + 12)} y={y(data.watch_point.latitude) + 4} fill="#aefbf7" fontSize="13">Grand Bay watch</text>
       <text x="15" y="326" fill="#90a5b4" fontSize="11">Schematic only · live radar unavailable</text>
     </svg>;
   }
-  return <div className="hurricane-watch__map-wrap"><div ref={host} className="hurricane-watch__map" role="img" aria-label="Current IEM NEXRAD radar mosaic, NHC cone, observed and forecast track, and Grand Bay watch location" />
+  return <div className="hurricane-watch__map-wrap"><div ref={host} className="hurricane-watch__map" aria-describedby={descriptionId} /><span id={descriptionId} className="a11y-caption">Current IEM NEXRAD radar mosaic, NHC cone, observed and forecast track, and Grand Bay watch location</span>
     {printMap && <img className="hurricane-watch__print-map" src={printMap} alt="Captured radar map for this briefing" />}
     <div className="hurricane-watch__radar"><span className={`hurricane-watch__radar-dot hurricane-watch__radar-dot--${radarStatus}`} /> Radar {radarOn ? radarStatus : "off"}<button type="button" aria-pressed={radarOn} onClick={() => setRadarOn((on) => !on)}>{radarOn ? "Hide" : "Show"}</button></div>
     <div className="hurricane-watch__legend"><span><i className="hurricane-watch__legend-observed" />Observed</span><span><i className="hurricane-watch__legend-forecast" />NHC forecast</span><span><i className="hurricane-watch__legend-watch" />Watch point</span></div>
@@ -324,7 +329,7 @@ export default function HurricaneWatch() {
   const sourceAgeHours = Number.isFinite(sourceTime) ? (Date.now() - sourceTime) / 3_600_000 : null
   const sourceIsOld = sourceAgeHours !== null && sourceAgeHours > 12
   return <section className="hurricane-watch">
-    <header className="hurricane-watch__header"><div><h1><span>{data?.storm?.classification === "HU" ? "Hurricane" : "Storm"}</span> <em>{data?.storm?.name ?? "Gulf"}</em></h1><p>{category === null ? "" : `${data?.status === "active" ? "NHC Category" : "Last NHC Category"} ${category} · `}Grand Bay watch · source checks about every five minutes</p></div><Link to="/weather">Weather →</Link></header>
+    <PageHeader className="hurricane-watch__header" kicker="TROPICAL WEATHER · GRAND BAY WATCH" title={data?.storm ? `${data.storm.classification === "HU" ? "Hurricane" : "Storm"} ${data.storm.name ?? "Gulf"}` : "Hurricane Watch"} description={`${category === null ? "" : `${data?.status === "active" ? "NHC Category" : "Last NHC Category"} ${category} · `}Grand Bay watch · source checks about every five minutes`} actions={<Link to="/weather">Weather →</Link>} />
     {error && <p role="alert" className="hurricane-watch__error">{error}</p>}
     {!data && !error && <p role="status">Loading the latest assessment…</p>}
     {data?.status === "pending" && <p role="status">{data.notice}</p>}
@@ -332,7 +337,7 @@ export default function HurricaneWatch() {
     {sourceIsOld && <p role="alert" className="hurricane-watch__error">The displayed advisory is {Math.floor(sourceAgeHours)} hours old. Treat this as historical context and verify the latest NHC/NWS guidance before acting.</p>}
     {data?.status === "inactive" && <p className="hurricane-watch__error">NHC no longer lists this storm as active. The last assessment remains below.</p>}
     {data?.storm && a && <>
-      <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{error ? "LAST VERIFIED WATCH" : data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button className="hurricane-watch__image-action" type="button" disabled={generatingImage || exportRadarStatus === "loading" || !radarVisible} onClick={() => void createImage()}>{generatingImage ? "Creating image…" : !radarVisible ? "Show radar for image" : exportRadarStatus === "loading" ? "Waiting for radar…" : "Create one-page image"}</button><button type="button" onClick={() => void share()}>Share text</button><button type="button" onClick={printBrief}>Print / PDF</button></div>
+      <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{error ? "LAST VERIFIED WATCH" : data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button className="hurricane-watch__image-action" type="button" disabled={generatingImage || exportRadarStatus === "loading" || exportRadarStatus === "unavailable" || !radarVisible} onClick={() => void createImage()}>{generatingImage ? "Creating image…" : !radarVisible ? "Show radar for image" : exportRadarStatus === "loading" ? "Waiting for radar…" : exportRadarStatus === "unavailable" ? "Image needs the radar map" : "Create one-page image"}</button><button type="button" onClick={() => void share()}>Share text</button><button type="button" onClick={printBrief}>Print / PDF</button></div>
       {shareStatus && <p role="status" className="hurricane-watch__share-status">{shareStatus}</p>}
       {imageStatus && <p role="status" className="hurricane-watch__share-status">{imageStatus}</p>}
       <section className="hurricane-watch__metrics" aria-label="Official storm status">
@@ -357,7 +362,7 @@ export default function HurricaneWatch() {
       <section className="hurricane-watch__panel"><h2>Intensity: observed + projected</h2><Trend data={data} /></section>
       <section className="hurricane-watch__panel"><h2>Aegis findings</h2>
         {data.ai?.status === "ready" ? <div className="hurricane-watch__ai"><p>{data.ai.summary}</p>{data.ai.supporting_factors && <p><b>Evidence:</b> {narrative(data.ai.supporting_factors)}</p>}{data.ai.limiting_factors && <p><b>Limits:</b> {narrative(data.ai.limiting_factors)}</p>}{data.ai.uncertainties && <p><b>Uncertainty:</b> {narrative(data.ai.uncertainties)}</p>}{data.ai.recommended_attention && <p><b>Watch next:</b> {narrative(data.ai.recommended_attention)}</p>}<p className="hurricane-watch__caution">Aegis interpretation is not an official forecast or an evacuation instruction. Follow NHC, NWS, and local officials.</p></div>
-          : <p className="hurricane-watch__caution">AI commentary unavailable for this cycle; the official source assessment is current.</p>}
+          : <p className="hurricane-watch__caution">AI commentary unavailable for this cycle; rely on the official NHC and NWS products above.</p>}
       </section>
       <section className="hurricane-watch__panel"><h2>Preliminary storm reports</h2><p>Mobile NWS office · last 36 hours · {data.reports_status === "ready" ? `${data.reports?.length ?? 0} products` : "Feed unavailable"}</p>
         {data.reports?.map((report) => <details key={report.url}><summary>{time(report.issued)} · {report.office}</summary><pre>{report.text}</pre><a href={report.url} target="_blank" rel="noreferrer">Official report ↗</a></details>)}

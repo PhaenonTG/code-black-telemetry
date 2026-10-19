@@ -1,5 +1,19 @@
 {
   "version": 1,
-  "include": ["/api/core/*", "/api/public/hurricane", "/api/ardot-camera-stream", "/api/camera-health", "/api/kandrive/*", "/api/modot/*", "/api/odot/*", "/api/tdot/*", "/overlay-core/*"],
+  "include": [
+    "/api/core/*",
+    "/api/public/hurricane",
+    "/api/ardot-camera-stream",
+    "/api/camera-health",
+    "/api/kandrive/*",
+    "/api/modot/*",
+    "/api/odot/*",
+    "/api/tdot/*",
+    "/overlay-core/*",
+    "/api/v1/radar/*",
+    "/api/coordination/v1/snapshot",
+    "/api/ops-radar/v1/*",
+    "/api/directory"
+  ],
   "exclude": []
 }

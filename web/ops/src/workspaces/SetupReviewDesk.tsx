@@ -22,7 +22,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
   const approvalReason = approvalDisabledReason(workflow, { current, role, note, acknowledged, fingerprint });
 
   useEffect(() => {
-    if (workflow?.status !== "pending") return;
+    if (!current && workflow?.status !== "pending") return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -34,11 +34,11 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
             if (record.current_revision !== revision) setError("A newer revision is available. Refresh before making a decision.");
           }
         }).catch(() => { if (!controller.signal.aborted) setError("Review status could not be refreshed. Use Refresh to check again."); });
-      if (!controller.signal.aborted) timer = setTimeout(() => void poll(), 5000);
+      if (!controller.signal.aborted) timer = setTimeout(() => void poll(), workflow?.status === "pending" ? 5000 : 30000);
     };
-    timer = setTimeout(() => void poll(), 5000);
+    timer = setTimeout(() => void poll(), workflow?.status === "pending" ? 5000 : 30000);
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [config, onWorkflowChange, setupId, revision, workflow?.status]);
+  }, [config, current, onWorkflowChange, setupId, revision, workflow?.status]);
 
   async function submit(decision?: "approved" | "changes_requested") {
     if (busy) return;
@@ -99,7 +99,7 @@ export function SetupReviewDesk({ config, setupId, revision, fingerprint, curren
       {workflow.completed_at && ` · Completed ${new Date(workflow.completed_at).toLocaleString()}`}</p>}
     <div className="chase-setups__reviews">{[["aegis", "Aegis analysis"], ["local_30b", "Local 30B review"]].map(([key, title]) => {
       const review = workflow?.reviewers[key];
-      return <div key={key}><h4>{title}</h4><small>{review?.model ?? (key === "aegis" ? "qwen3:8b" : "qwen3-coder:30b")} · {reviewStatus(review?.status)}</small>
+      return <div key={key}><h4>{title}</h4><small>{review?.model ?? (key === "aegis" ? "qwen3:8b" : "qwen3-coder:30b")} · {reviewStatus(review?.status)}{review?.automatic ? " · Automatic" : ""}</small>
         {review?.status === "ready" ? <><p>{review.summary}</p>
           {review.primary_hazards && review.primary_hazards.length > 0 && <p><strong>Hazards assessed:</strong> {review.primary_hazards.join(", ")}</p>}
           <details><summary>Storm mode and initiation</summary><p>{review.storm_mode}</p><p>{review.initiation}</p></details>

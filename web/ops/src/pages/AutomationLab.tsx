@@ -72,8 +72,8 @@ export default function AutomationLab() {
       description="Rehearse Aegis policy on Core without publishing alerts or changing live settings. Activation remains locked while radar scoring is validated." />
 
     <section className="automation-lab__live" aria-label="Current Core state">
-      <div><small>CORE SCREEN</small><b>{liveError ? "UNAVAILABLE" : live?.screen.enabled ? "RUNNING" : "CHECKING"}</b></div>
-      <div><small>REAL DELIVERY</small><b>{live?.delivery_enabled ? "ON" : "OFF / SHADOW"}</b></div>
+      <div><small>CORE SCREEN</small><b>{liveError ? "UNAVAILABLE" : !live ? "CHECKING" : live.screen.enabled ? "RUNNING" : "OFF"}</b></div>
+      <div><small>REAL DELIVERY</small><b>{liveError ? "UNAVAILABLE" : !live ? "CHECKING" : live.delivery_enabled ? "ON" : "OFF / SHADOW"}</b></div>
       <div><small>REAL CUTOFF</small><b>{live?.screen.cutoff ?? "—"}</b></div>
       <div><small>RADAR SITES</small><b>{live?.screen.sites?.join(", ") || "—"}</b></div>
     </section>

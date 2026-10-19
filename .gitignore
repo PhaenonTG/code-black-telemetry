@@ -38,3 +38,5 @@ native/**/target/
 *.njsproj
 *.sln
 *.sw?
+
+/dist-parity/

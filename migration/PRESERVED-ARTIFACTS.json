@@ -1,0 +1,12 @@
+{
+  "r19-runtime\\scripts\\serve-private.mjs": "b262a8332d4bea48b563cd0bc428e5d59b614871f39447f761b55d999c4270a7",
+  "r19-runtime\\dist-private\\core-gateway.mjs": "26108dde8108640d0a11049c382c27a92e76b7b28ad7c3147ca6b197a4ee27ce",
+  "r19-runtime\\dist-private\\core-gateway.original.mjs": "1b891cb59f1d10b7b6f693aaacca7a5a9f889d1331aa56a53293e53f784ed3a7",
+  "r19-runtime\\dist-private\\radar-gateway.mjs": "daabc350e619bd007befc247d729bd3d2c436ae07075ad2cac8450a1f8656e21",
+  "radar-r3\\PrivateRadarPilot.tsx": "683f46d54b24087d9f6844e4f15fa40dd0d282e121f66ca8e99c050a5af5a542",
+  "radar-r3\\PrivateRadarPilot.css": "46bff45584fda29428a855933547c246b801760816bd25b5453accb54dc8c65b",
+  "radar-r3\\privateRadarClient.mjs": "769f0b3977f67318911473d5094ab46432cec9e9c086a8ec436ac8fd87deb93c",
+  "radar-r3\\privateRadarClient.d.mts": "4fd4b187a78e87ca8e8422dd5a31ca50faead0842dab7dbf6ba9e801f1e3fa68",
+  "radar-r3\\privateRadarPilot.mjs": "4e0b6c67a8ae6341dfa9f4e1d95c69e187eca0f9b0101cbbf0f6831dad4aa194",
+  "radar-r3\\privateRadarPilot.d.mts": "c0bd2a12d1d6a2a46b1d17bc0269d609221505a4278f0e04fbcb0226fb08006e"
+}

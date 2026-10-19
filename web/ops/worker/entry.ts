@@ -1,3 +1,4 @@
+import {handleDirectory} from "./directory/handler";
 // Cloudflare Pages "Advanced Mode" worker entry (_worker.js after bundling). Runs before any
 // static-asset lookup, unconditionally, on every request -- see docs/system/code-black-core-gateway.md
 // for why this exists.
@@ -60,7 +61,8 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
   const route = resolveAllowlistRoute(routeKey);
   if (!route) return gatewayErrorResponse(404, "ROUTE_NOT_ALLOWED");
   if (!(route.methods ?? ["GET"]).includes(request.method)) return gatewayErrorResponse(405, "METHOD_NOT_ALLOWED");
-  if (route.opsWrite && (!auth.role || (route.opsWrite === "decision" && !["OWNER", "ADMIN"].includes(auth.role))))
+  const actorPolicy = route.opsWrite ?? route.opsSignedRead;
+  if (actorPolicy && (!auth.role || (actorPolicy === "decision" && !["OWNER", "ADMIN"].includes(auth.role))))
     return gatewayErrorResponse(403, "UNAUTHORIZED");
 
   if (route.upstreamPath === "/api/fabric/v1/stream") {
@@ -76,7 +78,7 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
     method: request.method,
     body,
     headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-      ...(route.opsWrite ? { "X-Ops-User-Id": auth.userId, "X-Ops-Role": auth.role! } : {}) },
+      ...(actorPolicy ? { "X-Ops-User-Id": auth.userId, "X-Ops-Role": auth.role! } : {}) },
   });
   if (result.status !== 200 && !result.body) return gatewayErrorResponse(result.status, result.reason ?? "CORE_UNAVAILABLE");
   return new Response(JSON.stringify(result.body), {
@@ -88,6 +90,7 @@ async function handleGatewayRequest(request: Request, env: Env): Promise<Respons
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === "/api/directory") return handleDirectory(request,env);
     if (url.pathname.startsWith(GATEWAY_PREFIX)) {
       return handleGatewayRequest(request, env);
     }

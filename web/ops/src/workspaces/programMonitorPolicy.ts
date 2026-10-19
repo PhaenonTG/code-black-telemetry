@@ -3,6 +3,11 @@ const PATH = /^\/api\/producer\/v1\/preview\/hls\/(?:index\.m3u8|program-[0-9a-f
 // Cloudflare Workers request allowance. A fresh read also runs when the tab returns.
 export const PROGRAM_STATUS_POLL_MS = 3000
 export const PROGRAM_PREVIEW_POLL_MS = 15_000
+// Six bounded recovery attempts, never retry an authentication/permission failure.
+export function monitorRecoveryDelay(attempt: number, status = 0): number | null {
+  if (!Number.isInteger(attempt) || attempt < 1 || attempt > 6 || ![0, 404, 408, 409, 429, 500, 502, 503, 504].includes(status)) return null
+  return Math.min(30_000, 2000 * 2 ** (attempt - 1))
+}
 export function isProgramMediaUrl(value: string, origin: string): boolean {
   try { const url = new URL(value, origin); return url.origin === origin && PATH.test(url.pathname) && !url.search && !url.hash && !url.username && !url.password } catch { return false }
 }

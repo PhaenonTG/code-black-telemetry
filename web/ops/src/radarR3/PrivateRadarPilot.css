@@ -1,0 +1,7 @@
+.private-radar-pilot { display: flex; flex-direction: column; width: 100%; min-width: 0; }
+.private-radar-pilot-panel { position: relative; padding: 10px; background: #101923; color: white; overflow-wrap: anywhere; white-space: normal; }
+.private-radar-pilot-map { position: relative; width: 100%; height: clamp(420px, 68vh, 900px); min-height: 420px; }
+@media (max-width: 900px) {
+  .private-radar-pilot-panel { padding-right: 50px; }
+  .private-radar-pilot-map { height: 62vh; min-height: 360px; }
+}

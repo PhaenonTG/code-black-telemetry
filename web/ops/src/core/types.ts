@@ -10,6 +10,7 @@ export interface CoreHealthSnapshot {
 }
 
 export interface FabricSnapshotState {
+  unitsReceivedAt?: number | null;
   state: OpsConnectionState;
   detail: string;
   checkedAt: number;

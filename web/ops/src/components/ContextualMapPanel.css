@@ -1,0 +1,23 @@
+.context-map-panel{position:relative;width:100%;max-width:1280px;margin:0 auto;padding:18px 20px 28px;color:var(--cb-text,#f4f6fa);box-sizing:border-box}
+.context-map-panel__header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.context-map-panel__header h2{font-size:16px;line-height:1.4;margin:0}
+.context-map-panel__header button{min-height:44px;padding:8px 12px;border:1px solid var(--cb-line-strong,#713137);border-radius:8px;background:var(--cb-panel,#0d0e11);color:inherit;cursor:pointer;font:600 13px/1.4 system-ui,sans-serif;flex-shrink:0}
+.context-map-panel__header button:focus-visible{outline:3px solid var(--cb-blue,#12a8ff);outline-offset:3px}
+.context-map-panel__grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(280px,2fr);gap:16px;align-items:start}
+.context-map-panel__map{position:relative;height:clamp(360px,44vh,480px);min-width:0;overflow:hidden;border:1px solid var(--cb-line,#303238);border-radius:12px;background:var(--cb-black,#020203)}
+.context-map-panel__map>.ops-map-stage,.context-map-panel__map>.storm-workspace__map,.context-map-panel__map>.private-radar-pilot-map{height:100%;min-height:0;width:100%}
+.context-map-panel__map .atlas-map-shell{height:100%;width:100%}
+.context-map-panel__context{min-width:0;overflow-wrap:anywhere}
+.context-map-panel__context>.ops-side-rail{border:1px solid var(--cb-line,#303238);border-radius:12px;overflow:visible}
+.context-map-panel__context .private-radar-pilot-panel{border:1px solid var(--cb-line,#303238);border-radius:12px;padding:14px;background:var(--cb-panel,#0d0e11);color:var(--cb-text,#f4f6fa)}
+.context-map-panel[data-expanded=true]{max-width:none}
+.context-map-panel[data-expanded=true]>.context-map-panel__grid{grid-template-columns:minmax(0,1fr)}
+.context-map-panel[data-expanded=true] .context-map-panel__map{height:clamp(480px,74vh,900px)}
+.context-map-panel[data-expanded=true] .context-map-panel__context{display:none}
+/* Keep the shared map's tools inside the smaller panel, without changing map/data semantics. */
+.context-map-panel .ops-map-overlay{max-width:calc(100% - 190px);right:8px;gap:6px}
+.context-map-panel .ops-map-overlay>div{min-width:0;padding:7px 9px}
+.context-map-panel .ops-map-overlay h1,.context-map-panel .ops-map-overlay h2{font-size:12px}
+.context-map-panel .ops-map-overlay .ops-nearby-reference{display:none}
+@media(max-width:900px){.context-map-panel{padding:14px 12px 24px}.context-map-panel__grid{grid-template-columns:minmax(0,1fr)}.context-map-panel__map{height:360px}.context-map-panel[data-expanded=true] .context-map-panel__map{height:max(420px,70svh)}}
+@media(max-width:420px){.context-map-panel__header{align-items:flex-start}.context-map-panel__header h2{font-size:14px}.context-map-panel__header button{max-width:142px}.context-map-panel .ops-map-overlay{position:relative;inset:auto;max-width:none;justify-content:flex-start;padding:6px;background:var(--cb-panel,#0d0e11)}.context-map-panel .ops-map-overlay>div{padding:2px 4px}.context-map-panel .ops-map-stage>.atlas-map-shell{height:calc(100% - 58px)}}

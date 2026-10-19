@@ -65,11 +65,12 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     if (request.method === "POST" && body && new TextEncoder().encode(body).length > 4096)
       return jsonResponse(413, { error: "REQUEST_TOO_LARGE" });
     const actorHeaders: Record<string, string> = {};
-    if (route.opsWrite) {
+    const actorPolicy = route.opsWrite ?? route.opsSignedRead;
+    if (actorPolicy) {
       const actor = request.headers.get("X-Ops-User-Id") ?? "";
       const role = request.headers.get("X-Ops-Role") ?? "";
       if (!env.OPS_WRITE_SECRET || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actor) ||
-          !["OWNER", "ADMIN", "OPERATOR"].includes(role) || (route.opsWrite === "decision" && role === "OPERATOR"))
+          !["OWNER", "ADMIN", "OPERATOR"].includes(role) || (actorPolicy === "decision" && role === "OPERATOR"))
         return jsonResponse(403, { error: "UNAUTHORIZED" });
       const timestamp = String(Math.floor(Date.now() / 1000));
       const hex = (buffer: ArrayBuffer) => Array.from(new Uint8Array(buffer), value => value.toString(16).padStart(2, "0")).join("");
@@ -79,7 +80,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       const signature = hex(await crypto.subtle.sign("HMAC", key, encoder.encode([request.method, route.upstreamPath, timestamp, actor, role, bodyHash].join("\n"))));
       Object.assign(actorHeaders, { "X-Ops-User-Id": actor, "X-Ops-Role": role, "X-Ops-Timestamp": timestamp, "X-Ops-Signature": signature });
     }
-    return await env.CORE_VPC.fetch(targetUrl, {
+    const response = await env.CORE_VPC.fetch(targetUrl, {
       method: request.method,
       body,
       headers: {
@@ -89,7 +90,10 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       },
       signal: request.signal,
     });
+    if (!response.ok) console.warn("Core gateway upstream status", route.upstreamPath, response.status);
+    return response;
   } catch {
+    console.warn("Core gateway transport unavailable", route.upstreamPath);
     // Never surface the underlying exception (which could contain internal network detail) to
     // the caller -- map every VPC transport failure to one generic, safe reason.
     return jsonResponse(502, { error: "CORE_TRANSPORT_UNAVAILABLE" });

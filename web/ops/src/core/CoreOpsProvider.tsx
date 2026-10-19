@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lookupPoint, rememberOpsStatus, retainedOpsStatus } from "./useSharedOpsStatus";
 import { BoundedBackoff } from "./backoff";
+import { selectFabricReceipt } from "./fabricReceipt";
 import { coreConfigured, readOpsCoreConfig } from "./config";
 import { CoreOpsContext, type OpsSelectedPoint } from "./CoreOpsContext";
-import { consumeFabricStream, fetchCoreHealth, fetchFabricRest, fetchStormIntelHealth, fetchStormIntelPoint } from "./client";
+import { consumeFabricStream, fetchCoreHealth, fetchFabricRest, fetchStormIntelHealth } from "./client";
 import { planFabricReconnect } from "./fabricReconnect";
 import { fabricStateFromSnapshot } from "./fabricSnapshot";
 import { LatestRequestGate } from "./requestGate";
@@ -25,10 +27,11 @@ function savedReference(): { mode: LocationMode; unitId: string } {
 
 function initialState(): OpsCoreState {
   const now = Date.now();
+  const previous = retainedOpsStatus();
   return {
     refreshedAt: now,
-    core: { state: "CHECKING", detail: "Core check pending", checkedAt: now },
-    fabric: {
+    core: previous ? { ...previous.core, state: "STALE" } : { state: "CHECKING", detail: "Core check pending", checkedAt: now },
+    fabric: previous ? { ...previous.fabric, state: "STALE", streamState: "connecting" } : {
       state: "CHECKING",
       detail: "Fabric check pending",
       checkedAt: now,
@@ -117,13 +120,14 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
     const last = lastRequestedRef.current;
     if (source !== referenceSourceRef.current || shouldRefreshPoint(last.point, target, Date.now() - last.at)) {
       referenceSourceRef.current = source;
-      setSelectedPoint({ ...target });
+      setSelectedPoint((current) => current?.lat === target.lat && current.lon === target.lon ? current : { ...target });
     }
   }, [locationMode, referenceUnitId, referenceIsFallback, deviceLocation, deviceReady, selectedChaserPoint, referenceNow]);
 
   useEffect(() => {
     fabricRef.current = state.fabric;
-  }, [state.fabric]);
+    rememberOpsStatus({ core: state.core, fabric: state.fabric });
+  }, [state.core, state.fabric]);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,8 +160,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
         core,
         fabric: {
           ...fabric,
-          units: current.fabric.streamState === "open" && current.fabric.lastStreamEventAt !== null && Date.now() - current.fabric.lastStreamEventAt < FABRIC_STREAM_FRESH_MS
-            ? current.fabric.units : fabric.units,
+          ...selectFabricReceipt(current.fabric, fabric),
           streamState: current.fabric.streamState,
           lastStreamEventAt: current.fabric.lastStreamEventAt,
           lastContactAt: current.fabric.lastContactAt ?? fabric.lastContactAt,
@@ -220,6 +223,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
             state: "LIVE",
             detail: `Fabric live feed; ${snapshot.units.length} registered units`,
             units: snapshot,
+            unitsReceivedAt: Date.now(),
             streamState: "open",
             lastStreamEventAt: Date.now(),
             lastContactAt: Date.now(),
@@ -294,7 +298,7 @@ export function CoreOpsProvider({ children }: { children: ReactNode }) {
     }));
 
     if (!coreConfigured(config)) return;
-    void fetchStormIntelPoint(config, selectedPoint, controller.signal)
+    void lookupPoint(config, selectedPoint, refreshNonce)
       .then((snapshot) => {
         if (!pointRequestRef.current.isCurrent(requestId) || controller.signal.aborted) return;
         setState((current) => ({

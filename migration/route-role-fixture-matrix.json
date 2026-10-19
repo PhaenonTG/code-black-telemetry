@@ -1,0 +1,402 @@
+{
+  "authorizationApproval": "PENDING_UNAPPLIED",
+  "core": [
+    {
+      "path": "/api/core/api/forecast/v1/targets",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/review",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/runs",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/point",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/alerts",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/briefings",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/verified-events",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/hurricane-watch",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/chase-setups",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/tornado-potential",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/chase-setup",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/chase-setup-review",
+      "method": "POST",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/chase-setup-decision",
+      "method": "POST",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/chase-setup-policy",
+      "method": "POST",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN"
+      ]
+    },
+    {
+      "path": "/api/core/api/forecast/v1/chase-setup-paid-review",
+      "method": "POST",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN"
+      ]
+    },
+    {
+      "path": "/api/core/health",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/fabric/v1/health",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/fabric/v1/units",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/fabric/v1/aegis-status",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/fabric/v1/aegis-alerts",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/fabric/v1/aegis-observation-plan",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/fabric/v1/aegis-policy",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/fabric/v1/aegis-policy/replay",
+      "method": "POST",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN"
+      ]
+    },
+    {
+      "path": "/api/core/api/fabric/v1/stream",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/storm-intel/v1/health",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/storm-intel/v1/point",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/soundings/v1/health",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/soundings/v1/point",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/soundings/v1/search-location",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/weather-alert/v1/settings",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/weather-alert/v1/settings",
+      "method": "PUT",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN"
+      ]
+    },
+    {
+      "path": "/api/core/api/weather-alert/v1/status",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/ops/status-center/v1/status",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/ops/status-center/v1/radar-control-settings",
+      "method": "GET",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/core/api/ops/status-center/v1/radar-control-settings",
+      "method": "PUT",
+      "scope": "UNAPPLIED_CORE_AUTHORIZATION_PROPOSAL",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN"
+      ]
+    }
+  ],
+  "candidate": [
+    {
+      "path": "/api/v1/radar/frames",
+      "method": "GET",
+      "query": "site=KSRX; REF1/VEL2/CC1; limit=1; exact four keys",
+      "scope": "CANDIDATE_CHAIN_NOT_EXPOSED",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/v1/radar/frame/<hex-id>/metadata",
+      "method": "GET",
+      "query": "none; bounded lowercase hex ID",
+      "scope": "CANDIDATE_CHAIN_NOT_EXPOSED",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/v1/radar/tiles/<hex-id>/<z>/<x>/<y>.png",
+      "method": "GET",
+      "query": "none; frozen gateway coordinate bounds",
+      "scope": "CANDIDATE_CHAIN_NOT_EXPOSED",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    },
+    {
+      "path": "/api/coordination/v1/snapshot",
+      "method": "GET",
+      "query": "none; strict sanitized snapshot",
+      "scope": "CANDIDATE_CHAIN_NOT_EXPOSED",
+      "allowedRoles": [
+        "OWNER",
+        "ADMIN",
+        "OPERATOR"
+      ]
+    }
+  ],
+  "producer": {
+    "route": "ops.codeblackwx.com/api/producer/*",
+    "owner": "codeblack-chase-gateway",
+    "policy": "RETAINED_EXISTING_BACKEND_NOT_REPLACED_OR_REQUALIFIED",
+    "deployment": "4ae18276-de32-4daf-9290-0ce09fe214fa",
+    "version": "1d43ecc2-8c12-4e28-a72d-9ab2bb308d3e"
+  }
+}

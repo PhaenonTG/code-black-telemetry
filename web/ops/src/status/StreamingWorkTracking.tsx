@@ -1,0 +1,3 @@
+import {STREAM_WORK} from "../workspaces/pcPreparation"
+import PreparePcControls from "../workspaces/PreparePcControls"
+export default function StreamingWorkTracking(){return <section className="stream-work" aria-label="Streaming setup"><h2>STREAMING SETUP</h2><PreparePcControls/><details className="stream-work__milestones"><summary>Streaming milestones <span>Planned work · not live service health</span></summary><div className="stream-work-grid">{STREAM_WORK.map(work=><article key={work.id}><h3>{work.title}</h3><strong>{work.state}</strong><p>{work.detail}</p><small>Next: {work.next}</small></article>)}</div></details></section>}

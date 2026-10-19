@@ -1,9 +1,0 @@
-# OPS forecast route recovery — 2026-10-12
-
-The live OPS Weather timeline and Hurricane Watch returned HTTP 502 because the active Core API release contained `code_black_core_api/forecast/api.py` but did not mount its router in `app.py`. The same Core `/health` endpoint returned 200, masking the route failure.
-
-On Core, release `/srv/codeblack/releases/core-api/ops-forecast-route-20261012` was copied from the previously active `aegis-reconcile-20261012-1` release. Its `ops-src/code_black_core_api/app.py` imports `router as forecast_router` from `code_black_core_api.forecast.api` and calls `app.include_router(forecast_router)` after constructing the FastAPI app. The last-order systemd drop-in `zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-forecast-route.conf` points `codeblack-core-api.service` at this release. The previous release and drop-in remain available for rollback.
-
-Verified after restart: `/health`, `/api/forecast/v1/runs`, `/api/forecast/v1/hurricane-watch`, `/api/fabric/v1/health`, and soundings health all returned HTTP 200. The authenticated live OPS Weather and Hurricane Watch pages then populated. Preserve this router mount in the next consolidated Core API release; otherwise the next deployment can reintroduce the 502s.
-
-The Edge backup pull completed at 2026-10-13 00:12 UTC, but Status Center displayed the prior day's backup because the independent 03:30 UTC verification had not yet run. Running `/srv/codeblack/services/backup-verify/verify.sh` as `codeblack` verified the current snapshot (`20261013T001202Z`, 2/2 repos) and Status Center changed to HEALTHY. The daily schedule still leaves a verification gap between backup completion and 03:30 UTC; wiring verification to the backup's successful completion is a follow-up requiring Edge service configuration access.

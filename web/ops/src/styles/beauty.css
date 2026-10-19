@@ -1,0 +1,160 @@
+/* Beautification layer (2026-10-18). Loaded last by styles/index.css.
+   One spacing scale, one type system (Anton display / Rajdhani UI / tabular digits), one page
+   header, brushed-steel surfaces with red laser accents, and transform/opacity-only motion that
+   is skipped entirely under prefers-reduced-motion. Map surfaces, map geometry and semantic
+   status colours are untouched; page-scoped "--brand" stylesheets keep precedence (higher
+   specificity) where they already define a look. */
+
+/* ---- Fonts: bundled so every device renders the same faces (no third-party requests). ---- */
+@font-face { font-family: "Rajdhani"; src: url("/fonts/rajdhani-medium-latin.woff2") format("woff2"); font-weight: 100 549; font-style: normal; font-display: swap; }
+@font-face { font-family: "Rajdhani"; src: url("/fonts/rajdhani-semibold-latin.woff2") format("woff2"); font-weight: 550 649; font-style: normal; font-display: swap; }
+@font-face { font-family: "Rajdhani"; src: url("/fonts/rajdhani-bold-latin.woff2") format("woff2"); font-weight: 650 1000; font-style: normal; font-display: swap; }
+/* Digits only, equal advance widths: clocks, ages, counts and readouts stop jittering. */
+@font-face { font-family: "CB Data Digits"; src: url("/fonts/cb-data-digits-medium.woff2") format("woff2"); font-weight: 100 549; unicode-range: U+0030-0039; font-display: swap; }
+@font-face { font-family: "CB Data Digits"; src: url("/fonts/cb-data-digits-semibold.woff2") format("woff2"); font-weight: 550 649; unicode-range: U+0030-0039; font-display: swap; }
+@font-face { font-family: "CB Data Digits"; src: url("/fonts/cb-data-digits-bold.woff2") format("woff2"); font-weight: 650 1000; unicode-range: U+0030-0039; font-display: swap; }
+
+.shell {
+  /* Spacing scale: every gap/padding below is one of these steps. */
+  --cb-sp-1: 4px; --cb-sp-2: 8px; --cb-sp-3: 12px; --cb-sp-4: 16px; --cb-sp-5: 20px; --cb-sp-6: 24px; --cb-sp-7: 32px; --cb-sp-8: 48px;
+  --cb-page-gutter: clamp(16px, 2.2vw, 40px);
+  --cb-page-max: 1600px;
+  --cb-r-sm: 6px; --cb-r-md: 10px; --cb-r-lg: 14px;
+  --cb-font-display: Anton, Impact, "Arial Narrow", sans-serif;
+  --cb-font-ui: "CB Data Digits", Rajdhani, Inter, "Segoe UI", system-ui, sans-serif;
+  --cb-h1-size: clamp(28px, 0.9vw + 18px, 42px);
+  --cb-h2-size: clamp(18px, 0.4vw + 14px, 24px);
+  --cb-laser: #ff2a0c;
+  --cb-laser-glow: 0 0 10px rgba(255, 42, 12, .65), 0 0 2px rgba(255, 42, 12, .9);
+  --cb-glow-hover: 0 0 0 1px rgba(255, 42, 12, .45), 0 0 22px -6px rgba(255, 42, 12, .75);
+  --cb-steel:
+    linear-gradient(90deg, transparent, rgba(255, 42, 12, .55) 18%, rgba(255, 42, 12, .55) 82%, transparent) top / 100% 1px no-repeat,
+    linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, 0) 42%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .013) 0 1px, transparent 1px 3px),
+    var(--cb-panel);
+  --cb-steel-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), 0 14px 32px -22px rgba(0, 0, 0, .9);
+  --cb-ease-out: cubic-bezier(.2, .8, .2, 1);
+  --cb-ease-press: cubic-bezier(.3, 0, .2, 1);
+  font-family: var(--cb-font-ui);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+}
+.shell[data-theme="light"] {
+  --cb-steel:
+    linear-gradient(90deg, transparent, rgba(200, 20, 10, .5) 18%, rgba(200, 20, 10, .5) 82%, transparent) top / 100% 1px no-repeat,
+    linear-gradient(180deg, rgba(255, 255, 255, .9), rgba(255, 255, 255, 0) 42%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, .012) 0 1px, transparent 1px 3px),
+    var(--cb-panel);
+  --cb-steel-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 10px 26px -20px rgba(24, 39, 58, .45);
+}
+/* Form controls do not inherit fonts by default; that is why some panels rendered in a second face. */
+.shell :is(button, input, select, textarea, optgroup) { font-family: inherit; font-variant-numeric: inherit; }
+.shell :is(code, kbd, samp, pre) { font-family: "JetBrains Mono", Consolas, ui-monospace, monospace; }
+
+/* ---- One page header (PageHeader everywhere; .workspace-heading is now a PageHeader too). ---- */
+.shell .page-header {
+  position: relative; display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: var(--cb-sp-4) var(--cb-sp-6); min-height: 0; margin: 0 0 var(--cb-sp-6); padding: 0 0 var(--cb-sp-4);
+}
+.shell .page-header::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--cb-line); pointer-events: none; }
+.shell .page-header::after { content: ""; position: absolute; left: 0; bottom: 0; width: min(280px, 45%); height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--cb-laser), rgba(255, 42, 12, 0)); box-shadow: var(--cb-laser-glow); pointer-events: none; }
+.shell .page-header > div:first-child { min-width: 0; flex: 1 1 320px; }
+.shell .page-header__kicker { margin: 0 0 var(--cb-sp-2); color: var(--cb-laser); font-size: 11px; font-weight: 700; letter-spacing: .2em; line-height: 1.2; text-transform: uppercase; text-shadow: 0 0 10px rgba(255, 42, 12, .45); }
+.shell :is(.page-header h1, .coordination__header h1, .site-directory h1, .ops-not-found__title) {
+  margin: 0; font-family: var(--cb-font-display); font-weight: 400; font-size: var(--cb-h1-size); line-height: 1.05; letter-spacing: .035em; text-transform: uppercase; overflow-wrap: anywhere;
+}
+.shell .page-header__description, .shell .workspace-heading .page-header__description { max-width: 72ch; margin: var(--cb-sp-2) 0 0; color: var(--cb-muted); font-size: 14px; font-weight: 500; line-height: 1.55; }
+.shell .page-header__actions { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--cb-sp-2); flex: 0 1 auto; max-width: 100%; }
+.shell .page-header__actions > :is(nav, div) { display: flex; flex-wrap: wrap; gap: var(--cb-sp-2); }
+.shell :is(.chase-workspace, .analysis-workspace) > .page-header { margin-bottom: var(--cb-sp-3); }
+.shell .radar-lab .page-header { margin-bottom: 0; }
+.shell .soundings-workspace__header { grid-column: 1 / -1; margin: 0; padding: var(--cb-sp-4) var(--cb-page-gutter); background: var(--cb-shell); }
+.shell .soundings-workspace { grid-template-rows: auto minmax(0, 1fr); }
+@media (max-width: 899px) { .shell .soundings-workspace { grid-template-rows: auto auto minmax(0, 1fr); } }
+
+/* Section titles inside pages share the display face at one size. */
+.shell :is(.page, .workspace-page) > section > h2,
+.shell :is(.ops-inventory, .stream-work) > h2 { margin: 0 0 var(--cb-sp-4); font-family: var(--cb-font-display); font-weight: 400; font-size: var(--cb-h2-size); line-height: 1.1; letter-spacing: .05em; text-transform: uppercase; }
+
+/* ---- Page frame: one gutter scale, sensible max widths on wide and ultrawide screens. ---- */
+.shell .page { width: 100%; min-width: 0 !important; max-width: var(--cb-page-max) !important; margin-inline: auto !important; padding: var(--cb-sp-7) var(--cb-page-gutter) var(--cb-sp-8) !important; }
+.shell .workspace-page { width: 100%; max-width: 1920px; margin-inline: auto; padding: var(--cb-sp-6) var(--cb-page-gutter) var(--cb-sp-8); }
+.shell :is(.chase-workspace, .analysis-workspace) { padding: var(--cb-sp-3) var(--cb-page-gutter) var(--cb-sp-4); }
+.shell :is(.page, .workspace-page) :is(img, video) { max-width: 100%; }
+@media (max-width: 767px) {
+  .shell .page { padding: var(--cb-sp-5) var(--cb-page-gutter) var(--cb-sp-7) !important; }
+  .shell .workspace-page { padding: var(--cb-sp-4) var(--cb-page-gutter) calc(var(--bottomnav-h) + var(--cb-sp-6)); }
+  .shell .page-header { margin-bottom: var(--cb-sp-5); align-items: flex-start; }
+  .shell .page-header > div:first-child { flex-basis: 100%; }
+  .shell .page-header__description { font-size: 15px; }
+  .shell .analysis-workspace .page-header__actions { flex-basis: 100%; width: 100%; }
+}
+
+/* ---- Brushed-steel surfaces, rounded, with a red laser top edge. ---- */
+.shell :is(.settings-group, .ops-system-grid section, .ops-fleet-card, .ops-dev-panel, .empty-state--centered, .status-center__panel, .status-center__telemetry,
+  .aegis-summary, .aegis-panel, .automation-lab__panel, .workspace-panel, .pc-prepare, .stream-work-grid > article, .ops-inventory__projects > article,
+  .stream-health, .provider-diagnostics, .status-table, .stream-stage, .coordination__sessions article) {
+  border: 1px solid var(--cb-line); border-radius: var(--cb-r-lg); background: var(--cb-steel); box-shadow: var(--cb-steel-shadow); clip-path: none;
+}
+.shell :is(.pc-prepare, .stream-work-grid > article, .ops-inventory__projects > article, .settings-group, .ops-dev-panel) { padding: var(--cb-sp-5); }
+.shell .pc-prepare { margin: var(--cb-sp-4) 0; color: var(--cb-text); }
+.shell .status-table { overflow: hidden; }
+.shell .stream-work-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--cb-sp-4); margin-top: var(--cb-sp-4); }
+.shell .stream-work-grid > article :is(h3) { margin: 0 0 var(--cb-sp-2); font-size: 16px; font-weight: 700; }
+.shell .stream-work-grid > article strong { display: inline-block; margin-bottom: var(--cb-sp-2); color: var(--cb-amber); font-size: 11px; letter-spacing: .12em; }
+.shell .stream-work-grid > article :is(p, small) { margin: 0 0 var(--cb-sp-2); color: var(--cb-muted); line-height: 1.5; }
+.shell .stream-work__milestones { margin-top: var(--cb-sp-4); }
+.shell .stream-work__milestones > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--cb-sp-2) var(--cb-sp-3); min-height: 44px; padding: var(--cb-sp-3) var(--cb-sp-4); border: 1px solid var(--cb-line); border-radius: var(--cb-r-md); background: var(--cb-panel-low); cursor: pointer; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; list-style-position: inside; }
+.shell .stream-work__milestones > summary span { color: var(--cb-muted); font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: none; }
+.shell :is(.ops-system-grid, .ops-fleet-grid, .ops-more-grid, .stream-health__grid) { gap: var(--cb-sp-4); }
+
+/* ---- Controls: rounded, glow on hover, press-in on tap. ---- */
+.shell :is(.page, .workspace-page, .chase-workspace, .analysis-workspace, .soundings-workspace, .coordination, .site-directory) :is(button, .page-action-link, .empty-state__actions a, .workspace-heading a, .analysis-context a, .section-tabs a, .section-tabs span):not(.atlas-map-shell *, .chase-map-frame *, .mapboxgl-map *, [role="switch"]) {
+  border-radius: var(--cb-r-sm);
+}
+.shell :is(.page, .workspace-page, .chase-workspace, .analysis-workspace) .section-tabs a.active,
+.shell .workspace-heading button[aria-pressed="true"],
+.shell .analysis-mode button[aria-pressed="true"] { border-color: var(--cb-laser); box-shadow: var(--cb-glow-hover); }
+.shell :is(button, a, summary, input, select, textarea):focus-visible { outline: 2px solid var(--cb-laser); outline-offset: 2px; }
+@media (hover: hover) {
+  .shell :is(.page, .workspace-page, .chase-workspace, .analysis-workspace, .soundings-workspace, .coordination) :is(button, .page-action-link, .empty-state__actions a, .workspace-heading a, .analysis-context a, .section-tabs a):not(:disabled, [aria-disabled="true"], .atlas-map-shell *, .chase-map-frame *, .mapboxgl-map *):hover {
+    border-color: rgba(255, 42, 12, .7); box-shadow: var(--cb-glow-hover);
+  }
+  .shell :is(.ops-more-grid__item, .ops-fleet-card, .stream-work-grid > article, .ops-inventory__projects > article, .ops-system-grid section):hover { border-color: rgba(255, 42, 12, .45); box-shadow: var(--cb-steel-shadow), 0 0 26px -12px rgba(255, 42, 12, .6); }
+}
+
+/* ---- Motion: transform/opacity keyframes only; nothing runs when reduced motion is requested. ---- */
+@keyframes cb-rise { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+@keyframes cb-laser { from { opacity: 0; transform: scaleX(.2); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .shell :is(.page, .workspace-page, .coordination, .site-directory) > *,
+  .shell :is(.chase-workspace, .analysis-workspace, .soundings-workspace) > .page-header,
+  .shell :is(.ops-system-grid, .ops-fleet-grid, .ops-more-grid, .stream-work-grid, .ops-inventory__projects, .stream-health__grid, .status-center__tiles) > * {
+    animation: cb-rise 460ms var(--cb-ease-out) both;
+  }
+  .shell :is(.page, .workspace-page, .coordination, .site-directory) > :nth-child(2), .shell :is(.ops-system-grid, .ops-fleet-grid, .ops-more-grid, .stream-work-grid, .ops-inventory__projects, .stream-health__grid, .status-center__tiles) > :nth-child(2) { animation-delay: 50ms; }
+  .shell :is(.page, .workspace-page, .coordination, .site-directory) > :nth-child(3), .shell :is(.ops-system-grid, .ops-fleet-grid, .ops-more-grid, .stream-work-grid, .ops-inventory__projects, .stream-health__grid, .status-center__tiles) > :nth-child(3) { animation-delay: 100ms; }
+  .shell :is(.page, .workspace-page, .coordination, .site-directory) > :nth-child(4), .shell :is(.ops-system-grid, .ops-fleet-grid, .ops-more-grid, .stream-work-grid, .ops-inventory__projects, .stream-health__grid, .status-center__tiles) > :nth-child(4) { animation-delay: 150ms; }
+  .shell :is(.page, .workspace-page, .coordination, .site-directory) > :nth-child(5), .shell :is(.ops-system-grid, .ops-fleet-grid, .ops-more-grid, .stream-work-grid, .ops-inventory__projects, .stream-health__grid, .status-center__tiles) > :nth-child(5) { animation-delay: 200ms; }
+  .shell :is(.page, .workspace-page, .coordination, .site-directory) > :nth-child(6), .shell :is(.ops-system-grid, .ops-fleet-grid, .ops-more-grid, .stream-work-grid, .ops-inventory__projects, .stream-health__grid, .status-center__tiles) > :nth-child(6) { animation-delay: 250ms; }
+  .shell :is(.page, .workspace-page, .coordination, .site-directory) > :nth-child(n+7), .shell :is(.ops-system-grid, .ops-fleet-grid, .ops-more-grid, .stream-work-grid, .ops-inventory__projects, .stream-health__grid, .status-center__tiles) > :nth-child(n+7) { animation-delay: 300ms; }
+  .shell .page-header::after { transform-origin: left center; animation: cb-laser 700ms var(--cb-ease-out) 120ms both; }
+  .shell :is(.page, .workspace-page, .chase-workspace, .analysis-workspace, .soundings-workspace, .coordination, .site-directory) :is(button, .page-action-link, .empty-state__actions a, .workspace-heading a, .analysis-context a, .section-tabs a):not(.atlas-map-shell *, .chase-map-frame *, .mapboxgl-map *) {
+    transition: transform 140ms var(--cb-ease-press), border-color 180ms var(--cb-ease-out), box-shadow 220ms var(--cb-ease-out), background-color 180ms var(--cb-ease-out), color 180ms var(--cb-ease-out);
+  }
+  .shell :is(.page, .workspace-page, .chase-workspace, .analysis-workspace, .soundings-workspace, .coordination, .site-directory) :is(button, .page-action-link, .empty-state__actions a, .workspace-heading a, .analysis-context a, .section-tabs a):not(:disabled, .atlas-map-shell *, .chase-map-frame *, .mapboxgl-map *):active { transform: scale(.97); }
+  .shell :is(.ops-more-grid__item, .ops-fleet-card, .stream-work-grid > article, .ops-inventory__projects > article, .ops-system-grid section) { transition: transform 220ms var(--cb-ease-out), border-color 220ms var(--cb-ease-out), box-shadow 260ms var(--cb-ease-out); }
+}
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  .shell :is(.ops-more-grid__item, .ops-fleet-card, .stream-work-grid > article, .ops-inventory__projects > article):hover { transform: translate3d(0, -2px, 0); }
+}
+
+/* Chase Desk chrome around the (untouched) map frame. */
+.shell :is(.chase-reference-bar, .chase-unit-strip, .analysis-context) { border-radius: var(--cb-r-md); }
+.shell .chase-unit-strip { overflow: hidden; }
+
+/* Flex-column pages (Program Status) must not squeeze the header/tabs into each other on short screens. */
+.shell .page-stream { height: auto; min-height: 100%; }
+.shell :is(.page, .workspace-page, .chase-workspace, .analysis-workspace) > :is(.page-header, .section-tabs) { flex-shrink: 0; }

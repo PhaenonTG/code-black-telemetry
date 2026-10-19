@@ -90,49 +90,78 @@ export interface AegisRecordedReplay {
       factors: string[]; decision: string }> }>;
 }
 
-async function coreGet<T>(config: OpsCoreConfig, route: string, signal?: AbortSignal): Promise<T> {
+export const AEGIS_GET_TIMEOUT_MS = 12_000;
+export const AEGIS_REPLAY_TIMEOUT_MS = 20_000;
+
+async function withAegisDeadline<T>(
+  work: (signal: AbortSignal, aborted: Promise<never>) => Promise<T>,
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+): Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal?.reason);
+  const aborted = new Promise<never>((_resolve, reject) => {
+    controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true });
+  });
+  const timer = setTimeout(() => controller.abort(new Error(`Aegis feed did not respond within ${timeoutMs / 1000} s`)), timeoutMs);
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
+  try {
+    return await Promise.race([aborted, work(controller.signal, aborted)]);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+  }
+}
+
+async function coreGet<T>(config: OpsCoreConfig, route: string, signal?: AbortSignal, timeoutMs = AEGIS_GET_TIMEOUT_MS): Promise<T> {
   if (!config.coreBaseUrl) throw new Error("Core is not configured");
-  const token = await currentAccessToken();
-  const response = await fetch(`${config.coreBaseUrl}${route}`, { cache: "no-store", signal,
-    headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-  if (!response.ok) throw new Error(`Core feed HTTP ${response.status}`);
-  if (response.headers.get("content-type")?.toLowerCase().includes("text/html")) throw new Error("Aegis gateway returned a web page instead of data. Check Ops API routing.");
-  try { return await response.json() as T; } catch { throw new Error("Aegis feed returned invalid data."); }
+  return withAegisDeadline(async (requestSignal, aborted) => {
+    const token = await Promise.race([aborted, currentAccessToken()]);
+    const response = await fetch(`${config.coreBaseUrl}${route}`, { cache: "no-store", signal: requestSignal,
+      headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    if (!response.ok) throw new Error(`Core feed HTTP ${response.status}`);
+    if (response.headers.get("content-type")?.toLowerCase().includes("text/html")) throw new Error("Aegis gateway returned a web page instead of data. Check Ops API routing.");
+    try { return await response.json() as T; } catch { throw new Error("Aegis feed returned invalid data."); }
+  }, signal, timeoutMs);
 }
 
-export function getAegisFeed(config: OpsCoreConfig, signal?: AbortSignal): Promise<AegisAlertFeed> {
-  return coreGet(config, "/api/fabric/v1/aegis-alerts?after=0&limit=100", signal);
+export function getAegisFeed(config: OpsCoreConfig, signal?: AbortSignal, timeoutMs = AEGIS_GET_TIMEOUT_MS): Promise<AegisAlertFeed> {
+  return coreGet(config, "/api/fabric/v1/aegis-alerts?after=0&limit=100", signal, timeoutMs);
 }
 
-export function getAegisStatus(config: OpsCoreConfig, signal?: AbortSignal): Promise<AegisStatus> {
-  return coreGet(config, "/api/fabric/v1/aegis-status", signal);
+export function getAegisStatus(config: OpsCoreConfig, signal?: AbortSignal, timeoutMs = AEGIS_GET_TIMEOUT_MS): Promise<AegisStatus> {
+  return coreGet(config, "/api/fabric/v1/aegis-status", signal, timeoutMs);
 }
 
-export function getAegisObservationPlan(config: OpsCoreConfig, signal?: AbortSignal): Promise<AegisObservationPlan> {
-  return coreGet(config, "/api/fabric/v1/aegis-observation-plan", signal);
+export function getAegisObservationPlan(config: OpsCoreConfig, signal?: AbortSignal, timeoutMs = AEGIS_GET_TIMEOUT_MS): Promise<AegisObservationPlan> {
+  return coreGet(config, "/api/fabric/v1/aegis-observation-plan", signal, timeoutMs);
 }
 
-export function getAegisPolicy(config: OpsCoreConfig, signal?: AbortSignal): Promise<AegisPolicyStatus> {
-  return coreGet(config, "/api/fabric/v1/aegis-policy", signal);
+export function getAegisPolicy(config: OpsCoreConfig, signal?: AbortSignal, timeoutMs = AEGIS_GET_TIMEOUT_MS): Promise<AegisPolicyStatus> {
+  return coreGet(config, "/api/fabric/v1/aegis-policy", signal, timeoutMs);
 }
 
 export async function replayAegisPolicy<T extends AegisScenarioReplay | AegisRecordedReplay>(
   config: OpsCoreConfig,
   input: { mode: "scenario"; scenario: PolicyDraft } | { mode: "recorded"; evidenceCutoff: number; limit: number },
   signal?: AbortSignal,
+  timeoutMs = AEGIS_REPLAY_TIMEOUT_MS,
 ): Promise<T> {
   if (!config.coreBaseUrl) throw new Error("Core is not configured");
-  const token = await currentAccessToken();
-  const response = await fetch(`${config.coreBaseUrl}/api/fabric/v1/aegis-policy/replay`, {
-    method: "POST", cache: "no-store", signal, body: JSON.stringify(input),
-    headers: { Accept: "application/json", "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
-  if (!response.ok) throw new Error(`Core replay HTTP ${response.status}`);
-  if (response.headers.get("content-type")?.toLowerCase().includes("text/html")) throw new Error("Aegis gateway returned a web page instead of data. Check Ops API routing.");
-  let result: T;
-  try { result = await response.json() as T; } catch { throw new Error("Core replay returned invalid data."); }
-  if (result.dry_run !== true || result.no_messages_sent !== true || result.no_config_changed !== true)
-    throw new Error("Core did not confirm a side-effect-free replay");
-  return result;
+  return withAegisDeadline(async (requestSignal, aborted) => {
+    const token = await Promise.race([aborted, currentAccessToken()]);
+    const response = await fetch(`${config.coreBaseUrl}/api/fabric/v1/aegis-policy/replay`, {
+      method: "POST", cache: "no-store", signal: requestSignal, body: JSON.stringify(input),
+      headers: { Accept: "application/json", "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!response.ok) throw new Error(`Core replay HTTP ${response.status}`);
+    if (response.headers.get("content-type")?.toLowerCase().includes("text/html")) throw new Error("Aegis gateway returned a web page instead of data. Check Ops API routing.");
+    let result: T;
+    try { result = await response.json() as T; } catch { throw new Error("Core replay returned invalid data."); }
+    if (result.dry_run !== true || result.no_messages_sent !== true || result.no_config_changed !== true)
+      throw new Error("Core did not confirm a side-effect-free replay");
+    return result;
+  }, signal, timeoutMs);
 }

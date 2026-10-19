@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PageHeader } from "../components/PageHeader";
 import { AnalogMatchesPanel } from "../components/AnalogMatchesPanel";
+import { AsyncViewState } from "../components/AsyncViewState";
 import { Hodograph } from "../components/Hodograph";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { SkewT } from "../components/SkewT";
@@ -8,6 +10,7 @@ import { useCoreOps } from "../core/useCoreOps";
 import type { OpsConnectionState, SoundingPointResult, SoundingRequestState } from "../core/types";
 import { LatestRequest } from "./latestRequest";
 import { liveChaserPoint } from "../core/referenceLocation";
+import "./SoundingsWorkspace.css";
 
 const RECENT_KEY = "codeblack.ops.soundings.recent-locations.v1";
 const MAX_RECENT = 6;
@@ -209,7 +212,8 @@ export default function SoundingsWorkspace() {
   }, [result]);
 
   return (
-    <div className="soundings-workspace">
+    <div className="soundings-workspace soundings-workspace--brand">
+      <PageHeader className="soundings-workspace__header" kicker="ANALYSIS · UPPER AIR" title="Soundings" description="Point soundings for any location: Skew-T, hodograph, derived parameters, and historical analogs." />
       <aside className="soundings-sidebar">
         <section className="soundings-panel">
           <header className="soundings-panel__header">
@@ -217,19 +221,21 @@ export default function SoundingsWorkspace() {
           </header>
           <div className="soundings-location-form">
             <input
+              aria-label="Sounding location city"
               placeholder="City"
               value={cityInput}
               onChange={(e) => setCityInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && void handleSearch()}
             />
             <input
+              aria-label="Sounding location state"
               placeholder="ST"
               maxLength={2}
               value={stateInput}
               onChange={(e) => setStateInput(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && void handleSearch()}
             />
-            <button type="button" onClick={() => void handleSearch()} disabled={searchBusy}>
+            <button type="button" aria-label="Search sounding locations" onClick={() => void handleSearch()} disabled={searchBusy}>
               {searchBusy ? "…" : "Search"}
             </button>
           </div>
@@ -292,7 +298,7 @@ export default function SoundingsWorkspace() {
           <span className="soundings-status-bar__point">{point ? point.label : "No location selected"}</span>
         </div>
 
-        {phase === "idle" && <div className="soundings-empty">Select a location to load a sounding.</div>}
+        {phase === "idle" && <AsyncViewState state="empty" title="No sounding loaded" message="Select a location to load a sounding." />}
         {phase === "loading" && !result && (
           <div className="soundings-empty soundings-loading" role="status">
             <strong>{startedAt && clock - startedAt > 45_000 ? "Deriving the vertical profile…" : startedAt && clock - startedAt > 15_000 ? "Acquiring HRRR model levels…" : "Starting sounding request…"}</strong>
@@ -301,14 +307,23 @@ export default function SoundingsWorkspace() {
           </div>
         )}
         {phase === "unavailable" && (
-          <div className="soundings-empty soundings-empty--error">
-            {error ?? "Sounding unavailable."}
-            {point && (
-              <button type="button" className="soundings-retry" onClick={() => void loadSounding(point)}>
-                Retry
-              </button>
-            )}
-          </div>
+          <AsyncViewState
+            state="error"
+            title="Sounding unavailable"
+            message={error ?? "Sounding unavailable."}
+            onRetry={point ? () => void loadSounding(point) : undefined}
+          />
+        )}
+        {phase === "stale" && result && (
+          <AsyncViewState
+            compact
+            state="stale"
+            title="Sounding may be out of date"
+            message={`This profile was received more than ${STALE_AFTER_MS / 60_000} minutes ago and is no longer marked current.`}
+            lastUpdated={loadedAt !== null ? new Date(loadedAt) : undefined}
+            onRetry={point ? () => void loadSounding(point) : undefined}
+            retryLabel="Reload sounding"
+          />
         )}
 
         {result && (

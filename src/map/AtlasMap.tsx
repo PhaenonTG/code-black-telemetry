@@ -882,9 +882,25 @@ export function AtlasMap({
     try {
       if (site) localStorage.setItem(RADAR_SITE_OVERRIDE_KEY, site);
       else localStorage.removeItem(RADAR_SITE_OVERRIDE_KEY);
+      window.dispatchEvent(new Event("codeblack:radar-site-changed"));
     } catch { /* preference remains active for this session */ }
   };
   const radarFrame = radarFrames[radarPlaybackIndex] ?? null;
+  useEffect(() => {
+    const changed = () => {
+      let site: string;
+      try { site = localStorage.getItem(RADAR_SITE_OVERRIDE_KEY) ?? ""; } catch { return; }
+      if (site === radarSiteOverride) return;
+      setRadarSiteOverride(site);
+      setRadarFrames([]);
+      setRadarPlaybackIndex(0);
+      radarSelectedSiteRef.current = null;
+      radarPrimaryRecoveryStreakRef.current = 0;
+    };
+    window.addEventListener("storage", changed);
+    window.addEventListener("codeblack:radar-site-changed", changed);
+    return () => { window.removeEventListener("storage", changed); window.removeEventListener("codeblack:radar-site-changed", changed); };
+  }, [radarSiteOverride]);
   // Reflectivity alone doesn't show rotation -- a chaser needs VEL/SRV to spot a mesocyclone and CC
   // to catch a debris-ball tornado confirmation. SRV additionally requires a storm motion vector set
   // (the worker 400s without one), so the product switcher and storm-motion control are paired.

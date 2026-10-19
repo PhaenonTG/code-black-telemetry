@@ -2,7 +2,7 @@ import { PageHeader } from "../components/PageHeader";
 
 export default function DevelopmentPage({
   title,
-  detail = "Route and chassis are present for Phase 1. This section is explicitly not live yet.",
+  detail = "This section is planned and not available yet.",
 }: {
   title: string;
   detail?: string;
@@ -12,7 +12,7 @@ export default function DevelopmentPage({
       <PageHeader title={title} kicker="DEVELOPMENT / NOT YET AVAILABLE" />
       <div className="ops-dev-panel">
         <p>{detail}</p>
-        <p>No data is fabricated here. This surface will consume normalized Core contracts when the backend product is ready.</p>
+        <p>Nothing here is live and no data is shown. It is hidden from navigation until it is ready.</p>
       </div>
     </div>
   );

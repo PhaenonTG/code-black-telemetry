@@ -6,6 +6,8 @@ import { CoreOpsProvider } from "../core/CoreOpsProvider"
 import { AppShell } from "../layouts/AppShell"
 import UpdatePassword from "../pages/UpdatePassword"
 import { RouteLoadBoundary } from "./RouteLoadBoundary"
+import { AliasRedirect } from "./AliasRedirect"
+import { ROUTE_ALIASES } from "./routes"
 
 // Route-level code splitting -- this bundle shipped as a single ~3MB JS chunk with everything
 // (including the map/mapbox-gl stack, only needed by two of these routes) loaded on first paint,
@@ -15,7 +17,12 @@ const StormIntelWorkspace = lazy(() => import("../pages/StormIntelWorkspace"))
 const SoundingsWorkspace = lazy(() => import("../pages/SoundingsWorkspace"))
 const DevelopmentPage = lazy(() => import("../pages/DevelopmentPage"))
 const Fleet = lazy(() => import("../pages/Fleet"))
+const RadarLab = lazy(() => import("../pages/RadarLab"))
+const RadarR3 = lazy(() => import("../pages/RadarR3"))
+const Coordination = lazy(() => import("../pages/Coordination"))
+const VehicleTelemetry = lazy(() => import("../pages/VehicleTelemetry"))
 const Operations = lazy(() => import("../pages/Operations"))
+const SiteDirectory = lazy(() => import("../pages/SiteDirectory"))
 const StatusCenter = lazy(() => import("../pages/StatusCenter"))
 const Settings = lazy(() => import("../pages/Settings"))
 const More = lazy(() => import("../pages/More"))
@@ -28,6 +35,7 @@ const AutomationLab = lazy(() => import("../pages/AutomationLab"))
 const ProducerWorkspace = lazy(() => import("../pages/ProducerWorkspace"))
 const ChaseWorkspace = lazy(() => import("../pages/ChaseWorkspace"))
 const AnalysisWorkspace = lazy(() => import("../pages/AnalysisWorkspace"))
+const NotFound = lazy(() => import("../pages/NotFound"))
 
 function LegacyChaseSetupRedirect() {
   const { setupId } = useParams()
@@ -54,16 +62,22 @@ export default function App() {
                   <AppShell>
                     <RouteLoadBoundary><Suspense fallback={<div className="page-empty">Loading…</div>}>
                       <Routes>
+                        {Object.entries(ROUTE_ALIASES).map(([alias, canonical]) => <Route key={alias} path={alias} element={<AliasRedirect to={canonical} />} />)}
                         <Route path="/" element={<MobileHome />} />
                         <Route path="/producer" element={<ProducerWorkspace />} />
+                        <Route path="/radar-r3" element={<RadarR3 />} />
+                        <Route path="/coordination" element={<Coordination />} />
+                        <Route path="/vehicle-weather" element={<VehicleTelemetry />} />
                         <Route path="/workspace/chase" element={<ChaseWorkspace />} />
                         <Route path="/analysis" element={<AnalysisWorkspace />} />
+                        <Route path="/analysis/horizons" element={<AnalysisWorkspace />} />
+                        <Route path="/analysis/potential" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/drafts" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/drafts/:setupId" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/briefings" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/briefings/:setupId" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/setup/:setupId" element={<LegacyChaseSetupRedirect />} />
-                        <Route path="/radar" element={<OpsWorkstation focus="RADAR LAB" />} />
+                        <Route path="/radar" element={<RadarLab />} />
                         <Route path="/weather" element={<StormIntelWorkspace />} />
                         <Route path="/hurricane" element={<HurricaneWatch />} />
                         <Route path="/chase-setups" element={<LegacyChaseSetupRedirect />} />
@@ -85,9 +99,10 @@ export default function App() {
                         <Route path="/ai" element={<AiHandoff />} />
                         <Route path="/system" element={<Operations />} />
                         <Route path="/status-center" element={<StatusCenter />} />
+                        <Route path="/directory" element={<SiteDirectory />} />
                         <Route path="/settings" element={<Settings />} />
                         <Route path="/more" element={<More />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
+                        <Route path="*" element={<NotFound />} />
                       </Routes>
                     </Suspense></RouteLoadBoundary>
                   </AppShell>

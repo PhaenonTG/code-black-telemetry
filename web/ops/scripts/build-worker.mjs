@@ -1,4 +1,4 @@
-// Bundles worker/entry.ts (the Cloudflare Pages Advanced Mode gateway) into dist/_worker.js
+// Bundles worker/parityEntry.ts (the Cloudflare Pages Advanced Mode gateway) into dist/_worker.js
 // Kept for manual repair; Vite now bundles this worker on every production build.
 import { build } from "esbuild";
 import path from "node:path";
@@ -8,7 +8,7 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(dirname, "..");
 
 await build({
-  entryPoints: [path.join(root, "worker/entry.ts")],
+  entryPoints: [path.join(root, "worker/parityEntry.ts")],
   outfile: path.join(root, "dist/_worker.js"),
   bundle: true,
   format: "esm",

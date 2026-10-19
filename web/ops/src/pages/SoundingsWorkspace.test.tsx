@@ -1,6 +1,7 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { CoreOpsContext, type CoreOpsContextValue } from "../core/CoreOpsContext";
+import { LocationControl } from "../layouts/LocationControl";
 import SoundingsWorkspace from "./SoundingsWorkspace";
 
 // Regression test for a real production bug: the workspace's request-lifecycle state defaulted
@@ -36,6 +37,13 @@ function renderWorkspace(): string {
 }
 
 describe("SoundingsWorkspace initial state", () => {
+  it("gives the location form stable accessible names, without relying on placeholder text", () => {
+    const html = renderWorkspace();
+    expect(html).toContain('aria-label="Search sounding locations"');
+    expect(html).toContain('aria-label="Sounding location city"');
+    expect(html).toContain('aria-label="Sounding location state"');
+  });
+
   it("never shows the loading state before any location has been requested", () => {
     const html = renderWorkspace();
     expect(html).not.toContain("Loading sounding");
@@ -55,5 +63,27 @@ describe("SoundingsWorkspace initial state", () => {
   it("retains an empty search form (nothing fabricated) with no error shown yet", () => {
     const html = renderWorkspace();
     expect(html).not.toContain("soundings-panel__error");
+  });
+});
+
+
+describe("LocationControl compact labels", () => {
+  it.each([
+    { mode: "follow", fallback: true, stale: false, label: "Pea Ridge, AR", expected: "Pea Ridge, AR", hint: "Fallback" },
+    { mode: "fallback", fallback: true, stale: false, label: "Pea Ridge, AR", expected: "Pea Ridge, AR", hint: "Fixed reference" },
+    { mode: "chaser", fallback: true, stale: true, label: "A very long chaser name awaiting GPS from the selected vehicle", expected: "A very long chaser name awaiting GPS from the selected vehicle", hint: "Last verified chaser position" },
+    { mode: "manual", fallback: false, stale: false, label: "Selected point", expected: "36.450, -94.120", hint: "Selected point" },
+  ] as const)("preserves the full $mode label and status inside truncatable elements", ({ mode, fallback, stale, label, expected, hint }) => {
+    const value = contextValue();
+    value.locationMode = mode;
+    value.referenceIsFallback = fallback;
+    value.referenceIsStale = stale;
+    value.referenceLabel = label;
+    value.selectedPoint = mode === "manual" ? { lat: 36.45, lon: -94.12 } : null;
+    const html = renderToString(<CoreOpsContext.Provider value={value}><LocationControl /></CoreOpsContext.Provider>);
+    expect(html).toContain('aria-label="OPS location reference"');
+    expect(html).toContain(`<span class="location-control__name">${expected}</span><small>${hint}</small>`);
+    expect(html).toContain('role="status"');
+    expect(html).toContain('title="');
   });
 });

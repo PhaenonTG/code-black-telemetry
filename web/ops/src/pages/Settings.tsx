@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type CSSProperties } from "react"
 import { loadAppTheme, saveAppTheme, subscribeAppTheme, type AppThemeMode } from "../../../../src/services/settings"
 import { loadMapLayerVisibility, saveMapLayerVisibility, subscribeMapLayerVisibility, type MapLayerVisibility } from "../../../../src/services/settings"
 import { PageHeader } from "../components/PageHeader"
@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthProvider"
 import { Link } from "react-router-dom"
 import { loadWeatherAlertRuntimeStatus, loadWeatherAlertSettings, saveWeatherAlertSettings, type WeatherAlertRuntimeStatus, type WeatherAlertSettings } from "../weatherAlertSettings"
 import { useCoreOps } from "../core/useCoreOps"
+import "./Settings.css"
 
 const THEME_OPTIONS: AppThemeMode[] = ["dark", "night", "system", "light"]
 
@@ -52,6 +53,10 @@ export default function Settings() {
   const [alertRuntime, setAlertRuntime] = useState<WeatherAlertRuntimeStatus | null>(null)
   const [alertError, setAlertError] = useState<string | null>(null)
   const [alertSaving, setAlertSaving] = useState(false)
+  // Last settings confirmed by the server (load or save). Used only to tell the operator whether
+  // on-screen edits are still unsaved; no extra request is made.
+  const [alertSaved, setAlertSaved] = useState<WeatherAlertSettings | null>(null)
+  const [alertSavedNotice, setAlertSavedNotice] = useState(false)
 
   useEffect(() => {
     const unsub = subscribeAppTheme(setTheme)
@@ -59,17 +64,18 @@ export default function Settings() {
     return unsub
   }, [])
   useEffect(() => {
-    void loadWeatherAlertSettings(config).then(setAlertSettings).catch(() => setAlertError("Weather alert controls are unavailable."))
+    void loadWeatherAlertSettings(config).then((loaded) => { setAlertSettings(loaded); setAlertSaved(loaded) }).catch(() => setAlertError("Weather alert controls are unavailable."))
     void loadWeatherAlertRuntimeStatus(config).then(setAlertRuntime).catch(() => undefined)
   }, [config])
 
   const saveAlerts = async () => {
     if (!alertSettings) return
-    setAlertSaving(true); setAlertError(null)
-    try { setAlertSettings(await saveWeatherAlertSettings(config, alertSettings)) }
+    setAlertSaving(true); setAlertError(null); setAlertSavedNotice(false)
+    try { const saved = await saveWeatherAlertSettings(config, alertSettings); setAlertSettings(saved); setAlertSaved(saved); setAlertSavedNotice(true) }
     catch { setAlertError("Could not save weather alert controls. No change was confirmed.") }
     finally { setAlertSaving(false) }
   }
+  const alertDirty = !!alertSettings && !!alertSaved && JSON.stringify(alertSettings) !== JSON.stringify(alertSaved)
   useEffect(() => {
     const unsub = subscribeMapLayerVisibility(setLayers)
     void loadMapLayerVisibility()
@@ -77,11 +83,12 @@ export default function Settings() {
   }, [])
 
   return (
-    <div className="page page-settings">
-      <PageHeader title="SETTINGS" kicker="DISPLAY · MAP · SESSION" description="Set this browser's operating defaults. Changes apply immediately and persist on this device." actions={<Link className="page-action-link" to="/system">SYSTEM HEALTH</Link>} />
+    <div className="page page-settings page-settings--brand">
+      <PageHeader title="SETTINGS" kicker="DISPLAY · MAP · ALERTS · SESSION" description="Display and map-layer defaults apply immediately and persist on this device. Weather alert controls change the shared alert pipeline and apply only after you save them." />
 
-      <section className="settings-group">
+      <section className="settings-group" style={{ "--cb-i": 0 } as CSSProperties}>
         <h2>Display</h2>
+        <p className="settings-alert-copy">Applies immediately on this device.</p>
         <div className="settings-row">
           <span>Theme</span>
           <div className="segmented">
@@ -94,8 +101,9 @@ export default function Settings() {
         </div>
       </section>
 
-      <section className="settings-group settings-group--layers">
+      <section className="settings-group settings-group--layers" style={{ "--cb-i": 1 } as CSSProperties}>
         <h2>Map layer defaults</h2>
+        <p className="settings-alert-copy">Applies immediately and persists on this device.</p>
         {layers ? (
           <div className="settings-layer-grid">
             {LAYER_GROUPS.map((group) => <div className="settings-toggle-list" key={group.title}>
@@ -115,22 +123,22 @@ export default function Settings() {
         )}
       </section>
 
-      <section className="settings-group settings-group--data">
+      <section className="settings-group settings-group--data" style={{ "--cb-i": 2 } as CSSProperties}>
         <h2>Data & diagnostics</h2>
         <p>Provider health, radar availability, camera totals, and Core connectivity are tracked on the System page.</p>
-        <Link className="page-action-link" to="/system">VIEW PROVIDER STATUS</Link>
+        <Link className="page-action-link" to="/system">OPEN SYSTEM HEALTH</Link>
       </section>
 
-      <section className="settings-group settings-group--alerts">
+      <section className="settings-group settings-group--alerts" style={{ "--cb-i": 3 } as CSSProperties}>
         <h2>Weather alert controls</h2>
-        <p className="settings-alert-copy">These settings control Discord alert intake and routing. Changes apply to the live alert pipeline after saving.</p>
+        <p className="settings-alert-copy">These settings control Discord alert intake and routing. Edits here are not applied until you select SAVE WEATHER ALERT CONTROLS; then they apply to the live alert pipeline.</p>
         {alertRuntime && <div className="settings-layer-grid settings-alert-telemetry">
           <div className="settings-toggle-list"><h3>DELIVERY TELEMETRY</h3>
             <div className="settings-row"><span>Transport</span><strong>{alertRuntime.transport === "nwws" ? "NWWS REALTIME" : "NWS API · 15 SEC"}</strong></div>
             <div className="settings-row"><span>Latest latency</span><strong>{formatLatency(alertRuntime.latency.latest_issue_to_discord_ms)}</strong></div>
             <div className="settings-row"><span>P50 / P95</span><strong>{formatLatency(alertRuntime.latency.p50_issue_to_discord_ms)} / {formatLatency(alertRuntime.latency.p95_issue_to_discord_ms)}</strong></div>
           </div>
-          <div className="settings-toggle-list"><h3>CHASE TARGET</h3>
+          <div className="settings-toggle-list"><h3>ACTIVE TARGET MATCH</h3>
             {alertRuntime.target ? <><div className="settings-row"><span>{alertRuntime.target.target.label}</span><strong>{alertRuntime.target.warning.title}</strong></div><div className="settings-row"><span>Motion</span><strong>{alertRuntime.target.motion.heading_deg}° · {alertRuntime.target.motion.speed_mph} mph</strong></div><div className="settings-row"><span>Projected</span><strong>{alertRuntime.target.projected.map((point) => `${point.minutes}m ${point.lat.toFixed(2)}, ${point.lon.toFixed(2)}`).join(" · ")}</strong></div></> : <p className="page-empty">No active warning matched to the selected target.</p>}
           </div>
         </div>}
@@ -154,13 +162,14 @@ export default function Settings() {
             <AlertNumber label="Minimum hail (in)" value={alertSettings.filters.lsr_min_hail_inches} step="0.25" onChange={(value) => setAlertSettings({ ...alertSettings, filters: { ...alertSettings.filters, lsr_min_hail_inches: value } })} />
             <AlertNumber label="Minimum wind (mph)" value={alertSettings.filters.lsr_min_wind_mph} onChange={(value) => setAlertSettings({ ...alertSettings, filters: { ...alertSettings.filters, lsr_min_wind_mph: value } })} />
           </div></div>
-          {alertError && <p className="page-empty">{alertError}</p>}
+          {alertError && <p className="page-empty" role="alert">{alertError}</p>}
+          <p className="settings-alert-copy" role="status">{alertSaving ? "Saving weather alert controls…" : alertDirty ? "Unsaved changes. The live alert pipeline still uses the last saved controls." : alertSavedNotice ? "Saved. The live alert pipeline now uses these controls." : "No unsaved changes."}</p>
           <button type="button" className="page-action-link settings-save" disabled={alertSaving} onClick={() => void saveAlerts()}>{alertSaving ? "SAVING…" : "SAVE WEATHER ALERT CONTROLS"}</button>
         </> : <p className="page-empty">{alertError ?? "Loading…"}</p>}
       </section>
 
       {auth.status === "authorized" && (
-        <section className="settings-group">
+        <section className="settings-group" style={{ "--cb-i": 4 } as CSSProperties}>
           <h2>Session</h2>
           <div className="settings-row">
             <span>{auth.session.user.email}</span>

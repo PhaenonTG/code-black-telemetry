@@ -1,0 +1,154 @@
+{
+  "fullMigration": "HOLD",
+  "sourceParent": "00d0621c8e2fda5655a335e641e042a57da3b691",
+  "routes": [
+    {
+      "route": "/radar-r3",
+      "label": "RADAR R3 CANDIDATE",
+      "state": "APP_ROUTED_CANDIDATE_CHAIN_SYNTHETICALLY_VERIFIED",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/coordination",
+      "label": "COORDINATION",
+      "state": "APP_ROUTED_CANDIDATE_CHAIN_SYNTHETICALLY_VERIFIED",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/vehicle-weather",
+      "label": "VEHICLE WEATHER",
+      "state": "STAGED_HUD_FIXTURES_VERIFIED",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/producer",
+      "label": "PRODUCER",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/workspace/chase",
+      "label": "CHASE DESK",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/analysis",
+      "label": "SETUP REVIEW",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/",
+      "label": "OPERATIONS MAP",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/weather",
+      "label": "WEATHER ANALYSIS",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/hurricane",
+      "label": "HURRICANE WATCH",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/aegis-alerts",
+      "label": "AEGIS RADAR ALERTS",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/radar",
+      "label": "RADAR LAB",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/models",
+      "label": "MODELS",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/soundings",
+      "label": "SOUNDINGS",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/consensus",
+      "label": "CONSENSUS",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/targets",
+      "label": "TARGETS",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/chase",
+      "label": "TEAM & DEVICES",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/field",
+      "label": "FIELD MAP",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/stream",
+      "label": "PROGRAM STATUS",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/system",
+      "label": "SYSTEM",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/status-center",
+      "label": "STATUS CENTER",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/automation-lab",
+      "label": "AUTOMATION LAB",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/settings",
+      "label": "SETTINGS",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    },
+    {
+      "route": "/more",
+      "label": "MORE",
+      "state": "RETAINED_PUBLIC_SOURCE",
+      "realAuthenticatedBrowserVerified": false
+    }
+  ],
+  "backend": {
+    "Core": "UNCHANGED_UNTIL_AUTHORIZATION_PATCH_APPROVED",
+    "Producer": "EXISTING_SEPARATE_WORKER_RETAINED",
+    "radarAndCoordination": "SOURCE_CHAIN_FUNCTIONAL_FIXTURE_ONLY_UNCONFIGURED_UNEXPOSED"
+  },
+  "approvalArtifacts": {
+    "authorization": "authorization.patch UNAPPLIED",
+    "functional": "functional-wiring.patch APPLIED_ONLY_TO_ISOLATED_SOURCE; production binding/exposure not configured"
+  },
+  "realAuthOrBackendQualified": false
+}

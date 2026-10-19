@@ -1,0 +1,5 @@
+.private-radar-pilot-panel { position: absolute; top: 8px; left: 8px; right: 8px; padding: 10px; background: #101923; color: white; z-index: 1; overflow-wrap: anywhere; white-space: normal; }
+@media (max-width: 900px) {
+  /* Leave room for the host's existing collapsed Aegis rail. */
+  .private-radar-pilot-panel { right: 50px; }
+}

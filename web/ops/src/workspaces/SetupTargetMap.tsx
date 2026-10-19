@@ -1,17 +1,19 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useId } from "react"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles"
 import { PEA_RIDGE_REFERENCE } from "../core/referenceLocation"
+import type { TornadoTrackingMap } from "../pages/ChaseSetups"
 
 export interface SetupCandidatePoint { latitude?: number; longitude?: number; valid_time?: string; run_time?: string; score_index?: number }
-type Props = { geometry: unknown; bounds: number[] | undefined; points: SetupCandidatePoint[]; selectedKey?: string | null }
+type Props = { geometry: unknown; trackingMap?: TornadoTrackingMap; bounds: number[] | undefined; points: SetupCandidatePoint[]; selectedKey?: string | null }
 
 function validPoint(point: SetupCandidatePoint) {
   return typeof point.latitude === "number" && typeof point.longitude === "number" && Number.isFinite(point.latitude) && Number.isFinite(point.longitude) && Math.abs(point.latitude) <= 90 && Math.abs(point.longitude) <= 180
 }
 
-export function SetupTargetMap({ geometry, bounds, points, selectedKey }: Props) {
+export function SetupTargetMap({ geometry, trackingMap, bounds, points, selectedKey }: Props) {
+  const descriptionId = useId()
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<InstanceType<typeof mapboxgl.Map> | null>(null)
   useEffect(() => {
@@ -23,10 +25,13 @@ export function SetupTargetMap({ geometry, bounds, points, selectedKey }: Props)
     mapRef.current = map
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right")
     map.on("load", () => {
-      if (geometry && typeof geometry === "object" && ["Polygon", "MultiPolygon"].includes((geometry as { type?: string }).type ?? "")) {
-        map.addSource("setup-official-area", { type: "geojson", data: { type: "Feature", properties: {}, geometry } as mapboxgl.GeoJSONSourceSpecification["data"] })
-        map.addLayer({ id: "setup-official-fill", type: "fill", source: "setup-official-area", paint: { "fill-color": "#e43b4a", "fill-opacity": 0.14 } })
-        map.addLayer({ id: "setup-official-outline", type: "line", source: "setup-official-area", paint: { "line-color": "#f16a72", "line-width": 2 } })
+      const tracked = trackingMap?.schema === "codeblack.chase.tornado-tracking-map.v1" && trackingMap.features?.length
+      if (tracked || (geometry && typeof geometry === "object" && ["Polygon", "MultiPolygon"].includes((geometry as { type?: string }).type ?? ""))) {
+        const data = tracked ? { type: "FeatureCollection", features: trackingMap.features } : { type: "Feature", properties: { official_risk_code: 2 }, geometry }
+        map.addSource("setup-official-area", { type: "geojson", data: data as mapboxgl.GeoJSONSourceSpecification["data"] })
+        const color: mapboxgl.ExpressionSpecification = ["step", ["get", "official_risk_code"], "#e6b653", 5, "#e87840", 10, "#df4e52", 15, "#b73b81"]
+        map.addLayer({ id: "setup-official-fill", type: "fill", source: "setup-official-area", paint: { "fill-color": color, "fill-opacity": 0.18 } })
+        map.addLayer({ id: "setup-official-outline", type: "line", source: "setup-official-area", paint: { "line-color": color, "line-width": 2 } })
       }
       const features = points.filter(validPoint).map((point, index) => ({ type: "Feature" as const, properties: { index: index + 1, key: `${point.latitude!.toFixed(5)},${point.longitude!.toFixed(5)},${point.valid_time ?? ""},${point.run_time ?? ""}` }, geometry: { type: "Point" as const, coordinates: [point.longitude!, point.latitude!] } }))
       map.addSource("setup-screening-points", { type: "geojson", data: { type: "FeatureCollection", features } })
@@ -36,7 +41,7 @@ export function SetupTargetMap({ geometry, bounds, points, selectedKey }: Props)
       if (validBounds) map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 18, duration: 0, maxZoom: 8 })
     })
     return () => { mapRef.current = null; map.remove() }
-  }, [geometry, bounds, points])
+  }, [geometry, trackingMap, bounds, points])
 
   useEffect(() => {
     const map = mapRef.current
@@ -53,5 +58,5 @@ export function SetupTargetMap({ geometry, bounds, points, selectedKey }: Props)
   }, [points, selectedKey])
 
   if (!hasMapboxToken()) return <div className="setup-target-map__unavailable">Mapbox is not configured in this build.</div>
-  return <div ref={container} className="setup-target-map" role="img" aria-label="Official SPC risk area and experimental HRRR screening candidate points" />
+  return <><div ref={container} className="setup-target-map" aria-describedby={descriptionId} /><span id={descriptionId} className="a11y-caption">Official SPC tornado outlook areas with Code Black model context and experimental HRRR screening points</span></>
 }
