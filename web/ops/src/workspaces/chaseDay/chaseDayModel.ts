@@ -1,3 +1,4 @@
+import { formatOpsTime } from "../../core/timeFormat";
 import type { Catalog } from '../setupHorizons/HorizonCatalog';
 import type { PotentialPayload } from '../tornadoPotentialModel';
 import type { SoundingPointResult, SoundingParameter } from '../../core/types';
@@ -127,7 +128,7 @@ export function chaserRows(units: unknown[], target: ReturnType<typeof targetPoi
         return { name: u.display_name ?? u.name ?? u.unit_id ?? 'Chaser', ageMs: age, state: live ? 'LIVE' : usable ? 'LAST KNOWN' : 'No usable position', miles, driveMs, arrival: driveMs === null ? null : now + driveMs };
     });
 }
-export function clock(at: number) { return Number.isFinite(at) ? new Date(at).toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }) + ' CT' : '—'; }
+export function clock(at: number) { return Number.isFinite(at) ? formatOpsTime(at) : '—'; }
 export function duration(ms: number | null) { if (ms === null)
     return '—'; const m = Math.max(0, Math.round(ms / 60000)); return `${Math.floor(m / 60)}h ${m % 60}m`; }
 export function windowText(start: number, end: number, now: number) { return !Number.isFinite(start) ? 'Window unavailable' : now < start ? `Window starts in ${duration(start - now)}` : now > end ? 'Window expired' : `Window open · ends ${clock(end)}`; }

@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react"
-import { BrowserRouter, Navigate, Routes, Route, useLocation, useParams } from "react-router-dom"
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom"
 import { AuthProvider } from "../auth/AuthProvider"
 import { AuthGate } from "../components/AuthGate"
 import { CoreOpsProvider } from "../core/CoreOpsProvider"
@@ -8,6 +8,7 @@ import UpdatePassword from "../pages/UpdatePassword"
 import { RouteLoadBoundary } from "./RouteLoadBoundary"
 import { AliasRedirect } from "./AliasRedirect"
 import { ROUTE_ALIASES } from "./routes"
+import { LegacyAnalysisRedirect, LegacyChaseSetupRedirect, SetupReviewLanding } from "../pages/SetupReviewRouting"
 
 // Route-level code splitting -- this bundle shipped as a single ~3MB JS chunk with everything
 // (including the map/mapbox-gl stack, only needed by two of these routes) loaded on first paint,
@@ -36,13 +37,6 @@ const ChaseWorkspace = lazy(() => import("../pages/ChaseWorkspace"))
 const AnalysisWorkspace = lazy(() => import("../pages/AnalysisWorkspace"))
 const NotFound = lazy(() => import("../pages/NotFound"))
 
-function LegacyChaseSetupRedirect() {
-  const { setupId } = useParams()
-  const location = useLocation()
-  const destination = setupId ? `/analysis/drafts/${setupId}${location.search}` : `/analysis/drafts${location.search}`
-  return <Navigate to={destination} replace />
-}
-
 // /update-password is reachable regardless of auth state -- it's the landing page for a
 // Supabase password-recovery email link, which itself establishes a temporary session (see
 // UpdatePassword.tsx). Every other route is gated behind AuthGate: no protected page renders
@@ -61,21 +55,19 @@ export default function App() {
                   <AppShell>
                     <RouteLoadBoundary><Suspense fallback={<div className="page-empty">Loading…</div>}>
                       <Routes>
-                        {Object.entries(ROUTE_ALIASES).map(([alias, canonical]) => <Route key={alias} path={alias} element={<AliasRedirect to={canonical} />} />)}
+                        {Object.entries(ROUTE_ALIASES).map(([alias, canonical]) => <Route key={alias} path={alias} element={alias === "/analysis" ? <LegacyAnalysisRedirect /> : <AliasRedirect to={canonical} />} />)}
                         <Route path="/" element={<MobileHome />} />
                         <Route path="/producer" element={<ProducerWorkspace />} />
                         <Route path="/radar-r3" element={<RadarR3 />} />
                         <Route path="/coordination" element={<Coordination />} />
                         <Route path="/vehicle-weather" element={<VehicleTelemetry />} />
                         <Route path="/chase-desk" element={<ChaseWorkspace />} />
-                        <Route path="/analysis" element={<AnalysisWorkspace />} />
-                        <Route path="/analysis/horizons" element={<AnalysisWorkspace />} />
-                        <Route path="/analysis/potential" element={<AnalysisWorkspace />} />
-                        <Route path="/analysis/drafts" element={<AnalysisWorkspace />} />
-                        <Route path="/analysis/drafts/:setupId" element={<AnalysisWorkspace />} />
-                        <Route path="/analysis/briefings" element={<AnalysisWorkspace />} />
-                        <Route path="/analysis/briefings/:setupId" element={<AnalysisWorkspace />} />
+                        <Route path="/setup-review" element={<SetupReviewLanding />} />
+                        {["today", "outlook", "potential", "drafts", "briefings", "surveillance"].map(tab => <Route key={tab} path={`/setup-review/${tab}`} element={<AnalysisWorkspace />} />)}
+                        <Route path="/setup-review/drafts/:setupId" element={<AnalysisWorkspace />} />
+                        <Route path="/setup-review/briefings/:setupId" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/setup/:setupId" element={<LegacyChaseSetupRedirect />} />
+                        <Route path="/analysis/*" element={<LegacyAnalysisRedirect />} />
                         <Route path="/radar" element={<RadarLab />} />
                         <Route path="/weather" element={<StormIntelWorkspace />} />
                         <Route path="/hurricane" element={<HurricaneWatch />} />

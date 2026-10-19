@@ -17,7 +17,7 @@ export const ROUTES: RouteDef[] = [
   { path: "/field", label: "Field Map", icon: "radio", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "OPERATE" },
   { path: "/chase-desk", label: "Chase Desk", phoneLabel: "Chase", icon: "target", state: "LIVE", inPhoneNav: true, inSidebar: true, section: "OPERATE" },
   { path: "/producer", label: "Producer", icon: "stream", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "OPERATE" },
-  { path: "/analysis", label: "Setup Review", icon: "models", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FORECAST" },
+  { path: "/setup-review", label: "Setup Review", icon: "models", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FORECAST" },
   { path: "/weather", label: "Weather Analysis", icon: "cloud", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FORECAST" },
   { path: "/soundings", label: "Soundings", icon: "sounding", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FORECAST" },
   { path: "/hurricane", label: "Hurricane", icon: "hurricane", state: "LIVE", inPhoneNav: false, inSidebar: true, section: "FORECAST" },
@@ -41,7 +41,7 @@ export const MORE_ROUTE: RouteDef = { path: "/more", label: "More", phoneLabel: 
 export const NOT_FOUND_ROUTE: RouteDef = { path: "*", label: "Page not found", icon: "alert", state: "LIVE", inPhoneNav: false, inSidebar: false, section: "ADMIN" }
 
 export const ROUTE_ALIASES = {
-  "/setup-review": "/analysis",
+  "/analysis": "/setup-review",
   "/workspace/chase": "/chase-desk",
   "/chase": "/team",
   "/fleet": "/team",

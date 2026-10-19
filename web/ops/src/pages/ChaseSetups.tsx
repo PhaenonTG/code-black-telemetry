@@ -11,6 +11,10 @@ import type { SetupWorkflow } from "../workspaces/setupReviewModel";
 import type { WeightedSynthesis } from "../workspaces/setupReviewModel";
 import { SetupSynthesis } from "../workspaces/SetupSynthesis";
 import { SetupRrfsEvidence, type ModelPriority, type RrfsEvidence } from "../workspaces/SetupRrfsEvidence";
+import { decisionInQueue, readSetupDecisions } from "./SetupReviewModel";
+import { SetupReviewTitle } from "./SetupReviewTitle";
+import { EmptyState, ErrorState, AsyncViewState } from "../components/AsyncViewState";
+import { formatOpsTimestamp } from "../core/timeFormat";
 import "./ChaseSetups.css";
 
 type SetupRow = {
@@ -46,19 +50,21 @@ type SetupDetail = {
   review?: { required?: boolean; decision?: string | null; reason?: string };
 };
 
-const when = (value?: string) => {
-  if (!value) return "Unavailable";
-  const parsed = new Date(value);
-  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString() : "Unavailable";
-};
+const EMPTY_POINTS: SetupCandidatePoint[] = [];
+const when = (value?: string) => value && Number.isFinite(Date.parse(value))
+  ? <time dateTime={value} title={new Date(value).toISOString()}>{formatOpsTimestamp(value)}</time> : "\u2014";
 const setupId = /^setup-\d{8}-[0-9a-f]{10}$/;
 
-export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue = "drafts" }: { detailBasePath?: string; queue?: SetupQueue }) {
+export default function ChaseSetups({ detailBasePath = "/setup-review/drafts", queue = "drafts", active = true }: { detailBasePath?: string; queue?: SetupQueue; active?: boolean }) {
   const { config } = useCoreOps();
-  const { setupId: selectedId } = useParams();
+  const { setupId: routeSelectedId } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const revisionParam = searchParams.get("revision");
+  const routeRevision = searchParams.get("revision");
+  const [retainedSelection, setRetainedSelection] = useState({ id: routeSelectedId, revision: routeRevision });
+  if (active && (retainedSelection.id !== routeSelectedId || retainedSelection.revision !== routeRevision)) setRetainedSelection({ id: routeSelectedId, revision: routeRevision });
+  const selectedId = active ? routeSelectedId : retainedSelection.id;
+  const revisionParam = active ? routeRevision : retainedSelection.revision;
   const [index, setIndex] = useState<SetupIndex | null>(null);
   const [detail, setDetail] = useState<SetupDetail | null>(null);
   const [indexError, setIndexError] = useState("");
@@ -67,7 +73,7 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
   const [sourceFresh, setSourceFresh] = useState(false);
   const [queueLoading, setQueueLoading] = useState(true);
   const [decisionRows, setDecisionRows] = useState<SetupRow[] | null>(null);
-  const [decisions, setDecisions] = useState<Record<string, string | null>>({});
+  const [decisions, setDecisions] = useState<Record<string, string | null | undefined>>({});
   const [reloadVersion, setReloadVersion] = useState(0);
   const [selectedCandidate, setSelectedCandidate] = useState<{ setupId: string; key: string } | null>(null);
   const detailSelection = useRef("");
@@ -83,11 +89,11 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
       setDecisionRows((previous) => previous && previous.length === result.items.length && previous.every((row, position) => row.setup_id === result.items[position]?.setup_id && row.revision === result.items[position]?.revision) ? previous : result.items);
       setSourceFresh(Number.isFinite(lastSourceCheck) && sourceAge >= 0 && sourceAge <= 30 * 60_000);
     } catch {
-      if (!signal?.aborted) { setIndexError("Private setup drafts are unavailable. No source or review state has been inferred."); setQueueLoading(false); setSourceFresh(false); }
+      if (!signal?.aborted) { setIndexError(queue === "briefings" ? "Reviewed briefings are unavailable." : "Private setup drafts are unavailable. No source or review state has been inferred."); setQueueLoading(false); setSourceFresh(false); }
     } finally {
       if (!signal?.aborted && !quiet) setBusy(false);
     }
-  }, [config]);
+  }, [config, queue]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -107,22 +113,14 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
     const items = decisionRows ?? [];
     if (!decisionRows) return () => controller.abort();
     setQueueLoading(true);
-    void Promise.all(items.map(async (row) => {
-      try {
-        const record = await fetchForecast<Pick<SetupDetail, "workflow">>(config,
-          `chase-setup?setup_id=${encodeURIComponent(row.setup_id)}`, controller.signal);
-        return [row.setup_id, record.workflow?.decision?.decision ?? null] as const;
-      } catch {
-        return [row.setup_id, null] as const;
-      }
-    })).then((entries) => {
+    void readSetupDecisions(config, items, controller.signal).then((entries) => {
       if (!controller.signal.aborted) {
         setDecisions(Object.fromEntries(entries));
         setQueueLoading(false);
       }
     });
     return () => controller.abort();
-  }, [config, decisionRows]);
+  }, [config, decisionRows, reloadVersion]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -144,15 +142,15 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
       .then((record) => {
         if (controller.signal.aborted) return;
         const approved = record.workflow?.decision?.decision === "approved";
-        if (record.is_current_revision !== false && approved !== (queue === "briefings")) {
-          navigate(`/analysis/${approved ? "briefings" : "drafts"}/${record.setup_id}${revisionParam ? `?revision=${revisionParam}` : ""}`, { replace: true });
+        if (active && record.is_current_revision !== false && approved !== (queue === "briefings")) {
+          navigate(`/setup-review/${approved ? "briefings" : "drafts"}/${record.setup_id}${revisionParam ? `?revision=${revisionParam}` : ""}`, { replace: true });
           return;
         }
         setDetail(record);
       })
       .catch(() => { if (!controller.signal.aborted) setDetailError(revisionParam ? "This captured revision is unavailable." : "This private draft is unavailable."); });
     return () => controller.abort();
-  }, [config, navigate, queue, selectedId, revisionParam, reloadVersion]);
+  }, [active, config, navigate, queue, selectedId, revisionParam, reloadVersion]);
 
   const selectRevision = (revision: number | null) => {
     setSearchParams((params) => {
@@ -166,47 +164,45 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
   const handleWorkflowChange = useCallback((workflow: SetupWorkflow) => {
     if (!detail) return;
     setDecisions((value) => ({ ...value, [detail.setup_id]: workflow.decision?.decision ?? null }));
-    if (detail.is_current_revision === false) return;
-    if (queue === "drafts" && workflow.decision?.decision === "approved") navigate(`/analysis/briefings/${detail.setup_id}`, { replace: true });
-    if (queue === "briefings" && workflow.decision?.decision !== "approved") navigate(`/analysis/drafts/${detail.setup_id}`, { replace: true });
-  }, [detail, navigate, queue]);
+    if (!active || detail.is_current_revision === false) return;
+    if (queue === "drafts" && workflow.decision?.decision === "approved") navigate(`/setup-review/briefings/${detail.setup_id}`, { replace: true });
+    if (queue === "briefings" && workflow.decision?.decision !== "approved") navigate(`/setup-review/drafts/${detail.setup_id}`, { replace: true });
+  }, [active, detail, navigate, queue]);
 
-  const rows = (index?.items ?? []).filter((row) => queue === "briefings" ? decisions[row.setup_id] === "approved" : decisions[row.setup_id] !== "approved");
+  const unknownRows = (index?.items ?? []).filter(row => Object.hasOwn(decisions, row.setup_id) && decisions[row.setup_id] === undefined);
+  const drafts = (index?.items ?? []).filter(row => Object.hasOwn(decisions, row.setup_id) && decisionInQueue(decisions[row.setup_id], "drafts"));
+  const rows = queue === "briefings" ? (index?.items ?? []).filter(row => decisionInQueue(decisions[row.setup_id], "briefings")) : drafts;
   const currentSource = index?.status === "ready" && sourceFresh;
   const isBriefings = queue === "briefings";
-  const points = detail?.model.target_points ?? [];
+  const points = detail?.model.target_points ?? EMPTY_POINTS;
   const ranked = rankedCandidates(points);
   const selectedCandidateKey = selectedCandidate && selectedCandidate.setupId === detail?.setup_id ? selectedCandidate.key : null;
   return (
     <div className="chase-setups page">
-      <header className="chase-setups__header">
-        <div><h2>{isBriefings ? "Reviewed setup briefings" : "Chase setup drafts"}</h2><p>{isBriefings ? "Approved current revisions retained as private operational briefings." : "Potential setups for operator review. No draft is public."}</p></div>
-        <div className="chase-setups__header-actions">
-          <span className={currentSource ? "chase-setups__fresh" : "chase-setups__stale"}>
-            {index ? currentSource ? "Sources current" : index.status === "source_degraded" ? "Source check degraded" : index.status === "ready" ? "Source check stale" : "Awaiting first collection" : "Source status unavailable"}
-          </span>
-          <button type="button" onClick={() => { void refresh(); setReloadVersion((version) => version + 1); }} disabled={busy}>{busy ? "Checking…" : "Refresh"}</button>
-        </div>
-      </header>
-      {indexError && <p className="chase-setups__error" role="alert">{indexError}</p>}
-      <div className="chase-setups__layout">
+      <SetupReviewTitle title={`${isBriefings ? "Briefings" : "Drafts"}${rows.length ? ` (${rows.length})` : ""}`}
+        description={isBriefings ? "Approved current revisions retained as private operational briefings." : "Private drafts · operator review required. No draft is public."}
+        state={indexError ? "Unavailable" : !index ? "Waiting" : currentSource ? "Live" : "Stale"}
+        checkedAt={index?.last_source_check_at ?? index?.checked_at} busy={busy || queueLoading}
+        refresh={() => { void refresh(); setReloadVersion(version => version + 1); }} reloads={`${queue} sources and review decisions`} />
+      {indexError && <ErrorState title={isBriefings ? "Reviewed briefings are unavailable." : "Setup list unavailable"} message={indexError} onRetry={() => { void refresh(); setReloadVersion(version => version + 1); }} />}
+      {unknownRows.length > 0 && <ErrorState title="Decision state unavailable" message={`${unknownRows.length} setup decision${unknownRows.length === 1 ? "" : "s"} could not be verified. These rows are excluded from both queues.`} onRetry={() => setReloadVersion(version => version + 1)} />}
+      {!index && !indexError && <AsyncViewState state="loading" title="Checking review states" message="Matching each active setup to its exact operator decision." />}
+      {index && !indexError && unknownRows.length === 0 && !queueLoading && rows.length === 0 && !selectedId && <EmptyState title={isBriefings ? "Briefings (0)" : "Drafts (0)"}
+        message={isBriefings ? "Approving a current revision moves it here automatically." : index.status === "ready" ? "New qualifying setups will appear after a complete source check." : "A complete source check has not produced a current draft."}>
+        {isBriefings && drafts.length > 0 && <a href="/setup-review/drafts">{drafts.length} drafts awaiting review →</a>}
+      </EmptyState>}
+      {(rows.length > 0 || selectedId) && <div className="chase-setups__layout">
         <section className="chase-setups__list" aria-label={isBriefings ? "Reviewed setup briefings" : "Private setup drafts"}>
-          <h2>{isBriefings ? "Reviewed briefings" : "Detected drafts"} <span>{queueLoading && !index ? "…" : rows.length}</span></h2>
-          {indexError && !index ? <div className="chase-setups__empty"><strong>Setup list unavailable</strong><p>Review state could not be verified.</p></div> : queueLoading ? <div className="chase-setups__empty"><strong>Loading review states…</strong><p>Matching each active setup to its exact operator decision.</p></div> : rows.length === 0 ? <div className="chase-setups__empty">
-            <strong>{isBriefings ? "No reviewed briefings at this time" : "No setup drafts at this time"}</strong>
-            <p>{isBriefings ? "Approving a current revision moves it here automatically." : index?.status === "ready" ? "New qualifying setups will appear after a complete source check." : "A complete source check has not produced a current draft."}</p>
-          </div> : <ul>{rows.map((row) => <li key={row.setup_id}>
-            <button type="button" className={selectedId === row.setup_id ? "selected" : ""}
-              onClick={() => navigate(`${detailBasePath}/${row.setup_id}`)}>
-              <strong>SPC Day {row.day} · {row.risk_label}</strong>
-              <span>{when(row.valid_from)}–{when(row.valid_until)}</span>
+          <ul>{rows.map(row => <li key={row.setup_id}>
+            <button type="button" className={selectedId === row.setup_id ? "selected" : ""} onClick={() => navigate(`${detailBasePath}/${row.setup_id}`)}>
+              <strong>SPC Day {row.day} · {row.risk_label}</strong><span>{when(row.valid_from)}–{when(row.valid_until)}</span>
               <small>{row.model_status === "available" ? "HRRR screening available" : "HRRR screening unavailable"} · Revision {row.revision}</small>
             </button>
-          </li>)}</ul>}
+          </li>)}</ul>
         </section>
         <article className="chase-setups__detail">
           {detailError ? <p className="chase-setups__error" role="alert">{detailError}</p> :
-           !selectedId ? <div className="chase-setups__empty"><strong>No setup selected</strong><p>Select a {isBriefings ? "reviewed briefing" : "draft"} to inspect its evidence and review state.</p></div> :
+           !selectedId ? <div className="chase-setups__empty"><strong>No setup selected</strong><p>Select a {isBriefings ? "briefing" : "draft"} to inspect its evidence and review state.</p></div> :
            !detail ? <p className="chase-setups__loading">Loading {isBriefings ? "reviewed briefing" : "private draft"}…</p> : <>
             <div className="chase-setups__detail-head"><div>
               <h2>{isBriefings ? "Reviewed briefing" : "Setup review"}</h2><p>{detail.setup_id} · Revision {detail.revision}</p>
@@ -253,11 +249,10 @@ export default function ChaseSetups({ detailBasePath = "/analysis/drafts", queue
           {detail && <SetupRevisionTimeline history={detail.revision_history} selectedRevision={detail.revision}
             currentRevision={detail.current_revision ?? detail.revision} onSelect={selectRevision} />}
           <h2>Source chronology</h2>
-          {detail ? <><ol className="chase-setups__chronology">{setupChronology(detail).map((entry) => <li key={entry.key}><strong>{entry.label}</strong><time dateTime={entry.at}>{when(entry.at)}</time></li>)}</ol><p>Source timestamps for revision {detail.revision}.</p></> : <p>Select a draft to inspect its source timestamps.</p>}
-          <dl><div><dt>Last source check</dt><dd>{when(index?.last_source_check_at ?? index?.checked_at)}</dd></div></dl>
+          {detail ? <><ol className="chase-setups__chronology">{setupChronology(detail).map((entry) => <li key={entry.key}><strong>{entry.label}</strong><time dateTime={entry.at}>{when(entry.at)}</time></li>)}</ol><p>Source timestamps for revision {detail.revision}.</p></> : <p>Select a {isBriefings ? "briefing" : "draft"} to inspect its source timestamps.</p>}
           <p>Official guidance remains the authority. This desk does not issue warnings.</p>
         </aside>
-      </div>
+      </div>}
     </div>
   );
 }

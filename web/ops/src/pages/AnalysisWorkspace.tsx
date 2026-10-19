@@ -1,6 +1,10 @@
-import { lazy, Suspense, useState } from "react"
+import { lazy, Suspense, useEffect, useRef, useState } from "react"
+import { Icon } from "../components/Icon"
 import { PageHeader } from "../components/PageHeader"
-import { Link, useLocation, useNavigate } from "react-router-dom"
+import { AsyncViewState } from "../components/AsyncViewState"
+import { Link, useLocation } from "react-router-dom"
+import { SETUP_TABS, type SetupTab } from "./SetupReviewModel"
+import { useViewport } from "../hooks/useViewport"
 import ChaseSetups from "./ChaseSetups"
 import ChaseSurveillance from "./ChaseSurveillance"
 import "./Workspaces.css"
@@ -8,41 +12,31 @@ import "./Workspaces.css"
 const TornadoPotential = lazy(() => import("./TornadoPotential"))
 const HorizonCatalog = lazy(() => import("../workspaces/setupHorizons/HorizonCatalog"))
 const ChaseDayBriefingCard = lazy(() => import("../workspaces/chaseDay/ChaseDayBriefingCard"))
-type Mode = "today" | "outlooks" | "drafts" | "briefings" | "surveillance" | "potential"
-const MODE_KEY = "codeblack.ops.analysis.mode.v1"
-function savedMode(): Mode {
-  try {
-    const value = localStorage.getItem(MODE_KEY)
-    if (value === "today" || value === "outlooks" || value === "drafts" || value === "briefings" || value === "surveillance" || value === "potential") return value
-    return "outlooks"
-  } catch { return "outlooks" }
-}
+const names: Record<SetupTab, string> = { today: "Today", outlook: "Outlook", potential: "Potential", drafts: "Drafts", briefings: "Briefings", surveillance: "Surveillance" }
 
 export default function AnalysisWorkspace() {
-  const [savedSelection, setSavedSelection] = useState<Mode>(savedMode)
   const location = useLocation()
-  const navigate = useNavigate()
-  const routeMode: Mode | null = location.pathname === "/analysis" && new URLSearchParams(location.search).get("mode") === "today" ? "today" : location.pathname.startsWith("/analysis/horizons") ? "outlooks" : location.pathname.startsWith("/analysis/potential") ? "potential"
-    : location.pathname.startsWith("/analysis/briefings") ? "briefings"
-    : location.pathname.startsWith("/analysis/drafts") || location.pathname.startsWith("/analysis/setup/") ? "drafts"
-    : null
-  const mode = routeMode ?? savedSelection
-  const chooseMode = (next: Mode) => {
-    setSavedSelection(next)
-    try { localStorage.setItem(MODE_KEY, next) } catch { /* Session selection remains usable. */ }
-    navigate(next === "today" ? "/analysis?mode=today" : next === "surveillance" ? "/analysis" : next === "outlooks" ? "/analysis/horizons" : `/analysis/${next}`)
-  }
-  const subtitle = mode === "today" ? "Private chase day screening briefing" : mode === "outlooks" ? "Official outlook timeline and separate speculative context" : mode === "potential" ? "Code Black model-driven tornado potential" : mode === "drafts" ? "Pre-chase setup review" : mode === "briefings" ? "Approved setup briefings" : "Active radar surveillance"
-  const context = mode === "today" ? "Reviewed sources · screening thresholds · official guidance first" : mode === "outlooks" ? "Saved official sources; unknown and unavailable windows remain explicit" : mode === "drafts" ? "Private drafts · operator review required"
-    : mode === "briefings" ? "Approved revisions · private briefing record"
-    : mode === "potential" ? "Independent forecast-grid screening · experimental"
-    : "Official warnings first · Aegis findings are internal"
+  const viewport = useViewport()
+  const requested = location.pathname.split("/")[2] as SetupTab
+  const mode = SETUP_TABS.includes(requested) ? requested : "outlook"
+  const [visited, setVisited] = useState<SetupTab[]>([mode])
+  // Retain visited panels and their results for this workspace visit; never persist a landing preference.
+  if (!visited.includes(mode)) setVisited([...visited, mode])
+  const tabs = useRef<HTMLElement>(null)
+  useEffect(() => {
+    document.title = `${names[mode]} · Setup Review · Code Black OPS`
+    tabs.current?.querySelector('[aria-current="page"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" })
+  }, [mode])
+  const related = mode === "outlook" || mode === "potential" ? <><Link to="/weather">Weather Analysis →</Link><Link to="/soundings">Soundings →</Link></>
+    : mode === "surveillance" ? <><Link to="/radar">Radar Lab →</Link><Link to="/aegis-alerts">Aegis Alerts →</Link></> : null
   return <section className="analysis-workspace">
-    <PageHeader className="workspace-heading" kicker="ANALYSIS · SETUP REVIEW" title="Setup Review" description={subtitle} actions={<div className="analysis-mode" role="group" aria-label="Analysis mode"><button type="button" aria-pressed={mode === "today"} onClick={() => chooseMode("today")}>Chase day</button><button type="button" aria-pressed={mode === "outlooks"} onClick={() => chooseMode("outlooks")}>Outlook timeline</button><button type="button" aria-pressed={mode === "potential"} onClick={() => chooseMode("potential")}>Tornado potential</button><button type="button" aria-pressed={mode === "drafts"} onClick={() => chooseMode("drafts")}>Drafts</button><button type="button" aria-pressed={mode === "briefings"} onClick={() => chooseMode("briefings")}>Reviewed briefings</button><button type="button" aria-pressed={mode === "surveillance"} onClick={() => chooseMode("surveillance")}>Surveillance</button></div>} />
-    <div className="analysis-context"><span>{context}</span><nav aria-label="Analysis tools"><Link to="/weather">Weather analysis →</Link><Link to="/radar">Radar Lab →</Link></nav></div>
-    {mode === "today" ? <Suspense fallback={<p>Loading chase day briefing…</p>}><ChaseDayBriefingCard /></Suspense> : mode === "outlooks" ? <Suspense fallback={<p>Loading outlook timeline.</p>}><HorizonCatalog /></Suspense> : mode === "potential" ? <Suspense fallback={<p>Loading tornado potential…</p>}><TornadoPotential /></Suspense>
-      : mode === "drafts" ? <ChaseSetups queue="drafts" detailBasePath="/analysis/drafts" />
-      : mode === "briefings" ? <ChaseSetups queue="briefings" detailBasePath="/analysis/briefings" />
-      : <ChaseSurveillance />}
+    <PageHeader className="workspace-heading" routePath="/setup-review" title="Setup Review" description="Forecast setups from outlook to briefing" actions={related && <details className="analysis-related" open={viewport !== "phone"}><summary aria-label="Related tools"><Icon name="more" /><span className="analysis-related-label">Related tools</span></summary><nav aria-label="Related tools">{related}</nav></details>} />
+    <nav ref={tabs} className="analysis-mode" aria-label="Setup Review tabs">{SETUP_TABS.map(tab => <Link key={tab} to={`/setup-review/${tab}`} aria-current={mode === tab ? "page" : undefined}>{names[tab]}</Link>)}</nav>
+    {visited.map(tab => <div key={tab} className="analysis-tab-panel" data-tab={tab} hidden={mode !== tab}>
+      <Suspense fallback={<AsyncViewState compact state="loading" title={`Opening ${names[tab]}`} />}>
+        {tab === "today" ? <ChaseDayBriefingCard /> : tab === "outlook" ? <HorizonCatalog /> : tab === "potential" ? <TornadoPotential />
+          : tab === "drafts" || tab === "briefings" ? <ChaseSetups queue={tab} active={mode === tab} detailBasePath={`/setup-review/${tab}`} /> : <ChaseSurveillance />}
+      </Suspense>
+    </div>)}
   </section>
 }

@@ -16,7 +16,7 @@ describe("locked navigation", () => {
     }
   })
   it("keeps every detail key reachable through sidebar or its tab/alias", () => {
-    const paths = new Set([...ROUTES.filter(route => route.inSidebar).map(route => route.path), "/setup-review", "/producer/sources", "/status/telemetry"])
+    const paths = new Set([...ROUTES.filter(route => route.inSidebar).map(route => route.path), ...Object.keys(ROUTE_ALIASES), "/setup-review", "/producer/sources", "/status/telemetry"])
     for (const key of Object.keys(NAV_DETAILS)) expect(paths.has(key), key).toBe(true)
   })
   it.each(["/status", "/status/health", "/status/telemetry", "/coordination"])("lights Status on %s", path => expect(activePhoneRoute(path)).toBe("/status"))

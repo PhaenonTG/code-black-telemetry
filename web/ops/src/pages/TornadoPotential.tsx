@@ -6,9 +6,13 @@ import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../sr
 import { fetchForecast } from "../core/client"
 import { useCoreOps } from "../core/useCoreOps"
 import { parsePotential, type PotentialPayload } from "../workspaces/tornadoPotentialModel"
+import { SetupReviewTitle } from "./SetupReviewTitle"
+import { AsyncViewState, ErrorState } from "../components/AsyncViewState"
+import { formatOpsTimestamp } from "../core/timeFormat"
+import { nextPotentialFrame } from "./SetupReviewModel"
 import "./TornadoPotential.css"
 
-const time = (value?: string) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : "Unavailable"
+const time = (value?: string) => value && Number.isFinite(Date.parse(value)) ? <time dateTime={value} title={new Date(value).toISOString()}>{formatOpsTimestamp(value)}</time> : "\u2014"
 
 export function PotentialMap({ data, stormOnly }: { data: PotentialPayload | null; stormOnly: boolean }) {
   const descriptionId = useId()
@@ -62,6 +66,7 @@ export function PotentialMap({ data, stormOnly }: { data: PotentialPayload | nul
 export default function TornadoPotential() {
   const { config } = useCoreOps()
   const [data, setData] = useState<PotentialPayload | null>(null)
+  const [now, setNow] = useState(() => Date.now())
   const [frame, setFrame] = useState("")
   const [stormOnly, setStormOnly] = useState(false)
   const [error, setError] = useState("")
@@ -75,9 +80,12 @@ export default function TornadoPotential() {
       try {
         const response = parsePotential(await fetchForecast<unknown>(config,
           `tornado-potential${frame ? `?frame=${encodeURIComponent(frame)}` : ""}`, controller.signal))
-        if (!controller.signal.aborted) { setData(response); setError("") }
+        if (!controller.signal.aborted) {
+          setData(response); setNow(Date.now()); setError("");
+          if (!frame) { const next = nextPotentialFrame(response.frames); if (next) setFrame(next.frame_id); }
+        }
       } catch {
-        if (!controller.signal.aborted) setError("Potential-map source unavailable. Previous shading may be stale.")
+        if (!controller.signal.aborted) setError("The model grid could not be checked. Previous shading may be stale; this is not an all-clear.")
       } finally {
         if (!controller.signal.aborted) { setBusy(false); timeout = setTimeout(() => void load(), 120000) }
       }
@@ -85,15 +93,34 @@ export default function TornadoPotential() {
     void load()
     return () => { controller.abort(); clearTimeout(timeout) }
   }, [config, frame, refresh])
-  return <div className="tornado-potential"><header className="potential-heading"><div><h2>Code Black tornado potential</h2><p>Forecast ingredients across CONUS · experimental environment screen</p></div><button type="button" disabled={busy} onClick={() => setRefresh(value => value + 1)}>{busy ? "Updating…" : "Refresh"}</button></header>
-    <div className="potential-controls"><label>Valid time <select value={frame || data?.frame_id || ""} onChange={event => setFrame(event.target.value)}>{data?.frames.map(item => <option key={item.frame_id} value={item.frame_id}>{time(item.valid_time)} · HRRR f{item.forecast_hour}</option>)}</select></label><label><input type="checkbox" checked={stormOnly} onChange={event => setStormOnly(event.target.checked)} /> Show only forecast convection overlap</label></div>
-    {error && <p className="potential-warning" role="status">{error}</p>}
-    {data?.status === "stale" && <p className="potential-warning" role="status">The published model layer is stale. Check source times before using it.</p>}
-    {data?.status === "unavailable" && <p className="potential-warning">Complete model grids are unavailable. No tornado-potential assessment is shown.</p>}
+  const frames = data?.frames ?? []
+  const selectedIndex = frames.findIndex(item => item.frame_id === (frame || data?.frame_id))
+  const selectedFrame = frames[selectedIndex]
+  const unavailable = Boolean(error || data?.status === "unavailable")
+  const stale = data?.status === "stale" || data?.status.includes("degraded")
+  return <div className="tornado-potential">
+    <SetupReviewTitle title="Potential" description="Independent forecast-grid screening · this is not an all-clear."
+      state={unavailable ? "Unavailable" : !data ? "Waiting" : stale ? "Stale" : "Live"}
+      checkedAt={data?.generated_at} busy={busy} refresh={() => setRefresh(value => value + 1)} reloads="the model grid and setup reviews">
+      <span className="analysis-experimental">Experimental</span>
+    </SetupReviewTitle>
+    <div className="potential-controls">
+      <div className="analysis-time-stepper" role="group" aria-label="Valid time">
+        <button type="button" aria-label="Previous valid hour" disabled={selectedIndex <= 0} onClick={() => setFrame(frames[selectedIndex - 1].frame_id)}>−1 h</button>
+        <span>Valid {time(selectedFrame?.valid_time ?? data?.valid_time)} · Run {time(selectedFrame?.run_time ?? data?.run_time)}</span>
+        <button type="button" aria-label="Next valid hour" disabled={selectedIndex < 0 || selectedIndex >= frames.length - 1} onClick={() => setFrame(frames[selectedIndex + 1].frame_id)}>+1 h</button>
+        <details><summary>Choose any hour</summary><label>Valid time <select disabled={!frames.length} value={frame || data?.frame_id || ""} onChange={event => setFrame(event.target.value)}>{frames.map(item => <option key={item.frame_id} value={item.frame_id}>{formatOpsTimestamp(item.valid_time)} · HRRR f{item.forecast_hour}{Date.parse(item.valid_time) < now ? " (past)" : ""}</option>)}</select></label></details>
+      </div>
+      <label><input type="checkbox" checked={stormOnly} onChange={event => setStormOnly(event.target.checked)} /> Show only forecast convection overlap</label>
+    </div>
+    {!data && !error && <AsyncViewState state="loading" title="Waiting for model grid" />}
+    {unavailable && <ErrorState title="Model grid unavailable" message={error || "Complete model grids are unavailable. No tornado-potential assessment is shown."} onRetry={() => setRefresh(value => value + 1)} />}
+    {stale && !unavailable && <p className="potential-warning" role="status">The published model layer is stale. Check source times before using it.</p>}
+    {data && !unavailable && !data.features.some(feature => !stormOnly || feature.properties.storm_supported === true) && <p role="status">No shaded cells for this hour; this is not an all-clear</p>}
     <PotentialMap data={data} stormOnly={stormOnly} />
     <div className="potential-legend"><span><i data-tier="1" />Conditional ingredients</span><span><i data-tier="2" />Elevated environment signal</span><span><i data-tier="3" />Strong environment signal</span></div>
-    <div className="potential-metadata"><span>Run {time(data?.run_time)}</span><span>Valid {time(data?.valid_time)}</span><span>{data?.coverage ? `${data.coverage.native_land_points_evaluated.toLocaleString()} native land points evaluated · 0.25° display cells` : "Awaiting model coverage"}</span></div>
+    <div className="potential-metadata"><span>{data?.coverage ? `${data.coverage.native_land_points_evaluated.toLocaleString()} native land points evaluated · 0.25° display cells` : "Awaiting model coverage"}</span></div>
     <p className="potential-notice">{data?.notice ?? "This layer is being prepared from retained HRRR forecast grids."}</p>
-    <section className="potential-aegis"><header><h3>Automatic Aegis setup reviews</h3><span>{data?.automatic_aegis?.status.replaceAll("_", " ") ?? "Awaiting first pass"}</span></header><p>Aegis reviews changed setup evidence and the nearby Code Black grid signal. <Link to="/analysis/drafts">Open setup reviews →</Link></p><div>{data?.automatic_aegis?.setups.map(setup => <article key={setup.setup_id}><strong>{setup.setup_id} · Revision {setup.revision}</strong><span>{setup.status.replaceAll("_", " ")}{setup.completed_at ? ` · ${time(setup.completed_at)}` : ""}</span><p>{setup.summary || (setup.status === "pending" ? "Aegis is reviewing this setup." : "Awaiting a successful automatic review.")}</p>{!setup.summary && setup.previous_summary && <p><strong>Previous review · Revision {setup.previous_revision}</strong>{setup.previous_summary}</p>}</article>)}</div></section>
+    <section className="potential-aegis"><header><h3>Automatic Aegis setup reviews</h3><span>{data?.automatic_aegis?.status.replaceAll("_", " ") ?? "Awaiting first pass"}</span></header><p>Aegis reviews changed setup evidence and the nearby Code Black grid signal. <Link to="/setup-review/drafts">Open setup reviews →</Link></p><div>{data?.automatic_aegis?.setups.map(setup => <article key={setup.setup_id}><strong>{setup.setup_id} · Revision {setup.revision}</strong><span>{setup.status.replaceAll("_", " ")}{setup.completed_at && <> · {time(setup.completed_at)}</>}</span><p>{setup.summary || (setup.status === "pending" ? "Aegis is reviewing this setup." : "Awaiting a successful automatic review.")}</p>{!setup.summary && setup.previous_summary && <p><strong>Previous review · Revision {setup.previous_revision}</strong>{setup.previous_summary}</p>}</article>)}</div></section>
   </div>
 }

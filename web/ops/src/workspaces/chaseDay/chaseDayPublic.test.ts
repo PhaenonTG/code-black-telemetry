@@ -18,7 +18,7 @@ it('public snapshot', () => {
     expect(publicText(b)).toMatchInlineSnapshot(`"May 15, 2026
 SPC Day 1: SLGT · https://www.spc.noaa.gov/
 Target area TBA
-Valid window: 1:00 PM CT – 2:00 PM CT
+Valid window: 1:00 PM CDT – 2:00 PM CDT
 Official NWS watches and warnings are authoritative.
 Screening summary, not a forecast."`);
 });
