@@ -45,3 +45,21 @@
 .aegis-review__products .missing { background: #4a2729; color: #ffd2d2; }
 .aegis-review__candidates small { display: block; color: #aabed3; }
 @media (max-width: 650px) { .aegis-review__grid { grid-template-columns: 1fr; } .aegis-review__list { max-height: 210px; } }
+
+/* Owned review screens only; map geometry and layers are unchanged. */
+.aegis-page :is(.page-header button,.aegis-summary a,.aegis-alert-item,.aegis-review__list button,.aegis-panel > details > summary,.aegis-evidence a) { min-height:44px; }
+.aegis-page :is(.aegis-summary a,.aegis-evidence a) { display:inline-flex; align-items:center; }
+.aegis-page :is(h2,h3) { font-size:18px; text-transform:none; }
+.aegis-page .aegis-panel { border-radius:14px; border-color:var(--cb-line); background:var(--cb-panel); }
+.aegis-page .page-header__actions button { padding:10px 14px; color:var(--cb-text); background:var(--cb-panel-hi); border:1px solid var(--cb-line); border-radius:14px; }
+.soundings-workspace--brand { grid-template-columns:minmax(320px,380px) minmax(0,1fr); }
+.soundings-workspace--brand :is(h2,h3) { font-size:18px; text-transform:none; }
+.soundings-workspace--brand .soundings-panel { border-radius:14px; padding:20px; background:var(--cb-panel); border-color:var(--cb-line); }
+.soundings-workspace--brand :is(.soundings-panel__eyebrow,.soundings-param-card__label) { font-size:11px; }
+.soundings-workspace--brand :is(button,input,summary) { min-height:44px; }
+.soundings-workspace--brand :is(.soundings-main,.soundings-profile-table-wrap):focus-visible { outline:2px solid var(--cb-red); outline-offset:3px; }
+@media(max-width:767px) { .soundings-workspace--brand { grid-template-columns:minmax(0,1fr); } }
+
+div.soundings-workspace--brand .soundings-location-form :is(input,button) { min-height:44px; }
+.soundings-workspace--brand :is(.soundings-panel__note,.soundings-panel__error,.soundings-panel__badge) { font-size:11px; }
+.aegis-page h4 { font-size:11px; text-transform:uppercase; }

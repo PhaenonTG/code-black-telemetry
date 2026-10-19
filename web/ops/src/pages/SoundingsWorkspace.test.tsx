@@ -64,6 +64,14 @@ describe("SoundingsWorkspace initial state", () => {
     const html = renderWorkspace();
     expect(html).not.toContain("soundings-panel__error");
   });
+
+  it("renders one shared empty card, a Forecast header and a focusable profile region", () => {
+    const html = renderWorkspace();
+    expect(html.match(/async-view-state--empty/g)).toHaveLength(1);
+    expect(html).toContain("FORECAST");
+    expect(html).toContain("<h1>Soundings</h1>");
+    expect(html).toContain('tabindex="0" role="region" aria-label="Sounding profile and parameters"');
+  });
 });
 
 

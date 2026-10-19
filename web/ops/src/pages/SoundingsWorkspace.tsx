@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { AnalogMatchesPanel } from "../components/AnalogMatchesPanel";
-import { AsyncViewState } from "../components/AsyncViewState";
+import { formatOpsTimestamp } from "../core/timeFormat";
+import "../styles/aegis.css";
+import { AsyncViewState, ErrorState } from "../components/AsyncViewState";
 import { Hodograph } from "../components/Hodograph";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { SkewT } from "../components/SkewT";
@@ -58,7 +60,7 @@ function formatUtc(iso: string | null | undefined): string {
   if (!iso) return "UNAVAILABLE";
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "UNAVAILABLE";
-  return `${date.toISOString().slice(0, 16).replace("T", " ")}Z`;
+  return formatOpsTimestamp(date);
 }
 
 function dataAgeLabel(generatedAt: string | null | undefined): string {
@@ -221,7 +223,7 @@ export default function SoundingsWorkspace() {
 
   return (
     <div className="soundings-workspace soundings-workspace--brand">
-      <PageHeader className="soundings-workspace__header" kicker="ANALYSIS · UPPER AIR" title="Soundings" description="Point soundings for any location: Skew-T, hodograph, derived parameters, and historical analogs." />
+      <PageHeader className="soundings-workspace__header" routePath="/soundings" title="Soundings" description="Point soundings for any location: Skew-T, hodograph, derived parameters, and historical analogs." />
       <aside className="soundings-sidebar">
         <section className="soundings-panel">
           <header className="soundings-panel__header">
@@ -247,7 +249,7 @@ export default function SoundingsWorkspace() {
               {searchBusy ? "…" : "Search"}
             </button>
           </div>
-          {searchError && <p className="soundings-panel__error">{searchError}</p>}
+          {searchError && <ErrorState title="Location search unavailable" message="The requested location could not be resolved." details={searchError} onRetry={() => void handleSearch()} />}
 
           <div className="soundings-quick-locations">
             <button type="button" disabled={!opsPoint} onClick={() => opsPoint && selectPoint({ ...opsPoint, label: referenceLabel })}>OPS reference</button>
@@ -300,9 +302,9 @@ export default function SoundingsWorkspace() {
         </section>
       </aside>
 
-      <section className="soundings-main">
+      <section className="soundings-main" tabIndex={0} role="region" aria-label="Sounding profile and parameters">
         <div className="soundings-status-bar">
-          {phase !== "idle" && <OpsStatusPill state={pillStateFor(phase)} label={statusLabel(phase, error)} />}
+          {phase !== "idle" && <OpsStatusPill state={pillStateFor(phase)}  />}
           <span className="soundings-status-bar__point">{point ? point.label : "No location selected"}</span>
         </div>
 
@@ -318,9 +320,9 @@ export default function SoundingsWorkspace() {
           <AsyncViewState
             state="error"
             title="Sounding unavailable"
-            message={error ?? "Sounding unavailable."}
+            message="The requested vertical profile could not be loaded."
             onRetry={point ? () => void loadSounding(point) : undefined}
-          />
+          >{error && <details><summary>Details</summary><pre>{error}</pre></details>}</AsyncViewState>
         )}
         {phase === "stale" && result && (
           <AsyncViewState
@@ -330,7 +332,7 @@ export default function SoundingsWorkspace() {
             message={`This profile was received more than ${STALE_AFTER_MS / 60_000} minutes ago and is no longer marked current.`}
             lastUpdated={loadedAt !== null ? new Date(loadedAt) : undefined}
             onRetry={point ? () => void loadSounding(point) : undefined}
-            retryLabel="Reload sounding"
+            retryLabel="Refresh"
           />
         )}
 
@@ -368,7 +370,7 @@ export default function SoundingsWorkspace() {
               <header className="soundings-panel__header">
                 <h2>Profile Levels</h2>
               </header>
-              <div className="soundings-profile-table-wrap">
+              <div className="soundings-profile-table-wrap" tabIndex={0} role="region" aria-label="Profile levels">
                 <table className="soundings-profile-table">
                   <thead>
                     <tr>
@@ -428,9 +430,4 @@ function pillStateFor(phase: SoundingRequestState): OpsConnectionState {
     case "idle":
       return "UNAVAILABLE";
   }
-}
-
-function statusLabel(phase: SoundingRequestState, error: string | null): string {
-  if (phase === "unavailable") return error ? `UNAVAILABLE — ${error}` : "UNAVAILABLE";
-  return pillStateFor(phase);
 }
