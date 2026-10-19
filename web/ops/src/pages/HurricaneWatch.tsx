@@ -1,8 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import mapboxgl from "mapbox-gl";
+import type mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Link } from "react-router-dom";
-import { startAtlasMosaicLayer, type MosaicStatus } from "../../../../src/map/AtlasMosaicLayer";
+import type { MosaicStatus } from "../../../../src/map/AtlasMosaicLayer";
 import { mapboxAccessToken } from "../../../../src/services/mapTiles";
 import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
@@ -11,6 +11,7 @@ import { hurricaneCategory } from "../../../shared/hurricaneCategory";
 import { EmptyState, ErrorState } from "../components/AsyncViewState"
 import { PageHeader } from "../components/PageHeader";
 import "./HurricaneWatch.css";
+import { afterPaintIdle } from "./afterPaintIdle";
 
 type TrackPoint = { hour: number; latitude: number; longitude: number; wind_mph: number | null };
 type ModelPoint = TrackPoint & { valid_time: string; pressure_mb: number | null };
@@ -71,13 +72,19 @@ export function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisi
     }
   }, [selectedModels, showPrior, mapKey, models]);
   useEffect(() => {
-    if (!host.current || !data.storm || !data.watch_point || !data.track?.length || !token) return;
+    const container = host.current, storm = data.storm;
+    if (!container || !storm || !data.watch_point || !data.track?.length || !token) return;
+    let disposed = false;
+    let cleanup = () => {};
+    const cancelStartup = afterPaintIdle(() => {
+      void Promise.all([import("mapbox-gl"), import("../../../../src/map/AtlasMosaicLayer")]).then(([{ default: mapboxgl }, { startAtlasMosaicLayer }]) => {
+        if (disposed) return;
     setRadarStatus("loading");
     onRadarStatus("loading");
     mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({
-      container: host.current, style: "mapbox://styles/mapbox/dark-v11", preserveDrawingBuffer: true,
-      center: [data.storm.longitudeNumeric, data.storm.latitudeNumeric], zoom: 4.6,
+      container, style: "mapbox://styles/mapbox/dark-v11", preserveDrawingBuffer: true,
+      center: [storm.longitudeNumeric, storm.latitudeNumeric], zoom: 4.6,
       attributionControl: false, interactive: true,
     });
     mapRef.current = map;
@@ -86,6 +93,7 @@ export function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisi
       catch { return null; }
     });
     let stopRadar: (() => void) | undefined;
+    cleanup = () => { registerCapture(null); stopRadar?.(); mapRef.current = null; map.remove(); };
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
     map.on("load", () => {
       stopRadar = startAtlasMosaicLayer(map as unknown as Parameters<typeof startAtlasMosaicLayer>[0], () => visible.current, undefined, (status) => { setRadarStatus(status); onRadarStatus(status); });
@@ -136,7 +144,12 @@ export function HurricaneMap({ data, registerCapture, onRadarStatus, onRadarVisi
       bounds.extend([data.watch_point!.longitude, data.watch_point!.latitude]);
       map.fitBounds(bounds, { padding: 48, maxZoom: 6 });
     });
-    return () => { registerCapture(null); stopRadar?.(); mapRef.current = null; map.remove(); };
+      }).catch(() => {
+        cleanup(); cleanup = () => {};
+        if (!disposed) { setRadarStatus("unavailable"); onRadarStatus("unavailable"); }
+      });
+    });
+    return () => { disposed = true; cancelStartup(); cleanup(); };
   // Minute-by-minute warning polling must not reset the map camera.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapKey, token]);
