@@ -37,3 +37,18 @@ describe("RIP-15 unauthorized card centering", () => {
     expect(page("Unauthorized")).toContain('onClick={() => void signOut()}')
   })
 })
+
+describe("RIP-16 landscape auth scrolling", () => {
+  it("uses safe centering and scroll overflow at every width", () => {
+    const screen = rule(".auth-screen")
+    expect(screen).toContain("justify-content:safe center")
+    expect(screen).toContain("overflow-y:auto")
+    expect(screen).toContain("box-sizing:border-box")
+    for (const edge of ["top", "right", "bottom", "left"]) {
+      expect(screen).toContain(`env(safe-area-inset-${edge}, 0px)`)
+    }
+    expect(rule(".auth-card")).toContain("flex-shrink:0")
+    expect(rule(".auth-screen .auth-screen__status")).toContain("flex-shrink:0")
+    expect(css.indexOf("overflow-y:auto")).toBeLessThan(css.indexOf("@media"))
+  })
+})
