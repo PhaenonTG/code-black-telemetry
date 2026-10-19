@@ -63,3 +63,12 @@ describe("RIP-17 recovery link height", () => {
     expect(page("UpdatePassword")).toContain('<Link to="/" className="auth-card__link">')
   })
 })
+
+describe("RIP-18 recovery link width", () => {
+  it("adds horizontal hit-area padding and a minimum width to text links", () => {
+    const link = rule(".auth-card__link")
+    expect(link).toContain("min-width:44px")
+    expect(link).toContain("padding:4px 12px")
+    expect(link).toContain("max-width:100%")
+  })
+})

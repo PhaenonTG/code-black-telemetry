@@ -60,7 +60,7 @@
 .auth-card__link{
   display:inline-flex;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box;
   background:transparent;border:0;color:var(--cb-muted);font-size:12px;text-align:center;
-  padding:4px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;
+  min-width:44px;max-width:100%;padding:4px 12px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;
 }
 .auth-card__link:hover{color:var(--cb-text)}
 
