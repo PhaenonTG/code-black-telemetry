@@ -37,7 +37,7 @@ function ForgotPassword({ onBack }: { onBack: () => void }) {
       <h1 className="auth-card__title">Reset access</h1>
       {phase === "sent" ? (
         <>
-          <p className="auth-card__status auth-card__status--ok">
+          <p className="auth-card__status auth-card__status--ok" role="status">
             If that email is on file, a recovery link is on the way. Check your inbox.
           </p>
           <button type="button" className="auth-card__link" onClick={onBack}>
@@ -57,7 +57,7 @@ function ForgotPassword({ onBack }: { onBack: () => void }) {
             />
           </label>
           {phase === "error" && (
-            <p className="auth-card__status auth-card__status--error">
+            <p className="auth-card__status auth-card__status--error" role="alert">
               RESET REQUEST FAILED
               <br />
               {error}

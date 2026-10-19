@@ -81,3 +81,13 @@ describe("RIP-19 auth keyboard focus", () => {
     expect(css.indexOf("input:focus-visible")).toBeGreaterThan(css.indexOf("input:focus{"))
   })
 })
+
+describe("RIP-20 auth status announcements", () => {
+  it.each(["Login", "UpdatePassword"])("gives every existing %s success/error node its announcement role", name => {
+    const statuses = [...page(name).matchAll(/<p className="auth-card__status auth-card__status--(error|ok)"([^>]*)>/g)]
+    expect(statuses.length).toBeGreaterThanOrEqual(3)
+    for (const [, kind, attributes] of statuses) {
+      expect(attributes).toContain(`role="${kind === "error" ? "alert" : "status"}"`)
+    }
+  })
+})

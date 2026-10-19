@@ -68,7 +68,7 @@ export default function UpdatePassword() {
 
         {phase === "invalid-link" && (
           <>
-            <p className="auth-card__status auth-card__status--error">
+            <p className="auth-card__status auth-card__status--error" role="alert">
               This link is invalid or has expired.
             </p>
             <Link to="/" className="auth-card__link">
@@ -79,7 +79,7 @@ export default function UpdatePassword() {
 
         {phase === "done" && (
           <>
-            <p className="auth-card__status auth-card__status--ok">Password updated.</p>
+            <p className="auth-card__status auth-card__status--ok" role="status">Password updated.</p>
             <Link to="/" className="auth-card__link">
               Continue to OPS
             </Link>
@@ -122,7 +122,7 @@ export default function UpdatePassword() {
             </label>
 
             {phase === "error" && (
-              <p className="auth-card__status auth-card__status--error">
+              <p className="auth-card__status auth-card__status--error" role="alert">
                 Could not update password. Check both fields and try again.
               </p>
             )}
