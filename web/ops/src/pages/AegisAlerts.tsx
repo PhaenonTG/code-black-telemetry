@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { recordedReplaySession } from "./SetupRecordedReplay";
+import { recordedReplaySession } from "../workspaces/chaseDay/setupReview/SetupRecordedReplay";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { ErrorState } from "../components/AsyncViewState";
 import { formatOpsTimestamp } from "../core/timeFormat";

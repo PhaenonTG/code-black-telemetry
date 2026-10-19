@@ -6,9 +6,9 @@ import { useCoreOps } from "../core/useCoreOps";
 import { formatOpsTimestamp } from "../core/timeFormat";
 import { OpsStatusPill } from "../components/OpsStatusPill";
 import { EmptyState, ErrorState } from "../components/AsyncViewState";
-import { SetupReviewTitle } from "./SetupReviewTitle";
+import { SetupReviewTitle } from "../workspaces/chaseDay/setupReview/SetupReviewTitle";
 import { SetupSynthesis } from "../workspaces/SetupSynthesis";
-import { surveillanceDetails, type SetupIndex, type SetupDetail } from "./SetupSurveillanceRead";
+import { surveillanceDetails, type SetupIndex, type SetupDetail } from "../workspaces/chaseDay/setupReview/SetupSurveillanceRead";
 import "./ChaseSetups.css";
 
 function when(value?: string) {

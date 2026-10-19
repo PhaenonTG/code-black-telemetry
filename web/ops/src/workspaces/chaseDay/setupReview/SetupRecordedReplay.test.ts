@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { recordedReplaySession } from "./SetupRecordedReplay"
-import type { AegisStatus } from "../core/aegisFeed"
-import { readOpsCoreConfig } from "../core/config"
+import type { AegisStatus } from "../../../core/aegisFeed"
+import { readOpsCoreConfig } from "../../../core/config"
 const mocks = vi.hoisted(() => ({ replay: vi.fn() }))
-vi.mock("../core/aegisFeed", () => ({ replayAegisPolicy: (...args: unknown[]) => mocks.replay(...args) }))
+vi.mock("../../../core/aegisFeed", () => ({ replayAegisPolicy: (...args: unknown[]) => mocks.replay(...args) }))
 afterEach(() => { mocks.replay.mockReset(); vi.useRealTimers() })
 describe("recorded scan page lifecycle", () => {
   it("loads once on open after first status, never on timers/cutoff, and once per explicit Refresh", async () => {

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { analysisDestination, decisionInQueue, nextPotentialFrame, readSetupDecisions, setupLanding } from "./SetupReviewModel"
 import { surveillanceDetails } from "./SetupSurveillanceRead"
-import { readOpsCoreConfig } from "../core/config"
+import { readOpsCoreConfig } from "../../../core/config"
 const mocks = vi.hoisted(() => ({ read: vi.fn() }))
-vi.mock("../core/client", () => ({ fetchForecast: (...args: unknown[]) => mocks.read(...args) }))
+vi.mock("../../../core/client", () => ({ fetchForecast: (...args: unknown[]) => mocks.read(...args) }))
 const config = readOpsCoreConfig({})
 afterEach(() => { mocks.read.mockReset(); vi.useRealTimers() })
 

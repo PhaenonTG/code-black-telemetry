@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
-import { OpsStatusPill } from "../components/OpsStatusPill"
-import { formatOpsTimestamp } from "../core/timeFormat"
+import { OpsStatusPill } from "../../../components/OpsStatusPill"
+import { formatOpsTimestamp } from "../../../core/timeFormat"
 
 export function SetupReviewTime({ value }: { value?: string | number | null }) {
   if (value === undefined || value === null || !Number.isFinite(new Date(value).getTime())) return <>—</>

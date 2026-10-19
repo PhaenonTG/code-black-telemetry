@@ -1,4 +1,4 @@
-import { SetupReviewTime } from "../pages/SetupReviewTitle";
+import { SetupReviewTime } from "./chaseDay/setupReview/SetupReviewTitle";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { fetchForecast, postSetupWorkflow } from "../core/client";

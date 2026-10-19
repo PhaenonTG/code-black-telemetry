@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Navigate, useLocation, useParams } from "react-router-dom"
-import { useCoreOps } from "../core/useCoreOps"
-import { AsyncViewState } from "../components/AsyncViewState"
+import { useCoreOps } from "../../../core/useCoreOps"
+import { AsyncViewState } from "../../../components/AsyncViewState"
 import { analysisDestination, setupLanding, type SetupTab } from "./SetupReviewModel"
 
 export function LegacyAnalysisRedirect() {

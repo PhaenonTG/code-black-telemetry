@@ -1,7 +1,7 @@
-import { fetchForecast } from "../core/client"
-import { requestDeadline } from "../core/requestDeadline"
-import { selectBriefing, type Briefing } from "../workspaces/chaseDay/chaseDayModel"
-import type { PotentialPayload } from "../workspaces/tornadoPotentialModel"
+import { fetchForecast } from "../../../core/client"
+import { requestDeadline } from "../../../core/requestDeadline"
+import { selectBriefing, type Briefing } from "../chaseDayModel"
+import type { PotentialPayload } from "../../tornadoPotentialModel"
 export const SETUP_TABS = ["today", "outlook", "potential", "drafts", "briefings", "surveillance"] as const
 export type SetupTab = typeof SETUP_TABS[number]
 export function analysisDestination(path: string, search = ""): string {

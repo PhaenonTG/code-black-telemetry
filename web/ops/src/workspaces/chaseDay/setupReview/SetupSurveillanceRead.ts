@@ -1,5 +1,5 @@
-import { fetchForecast } from "../core/client";
-import type { WeightedSynthesis } from "../workspaces/setupReviewModel";
+import { fetchForecast } from "../../../core/client";
+import type { WeightedSynthesis } from "../../setupReviewModel";
 type SetupRow = { setup_id: string; day: number; risk_label: string; revision: number; valid_until: string };
 export type SetupIndex = { status: string; checked_at?: string; last_source_check_at?: string; items: SetupRow[] };
 export type SetupDetail = SetupRow & { weighted_synthesis?: WeightedSynthesis | null; unavailable?: boolean };

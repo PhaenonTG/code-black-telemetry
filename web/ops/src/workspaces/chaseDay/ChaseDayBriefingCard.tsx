@@ -1,5 +1,5 @@
 import { formatOpsTimestamp } from "../../core/timeFormat";
-import { SetupReviewTitle } from '../../pages/SetupReviewTitle';
+import { SetupReviewTitle } from './setupReview/SetupReviewTitle';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { OpsStatusPill } from '../../components/OpsStatusPill';

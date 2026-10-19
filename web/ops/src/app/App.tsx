@@ -8,7 +8,7 @@ import UpdatePassword from "../pages/UpdatePassword"
 import { RouteLoadBoundary } from "./RouteLoadBoundary"
 import { AliasRedirect } from "./AliasRedirect"
 import { ROUTE_ALIASES } from "./routes"
-import { LegacyAnalysisRedirect, LegacyChaseSetupRedirect, SetupReviewLanding } from "../pages/SetupReviewRouting"
+import { LegacyAnalysisRedirect, LegacyChaseSetupRedirect, SetupReviewLanding } from "../workspaces/chaseDay/setupReview/SetupReviewRouting"
 
 // Route-level code splitting -- this bundle shipped as a single ~3MB JS chunk with everything
 // (including the map/mapbox-gl stack, only needed by two of these routes) loaded on first paint,

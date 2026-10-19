@@ -6,10 +6,10 @@ import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../sr
 import { fetchForecast } from "../core/client"
 import { useCoreOps } from "../core/useCoreOps"
 import { parsePotential, type PotentialPayload } from "../workspaces/tornadoPotentialModel"
-import { SetupReviewTitle } from "./SetupReviewTitle"
+import { SetupReviewTitle } from "../workspaces/chaseDay/setupReview/SetupReviewTitle"
 import { AsyncViewState, ErrorState } from "../components/AsyncViewState"
 import { formatOpsTimestamp } from "../core/timeFormat"
-import { nextPotentialFrame } from "./SetupReviewModel"
+import { nextPotentialFrame } from "../workspaces/chaseDay/setupReview/SetupReviewModel"
 import "./TornadoPotential.css"
 
 const time = (value?: string) => value && Number.isFinite(Date.parse(value)) ? <time dateTime={value} title={new Date(value).toISOString()}>{formatOpsTimestamp(value)}</time> : "\u2014"

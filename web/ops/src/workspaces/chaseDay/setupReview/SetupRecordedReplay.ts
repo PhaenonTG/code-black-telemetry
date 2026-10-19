@@ -1,5 +1,5 @@
-import { replayAegisPolicy, type AegisRecordedReplay, type AegisStatus } from "../core/aegisFeed"
-import type { OpsCoreConfig } from "../core/config"
+import { replayAegisPolicy, type AegisRecordedReplay, type AegisStatus } from "../../../core/aegisFeed"
+import type { OpsCoreConfig } from "../../../core/config"
 
 /** Page-open replay waits for the first known cutoff. Status polling never triggers another POST. */
 export function recordedReplaySession(config: OpsCoreConfig, signal: AbortSignal,
