@@ -21,7 +21,11 @@ describe("phone readiness", () => {
     expect(html).not.toContain("Core test detail")
     expect(html).not.toContain("OPS READY")
     expect(html).not.toContain("Unrelated weather detail")
-    expect(html).toContain("https://phaenon3.tail1d0673.ts.net/ai#access_token=test-access-token")
+    expect(html).toContain('href="/ai"')
+    expect(html).toContain("Console handoff disabled")
+    expect(html).not.toContain("test-access-token")
+    expect(html).not.toContain("access_token=")
+    expect(html).not.toContain("phaenon3.tail1d0673.ts.net")
   })
   it("labels a live Core narrowly, without claiming all services are ready", () => {
     fixture.state = "LIVE"
