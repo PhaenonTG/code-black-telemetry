@@ -2,8 +2,5 @@
 .producer-workspace a {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-}
-@media (max-width: 600px) {
-  .producer-workspace a { min-height: 44px; }
+  min-height: 44px;
 }

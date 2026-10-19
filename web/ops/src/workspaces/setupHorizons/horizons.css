@@ -136,8 +136,21 @@
   .outlook-day-unavailable .outlook-day-full { display: none; }
   .outlook-day-unavailable .outlook-day-dash { display: inline; }
   .setup-horizons__timeline button { min-height: 62px; }
+  .setup-horizons__source, .setup-horizons__source a, .setup-horizons__source dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .setup-horizons__timeline span {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: auto;
+    letter-spacing: 0;
+  }
 }
-@media (pointer: coarse) { .setup-horizons .outlook-legend button { min-height: 44px; } }
+@media (pointer: coarse) {
+  .setup-horizons .outlook-legend button { min-height: 44px; }
+  .setup-horizons__source a { display: inline-flex; align-items: center; min-height: 44px; }
+}
 
 .outlook-host[data-paused=true] .outlook-glow { animation-play-state: paused; }
 
