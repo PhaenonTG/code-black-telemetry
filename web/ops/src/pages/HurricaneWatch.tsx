@@ -8,6 +8,7 @@ import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
 import { createHurricaneBriefingImage } from "./hurricaneBriefingImage";
 import { hurricaneCategory } from "../../../shared/hurricaneCategory";
+import { EmptyState, ErrorState } from "../components/AsyncViewState"
 import { PageHeader } from "../components/PageHeader";
 import "./HurricaneWatch.css";
 
@@ -329,14 +330,15 @@ export default function HurricaneWatch() {
   const sourceAgeHours = Number.isFinite(sourceTime) ? (Date.now() - sourceTime) / 3_600_000 : null
   const sourceIsOld = sourceAgeHours !== null && sourceAgeHours > 12
   return <section className="hurricane-watch">
-    <PageHeader className="hurricane-watch__header" kicker="TROPICAL WEATHER · GRAND BAY WATCH" title={data?.storm ? `${data.storm.classification === "HU" ? "Hurricane" : "Storm"} ${data.storm.name ?? "Gulf"}` : "Hurricane Watch"} description={`${category === null ? "" : `${data?.status === "active" ? "NHC Category" : "Last NHC Category"} ${category} · `}Grand Bay watch · source checks about every five minutes`} actions={<Link to="/weather">Weather →</Link>} />
-    {error && <p role="alert" className="hurricane-watch__error">{error}</p>}
+    <PageHeader routePath="/hurricane" className="hurricane-watch__header" title="" description={`${data?.storm?.name ? `${data.storm.name} · ` : ""}${category === null ? "" : `${data?.status === "active" ? "NHC Category" : "Last NHC Category"} ${category} · `}Grand Bay watch · source checks about every five minutes`} actions={<Link className="page-action-link" to="/weather">Weather Analysis</Link>} />
+    {error && <ErrorState message="The hurricane assessment could not be refreshed." details={error} />}
     {!data && !error && <p role="status">Loading the latest assessment…</p>}
     {data?.status === "pending" && <p role="status">{data.notice}</p>}
     {data?.freshness === "stale" && <p role="alert" className="hurricane-watch__error">Source assessment is stale. Last successful check: {time(data.checked_at)}.</p>}
     {sourceIsOld && <p role="alert" className="hurricane-watch__error">The displayed advisory is {Math.floor(sourceAgeHours)} hours old. Treat this as historical context and verify the latest NHC/NWS guidance before acting.</p>}
-    {data?.status === "inactive" && <p className="hurricane-watch__error">NHC no longer lists this storm as active. The last assessment remains below.</p>}
+    {data?.status === "inactive" && <EmptyState title="No active storms" message="NHC no longer lists this storm as active. The last assessment remains below as history." />}
     {data?.storm && a && <>
+      {data.status === "inactive" && <h2>Storm history · {data.storm.name}</h2>}
       <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{error ? "LAST VERIFIED WATCH" : data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button className="hurricane-watch__image-action" type="button" disabled={generatingImage || exportRadarStatus === "loading" || exportRadarStatus === "unavailable" || !radarVisible} onClick={() => void createImage()}>{generatingImage ? "Creating image…" : !radarVisible ? "Show radar for image" : exportRadarStatus === "loading" ? "Waiting for radar…" : exportRadarStatus === "unavailable" ? "Image needs the radar map" : "Create one-page image"}</button><button type="button" onClick={() => void share()}>Share text</button><button type="button" onClick={printBrief}>Print / PDF</button></div>
       {shareStatus && <p role="status" className="hurricane-watch__share-status">{shareStatus}</p>}
       {imageStatus && <p role="status" className="hurricane-watch__share-status">{imageStatus}</p>}

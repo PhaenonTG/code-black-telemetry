@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { useLocation } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { useViewport } from "../hooks/useViewport"
 import { loadMapLayerVisibility, saveMapLayerVisibility } from "../../../../src/services/settings"
 import { Sidebar } from "./Sidebar"
 import { BottomNav } from "./BottomNav"
 import { StatusBar } from "./StatusBar"
 import { useShellTheme } from "../hooks/useShellTheme"
+import { useSharedOpsStatus } from "../core/useSharedOpsStatus"
+import { statusPresentation } from "../core/statusWords"
 import { LocationControl } from "./LocationControl"
 
 const SIDEBAR_COLLAPSED_KEY = "codeblack.ops.sidebarCollapsed"
@@ -20,6 +22,7 @@ function readSidebarCollapsed(): boolean {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { core } = useSharedOpsStatus()
   const viewport = useViewport()
   const theme = useShellTheme()
   const { pathname } = useLocation()
@@ -60,7 +63,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <div className="shell shell--phone" data-theme={theme}>
         <a className="ops-skip-link" href="#ops-main">Skip to content</a>
-        <div className="shell__location"><LocationControl /></div>
+        <div className="shell__location"><LocationControl /><Link className="phone-health-dot" to="/status/health" aria-label={`Core: ${statusPresentation(core.state).word}. Open Status`}><i style={{ background: statusPresentation(core.state).color }} /></Link></div>
         <main id="ops-main" tabIndex={-1} ref={contentRef} className="shell__content">{children}</main>
         <BottomNav />
       </div>

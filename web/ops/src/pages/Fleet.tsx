@@ -1,3 +1,5 @@
+import { formatOpsTimestamp } from "../core/timeFormat"
+import { EmptyState } from "../components/AsyncViewState"
 import { PageHeader } from "../components/PageHeader"
 import { OpsStatusPill } from "../components/OpsStatusPill"
 import { useSharedOpsStatus, statusAge } from "../core/useSharedOpsStatus"
@@ -15,11 +17,13 @@ function pillState(health: FabricPresenceState): OpsConnectionState {
 }
 
 export function lastSeenLabel(lastSeen: number | string | null): string {
+  // TODO(stale-threshold): retain current Team last-report behavior pending policy review.
   if (lastSeen == null) return "Never reported"
   const timestamp = typeof lastSeen === "string"
     ? Date.parse(lastSeen)
     : lastSeen < 100_000_000_000 ? lastSeen * 1000 : lastSeen
   if (!Number.isFinite(timestamp) || timestamp <= 0) return "Last seen unavailable"
+  if (Date.now() - timestamp >= 3_600_000) return `Last seen ${formatOpsTimestamp(timestamp)}`
   return `Last seen ${ageText(Math.max(0, Math.round((Date.now() - timestamp) / 1000)))} ago`
 }
 
@@ -34,43 +38,30 @@ export default function Fleet() {
   }, [])
   return (
     <div className="page page-fleet">
-      <PageHeader title="TEAM & DEVICES" kicker="FIELD OPERATIONS · CHASERS · VEHICLES" description="Active chase units, their onboard devices, and when each last reported." />
-      <nav className="section-tabs" aria-label="Field operations sections">
-        <Link className="active" to="/chase" aria-current="page">TEAM & DEVICES</Link>
-        <Link to="/stream">PROGRAM STATUS</Link>
-      </nav>
-      {fabric.state === "STALE" && <p role="status">STALE Fabric snapshot · {statusAge(fabric.unitsReceivedAt ?? fabric.lastContactAt ?? fabric.checkedAt, statusNow)}</p>}
+      <PageHeader routePath="/team" title="" description="Active chase units, their onboard devices, and when each last reported." />
+      <p><Link to="/producer/sources">Producer › Sources →</Link></p>
+      {fabric.state === "STALE" && <p role="status">Stale Fabric snapshot · {statusAge(fabric.unitsReceivedAt ?? fabric.lastContactAt ?? fabric.checkedAt, statusNow)}</p>}
       {units.length === 0 ? (
-        <div className="empty-state empty-state--centered">
-          <p className="empty-state__title">{snapshot ? "NO UNITS REGISTERED" : "NO FABRIC UNIT SNAPSHOT"}</p>
-          <p className="empty-state__body">
-            {snapshot ? "Fabric is reachable, but no units are registered yet." : `${fabric.detail}. Units appear here when Fabric supplies a snapshot.`}
-          </p>
-          <div className="empty-state__actions"><Link to="/">OPEN OPERATIONS MAP</Link><Link to="/system">VIEW SYSTEM HEALTH</Link></div>
-        </div>
+        <EmptyState title={snapshot ? "No units registered" : "No Fabric unit snapshot"} message={snapshot ? "Fabric is reachable, but no units are registered yet." : `${fabric.detail}. Units appear here when Fabric supplies a snapshot.`}>
+          <div className="empty-state__actions"><Link to="/">Open Ops Map →</Link><Link to="/status/health">Open Status →</Link></div>
+        </EmptyState>
       ) : (
-        <div className="ops-fleet-grid">
+        <div className="ops-team-table-wrap"><table className="ops-team-table"><thead><tr><th>Chaser</th><th>Role</th><th>Device</th><th>Last report</th><th>Status</th></tr></thead><tbody>
           {units.map((unit) => {
             const readings = liveChaserReadings(unit, now)
             return (
-            <section className="ops-fleet-card" key={unit.unit_id}>
-              <header>
-                <p>{unit.role}</p>
-                <OpsStatusPill state={pillState(unit.overall_health)} label={unit.overall_health} />
-              </header>
-              <h2>{unit.operator_name || unit.display_name}</h2>
-              <span className="ops-fleet-card__meta">{lastSeenLabel(unit.last_seen)}</span>
+            <tr key={unit.unit_id}><td><strong>{unit.operator_name || unit.display_name}</strong></td><td>{unit.role}</td><td>{unit.display_name}<small>{unit.unit_id}</small>{(unit.devices ?? []).map(device => <small key={device.device_id}>{device.display_label}</small>)}</td><td>{lastSeenLabel(unit.last_seen)}
               {readings.length > 0 && (
                 <div className="ops-fleet-card__readings" aria-label={`${unit.operator_name || unit.display_name} live conditions`}>
-                  <div className="ops-fleet-card__readings-heading"><strong>LIVE CONDITIONS</strong><span>{`${Math.ceil(Math.max(...readings.map((reading) => reading.ageMs)) / 1000)}s ago`}</span></div>
+                  <div className="ops-fleet-card__readings-heading"><strong>Live conditions</strong><span>{`${Math.ceil(Math.max(...readings.map((reading) => reading.ageMs)) / 1000)}s ago`}</span></div>
                   <dl>{readings.map((reading) => (
                     <div key={reading.key}><dt>{reading.label}</dt><dd>{reading.value}</dd></div>
                   ))}</dl>
                 </div>
               )}
-            </section>
+            </td><td><OpsStatusPill state={pillState(unit.overall_health)} label={unit.overall_health} /></td></tr>
           )})}
-        </div>
+        </tbody></table></div>
       )}
     </div>
   )

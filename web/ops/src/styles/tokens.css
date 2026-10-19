@@ -89,3 +89,20 @@
 
 .shell[data-theme="light"] .segmented button.active { color: #ffffff; }
 .shell[data-theme="light"] .settings-number input { background: var(--cb-void); }
+
+/* r2 shared sizing contract; map geometry is owned separately. */
+:root {
+  --cb-text-min: 11px;
+  --cb-section-title: 18px;
+  --cb-panel-label: var(--cb-text-min);
+  --cb-card-radius: 14px;
+  --cb-card-padding: 20px;
+  --cb-card-compact: 14px;
+  --cb-h1-font: Anton, Impact, "Arial Narrow", sans-serif;
+  --cb-button-primary-text: 14px;
+  --cb-button-primary-height: 44px;
+  --cb-button-secondary-text: 12px;
+  --cb-button-secondary-height: 36px;
+  --cb-button-compact-text: var(--cb-text-min);
+  --cb-button-compact-height: 32px;
+}

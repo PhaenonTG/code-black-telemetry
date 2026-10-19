@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { formatOpsTimestamp } from "../core/timeFormat"
 import { PageHeader } from "../components/PageHeader"
 import { useCoreOps } from "../core/useCoreOps"
 import { ChaseRadarPanel } from "../workspaces/ChaseRadarPanel"
@@ -31,15 +32,16 @@ export default function ChaseWorkspace() {
     : locationMode === "chaser" ? (referenceIsStale ? "Last known chaser fix" : referenceIsFallback ? "Waiting for chaser GPS" : "Live chaser GPS")
       : referenceIsFallback ? "Fallback reference" : "Map-selected point"
   return <section className="chase-workspace">
-    <PageHeader className="workspace-heading" kicker="FIELD · CHASE SITUATION" title="Chase Desk" description="Field position, official alerts, and radar context" actions={<nav aria-label="Chase tools"><button type="button" aria-pressed={choosingDestination} onClick={() => setChoosingDestination((value) => !value)}>{choosingDestination ? "Tap destination on map" : "Set route destination"}</button>{destination && <button type="button" onClick={() => { setDestination(null); setChoosingDestination(false) }}>Clear route</button>}<Link to="/radar">Radar Lab →</Link><Link to="/chase">Team & devices →</Link></nav>} />
+    <PageHeader routePath="/chase-desk" className="workspace-heading" title="" description="Field position, official alerts, and radar context" actions={<nav aria-label="Chase tools"><button type="button" className="ops-button-primary" aria-pressed={choosingDestination} onClick={() => setChoosingDestination((value) => !value)}>{choosingDestination ? "Tap destination on map" : "Set destination"}</button>{destination && <button type="button" onClick={() => { setDestination(null); setChoosingDestination(false) }}>Clear route</button>}<Link to="/radar">Radar Lab</Link><Link to="/team">Team</Link></nav>} />
+    <ChaseOfficialBanner intel={intel} point={radarFocus} vehiclePosition={vehiclePosition} />
     <nav className="chase-reference-bar" aria-label="Chase location reference">
-      <span>FOLLOW</span>
+      <span>Follow</span>
       <button type="button" aria-pressed={locationMode === "follow"} onClick={followDeviceLocation}>My device</button>
       <button type="button" disabled={!nick} aria-pressed={referenceUnitId === nick?.unit_id} onClick={() => nick && chooseChaserLocation(nick.unit_id)}>Nick</button>
       <button type="button" disabled={!spencer} aria-pressed={referenceUnitId === spencer?.unit_id} onClick={() => spencer && chooseChaserLocation(spencer.unit_id)}>Spencer</button>
     </nav>
-    <div className="chase-unit-strip" aria-label="Active location reference"><div><span>LOCATION REFERENCE</span><strong>{referenceLabel}</strong></div><div><span>GPS / SOURCE</span><strong>{locationDetail}</strong></div><div><span>FABRIC</span><strong>{active?.overall_health ?? state.fabric.state}</strong></div><div><span>{locationMode === "chaser" ? "CHASER FIX" : "REFERENCE UPDATED"}</span><strong>{locationMode === "chaser" ? (lastFix ? new Date(lastFix).toLocaleTimeString() : "Awaiting GPS") : deviceLocation.status === "ready" ? new Date(deviceLocation.at).toLocaleTimeString() : "Unavailable"}</strong></div></div>
-    <ChaseOfficialBanner intel={intel} point={radarFocus} vehiclePosition={vehiclePosition} />
+    <div className="chase-unit-strip" aria-label="Active location reference"><div><span>LOCATION REFERENCE</span><strong>{referenceLabel}</strong></div><div><span>GPS / SOURCE</span><strong>{locationDetail}</strong></div><div><span>FABRIC</span><strong>{active?.overall_health ?? state.fabric.state}</strong></div><div><span>{locationMode === "chaser" ? "CHASER FIX" : "REFERENCE UPDATED"}</span><strong>{locationMode === "chaser" ? (lastFix ? formatOpsTimestamp(lastFix) : "Awaiting GPS") : deviceLocation.status === "ready" ? formatOpsTimestamp(deviceLocation.at) : "Unavailable"}</strong></div></div>
+
     <div className="chase-workspace__split"><div className="chase-map-frame"><OpsWorkstation focus="CHASE SITUATION" embedded routeOverlay={destination ? route.path : undefined} onChaseDestinationSelect={choosingDestination ? (point) => { setDestination(point); setChoosingDestination(false) } : undefined} /></div><ChaseRadarPanel focus={radarFocus} /><ChaseIntelRail intel={intel} point={radarFocus} vehiclePosition={vehiclePosition} route={route} routeOrigin={origin} routeDestination={destination} /></div>
     <p className="workspace-note chase-workspace__note">Official point alerts are authoritative for the reference point. Nearby polygon distance is approximate; road feeds may be incomplete. Aegis candidates are internal and unconfirmed.</p>
   </section>

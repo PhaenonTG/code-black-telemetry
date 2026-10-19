@@ -11,7 +11,7 @@ function render(overrides:Record<string,unknown> = {}) {
 describe("location reference explanation",()=>{
  it("shows the fallback reason and a location picker control",()=>{
   const html=render()
-  expect(html).toContain("Using fallback location - no chaser GPS")
+  expect(html).toContain("Using fallback location · no chaser GPS")
   expect(html).toContain("Choose location")
   expect(html).toContain('aria-label="OPS location reference"')
  })

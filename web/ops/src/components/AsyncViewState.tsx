@@ -1,3 +1,4 @@
+import { statusWord } from "../core/statusWords"
 import { Icon } from "./Icon"
 import { formatOpsTimestamp } from "../core/timeFormat"
 import type { ReactNode } from "react"
@@ -30,14 +31,14 @@ export interface AsyncViewStateProps {
 const DEFAULT_TITLES: Record<AsyncViewStateKind, string> = {
   loading: "Loading",
   stale: "Showing last received data",
-  error: "Unavailable",
+  error: statusWord("UNAVAILABLE"),
   empty: "Nothing to show",
 }
 
 const STATE_LABELS: Record<AsyncViewStateKind, string> = {
-  loading: "Waiting",
-  stale: "Stale",
-  error: "Unavailable",
+  loading: statusWord("CHECKING"),
+  stale: statusWord("STALE"),
+  error: statusWord("UNAVAILABLE"),
   empty: "0",
 }
 

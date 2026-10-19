@@ -73,3 +73,16 @@
 .producer-monitor-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; }
 .producer-monitor-controls button { min-height: 44px; padding: 10px 14px; touch-action: manipulation; }
 .producer-monitor-controls [role="status"] { flex: 1 1 220px; font-size: 12px; }
+
+/* Owned Producer and Chase chrome, outside the map panels. */
+.chase-reference-bar { position: static; }
+.chase-reference-bar > span, .producer-sources__rail button small { font-size: var(--cb-text-min); }
+.producer-main > .workspace-panel:not(.producer-map-link), .producer-rail > .workspace-panel { border-radius: var(--cb-card-radius); }
+.producer-workspace .workspace-heading h1, .chase-workspace .workspace-heading h1 { font-family: var(--cb-h1-font); }
+.producer-main > .workspace-panel > header h2, .producer-rail > .workspace-panel > header h2 { font-size: var(--cb-section-title); text-transform: none; }
+
+.producer-workspace .producer-controls__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.producer-workspace .producer-controls__grid > button { min-width: 0; }
+.producer-workspace .producer-controls h2 { font-size: var(--cb-section-title); text-transform: none; }
+
+.producer-main > .workspace-panel:not(.producer-map-link), .producer-rail > .workspace-panel { padding: var(--cb-card-padding); }

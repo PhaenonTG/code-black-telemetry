@@ -69,7 +69,7 @@ export default function AutomationLab() {
 
   return <div className="page automation-lab">
     <PageHeader kicker="OPS / WORKFLOW DESIGN" title="Automation Lab"
-      description="Rehearse Aegis policy on Core without publishing alerts or changing live settings. Activation remains locked while radar scoring is validated." />
+      description="Rehearse alert routing changes as a dry run." />
 
     <section className="automation-lab__live" aria-label="Current Core state">
       <div><small>CORE SCREEN</small><b>{liveError ? "UNAVAILABLE" : !live ? "CHECKING" : live.screen.enabled ? "RUNNING" : "OFF"}</b></div>

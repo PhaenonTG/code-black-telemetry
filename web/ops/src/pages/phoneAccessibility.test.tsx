@@ -57,7 +57,7 @@ describe("phone accessibility", () => {
     const html = renderToString(<MemoryRouter><HurricaneWatch /></MemoryRouter>)
     expect(html).toContain('class="page-header hurricane-watch__header"')
     expect(html).toContain('class="page-header__kicker"')
-    expect(html).toContain('<h1>Hurricane Watch</h1>')
+    expect(html).toContain('<h1>Hurricane</h1>')
     expect(html).toContain('class="page-header__description"')
     expect(html).toContain('href="/weather"')
     expect(fetch).not.toHaveBeenCalled()

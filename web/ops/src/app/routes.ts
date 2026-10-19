@@ -38,6 +38,8 @@ export const ROUTES: RouteDef[] = [
 
 export const MORE_ROUTE: RouteDef = { path: "/more", label: "More", phoneLabel: "More", icon: "more", state: "LIVE", inPhoneNav: true, inSidebar: false, section: "ADMIN" }
 
+export const NOT_FOUND_ROUTE: RouteDef = { path: "*", label: "Page not found", icon: "alert", state: "LIVE", inPhoneNav: false, inSidebar: false, section: "ADMIN" }
+
 export const ROUTE_ALIASES = {
   "/setup-review": "/analysis",
   "/workspace/chase": "/chase-desk",
@@ -51,7 +53,7 @@ export const ROUTE_ALIASES = {
 
 export function routeForPath(path: string): RouteDef | undefined {
   const canonical = ROUTE_ALIASES[path as keyof typeof ROUTE_ALIASES] ?? path
-  return [...ROUTES, MORE_ROUTE].filter(route => canonical === route.path || (route.path !== "/" && canonical.startsWith(`${route.path}/`))).sort((a, b) => b.path.length - a.path.length)[0]
+  return [...ROUTES, MORE_ROUTE, NOT_FOUND_ROUTE].filter(route => canonical === route.path || (route.path !== "/" && canonical.startsWith(`${route.path}/`))).sort((a, b) => b.path.length - a.path.length)[0]
 }
 
 export function routeEyebrow(route: RouteDef): string {

@@ -15,8 +15,10 @@ export function LocationControl() {
   const detail = referenceIsFallback && locationMode === "follow"
     ? deviceLocation.status === "denied" ? "Location permission denied · using Pea Ridge, AR" : "Waiting for browser GPS · using Pea Ridge, AR"
     : referenceLabel
-  return <div className="location-control" data-fallback={referenceIsFallback} title={detail}>
-    <span className="location-control__indicator" aria-hidden="true" />
+  return <details className="location-control location-control--chip" data-fallback={referenceIsFallback} data-stale={referenceIsStale}>
+    <summary aria-label={`Location: ${referenceLabel}. Choose location`} title={detail}><span className="location-control__indicator" aria-hidden="true" /><span>{referenceLabel}</span><span aria-hidden="true">⌄</span></summary>
+    <div className="location-control__sheet">
+    <p role="status">{detail}{referenceIsStale ? " · Last verified chaser position" : ""}</p>
     <label className="location-control__choice"><span>Location</span><select ref={picker} aria-label="OPS location reference" value={value} onChange={(event) => {
       const next = event.target.value
       if (next.startsWith("chaser:")) chooseChaserLocation(next.slice(7))
@@ -37,6 +39,7 @@ export function LocationControl() {
       {locationMode === "manual" && <option value="manual">Map point</option>}
     </select></label>
     <span className="location-control__detail" role="status"><span className="location-control__name">{referenceIsFallback ? locationMode === "chaser" ? referenceLabel : "Pea Ridge, AR" : selectedPoint ? `${selectedPoint.lat.toFixed(3)}, ${selectedPoint.lon.toFixed(3)}` : referenceLabel}</span><small>{referenceIsStale ? "Last verified chaser position" : referenceIsFallback ? locationMode === "fallback" ? "Fixed reference" : "Fallback" : locationMode === "manual" ? "Selected point" : "GPS reference"}</small></span>
-    {referenceIsFallback && <button type="button" className="location-control__fallback" onClick={() => { picker.current?.focus() }}>Using fallback location - no chaser GPS <span>Choose location</span></button>}
-  </div>
+    {referenceIsFallback && <p className="location-control__warning">Using fallback location · no chaser GPS. Choose a location above.</p>}
+    </div>
+  </details>
 }

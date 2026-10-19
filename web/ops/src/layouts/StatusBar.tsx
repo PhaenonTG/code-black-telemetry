@@ -2,6 +2,9 @@ import { useEffect, useState } from "react"
 import { useSharedOpsStatus, statusAge } from "../core/useSharedOpsStatus"
 import { OpsStatusPill } from "../components/OpsStatusPill"
 import type { OpsConnectionState } from "../core/types"
+import { Link, useLocation } from "react-router-dom"
+import { routeForPath, routeEyebrow } from "../app/routes"
+import { formatOpsClock } from "../core/timeFormat"
 import { LocationControl } from "./LocationControl"
 
 // Compact top strip for desktop/tablet -- not a duplicate of the Operations page, just the
@@ -9,6 +12,7 @@ import { LocationControl } from "./LocationControl"
 // No brand mark here -- the sidebar already shows the Code Black OPS logo/wordmark on every one
 // of these viewports, so a second copy here was pure duplication, not a second piece of info.
 export function StatusBar() {
+  const currentRoute = routeForPath(useLocation().pathname)
   const [now, setNow] = useState(() => new Date())
   const { core, fabric, now: statusNow } = useSharedOpsStatus()
   useEffect(() => {
@@ -23,14 +27,12 @@ export function StatusBar() {
     : "UNAVAILABLE"
   return (
     <div className="statusbar">
-      <OpsStatusPill state={core.state} label={`CORE ${core.state}${core.state === "STALE" ? ` ${statusAge(core.checkedAt, statusNow)}` : ""}`} />
-      <OpsStatusPill state={wsTone} label={`FABRIC FEED ${fabric.state === "STALE" ? `STALE ${statusAge(fabric.unitsReceivedAt ?? fabric.lastContactAt ?? fabric.checkedAt, statusNow)}` : fabric.streamState.toUpperCase()}`} />
+      <Link to="/status/health" aria-label="Open Core health"><OpsStatusPill state={core.state} label={`Core ${core.state}${core.state === "STALE" ? ` ${statusAge(core.checkedAt, statusNow)}` : ""}`} /></Link>
+      <Link to="/status/health" aria-label="Open Fabric health"><OpsStatusPill state={wsTone} label={`Fabric ${fabric.state === "STALE" ? `STALE ${statusAge(fabric.unitsReceivedAt ?? fabric.lastContactAt ?? fabric.checkedAt, statusNow)}` : fabric.streamState.toUpperCase()}`} /></Link>
+      {currentRoute && <span className="statusbar__route">{routeEyebrow(currentRoute)}</span>}
       <div className="statusbar__spacer" />
       <LocationControl />
-      <div className="statusbar__item">UTC {now.toISOString().slice(11, 19)}</div>
-      <div className="statusbar__item statusbar__clock">
-        {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-      </div>
+      <time className="statusbar__item statusbar__clock" dateTime={now.toISOString()} title={now.toISOString()}>{formatOpsClock(now)}</time>
     </div>
   )
 }

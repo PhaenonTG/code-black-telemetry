@@ -33,8 +33,8 @@ function renderFleet(hasSnapshot: boolean): string {
 
 describe("Fleet empty states", () => {
   it("distinguishes a valid empty snapshot from an unavailable snapshot", () => {
-    expect(renderFleet(true)).toContain("NO UNITS REGISTERED")
-    expect(renderFleet(false)).toContain("NO FABRIC UNIT SNAPSHOT")
+    expect(renderFleet(true)).toContain("No units registered")
+    expect(renderFleet(false)).toContain("No Fabric unit snapshot")
   })
 })
 

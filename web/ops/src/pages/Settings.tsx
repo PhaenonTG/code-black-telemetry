@@ -84,7 +84,7 @@ export default function Settings() {
 
   return (
     <div className="page page-settings page-settings--brand">
-      <PageHeader title="SETTINGS" kicker="DISPLAY · MAP · ALERTS · SESSION" description="Display and map-layer defaults apply immediately and persist on this device. Weather alert controls change the shared alert pipeline and apply only after you save them." />
+      <PageHeader routePath="/settings" title="" description="Display and map-layer defaults apply immediately and persist on this device. Weather alert controls change the shared alert pipeline and apply only after you save them." />
 
       <section className="settings-group" style={{ "--cb-i": 0 } as CSSProperties}>
         <h2>Display</h2>
@@ -125,8 +125,8 @@ export default function Settings() {
 
       <section className="settings-group settings-group--data" style={{ "--cb-i": 2 } as CSSProperties}>
         <h2>Data & diagnostics</h2>
-        <p>Provider health, radar availability, camera totals, and Core connectivity are tracked on the System page.</p>
-        <Link className="page-action-link" to="/system">OPEN SYSTEM HEALTH</Link>
+        <p>Provider health, radar availability, camera totals, and Core connectivity are tracked on Status › Health.</p>
+        <Link className="page-action-link" to="/status/health">Open Status</Link>
       </section>
 
       <section className="settings-group settings-group--alerts" style={{ "--cb-i": 3 } as CSSProperties}>
@@ -164,7 +164,7 @@ export default function Settings() {
           </div></div>
           {alertError && <p className="page-empty" role="alert">{alertError}</p>}
           <p className="settings-alert-copy" role="status">{alertSaving ? "Saving weather alert controls…" : alertDirty ? "Unsaved changes. The live alert pipeline still uses the last saved controls." : alertSavedNotice ? "Saved. The live alert pipeline now uses these controls." : "No unsaved changes."}</p>
-          <button type="button" className="page-action-link settings-save" disabled={alertSaving} onClick={() => void saveAlerts()}>{alertSaving ? "SAVING…" : "SAVE WEATHER ALERT CONTROLS"}</button>
+          <button type="button" className="page-action-link settings-save ops-button-primary" disabled={alertSaving} onClick={() => void saveAlerts()}>{alertSaving ? "Saving…" : "Save weather alert controls"}</button>
         </> : <p className="page-empty">{alertError ?? "Loading…"}</p>}
       </section>
 
