@@ -1,4 +1,8 @@
 const PATHS: Record<string, string> = {
+  team: "M8 11a3 3 0 100-6 3 3 0 000 6zM2 21v-3a6 6 0 0112 0v3M17 5a3 3 0 010 6M22 21v-3a6 6 0 00-5-6",
+  directory: "M4 3h7v8H4zM14 3h6v8h-6zM4 14h7v7H4zM14 14h6v7h-6z",
+  experiment: "M8 3h8M10 3v7L4 21h16l-6-11V3M8 15h8",
+  hurricane: "M6 4c8-5 17 6 9 12-6 4-14-4-8-8 5-4 10 3 6 6M6 20c-3-4-3-8-1-11M18 4c3 4 3 8 1 11",
   home: "M4 11l8-7 8 7v9a1 1 0 01-1 1h-4v-6H9v6H5a1 1 0 01-1-1v-9z",
   map: "M4 6l5-2 6 2 5-2v14l-5 2-6-2-5 2V6zM9 4v14M15 6v14",
   radar: "M12 21a9 9 0 100-18 9 9 0 000 18zM12 12l5-5M12 12h8M12 12l3 7M12 12L5 9",

@@ -21,9 +21,8 @@ const RadarLab = lazy(() => import("../pages/RadarLab"))
 const RadarR3 = lazy(() => import("../pages/RadarR3"))
 const Coordination = lazy(() => import("../pages/Coordination"))
 const VehicleTelemetry = lazy(() => import("../pages/VehicleTelemetry"))
-const Operations = lazy(() => import("../pages/Operations"))
+const StatusPage = lazy(() => import("../pages/StatusPage"))
 const SiteDirectory = lazy(() => import("../pages/SiteDirectory"))
-const StatusCenter = lazy(() => import("../pages/StatusCenter"))
 const Settings = lazy(() => import("../pages/Settings"))
 const More = lazy(() => import("../pages/More"))
 const Stream = lazy(() => import("../pages/Stream"))
@@ -68,7 +67,7 @@ export default function App() {
                         <Route path="/radar-r3" element={<RadarR3 />} />
                         <Route path="/coordination" element={<Coordination />} />
                         <Route path="/vehicle-weather" element={<VehicleTelemetry />} />
-                        <Route path="/workspace/chase" element={<ChaseWorkspace />} />
+                        <Route path="/chase-desk" element={<ChaseWorkspace />} />
                         <Route path="/analysis" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/horizons" element={<AnalysisWorkspace />} />
                         <Route path="/analysis/potential" element={<AnalysisWorkspace />} />
@@ -93,12 +92,12 @@ export default function App() {
                         <Route path="/soundings" element={<SoundingsWorkspace />} />
                         <Route path="/consensus" element={<DevelopmentPage title="CONSENSUS" detail="Consensus architecture reserved. No ensemble agreement, target corridor, or percentage score is generated in Phase 2." />} />
                         <Route path="/targets" element={<DevelopmentPage title="TARGETS" detail="Target corridors are reserved for the future Consensus workflow. Phase 2 does not create automated chase targets." />} />
-                        <Route path="/chase" element={<Fleet />} />
-                        <Route path="/fleet" element={<Navigate to="/chase" replace />} />
-                        <Route path="/stream" element={<Stream />} />
+                        <Route path="/team" element={<Fleet />} />
+                        <Route path="/producer/sources" element={<Stream />} />
                         <Route path="/ai" element={<AiHandoff />} />
-                        <Route path="/system" element={<Operations />} />
-                        <Route path="/status-center" element={<StatusCenter />} />
+                        <Route path="/status" element={<StatusPage />} />
+                        <Route path="/status/health" element={<StatusPage />} />
+                        <Route path="/status/telemetry" element={<StatusPage />} />
                         <Route path="/directory" element={<SiteDirectory />} />
                         <Route path="/settings" element={<Settings />} />
                         <Route path="/more" element={<More />} />

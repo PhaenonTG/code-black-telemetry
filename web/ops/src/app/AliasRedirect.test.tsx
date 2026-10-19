@@ -13,7 +13,7 @@ describe("label-matching aliases",()=>{
   const html=renderToString(<MemoryRouter initialEntries={[`${alias}?unit=striker#status`]}><Routes><Route path={alias} element={<AliasRedirect to={canonical}/>}/></Routes></MemoryRouter>)
   expect(html).toContain(`data-destination="${canonical}?unit=striker#status"`)
   expect(html).toContain('data-replace="true"')
-  expect(ROUTES.some(route=>route.path===canonical)).toBe(true)
+  expect(ROUTES.some(route=>route.path===canonical || canonical.startsWith(`${route.path}/`))).toBe(true)
   expect(matchRoutes([{path:canonical}],canonical)).not.toBeNull()
   expect(renderToString(<MemoryRouter initialEntries={[canonical]}><Routes><Route path={canonical} element={<Canonical/>}/></Routes></MemoryRouter>)).toContain(canonical)
  })

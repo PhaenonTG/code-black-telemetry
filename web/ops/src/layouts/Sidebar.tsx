@@ -55,6 +55,7 @@ export function Sidebar({ rail, collapsible, onToggleCollapse }: { rail: boolean
                 <NavLink key={r.path} to={r.path} title={rail ? label : undefined} aria-label={label} className={({ isActive }) => `sidebar__link${isActive ? " active" : ""}`} end={r.path === "/"}>
                   <Icon name={r.icon} />
                   {!rail && <span>{label}</span>}
+                  {!rail && r.state === "DEVELOPMENT" && <small className="sidebar__dev">DEV</small>}
                 </NavLink>
               )
             })}

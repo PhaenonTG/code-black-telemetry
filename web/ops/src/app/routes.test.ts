@@ -4,46 +4,17 @@ import { PHONE_ROUTES } from "../layouts/phoneRoutes";
 
 describe("OPS workstation routes", () => {
   it("exposes the approved major navigation families without marking future sections live", () => {
-    expect(ROUTES.map((route) => route.label)).toEqual([
-      "PRODUCER",
-      "CHASE DESK",
-      "SETUP REVIEW",
-      "OPERATIONS MAP",
-      "WEATHER ANALYSIS",
-      "HURRICANE WATCH",
-      "AEGIS RADAR ALERTS",
-      "RADAR LAB",
-      "MODELS",
-      "SOUNDINGS",
-      "RADAR R3 CANDIDATE",
-      "CONSENSUS",
-      "TARGETS",
-      "TEAM & DEVICES",
-      "VEHICLE WEATHER",
-      "FIELD MAP",
-      "PROGRAM STATUS",
-      "SYSTEM",
-      "SITE DIRECTORY",
-      "STATUS CENTER",
-      "AUTOMATION LAB",
-      "COORDINATION",
-      "SETTINGS",
-    ]);
-    expect(ROUTES.filter((route) => route.state === "DEVELOPMENT").map((route) => route.label)).toEqual([
-      "MODELS",
-      "RADAR R3 CANDIDATE",
-      "CONSENSUS",
-      "TARGETS",
-    ]);
-    expect(ROUTES.filter((route) => route.section === "WORKSPACES" && route.inSidebar).map((route) => route.label)).toEqual([
-      "PRODUCER", "CHASE DESK", "SETUP REVIEW",
+    expect(ROUTES.filter(route => route.inSidebar).map(route => route.label)).toEqual(["Ops Map", "Field Map", "Chase Desk", "Producer", "Setup Review", "Weather Analysis", "Soundings", "Hurricane", "Radar Lab", "Aegis Alerts", "Team", "Vehicle Weather", "Status", "Coordination", "Directory", "Settings", "Radar R3", "Automation Lab"]);
+    expect(ROUTES.filter(route => route.state === "DEVELOPMENT").map(route => route.label)).toEqual(["Radar R3", "Automation Lab", "Models", "Consensus", "Targets"]);
+    expect(ROUTES.filter((route) => route.section === "OPERATE" && route.inSidebar).map((route) => route.label)).toEqual([
+      "Ops Map", "Field Map", "Chase Desk", "Producer",
     ]);
   });
 
   it("keeps the phone nav bounded to five destinations", () => {
-    expect(PHONE_ROUTES.map((route) => route.label)).toEqual(["HOME", "RADAR", "SYSTEM", "AEGIS", "MORE"]);
+    expect(PHONE_ROUTES.map((route) => route.label)).toEqual(["HOME", "CHASE", "RADAR", "STATUS", "MORE"]);
     expect([...ROUTES.filter((route) => route.inPhoneNav), MORE_ROUTE].map((route) => route.label)).toEqual([
-      "OPERATIONS MAP", "RADAR LAB", "MORE",
+      "Ops Map", "Chase Desk", "Radar Lab", "Status", "More",
     ]);
   });
 });
