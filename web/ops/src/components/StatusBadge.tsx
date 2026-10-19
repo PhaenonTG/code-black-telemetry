@@ -1,18 +1,7 @@
-import { stateTone, type OperationalState } from "../status/systemStatus"
-
-const TONE_COLOR: Record<string, string> = {
-  ok: "var(--cb-green)",
-  warn: "var(--cb-amber)",
-  bad: "var(--cb-red)",
-  neutral: "var(--cb-gray)",
-}
-
-export function StatusBadge({ state }: { state: OperationalState }) {
-  const tone = stateTone(state)
-  return (
-    <span className="ops-status-badge" style={{ color: TONE_COLOR[tone], borderColor: TONE_COLOR[tone] }}>
-      <i style={{ background: TONE_COLOR[tone] }} />
-      {state.replace(/_/g, " ")}
-    </span>
-  )
+import { statusPresentation } from "../core/statusWords"
+export function StatusBadge({ state }: { state: string }) {
+  if (state.toUpperCase() === "EMPTY") return <span className="ops-state-count">0</span>
+  const { word, color } = statusPresentation(state)
+  const development = state === "DEVELOPMENT"
+  return <span data-state={state} className="ops-status-badge" style={{ color, borderColor: color }}><i style={{ background: color }} />{development ? "DEVELOPMENT" : word}</span>
 }

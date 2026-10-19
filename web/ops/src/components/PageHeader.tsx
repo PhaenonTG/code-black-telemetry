@@ -1,6 +1,10 @@
 import type { ReactNode } from "react"
+import { routeForPath, routeEyebrow } from "../app/routes"
 
-export function PageHeader({ title, kicker, description, actions, className }: { title: string; kicker?: string; description?: ReactNode; actions?: ReactNode; className?: string }) {
+export function PageHeader({ title, kicker, description, actions, className, routePath }: { title: string; kicker?: string; description?: ReactNode; actions?: ReactNode; className?: string; routePath?: string }) {
+  const route = routeForPath(routePath ?? (title === "STATUS CENTER" ? "/status" : title === "Automation Lab" ? "/automation-lab" : ""))
+  title = route?.label ?? title
+  kicker = route ? routeEyebrow(route) : kicker
   return (
     <header className={className ? `page-header ${className}` : "page-header"}>
       <div>

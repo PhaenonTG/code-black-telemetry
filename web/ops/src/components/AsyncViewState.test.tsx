@@ -6,7 +6,7 @@ describe("AsyncViewState", () => {
   it.each(["loading", "stale", "error", "empty"] as const)("renders the %s state with its label", (state) => {
     const html = renderToString(<AsyncViewState state={state} title="Inventory" message="Detail" />)
     expect(html).toContain(`data-state="${state}"`)
-    expect(html).toContain(state.toUpperCase())
+    expect(html).toContain({ loading: "Waiting", stale: "Stale", error: "Unavailable", empty: "0" }[state])
     expect(html).toContain("Inventory")
     expect(html).toContain("Detail")
   })

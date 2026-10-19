@@ -13,6 +13,7 @@ export function statusView(current: Status, previous: Status | null, now: number
   const core = current.core.state !== "LIVE" && previous?.core.state !== "CHECKING" && previous ? previous.core : current.core
   const fabric = !current.fabric.units && previous?.fabric.units ? previous.fabric : current.fabric
   const coreOld = core !== current.core || core.state === "STALE" || now - core.checkedAt > 60_000
+  // TODO(stale-threshold): retain the current Fabric threshold pending policy review.
   const fabricAt = fabric.unitsReceivedAt ?? fabric.lastContactAt ?? fabric.checkedAt
   const fabricOld = fabric !== current.fabric || now - fabricAt > 60_000 || (fabric.units !== null && fabric.streamState !== "open")
   return {

@@ -1,3 +1,5 @@
+import { Icon } from "./Icon"
+import { formatOpsTimestamp } from "../core/timeFormat"
 import type { ReactNode } from "react"
 import "./AsyncViewState.css"
 
@@ -33,10 +35,10 @@ const DEFAULT_TITLES: Record<AsyncViewStateKind, string> = {
 }
 
 const STATE_LABELS: Record<AsyncViewStateKind, string> = {
-  loading: "LOADING",
-  stale: "STALE",
-  error: "ERROR",
-  empty: "EMPTY",
+  loading: "Waiting",
+  stale: "Stale",
+  error: "Unavailable",
+  empty: "0",
 }
 
 function validLastUpdated(value: Date | null | undefined): Date | null {
@@ -44,7 +46,7 @@ function validLastUpdated(value: Date | null | undefined): Date | null {
 }
 
 function formatLastUpdated(value: Date): string {
-  return value.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+  return formatOpsTimestamp(value)
 }
 
 export function AsyncViewState({
@@ -57,11 +59,12 @@ export function AsyncViewState({
   return (
     <div className={classes} role={role} aria-live={state === "error" ? "assertive" : "polite"} data-state={state}>
       <div className="async-view-state__head">
+        <Icon name={state === "error" ? "alert" : "system"} />
         <span className="async-view-state__badge">{state === "loading" && <i className="async-view-state__spinner" aria-hidden="true" />}{STATE_LABELS[state]}</span>
         <strong className="async-view-state__title">{title ?? DEFAULT_TITLES[state]}</strong>
       </div>
       {message && <p className="async-view-state__message">{message}</p>}
-      {updated && <p className="async-view-state__meta">Last updated <time dateTime={updated.toISOString()}>{formatLastUpdated(updated)}</time></p>}
+      {updated && <p className="async-view-state__meta">Last updated <time dateTime={updated.toISOString()} title={updated.toISOString()}>{formatLastUpdated(updated)}</time></p>}
       {timeoutHint && <p className="async-view-state__meta">{timeoutHint}</p>}
       {children}
       {onRetry && <button type="button" className="async-view-state__retry" onClick={onRetry} disabled={retryDisabled}>{retryLabel}</button>}
@@ -70,3 +73,10 @@ export function AsyncViewState({
 }
 
 export default AsyncViewState
+
+export function EmptyState(props: Omit<AsyncViewStateProps, "state">) {
+  return <AsyncViewState state="empty" {...props} />
+}
+export function ErrorState({ details, ...props }: Omit<AsyncViewStateProps, "state"> & { details?: string }) {
+  return <AsyncViewState state="error" {...props}>{props.children}{details && <details><summary>Details</summary><pre>{details}</pre></details>}</AsyncViewState>
+}
