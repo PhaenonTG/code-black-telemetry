@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+      The Pi endpoint is user-configurable and may be a DHCP LAN IP, .local hostname,
+      or Tailscale 100.x address. Android network-security-config cannot express
+      local IP ranges, so cleartext is permitted for this native operations app.
+      Use only trusted local/Tailscale Code Black OPS endpoints.
+    -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

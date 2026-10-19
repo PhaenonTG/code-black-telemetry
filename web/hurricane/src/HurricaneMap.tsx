@@ -1,0 +1,263 @@
+import { useEffect, useRef, useState } from "react";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
+import type { PublicHurricane } from "./types";
+import type { WatchLocation } from "./watchLocation";
+import { distanceMiles } from "./watchLocation";
+import { activeWarnings } from "./nwsAlerts";
+import { latestPriorObservation } from "./stormTelemetry";
+
+const colors: Record<string, string> = { HFAI: "#e9b568", HFBI: "#bca9ef", AVNI: "#82aaff", CTCI: "#fa9372", CMCI: "#6db6ff", NVGI: "#9bbdd9", UKXI: "#f5cf75", AEMI: "#8bcfa5", GDMI: "#b5da7c", HWFI: "#f18cbb", HMNI: "#c48de8", HCCA: "#d8ddd8", TVCN: "#90b987" };
+const line = (points: { latitude: number; longitude: number }[]) => ({ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: points.map((point) => [point.longitude, point.latitude]) } });
+const WMS = "https://nowcoast.noaa.gov/geoserver/ows";
+const RADAR_LAYER = "weather_radar:base_reflectivity_mosaic";
+const SATELLITE_LAYERS = {
+  ir: "satellite:goes_longwave_imagery",
+  visible: "satellite:goes_visible_imagery",
+  vapor: "satellite:goes_water_vapor_imagery",
+  shortwave: "satellite:goes_shortwave_imagery",
+} as const;
+type SatelliteMode = keyof typeof SATELLITE_LAYERS;
+const wmsTiles = (layer: string, intervalMinutes: number) => [`${WMS}?service=WMS&version=1.1.1&request=GetMap&layers=${layer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&bbox={bbox-epsg-3857}&width=512&height=512&v=${Math.floor(Date.now() / (intervalMinutes * 60_000))}`];
+const compactTime = (value?: string) => value ? `${new Date(value).toISOString().slice(11, 16)}Z` : "—";
+
+
+async function sourceTimes(): Promise<Record<string, string>> {
+  const response = await fetch(`${WMS}?service=WMS&request=GetCapabilities`, { cache: "no-store" });
+  if (!response.ok) throw new Error("NOAA source metadata unavailable");
+  const xml = new DOMParser().parseFromString(await response.text(), "application/xml");
+  const result: Record<string, string> = {};
+  for (const layer of Array.from(xml.getElementsByTagName("Layer"))) {
+    const name = Array.from(layer.children).find((node) => node.localName === "Name")?.textContent;
+    const time = Array.from(layer.children).find((node) => node.localName === "Dimension" && node.getAttribute("name") === "time")?.getAttribute("default");
+    if (name && time && !Number.isNaN(Date.parse(time))) result[name] = time;
+  }
+  return result;
+}
+
+type ViewMode = "impact" | "approach" | "basin";
+function focusBounds(data: PublicHurricane, watch: WatchLocation, view: ViewMode = "impact") {
+  const bounds = new mapboxgl.LngLatBounds();
+  bounds.extend([watch.longitude, watch.latitude]);
+  const firstHour = view === "impact" ? 24 : 0, lastHour = view === "basin" ? 72 : view === "approach" ? 24 : 36;
+  for (const point of [...data.official.track, ...data.projection.points]) {
+    if (point.hour >= firstHour && point.hour <= lastHour) bounds.extend([point.longitude, point.latitude]);
+  }
+  if (view !== "impact" && data.storm.center.latitude != null && data.storm.center.longitude != null) {
+    bounds.extend([data.storm.center.longitude, data.storm.center.latitude]);
+    if (view === "approach") {
+      bounds.extend([data.storm.center.longitude - 4, data.storm.center.latitude - 3]);
+      bounds.extend([data.storm.center.longitude + 4, data.storm.center.latitude + 3]);
+    }
+  }
+  if (view === "basin") for (const point of data.observed.track) bounds.extend([point.longitude, point.latitude]);
+  return bounds;
+}
+
+const afterMapIdle = (map: mapboxgl.Map) => new Promise<void>((resolve) => {
+  if (map.loaded() && !map.isMoving()) { resolve(); return; }
+  const timer = window.setTimeout(() => { map.off("idle", finish); resolve(); }, 5000);
+  const finish = () => { window.clearTimeout(timer); resolve(); };
+  map.once("idle", finish);
+});
+
+export default function HurricaneMap({ data, token, onCapture, watch }: { data: PublicHurricane; token: string | null; onCapture: (capture: (() => Promise<string | null>) | null) => void; watch: WatchLocation }) {
+  const host = useRef<HTMLDivElement>(null), mapRef = useRef<mapboxgl.Map | null>(null);
+  const watchRef = useRef(watch);
+  watchRef.current = watch;
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>("approach");
+  const [radar, setRadar] = useState(false);
+  const [clouds, setClouds] = useState(false);
+  const [satelliteMode, setSatelliteMode] = useState<SatelliteMode>("ir");
+  const [alerts, setAlerts] = useState(false);
+  const [layerTimes, setLayerTimes] = useState<Record<string, string>>({});
+  const [alertCount, setAlertCount] = useState<{ mapped: number; total: number } | null>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const layerState = useRef({ radar, clouds, alerts, satelliteMode });
+  layerState.current = { radar, clouds, alerts, satelliteMode };
+  const models = data.guidance.models;
+  useEffect(() => {
+    let active = true;
+    const refresh = () => { void sourceTimes().then((times) => { if (active) setLayerTimes(times); }).catch(() => {}); };
+    refresh();
+    const timer = window.setInterval(refresh, 300_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.isStyleLoaded()) return;
+    for (const model of models) if (map.getLayer(`model-${model.id}`)) map.setLayoutProperty(`model-${model.id}`, "visibility", selectedModels.includes(model.id) ? "visible" : "none");
+  }, [selectedModels, models]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map?.getLayer("radar")) map.setLayoutProperty("radar", "visibility", radar ? "visible" : "none");
+  }, [radar]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map?.getLayer("satellite")) map.setLayoutProperty("satellite", "visibility", clouds ? "visible" : "none");
+  }, [clouds]);
+  useEffect(() => {
+    const source = mapRef.current?.getSource("satellite") as mapboxgl.RasterTileSource | undefined;
+    source?.setTiles(wmsTiles(SATELLITE_LAYERS[satelliteMode], 5));
+  }, [satelliteMode]);
+  useEffect(() => {
+    const map = mapRef.current;
+    for (const id of ["alert-fill", "alert-outline"]) if (map?.getLayer(id)) map.setLayoutProperty(id, "visibility", alerts ? "visible" : "none");
+  }, [alerts]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.isStyleLoaded()) return;
+    const source = map.getSource("watch") as mapboxgl.GeoJSONSource | undefined;
+    source?.setData({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [watch.longitude, watch.latitude] } });
+    map.setProjection(viewMode === "basin" ? "globe" : "mercator");
+    if (viewMode === "basin") {
+      map.easeTo({ center: [-89, 29], zoom: 3.15, duration: 500 });
+      return;
+    }
+    const center = data.storm.center;
+    if (center.latitude != null && center.longitude != null && distanceMiles({ latitude: center.latitude, longitude: center.longitude }, watch) < 700)
+      map.fitBounds(focusBounds(data, watch, viewMode), { padding: 35, maxZoom: viewMode === "impact" ? 7.5 : 6.5, duration: 500 });
+    else map.easeTo({ center: [watch.longitude, watch.latitude], zoom: 5, duration: 500 });
+  }, [watch, data, viewMode]);
+  useEffect(() => {
+    if (!token || !host.current || !data.storm.center.latitude || !data.storm.center.longitude) return;
+    let tileTimer: number | undefined, alertTimer: number | undefined;
+    mapboxgl.accessToken = token;
+    const map = new mapboxgl.Map({ container: host.current, style: "mapbox://styles/mapbox/dark-v11", center: [data.storm.center.longitude, data.storm.center.latitude],
+      zoom: 4.3, preserveDrawingBuffer: true, attributionControl: true });
+    mapRef.current = map;
+    onCapture(async () => {
+      const container = host.current;
+      if (!container) return null;
+      await afterMapIdle(map);
+      if (!map.isStyleLoaded()) return null;
+      const originalStyle = container.getAttribute("style");
+      const camera = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
+      const originalProjection = map.getProjection().name;
+      const modelVisibility = models.map((model) => [model.id, map.getLayer(`model-${model.id}`) ? map.getLayoutProperty(`model-${model.id}`, "visibility") : null] as const);
+      try {
+        Object.assign(container.style, { position: "fixed", left: "-2000px", top: "0", width: "1440px", height: "800px" });
+        map.resize();
+        for (const [id, visibility] of modelVisibility) if (visibility === "visible") map.setLayoutProperty(`model-${id}`, "visibility", "none");
+        map.setProjection("mercator");
+        map.fitBounds(focusBounds(data, watchRef.current, "approach"), { padding: { top: 80, bottom: 75, left: 90, right: 90 }, maxZoom: 7.3, duration: 0 });
+        await afterMapIdle(map);
+        return map.getCanvas().toDataURL("image/png");
+      } catch { return null; }
+      finally {
+        if (originalStyle === null) container.removeAttribute("style"); else container.setAttribute("style", originalStyle);
+        map.resize();
+        map.setProjection(originalProjection);
+        for (const [id, visibility] of modelVisibility) if (visibility === "visible" && map.getLayer(`model-${id}`)) map.setLayoutProperty(`model-${id}`, "visibility", "visible");
+        map.jumpTo(camera);
+      }
+    });
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
+    map.on("error", () => setMapError("Map tiles are temporarily unavailable. Track details remain below."));
+    map.on("load", () => {
+      map.addSource("satellite", { type: "raster", tiles: wmsTiles(SATELLITE_LAYERS[layerState.current.satelliteMode], 5), tileSize: 512, attribution: "NOAA nowCOAST" });
+      map.addLayer({ id: "satellite", type: "raster", source: "satellite", layout: { visibility: layerState.current.clouds ? "visible" : "none" }, paint: { "raster-opacity": 0.8, "raster-fade-duration": 0 } });
+      map.addSource("radar", { type: "raster", tiles: wmsTiles(RADAR_LAYER, 2), tileSize: 512, attribution: "NOAA nowCOAST" });
+      map.addLayer({ id: "radar", type: "raster", source: "radar", layout: { visibility: layerState.current.radar ? "visible" : "none" }, paint: { "raster-opacity": 0.78, "raster-fade-duration": 0 } });
+      map.addSource("alerts", { type: "geojson", data: { type: "FeatureCollection", features: [] }, attribution: "NWS" });
+      map.addLayer({ id: "alert-fill", type: "fill", source: "alerts", layout: { visibility: layerState.current.alerts ? "visible" : "none" }, paint: { "fill-color": ["match", ["get", "severity"], "Extreme", "#ff4b46", "Severe", "#ff8746", "#ffc252"], "fill-opacity": 0.09 } });
+      map.addLayer({ id: "alert-outline", type: "line", source: "alerts", layout: { visibility: layerState.current.alerts ? "visible" : "none" }, paint: { "line-color": ["match", ["get", "severity"], "Extreme", "#ff4b46", "Severe", "#ff8746", "#ffc252"], "line-opacity": 0.85, "line-width": 1.8 } });
+      const refreshAlerts = () => { void activeWarnings().then(({ features, total }) => {
+        if (!map.getSource("alerts")) return;
+        const collection = { type: "FeatureCollection", features: features.map((feature) => ({ type: "Feature", id: feature.id, geometry: feature.geometry, properties: { event: feature.properties.event, headline: feature.properties.headline, severity: feature.properties.severity, expires: feature.properties.expires, web: feature.properties.web } })) };
+        (map.getSource("alerts") as mapboxgl.GeoJSONSource).setData(collection as Parameters<mapboxgl.GeoJSONSource["setData"]>[0]);
+        setAlertCount({ mapped: features.length, total });
+      }).catch(() => setAlertCount(null)); };
+      refreshAlerts();
+      alertTimer = window.setInterval(refreshAlerts, 300_000);
+      map.on("click", "alert-fill", (event) => {
+        const props = (event.features?.[0] as unknown as { properties?: { event?: string; headline?: string; expires?: string } } | undefined)?.properties;
+        if (props) new mapboxgl.Popup({ maxWidth: "260px" }).setLngLat(event.lngLat).setText(`${props.event ?? "NWS alert"}${props.headline ? ` · ${props.headline}` : ""}`).addTo(map);
+      });
+      let radarVersion = Math.floor(Date.now() / 120_000), satelliteVersion = Math.floor(Date.now() / 300_000);
+      tileTimer = window.setInterval(() => {
+        const nextRadar = Math.floor(Date.now() / 120_000), nextSatellite = Math.floor(Date.now() / 300_000);
+        if (nextRadar !== radarVersion) {
+          radarVersion = nextRadar;
+          (map.getSource("radar") as mapboxgl.RasterTileSource | undefined)?.setTiles(wmsTiles(RADAR_LAYER, 2));
+        }
+        if (nextSatellite !== satelliteVersion) {
+          satelliteVersion = nextSatellite;
+          (map.getSource("satellite") as mapboxgl.RasterTileSource | undefined)?.setTiles(wmsTiles(SATELLITE_LAYERS[layerState.current.satelliteMode], 5));
+        }
+      }, 30_000);
+      if (data.official.cone.length >= 4) {
+        map.addSource("cone", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [data.official.cone] } } });
+        map.addLayer({ id: "cone-fill", type: "fill", source: "cone", paint: { "fill-color": "#e8f0ef", "fill-opacity": 0.1 } });
+        map.addLayer({ id: "cone-edge", type: "line", source: "cone", paint: { "line-color": "#e8f0ef", "line-opacity": 0.55, "line-width": 1.5 } });
+      }
+      if (data.observed.track.length > 1) {
+        map.addSource("observed", { type: "geojson", data: line(data.observed.track) });
+        map.addLayer({ id: "observed", type: "line", source: "observed", paint: { "line-color": "#f16e65", "line-width": 3 } });
+      }
+      // The preliminary best-track feed can lag the current advisory. Join its
+      // final point to the latest official center without calling that segment observed.
+      const lastObserved = latestPriorObservation(data);
+      const latestCenter = data.storm.center;
+      if (lastObserved && latestCenter.latitude != null && latestCenter.longitude != null &&
+          (lastObserved.latitude !== latestCenter.latitude || lastObserved.longitude !== latestCenter.longitude)) {
+        map.addSource("advisory-trail", { type: "geojson", data: line([lastObserved, { latitude: latestCenter.latitude, longitude: latestCenter.longitude }]) });
+        map.addLayer({ id: "advisory-trail", type: "line", source: "advisory-trail", paint: { "line-color": "#f16e65", "line-width": 3, "line-dasharray": [1.2, 1.2] } });
+      }
+      if (data.official.track.length > 1) {
+        map.addSource("official", { type: "geojson", data: line(data.official.track) });
+        map.addLayer({ id: "official", type: "line", source: "official", paint: { "line-color": "#f2f4ef", "line-width": 3, "line-dasharray": [2, 1.5] } });
+        map.addSource("official-points", { type: "geojson", data: { type: "FeatureCollection", features: data.official.track.filter((point) => point.hour > 0).map((point) => ({ type: "Feature", properties: { hour: point.hour, wind_mph: point.wind_mph, valid_time: point.valid_time }, geometry: { type: "Point", coordinates: [point.longitude, point.latitude] } })) } });
+        map.addLayer({ id: "official-dots", type: "circle", source: "official-points", paint: { "circle-radius": 5, "circle-color": "#f2f4ef", "circle-stroke-color": "#071015", "circle-stroke-width": 1.5 } });
+        map.on("click", "official-dots", (event) => {
+          const feature = event.features?.[0] as unknown as { geometry: { type: string; coordinates: number[] }; properties?: Record<string, number | string | null> } | undefined;
+          if (!feature || feature.geometry.type !== "Point") return;
+          const hour = Number(feature.properties?.hour ?? 0), wind = Number(feature.properties?.wind_mph);
+          new mapboxgl.Popup({ closeButton: false, maxWidth: "220px" }).setLngLat(feature.geometry.coordinates as [number, number])
+            .setText(`NHC official forecast +${hour}h${Number.isFinite(wind) && wind > 0 ? ` · max wind ${wind} mph` : ""}. This is a center forecast, not a local impact prediction.`).addTo(map);
+        });
+      }
+      for (const model of models) {
+        if (model.points.length < 2) continue;
+        map.addSource(`model-${model.id}`, { type: "geojson", data: line(model.points) });
+        map.addLayer({ id: `model-${model.id}`, type: "line", source: `model-${model.id}`, layout: { visibility: selectedModels.includes(model.id) ? "visible" : "none" },
+          paint: { "line-color": colors[model.id] ?? "#acbfd0", "line-width": 2, "line-opacity": 0.9 } });
+      }
+      if (data.projection.points.length > 1) {
+        map.addSource("aegis", { type: "geojson", data: line(data.projection.points) });
+        map.addLayer({ id: "aegis-halo", type: "line", source: "aegis", paint: { "line-color": "#06121c", "line-width": 8, "line-opacity": 0.8 } });
+        map.addLayer({ id: "aegis", type: "line", source: "aegis", paint: { "line-color": "#45d9d1", "line-width": 4 } });
+        map.addSource("aegis-points", { type: "geojson", data: { type: "FeatureCollection", features: data.projection.points.filter((p) => p.hour % 12 === 0).map((p) => ({ type: "Feature", properties: { hour: p.hour, spread: p.spread_miles, members: p.members }, geometry: { type: "Point", coordinates: [p.longitude, p.latitude] } })) } });
+        map.addLayer({ id: "aegis-dots", type: "circle", source: "aegis-points", paint: { "circle-radius": 4, "circle-color": "#45d9d1", "circle-stroke-color": "#06121c", "circle-stroke-width": 1.5 } });
+        map.on("click", "aegis-dots", (event) => {
+          const feature = event.features?.[0] as unknown as { geometry: { type: string; coordinates: number[] }; properties?: Record<string, number> } | undefined;
+          if (!feature || feature.geometry.type !== "Point") return;
+          new mapboxgl.Popup({ closeButton: false, maxWidth: "220px" }).setLngLat(feature.geometry.coordinates as [number, number])
+            .setText(`Experimental model blend +${feature.properties?.hour}h · model center spread ${feature.properties?.spread} mi · ${feature.properties?.members} members`).addTo(map);
+        });
+      }
+      const center = data.storm.center;
+      map.addSource("storm", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [center.longitude!, center.latitude!] } } });
+      map.addLayer({ id: "storm", type: "circle", source: "storm", paint: { "circle-radius": 9, "circle-color": "#fb716a", "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
+      map.addSource("watch", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [watchRef.current.longitude, watchRef.current.latitude] } } });
+      map.addLayer({ id: "watch-halo", type: "circle", source: "watch", paint: { "circle-radius": 15, "circle-color": "#45d9d1", "circle-opacity": 0.16 } });
+      map.addLayer({ id: "watch", type: "circle", source: "watch", paint: { "circle-radius": 7, "circle-color": "#45d9d1", "circle-stroke-color": "#06121c", "circle-stroke-width": 2 } });
+      map.addLayer({ id: "watch-label", type: "symbol", source: "watch", layout: { "text-field": "WATCH POINT", "text-size": 13, "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"], "text-anchor": "right", "text-offset": [-1.2, -0.2], "text-allow-overlap": true }, paint: { "text-color": "#f3ffff", "text-halo-color": "#06121c", "text-halo-width": 2 } });
+      map.on("click", "watch", () => new mapboxgl.Popup({ maxWidth: "220px" }).setLngLat([watchRef.current.longitude, watchRef.current.latitude]).setText(`Watch location: ${watchRef.current.label}`).addTo(map));
+      map.fitBounds(focusBounds(data, watchRef.current, viewMode), { padding: 35, maxZoom: 7.5, duration: 0 });
+    });
+    return () => { if (tileTimer) window.clearInterval(tileTimer); if (alertTimer) window.clearInterval(alertTimer); onCapture(null); mapRef.current = null; map.remove(); };
+  }, [data, token, onCapture]);
+  const toggle = (id: string) => setSelectedModels((selected) => selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]);
+  return <div className="map-block"><div className="map-heading"><h2>Forecast tracks</h2><span className="map-heading__status">Radar {radar ? "on" : "off"} · Satellite {clouds ? "on" : "off"}</span></div>
+    <details className="map-controls"><summary>Map layers & views</summary><div className="map-actions"><button type="button" aria-pressed={radar} onClick={() => setRadar((on) => !on)}>Radar</button><button type="button" aria-pressed={clouds} onClick={() => setClouds((on) => !on)}>Satellite</button><button type="button" aria-pressed={alerts} onClick={() => setAlerts((on) => !on)}>Watches & warnings</button></div>
+    <div className="map-products"><label htmlFor="goes-product">Satellite product</label><select id="goes-product" value={satelliteMode} onChange={(event) => { setSatelliteMode(event.target.value as SatelliteMode); setClouds(true); }}><option value="ir">Infrared</option><option value="visible">Visible</option><option value="vapor">Water vapor</option><option value="shortwave">Shortwave IR</option></select><span>Radar {compactTime(layerTimes["weather_radar:conus_base_reflectivity_mosaic"])} · GOES {compactTime(layerTimes[SATELLITE_LAYERS[satelliteMode]])}{alerts && alertCount ? ` · NWS ${alertCount.mapped}/${alertCount.total} mapped` : ""}</span><a href="https://nowcoast.noaa.gov/" target="_blank" rel="noreferrer">NOAA ↗</a></div>
+    <div className="map-view-switch" role="group" aria-label="Map view"><button type="button" aria-pressed={viewMode === "approach"} onClick={() => setViewMode("approach")}>Gulf approach</button><button type="button" aria-pressed={viewMode === "impact"} onClick={() => setViewMode("impact")}>Coast focus</button><button type="button" aria-pressed={viewMode === "basin"} onClick={() => setViewMode("basin")}>Basin</button></div></details>
+    <div className="map-frame">{token ? <div ref={host} className="map-canvas" aria-label="Interactive Gulf hurricane map with watch location, Aegis, NHC, and model tracks" /> : <div className="map-fallback">Loading live map…</div>}
+      {clouds && <div className="satellite-map-tag">GOES · {satelliteMode === "ir" ? "Infrared" : satelliteMode === "vapor" ? "Water vapor" : satelliteMode === "shortwave" ? "Shortwave IR" : "Visible"} · {compactTime(layerTimes[SATELLITE_LAYERS[satelliteMode]])}</div>}
+      {mapError && <div className="map-error" role="status">{mapError}</div>}</div>
+    <div className="map-legend"><span><i className="key-aegis"/>Model blend · experimental</span><span><i className="key-nhc"/>NHC · official</span><span><i className="key-observed"/>Past NHC track · dashed to current</span><span><i className="key-watch"/>Watch point</span></div>
+    <details className="model-layers"><summary>Compare model tracks <span>{selectedModels.length} selected</span></summary><div className="model-switches">{models.map((model) => <button key={model.id} type="button" aria-pressed={selectedModels.includes(model.id)} onClick={() => toggle(model.id)} style={{ "--model-color": colors[model.id] ?? "#acbfd0" } as React.CSSProperties}>{model.name}</button>)}</div></details>
+  </div>;
+}

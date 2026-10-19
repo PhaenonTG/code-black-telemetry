@@ -1,0 +1,89 @@
+.callsign-card.cb-chassis {
+  --cb-edge-color: var(--cb-signal-red);
+  position: absolute;
+  left: var(--safe-margin);
+  bottom: var(--safe-margin);
+  z-index: 6;
+  padding: 16px 30px 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: cb-wipe-in var(--cb-motion-slow) var(--cb-ease) both;
+}
+
+.callsign-card__name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.callsign-card__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--cb-utility-gray-dim);
+  flex: none;
+}
+
+.callsign-card__dot.freshness-current {
+  background: var(--cb-white);
+}
+
+.callsign-card__dot.freshness-aging {
+  background: var(--cb-warn-severe);
+}
+
+.callsign-card__dot.freshness-stale {
+  background: var(--cb-signal-red);
+}
+
+.callsign-card__name {
+  font-family: var(--cb-font-display);
+  font-weight: 800;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--cb-white);
+}
+
+.callsign-card__tag {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-left: 22px;
+}
+
+.callsign-card__tag-label {
+  font-family: var(--cb-font-display);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--cb-utility-gray);
+}
+
+.callsign-card__tag-value {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cb-signal-red);
+}
+
+.callsign-card__telemetry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 22px;
+  margin-top: 2px;
+}
+
+.callsign-card__location {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cb-white);
+}
+
+.callsign-card__heading {
+  font-size: 11px;
+  color: var(--cb-utility-gray);
+}

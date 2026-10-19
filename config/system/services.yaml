@@ -1,0 +1,445 @@
+services:
+  ops-capacitor-app:
+    display_name: Code Black OPS App
+    node: samsung-cockpit
+    purpose: Current vehicle operational cockpit.
+    platform: react-capacitor-android-ios
+    path: src/
+    startup:
+      type: npm-capacitor
+      start_command: npm run dev
+      build_command: npm run build
+      android_debug_command: npm run android:debug
+      ios_sync_command: npm run cap:sync:ios
+    actions:
+      stop: "Stop Vite dev server or close native app."
+      restart: "Rebuild/sync/relaunch native host as appropriate."
+      status: "npm run build; native device launch/manual QA"
+    health:
+      type: build-and-device-qa
+      command: npm run build
+    dependencies:
+      - react
+      - vite
+      - capacitor
+      - mapbox-gl
+      - zustand
+    ports:
+      - service: vite-dev
+        port: 5173
+        protocol: http
+        known_from: vite-default
+    config_path:
+      - .env.example
+      - capacitor.config.ts
+    persistent_data:
+      - Capacitor Preferences
+      - Android Keystore credential store
+      - iOS Keychain adapter source
+    criticality: chase-critical
+    failure_impact: "Primary tablet cockpit unavailable."
+    remote_control_eligible: false
+    maturity: beta
+
+  code-black-control-web:
+    display_name: Code Black Control
+    node: windows-dev-producer
+    purpose: Early remote management/control-plane frontend; currently simulation-only.
+    platform: vite-react-typescript
+    path: web/telemetry/
+    startup:
+      type: npm
+      start_command: "cd web/telemetry && npm run dev"
+      build_command: "cd web/telemetry && npm run build"
+    actions:
+      stop: "Stop Vite dev server."
+      restart: "Restart Vite dev server."
+      status: "cd web/telemetry && npm run build"
+    health:
+      type: build
+      command: "cd web/telemetry && npm run build"
+    dependencies:
+      - react
+      - vite
+      - typescript
+    ports:
+      - service: code-black-control-dev
+        port: 5174
+        protocol: http
+        exposure: localhost
+        known_from: web/telemetry/vite.config.ts
+    config_path:
+      - web/telemetry/vite.config.ts
+    persistent_data: []
+    criticality: optional
+    failure_impact: "Remote control-plane UI unavailable; local chase operation unaffected."
+    remote_control_eligible: false
+    maturity: partial
+
+  web-ops:
+    display_name: Code Black OPS Web
+    node: codeblack-core
+    purpose: Private operational web surface for map, weather, alerts, fleet, system status, and settings.
+    platform: vite-react-supabase-cloudflare-pages
+    path: web/ops/
+    startup:
+      type: npm-cloudflare-pages
+      start_command: "cd web/ops && npm run dev"
+      build_command: "cd web/ops && npm run build"
+    health:
+      type: build
+      command: "cd web/ops && npm run build"
+    dependencies:
+      - react
+      - vite
+      - react-router-dom
+      - supabase
+      - mapbox-gl
+      - hls.js
+    ports:
+      - service: web-ops-dev
+        port: 5173
+        protocol: http
+        known_from: vite-default
+    config_path:
+      - web/ops/.env.example
+      - web/ops/docs/ARCHITECTURE.md
+    persistent_data:
+      - Supabase Auth session storage
+      - Supabase public.profiles authorization table
+    criticality: optional
+    failure_impact: "Private web OPS unavailable; vehicle cockpit should continue locally."
+    remote_control_eligible: true
+    maturity: partial
+
+  public-site:
+    display_name: Code Black WX Public Website
+    node: codeblack-core
+    purpose: Public brand/status site with no telemetry or private OPS data.
+    platform: vite-react
+    path: web/public/
+    startup:
+      type: npm
+      start_command: "cd web/public && npm run dev"
+      build_command: "cd web/public && npm run build"
+    health:
+      type: build
+      command: "cd web/public && npm run build"
+    dependencies:
+      - react
+      - vite
+    ports:
+      - service: public-site-dev
+        port: 5173
+        protocol: http
+        known_from: vite-default
+    config_path:
+      - web/public/.env.example
+    persistent_data: []
+    criticality: optional
+    failure_impact: "Public website unavailable; chase operation unaffected."
+    remote_control_eligible: false
+    maturity: partial
+
+  telemetry-client-provider:
+    display_name: OPS Telemetry Client Provider
+    node: samsung-cockpit
+    purpose: BLE-first telemetry client with optional HTTP Pi fallback and simulator fallback in development.
+    platform: typescript
+    path: src/services/telemetry/
+    startup:
+      type: app-module
+      start_command: "Imported by root OPS app at runtime."
+    actions:
+      status: "Inspect OPS telemetry status and connection model."
+    health:
+      type: app-state
+      command: "Use OPS diagnostics/status UI."
+    dependencies:
+      - ble-telemetry-link
+      - pi-http-telemetry-api
+      - tablet-gps-fallback
+    ports: []
+    config_path:
+      - .env.example
+      - src/services/settings.ts
+    persistent_data:
+      - "Capacitor Preferences key: codeblack.lastTelemetrySnapshot"
+    criticality: chase-critical
+    failure_impact: "Vehicle telemetry stale/offline; tablet can still use local map/radar and tablet GPS fallback."
+    remote_control_eligible: false
+    maturity: beta
+
+  ble-telemetry-link:
+    display_name: Pi BLE Telemetry Link
+    node: charger-pi
+    purpose: BLE notify/command bridge between Pi backend and OPS app.
+    platform: bluetooth-le
+    path: src/services/telemetry/ble-client.ts
+    startup:
+      type: pi-service-unknown
+      unit: codeblack-ble.service
+      unknown: true
+      notes: "Client comments reference codeblack-ble.service and Pi docs at ~/CodeBlack/docs/BLE_PROTOCOL.md, but the unit is not in this repo."
+    actions:
+      start: unknown
+      stop: unknown
+      restart: unknown
+      status: unknown
+    health:
+      type: ble-notifications
+      service_uuid: 8f2a0000-6d6f-4f9f-9d8b-0c0d2b4c0001
+    dependencies:
+      - charger-pi
+      - navigation-esp
+      - weather-esp
+    ports: []
+    config_path:
+      - src/services/telemetry/ble-client.ts
+    persistent_data: []
+    criticality: important
+    failure_impact: "OPS falls back to HTTP Pi endpoint or last-known/tablet data."
+    remote_control_eligible: true
+    maturity: partial
+
+  pi-http-telemetry-api:
+    display_name: Pi HTTP Telemetry API
+    node: charger-pi
+    purpose: Optional HTTP fallback for latest vehicle telemetry.
+    platform: http-api
+    path: src/services/telemetry/api-provider.ts
+    startup:
+      type: pi-service-unknown
+      unknown: true
+    actions:
+      start: unknown
+      stop: unknown
+      restart: unknown
+      status: unknown
+    health:
+      type: http
+      endpoint: "/api/latest"
+      base_url_source: "VITE_PI_API_BASE or Settings / Pi Endpoint"
+    dependencies:
+      - charger-pi
+      - navigation-esp
+      - weather-esp
+    ports:
+      - service: pi-http-example
+        port: 5000
+        protocol: http
+        exposure: lan-or-tailscale
+        known_from: ".env.example and PiEndpointPanel presets"
+    config_path:
+      - .env.example
+      - src/components/operations/PiEndpointPanel.tsx
+    persistent_data:
+      - Capacitor Preferences Pi endpoint
+    criticality: important
+    failure_impact: "HTTP telemetry fallback unavailable; BLE may still provide vehicle telemetry."
+    remote_control_eligible: true
+    maturity: partial
+
+  mission-streaming-client:
+    display_name: Mission Streaming Client Controls
+    node: samsung-cockpit
+    purpose: Tablet switch/status surface for camera, KNWA, Code Black, and recording states.
+    platform: typescript
+    path: src/services/streaming.ts
+    startup:
+      type: app-module
+      start_command: "Imported by OPS Operations page."
+    actions:
+      status: "GET /api/local/stream/status or per-target fallback endpoints"
+      start: "POST /api/local/stream/{target}/start or BLE command"
+      stop: "POST /api/local/stream/{target}/stop or BLE command"
+      restart: unknown
+    health:
+      type: http
+      endpoint: "/api/local/stream/status"
+    dependencies:
+      - pi-streaming-stack
+      - ble-telemetry-link
+      - pi-http-telemetry-api
+    ports:
+      - service: pi-http-example
+        port: 5000
+        protocol: http
+        exposure: lan-or-tailscale
+        known_from: ".env.example and PiEndpointPanel presets"
+    config_path:
+      - src/services/streaming.ts
+      - src/services/settings.ts
+    persistent_data:
+      - Pi endpoint preference
+      - BLE command token preference
+    criticality: optional
+    failure_impact: "Broadcast/recording controls unavailable; chase operation unaffected."
+    remote_control_eligible: true
+    maturity: partial
+
+  pi-streaming-stack:
+    display_name: Pi Streaming Stack
+    node: charger-pi
+    purpose: Camera ingest, FFmpeg/MediaMTX or equivalent process work, recording, reconnect, credentials, and network failover.
+    platform: linux
+    path: external-pi-codebase
+    startup:
+      type: unknown
+      unknown: true
+    actions:
+      start: unknown
+      stop: unknown
+      restart: unknown
+      status: unknown
+    health:
+      type: unknown
+      unknown: true
+    dependencies:
+      - ffmpeg
+      - mediamtx
+      - camera-inputs
+      - network
+    ports: []
+    config_path: unknown
+    persistent_data: unknown
+    criticality: optional
+    failure_impact: "Broadcast unavailable; chase remains locally capable."
+    remote_control_eligible: true
+    maturity: planned
+
+  radar-worker:
+    display_name: Code Black Radar Worker
+    node: windows-dev-producer
+    purpose: Development radar API for Level II/III products, tiles, status, and storm motion experiments.
+    platform: node-http
+    path: radar-worker/worker.cjs
+    startup:
+      type: npm
+      start_command: npm run radar:worker
+    actions:
+      stop: "Stop node process."
+      restart: "Restart npm run radar:worker."
+      status: "GET /api/v1/radar/health"
+    health:
+      type: http
+      endpoint: /api/v1/radar/health
+    dependencies:
+      - nexrad-level-2-data
+      - nexrad-level-3-data
+      - pngjs
+      - unidata-nexrad-level2
+      - unidata-nexrad-level3
+    ports:
+      - service: radar-worker
+        port: 8787
+        protocol: http
+        exposure: localhost-development
+        known_from: "CODEBLACK_RADAR_PORT default in radar-worker/worker.cjs"
+    config_path:
+      - radar-worker/worker.cjs
+      - radar-worker/sites.cjs
+    persistent_data:
+      - in-memory frame/tile cache
+    criticality: optional
+    failure_impact: "Development single-site radar worker unavailable. Current production OPS uses mosaic radar."
+    remote_control_eligible: false
+    maturity: partial
+
+  android-chase-tracking-service:
+    display_name: Android Chase Tracking Service
+    node: samsung-cockpit
+    purpose: Native Android foreground service for persistent chase location tracking.
+    platform: android-java
+    path: android/app/src/main/java/com/codeblackwx/ops/chase/
+    startup:
+      type: android-foreground-service
+      start_command: "Started through ChaseTrackingNativePlugin from shared app."
+    actions:
+      stop: "Stop through ChaseTrackingNativePlugin/shared app."
+      restart: "Stop/start through native plugin."
+      status: "Native plugin state and app diagnostics."
+    health:
+      type: native-plugin-state
+    dependencies:
+      - android-location
+      - notifications
+    ports: []
+    config_path:
+      - android/app/src/main/AndroidManifest.xml
+    persistent_data:
+      - Android app-private storage
+    criticality: important
+    failure_impact: "Background chase breadcrumb/location behavior degraded; foreground cockpit still usable."
+    remote_control_eligible: false
+    maturity: beta
+
+  cloudflare-modot-proxy:
+    display_name: MoDOT Same-Origin Proxy
+    node: codeblack-core
+    purpose: Cloudflare Pages Function proxy for MoDOT public road/camera data.
+    platform: cloudflare-pages-function
+    path: functions/api/modot/[[path]].ts
+    startup:
+      type: cloudflare-pages
+      start_command: "Deployed with Pages project."
+    health:
+      type: provider-request
+    dependencies:
+      - modot-public-arcgis
+    ports: []
+    config_path:
+      - functions/api/modot/[[path]].ts
+    persistent_data: []
+    criticality: optional
+    failure_impact: "Missouri road/camera layer unavailable."
+    remote_control_eligible: false
+    maturity: partial
+
+  cloudflare-odot-proxy:
+    display_name: ODOT Same-Origin Proxy
+    node: codeblack-core
+    purpose: Cloudflare Pages Function proxy for ODOT public road data requiring server-side token handling.
+    platform: cloudflare-pages-function
+    path: functions/api/odot/[[path]].ts
+    startup:
+      type: cloudflare-pages
+      start_command: "Deployed with Pages project."
+    health:
+      type: provider-request
+    dependencies:
+      - odot-public-api
+    ports: []
+    config_path:
+      - functions/api/odot/[[path]].ts
+    persistent_data: []
+    criticality: optional
+    failure_impact: "Oklahoma road layer unavailable."
+    remote_control_eligible: false
+    maturity: partial
+
+  native-radar-reference:
+    display_name: Rust Native Radar Reference
+    node: samsung-cockpit
+    purpose: Retired/deferred reference crate for on-device Level II radar decode/render.
+    platform: rust-android-ffi
+    path: native/radar-ref/
+    startup:
+      type: cargo
+      start_command: "No runtime service; build crate for Android library when revived."
+    health:
+      type: cargo-build
+      command: "cargo build --target aarch64-linux-android --release"
+    dependencies:
+      - rust
+      - android-ndk
+      - nexrad-data
+      - nexrad-render
+    ports: []
+    config_path:
+      - native/radar-ref/Cargo.toml
+    persistent_data: []
+    criticality: optional
+    failure_impact: "No impact on current shipped mosaic radar."
+    remote_control_eligible: false
+    maturity: deprecated

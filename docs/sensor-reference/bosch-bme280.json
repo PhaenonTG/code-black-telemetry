@@ -1,0 +1,26 @@
+{
+  "reference_id": "bosch-bme280-ds001-23",
+  "manufacturer": "Bosch Sensortec",
+  "part": "BME280",
+  "document": "BME280 digital humidity, pressure and temperature sensor data sheet",
+  "document_revision": "BST-BME280-DS001-23, revision 1.23, January 2022",
+  "source_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf",
+  "source_sha256": "a2ccdb449fec94380742fe8eec851a11d9bd4142252d332b34682b4deecd7d89",
+  "retrieved_date": "2026-10-15",
+  "chip_id_register": "0xD0",
+  "chip_id_value": "0x60",
+  "i2c_addresses_7_bit": ["0x76", "0x77"],
+  "i2c_address_select": "SDO tied to GND selects 0x76; SDO tied to VDDIO selects 0x77",
+  "vdd_volts": [1.71, 3.6],
+  "vddio_volts": [1.2, 3.6],
+  "operating_temperature_c": [-40, 85],
+  "operating_humidity_pct": [0, 100],
+  "operating_pressure_hpa": [300, 1100],
+  "striker_nav": {
+    "planned_sda_gpio": 21,
+    "planned_scl_gpio": 22,
+    "firmware_reads": ["temperature_c", "pressure_hpa"],
+    "physical_device_status": "not confirmed; no live reading as of 2026-10-15"
+  }
+}
+

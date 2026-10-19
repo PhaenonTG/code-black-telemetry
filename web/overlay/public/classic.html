@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Code Black Storm Overlay</title>
+  <!-- Mapbox GL JS -- the Code Black standard map engine, same version RadarOBS/radar.html (the
+       original overlay's radar companion) already used. Not Leaflet: the owner specifically
+       wants Mapbox's vector street styling (roads, road names, county/state lines), which the
+       key-less raster basemaps used during earlier iteration of this panel don't provide. -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.css"
+    integrity="sha384-EP/H7vnAWQ5LW9GnEKFrWdLNFs5Ar50IJgtlPCBzA/mZRKZrR+/rMG5kXl5QNyCp" crossorigin="anonymous" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.js"
+    integrity="sha384-ZMqM0SdLsq7rI9P0wS7ycsmyMZABQED4jFTBlrzUG5+eRlOZnZFEwT5vDaWWr0pQ" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: rgba(0,0,0,0);
+      --border: rgba(255,255,255,0.12);
+      --text: #ffffff;
+      --muted: rgba(255,255,255,0.72);
+      --accent: #ff2a2a;
+      --accent-soft: rgba(255, 42, 42, 0.22);
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+      --font: Arial, Helvetica, sans-serif;
+      --panel-bg: linear-gradient(180deg, rgba(12,12,15,0.84), rgba(12,12,15,0.64));
+
+      /* Alert-bubble colors, one pair (gradient start/end) per tier -- every .alert-bubble.<tier>
+         rule below just references these instead of hardcoding hex, so changing a tier's color
+         later is a one-line edit here rather than hunting through the CSS.
+         Color policy (owner's explicit call): red is reserved for tornado warnings only -- nothing
+         else on this list uses it, including Flash Flood Warning despite that being NWS's own real
+         official color for it. PDS Tornado Warning is its own deep, almost-purple red, distinct
+         from plain tor-warning. Anything heat-related is orange, never red. */
+      --alert-tor-emergency-1: #6a0000;
+      --alert-tor-emergency-2: #000000;
+      --alert-tor-pds-1: #9b0057;
+      --alert-tor-pds-2: #33001f;
+      --alert-tor-warning-1: #FF0000;
+      --alert-tor-warning-2: #b00000;
+      --alert-svr-destructive-1: #ff5500;
+      --alert-svr-destructive-2: #a33900;
+      --alert-svr-considerable-1: #ff8c00;
+      --alert-svr-considerable-2: #a34700;
+      --alert-svr-warning-1: #FFA500;
+      --alert-svr-warning-2: #cc7000;
+      --alert-ffw-warning-1: #00C853;
+      --alert-ffw-warning-2: #009140;
+      --alert-heat-warning-1: #FF6600;
+      --alert-heat-warning-2: #993d00;
+      --alert-heat-advisory-1: #FF9800;
+      --alert-heat-advisory-2: #b36b00;
+      --alert-tor-watch-1: #FFFF00;
+      --alert-tor-watch-2: #d4d400;
+      --alert-svr-watch-1: #FFCC80;
+      --alert-svr-watch-2: #FFB74D;
+      --alert-ffw-watch-1: #A5D6A7;
+      --alert-ffw-watch-2: #81C784;
+      --alert-generic-1: #c0392b;
+      --alert-generic-2: #922b21;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      overflow: hidden;
+      font-family: var(--font);
+      color: var(--text);
+    }
+
+    .canvas {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: top left;
+    }
+
+    .top-brand {
+      position: absolute;
+      top: 28px;
+      left: 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(12,12,15,0.72), rgba(12,12,15,0.55));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      z-index: 5;
+    }
+
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 35% 35%, #ff6666, var(--accent));
+      box-shadow: 0 0 14px rgba(255,42,42,0.4);
+      flex: 0 0 auto;
+      animation: pulseDot 1.8s infinite ease-in-out;
+    }
+
+    .brand-title {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      line-height: 1;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.88); opacity: 0.7; }
+    }
+
+    .camera-frame {
+      position: absolute;
+      inset: 18px;
+      border-radius: 28px;
+      border: 1px solid rgba(255,255,255,0.08);
+      pointer-events: none;
+    }
+
+    .camera-corner {
+      position: absolute;
+      width: 42px;
+      height: 42px;
+      border-color: rgba(255,255,255,0.18);
+      border-style: solid;
+      pointer-events: none;
+    }
+
+    .camera-corner.tl { top: 18px; left: 18px; border-width: 2px 0 0 2px; border-top-left-radius: 22px; }
+    .camera-corner.tr { top: 18px; right: 18px; border-width: 2px 2px 0 0; border-top-right-radius: 22px; }
+    .camera-corner.bl { bottom: 18px; left: 18px; border-width: 0 0 2px 2px; border-bottom-left-radius: 22px; }
+    .camera-corner.br { bottom: 18px; right: 18px; border-width: 0 2px 2px 0; border-bottom-right-radius: 22px; }
+
+    .radar-panel {
+      position: absolute;
+      top: 28px;
+      right: 28px;
+      width: 460px;
+      height: 300px;
+      border-radius: 24px;
+      background: #0b0c10;
+      border: 1px solid var(--border);
+      /* Matches .bubble's shadow plus a faint inset top highlight -- the map inside stays fully
+         opaque (it has to, for clarity), so this is what carries the "liquid glass" family look
+         onto the frame itself, the same way .bubble::before's top line does. */
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+      overflow: hidden;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .radar-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.85;
+      z-index: 4;
+    }
+
+    .radar-head {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 57px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 18px 12px 18px;
+      background: linear-gradient(180deg, rgba(12,12,15,0.78), rgba(12,12,15,0.58));
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(10px);
+      z-index: 3;
+    }
+
+    .radar-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .radar-product {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+    }
+
+    .radar-site {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(255,42,42,0.55);
+      animation: pulse 1.4s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.82); }
+    }
+
+    .radar-window {
+      position: absolute;
+      top: 57px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #0b0c10;
+      z-index: 1;
+    }
+
+    #radarMap {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Mapbox's attribution + logo controls -- kept (required by Mapbox's ToS) but styled down
+       small/quiet in a broadcast corner rather than their default size. Never hidden entirely. */
+    .mapboxgl-ctrl-attrib {
+      font-size: 8px !important;
+      background: rgba(0,0,0,0.35) !important;
+      color: rgba(255,255,255,0.35) !important;
+      padding: 0 4px !important;
+    }
+    .mapboxgl-ctrl-attrib a { color: rgba(255,255,255,0.45) !important; }
+    .mapboxgl-ctrl-logo { transform: scale(0.7); transform-origin: bottom left; opacity: 0.6; }
+    .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl { margin: 0 4px 2px 0 !important; }
+    .mapboxgl-ctrl-bottom-left .mapboxgl-ctrl { margin: 0 0 2px 4px !important; }
+
+    /* Nick's live GPS position on the radar -- same continuous-pulse language this design
+       already uses (.live-dot, .brand-mark), not a one-shot flash. */
+    .radar-position-marker {
+      position: relative;
+      width: 16px;
+      height: 16px;
+    }
+    .radar-position-marker__core {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 10px rgba(255,42,42,0.85), 0 0 0 2px rgba(255,255,255,0.9);
+    }
+    .radar-position-marker__ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      border: 2px solid var(--accent);
+      animation: radarPositionPulse 1.6s infinite ease-out;
+    }
+    @keyframes radarPositionPulse {
+      0% { transform: scale(0.4); opacity: 0.9; }
+      100% { transform: scale(1.9); opacity: 0; }
+    }
+
+
+    .radar-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      z-index: 2;
+      background: #0b0c10;
+      transition: opacity 0.3s ease;
+    }
+    .radar-loading.hidden { opacity: 0; pointer-events: none; }
+
+    .bottom-bar {
+      position: absolute;
+      left: 28px;
+      right: 28px;
+      bottom: 28px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 14px;
+      align-items: stretch;
+      width: auto;
+      transform: none;
+      z-index: 5;
+    }
+
+    .bubble {
+      height: 88px;
+      border-radius: 20px;
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bubble::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.85;
+    }
+
+    .location-bubble {
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      justify-self: start;
+    }
+
+    .location-inner {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 4px;
+      text-align: left;
+    }
+
+    .location-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0px;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .icon-chip {
+      width: 40px;
+      height: 40px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent-soft);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 19px;
+      flex: 0 0 auto;
+    }
+
+    .location-text {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.05;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .heading-text {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-left: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+      text-align: left;
+    }
+
+    .alert-bubble {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0 18px;
+      text-align: center;
+    }
+
+    .alert-bubble.show {
+      display: flex;
+      animation: alertGlow 1.8s infinite ease-in-out;
+    }
+
+    /* Flash-cut on any tier change -- a plain instant color swap read as jarring on stream, and
+       gradients don't cross-fade reliably via a CSS transition. Instead the new color swaps in
+       immediately underneath (so the bubble is never mid-blend/wrong), and this white overlay
+       flashes over it and fades out, giving the change a deliberate "punched in" feel instead of a
+       hard cut. .bubble already has position:relative + overflow:hidden, so this clips to the
+       bubble's own rounded corners for free. Re-triggered by re-adding the class each time (see
+       triggerAlertFlash in JS) -- a CSS animation doesn't replay just because the class was
+       already present. */
+    .alert-bubble::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: #ffffff;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .alert-bubble.flash::after {
+      animation: alertFlash 0.5s ease-out;
+    }
+    @keyframes alertFlash {
+      0% { opacity: 0.4; }
+      100% { opacity: 0; }
+    }
+    /* Stronger version specifically for an escalation (e.g. Tornado Warning -> PDS -> Emergency) --
+       brighter flash plus a brief scale punch, so an upgrade reads as a distinct, more urgent event
+       than a plain tier change (a new alert appearing, a downgrade, or a lateral change). */
+    .alert-bubble.flash-escalate::after {
+      animation: alertFlashEscalate 0.6s ease-out;
+    }
+    .alert-bubble.flash-escalate {
+      animation: alertGlow 1.8s infinite ease-in-out, alertEscalatePunch 0.6s ease-out;
+    }
+    @keyframes alertFlashEscalate {
+      0% { opacity: 0.8; }
+      100% { opacity: 0; }
+    }
+    @keyframes alertEscalatePunch {
+      0% { transform: scale(1); }
+      30% { transform: scale(1.035); }
+      100% { transform: scale(1); }
+    }
+
+    /* Escalation ladder, most severe first -- every color here comes from the --alert-* variables
+       in :root, so re-coloring a tier later is a one-line edit up there, not a hunt through this
+       block. tornadoDamageThreat/thunderstormDamageThreat (NWS's own structured CAP fields -- see
+       alertClassFor) drive PDS/Emergency/Considerable/Destructive. Heat Advisory isn't handled at
+       all right now (deliberately -- see alertClassFor's own comment). */
+    .alert-bubble.tor-emergency { background: linear-gradient(180deg, var(--alert-tor-emergency-1), var(--alert-tor-emergency-2)); animation: alertGlowIntense 1.1s infinite ease-in-out; }
+    .alert-bubble.tor-pds { background: linear-gradient(180deg, var(--alert-tor-pds-1), var(--alert-tor-pds-2)); }
+    .alert-bubble.tor-warning { background: linear-gradient(180deg, var(--alert-tor-warning-1), var(--alert-tor-warning-2)); }
+    .alert-bubble.svr-destructive { background: linear-gradient(180deg, var(--alert-svr-destructive-1), var(--alert-svr-destructive-2)); }
+    .alert-bubble.svr-considerable { background: linear-gradient(180deg, var(--alert-svr-considerable-1), var(--alert-svr-considerable-2)); }
+    .alert-bubble.svr-warning { background: linear-gradient(180deg, var(--alert-svr-warning-1), var(--alert-svr-warning-2)); }
+    .alert-bubble.ffw-warning { background: linear-gradient(180deg, var(--alert-ffw-warning-1), var(--alert-ffw-warning-2)); }
+    .alert-bubble.heat-warning { background: linear-gradient(180deg, var(--alert-heat-warning-1), var(--alert-heat-warning-2)); color: #111111; }
+    .alert-bubble.heat-advisory { background: linear-gradient(180deg, var(--alert-heat-advisory-1), var(--alert-heat-advisory-2)); color: #111111; }
+    .alert-bubble.tor-watch { background: linear-gradient(180deg, var(--alert-tor-watch-1), var(--alert-tor-watch-2)); color: #111111; }
+    .alert-bubble.svr-watch { background: linear-gradient(180deg, var(--alert-svr-watch-1), var(--alert-svr-watch-2)); color: #111111; }
+    .alert-bubble.ffw-watch { background: linear-gradient(180deg, var(--alert-ffw-watch-1), var(--alert-ffw-watch-2)); color: #111111; }
+    .alert-bubble.generic { background: linear-gradient(180deg, var(--alert-generic-1), var(--alert-generic-2)); }
+
+    @keyframes alertGlow {
+      0%, 100% { box-shadow: var(--shadow), 0 0 0 rgba(255,42,42,0); }
+      50% { box-shadow: var(--shadow), 0 0 28px rgba(255,42,42,0.30); }
+    }
+
+    /* Tornado Emergency's own faster/brighter pulse -- the one tier that should visibly read as
+       "beyond a normal warning" at a glance, not just via text. */
+    @keyframes alertGlowIntense {
+      0%, 100% { box-shadow: var(--shadow), 0 0 0 rgba(255,42,42,0); }
+      50% { box-shadow: var(--shadow), 0 0 40px rgba(255,42,42,0.55); }
+    }
+
+    .alert-inner {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+
+    .alert-text {
+      width: 100%;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      line-height: 1.08;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Second line -- warning number + live countdown to expiration. Only ever populated for a
+       real storm-based warning with a VTEC number/expires time (see renderAlertDetail); empty and
+       collapsed for anything else, so this never adds blank space to a watch/generic alert. */
+    .alert-detail {
+      width: 100%;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.85;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .alert-detail:empty { display: none; }
+
+    .clock-bubble {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 16px;
+      justify-self: end;
+      width: fit-content;
+      min-width: 0;
+      margin-left: auto;
+      margin-right: 0;
+    }
+
+    .clock-inner {
+      width: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 4px;
+      text-align: right;
+    }
+
+    /* Matched to .location-text/.heading-text's own scale (28px/17px, same weights) -- the
+       bottom-left corner was the one the owner explicitly liked, so the right corner now mirrors
+       its type scale instead of running its own, smaller one. Growing this text also naturally
+       grows the clock-bubble's fit-content width toward the location-bubble's, balancing the two
+       corners without hardcoding either box to a fixed pixel width. */
+    /* Byte-for-byte the same typography as .location-text/.heading-text (size, weight, line-height,
+       letter-spacing, case) -- only text-align/justify-content differ, since this corner is
+       right-aligned instead of left. Anything typographic that differed between the two corners
+       read as visually mismatched even when the pixel sizes already matched. */
+    .clock-time {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.05;
+    }
+
+    .clock-date {
+      font-size: 17px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas" id="canvas">
+    <div class="camera-frame"></div>
+    <div class="camera-corner tl"></div>
+    <div class="camera-corner tr"></div>
+    <div class="camera-corner bl"></div>
+    <div class="camera-corner br"></div>
+
+    <div class="top-brand">
+      <div class="brand-mark"></div>
+      <div class="brand-title" id="brandTitle">Nick Mounce</div>
+    </div>
+
+    <div class="radar-panel">
+      <div class="radar-head">
+        <div class="radar-title">
+          Radar
+          <span class="radar-product" id="radarProduct">REF</span>
+          <span class="radar-site" id="radarSite">--</span>
+          <span class="radar-site" id="radarZoomLabel">CLOSE</span>
+        </div>
+        <div class="live-pill"><span class="live-dot"></span><span>Live</span></div>
+      </div>
+      <div class="radar-window">
+        <div id="radarMap"></div>
+        <div class="radar-loading" id="radarLoading">Acquiring site...</div>
+      </div>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="bubble location-bubble">
+        <div class="location-inner">
+          <div class="location-row">
+            <div class="location-text" id="locationText">Locating...</div>
+          </div>
+          <div class="heading-text" id="headingText">Heading: --</div>
+        </div>
+      </div>
+
+      <div class="bubble alert-bubble" id="alertBubble">
+        <div class="alert-inner">
+          <div class="alert-text" id="alertText"></div>
+          <div class="alert-detail" id="alertDetail"></div>
+        </div>
+      </div>
+
+      <div class="bubble clock-bubble">
+        <div class="clock-inner">
+          <div class="clock-time" id="clockTime">12:00 PM</div>
+          <div class="clock-date" id="clockDate">Monday Mar 30</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Same shape as the original file-polling Nick Mounce overlay this is reworked from
+    // (C:\GPSStream\obsoverlay.html), except location/weather/alerts now come from public,
+    // CORS-open APIs directly instead of a local Python bridge writing text files -- no server
+    // component needed for this page at all.
+    //
+    // Live position comes from the chase phone (wx.codeblack.chase) -> the codeblack-chase-
+    // gateway Worker -> Core, read back here through gateway's public GET
+    // /api/chase/location/public?unit_id=... . That route deliberately requires no caller auth
+    // (a headless OBS browser source can't hold the real CHASE_TOKEN without exposing it to
+    // anyone who views page source -- and that token also guards the POST/ingest path, so
+    // leaking it would let a page-source viewer post fake locations, not just read real ones).
+    // See cloudflare/chase-gateway/src/index.js's forwardPublicLatest for the server-side detail.
+    //
+    // ?latitude=&longitude= (if given) is a manual override for bench-testing without the phone
+    // live -- when present, live GPS polling is skipped entirely and that fixed point is used
+    // instead, same as before this was wired up.
+    const params = new URLSearchParams(window.location.search);
+    const MIN_GPS_POLL_SECONDS = 15;
+
+    const manualLatitude = params.get('latitude') ? Number(params.get('latitude')) : null;
+    const manualLongitude = params.get('longitude') ? Number(params.get('longitude')) : null;
+
+    const settings = {
+      title: params.get('title') || params.get('publicIdentity') || 'Nick Mounce',
+      latitude: manualLatitude,
+      longitude: manualLongitude,
+      bearingDeg: null,
+      useClock: params.get('clock') !== 'off',
+      scaleToWindow: true,
+      pollSeconds: params.get('pollSeconds') ? Number(params.get('pollSeconds')) : 60,
+      useLiveGps: manualLatitude === null || manualLongitude === null,
+      chaseGatewayBase: params.get('chaseGatewayBase') || 'https://ops.codeblackwx.com',
+      unitId: params.get('unitId') || 'cbwx-unit-tessa',
+      gpsPollSeconds: params.get('gpsPollSeconds') ? Number(params.get('gpsPollSeconds')) : MIN_GPS_POLL_SECONDS,
+    };
+    let lastAppliedLat = manualLatitude;
+    let lastAppliedLon = manualLongitude;
+
+    const el = {
+      canvas: document.getElementById('canvas'),
+      brandTitle: document.getElementById('brandTitle'),
+      locationText: document.getElementById('locationText'),
+      headingText: document.getElementById('headingText'),
+      alertBubble: document.getElementById('alertBubble'),
+      alertText: document.getElementById('alertText'),
+      alertDetail: document.getElementById('alertDetail'),
+      clockTime: document.getElementById('clockTime'),
+      clockDate: document.getElementById('clockDate'),
+    };
+
+    el.brandTitle.textContent = settings.title;
+
+    function updateClock() {
+      // Reuses this same 1s tick for the alert bubble's live countdown-to-expiration -- no reason
+      // to run a second interval for the same cadence. Kept outside the useClock guard below so
+      // ?clock=off doesn't silently stop the countdown too -- the two are unrelated settings.
+      renderAlertDetail();
+      if (!settings.useClock) return;
+      const now = new Date();
+      const tz = new Intl.DateTimeFormat([], { timeZoneName: 'short' })
+        .formatToParts(now)
+        .find(part => part.type === 'timeZoneName')?.value || '';
+      const timeText = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      el.clockTime.textContent = `${timeText} ${tz}`.trim();
+      el.clockDate.textContent = now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+
+    const COMPASS_POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    function compassFor(deg) {
+      const normalized = ((deg % 360) + 360) % 360;
+      return COMPASS_POINTS[Math.round(normalized / 22.5) % 16];
+    }
+
+    // The original design's "heading" line was really one combined secondary readout (temp,
+    // dew point, and GPS heading all in one string, written together by the old Python bridge)
+    // -- rebuilt here from whichever of weather/bearing last updated, since they now come from
+    // two independent sources (Open-Meteo vs. the chase GPS feed) instead of one script.
+    let lastTemp = null;
+    let lastDew = null;
+    let lastGroundObs = null; // real station reading; preferred over the model estimate below when present
+    function renderSecondaryLine() {
+      const temp = lastGroundObs ? lastGroundObs.tempF : lastTemp;
+      const dew = lastGroundObs ? lastGroundObs.dewF : lastDew;
+      const parts = [];
+      if (temp !== null) parts.push(`Temp: ${temp}°`);
+      if (dew !== null) parts.push(`Dew Point: ${dew}°`);
+      parts.push(settings.bearingDeg !== null ? `Heading: ${compassFor(settings.bearingDeg)}` : 'Heading: --');
+      el.headingText.textContent = parts.join('  |  ');
+    }
+
+    // Nominatim reverse geocode -- public, CORS-open, no key. Rate-limited to ~1req/s by their
+    // usage policy; this only calls it once per settings.pollSeconds (default 60s) plus on a
+    // meaningful GPS position change, well under it.
+    async function updateLocation() {
+      if (settings.latitude === null || settings.longitude === null) {
+        el.locationText.textContent = 'Awaiting GPS feed...';
+        renderSecondaryLine();
+        return;
+      }
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${settings.latitude}&lon=${settings.longitude}&zoom=10`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('reverse geocode failed');
+        const data = await res.json();
+        const addr = data.address || {};
+        const city = addr.city || addr.town || addr.village || addr.hamlet || addr.county;
+        const state = addr.state;
+        el.locationText.textContent = city && state ? `${city}, ${state.slice(0, 2).toUpperCase()}` : (data.display_name || 'Location unavailable');
+      } catch (err) {
+        el.locationText.textContent = `${settings.latitude.toFixed(2)}, ${settings.longitude.toFixed(2)}`;
+      }
+    }
+
+    // Open-Meteo -- public, CORS-open, no key.
+    async function updateWeather() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${settings.latitude}&longitude=${settings.longitude}&current=temperature_2m,dew_point_2m&temperature_unit=fahrenheit`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('weather fetch failed');
+        const data = await res.json();
+        lastTemp = Math.round(data.current.temperature_2m);
+        lastDew = Math.round(data.current.dew_point_2m);
+        renderSecondaryLine();
+      } catch (err) {
+        // leave last-known weather text in place -- a single missed poll isn't an outage
+      }
+    }
+
+    // Ground truth surface obs -- a real METAR/ASOS station reading (api.weather.gov, public, no
+    // key), deliberately separate from updateWeather() above (which is Open-Meteo's gridded MODEL
+    // estimate, not an actual station observation). Nearest-station lookup is two hops: /points
+    // resolves the position to its NWS gridpoint and station list URL, then that list is fetched
+    // and the nearest entry picked by straight-line distance (NWS doesn't guarantee the list is
+    // distance-sorted). Same "only re-fetch on a meaningful position change" cadence as weather/
+    // location/alerts -- a moving vehicle's nearest station doesn't change every few seconds.
+    function approxMilesBetween(lat1, lon1, lat2, lon2) {
+      const dLat = lat1 - lat2;
+      const dLon = (lon1 - lon2) * Math.cos((lat1 * Math.PI) / 180);
+      return Math.sqrt(dLat * dLat + dLon * dLon) * 69;
+    }
+    async function updateSurfaceObs() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      try {
+        const pointsRes = await fetch(`https://api.weather.gov/points/${settings.latitude.toFixed(4)},${settings.longitude.toFixed(4)}`, { headers: { Accept: 'application/geo+json' } });
+        if (!pointsRes.ok) throw new Error('points lookup failed');
+        const pointsData = await pointsRes.json();
+        const stationsUrl = pointsData.properties && pointsData.properties.observationStations;
+        if (!stationsUrl) throw new Error('no observationStations link');
+        const stationsRes = await fetch(stationsUrl, { headers: { Accept: 'application/geo+json' } });
+        if (!stationsRes.ok) throw new Error('stations list failed');
+        const stationsData = await stationsRes.json();
+        const features = stationsData.features || [];
+        if (!features.length) throw new Error('no nearby stations');
+        let nearest = null;
+        let nearestMiles = Infinity;
+        for (const f of features) {
+          const coords = f.geometry && f.geometry.coordinates; // [lon, lat]
+          if (!coords) continue;
+          const miles = approxMilesBetween(settings.latitude, settings.longitude, coords[1], coords[0]);
+          if (miles < nearestMiles) { nearestMiles = miles; nearest = f; }
+        }
+        if (!nearest) throw new Error('no usable station coordinates');
+        const stationId = nearest.properties.stationIdentifier;
+        const obsRes = await fetch(`https://api.weather.gov/stations/${stationId}/observations/latest`, { headers: { Accept: 'application/geo+json' } });
+        if (!obsRes.ok) throw new Error('latest observation failed');
+        const obsData = await obsRes.json();
+        const p = obsData.properties || {};
+        const tempC = p.temperature && p.temperature.value;
+        const dewC = p.dewpoint && p.dewpoint.value;
+        if (typeof tempC !== 'number' || typeof dewC !== 'number') throw new Error('observation missing temp/dewpoint');
+        lastGroundObs = {
+          stationId,
+          tempF: Math.round((tempC * 9) / 5 + 32),
+          dewF: Math.round((dewC * 9) / 5 + 32),
+        };
+        renderSecondaryLine();
+      } catch (err) {
+        // leave last-known ground obs in place -- a single missed poll isn't an outage, and this
+        // is always a supplement to updateWeather()'s model estimate, never the only reading shown
+      }
+    }
+
+    // Live position: chase phone -> chase-gateway Worker -> Core -> this public read. See the
+    // top-of-file comment for why this route needs no caller auth. Polled independently of (and
+    // faster than) weather/alerts, since position should feel live on stream; weather/alerts
+    // only actually re-fetch when the position has moved meaningfully, to stay well under
+    // Nominatim's rate limit.
+    async function updateGps() {
+      if (!settings.useLiveGps || document.hidden) return;
+      try {
+        const url = `${settings.chaseGatewayBase}/api/chase/location/public?unit_id=${encodeURIComponent(settings.unitId)}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('gps fetch failed');
+        const data = await res.json();
+        const hasFix = typeof data.lat === 'number' && typeof data.lon === 'number';
+        if (!hasFix || data.stale || data.location_sharing === false) {
+          settings.latitude = null;
+          settings.longitude = null;
+          settings.bearingDeg = null;
+          lastAppliedLat = null;
+          lastAppliedLon = null;
+          el.locationText.textContent = data.location_sharing === false ? 'Location sharing stopped' : 'Awaiting GPS feed...';
+          renderSecondaryLine();
+          return;
+        }
+        settings.bearingDeg = typeof data.bearing_deg === 'number' ? data.bearing_deg : null;
+        settings.latitude = data.lat;
+        settings.longitude = data.lon;
+        renderSecondaryLine();
+        const moved = lastAppliedLat === null
+          || Math.abs(data.lat - lastAppliedLat) > 0.01
+          || Math.abs(data.lon - lastAppliedLon) > 0.01;
+        if (moved) {
+          lastAppliedLat = data.lat;
+          lastAppliedLon = data.lon;
+          updateLocation();
+          updateWeather();
+          updateSurfaceObs();
+          updateAlert();
+          updateRadarSite();
+        }
+      } catch (err) {
+        // leave last-known position/state in place -- a single missed GPS poll isn't an outage
+      }
+    }
+
+    // Takes the whole feature (not just the event name) because PDS/Tornado Emergency/
+    // Considerable/Destructive are never their own NWS `event` string -- Tornado Warning stays
+    // "Tornado Warning" even at Tornado Emergency severity. NWS conveys the escalation through
+    // structured CAP parameters instead: tornadoDamageThreat ("CONSIDERABLE" = PDS, "CATASTROPHIC"
+    // = Tornado Emergency) and thunderstormDamageThreat ("CONSIDERABLE"/"DESTRUCTIVE" for severe
+    // t-storm). Falls back to searching the free-text headline/description for "PARTICULARLY
+    // DANGEROUS SITUATION" / "TORNADO EMERGENCY" in case the structured field is ever missing but
+    // the text flag is present -- never fabricates an escalation neither signal actually shows.
+    function alertClassFor(feature) {
+      const props = feature?.properties || {};
+      const text = String(props.event || '').toLowerCase();
+      const params = props.parameters || {};
+      const firstOf = (value) => (Array.isArray(value) ? value[0] : value) || '';
+      const tornadoThreat = String(firstOf(params.tornadoDamageThreat)).toUpperCase();
+      const stormThreat = String(firstOf(params.thunderstormDamageThreat)).toUpperCase();
+      const freeText = `${props.headline || ''} ${props.description || ''}`.toUpperCase();
+
+      if (text.includes('tornado warning')) {
+        if (tornadoThreat === 'CATASTROPHIC' || freeText.includes('TORNADO EMERGENCY')) return 'tor-emergency';
+        if (tornadoThreat === 'CONSIDERABLE' || freeText.includes('PARTICULARLY DANGEROUS SITUATION')) return 'tor-pds';
+        return 'tor-warning';
+      }
+      if (text.includes('severe thunderstorm warning')) {
+        if (stormThreat === 'DESTRUCTIVE') return 'svr-destructive';
+        if (stormThreat === 'CONSIDERABLE') return 'svr-considerable';
+        return 'svr-warning';
+      }
+      if (text.includes('flash flood warning')) return 'ffw-warning';
+      // Excessive Heat Warning is the actual warning-tier heat product (there's no plain "Heat
+      // Warning"); Heat Advisory and Excessive Heat Watch both get the lighter advisory-weight
+      // color -- a heat watch isn't materially different from an advisory the way a tornado watch
+      // is from a warning.
+      if (text.includes('excessive heat warning')) return 'heat-warning';
+      if (text.includes('heat advisory') || text.includes('excessive heat watch')) return 'heat-advisory';
+      if (text.includes('tornado watch')) return 'tor-watch';
+      if (text.includes('severe thunderstorm watch')) return 'svr-watch';
+      if (text.includes('flash flood watch')) return 'ffw-watch';
+      return 'generic';
+    }
+
+    // Warning-tier alerts a real polygon boundary/countdown/radar-mode reaction apply to --
+    // watches and generic are excluded (see the call sites below). heat-warning is included even
+    // though NWS heat products never actually carry polygon geometry -- updateRadarWarningPolygon
+    // just draws nothing when geometry is null, so including it costs nothing and means it gets
+    // the same "extras" (detail line, radar-mode consideration) any other warning-tier alert does.
+    const WARNING_TIER_CLASSES = ['tor-emergency', 'tor-pds', 'tor-warning', 'svr-destructive', 'svr-considerable', 'svr-warning', 'ffw-warning', 'heat-warning'];
+
+    // Tornado Emergency obviously outranks everything; the rest escalate within their own family
+    // (PDS above plain tor-warning, destructive/considerable above plain severe) before falling to
+    // NWS's own severity convention (warnings before watches, tornado before severe before flash
+    // flood before heat).
+    const ALERT_SEVERITY_ORDER = ['tor-emergency', 'tor-pds', 'tor-warning', 'svr-destructive', 'svr-considerable', 'svr-warning', 'ffw-warning', 'heat-warning', 'tor-watch', 'svr-watch', 'ffw-watch', 'heat-advisory', 'generic'];
+    function severityRank(cls) {
+      const i = ALERT_SEVERITY_ORDER.indexOf(cls);
+      return i === -1 ? ALERT_SEVERITY_ORDER.length : i;
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // NWS's VTEC string (properties.parameters.VTEC[0]) carries the real, official sequential
+    // event number for that alert type/office this year -- e.g.
+    // "/O.NEW.KOUN.TO.W.0042.260908T0815Z-260908T0900Z/" -> 0042. This is the actual "warning
+    // number" a chaser would recognize, not something invented for this ticker. The action field
+    // (NEW/CON/EXT/EXA/EXB/UPG/CAN/EXP/COR/ROU) is always exactly 3 letters -- this previously
+    // read \w{2} here, which never actually matched real VTEC strings at all (verified: null
+    // against the exact example in this comment) and silently produced no warning number all
+    // session without it ever being visually confirmed against a real number until now.
+    function vtecEventNumber(feature) {
+      const vtec = feature?.properties?.parameters?.VTEC;
+      const first = Array.isArray(vtec) ? vtec[0] : null;
+      if (!first) return null;
+      const match = first.match(/\.\w{3}\.\w{4}\.\w{2}\.\w\.(\d{3,4})\./);
+      return match ? match[1] : null;
+    }
+
+    // NWS's own `event` field never changes for an escalated tier (Tornado Warning stays "Tornado
+    // Warning" whether or not it's PDS/Emergency) -- this is the actual label text for the tiers
+    // that need one; anything not listed here just uses its own event name.
+    const ALERT_TIER_LABELS = {
+      'tor-emergency': 'TORNADO EMERGENCY',
+      'tor-pds': 'PDS TORNADO WARNING',
+      'svr-destructive': 'DESTRUCTIVE T-STORM WARNING',
+      'svr-considerable': 'CONSIDERABLE T-STORM WARNING',
+    };
+
+    // Bottom-bar alert label: warning + its (first-listed) county in one line -- previously the
+    // ticker's settled state, now the only alert display at all (the separate ticker bar above
+    // the bottom bar was removed: showing the same warning twice at once was too much).
+    function minimalAlertLabel(feature) {
+      const props = feature.properties || {};
+      const county = String(props.areaDesc || '').split(';')[0].trim();
+      const head = ALERT_TIER_LABELS[alertClassFor(feature)] || String(props.event || '').toUpperCase();
+      return county ? `${head} — ${county}` : head;
+    }
+
+    // MM:SS normally, H:MM:SS once it's over an hour out (a fresh watch can run several hours).
+    function formatCountdown(ms) {
+      if (ms <= 0) return 'EXPIRED';
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      const mm = String(minutes).padStart(2, '0');
+      const ss = String(seconds).padStart(2, '0');
+      return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+    }
+
+    // The alert bubble's second line: warning number (real VTEC sequence, not invented) + a live
+    // countdown to expiration. Ticks every second off updateClock's own existing 1s interval
+    // rather than a second timer -- see the call site near setInterval(updateClock, ...).
+    let activeAlertFeature = null;
+    function renderAlertDetail() {
+      const feature = activeAlertFeature;
+      if (!feature) { el.alertDetail.textContent = ''; return; }
+      const number = vtecEventNumber(feature);
+      const expiresAt = feature.properties?.expires ? Date.parse(feature.properties.expires) : NaN;
+      const parts = [];
+      if (number) parts.push(`#${number}`);
+      if (Number.isFinite(expiresAt)) parts.push(`Expires ${formatCountdown(expiresAt - Date.now())}`);
+      el.alertDetail.textContent = parts.join(' · ');
+    }
+
+    // Test-only: ?simulateAlert=tor-warning|tor-pds|tor-emergency|svr-warning|svr-considerable|
+    // svr-destructive|ffw-warning|heat-warning|heat-advisory|tor-watch|svr-watch|ffw-watch
+    // builds a fake NWS
+    // feature (including the real tornadoDamageThreat/thunderstormDamageThreat CAP parameters for
+    // the escalated tiers, not a separate shortcut) and feeds it through the exact same path a
+    // real fetch would -- bubble color/label, polygon, countdown, and radar-mode side effects all
+    // react identically, so this actually exercises the real code rather than a separate mock.
+    // Never touched unless the param is explicitly present.
+    function simulatedAlertFeature(kind) {
+      const config = {
+        'tor-warning': { event: 'Tornado Warning' },
+        'tor-pds': { event: 'Tornado Warning', parameters: { tornadoDamageThreat: ['CONSIDERABLE'] } },
+        'tor-emergency': { event: 'Tornado Warning', parameters: { tornadoDamageThreat: ['CATASTROPHIC'] } },
+        'svr-warning': { event: 'Severe Thunderstorm Warning' },
+        'svr-considerable': { event: 'Severe Thunderstorm Warning', parameters: { thunderstormDamageThreat: ['CONSIDERABLE'] } },
+        'svr-destructive': { event: 'Severe Thunderstorm Warning', parameters: { thunderstormDamageThreat: ['DESTRUCTIVE'] } },
+        'ffw-warning': { event: 'Flash Flood Warning' },
+        'heat-warning': { event: 'Excessive Heat Warning' },
+        'heat-advisory': { event: 'Heat Advisory' },
+        'tor-watch': { event: 'Tornado Watch' },
+        'svr-watch': { event: 'Severe Thunderstorm Watch' },
+        'ffw-watch': { event: 'Flash Flood Watch' },
+      }[kind];
+      if (!config) return null;
+      const now = new Date();
+      const feature = {
+        properties: {
+          id: `urn:oid:simulated.${kind}`,
+          event: config.event,
+          areaDesc: 'Benton; Washington',
+          sent: now.toISOString(),
+          expires: new Date(now.getTime() + 30 * 60_000).toISOString(),
+          parameters: { VTEC: ['/O.NEW.KOUN.XX.W.0099.260908T1200Z-260908T1300Z/'], ...(config.parameters || {}) },
+        },
+      };
+      // Storm-based warnings (tornado/severe/flash flood, any tier) carry a real polygon in NWS's
+      // own feed -- simulate one too, an irregular shape (real warning polygons are never neat
+      // rectangles) deliberately NOT centered on the position so the dot sits inside it
+      // off-center, the way a real one would.
+      if (WARNING_TIER_CLASSES.includes(alertClassFor(feature))) {
+        const lon = settings.longitude ?? -97.5;
+        const lat = settings.latitude ?? 35.5;
+        feature.geometry = {
+          type: 'Polygon',
+          coordinates: [[
+            [lon - 0.28, lat - 0.10],
+            [lon - 0.05, lat - 0.22],
+            [lon + 0.20, lat - 0.06],
+            [lon + 0.16, lat + 0.18],
+            [lon - 0.10, lat + 0.20],
+            [lon - 0.28, lat - 0.10],
+          ]],
+        };
+      }
+      return feature;
+    }
+
+    // api.weather.gov's own ?point= geofilter already restricts results to alerts whose actual
+    // geometry/zone contains that exact point -- this is never "an alert somewhere nearby", only
+    // ones Nick's own position is genuinely inside. No key needed (requires a User-Agent per NWS
+    // policy, which fetch() from a browser cannot set; NWS accepts requests without it, just less
+    // politely).
+    // Tracks the currently-shown tier so a real change can flash (see the two-class scheme just
+    // above) and so an escalation (moving to a MORE severe tier) can be told apart from a plain
+    // change -- reset to null on clear so the next alert to appear is never mistaken for an
+    // escalation off some long-stale previous severity.
+    let lastAlertClass = null;
+
+    function clearAlertBubble() {
+      el.alertBubble.className = 'bubble alert-bubble';
+      el.alertText.textContent = '';
+      activeAlertFeature = null;
+      lastAlertClass = null;
+      renderAlertDetail();
+      isTorWarning = false;
+      isWarningActive = false;
+      updateRadarWarningPolygon(null);
+    }
+
+    async function updateAlert() {
+      const simulateKind = params.get('simulateAlert');
+      if (!simulateKind && (settings.latitude === null || settings.longitude === null)) {
+        clearAlertBubble();
+        return;
+      }
+      try {
+        let features;
+        if (simulateKind) {
+          const feature = simulatedAlertFeature(simulateKind);
+          features = feature ? [feature] : [];
+        } else {
+          const url = `https://api.weather.gov/alerts/active?point=${settings.latitude},${settings.longitude}`;
+          const res = await fetch(url, { headers: { Accept: 'application/geo+json' } });
+          if (!res.ok) throw new Error('alerts fetch failed');
+          const data = await res.json();
+          features = Array.isArray(data.features) ? data.features : [];
+        }
+        // Severity-weighted: the highest-ranked active alert covering this point drives the
+        // bubble/radar mode.
+        const sorted = [...features].sort((a, b) => severityRank(alertClassFor(a)) - severityRank(alertClassFor(b)));
+        const primary = sorted[0];
+        const text = primary ? primary.properties.event : '';
+        if (!text) {
+          clearAlertBubble();
+          return;
+        }
+        const cls = alertClassFor(primary);
+        el.alertText.textContent = minimalAlertLabel(primary);
+        el.alertBubble.className = 'bubble alert-bubble show ' + cls;
+        if (cls !== lastAlertClass) {
+          // Only a real MORE-severe move counts as an escalation (lower rank number = worse) --
+          // a first-ever alert, a downgrade, or a lateral change (e.g. tor-warning -> svr-warning)
+          // all get the plain flash instead.
+          const isEscalation = lastAlertClass !== null && severityRank(cls) < severityRank(lastAlertClass);
+          el.alertBubble.classList.add(isEscalation ? 'flash-escalate' : 'flash');
+          lastAlertClass = cls;
+        }
+        activeAlertFeature = primary;
+        renderAlertDetail();
+        // Only actual warning-tier products get a polygon drawn -- watches/advisories are always
+        // zone-based (NWS never gives them real geometry).
+        const isWarningTier = WARNING_TIER_CLASSES.includes(cls);
+        updateRadarWarningPolygon(isWarningTier ? primary : null);
+        // Radar mode reacts to these -- see radarModeTick(). Any active WARNING (not a watch)
+        // outranks the normal close/mid/far zoom cycle and holds close range instead; any tornado
+        // tier (plain/PDS/Emergency) specifically also bumps VEL/CC to top priority over the REF
+        // loop -- both per the owner's own explicit calls.
+        isWarningActive = isWarningTier;
+        isTorWarning = cls === 'tor-emergency' || cls === 'tor-pds' || cls === 'tor-warning';
+      } catch (err) {
+        // leave last-known alert state in place -- a single missed poll isn't an outage
+      }
+    }
+
+    // ---- Radar: single-site, auto-switching, looped REF normally; VEL/CC priority rotation
+    // during an active tornado warning. Backed by radar-worker (real NEXRAD Level II/III decode)
+    // via the public codeblack-radar-relay Worker -- see workers/radar-relay/ and
+    // radar-worker/worker.cjs in the main repo. No auth needed: this is public NOAA data.
+    // Deliberately not hardcoded here -- GitHub's push protection correctly rejected a commit
+    // that embedded the project's real Mapbox token directly (even a "public" pk. token sitting
+    // in git history on a scanned repo can be scraped and used against the account's billing
+    // quota by someone who never runs this page at all). Normally resolved automatically at
+    // startup from the gateway's /overlay-core/mapbox-token endpoint (see resolveMapboxToken
+    // below) -- no OBS URL param needed. &mapboxToken=... in the URL still works as an override
+    // for local testing against a different token/project.
+    let MAPBOX_TOKEN = params.get('mapboxToken') || '';
+    const MAPBOX_STYLE = params.get('mapboxStyle') || 'mapbox://styles/mapbox/navigation-night-v1';
+    // Pool of persistent sources/layers, one per possible loop frame (6 -- the REF loop's max
+    // length; VEL/CC only ever use slot 0), rather than one shared source whose tiles get swapped
+    // via setTiles() on every 700ms tick. Swapping tiles mid-loop meant each frame change waited
+    // on a fresh network fetch that could easily take longer than 700ms, which is what made the
+    // loop choppy. Now every frame's tiles are requested once, up front, whenever the frame list
+    // itself refreshes (see preloadRadarFrames) -- radarModeTick's per-tick work becomes a pure
+    // opacity flip between layers that are already loaded, no network dependency at swap time.
+    const RADAR_FRAME_POOL_SIZE = 6;
+    const radarSourceIds = Array.from({ length: RADAR_FRAME_POOL_SIZE }, (_, i) => `radar-source-${i}`);
+    const radarLayerIds = Array.from({ length: RADAR_FRAME_POOL_SIZE }, (_, i) => `radar-layer-${i}`);
+    const BLANK_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    // The actual warning polygon boundary drawn on the radar map -- any storm-based warning that
+    // carries real geometry (tornado, severe t-storm, flash flood; NOT zone-based products like
+    // watches/advisories, which NWS never gives a precise shape), not tornado-specific.
+    const WARNING_POLYGON_SOURCE_ID = 'warning-polygon-source';
+    const WARNING_POLYGON_FILL_LAYER_ID = 'warning-polygon-fill';
+    const WARNING_POLYGON_LINE_LAYER_ID = 'warning-polygon-line';
+    const EMPTY_FEATURE_COLLECTION = { type: 'FeatureCollection', features: [] };
+    let pendingWarningPolygonFeature = undefined;
+    const radarSettings = { gatewayBase: params.get('radarGatewayBase') || 'https://ops.codeblackwx.com' };
+    // Close/mid/far range cycle for the baseline (no-warning) loop -- Mapbox GL zoom levels,
+    // higher number = tighter/closer range. Overridable per-deployment via URL params. Holds
+    // each range for HOLD_TICKS ticks (radarModeTick runs every 700ms) before advancing.
+    const RADAR_ZOOM_LEVELS = [
+      { name: 'CLOSE', zoom: params.get('radarZoomClose') ? Number(params.get('radarZoomClose')) : 9 },
+      { name: 'MID', zoom: params.get('radarZoomMid') ? Number(params.get('radarZoomMid')) : 7 },
+      { name: 'FAR', zoom: params.get('radarZoomFar') ? Number(params.get('radarZoomFar')) : 5 },
+    ];
+    const ZOOM_HOLD_TICKS = 16; // 16 * 700ms ~= 11.2s per range
+    let radarZoomIndex = 0;
+    let radarZoomTickCount = 0;
+    let radarPositionMarker = null;
+    let radarSiteId = null;
+    let radarProduct = 'REF';
+    let radarFrames = [];
+    let radarLoopIndex = 0;
+    // At CLOSE zoom the REF loop doesn't cycle through all 6 frames -- it plays only the most
+    // recent CLOSE_MINI_LOOP_FRAMES once, then holds on frame 0 (newest) for the rest of the
+    // CLOSE hold. Full motion is more useful at MID/FAR for tracking a cell's path; at CLOSE the
+    // user is already looking at the current position and a full 6-frame loop was distracting.
+    const CLOSE_MINI_LOOP_FRAMES = 3;
+    let radarCloseLoopTick = 0;
+    let radarFrameFetchInFlight = false;
+    let radarTickCount = 0;
+    let torRotationIndex = 0;
+    let isTorWarning = false;
+    let isWarningActive = false;
+    let radarMap = null;
+    let radarMapReady = false;
+    let pendingRadarFrames = null;
+    // Weighted, not equal-time: VEL is the highest priority during a tornado warning, REF next,
+    // CC included but least -- expressed as slot counts in one repeating sequence (VEL:3, REF:2,
+    // CC:1) rather than three separate timers, so the total time-on-screen ratio matches that
+    // priority order exactly regardless of hold duration.
+    const TOR_PRODUCT_ROTATION = ['VEL', 'REF', 'VEL', 'CC', 'VEL', 'REF'];
+    const TOR_HOLD_TICKS = 8; // 8 * radarTickIntervalMs (700ms) ~= 5.6s per product
+
+    // Fetches the Mapbox public token from the gateway when it wasn't passed as a URL param.
+    // The endpoint is public/unauthenticated (same trust level as the token itself -- see the
+    // comment above MAPBOX_TOKEN) so a plain GET with no credentials is all this needs.
+    async function resolveMapboxToken() {
+      if (MAPBOX_TOKEN) return MAPBOX_TOKEN;
+      try {
+        const res = await fetch(`${radarSettings.gatewayBase}/overlay-core/mapbox-token`);
+        if (!res.ok) return '';
+        const data = await res.json();
+        return data.token || '';
+      } catch (err) {
+        return '';
+      }
+    }
+
+    async function initRadarMap() {
+      if (radarMap || typeof mapboxgl === 'undefined') return;
+      MAPBOX_TOKEN = await resolveMapboxToken();
+      if (radarMap) return; // another call already initialized it while we awaited the token
+      if (!MAPBOX_TOKEN) {
+        document.getElementById('radarLoading').textContent = 'Mapbox token unavailable';
+        return;
+      }
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+      radarMap = new mapboxgl.Map({
+        container: 'radarMap',
+        style: MAPBOX_STYLE,
+        center: [-97.5, 35.5],
+        zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom,
+        interactive: false, // broadcast graphic -- never viewer-interactive
+        attributionControl: true,
+      });
+      radarMap.on('load', () => {
+        // One raster source/layer per pool slot, all starting blank/hidden -- see the
+        // RADAR_FRAME_POOL_SIZE comment above for why this replaced a single shared source.
+        for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
+          radarMap.addSource(radarSourceIds[i], { type: 'raster', tiles: [BLANK_TILE], tileSize: 256 });
+          radarMap.addLayer({ id: radarLayerIds[i], type: 'raster', source: radarSourceIds[i], paint: { 'raster-opacity': 0 } });
+        }
+        // The actual NWS warning polygon boundary -- above the radar raster layers so the outline
+        // reads clearly against reflectivity; a plain GeoJSON source/pair of layers (fill so the
+        // covered area itself is visible, line for a crisp boundary), empty until a real
+        // storm-based warning (one that actually carries geometry -- see updateRadarWarningPolygon)
+        // is active.
+        radarMap.addSource(WARNING_POLYGON_SOURCE_ID, { type: 'geojson', data: EMPTY_FEATURE_COLLECTION });
+        radarMap.addLayer({
+          id: WARNING_POLYGON_FILL_LAYER_ID,
+          type: 'fill',
+          source: WARNING_POLYGON_SOURCE_ID,
+          paint: { 'fill-color': '#FF0000', 'fill-opacity': 0.12 },
+        });
+        radarMap.addLayer({
+          id: WARNING_POLYGON_LINE_LAYER_ID,
+          type: 'line',
+          source: WARNING_POLYGON_SOURCE_ID,
+          paint: { 'line-color': '#FF0000', 'line-width': 3, 'line-opacity': 0.95 },
+        });
+        radarMapReady = true;
+        if (pendingRadarFrames) {
+          preloadRadarFrames(pendingRadarFrames);
+          pendingRadarFrames = null;
+        }
+        if (pendingWarningPolygonFeature !== undefined) {
+          updateRadarWarningPolygon(pendingWarningPolygonFeature);
+          pendingWarningPolygonFeature = undefined;
+        }
+      });
+    }
+
+    // Re-centers the map on Nick's own position (not the radar site -- the site only decides
+    // which station's data to pull) and keeps the pulsing marker there in sync. Called whenever
+    // position changes and whenever the zoom range advances, so the marker/center never drift
+    // apart from each other.
+    function centerRadarMapOnPosition() {
+      if (!radarMap || settings.latitude === null || settings.longitude === null) return;
+      const lngLat = [settings.longitude, settings.latitude];
+      // easeTo, not jumpTo -- a hard instant cut every time the CLOSE/MID/FAR range advances read
+      // as a jarring snap on stream. A deliberate ~2s eased transition (Mapbox's own smooth
+      // ease-out curve) makes each range change read as a purposeful zoom, not a glitch.
+      radarMap.easeTo({ center: lngLat, zoom: RADAR_ZOOM_LEVELS[radarZoomIndex].zoom, duration: 2000 });
+      if (!radarPositionMarker) {
+        const el = document.createElement('div');
+        el.className = 'radar-position-marker';
+        el.innerHTML = '<div class="radar-position-marker__ring"></div><div class="radar-position-marker__core"></div>';
+        radarPositionMarker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(radarMap);
+      } else {
+        radarPositionMarker.setLngLat(lngLat);
+      }
+    }
+
+    // Auto-switches to whichever site is nearest the current live/manual position -- only
+    // re-fetches when the nearest site actually changes, not on every GPS tick. The map itself
+    // stays centered on Nick's own position (see centerRadarMapOnPosition), independent of which
+    // site's data happens to be feeding it.
+    async function updateRadarSite() {
+      if (settings.latitude === null || settings.longitude === null) return;
+      centerRadarMapOnPosition();
+      try {
+        const url = `${radarSettings.gatewayBase}/api/v1/radar/sites/nearest?lat=${settings.latitude}&lon=${settings.longitude}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('sites fetch failed');
+        const sites = await res.json();
+        const nearest = Array.isArray(sites) ? sites[0] : null;
+        if (!nearest || nearest.id === radarSiteId) return;
+        radarSiteId = nearest.id;
+        document.getElementById('radarSite').textContent = radarSiteId;
+        radarFrames = [];
+        radarLoopIndex = 0;
+        radarCloseLoopTick = 0;
+        await fetchRadarFrames();
+      } catch (err) {
+        // leave last-known site in place -- a single missed lookup isn't an outage
+      }
+    }
+
+    async function fetchRadarFrames() {
+      if (!radarSiteId || radarFrameFetchInFlight) return;
+      radarFrameFetchInFlight = true;
+      try {
+        const limit = radarProduct === 'REF' ? 6 : 1;
+        const url = `${radarSettings.gatewayBase}/api/v1/radar/frames?site=${encodeURIComponent(radarSiteId)}&product=${radarProduct}&limit=${limit}`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('frames fetch failed');
+        const frames = await res.json();
+        if (Array.isArray(frames) && frames.length) {
+          radarFrames = frames;
+          radarLoopIndex = 0;
+          radarCloseLoopTick = 0;
+          preloadRadarFrames(frames);
+          document.getElementById('radarLoading').classList.add('hidden');
+        }
+      } catch (err) {
+        // leave last-known frames in place -- a single missed poll isn't an outage
+      } finally {
+        radarFrameFetchInFlight = false;
+      }
+    }
+
+    // Requests every frame's tiles once, immediately -- pool slot i always holds radarFrames[i]'s
+    // tiles until the next fetch. Unused slots (VEL/CC's single-frame case, or a REF fetch that
+    // came back short) reset to blank so a stale frame from a previous product/site never lingers
+    // hidden-but-loaded in a slot the loop might later flip to.
+    // Staggered, not all six at once -- calling setTiles() on every pool slot in one tight loop
+    // asked radar-worker to decode up to 6 different NEXRAD volume scans simultaneously (real,
+    // CPU-bound decode work per frame, not a cache lookup), which overloaded it enough to start
+    // timing out/502ing under the resulting burst -- visible on stream as missing/choppy frames,
+    // the opposite of what the pool was supposed to fix. Spacing each frame's request out gives
+    // radar-worker room to actually keep up; frame 0 (needed first) still loads immediately.
+    const RADAR_PRELOAD_STAGGER_MS = 650;
+    function preloadRadarFrames(frames) {
+      if (!radarMapReady) { pendingRadarFrames = frames; return; }
+      for (let i = 0; i < RADAR_FRAME_POOL_SIZE; i++) {
+        const frame = frames[i];
+        const url = frame ? `${radarSettings.gatewayBase}/api/v1/radar/tiles/${frame.frameId}/{z}/{x}/{y}.png` : BLANK_TILE;
+        window.setTimeout(() => {
+          const source = radarMap.getSource(radarSourceIds[i]);
+          if (source) source.setTiles([url]);
+        }, i * RADAR_PRELOAD_STAGGER_MS);
+      }
+    }
+
+    // Flips to pool slot `index` -- a plain opacity change between already-loaded layers, no
+    // network fetch at swap time (see the RADAR_FRAME_POOL_SIZE comment above).
+    function applyRadarFrame(index) {
+      if (!radarMapReady) return;
+      radarLayerIds.forEach((id, i) => {
+        if (radarMap.getLayer(id)) radarMap.setPaintProperty(id, 'raster-opacity', i === index ? 0.92 : 0);
+      });
+    }
+
+    // Draws (or clears) the active warning's real polygon boundary on the radar map. `feature` is
+    // the primary NWS alert feature itself (its top-level `geometry`, not `properties` -- NWS's
+    // GeoJSON puts the actual shape there) or null/undefined to clear. Zone-based products
+    // (watches, advisories, most statements) never carry geometry -- this naturally shows nothing
+    // for those rather than needing a separate warning-vs-watch check.
+    function updateRadarWarningPolygon(feature) {
+      if (!radarMapReady) { pendingWarningPolygonFeature = feature; return; }
+      const source = radarMap.getSource(WARNING_POLYGON_SOURCE_ID);
+      if (!source) return;
+      const geometry = feature && feature.geometry;
+      source.setData(geometry ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry }] } : EMPTY_FEATURE_COLLECTION);
+    }
+
+    function setRadarProduct(product) {
+      if (radarProduct === product) return;
+      radarProduct = product;
+      document.getElementById('radarProduct').textContent = product;
+      radarFrames = [];
+      radarLoopIndex = 0;
+      radarCloseLoopTick = 0;
+      fetchRadarFrames();
+    }
+
+    function setRadarZoom(index) {
+      if (radarZoomIndex === index) return;
+      radarZoomIndex = index;
+      if (index === 0) radarCloseLoopTick = 0;
+      document.getElementById('radarZoomLabel').textContent = RADAR_ZOOM_LEVELS[index].name;
+      centerRadarMapOnPosition();
+    }
+
+    // Indices into RADAR_ZOOM_LEVELS to cycle through. Baseline (no warning) is all three
+    // (CLOSE/MID/FAR); any active warning drops FAR -- far range isn't useful once something's
+    // actually happening close by -- and cycles CLOSE/MID only, per the owner's own call.
+    const BASELINE_ZOOM_ORDER = [0, 1, 2];
+    const WARNING_ZOOM_ORDER = [0, 1];
+    function advanceZoom(order) {
+      radarZoomTickCount += 1;
+      if (radarZoomTickCount < ZOOM_HOLD_TICKS) return;
+      radarZoomTickCount = 0;
+      const currentPos = order.indexOf(radarZoomIndex);
+      const nextPos = currentPos === -1 ? 0 : (currentPos + 1) % order.length;
+      setRadarZoom(order[nextPos]);
+    }
+
+    // One shared tick drives everything so there's a single, easy-to-reason-about clock rather
+    // than juggling separate timers per mode.
+    // Advances the REF loop by one tick. At CLOSE zoom, plays only the most recent
+    // CLOSE_MINI_LOOP_FRAMES once (newest -> older) then holds on frame 0; otherwise cycles
+    // through the full pool as before.
+    function advanceRefLoop() {
+      if (!radarFrames.length) return;
+      if (radarZoomIndex === 0) {
+        if (radarCloseLoopTick < CLOSE_MINI_LOOP_FRAMES) {
+          const frameIndex = Math.min(CLOSE_MINI_LOOP_FRAMES, radarFrames.length) - 1 - radarCloseLoopTick;
+          applyRadarFrame(Math.max(0, frameIndex));
+          radarCloseLoopTick += 1;
+        } else {
+          applyRadarFrame(0);
+        }
+        return;
+      }
+      applyRadarFrame(radarLoopIndex);
+      radarLoopIndex = (radarLoopIndex + 1) % radarFrames.length;
+    }
+
+    function radarModeTick() {
+      radarTickCount += 1;
+
+      if (isWarningActive) {
+        advanceZoom(WARNING_ZOOM_ORDER);
+        if (isTorWarning) {
+          // Tornado warning specifically also bumps VEL/CC to top priority over REF.
+          if (radarTickCount % TOR_HOLD_TICKS === 1) {
+            const product = TOR_PRODUCT_ROTATION[torRotationIndex % TOR_PRODUCT_ROTATION.length];
+            torRotationIndex += 1;
+            setRadarProduct(product);
+          }
+          if (radarFrames.length) applyRadarFrame(0);
+          return;
+        }
+        // Severe t-storm / flash flood warning: cycle close/mid, but no product override was
+        // called for at that severity -- REF stays on and keeps looping.
+        if (radarProduct !== 'REF') { setRadarProduct('REF'); torRotationIndex = 0; }
+        advanceRefLoop();
+        return;
+      }
+
+      if (radarProduct !== 'REF') {
+        setRadarProduct('REF');
+        torRotationIndex = 0;
+      }
+      advanceZoom(BASELINE_ZOOM_ORDER);
+      advanceRefLoop();
+    }
+
+    function scaleCanvas() {
+      if (!settings.scaleToWindow) return;
+      const scaleX = window.innerWidth / 1920;
+      const scaleY = window.innerHeight / 1080;
+      const scale = Math.min(scaleX, scaleY);
+      el.canvas.style.transform = 'scale(' + scale + ')';
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+    initRadarMap();
+    if (settings.useLiveGps) {
+      el.locationText.textContent = 'Awaiting GPS feed...';
+      renderSecondaryLine();
+      updateGps();
+      const gpsPollIntervalMs = Math.max(MIN_GPS_POLL_SECONDS, settings.gpsPollSeconds) * 1000;
+      setInterval(() => void updateGps(), gpsPollIntervalMs);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) void updateGps();
+      });
+    } else {
+      updateLocation();
+      updateWeather();
+      updateSurfaceObs();
+      updateRadarSite();
+    }
+    updateAlert();
+    setInterval(updateLocation, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateWeather, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateSurfaceObs, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(updateAlert, Math.max(30, settings.pollSeconds) * 1000);
+    setInterval(radarModeTick, 700);
+    setInterval(fetchRadarFrames, 120_000); // pick up new radar volume scans independent of site changes
+    scaleCanvas();
+    window.addEventListener('resize', scaleCanvas);
+  </script>
+</body>
+</html>

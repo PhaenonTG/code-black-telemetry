@@ -1,0 +1,850 @@
+const http = require("http");
+const crypto = require("crypto");
+const { PNG } = require("pngjs");
+const { Level2Radar } = require("nexrad-level-2-data");
+const parseLevel3 = require("nexrad-level-3-data");
+const bzip = require("seek-bzip");
+const { RandomAccessFile } = require("nexrad-level-3-data/src/randomaccessfile");
+const textHeader = require("nexrad-level-3-data/src/headers/text");
+const messageHeader = require("nexrad-level-3-data/src/headers/message");
+const { parse: productDescription } = require("nexrad-level-3-data/src/headers/productdescription");
+const symbologyHeader = require("nexrad-level-3-data/src/headers/symbology");
+const radialPackets = require("nexrad-level-3-data/src/headers/radialpackets");
+const sites = require("./sites.cjs");
+
+const PORT = Number(process.env.CODEBLACK_RADAR_PORT || 8787);
+const LEVEL2_BUCKET = "https://unidata-nexrad-level2.s3.amazonaws.com";
+const LEVEL2_CHUNKS_BUCKET = "https://unidata-nexrad-level2-chunks.s3.amazonaws.com";
+const LEVEL3_BUCKET = "https://unidata-nexrad-level3.s3.amazonaws.com";
+const VERSION = "0.2.0";
+const PRODUCTS = ["REF", "VEL", "SRV", "CC", "ET"];
+const LEVEL2_PRODUCTS = new Set(["REF", "VEL", "SRV", "CC"]);
+const PRODUCT_TO_ACCESSOR = {
+  REF: "getHighresReflectivity",
+  VEL: "getHighresVelocity",
+  CC: "getHighresCorrelationCoefficient",
+};
+const ET_CODES = ["EET", "NET"];
+// A decoded Level II volume is large even after compacting gate values. Eight scans covers roughly
+// 35-45 minutes at normal cadence while leaving safe headroom under the service's 2 GB hard limit.
+const FRAME_LIMIT = 8;
+const GLOBAL_FRAME_LIMIT = 8;
+const SITE_LIMIT = 3;
+const TILE_SIZE = 256;
+const CACHE_TTL_MS = 30 * 60_000;
+const STALE_MS = 18 * 60_000;
+const DELAYED_MS = 8 * 60_000;
+
+let selectedSite = process.env.CODEBLACK_RADAR_SITE || "AUTO";
+let selectedProduct = "REF";
+let selectedTilt = 1;
+let latestError = "";
+let stormMotion = null;
+const frames = new Map();
+const tiles = new Map();
+const siteUse = new Map();
+// Multiple browsers commonly request the same new scan at once. Share one download/decode per
+// frame instead of multiplying the heaviest operation in this process.
+const frameLoads = new Map();
+const backfillJobs = new Set();
+const backfillQueue = [];
+let backfillRunning = false;
+
+function send(res, status, body, type = "application/json") {
+  const data = Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body));
+  res.writeHead(status, {
+    "content-type": type,
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-headers": "content-type",
+    "cache-control": type === "application/json" ? "no-store" : "public, max-age=120",
+  });
+  res.end(data);
+}
+
+function jsonBody(req) {
+  return new Promise((resolve) => {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); }
+    });
+  });
+}
+
+function distanceMiles(a, b) {
+  const r = 3958.8;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lon - a.lon) * Math.PI / 180;
+  const lat1 = a.lat * Math.PI / 180;
+  const lat2 = b.lat * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(h));
+}
+
+function bearingDeg(from, to) {
+  const lat1 = from.lat * Math.PI / 180;
+  const lat2 = to.lat * Math.PI / 180;
+  const dLon = (to.lon - from.lon) * Math.PI / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+// Real, simplified storm-motion estimation -- not a lie, but not full SCIT-style multi-cell
+// tracking either: weighted centroid of REF gates above threshold, tracked between two frames.
+// Good enough for a single dominant cell (the common chase case: you're on ONE storm), degrades
+// gracefully (low confidence) with multiple cells in view since the centroid drifts toward
+// whichever is bigger/closer rather than tracking either one correctly -- the client must show
+// confidence, not just a bare number, so a chaser isn't trusting a blended-cell artifact.
+const STORM_CENTROID_DBZ_THRESHOLD = 35;
+const STORM_CENTROID_MAX_RANGE_KM = 230;
+
+function stormCentroid(frame) {
+  if (!frame?.data || frame.product !== "REF") return null;
+  let sumEast = 0;
+  let sumNorth = 0;
+  let sumWeight = 0;
+  const siteLatRad = (frame.site.lat * Math.PI) / 180;
+  for (let i = 0; i < frame.data.length; i += 1) {
+    const radial = frame.data[i];
+    if (!radial?.moment_data) continue;
+    const azRad = ((frame.azimuths[i] ?? 0) * Math.PI) / 180;
+    const eastPerKm = Math.sin(azRad);
+    const northPerKm = Math.cos(azRad);
+    for (let g = 0; g < radial.moment_data.length; g += 1) {
+      const value = radial.moment_data[g];
+      if (!Number.isFinite(value) || value < STORM_CENTROID_DBZ_THRESHOLD) continue;
+      const rangeKm = radial.first_gate + g * radial.gate_size;
+      if (rangeKm > STORM_CENTROID_MAX_RANGE_KM) continue;
+      const weight = value - STORM_CENTROID_DBZ_THRESHOLD + 1;
+      sumEast += eastPerKm * rangeKm * weight;
+      sumNorth += northPerKm * rangeKm * weight;
+      sumWeight += weight;
+    }
+  }
+  if (sumWeight <= 0) return null;
+  const meanEastKm = sumEast / sumWeight;
+  const meanNorthKm = sumNorth / sumWeight;
+  return {
+    lat: frame.site.lat + meanNorthKm / 111.32,
+    lon: frame.site.lon + meanEastKm / (111.32 * Math.cos(siteLatRad)),
+    weight: sumWeight,
+    time: frame.time,
+  };
+}
+
+function compactMomentData(radials) {
+  return radials.map((radial) => radial ? {
+    ...radial,
+    // The decoder exposes sparse gate values as ordinary JS number arrays. Twelve Level II scans
+    // then consume well over a gigabyte. Float32 preserves more precision than the radar products
+    // contain while representing missing gates as NaN, cutting the dominant retained allocation.
+    moment_data: Float32Array.from(radial.moment_data, (value) => value == null ? Number.NaN : value),
+  } : radial);
+}
+
+function estimateStormMotion(site) {
+  const candidates = [...frames.values()]
+    .filter((item) => item.site.id === site && item.product === "REF")
+    .sort((a, b) => b.time - a.time);
+  if (candidates.length < 2) return { ok: false, reason: "NEED_TWO_REF_FRAMES", framesAvailable: candidates.length };
+  const newest = candidates[0];
+  // Prefer a baseline frame at least 4 minutes older than newest (too close together and any GPS/gate
+  // rounding noise dominates the real displacement) but not more than 20 (storm may have evolved/split).
+  const baseline = candidates.find((item) => newest.time - item.time >= 4 * 60_000 && newest.time - item.time <= 20 * 60_000) ?? candidates[candidates.length - 1];
+  if (baseline.id === newest.id) return { ok: false, reason: "NEED_TIME_SEPARATION" };
+  const c1 = stormCentroid(baseline);
+  const c2 = stormCentroid(newest);
+  if (!c1 || !c2) return { ok: false, reason: "NO_SIGNIFICANT_ECHO" };
+  const distanceKm = distanceMiles(c1, c2) * 1.60934;
+  const elapsedHours = (c2.time - c1.time) / 3_600_000;
+  if (elapsedHours <= 0) return { ok: false, reason: "NEED_TIME_SEPARATION" };
+  const speedKnots = (distanceKm / elapsedHours) / 1.852;
+  const movementBearing = bearingDeg(c1, c2);
+  const directionDegrees = (movementBearing + 180) % 360; // "FROM" convention, matches the UI
+  // A cell that barely moved between samples produces a noisy/meaningless bearing (a few hundred
+  // meters of centroid jitter can swing 90+ degrees) -- flag low confidence rather than asserting it.
+  const confidence = distanceKm < 1.5 ? "LOW" : distanceKm < 4 ? "MEDIUM" : "HIGH";
+  return {
+    ok: true,
+    directionDegrees,
+    speedKnots,
+    confidence,
+    sampleSpanMinutes: Math.round(elapsedHours * 60),
+    baselineFrameId: baseline.id,
+    newestFrameId: newest.id,
+  };
+}
+
+function tileToLonLat(z, x, y, px, py) {
+  const n = 2 ** z;
+  const lon = ((x + px / TILE_SIZE) / n) * 360 - 180;
+  const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + py / TILE_SIZE) / n)));
+  return { lat: latRad * 180 / Math.PI, lon };
+}
+
+function sourceFreshness(ts, cached = false) {
+  if (!ts) return "OFFLINE";
+  const age = Date.now() - ts;
+  if (cached) return "CACHED";
+  if (age <= DELAYED_MS) return "LIVE";
+  if (age <= STALE_MS) return "DELAYED";
+  return "STALE";
+}
+
+function frameId(site, product, tilt, key, motion = "") {
+  return crypto.createHash("sha1").update(`${site}:${product}:${tilt}:${key}:${motion}`).digest("hex").slice(0, 16);
+}
+
+// Bare fetch(url) with no timeout meant a slow/hanging S3 response could leave a request pending
+// indefinitely -- and since frameLoads (below) dedupes in-flight requests by frame id, one hung
+// fetch could stall every concurrent viewer waiting on that same frame, not just the one caller.
+const S3_FETCH_TIMEOUT_MS = 20_000;
+
+async function timedFetch(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), S3_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error(`upstream fetch timed out after ${S3_FETCH_TIMEOUT_MS}ms`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchText(url) {
+  const response = await timedFetch(url);
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return response.text();
+}
+
+async function fetchBuffer(url) {
+  const response = await timedFetch(url);
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function listS3(prefix, bucket = LEVEL2_BUCKET) {
+  const xml = await fetchText(`${bucket}/?list-type=2&prefix=${encodeURIComponent(prefix)}`);
+  return [...xml.matchAll(/<Key>(.*?)<\/Key>/g)].map((m) => m[1].replace(/&amp;/g, "&"));
+}
+
+function level3DatePrefixes(site3, code) {
+  return [0, 1, 2].map((daysBack) => {
+    const date = new Date(Date.now() - daysBack * 86400_000);
+    const yyyy = date.getUTCFullYear();
+    const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(date.getUTCDate()).padStart(2, "0");
+    return `${site3}_${code}_${yyyy}_${mm}_${dd}`;
+  });
+}
+
+function latestLevel2Prefix(site, date = new Date()) {
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  return `${yyyy}/${mm}/${dd}/${site}/`;
+}
+
+async function latestLevel2Key(site) {
+  const dates = [new Date(), new Date(Date.now() - 24 * 3600_000)];
+  for (const date of dates) {
+    const keys = (await listS3(latestLevel2Prefix(site, date)))
+      .filter((key) => !key.endsWith("_MDM") && /V0[368]$|V06$|V08$/.test(key))
+      .sort();
+    if (keys.length) return keys.at(-1);
+  }
+  return "";
+}
+
+function volumeTimeFromHeader(radar) {
+  const base = Date.UTC(1970, 0, 1) + ((radar.header?.modified_julian_date ?? 0) - 1) * 86400_000;
+  return base + (radar.header?.milliseconds ?? 0);
+}
+
+function getMoment(radar, product) {
+  if (product === "SRV") {
+    const velocity = radar.getHighresVelocity();
+    const azimuth = radar.getAzimuth();
+    return deriveSrv(velocity, azimuth);
+  }
+  return radar[PRODUCT_TO_ACCESSOR[product]]();
+}
+
+function deriveSrv(velocity, azimuths) {
+  if (!stormMotion) throw new Error("SRV UNAVAILABLE - SET STORM MOTION");
+  return velocity.map((radial, index) => {
+    if (!radial) return radial;
+    const radarBearing = Number(azimuths[index] ?? 0);
+    const projection = stormMotion.speedKnots * Math.cos((stormMotion.directionDegrees - radarBearing) * Math.PI / 180);
+    return {
+      ...radial,
+      name: "SRV",
+      moment_data: radial.moment_data.map((value) => value == null ? null : value - projection),
+    };
+  });
+}
+
+function palette(product, value) {
+  if (value == null || Number.isNaN(value)) return [0, 0, 0, 0];
+  if (product === "REF") {
+    const stops = [
+      [-10, [0, 0, 0, 0]], [5, [42, 92, 120, 85]], [20, [23, 170, 80, 130]], [35, [235, 210, 33, 170]],
+      [45, [255, 122, 20, 200]], [55, [230, 36, 45, 225]], [65, [205, 65, 210, 235]], [80, [255, 255, 255, 245]],
+    ];
+    return interpolateStops(stops, value);
+  }
+  if (product === "CC") {
+    const v = Math.max(0, Math.min(1.05, value));
+    if (v > 0.96) return [210, 220, 225, 105];
+    if (v > 0.9) return [92, 190, 245, 160];
+    if (v > 0.8) return [35, 210, 115, 190];
+    if (v > 0.65) return [245, 210, 60, 210];
+    return [230, 50, 55, 225];
+  }
+  if (product === "ET") {
+    return interpolateStops([[0, [0, 0, 0, 0]], [10, [40, 120, 220, 120]], [30, [50, 220, 120, 180]], [45, [245, 210, 55, 220]], [60, [230, 45, 55, 235]]], value);
+  }
+  const v = Math.max(-80, Math.min(80, value));
+  if (Math.abs(v) < 3) return [30, 30, 30, 50];
+  if (v < 0) return interpolateStops([[-80, [30, 0, 120, 235]], [-45, [35, 80, 235, 225]], [-15, [50, 220, 255, 180]], [0, [0, 0, 0, 0]]], v);
+  return interpolateStops([[0, [0, 0, 0, 0]], [15, [255, 230, 80, 180]], [45, [255, 95, 30, 225]], [80, [170, 0, 0, 235]]], v);
+}
+
+function interpolateStops(stops, value) {
+  for (let i = 1; i < stops.length; i++) {
+    if (value <= stops[i][0]) {
+      const [v0, c0] = stops[i - 1];
+      const [v1, c1] = stops[i];
+      const t = Math.max(0, Math.min(1, (value - v0) / (v1 - v0 || 1)));
+      return c0.map((c, idx) => Math.round(c + (c1[idx] - c) * t));
+    }
+  }
+  return stops.at(-1)[1];
+}
+
+async function recentLevel2Keys(site, count) {
+  const dates = [new Date(), new Date(Date.now() - 24 * 3600_000)];
+  const keys = [];
+  for (const date of dates) {
+    const dayKeys = (await listS3(latestLevel2Prefix(site, date)))
+      .filter((key) => !key.endsWith("_MDM") && /V0[368]$/.test(key))
+      .sort();
+    keys.unshift(...dayKeys);
+    if (keys.length >= count) break;
+  }
+  return keys.slice(-count);
+}
+
+async function ensureLevel2Frame(siteId, product, tilt = 1, explicitKey = null) {
+  const site = sites.find((item) => item.id === siteId);
+  if (!site) throw new Error(`Unknown radar site ${siteId}`);
+  if (!LEVEL2_PRODUCTS.has(product)) throw new Error(`${product} is not Level II`);
+  if (product === "SRV" && !stormMotion) throw new Error("SRV UNAVAILABLE - SET STORM MOTION");
+
+  const key = explicitKey ?? await latestLevel2Key(site.id);
+  if (!key) throw new Error(`No Level II volume found for ${site.id}`);
+  const id = frameId(site.id, product, tilt, key, product === "SRV" ? JSON.stringify(stormMotion) : "");
+  const existing = frames.get(id);
+  if (existing && Date.now() - existing.processedAt < CACHE_TTL_MS) return existing;
+
+  const inFlight = frameLoads.get(id);
+  if (inFlight) return inFlight;
+
+  const load = (async () => {
+    const started = Date.now();
+    const raw = await fetchBuffer(`${LEVEL2_BUCKET}/${key}`);
+    const checksum = crypto.createHash("sha1").update(raw).digest("hex").slice(0, 12);
+    const radar = new Level2Radar(raw, { logger: false });
+    const elevations = radar.listElevations();
+    const chosenTilt = elevations.includes(Number(tilt)) ? Number(tilt) : elevations[0];
+    radar.setElevation(chosenTilt);
+    const data = compactMomentData(getMoment(radar, product));
+    const azimuths = radar.getAzimuth();
+    const headers = radar.getHeader();
+    const firstHeader = Array.isArray(headers) ? headers[0] : headers;
+    const volumeTime = volumeTimeFromHeader(radar);
+    const frame = {
+      id, site, product, sourceLevel: "LEVEL II", sourceBucket: "unidata-nexrad-level2",
+      sourceChunkBucket: "unidata-nexrad-level2-chunks",
+      sourceNotification: "arn:aws:sns:us-east-1:684042711724:NewNEXRADLevel2ObjectFilterable",
+      key, checksum, tilt: chosenTilt, elevationAngle: firstHeader?.elevation_angle ?? null,
+      availableTilts: elevations, time: volumeTime, processedAt: Date.now(),
+      processingDurationMs: Date.now() - started,
+      vcp: radar.vcp?.record?.pattern_number ?? firstHeader?.volume?.volume_coverage_pattern ?? null,
+      nyquistVelocity: firstHeader?.radial?.nyquist_velocity ?? null,
+      quality: radar.isTruncated ? "INCOMPLETE" : radar.hasGaps ? "GAPS" : "OK", data, azimuths,
+    };
+    cacheFrame(frame);
+    // Pre-warm the matching CC scan in the background as soon as this REF/VEL/SRV frame is
+    // ready -- by the time a client actually requests a tile for it (after fetching the frame
+    // list, then Mapbox's own staggered tile loading), the CC decode this frame's filtering
+    // needs has usually already finished.
+    ensureMatchingCcFrame(frame);
+    return frame;
+  })();
+  frameLoads.set(id, load);
+  try { return await load; } finally { frameLoads.delete(id); }
+}
+
+async function drainHistoryBackfill() {
+  if (backfillRunning) return;
+  backfillRunning = true;
+  while (backfillQueue.length) {
+    const { jobKey, site, product, tilt, limit } = backfillQueue.shift();
+    try {
+    const keys = await recentLevel2Keys(site, limit);
+    // Keep this deliberately sequential. It runs after the live frame has been returned and avoids
+    // a burst of large Level II downloads/decodes exhausting the worker host.
+    for (const key of keys.reverse()) {
+      const count = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === tilt).length;
+      if (count >= limit) break;
+      try { await ensureLevel2Frame(site, product, tilt, key); } catch { /* skip corrupt archive objects */ }
+    }
+    } finally {
+      backfillJobs.delete(jobKey);
+    }
+  }
+  backfillRunning = false;
+}
+
+function startHistoryBackfill(site, product, tilt, limit) {
+  const jobKey = `${site}:${product}:${tilt}`;
+  if (backfillJobs.has(jobKey)) return;
+  backfillJobs.add(jobKey);
+  backfillQueue.push({ jobKey, site, product, tilt, limit });
+  void drainHistoryBackfill();
+}
+
+async function ensureEtFrame(siteId) {
+  const site = sites.find((item) => item.id === siteId);
+  if (!site) throw new Error(`Unknown radar site ${siteId}`);
+  const site3 = site.id.replace(/^K/, "");
+  for (const code of ET_CODES) {
+    const keys = [];
+    for (const prefix of level3DatePrefixes(site3, code)) keys.push(...await listS3(prefix, LEVEL3_BUCKET));
+    keys.sort();
+    const key = keys.at(-1);
+    if (!key) continue;
+    const id = frameId(site.id, "ET", "level3", key);
+    const existing = frames.get(id);
+    if (existing) return existing;
+    const raw = await fetchBuffer(`${LEVEL3_BUCKET}/${key}`);
+    let parsed;
+    try {
+      parsed = parseLevel3(raw, { logger: false });
+    } catch {
+      parsed = parseOfficialEet(raw);
+    }
+    const packet = parsed.radialPackets?.[0];
+    const radials = packet?.radials ?? [];
+    const data = radials.map((radial) => ({
+      name: "ET",
+      first_gate: packet.firstBin * packet.rangeScale,
+      gate_size: packet.rangeScale,
+      gate_count: packet.numberBins,
+      moment_data: radial.bins,
+    }));
+    const azimuths = radials.map((radial) => (radial.startAngle + radial.angleDelta / 2 + 360) % 360);
+    const productTime = parsed.productDescription?.productDate ? level3ProductTime(parsed.productDescription.productDate, parsed.productDescription.productTime) : Date.now();
+    const frame = {
+      id,
+      site,
+      product: "ET",
+      sourceLevel: "LEVEL III",
+      sourceBucket: "unidata-nexrad-level3",
+      key,
+      checksum: crypto.createHash("sha1").update(raw).digest("hex").slice(0, 12),
+      tilt: null,
+      elevationAngle: null,
+      availableTilts: [],
+      time: productTime,
+      processedAt: Date.now(),
+      processingDurationMs: 0,
+      vcp: null,
+      nyquistVelocity: null,
+      quality: data.length ? "OK" : "METADATA_ONLY",
+      data,
+      azimuths,
+      parsed,
+    };
+    cacheFrame(frame);
+    return frame;
+  }
+  throw new Error("ET UNAVAILABLE - official Level III ET product not found/renderable");
+}
+
+function parseOfficialEet(raw) {
+  const product = {
+    code: 135,
+    abbreviation: ["EET"],
+    description: "Enhanced Echo Tops",
+    productDescription: {
+      halfwords30_53(data) {
+        const raf = new RandomAccessFile(data);
+        return {
+          plot: { minimumDataValue: 0, dataIncrement: 5, dataLevels: 16 },
+          dependent30_46: raf.read(34),
+          compressionMethod: raf.readShort(),
+          uncompressedProductSize: (raf.readUShort() << 16) + raf.readUShort(),
+          dependent51_53: raf.read(6),
+        };
+      },
+    },
+  };
+  const raf = new RandomAccessFile(raw);
+  const result = {};
+  result.textHeader = textHeader(raf);
+  const textHeaderLength = raf.getPos();
+  if (result.textHeader.type !== "EET") throw new Error(`Unsupported ET product type: ${result.textHeader.type}`);
+  result.messageHeader = messageHeader(raf);
+  result.productDescription = productDescription(raf, product);
+  let decompressed = raf;
+  if (result.productDescription.compressionMethod > 0) {
+    const rafPos = raf.getPos();
+    const compressed = raf.read(raf.getLength() - raf.getPos());
+    const data = bzip.decode(compressed);
+    raf.seek(0);
+    decompressed = new RandomAccessFile(Buffer.concat([raf.read(rafPos), data]));
+    decompressed.seek(rafPos);
+  }
+  const offsetSymbologyBytes = textHeaderLength + result.productDescription.offsetSymbology * 2;
+  decompressed.seek(offsetSymbologyBytes);
+  result.symbology = symbologyHeader(decompressed);
+  result.radialPackets = radialPackets(decompressed, result.productDescription, result.symbology.numberLayers, { logger: false });
+  return result;
+}
+
+function level3ProductTime(julianDate, seconds) {
+  return Date.UTC(1970, 0, 1) + (julianDate - 1) * 86400_000 + seconds * 1000;
+}
+
+function cacheFrame(frame) {
+  frames.set(frame.id, frame);
+  siteUse.set(frame.site.id, Date.now());
+  const grouped = [...frames.values()].filter((item) => item.site.id === frame.site.id && item.product === frame.product && item.tilt === frame.tilt).sort((a, b) => b.processedAt - a.processedAt);
+  const evicted = grouped.slice(FRAME_LIMIT);
+  evicted.forEach((item) => frames.delete(item.id));
+  const keepSites = new Set([...siteUse.entries()].sort((a, b) => b[1] - a[1]).slice(0, SITE_LIMIT).map(([site]) => site));
+  for (const item of [...frames.values()]) {
+    if (!keepSites.has(item.site.id)) { frames.delete(item.id); evicted.push(item); }
+  }
+  const overflow = [...frames.values()].sort((a, b) => b.processedAt - a.processedAt).slice(GLOBAL_FRAME_LIMIT);
+  for (const item of overflow) { frames.delete(item.id); evicted.push(item); }
+  for (const item of evicted) {
+    for (const key of tiles.keys()) if (key.startsWith(`${item.id}/`)) tiles.delete(key);
+  }
+  for (const site of [...siteUse.keys()]) if (!keepSites.has(site)) siteUse.delete(site);
+}
+
+// Polar bilinear resampling -- interpolates the raw moment value across both the angular
+// (radial-to-radial) and range (gate-to-gate) axes before colorizing, instead of the old
+// nearest-single-gate lookup. That old approach is why the rendered image looked blocky and
+// gap-riddled: it either hit one gate dead-on or rendered nothing, with no continuity between
+// neighboring beams. This is the same general technique real radar viewers (GR2Analyst,
+// RadarScope) use to turn a native polar scan into a smooth raster -- built once per frame
+// (memoized on the frame object) rather than per pixel, so this is also considerably cheaper
+// per tile than the old per-pixel O(radial count) brute-force scan it replaces.
+function azimuthIndexFor(frame) {
+  if (frame._azIndex) return frame._azIndex;
+  const idx = frame.azimuths
+    .map((az, i) => ({ az, i }))
+    .filter((entry) => Number.isFinite(entry.az))
+    .sort((a, b) => a.az - b.az);
+  frame._azIndex = idx;
+  return idx;
+}
+
+// Binary-searches the sorted azimuth index for the two real radials bracketing `bearing`
+// (wrapping at 0/360, since compass bearings are circular), returning the fractional position
+// between them. `gapDeg` is the real angular distance between those two radials -- callers use
+// it to refuse to interpolate across an actual scan gap (a missing sector) as if it were just
+// two adjacent, closely-spaced beams.
+function bracketAzimuth(azIndex, bearing) {
+  const n = azIndex.length;
+  if (n === 0) return null;
+  let lo = 0;
+  let hi = n;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (azIndex[mid].az < bearing) lo = mid + 1; else hi = mid;
+  }
+  const hiEntry = azIndex[lo % n];
+  const loEntry = azIndex[(lo - 1 + n) % n];
+  let gapDeg = hiEntry.az - loEntry.az;
+  if (gapDeg < 0) gapDeg += 360;
+  let fromLo = bearing - loEntry.az;
+  if (fromLo < 0) fromLo += 360;
+  return { i0: loEntry.i, i1: hiEntry.i, t: gapDeg > 0 ? fromLo / gapDeg : 0, gapDeg };
+}
+
+// Linear interpolation between a radial's two gates bracketing `rangeKm`. Never interpolates
+// a real value against a missing (NaN) neighbor as if the gap were zero -- that would smear a
+// genuine echo edge into a fake soft fade into empty air. When only one side of a gate pair has
+// data, that single reading is used as-is instead.
+function interpGate(radial, rangeKm) {
+  if (!radial || !radial.moment_data) return NaN;
+  const data = radial.moment_data;
+  const gf = (rangeKm - radial.first_gate) / radial.gate_size;
+  const g0 = Math.floor(gf);
+  const g1 = g0 + 1;
+  if (g0 < 0 || g0 >= data.length) return NaN;
+  if (g1 >= data.length) return data[g0];
+  const v0 = data[g0];
+  const v1 = data[g1];
+  if (Number.isNaN(v0) && Number.isNaN(v1)) return NaN;
+  if (Number.isNaN(v0)) return v1;
+  if (Number.isNaN(v1)) return v0;
+  return v0 + (v1 - v0) * (gf - g0);
+}
+
+// Real NEXRAD super-res scans run close to 0.5 deg between radials; a bracketing gap much wider
+// than that is a genuine hole in the scan (edge of sector, dropped radial), not a normal beam
+// spacing -- refusing to bridge it keeps a real gap looking like a gap instead of inventing a
+// smooth fill across it.
+const MAX_AZIMUTH_GAP_DEG = 3;
+function sampleFrameValue(frame, rangeKm, bearing) {
+  const bracket = bracketAzimuth(azimuthIndexFor(frame), bearing);
+  if (!bracket || bracket.gapDeg > MAX_AZIMUTH_GAP_DEG) return NaN;
+  const v0 = interpGate(frame.data[bracket.i0], rangeKm);
+  const v1 = interpGate(frame.data[bracket.i1], rangeKm);
+  if (Number.isNaN(v0) && Number.isNaN(v1)) return NaN;
+  if (Number.isNaN(v0)) return v1;
+  if (Number.isNaN(v1)) return v0;
+  return v0 + (v1 - v0) * bracket.t;
+}
+
+// Ground clutter and biological scatterers (birds, insects, AP) commonly show up as
+// normal-looking reflectivity/velocity returns even though they aren't precipitation -- but
+// they have low dual-pol correlation coefficient (rho-hv), which is the same signal NWS's own
+// operational QC uses to tell real weather from clutter. Cross-referencing REF/VEL/SRV against
+// the CC scan from the exact same volume (same site/tilt/key, so it's genuinely time- and
+// geometry-matched, not an approximation) and suppressing low-CC gates is what actually removes
+// the near-site speckle/noise -- CC's own display is deliberately left unfiltered, since the
+// "noise" there simply IS the raw correlation data, not an artifact to hide.
+// A single fixed threshold is a simplified stand-in for NWS's real (multi-field) dual-pol QC,
+// not the official algorithm -- tune CODEBLACK_RADAR_CC_FILTER_THRESHOLD (a restart, not a
+// redeploy) if it's cutting real light precipitation or letting too much clutter through.
+// Ground clutter/AP is typically <0.8 rho-hv, biological scatter often <0.7, real precip
+// typically >0.90 (melting-layer/hail can dip lower). 0.85 (the original default) still left
+// visible near-site clutter streaking on real production data; verified locally against a real
+// KSGF scan that 0.90 cut it substantially and 0.95 nearly eliminated it. Defaulting to 0.95,
+// biased toward a clean broadcast picture over maximum recall of marginal/stratiform returns --
+// lower it if real light precipitation starts disappearing.
+const CC_FILTER_PRODUCTS = new Set(["REF", "VEL", "SRV"]);
+const CC_FILTER_THRESHOLD = Number(process.env.CODEBLACK_RADAR_CC_FILTER_THRESHOLD ?? 0.95);
+
+// Deliberately NEVER awaits a fresh CC decode (~8-10s for a full Level II volume) from inside a
+// live tile request -- the first version of this did, and blocking every tile of a just-arrived
+// frame on that decode is exactly what made the animation loop stall/jump right when a new scan
+// came in. Instead: return the CC frame only if it's already cached, and if not, kick off the
+// decode in the background (deduped against ensureLevel2Frame's own in-flight cache, so this
+// never causes a duplicate download+decode) and render this one request unfiltered. In practice
+// this rarely matters -- see the pre-warm call in ensureLevel2Frame below, which starts the CC
+// decode as soon as a REF/VEL/SRV frame is ready, well before the client has even requested a
+// tile for it.
+function ensureMatchingCcFrame(frame) {
+  if (!CC_FILTER_PRODUCTS.has(frame.product)) return null;
+  const cached = frames.get(frameId(frame.site.id, "CC", frame.tilt, frame.key));
+  if (cached) return cached;
+  ensureLevel2Frame(frame.site.id, "CC", frame.tilt, frame.key).catch(() => {});
+  return null;
+}
+
+async function renderTile(frame, z, x, y) {
+  const tileKey = `${frame.id}/${z}/${x}/${y}`;
+  if (tiles.has(tileKey)) return tiles.get(tileKey);
+  const png = new PNG({ width: TILE_SIZE, height: TILE_SIZE });
+  if (!frame.data) {
+    const buf = PNG.sync.write(png);
+    tiles.set(tileKey, buf);
+    return buf;
+  }
+  const ccFrame = ensureMatchingCcFrame(frame);
+  for (let py = 0; py < TILE_SIZE; py += 1) {
+    for (let px = 0; px < TILE_SIZE; px += 1) {
+      const pos = tileToLonLat(z, x, y, px, py);
+      const distMi = distanceMiles(frame.site, pos);
+      if (distMi > 160) continue;
+      // Bearing is numerically unstable within a few hundred meters of the site itself (a tiny
+      // pixel-to-pixel position change swings the computed angle wildly near that pole), which
+      // is what produced the sparkly "starburst" right at the site center -- not a data problem,
+      // a geometry one. Real radar coverage this close in is a rendering non-issue anyway (this
+      // is well inside any real gate's first_gate distance), so this is skipped outright rather
+      // than rendering essentially-random azimuth noise.
+      if (distMi < 0.3) continue;
+      const bearing = bearingDeg(frame.site, pos);
+      const rangeKm = distMi * 1.60934;
+      let value = sampleFrameValue(frame, rangeKm, bearing);
+      if (ccFrame) {
+        const cc = sampleFrameValue(ccFrame, rangeKm, bearing);
+        // Only suppress when we actually have a CC reading to judge by -- a missing CC sample
+        // (NaN) means "unknown," not "clutter," so it must never blank out a real REF/VEL value.
+        if (Number.isFinite(cc) && cc < CC_FILTER_THRESHOLD) value = NaN;
+      }
+      const color = palette(frame.product, value);
+      const idx = (py * TILE_SIZE + px) * 4;
+      png.data[idx] = color[0];
+      png.data[idx + 1] = color[1];
+      png.data[idx + 2] = color[2];
+      png.data[idx + 3] = color[3];
+    }
+  }
+  const buf = PNG.sync.write(png);
+  // Don't permanently cache a tile that was rendered unfiltered only because the matching CC
+  // scan hadn't finished pre-warming yet (see ensureMatchingCcFrame) -- caching it here would
+  // freeze that one tile as unfiltered/noisy for this frame's entire lifetime, even after CC
+  // becomes available moments later. A request too early just re-renders (and re-checks CC)
+  // next time instead.
+  const stillNeedsCc = CC_FILTER_PRODUCTS.has(frame.product) && !ccFrame;
+  if (!stillNeedsCc) {
+    tiles.set(tileKey, buf);
+    if (tiles.size > 500) tiles.delete(tiles.keys().next().value);
+  }
+  return buf;
+}
+
+async function ensureFrame(siteId, product, tilt) {
+  if (product === "ET") return ensureEtFrame(siteId);
+  return ensureLevel2Frame(siteId, product, tilt);
+}
+
+function metadata(frame) {
+  return {
+    frameId: frame.id,
+    site: frame.site,
+    product: frame.product,
+    sourceLevel: frame.sourceLevel,
+    sourceBucket: frame.sourceBucket,
+    sourceChunkBucket: frame.sourceChunkBucket,
+    sourceNotification: frame.sourceNotification,
+    tilt: frame.tilt,
+    availableTilts: frame.availableTilts,
+    elevationAngle: frame.elevationAngle,
+    time: new Date(frame.time).toISOString(),
+    ageSeconds: Math.max(0, Math.round((Date.now() - frame.time) / 1000)),
+    freshness: sourceFreshness(frame.time),
+    vcp: frame.vcp,
+    nyquistVelocity: frame.nyquistVelocity,
+    quality: frame.quality,
+    checksum: frame.checksum,
+    processingDurationMs: frame.processingDurationMs,
+    legend: legend(frame.product),
+  };
+}
+
+function legend(product) {
+  if (product === "REF") return { units: "dBZ", stops: [-10, 5, 20, 35, 45, 55, 65, 80] };
+  if (product === "CC") return { units: "rho-hv", stops: [0.65, 0.8, 0.9, 0.96, 1.05] };
+  if (product === "ET") return { units: "kft", stops: [10, 20, 30, 45, 60] };
+  return { units: "kt", stops: [-80, -45, -15, 0, 15, 45, 80] };
+}
+
+function currentSiteForUrl(url) {
+  return url.searchParams.get("site") || (selectedSite === "AUTO" ? "KSRX" : selectedSite);
+}
+
+const server = http.createServer(async (req, res) => {
+  try {
+    if (req.method === "OPTIONS") return send(res, 204, {});
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (url.pathname === "/api/v1/radar/health") return send(res, 200, { ok: true, backend: "Code Black Radar Worker", version: VERSION });
+    if (url.pathname === "/api/v1/radar/products") return send(res, 200, PRODUCTS.map((id) => ({ id, level: id === "ET" ? "LEVEL III" : "LEVEL II", label: { REF: "Base Reflectivity", VEL: "Base Velocity", SRV: "Storm-Relative Velocity", CC: "Correlation Coefficient", ET: "Echo Tops" }[id] })));
+    if (url.pathname === "/api/v1/radar/sites") return send(res, 200, sites);
+    if (url.pathname === "/api/v1/radar/sites/nearest") {
+      const pos = { lat: Number(url.searchParams.get("lat")), lon: Number(url.searchParams.get("lon")) };
+      const ranked = sites.map((site) => ({ ...site, distanceMi: distanceMiles(pos, site) })).sort((a, b) => a.distanceMi - b.distanceMi);
+      return send(res, 200, ranked.slice(0, 8));
+    }
+    if (url.pathname === "/api/v1/radar/status") {
+      const site = currentSiteForUrl(url);
+      const product = url.searchParams.get("product") || selectedProduct;
+      let frame = null;
+      try { frame = await ensureFrame(site, product, Number(url.searchParams.get("tilt") || selectedTilt)); latestError = ""; } catch (error) { latestError = error.message; }
+      const matchingFrameCount = [...frames.values()].filter((item) => item.site.id === site && item.product === product).length;
+      return send(res, 200, {
+        backendState: frame ? "READY" : "DEGRADED",
+        backendVersion: VERSION,
+        selectedSite: site,
+        siteMode: selectedSite === "AUTO" ? "AUTO" : "MANUAL",
+        availableProducts: PRODUCTS,
+        selectedProduct: product,
+        sourceLevel: frame?.sourceLevel ?? (product === "ET" ? "LEVEL III" : "LEVEL II"),
+        selectedTilt: frame?.tilt ?? selectedTilt,
+        availableTilts: frame?.availableTilts ?? [],
+        currentFrameId: frame?.id ?? null,
+        frameTime: frame ? new Date(frame.time).toISOString() : null,
+        dataAgeSeconds: frame ? Math.round((Date.now() - frame.time) / 1000) : null,
+        frameCount: frame ? Math.max(1, matchingFrameCount) : matchingFrameCount,
+        cacheState: frame || frames.size ? "AVAILABLE" : "EMPTY",
+        processingState: frame ? "IDLE" : "ERROR",
+        latestError,
+        stormMotion,
+        reconnectState: latestError ? "BACKOFF" : "CONNECTED",
+      });
+    }
+    if (url.pathname === "/api/v1/radar/frames") {
+      const site = currentSiteForUrl(url);
+      const product = url.searchParams.get("product") || selectedProduct;
+      const tilt = Number(url.searchParams.get("tilt") || selectedTilt);
+      const limit = Math.max(1, Math.min(FRAME_LIMIT, Number(url.searchParams.get("limit") || 6)));
+      const frame = await ensureFrame(site, product, tilt);
+      // Must also filter by tilt (chosenTilt, since that's what's actually cached under -- the raw
+      // request tilt can differ if the volume didn't have that exact cut) -- otherwise switching
+      // tilts on an already-populated site/product returns a list still dominated by the PREVIOUS
+      // tilt's cached frames, silently showing the wrong elevation while labeled as the new one.
+      const resolvedTilt = frame.tilt;
+      let list = [...frames.values()].filter((item) => item.site.id === site && item.product === product && item.tilt === resolvedTilt).sort((a, b) => b.time - a.time).slice(0, limit);
+      if (!list.find((item) => item.id === frame.id)) list.unshift(frame);
+      // First request for a site/product this process has seen: backfill a real short history
+      // instead of returning a single frame -- otherwise the client's "last N frames" loop has
+      // nothing to animate until enough real time has passed for new volumes to arrive on their own.
+      if (product !== "ET" && list.length < limit) startHistoryBackfill(site, product, resolvedTilt, limit);
+      return send(res, 200, list.map(metadata));
+    }
+    const metaMatch = url.pathname.match(/^\/api\/v1\/radar\/frame\/([^/]+)\/metadata$/);
+    if (metaMatch) {
+      const frame = frames.get(metaMatch[1]);
+      return frame ? send(res, 200, metadata(frame)) : send(res, 404, { error: "frame not found" });
+    }
+    const tileMatch = url.pathname.match(/^\/api\/v1\/radar\/tiles\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.png$/);
+    if (tileMatch) {
+      const frame = frames.get(tileMatch[1]);
+      if (!frame) return send(res, 404, { error: "frame not found" });
+      return send(res, 200, await renderTile(frame, Number(tileMatch[2]), Number(tileMatch[3]), Number(tileMatch[4])), "image/png");
+    }
+    if (url.pathname === "/api/v1/radar/selection" && req.method === "POST") {
+      const body = await jsonBody(req);
+      if (body.site) selectedSite = String(body.site);
+      if (PRODUCTS.includes(body.product)) selectedProduct = body.product;
+      if (body.tilt) selectedTilt = Number(body.tilt);
+      return send(res, 200, { selectedSite, selectedProduct, selectedTilt });
+    }
+    if (url.pathname === "/api/v1/radar/storm-motion/estimate") {
+      const site = currentSiteForUrl(url);
+      return send(res, 200, estimateStormMotion(site));
+    }
+    if (url.pathname === "/api/v1/radar/storm-motion" && req.method === "POST") {
+      const body = await jsonBody(req);
+      const directionDegrees = Number(body.directionDegrees);
+      const speedKnots = Number(body.speedKnots);
+      if (!Number.isFinite(directionDegrees) || !Number.isFinite(speedKnots)) return send(res, 400, { error: "directionDegrees and speedKnots are required" });
+      stormMotion = { directionDegrees: ((directionDegrees % 360) + 360) % 360, speedKnots, source: body.source || "MANUAL", updatedAt: new Date().toISOString() };
+      return send(res, 200, stormMotion);
+    }
+    return send(res, 404, { error: "not found" });
+  } catch (error) {
+    latestError = error.message;
+    return send(res, 500, { error: error.message });
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`Code Black Radar Worker listening on http://0.0.0.0:${PORT}`);
+  console.log(`Level II archive: ${LEVEL2_BUCKET}`);
+  console.log(`Level II chunks: ${LEVEL2_CHUNKS_BUCKET}`);
+  console.log(`Level III archive: ${LEVEL3_BUCKET}`);
+});

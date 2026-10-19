@@ -1,0 +1,79 @@
+{
+  "reference_id": "seeed-101990881-s-th-01-v1",
+  "manufacturer": "Seeed Studio / SenseCAP",
+  "sku": "101990881",
+  "model": "S-TH-01A (hook-up wire variant)",
+  "document": "Air Temperature and Humidity Sensor Data Sheet",
+  "document_revision": "V1.0",
+  "source_url": "https://files.seeedstudio.com/products/101990881/Docs/RS485_Air_Temperature_and_Humidity_Sensor_Datasheet.pdf",
+  "source_sha256": "f3cb429a44e7a64ec52ec20c57315a90c463824ccdd8e38a4b878ebfbff9b57d",
+  "retrieved_date": "2026-10-15",
+  "identification": "Digi-Key order image lists Seeed manufacturer part 101990881; physical probe and cable ends not yet inspected",
+  "electrical": {
+    "supply_v_dc_min": 3.6,
+    "supply_v_dc_max": 30,
+    "interface": "RS485 Modbus RTU; requires RS485 transceiver between probe and ESP32 UART",
+    "wires": {
+      "red": "V+",
+      "black": "power ground",
+      "yellow": "RS485 A / T+",
+      "white": "RS485 B / T-"
+    }
+  },
+  "modbus": {
+    "default_baud": 9600,
+    "default_data_bits": 8,
+    "default_parity": "none",
+    "default_stop_bits": 1,
+    "default_slave_address": "1 or 42 according to manufacturer; verify actual probe",
+    "read_functions": [
+      3,
+      4
+    ],
+    "registers": [
+      {
+        "address": 0,
+        "field": "air_temperature",
+        "raw_type": "int16",
+        "scale": 0.01,
+        "unit": "degC",
+        "range": [
+          -40,
+          80
+        ],
+        "accuracy": "+/-0.3 degC"
+      },
+      {
+        "address": 1,
+        "field": "relative_humidity",
+        "raw_type": "uint16",
+        "scale": 0.01,
+        "unit": "%RH",
+        "range": [
+          0,
+          100
+        ],
+        "accuracy": "+/-3 %RH"
+      },
+      {
+        "address": 2,
+        "field": "dew_point",
+        "raw_type": "int16",
+        "scale": 0.01,
+        "unit": "degC",
+        "range": [
+          -40,
+          80
+        ]
+      }
+    ]
+  },
+  "striker_weather": {
+    "configured_uart_rx_gpio": 16,
+    "configured_uart_tx_gpio": 17,
+    "configured_rs485_driver_enable_gpio": 4,
+    "configured_slave_address": 1,
+    "configured_read_function": 4,
+    "status": "live Modbus response verified on 2026-10-15; address 42 produced no reply, address 1 reported 19.79 degC and 98.85 %RH; Core accepted telemetry with HTTP 200; physical power and interface-board labels were not inspected"
+  }
+}

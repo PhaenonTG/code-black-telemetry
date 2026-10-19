@@ -1,0 +1,127 @@
+workflows:
+  ios-unsigned-altstore:
+    name: iOS unsigned build (AltStore sideload)
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+      node: latest
+      # Created in Codemagic dashboard: App settings -> Environment variables -> group "mapbox",
+      # containing VITE_MAPBOX_ACCESS_TOKEN (Secure). .env.local (which holds the real token) is
+      # gitignored and never reaches this cloud Mac, so without this the built app ships with an
+      # empty token and the map/radar layers silently fail on-device.
+      #
+      # Also requires group "github", containing GH_TOKEN (Secure) -- a GitHub PAT with "repo"
+      # scope (classic) or "Contents: Read and write" (fine-grained), used below to commit the
+      # built .ipa into the repo under altstore/ and push the updated altstore-source.json so
+      # AltStore picks up new builds as in-app updates instead of requiring a manual re-sideload
+      # each time.
+      groups:
+        - mapbox
+        - github
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Build web app
+        script: npm run build
+      - name: Sync Capacitor iOS platform
+        script: npx cap sync ios
+      # Signing is deliberately disabled here -- this produces an unsigned .app, which AltServer
+      # then re-signs locally with your own free Apple ID during sideload. There is no Apple
+      # Developer account, certificate, or provisioning profile involved anywhere in this build.
+      - name: Archive without code signing
+        script: |
+          # Derived from HEAD's commit timestamp rather than $CM_ENV or the wall clock: it must come
+          # out byte-identical here and in the "Publish AltStore source" step below (two separate
+          # script processes, no shared state), and AltStore rejects an install if the
+          # .ipa's embedded CFBundleShortVersionString doesn't exactly match the "version" the source
+          # manifest claims (VerificationError 4). The commit timestamp is fixed for the life of the
+          # build, so recomputing it in each step always agrees.
+          VERSION="$(date -u -r "$(git log -1 --format=%ct)" +%Y.%m%d.%H%M)"
+          cd ios/App
+          xcodebuild archive \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -archivePath "$CM_BUILD_DIR/App.xcarchive" \
+            -destination 'generic/platform=iOS' \
+            -sdk iphoneos \
+            MARKETING_VERSION="$VERSION" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS=""
+      # xcodebuild -exportArchive always wants a real signing method, so there's no built-in way to
+      # export a genuinely unsigned .ipa -- this is the standard community workaround: an .ipa is
+      # just a zip of a Payload/ folder containing the .app, so build that structure by hand from
+      # the unsigned archive's .app bundle.
+      - name: Package unsigned .ipa
+        script: |
+          mkdir -p "$CM_BUILD_DIR/Payload"
+          cp -r "$CM_BUILD_DIR/App.xcarchive/Products/Applications/App.app" "$CM_BUILD_DIR/Payload/"
+          cd "$CM_BUILD_DIR"
+          # COPYFILE_DISABLE stops macOS from writing AppleDouble (._*) resource-fork files into the
+          # zip, and -X drops the extra Apple file attributes zip would otherwise embed per entry --
+          # without both, AltStore's on-device installer can fail with a plist-parsing error
+          # ("the data couldn't be read because it isn't in the correct format") trying to read
+          # Info.plist back out of the archive, even though the .ipa is otherwise valid.
+          COPYFILE_DISABLE=1 zip -rX CodeBlackOps-unsigned.ipa Payload -x '.*' -x '__MACOSX'
+      # Commits the .ipa into the repo under altstore/ (served to AltStore via
+      # raw.githubusercontent.com, same as altstore-source.json itself), then updates
+      # altstore-source.json to point at it and pushes that change straight back to the branch
+      # being built. Add
+      # https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/master/altstore-source.json
+      # as a Source in AltStore/SideStore once -- after that, every build here shows up as an
+      # "Update" in-app instead of needing a manual reinstall via AltServer.
+      #
+      # Previously also created a GitHub Release and uploaded the .ipa there, back when
+      # downloadURL pointed at the release asset -- once downloadURL moved to the git-committed
+      # raw path instead, that release upload kept running on every build without anything ever
+      # linking to it. Removed as dead work rather than two needless GitHub API calls per build.
+      - name: Publish AltStore source
+        script: |
+          set -euo pipefail
+          IPA_PATH="$CM_BUILD_DIR/CodeBlackOps-unsigned.ipa"
+          # Same derivation as the "Archive without code signing" step above -- recomputed
+          # independently here (not passed via $CM_ENV, which didn't reliably propagate between
+          # these script steps) but always comes out identical since it's based on HEAD's fixed
+          # commit timestamp rather than wall-clock time.
+          VERSION="$(date -u -r "$(git log -1 --format=%ct)" +%Y.%m%d.%H%M)"
+          VERSION_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          IPA_SIZE="$(stat -f%z "$IPA_PATH")"
+          BRANCH="${CM_BRANCH:-master}"
+
+          mkdir -p altstore
+          # Committing every build's .ipa here means altstore/ only ever grows unless something
+          # prunes it -- only the version altstore-source.json currently points at is ever actually
+          # served, so drop every other .ipa in this directory before adding the new one.
+          find altstore -maxdepth 1 -name '*.ipa' -delete
+          cp "$IPA_PATH" "altstore/CodeBlackOps-$VERSION.ipa"
+          DOWNLOAD_URL="https://raw.githubusercontent.com/PhaenonTG/code-black-telemetry/$BRANCH/altstore/CodeBlackOps-$VERSION.ipa"
+
+          jq --arg v "$VERSION" --arg d "$VERSION_DATE" --arg u "$DOWNLOAD_URL" --argjson s "$IPA_SIZE" \
+            '.apps[0].version = $v
+             | .apps[0].versionDate = $d
+             | .apps[0].downloadURL = $u
+             | .apps[0].size = $s
+             | .apps[0].versionDescription = ("Automated Codemagic build " + $v)' \
+            altstore-source.json > altstore-source.json.tmp
+          mv altstore-source.json.tmp altstore-source.json
+
+          git config user.email "codemagic-ci@codeblackwx.local"
+          git config user.name "Codemagic CI"
+          git add altstore-source.json altstore/
+          git commit -m "Publish AltStore source for iOS $VERSION [skip ci]"
+          # Auth via an extraHeader instead of embedding the token in the remote URL, so it can't
+          # end up in a printed "origin" URL if any later command errors and echoes it.
+          AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64)"
+          # Retries once on a non-fast-forward rejection (e.g. a second build finishing this same
+          # step around the same time) by rebasing this single altstore-source.json commit onto
+          # whatever landed on the branch in the meantime, rather than failing outright.
+          if ! git -c "http.https://github.com/.extraHeader=$AUTH_HEADER" push origin "HEAD:$BRANCH"; then
+            git -c "http.https://github.com/.extraHeader=$AUTH_HEADER" fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            git -c "http.https://github.com/.extraHeader=$AUTH_HEADER" push origin "HEAD:$BRANCH"
+          fi
+    artifacts:
+      - $CM_BUILD_DIR/CodeBlackOps-unsigned.ipa

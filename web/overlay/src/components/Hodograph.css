@@ -1,0 +1,162 @@
+.hodo-module {
+  --cb-edge-color: var(--cb-utility-gray);
+  width: 300px;
+  flex: none;
+  padding: 10px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hodo-module__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hodo-module__fresh {
+  font-family: var(--cb-font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+}
+
+.hodo-module__fresh.freshness-current {
+  color: var(--cb-white);
+}
+.hodo-module__fresh.freshness-aging {
+  color: var(--cb-warn-severe);
+}
+.hodo-module__fresh.freshness-stale {
+  color: var(--cb-signal-red);
+}
+.hodo-module__fresh.freshness-unavailable,
+.hodo-module__fresh.freshness-unknown {
+  color: var(--cb-utility-gray-dim);
+}
+
+.hodo-module__body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hodo-svg {
+  width: 120px;
+  height: 120px;
+  flex: none;
+  display: block;
+}
+
+.hodo-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.09);
+  stroke-width: 1;
+}
+
+.hodo-axis {
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 1;
+}
+
+.hodo-axis-label {
+  fill: var(--cb-utility-gray);
+  font-size: 8px;
+  font-family: var(--cb-font-mono);
+}
+
+.hodo-trace {
+  fill: none;
+  stroke: var(--cb-signal-red);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: hodo-draw var(--cb-motion-hodo-draw) var(--cb-ease) forwards;
+  animation-delay: var(--cb-motion-hodo-delay);
+}
+
+@keyframes hodo-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.hodo-node {
+  opacity: 0;
+  animation: hodo-node-in var(--cb-motion-fast) var(--cb-ease) forwards;
+}
+
+@keyframes hodo-node-in {
+  to {
+    opacity: 1;
+  }
+}
+
+.hodo-module__data {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.hodo-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-family: var(--cb-font-display);
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  color: var(--cb-utility-gray);
+}
+
+.hodo-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hodo-legend__swatch {
+  width: 6px;
+  height: 6px;
+  display: inline-block;
+}
+
+.hodo-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-top: 1px solid var(--cb-hairline);
+  padding-top: 6px;
+}
+
+.hodo-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hodo-stat__value {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cb-white);
+}
+
+.hodo-stat__unit {
+  font-size: 9px;
+  color: var(--cb-utility-gray);
+  margin-left: 2px;
+  font-weight: 400;
+}
+
+.hodo-unavailable {
+  padding: 20px 0;
+  text-align: center;
+  color: var(--cb-utility-gray);
+  font-size: 12px;
+}

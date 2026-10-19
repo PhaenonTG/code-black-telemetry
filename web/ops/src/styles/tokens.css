@@ -1,0 +1,91 @@
+/* Reused from the existing OPS app's approved cockpit palette (src/index.css, "REFERENCE MATCH
+   PASS: approved Code Black OPS cockpit specification") rather than the public marketing site's
+   brand hexes -- this IS the existing Code Black branding system as already applied to OPS
+   specifically, and it's deliberately more restrained/operational than the public site. */
+:root {
+  --cb-black: #020203;
+  --cb-void: #050507;
+  --cb-shell: #0a0b0e;
+  --cb-panel: #0d0e11;
+  --cb-panel-hi: #171A1D;
+  --cb-panel-low: #050608;
+  --cb-tile: #101114;
+  --cb-line: rgba(255, 255, 255, 0.09);
+  --cb-line-strong: rgba(255, 45, 53, 0.34);
+  --cb-red: #FF2A0C;
+  --cb-red-deep: #4c080c;
+  --cb-warning: #a60e17;
+  --cb-amber: #f4b623;
+  --cb-orange: #ff7a1a;
+  --cb-blue: #12a8ff;
+  --cb-green: #20e36c;
+  --cb-gray: #8D949B;
+  --cb-text: #f4f6fa;
+  --cb-muted: #8b929f;
+  /* Was #59606b -- 3.04:1 against --cb-panel, below the 4.5:1 body-text floor, and this token is
+     used as real text color (not just a decorative dot) down to 8px in several places: provenance
+     labels, coordinate readouts, deferred-settings copy. Raised to the nearest value on the same
+     dim-to-muted hue ramp that clears 4.5:1 (4.58:1) while staying visibly dimmer than --cb-muted
+     (6.17:1), preserving the dim < muted < text hierarchy. */
+  --cb-dim: #757c85;
+  --cb-radius: 6px;
+  --cb-fast: 160ms;
+  --cb-medium: 360ms;
+
+  --sidebar-w: 240px;
+  --sidebar-w-rail: 76px;
+  --statusbar-h: 48px;
+  --bottomnav-h: 64px;
+}
+
+/* Apply the saved display mode to both OPS chrome and the reused map surfaces. */
+.shell {
+  background: var(--cb-black);
+  color: var(--cb-text);
+  color-scheme: dark;
+}
+.shell[data-theme="light"] {
+  color-scheme: light;
+  --cb-black: #f4f6f8;
+  --cb-void: #edf1f5;
+  --cb-shell: #ffffff;
+  --cb-panel: #ffffff;
+  --cb-panel-hi: #e4e9ef;
+  --cb-panel-low: #f4f6f8;
+  --cb-tile: #edf1f5;
+  --cb-line: #c6ccd5;
+  --cb-line-strong: #a60e17;
+  --cb-text: #101317;
+  --cb-muted: #4e5866;
+  --cb-dim: #5d6570;
+  --cb-red: #b51a09;
+  --cb-green: #16773b;
+  --cb-blue: #006fae;
+  --cb-amber: #8c6200;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --panel-2: #edf1f5;
+  --border: #c6ccd5;
+  --text: #101317;
+  --muted: #4e5866;
+  --secondary: #303742;
+}
+.shell[data-theme="night"] {
+  --cb-black: #020202;
+  --cb-void: #020202;
+  --cb-shell: #050505;
+  --cb-panel: #080808;
+  --cb-panel-hi: #111111;
+  --cb-tile: #080808;
+  --cb-line: rgba(255, 45, 53, 0.28);
+  --cb-text: #f2f2f2;
+  --cb-muted: #a19499;
+  --cb-dim: #978a8f;
+  --bg: #020202;
+  --panel: #080808;
+  --panel-2: #111111;
+  --border: rgba(255, 45, 53, 0.28);
+}
+
+.shell[data-theme="light"] .segmented button.active { color: #ffffff; }
+.shell[data-theme="light"] .settings-number input { background: var(--cb-void); }

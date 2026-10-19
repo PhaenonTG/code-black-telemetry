@@ -1,0 +1,191 @@
+nodes:
+  charger-pi:
+    id: CBWX-001
+    name: Spencer Charger Pi
+    vehicle: "Spencer's 2021 Dodge Charger"
+    type: raspberry-pi
+    platform: linux
+    owner_node: vehicle
+    status: planned-active-target
+    maturity: partial
+    roles:
+      - telemetry
+      - gps-bridge
+      - weather-bridge
+      - ble-bridge
+      - networking
+      - streaming
+      - vehicle-control
+      - local-api
+    connectivity:
+      lan: true
+      tailscale: true
+      starlink: true
+      ble: true
+    repository_coverage:
+      present_in_this_repo: false
+      notes: "README and docs identify the Pi backend as a separate Pi-side codebase at ~/CodeBlack. Exact systemd units, ports, NetworkManager profiles, watchdogs, and hardware scripts must be discovered on the Pi."
+    secrets_allowed: false
+
+  navigation-esp:
+    id: CBWX-ESP-NAV-001
+    name: Navigation ESP
+    type: esp32
+    platform: embedded
+    owner_node: charger-pi
+    status: planned
+    maturity: planned
+    roles:
+      - gps
+      - motion
+      - navigation-telemetry
+    connectivity:
+      upstream: charger-pi
+      protocol: unknown
+    repository_coverage:
+      present_in_this_repo: false
+      notes: "Modeled by telemetry payloads as gps/nav status, but firmware and transport details are not in this checkout."
+    secrets_allowed: false
+
+  weather-esp:
+    id: CBWX-ESP-WX-001
+    name: Weather ESP
+    type: esp32
+    platform: embedded
+    owner_node: charger-pi
+    status: planned
+    maturity: planned
+    roles:
+      - temperature
+      - humidity
+      - dewpoint
+      - wind
+      - weather-telemetry
+    connectivity:
+      upstream: charger-pi
+      protocol: unknown
+    repository_coverage:
+      present_in_this_repo: false
+      notes: "Modeled by telemetry payloads as wx/wind status, but firmware and transport details are not in this checkout."
+    secrets_allowed: false
+
+  samsung-cockpit:
+    id: CBWX-TAB-001
+    name: Samsung cockpit tablet
+    type: android-tablet
+    platform: android
+    owner_node: vehicle
+    status: active
+    maturity: beta
+    roles:
+      - primary-cockpit
+      - atlas-map
+      - radar
+      - gps-fallback
+      - telemetry-display
+      - stream-control-surface
+    repository_coverage:
+      present_in_this_repo: true
+      paths:
+        - android/
+        - src/
+      notes: "Root Capacitor app is current production OPS product for Android tablet use."
+    secrets_allowed: false
+
+  ios-cockpit:
+    id: CBWX-IOS-001
+    name: Future iPhone/iPad cockpit
+    type: ios-device
+    platform: ios-ipados
+    owner_node: operator
+    status: planned
+    maturity: partial
+    roles:
+      - secondary-cockpit
+      - future-primary-cockpit
+      - atlas-map
+      - gps-fallback
+      - telemetry-display
+    repository_coverage:
+      present_in_this_repo: true
+      paths:
+        - ios/
+      notes: "Capacitor iOS project exists. Native runtime validation and background Core Location adapter work remain pending."
+    secrets_allowed: false
+
+  codeblack-core:
+    id: CBWX-CORE-001
+    name: CodeBlack-Core
+    type: linux-server
+    platform: linux
+    owner_node: central
+    status: planned
+    maturity: planned
+    roles:
+      - telemetry-ingest
+      - control-plane-backend
+      - stream-relay
+      - archive
+      - remote-producer
+      - fleet-coordination
+    repository_coverage:
+      present_in_this_repo: false
+      notes: "Referenced as future central backend/control authority. Must never be required for local chase operation."
+    secrets_allowed: false
+
+  windows-dev-producer:
+    id: CBWX-WIN-DEV-001
+    name: Windows development and producer PC
+    type: windows-workstation
+    platform: windows
+    owner_node: operator
+    status: active
+    maturity: beta
+    roles:
+      - development
+      - build-tooling
+      - diagnostics
+      - producer-workstation
+      - obs-production
+    repository_coverage:
+      present_in_this_repo: true
+      paths:
+        - scripts/
+        - web/
+        - src/
+      notes: "Primary development machine for this checkout."
+    secrets_allowed: false
+
+  nick-vehicle-node:
+    id: CBWX-FLEET-NICK-001
+    name: Nick vehicle node
+    type: vehicle-node
+    platform: unknown
+    owner_node: future-fleet
+    status: future-planned
+    maturity: planned
+    roles:
+      - fleet-telemetry
+      - future-vehicle-node
+    repository_coverage:
+      present_in_this_repo: false
+      notes: "Explicitly planned future fleet node. Hardware/software details are not yet known."
+    secrets_allowed: false
+
+  future-probes:
+    id: CBWX-PROBE-FUTURE
+    name: Future probes
+    type: probe
+    platform: unknown
+    owner_node: future-fleet
+    status: future-planned
+    maturity: planned
+    roles:
+      - probe-observations
+      - fleet-telemetry
+    repository_coverage:
+      present_in_this_repo: partial
+      paths:
+        - src/services/mapLayerModels.ts
+      notes: "Probe observation model exists as a placeholder; no live provider exists in this checkout."
+    secrets_allowed: false

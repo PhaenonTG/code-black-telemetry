@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- Exclude encrypted credential blobs; the Android Keystore key is device/app-install scoped. -->
+        <exclude domain="sharedpref" path="CodeBlackSecureCredentials.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="CodeBlackSecureCredentials.xml" />
+    </device-transfer>
+</data-extraction-rules>

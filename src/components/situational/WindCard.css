@@ -1,0 +1,144 @@
+/* WindCard — self-contained styles. Deliberately narrow (width is set on .wind-panel's grid-area
+   in the shared page grid, matching the Alerts card below it) and deliberately plain: no red
+   accent stripe, no compass graphic. Speed/Direction stack on the left; Peak Gust (session-held
+   high, tap to reset) fills the right column — that column used to just be empty card padding. */
+
+/* The Wind card has been rebuilt into this hero-grid layout several times over the project's
+   history, and the pre-redesign compass/readout CSS from those earlier passes was never fully
+   purged from index.css -- several `.wind-panel { display: grid; grid-template-columns... }`
+   blocks (some !important, some inside media queries) are still floating around and were
+   clamping this card's content into a leftover 2-column compass|readout split. Rather than
+   chase every historical occurrence across a 5800-line file, force the correct box model here,
+   at maximum specificity+importance, same fix pattern already proven for .bottom-dock/.dock-signature. */
+.wind-panel.cockpit-card {
+  display: flex !important;
+  flex-direction: column !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+.wind-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  flex: 1;
+  gap: 8px 4px;
+  padding: 12px var(--glance-card-pad-x, 14px) 0;
+}
+
+.wind-hero__item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.wind-hero__item--speed {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.wind-hero__item--direction {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.wind-hero__item--peak {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-items: flex-start;
+  position: relative;
+  margin: 0;
+  padding: 0 0 0 16px;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  appearance: none;
+  cursor: pointer;
+}
+
+.wind-hero__item--peak:disabled {
+  cursor: default;
+}
+
+.wind-hero__item--peak:not(:disabled):active {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.wind-hero__reset-hint {
+  margin-top: 8px;
+  color: var(--muted, #8b949e);
+  font: 700 8px/1 Consolas, "JetBrains Mono", monospace;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.wind-hero__item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text, #f8fafc);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Match the Conditions card's hero-number size exactly (same row, same "primary reading" role) --
+   Wind previously had its own steeper clamp (2.8vw vs ~1.7-1.8vw here) that made its numbers read
+   noticeably larger/bolder than its row neighbors even at the same font-weight. */
+.wind-panel.cockpit-card--chase .wind-hero__item strong {
+  font-size: clamp(27px, 1.72vw, 36px);
+}
+
+.wind-panel.cockpit-card--normal .wind-hero__item strong {
+  font-size: clamp(28px, 1.82vw, 38px);
+}
+
+.wind-hero__item span {
+  margin-top: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted, #8b949e);
+  font: 700 clamp(9px, 0.72vw, 11px) / 1.2 Consolas, "JetBrains Mono", monospace;
+  text-transform: uppercase;
+}
+
+.wind-hero__item span em {
+  margin-left: 6px;
+  color: var(--secondary, #b6bec8);
+  font-style: normal;
+  text-transform: none;
+}
+
+/* Same restrained data-tone vocabulary the GPS/ops status readouts use elsewhere -- text color
+   only, on the number itself. No stripe, no glow, no animation: this card stays plain per the
+   note at the top of this file, but a gust that actually crosses a real NWS threshold (Wind
+   Advisory at 46mph, High Wind Warning / severe-thunderstorm criterion at 58mph) still deserves
+   to read as more than a plain white number. */
+.wind-hero__item strong[data-tone="warn"] {
+  color: var(--cb-amber);
+}
+
+.wind-hero__item strong[data-tone="critical"] {
+  color: var(--cb-red);
+}
+
+.wind-panel .wind-toolbar {
+  min-height: 40px;
+  margin-top: auto;
+}
+
+.wind-panel .wind-toolbar > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

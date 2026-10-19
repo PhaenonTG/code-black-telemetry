@@ -1,0 +1,169 @@
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import ModelGuidance from "./ModelGuidance";
+import LiveCameras from "./LiveCameras";
+import { saveBriefingImage } from "./briefingImage";
+import type { PublicHurricane } from "./types";
+import { displayTime, signed } from "./types";
+import { DEFAULT_WATCH, fetchPointAlerts, watchSummary } from "./watchLocation";
+import type { PointAlert, WatchLocation } from "./watchLocation";
+import codeblackShield from "../../../src/assets/codeblack-shield.png";
+import { hurricaneCategory } from "../../shared/hurricaneCategory";
+import { compassDirection, currentAdvisoryTrend, estimateNorthernGulfLandfall } from "./stormTelemetry";
+
+const HurricaneMap = lazy(() => import("./HurricaneMap"));
+
+const dataUrl = import.meta.env.DEV ? "/api/hurricane" : "https://ops.codeblackwx.com/api/public/hurricane";
+const tokenUrl = import.meta.env.DEV ? "/api/mapbox-token" : "https://ops.codeblackwx.com/overlay-core/mapbox-token";
+const ageMinutes = (value: string | null | undefined, now: number) => value ? Math.round((now - Date.parse(value)) / 60000) : Infinity;
+const alertPriority = (event: string) => /tornado warning/i.test(event) ? 0 : /hurricane warning/i.test(event) ? 1 : /storm surge warning/i.test(event) ? 2 : /tropical storm warning/i.test(event) ? 3 : /flood warning/i.test(event) ? 4 : /warning/i.test(event) ? 5 : /watch/i.test(event) ? 6 : 7;
+const alertTiming = (alert: PointAlert, now: number) => {
+  if (alert.onset && alert.ends && Date.parse(alert.onset) > now) return `Begins ${displayTime(alert.onset)} · through ${displayTime(alert.ends)}`;
+  if (alert.ends) return `Through ${displayTime(alert.ends)}`;
+  if (alert.onset && Date.parse(alert.onset) > now) return `Begins ${displayTime(alert.onset)}`;
+  return "Ongoing — check the latest NWS product";
+};
+
+function AegisBriefing({ data, watch }: { data: PublicHurricane; watch: WatchLocation }) {
+  const ai = data.ai;
+  const local = watchSummary(data, watch);
+  const changedWatch = watch.latitude !== DEFAULT_WATCH.latitude || watch.longitude !== DEFAULT_WATCH.longitude;
+  const changes = data.changes;
+  const changeItems = [
+    changes?.advisory_changed ? "New NHC advisory" : null,
+    changes?.model_cycle_changes?.length ? `${changes.model_cycle_changes.length} model cycle${changes.model_cycle_changes.length === 1 ? "" : "s"} updated` : null,
+    changes?.new_alerts?.length ? `${changes.new_alerts.length} new NWS alert${changes.new_alerts.length === 1 ? "" : "s"}` : null,
+    changes?.new_report_count ? `${changes.new_report_count} new report product${changes.new_report_count === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+  return <section className="aegis-briefing" id="aegis" aria-label="Aegis analysis">
+    <div className="aegis-briefing__head"><h2>{ai?.status === "ready" ? "Aegis briefing" : "Storm briefing"}</h2><span className={`aegis-briefing__state${ai?.status === "ready" ? "" : " aegis-briefing__state--missing"}`}>{ai?.status === "ready" ? "30B reviewed · experimental" : "Aegis text unavailable"}</span></div>
+    {changeItems.length > 0 && <div className="aegis-delta"><span>Changed since last check</span><strong>{changeItems.join(" · ")}</strong></div>}
+    {ai?.status === "ready" && ai.summary ? <><p className="aegis-briefing__summary">{ai.summary}</p>
+      <div className="aegis-briefing__details"><div><h3>Signals in view</h3><ul>{ai.supporting_factors.slice(0, 3).map((item) => <li key={item}>{item}</li>)}</ul></div>
+        <div><h3>Uncertainty</h3><ul>{ai.uncertainties.slice(0, 2).map((item) => <li key={item}>{item}</li>)}</ul></div></div>
+      <p className="aegis-briefing__meta">Reviewed {displayTime(ai.reviewed_at)} · Sources {displayTime(data.checked_at)}</p></> : <p className="aegis-briefing__summary aegis-briefing__summary--fallback">NHC reports {data.storm.max_wind_mph == null ? "an unavailable wind estimate" : `${data.storm.max_wind_mph} mph maximum winds`}{data.storm.movement_mph == null ? "" : ` and movement at ${data.storm.movement_mph} mph`}. The nearest official forecast center to this watch point is {local.official ? `${local.official.miles} mi at +${local.official.point.hour}h` : "unavailable"}; center distance does not predict local impacts.</p>}
+    <div className="aegis-facts"><div><span>Blended center closest to watch</span><strong>{local.aegis ? `${Math.round(local.aegis.miles)} mi · +${local.aegis.point.hour}h` : "Unavailable"}</strong></div><div><span>48h model spread</span><strong>{data.guidance.spread_48h_miles == null ? "Unavailable" : `${Math.round(data.guidance.spread_48h_miles)} mi`}</strong></div><div><span>Track guidance</span><strong>{data.guidance.models.length} models</strong></div></div>
+    {changedWatch && <p className="aegis-briefing__scope">Briefing anchored to Grand Bay; selected-location distances and alerts update separately.</p>}
+    {ai?.status === "ready" && <p className="aegis-briefing__caution">Experimental, not an official forecast. <a href={data.official.discussion_url ?? "https://www.nhc.noaa.gov/"} target="_blank" rel="noreferrer">NHC discussion ↗</a></p>}
+  </section>;
+}
+
+function TrendChart({ data }: { data: PublicHurricane }) {
+  const points = data.observed.track.filter((point) => point.wind_mph != null && point.valid_time).sort((a, b) => Date.parse(a.valid_time!) - Date.parse(b.valid_time!));
+  if (points.length < 2) return <p className="empty">Observed wind history is not available.</p>;
+  const winds = points.map((point) => point.wind_mph!);
+  const lo = Math.floor(Math.min(...winds) / 10) * 10 - 10, hi = Math.ceil(Math.max(...winds) / 10) * 10 + 10;
+  const coordinates = points.map((point, index) => `${48 + index * 660 / (points.length - 1)},${218 - (point.wind_mph! - lo) / (hi - lo) * 168}`).join(" ");
+  return <div className="trend-wrap"><svg viewBox="0 0 760 260" role="img" aria-label="Observed maximum sustained wind trend from NHC preliminary best track">
+    {[0, 1, 2, 3].map((line) => <g key={line}><line x1="48" x2="708" y1={50 + line * 56} y2={50 + line * 56} stroke="#2b4351" strokeWidth="1"/>
+      <text x="5" y={56 + line * 56} fill="#9aafb9" fontSize="15">{Math.round(hi - line * (hi - lo) / 3)}</text></g>)}
+    <polyline points={coordinates} fill="none" stroke="#45d9d1" strokeWidth="4" strokeLinejoin="round"/>
+    {points.map((point, index) => <circle key={point.valid_time} cx={48 + index * 660 / (points.length - 1)} cy={218 - (point.wind_mph! - lo) / (hi - lo) * 168} r="4" fill="#45d9d1"/>)}
+    <text x="48" y="252" fill="#9aafb9" fontSize="15">{displayTime(points[0].valid_time)}</text><text x="708" y="252" fill="#9aafb9" fontSize="15" textAnchor="end">{displayTime(points.at(-1)?.valid_time)}</text>
+  </svg><p>Preliminary observed NHC best track. It is not a forecast.</p></div>;
+}
+
+function TrendPill({ delta, unit, elapsedHours, dangerWhen, label }: { delta: number | null; unit: string; elapsedHours: number | null; dangerWhen: "up" | "down"; label: string }) {
+  if (delta == null || elapsedHours == null) return <small className="metric-trend metric-trend--unknown">Prior center data unavailable</small>;
+  const state = delta === 0 ? "steady" : (delta > 0) === (dangerWhen === "up") ? "adverse" : "improving";
+  const arrow = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+  return <small className={`metric-trend metric-trend--${state}`} aria-label={`${label} ${delta > 0 ? "up" : delta < 0 ? "down" : "unchanged"} ${Math.abs(delta)} ${unit} since the previous NHC position ${elapsedHours} hours ago`}>
+    <span aria-hidden="true">{arrow}</span> {signed(delta, unit)} <span className="metric-trend__period">/ {elapsedHours}h</span>
+  </small>;
+}
+
+const gulfTime = (value: string) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", weekday: "short", month: "short", day: "numeric", hour: "numeric", timeZoneName: "short" }).format(new Date(value));
+
+function LandfallCard({ data }: { data: PublicHurricane }) {
+  const aegis = estimateNorthernGulfLandfall(data, "aegis");
+  const nhc = estimateNorthernGulfLandfall(data, "nhc");
+  const primary = aegis ?? nhc;
+  if (!primary) return null;
+  return <section className="landfall-card" aria-label="Estimated Gulf Coast crossing">
+    <div className="landfall-card__title"><span>ESTIMATED CENTER COAST CROSSING</span><strong>{aegis ? "AEGIS MODEL BLEND" : "NHC CENTERLINE"}</strong></div>
+    <div className="landfall-card__grid"><div><span>Estimated time · Central</span><strong>~{gulfTime(primary.centerTime)}</strong><small>Track-point bracket: {gulfTime(primary.windowStart)} – {gulfTime(primary.windowEnd)}</small></div><div><span>Estimated coastal area</span><strong>{primary.region}</strong><small>{aegis ? `${primary.members} contributing model tracks · experimental` : "Based on official NHC center forecast"}</small></div>
+    {aegis && nhc && <div className="landfall-card__comparison"><span>NHC centerline comparison</span><strong>~{gulfTime(nhc.centerTime)}</strong><small>{nhc.region} · blend {Math.abs(Math.round((Date.parse(aegis.centerTime) - Date.parse(nhc.centerTime)) / 3_600_000))}h {Date.parse(aegis.centerTime) < Date.parse(nhc.centerTime) ? "earlier" : Date.parse(aegis.centerTime) > Date.parse(nhc.centerTime) ? "later" : "apart"}</small></div>}</div>
+    <p>Approximate centerline crossing of a simplified Gulf shoreline, not an official landfall forecast or a local-impact time. Timing and location can change; hazardous conditions may arrive earlier and well away from the center. <a href={data.official.discussion_url ?? "https://www.nhc.noaa.gov/"} target="_blank" rel="noreferrer">NHC discussion ↗</a></p>
+  </section>;
+}
+
+function App() {
+  const [data, setData] = useState<PublicHurricane | null>(null), [token, setToken] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [error, setError] = useState<string | null>(null), [loading, setLoading] = useState(true), [exporting, setExporting] = useState(false);
+  const [copyState, setCopyState] = useState<"copied" | "failed" | null>(null);
+  const [capture, setCapture] = useState<(() => Promise<string | null>) | null>(null);
+  const [watch, setWatch] = useState<WatchLocation>(DEFAULT_WATCH);
+  const [editingWatch, setEditingWatch] = useState(false), [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false), [searchError, setSearchError] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<WatchLocation[]>([]);
+  const [pointAlerts, setPointAlerts] = useState<PointAlert[]>([]), [alertsStatus, setAlertsStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+  const [alertsCheckedAt, setAlertsCheckedAt] = useState<string | null>(null);
+  const registerCapture = useCallback((value: (() => Promise<string | null>) | null) => setCapture(() => value), []);
+  const refresh = useCallback(async () => {
+    try { const response = await fetch(dataUrl, { cache: "no-store" }); if (!response.ok) throw new Error(`Feed returned ${response.status}`);
+      const next = await response.json() as PublicHurricane; setData((current) => current && JSON.stringify(current) === JSON.stringify(next) ? current : next); setError(null);
+    } catch { setError("The latest hurricane analysis could not be loaded. Please use the official NHC forecast linked below."); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void refresh(); const interval = window.setInterval(() => void refresh(), 60_000); return () => clearInterval(interval); }, [refresh]);
+  useEffect(() => { const interval = window.setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(interval); }, []);
+  useEffect(() => { let alive = true; fetch(tokenUrl).then((response) => response.json()).then((body) => { if (alive && typeof body.token === "string") setToken(body.token); }).catch(() => {}); return () => { alive = false; }; }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    setAlertsStatus("loading"); setPointAlerts([]); setAlertsCheckedAt(null);
+    const checkAlerts = () => fetchPointAlerts(watch, controller.signal).then((alerts) => {
+      if (!controller.signal.aborted) { setPointAlerts(alerts); setAlertsStatus("ready"); setAlertsCheckedAt(new Date().toISOString()); }
+    }).catch(() => { if (!controller.signal.aborted) { setAlertsStatus("unavailable"); setAlertsCheckedAt(new Date().toISOString()); } });
+    void checkAlerts();
+    const interval = window.setInterval(() => void checkAlerts(), 60_000);
+    return () => { window.clearInterval(interval); controller.abort(); };
+  }, [watch]);
+  const searchAddress = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setCandidates([]); setSearchError(null);
+    if (!token) { setSearchError("Address search is loading. Please try again shortly."); return; }
+    if (query.trim().length < 5) { setSearchError("Enter a street address, city, or ZIP code."); return; }
+    setSearching(true);
+    try {
+      const url = new URL("https://api.mapbox.com/search/geocode/v6/forward");
+      url.searchParams.set("q", query.trim().slice(0, 256)); url.searchParams.set("access_token", token);
+      url.searchParams.set("country", "us"); url.searchParams.set("limit", "5"); url.searchParams.set("autocomplete", "false");
+      const response = await fetch(url); if (!response.ok) throw new Error("Geocoding failed");
+      const body = await response.json() as { features?: { properties?: { full_address?: string; name?: string; place_formatted?: string }; geometry?: { coordinates?: number[] } }[] };
+      const results = (body.features ?? []).map((feature) => ({
+        label: feature.properties?.full_address ?? [feature.properties?.name, feature.properties?.place_formatted].filter(Boolean).join(", "),
+        longitude: feature.geometry?.coordinates?.[0] ?? NaN, latitude: feature.geometry?.coordinates?.[1] ?? NaN,
+      })).filter((result) => result.label && Number.isFinite(result.latitude) && Number.isFinite(result.longitude));
+      setCandidates(results); if (!results.length) setSearchError("No matching US location found. Try a fuller address.");
+    } catch { setSearchError("Address search is unavailable. The current watch location has not changed."); }
+    finally { setSearching(false); }
+  };
+  const selectWatch = (candidate: WatchLocation) => { setWatch(candidate); setEditingWatch(false); setCandidates([]); setQuery(""); setSearchError(null); };
+  const stale = useMemo(() => data ? ageMinutes(data.checked_at, now) > 90 || (data.status === "active" && ageMinutes(data.guidance.latest_cycle, now) > 900) : false, [data, now]);
+  const proximity = useMemo(() => data ? watchSummary(data, watch) : null, [data, watch]);
+  const category = data ? hurricaneCategory(data.storm.max_wind_mph, data.storm.classification) : null;
+  const currentTrend = data ? currentAdvisoryTrend(data, watch) : null;
+  const movementDirection = data ? compassDirection(data.storm.movement_degrees) : null;
+  const exportImage = async () => { if (!data) return; setExporting(true); try { await saveBriefingImage(data, await capture?.() ?? null, watch, [...pointAlerts].sort((a, b) => alertPriority(a.event) - alertPriority(b.event)), alertsStatus); } catch { setError("The image could not be created on this device. Try print / PDF instead."); } finally { setExporting(false); } };
+  const copyLink = async () => { try { await navigator.clipboard.writeText("https://tropics.codeblackwx.com/"); setCopyState("copied"); } catch { setCopyState("failed"); } window.setTimeout(() => setCopyState(null), 3000); };
+  return <div className="site-shell"><header className="site-header"><a href="/" className="brand" aria-label="Tropics home"><img className="brand-shield" src={codeblackShield} alt=""/><span>CODE BLACK <em>TROPICS</em></span></a>
+    <nav aria-label="Primary"><a href="#track">Track</a><a href="#aegis">Aegis</a><a href="#watch">Local watch</a><a href="#models">Models</a><a href="/reports">Reports</a><a href="#cameras">Cameras</a></nav><a className="official-link" href="https://www.nhc.noaa.gov/" target="_blank" rel="noreferrer">NHC official ↗</a></header>
+    <main>{loading && !data ? <div className="loading">Loading Tropics…</div> : !data ? <div className="failure"><h1>Tropics unavailable</h1><p>{error}</p><a href="https://www.nhc.noaa.gov/">View the official NHC forecast ↗</a></div> : <>
+      <section className="storm-head"><div><h1>{data.storm.classification === "HU" ? "Hurricane" : "Storm"} {data.storm.name ?? "watch"}</h1>{category !== null && <span className="storm-category">{data.status === "active" ? "NHC CATEGORY" : "LAST NHC CATEGORY"} <b>{category}</b><small>Saffir–Simpson wind scale</small></span>}</div><div className="update-info"><strong>{data.status === "active" && !stale ? "MONITORING NOW" : data.status === "post_storm_watch" && !stale ? "POST-STORM MONITORING" : "LATEST AVAILABLE"}</strong><span>NHC {displayTime(data.storm.last_update)}</span><span>Sources {displayTime(data.checked_at)}</span><button onClick={() => void refresh()} type="button">Refresh data ↻</button></div></section>
+      {(error || stale || data.status !== "active") && <div className="status-warning" role="alert">{error ?? (stale ? "The latest source check is old. Consult NHC and NWS directly before making decisions." : data.status === "post_storm_watch" ? "NHC no longer lists this cyclone as active. Its track is historical; the NWS alert and report watch continues." : "This storm is no longer listed as active. The map shows its last published track.")}</div>}
+      <div className="metrics" aria-label="Latest NHC storm measurements"><div><span>Maximum sustained wind</span><strong>{data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`}</strong><TrendPill delta={currentTrend?.wind ?? null} unit="mph" elapsedHours={currentTrend?.elapsedHours ?? null} dangerWhen="up" label="Maximum sustained wind"/></div><div><span>Minimum pressure</span><strong>{data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`}</strong><TrendPill delta={currentTrend?.pressure ?? null} unit="mb" elapsedHours={currentTrend?.elapsedHours ?? null} dangerWhen="down" label="Minimum pressure"/></div><div><span>Movement</span><div className="metric-movement">{data.storm.movement_degrees == null ? null : <span className="metric-compass" aria-label={`Moving ${movementDirection ?? "unknown direction"}`}><span>N</span><svg viewBox="0 0 40 40" aria-hidden="true" style={{ transform: `rotate(${data.storm.movement_degrees}deg)` }}><path d="M20 5 26 26 20 22 14 26Z"/></svg></span>}<strong>{movementDirection ?? "—"}{data.storm.movement_mph == null ? "" : ` · ${data.storm.movement_mph} mph`}</strong></div><small className="metric-detail">{data.storm.movement_degrees == null ? "Direction unavailable" : `${data.storm.movement_degrees}° from north`}</small></div><div><span>Center to watch point</span><strong>{proximity?.currentMiles == null ? "—" : `${proximity.currentMiles} mi`}</strong><TrendPill delta={currentTrend?.distance ?? null} unit="mi" elapsedHours={currentTrend?.elapsedHours ?? null} dangerWhen="down" label="Center distance to watch point"/></div></div>
+      <LandfallCard data={data}/>
+      <section className="projection-grid" id="track"><div className="dashboard-intel"><AegisBriefing data={data} watch={watch}/><div className={`snapshot-watch ${pointAlerts.some((alert) => /warning/i.test(alert.event)) ? "snapshot-watch--warning" : ""}`}><div><span>WATCH LOCATION</span><strong>{watch.label}</strong></div><p>{alertsStatus === "loading" ? "Checking official NWS alerts…" : alertsStatus === "unavailable" ? "NWS alert check unavailable — verify directly" : pointAlerts.length ? `${pointAlerts.length} active NWS alert${pointAlerts.length === 1 ? "" : "s"} · ${[...pointAlerts].sort((a, b) => alertPriority(a.event) - alertPriority(b.event))[0].event}` : "No active NWS alert returned for this point"}</p><a href="#watch">Local details ↓</a></div><div className="history-section" id="history"><div className="section-heading"><div><h2>Observed history</h2><p>NHC preliminary best-track observations</p></div></div><div className="trend-stats"><div><span>Wind change</span><b>{signed(data.observed.trend.wind_change_mph, "mph")}</b></div><div><span>Pressure change</span><b>{signed(data.observed.trend.pressure_change_mb, "mb")}</b></div></div><TrendChart data={data}/></div></div><Suspense fallback={<div className="map-fallback">Loading track map…</div>}><HurricaneMap data={data} token={token} onCapture={registerCapture} watch={watch}/></Suspense></section>
+      <section className="source-banner"><p>NHC track: official · Aegis blend: experimental · Neither predicts address-level impacts</p><a href={data.official.advisory_url ?? "https://www.nhc.noaa.gov/"} target="_blank" rel="noreferrer">NHC advisory ↗</a></section>
+      <div className="local-grid"><section className="watch-panel" id="watch" aria-label="Watch location"><div className="watch-panel__intro"><span className="eyebrow">LOCAL WATCH</span><h2>{watch.label}</h2></div><button type="button" className="watch-change" onClick={() => { setEditingWatch((open) => !open); setCandidates([]); setSearchError(null); }}>{editingWatch ? "Close" : "Change location"}</button>
+        {editingWatch && <div className="watch-search"><form onSubmit={(event) => void searchAddress(event)}><label htmlFor="watch-address">Search US address or place</label><div><input id="watch-address" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Street address, city, state, ZIP" autoComplete="street-address" maxLength={256}/><button type="submit" disabled={searching}>{searching ? "Searching…" : "Find location"}</button></div></form>{searchError && <p role="alert">{searchError}</p>}{candidates.length > 0 && <div className="watch-results"><strong>Select the correct location</strong>{candidates.map((candidate, index) => <button type="button" key={`${candidate.latitude}-${candidate.longitude}-${index}`} onClick={() => selectWatch(candidate)}>{candidate.label}</button>)}</div>}<button type="button" className="watch-reset" onClick={() => selectWatch(DEFAULT_WATCH)}>Use Grand Bay watch point</button></div>}
+        <div className="watch-distances"><div><span>Current center</span><strong>{proximity?.currentMiles == null ? "Unavailable" : `${proximity.currentMiles} mi away`}</strong></div><div><span>Closest NHC forecast center</span><strong>{proximity?.official ? `${proximity.official.miles} mi · +${proximity.official.point.hour}h` : "Unavailable"}</strong></div><div><span>Closest Aegis blended center</span><strong>{proximity?.aegis ? `${proximity.aegis.miles} mi · +${proximity.aegis.point.hour}h` : "Unavailable"}</strong></div></div><p className="watch-caution">Center distance is not a prediction of wind, surge, rain, or tornado impacts. Follow local NWS alerts and evacuation orders.</p></section>
+      <section className="alerts-section" id="alerts"><div className="section-heading"><div><h2>NWS alerts</h2><p>Checked {displayTime(alertsCheckedAt)}</p></div><a href={`https://forecast.weather.gov/MapClick.php?lat=${watch.latitude}&lon=${watch.longitude}`} target="_blank" rel="noreferrer">Local NWS forecast ↗</a></div>
+        {alertsStatus === "loading" ? <p className="empty">Checking NWS alerts for this location…</p> : alertsStatus === "unavailable" ? <p className="empty">NWS alerts could not be checked right now. Verify directly with NWS; this is not an all-clear.</p> : pointAlerts.length ? <div className="alert-list">{[...pointAlerts].sort((a, b) => alertPriority(a.event) - alertPriority(b.event)).map((alert, index) => <a key={`${alert.event}-${index}`} href={alert.url ?? "https://www.weather.gov/"} target="_blank" rel="noreferrer"><strong>{alert.event}</strong><span>{alertTiming(alert, now)}</span><small>Official NWS alert ↗</small></a>)}</div> : <p className="empty">No active NWS alert was returned for this point at this check. Keep monitoring official sources.</p>}</section></div>
+      <section className="lower-grid"><ModelGuidance data={data}/></section>
+      <LiveCameras data={data}/>
+      <section className="share-section"><h2>Share this briefing</h2><div className="share-actions"><button type="button" disabled={exporting} onClick={() => void exportImage()}>{exporting ? "Creating image…" : "Download one-page image"}</button><button type="button" onClick={() => void copyLink()}>{copyState === "copied" ? "Link copied" : copyState === "failed" ? "Copy unavailable" : "Copy public link"}</button></div></section>
+      <footer><div><strong>CODE BLACK / TROPICS</strong><p>Aegis analysis is experimental, not an official forecast. Follow NHC, NWS, and local officials for protective decisions.</p></div><div><a href={data.official.advisory_url ?? "https://www.nhc.noaa.gov/"}>NHC advisory ↗</a><a href={data.official.discussion_url ?? "https://www.nhc.noaa.gov/"}>NHC discussion ↗</a><a href="https://www.weather.gov/">NWS alerts ↗</a></div></footer>
+    </> }</main></div>;
+}
+
+export default App;

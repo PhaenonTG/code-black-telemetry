@@ -1,0 +1,15 @@
+.brand-bug {
+  position: absolute;
+  top: var(--safe-margin);
+  left: var(--safe-margin);
+  height: 44px;
+  z-index: 10;
+  opacity: 0.85;
+}
+
+.cb-brand-bug {
+  display: block;
+  height: 100%;
+  width: auto;
+  object-fit: contain;
+}

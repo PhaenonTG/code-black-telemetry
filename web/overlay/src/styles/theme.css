@@ -1,0 +1,67 @@
+:root {
+  color-scheme: dark;
+
+  /* Core Code Black brand anchors (matches root app's --cb-red / --color-red family) */
+  --cbwx-red: #ff3b3b;
+  --cbwx-red-soft: rgba(255, 59, 59, 0.16);
+  --cbwx-amber: #f2b84b;
+  --cbwx-amber-soft: rgba(242, 184, 75, 0.16);
+  --cbwx-green: #42d67d;
+  --cbwx-blue: #4fb2ff;
+
+  /* Broadcast glass surfaces */
+  --cbwx-black: #050607;
+  --cbwx-charcoal: #0d0f12;
+  --cbwx-panel: rgba(13, 15, 18, 0.72);
+  --cbwx-panel-strong: rgba(13, 15, 18, 0.88);
+  --cbwx-glass-border: rgba(255, 255, 255, 0.08);
+  --cbwx-glass-border-strong: rgba(255, 255, 255, 0.14);
+
+  --cbwx-text: #f4f6f8;
+  --cbwx-text-soft: #c7ced6;
+  --cbwx-text-muted: #8a94a1;
+
+  --cbwx-font-display: "Inter", "Segoe UI", system-ui, sans-serif;
+  --cbwx-font-mono: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
+
+  --cbwx-radius-sm: 6px;
+  --cbwx-radius-md: 10px;
+  --cbwx-radius-lg: 16px;
+
+  --cbwx-shadow-panel: 0 12px 32px rgb(0 0 0 / 0.45);
+
+  --cbwx-motion-fast: 160ms;
+  --cbwx-motion-med: 320ms;
+  --cbwx-motion-slow: 560ms;
+  --cbwx-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --freshness-current: var(--cbwx-green);
+  --freshness-aging: var(--cbwx-amber);
+  --freshness-stale: var(--cbwx-red);
+  --freshness-unavailable: #5b6470;
+  --freshness-unknown: #5b6470;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cbwx-motion-fast: 1ms;
+    --cbwx-motion-med: 1ms;
+    --cbwx-motion-slow: 1ms;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--cbwx-font-display);
+  color: var(--cbwx-text);
+}

@@ -1,0 +1,574 @@
+/* TopBar — self-contained header styles. Clock is mathematically centered on the physical
+   screen (absolute-positioned against .ops-header, independent of sibling widths); brand lockup
+   sits left, GPS/unit status sits right. See MEMORY.md project notes for why this file exists
+   standalone instead of living in the shared index.css monolith. */
+
+/* One solid bar, not a row of floating chips: a single flat background + a single hairline bottom
+   border on .ops-header itself. Every child (brand lockup, clock, status cluster) is plain content
+   on that one surface -- no per-element borders/gradients/box-shadows, which is what made the
+   header read as several taped-together panels instead of one rock-solid top. */
+.ops-header {
+  position: relative !important;
+  display: grid !important;
+  /* 300px floors assumed a tablet-width header -- on a phone-width header (e.g. ~370px) that
+     alone requests 660px+ across the two outer columns, forcing massive overflow regardless of
+     what's inside them. min(300px, 40vw) lets the floor shrink on narrow screens instead of
+     staying fixed. */
+  grid-template-columns: minmax(min(300px, 40vw), 1fr) minmax(60px, 0.3fr) minmax(min(300px, 40vw), 1fr) !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+  padding: 10px 20px !important;
+  border-bottom: 1px solid rgba(255, 45, 53, 0.3) !important;
+  background: #0a0a0c !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35) !important;
+}
+
+.brand-lockup {
+  grid-column: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+}
+
+.brand-lockup > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.brand-mark,
+.brand-mark--codeblack {
+  clip-path: none !important;
+  background: none !important;
+  filter: drop-shadow(0 0 6px rgba(255, 45, 53, 0.32)) !important;
+  /* Full shield badge (shield outline, arc lettering, tornado mark, tagline) needs real size to
+     read as anything more than a smudge -- bumped up from the old 46-64px icon-sized range.
+     Capped at 78px, not higher: .ops-header's height is a fixed CSS custom property
+     (--cb-header-h, index.css) shared by the whole app's page grid, not sized to its content --
+     a max any taller than this overflows past the header's own bottom border instead of growing
+     the header to fit (confirmed on-device: 92px pushed the subtitle line down into the border). */
+  width: clamp(58px, 4.8vw, 78px) !important;
+  height: clamp(58px, 4.8vw, 78px) !important;
+  object-fit: contain !important;
+  display: block !important;
+  flex-shrink: 0;
+}
+
+.brand-mark--codeblack::before {
+  display: none !important;
+}
+
+.brand-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  line-height: 1;
+  color: var(--text);
+  font: 800 clamp(17px, 1.7vw, 27px) / 1 "Rajdhani", "Inter", sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.brand-title strong {
+  color: var(--red);
+  font-weight: 900;
+}
+
+.brand-subtitle {
+  margin-top: 4px;
+  color: var(--secondary);
+  font: 800 clamp(9px, 0.75vw, 12px) / 1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.time-module {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 2;
+  display: grid !important;
+  place-items: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+/* On a narrow (phone-width) header, .ops-header's minmax(300px, 1fr) brand/status columns don't
+   leave room for a horizontally-centered clock -- the brand title's white-space:nowrap content
+   overflows toward center and collides with it, since the centering above is deliberately
+   independent of sibling layout. Pin the clock to the top-right corner instead on narrow screens,
+   out of the brand title's path entirely, rather than trying to out-shrink the title. */
+@media (max-aspect-ratio: 13 / 10) {
+  .time-module {
+    left: auto !important;
+    top: 7px !important;
+    right: 12px !important;
+    transform: none !important;
+  }
+
+  /* The clock no longer occupies the middle grid track once it's absolutely positioned above --
+     reclaim that space for the brand/status columns, which are otherwise tight on a phone-width
+     header (status content alone -- date, Pi link, battery -- needs ~215px and had nowhere near
+     that in the 3-column layout). */
+  .ops-header {
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto) !important;
+  }
+
+  .header-status {
+    grid-column: 2 !important;
+    /* Anchor to the bottom of the header row -- the clock sits pinned to the top-right corner
+       (above) and .header-status is otherwise vertically centered across the whole header height,
+       which put the two in each other's way. Bottom-aligning clears the clock's ~44px-tall badge
+       without needing to touch the clock's own height or the header's total height. */
+    align-self: end !important;
+    padding-bottom: 8px;
+  }
+}
+
+.time-module .font-mono {
+  color: var(--text);
+  /* line-height must be >= 1: anything tighter shrinks the line box below the glyphs' actual
+     rendered height, clipping the tops of digits like "2" and "0" -- that's what read as the
+     clock's corners being cut off. */
+  font: 800 clamp(18px, 1.7vw, 27px) / 1.1 "JetBrains Mono", Consolas, monospace !important;
+  letter-spacing: 0.08em;
+  padding-top: 0.05em;
+}
+
+.time-module span:last-child {
+  color: var(--red);
+  font: 900 clamp(9px, 0.75vw, 12px) / 1 "JetBrains Mono", Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.header-status {
+  grid-column: 3 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 16px !important;
+  min-width: 0 !important;
+}
+
+/* Thin hairline dividers instead of individual boxes -- keeps date/link/battery visually distinct
+   without giving each one its own chip. */
+.header-status > * + * {
+  padding-left: 16px !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.header-date {
+  flex-shrink: 0;
+  color: var(--secondary);
+  font: 800 clamp(11px, 0.95vw, 13px) / 1 "JetBrains Mono", Consolas, monospace !important;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.battery-chip {
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0;
+  gap: 6px !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  color: var(--text);
+  font: 800 clamp(10px, 0.85vw, 12px) / 1 "JetBrains Mono", Consolas, monospace !important;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.battery-chip__icon {
+  width: 16px;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.battery-chip__bolt {
+  width: 9px;
+  height: auto;
+  flex-shrink: 0;
+  color: var(--amber);
+  filter: drop-shadow(0 0 3px rgba(255, 190, 60, 0.7));
+}
+
+.battery-chip--good {
+  color: var(--green);
+}
+
+.battery-chip--warn {
+  color: var(--amber);
+}
+
+.battery-chip--bad {
+  color: var(--red);
+}
+
+.pi-link {
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0;
+  gap: 7px !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  color: var(--text);
+  font: 800 clamp(10px, 0.85vw, 12px) / 1 "JetBrains Mono", Consolas, monospace !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pi-link__dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.pi-link__dot--good {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(60, 220, 130, 0.65);
+}
+
+.pi-link__dot--degraded {
+  background: var(--amber);
+  box-shadow: 0 0 6px rgba(255, 190, 60, 0.65);
+}
+
+.pi-link__dot--bad {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(255, 45, 53, 0.65);
+}
+
+/* Phone header refinement: keep critical info out of camera-cutout territory and reduce the
+   vertical footprint without letting the brand/status collide. */
+@media (max-aspect-ratio: 13 / 10) {
+  .ops-header {
+    height: var(--top-h) !important;
+    min-height: var(--top-h) !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: minmax(0, 1fr) auto !important;
+    gap: 2px 8px !important;
+    padding:
+      calc(max(6px, env(safe-area-inset-top)) + 2px)
+      12px
+      7px !important;
+    align-items: end !important;
+  }
+
+  .brand-lockup {
+    grid-column: 1 !important;
+    grid-row: 1 / 3 !important;
+    gap: 8px !important;
+    align-self: center !important;
+  }
+
+  .brand-mark,
+  .brand-mark--codeblack {
+    width: clamp(42px, 11vw, 54px) !important;
+    height: clamp(42px, 11vw, 54px) !important;
+  }
+
+  .brand-title {
+    gap: 0.28em !important;
+    font-size: clamp(17px, 5.2vw, 23px) !important;
+    line-height: 0.95 !important;
+    letter-spacing: 0.04em !important;
+  }
+
+  /* "Situational Awareness" repeats what the app already establishes with its icon/wordmark on
+     every single screen -- on a phone-width header that line was mostly costing vertical space,
+     not adding information. Hidden here rather than deleted so it still reads on wider headers
+     (tablet/desktop) where the extra width has room to spare. */
+  .brand-subtitle {
+    display: none !important;
+  }
+
+  .time-module {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    position: static !important;
+    justify-self: end !important;
+    align-self: center !important;
+    min-width: 0 !important;
+    height: auto !important;
+    padding-top: 2px !important;
+    transform: none !important;
+  }
+
+  .time-module .font-mono {
+    font-size: clamp(17px, 5.2vw, 22px) !important;
+    line-height: 1.12 !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  .time-module span:last-child {
+    margin-top: 3px !important;
+    font-size: clamp(7px, 1.9vw, 9px) !important;
+  }
+
+  .header-status {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    align-self: end !important;
+    justify-self: end !important;
+    justify-content: flex-end !important;
+    gap: 7px !important;
+    padding-bottom: 0 !important;
+    max-width: min(52vw, 230px) !important;
+    overflow: hidden !important;
+  }
+
+  .header-status > * + * {
+    padding-left: 7px !important;
+  }
+
+  .header-date {
+    font-size: clamp(8px, 2.15vw, 10px) !important;
+    letter-spacing: 0.06em !important;
+  }
+
+  .pi-link,
+  .battery-chip {
+    gap: 4px !important;
+    font-size: clamp(8px, 2.1vw, 10px) !important;
+    letter-spacing: 0.03em !important;
+  }
+
+  .pi-link__dot {
+    width: 7px !important;
+    height: 7px !important;
+  }
+
+  .battery-chip__icon {
+    width: 14px !important;
+  }
+
+  .battery-chip__bolt {
+    width: 7px !important;
+  }
+}
+
+@media (max-aspect-ratio: 13 / 10) and (max-width: 430px) {
+  .ops-header {
+    grid-template-columns: minmax(0, 1fr) max-content !important;
+    gap: 2px 6px !important;
+    padding-inline: 10px !important;
+  }
+
+  .brand-lockup {
+    gap: 6px !important;
+  }
+
+  .brand-mark,
+  .brand-mark--codeblack {
+    width: clamp(34px, 10vw, 42px) !important;
+    height: clamp(34px, 10vw, 42px) !important;
+  }
+
+  .brand-title {
+    font-size: clamp(16px, 4.65vw, 19px) !important;
+    letter-spacing: 0.02em !important;
+  }
+
+  .brand-subtitle {
+    max-width: 165px !important;
+    font-size: 7px !important;
+    letter-spacing: 0.1em !important;
+  }
+
+  .time-module .font-mono {
+    font-size: clamp(15px, 4.7vw, 18px) !important;
+    line-height: 1.12 !important;
+  }
+
+  .header-status {
+    max-width: 128px !important;
+    gap: 5px !important;
+  }
+
+  .header-date {
+    display: none !important;
+  }
+
+  .header-status > * + * {
+    padding-left: 5px !important;
+  }
+
+  .pi-link,
+  .battery-chip {
+    font-size: 8px !important;
+  }
+}
+
+/* Short landscape phones are physically wide but vertically cramped, so the portrait-phone rules
+   above do not apply. Keep the header readable without letting the badge/subtitle clip. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .ops-header {
+    height: var(--top-h) !important;
+    min-height: var(--top-h) !important;
+    grid-template-columns: minmax(0, 1.05fr) minmax(170px, 0.55fr) minmax(0, 1fr) !important;
+    gap: 8px !important;
+    padding: 6px 20px !important;
+    align-items: center !important;
+    overflow: hidden !important;
+  }
+
+  .brand-lockup {
+    gap: 10px !important;
+    align-self: center !important;
+  }
+
+  .brand-mark,
+  .brand-mark--codeblack {
+    width: clamp(46px, 7.8dvh, 58px) !important;
+    height: clamp(46px, 7.8dvh, 58px) !important;
+  }
+
+  .brand-title {
+    font-size: clamp(18px, 3.9dvh, 24px) !important;
+    line-height: 0.98 !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  .brand-subtitle {
+    margin-top: 3px !important;
+    font-size: clamp(7px, 1.85dvh, 9px) !important;
+    line-height: 1.1 !important;
+    letter-spacing: 0.12em !important;
+    white-space: nowrap !important;
+  }
+
+  .time-module .font-mono {
+    font-size: clamp(18px, 4.4dvh, 26px) !important;
+    line-height: 1.12 !important;
+  }
+
+  .time-module span:last-child {
+    margin-top: 3px !important;
+    font-size: clamp(7px, 1.85dvh, 9px) !important;
+  }
+
+  .header-status {
+    gap: 10px !important;
+  }
+
+  .header-status > * + * {
+    padding-left: 10px !important;
+  }
+
+  .header-date,
+  .pi-link,
+  .battery-chip {
+    font-size: clamp(8px, 2dvh, 10px) !important;
+  }
+}
+
+/* .ops-header-wrap is the single direct child of .app-shell now (see TopBar.tsx for why that
+   matters -- .app-shell's grid-template-rows is positional, keyed to child order, not class
+   names). Plain block stacking of its two children (.ops-header, .ops-header-threat) is exactly
+   what's wanted here, just clearing default <header> margin. */
+.ops-header-wrap {
+  display: block;
+  margin: 0;
+}
+
+/* Persistent threat strip -- tablet only (Home's own hero band already covers phone, and a
+   second copy would just eat header space on a screen that's already tight). Deliberately thin
+   and understated compared to Home's hero: this lives on every page, including ones you're
+   actively looking at map/radar data on, so it must never compete for attention with what's
+   actually on screen -- it's a persistent fact, not a second alarm. */
+.ops-header-threat {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  /* .app-shell's row-1 height (--top-h) was sized for .ops-header alone across many breakpoint
+     rules elsewhere in index.css -- adding this strip without growing that row pushes the strip's
+     height out of row 1 into row 2's space, which is exactly the .page-viewport-collapses-to-0
+     bug this replaced. calc() on top of whatever --cb-header-h already resolves to (rather than a
+     guessed absolute) survives index.css changing that base value later; !important wins over the
+     non-!important --top-h declarations elsewhere at this same breakpoint. */
+  .app-shell {
+    --top-h: calc(var(--cb-header-h, 76px) + 30px) !important;
+  }
+
+  .ops-header-threat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 5px 20px;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.02);
+    font: 700 10px / 1.2 "JetBrains Mono", Consolas, monospace;
+    letter-spacing: 0.03em;
+    color: var(--muted, #8b949e);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .ops-header-threat:active {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .ops-header-threat__go {
+    margin-left: auto;
+    flex: 0 0 auto;
+    color: var(--muted, #8b949e);
+    opacity: 0.75;
+  }
+
+  .ops-header-threat strong {
+    color: var(--text, #f8fafc);
+    font-weight: 800;
+  }
+
+  .ops-header-threat__sep {
+    opacity: 0.4;
+  }
+
+  .ops-header-threat__pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted, #8b949e);
+    flex: 0 0 auto;
+  }
+
+  .ops-header-threat--watch strong,
+  .ops-header-threat--watch .ops-header-threat__pulse { color: #f5b942; background: #f5b942; }
+
+  .ops-header-threat--elevated strong,
+  .ops-header-threat--elevated .ops-header-threat__pulse { color: #ff8a00; background: #ff8a00; }
+
+  .ops-header-threat--critical strong,
+  .ops-header-threat--critical .ops-header-threat__pulse { color: #ff3044; background: #ff3044; }
+  .ops-header-threat--critical .ops-header-threat__pulse {
+    box-shadow: 0 0 0 0 rgba(255, 48, 68, 0.6);
+    animation: ops-header-threat-pulse 1.4s ease-out infinite;
+  }
+
+  @keyframes ops-header-threat-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 48, 68, 0.55); }
+    70% { box-shadow: 0 0 0 6px rgba(255, 48, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 48, 68, 0); }
+  }
+}

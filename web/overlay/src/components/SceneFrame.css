@@ -1,0 +1,67 @@
+.scene-frame {
+  position: absolute;
+  inset: 20px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.scene-frame__corner {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-color: rgba(255, 255, 255, 0.14);
+  border-style: solid;
+}
+
+.scene-frame__corner::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--cb-signal-red);
+  border-style: solid;
+}
+
+.scene-frame__corner--tl {
+  top: 0;
+  left: 0;
+  border-width: 2px 0 0 2px;
+}
+.scene-frame__corner--tl::before {
+  top: -2px;
+  left: -2px;
+  border-width: 2px 0 0 2px;
+}
+
+.scene-frame__corner--tr {
+  top: 0;
+  right: 0;
+  border-width: 2px 2px 0 0;
+}
+.scene-frame__corner--tr::before {
+  top: -2px;
+  right: -2px;
+  border-width: 2px 2px 0 0;
+}
+
+.scene-frame__corner--bl {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 2px 2px;
+}
+.scene-frame__corner--bl::before {
+  bottom: -2px;
+  left: -2px;
+  border-width: 0 0 2px 2px;
+}
+
+.scene-frame__corner--br {
+  bottom: 0;
+  right: 0;
+  border-width: 0 2px 2px 0;
+}
+.scene-frame__corner--br::before {
+  bottom: -2px;
+  right: -2px;
+  border-width: 0 2px 2px 0;
+}

@@ -1,0 +1,47 @@
+.aegis-page { color: #e8edf5; }
+.aegis-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin: 18px 0;
+  padding: 16px 20px; border: 1px solid #354052; border-radius: 14px; background: #141b26; color: #aebbd0; font-size: 13px; }
+.aegis-summary b { color: #f8fafc; }
+.aegis-state { padding: 6px 10px; border-radius: 999px; font-weight: 800; letter-spacing: .08em; font-size: 11px; }
+.aegis-state.live { color: #b7f7ce; background: #124126; }
+.aegis-state.shadow { color: #fbdca2; background: #44320d; }
+.aegis-grid { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(340px, 1.2fr); gap: 18px; }
+.aegis-panel { min-width: 0; background: #121922; border: 1px solid #354052; border-radius: 16px; padding: 20px; }
+.aegis-panel h2 { font-size: 18px; margin: 0 0 16px; }
+.aegis-empty { color: #a9b5c7; line-height: 1.6; }
+.aegis-error { border-left: 3px solid #f97316; padding: 9px 14px; background: #382217; border-radius: 6px; }
+.aegis-alert-item { display: block; width: 100%; text-align: left; color: #dce7f5; background: #1a2430;
+  border: 1px solid #334257; border-radius: 12px; padding: 14px; margin: 0 0 10px; cursor: pointer; }
+.aegis-alert-item:hover, .aegis-alert-item.selected { border-color: #f59e0b; background: #222a33; }
+.aegis-alert-item span, .aegis-alert-item small { display: block; margin-top: 6px; }
+.aegis-alert-item__top { display: flex !important; justify-content: space-between; gap: 8px; margin: 0 !important; }
+.aegis-alert-item__top span { margin: 0; color: #ffcf76; white-space: nowrap; }
+.aegis-alert-item small { color: #94a3b8; }
+.aegis-map { height: 390px; width: 100%; border: 1px solid #354052; border-radius: 12px; overflow: hidden; }
+.aegis-map-unavailable { height: 160px; display: grid; place-items: center; background: #1a2430; color: #a9b5c7; }
+.aegis-evidence { line-height: 1.5; font-size: 13px; color: #b5c2d3; }
+.aegis-evidence b { color: #ffcf76; }
+.aegis-evidence a { color: #92bdff; }
+@media (max-width: 850px) { .aegis-grid { grid-template-columns: 1fr; } .aegis-map { height: 310px; } }
+.aegis-review { margin-top: 18px; }
+.aegis-review__heading { display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; }
+.aegis-review__heading h2 { margin: 3px 0 0; }
+.aegis-review__heading > span, .aegis-review__kicker { color: #f7c77a; font-size: 12px; font-weight: 800; letter-spacing: .06em; }
+.aegis-review__kicker { margin: 0; }
+.aegis-review__grid { display: grid; grid-template-columns: minmax(210px, 310px) minmax(0, 1fr); gap: 16px; }
+.aegis-review__list { max-height: 380px; overflow: auto; display: grid; align-content: start; gap: 7px; }
+.aegis-review__list button { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; text-align: left; padding: 11px;
+  color: #edf3fa; background: #1b2634; border: 1px solid #3b4c61; border-radius: 9px; cursor: pointer; }
+.aegis-review__list button.selected, .aegis-review__list button:hover { border-color: #f7c77a; background: #253244; }
+.aegis-review__list span { justify-self: end; font-size: 11px; color: #afc0d4; }
+.aegis-review__list small { grid-column: 1 / -1; color: #c1cede; }
+.aegis-review__detail { min-width: 0; padding: 14px 17px; border: 1px solid #3b4c61; border-radius: 10px; background: #192330; color: #c5d1df; }
+.aegis-review__detail h3 { margin: 0; overflow-wrap: anywhere; color: #f3f7fc; }
+.aegis-review__detail h4 { margin-bottom: 5px; color: #f3f7fc; }
+.aegis-review__detail ul { padding-left: 20px; line-height: 1.5; }
+.aegis-review__products { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.aegis-review__products span { padding: 4px 7px; border-radius: 6px; font-size: 11px; font-weight: 800; }
+.aegis-review__products .available { background: #174732; color: #b9f1d3; }
+.aegis-review__products .missing { background: #4a2729; color: #ffd2d2; }
+.aegis-review__candidates small { display: block; color: #aabed3; }
+@media (max-width: 650px) { .aegis-review__grid { grid-template-columns: 1fr; } .aegis-review__list { max-height: 210px; } }

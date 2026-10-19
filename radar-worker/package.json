@@ -1,0 +1,15 @@
+{
+  "name": "codeblack-radar-worker",
+  "version": "0.1.0",
+  "private": true,
+  "main": "worker.cjs",
+  "scripts": {
+    "start": "node worker.cjs"
+  },
+  "dependencies": {
+    "nexrad-level-2-data": "^2.4.3",
+    "nexrad-level-3-data": "^0.6.1",
+    "pngjs": "^7.0.0",
+    "seek-bzip": "^2.0.0"
+  }
+}
