@@ -156,3 +156,8 @@
   .analysis-workspace .chase-setups__activity { grid-column:auto; }
 }
 @media(prefers-reduced-motion:reduce) { .analysis-workspace .analysis-mode a { transition:none; } }
+
+/* SON-9: keep the async Setup Review surface stable before its chunk/data arrives.
+   Persistent minimums also cover empty/error results; hidden tabs still use display:none. */
+.analysis-tab-panel[data-tab="outlook"],
+.analysis-tab-panel[data-tab="potential"] { min-height: 36rem; }

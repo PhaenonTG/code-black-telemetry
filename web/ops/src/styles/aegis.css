@@ -63,3 +63,12 @@
 div.soundings-workspace--brand .soundings-location-form :is(input,button) { min-height:44px; }
 .soundings-workspace--brand :is(.soundings-panel__note,.soundings-panel__error,.soundings-panel__badge) { font-size:11px; }
 .aegis-page h4 { font-size:11px; text-transform:uppercase; }
+
+/* SON-9: reserve the same panel footprint for connecting, empty and ready states. */
+.aegis-page .aegis-observation { min-height: 18rem; }
+.aegis-page .aegis-grid > .aegis-panel { min-height: 28rem; }
+.aegis-page .aegis-review { min-height: 24rem; }
+@media (max-width: 850px) {
+  .aegis-page .aegis-observation { min-height: 24rem; }
+  .aegis-page .aegis-grid > .aegis-panel { min-height: 32rem; }
+}
