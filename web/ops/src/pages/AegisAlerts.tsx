@@ -2,9 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import { recordedReplaySession } from "./SetupRecordedReplay";
+import { OpsStatusPill } from "../components/OpsStatusPill";
+import { ErrorState } from "../components/AsyncViewState";
+import { formatOpsTimestamp } from "../core/timeFormat";
 import { PageHeader } from "../components/PageHeader";
 import { useCoreOps } from "../core/useCoreOps";
-import { getAegisFeed, getAegisObservationPlan, getAegisStatus, replayAegisPolicy, type AegisObservationPlan,
+import { getAegisFeed, getAegisObservationPlan, getAegisStatus, type AegisObservationPlan,
   type AegisRadarAlert, type AegisRecordedReplay, type AegisStatus } from "../core/aegisFeed";
 import { atlasStyleUri, hasMapboxToken, mapboxAccessToken } from "../../../../src/services/mapTiles";
 import "../styles/aegis.css";
@@ -14,9 +18,8 @@ import { interpretRadarStatus } from "../status/externalHealth";
 
 const REFRESH_MS = 10_000;
 
-function utc(value: string | undefined): string {
-  const parsed = value ? new Date(value) : null;
-  return parsed && Number.isFinite(parsed.getTime()) ? parsed.toISOString().replace(".000", "") : "unavailable";
+function when(value: string | undefined) {
+  return value && Number.isFinite(Date.parse(value)) ? <time dateTime={value} title={new Date(value).toISOString()}>{formatOpsTimestamp(value)}</time> : "\u2014";
 }
 
 function EvidenceMap({ alert }: { alert: AegisRadarAlert }) {
@@ -58,6 +61,7 @@ export default function AegisAlerts() {
       if (inFlight) return;
       inFlight = true;
       try { const next = await getRadarStatus("AUTO", "REF"); if (!cancelled) setRadarStatus(next); }
+      catch { /* Keep the last radar health result; the next existing poll retries. */ }
       finally { inFlight = false; }
     };
     void poll();
@@ -75,74 +79,66 @@ export default function AegisAlerts() {
   const [recorded, setRecorded] = useState<AegisRecordedReplay | null>(null);
   const [recordedError, setRecordedError] = useState<string | null>(null);
   const [selectedVolume, setSelectedVolume] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [showAll, setShowAll] = useState(false);
+  const refreshFeed = useRef<(() => void) | null>(null);
+  const refreshRecorded = useRef<(() => void) | null>(null);
   useEffect(() => {
     const controller = new AbortController();
+    const replay = recordedReplaySession(config, controller.signal,
+      result => { setRecorded(result); setRecordedError(null); }, setRecordedError);
+    refreshRecorded.current = () => { void replay.refresh(); };
     const poll = async () => {
       try {
-        const [state, feed, observationPlan] = await Promise.all([
-          getAegisStatus(config, controller.signal),
+        const [, feed, observationPlan] = await Promise.all([
+          getAegisStatus(config, controller.signal).then(state => {
+            if (!controller.signal.aborted) { replay.status(state); setStatus(state); }
+            return state;
+          }),
           getAegisFeed(config, controller.signal),
           getAegisObservationPlan(config, controller.signal),
         ]);
         if (controller.signal.aborted) return;
-        setStatus(state); setPlan(observationPlan); setAlerts(feed.items.slice().reverse()); setError(null); setLoaded(true);
+        setNow(Date.now()); setPlan(observationPlan); setAlerts(feed.items.slice().reverse()); setError(null); setLoaded(true);
       } catch (caught) {
         if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Feed unavailable");
       }
     };
+    refreshFeed.current = () => { void poll(); };
     void poll();
     const timer = window.setInterval(() => void poll(), REFRESH_MS);
-    return () => { controller.abort(); window.clearInterval(timer); };
+    return () => { controller.abort(); refreshFeed.current = null; refreshRecorded.current = null; window.clearInterval(timer); };
   }, [config]);
-  useEffect(() => {
-    const controller = new AbortController();
-    const poll = async () => {
-      try {
-        const result = await replayAegisPolicy<AegisRecordedReplay>(config,
-          { mode: "recorded", evidenceCutoff: status?.screen.cutoff ?? 85, limit: 10 }, controller.signal);
-        if (result.mode !== "recorded") throw new Error("Unexpected Core replay mode");
-        if (!controller.signal.aborted) { setRecorded(result); setRecordedError(null); }
-      } catch (caught) {
-        if (!controller.signal.aborted) {
-          setRecorded(null);
-          setRecordedError(caught instanceof Error ? caught.message : "Recorded scans unavailable");
-        }
-      }
-    };
-    void poll();
-    const timer = window.setInterval(() => void poll(), 30_000);
-    return () => { controller.abort(); window.clearInterval(timer); };
-  }, [config, status?.screen.cutoff]);
   const selected = alerts.find((item) => item.id === selectedId) || alerts[0] || null;
   const selectedScan = recorded?.scans.find((scan) => scan.volume_key === selectedVolume)
     || recorded?.scans.at(-1) || null;
   return <div className="page aegis-page">
-    <PageHeader kicker="FABRIC / SUPPLEMENTAL INTELLIGENCE" title="Aegis Radar Alerts"
-      description="Warning-triggered radar evidence. Always follow official NWS warnings; Aegis never issues or cancels one." />
+    <PageHeader routePath="/aegis-alerts" title="Aegis Alerts"
+      description="Official warnings first · Aegis findings are internal. Always follow official NWS warnings; Aegis never issues or cancels one." actions={<button type="button" disabled={!status} title="Refresh the alert feed, observation plan and recorded scans" onClick={() => { refreshFeed.current?.(); refreshRecorded.current?.(); }}>Refresh</button>} />
     <div className="aegis-summary">
-      <span className={status?.delivery_enabled ? "aegis-state live" : "aegis-state shadow"}>
-        {status?.delivery_enabled ? "LIVE DELIVERY" : status ? "SHADOW / NO DELIVERY" : error ? "DELIVERY STATE UNKNOWN" : "CONNECTING TO CORE"}</span>
-      <span>Evidence cutoff <b>{status?.screen.cutoff ?? "—"}/100</b></span>
-      <span>Last screen <b>{utc(status?.screen.checked_at)}</b></span>
+      <OpsStatusPill state={status ? "Live" : error ? "Unavailable" : "Waiting"} />
+      <span title="Shadow mode records internal evidence; no alert messages are delivered.">{status?.delivery_enabled ? "Live delivery" : status ? "Shadow / No delivery" : "Delivery state unavailable"} <span aria-label="Shadow means internal evidence only">i</span></span>
+      <span title="Minimum evidence score for an internal qualifying candidate; never a tornado probability.">Evidence cutoff i <b>{status?.screen.cutoff ?? "—"}/100</b></span>
+      <span>Last screen <b>{when(status?.screen.checked_at)}</b></span>
       <span>Sites <b>{status?.screen.sites?.join(", ") || "none"}</b></span>
       <Link to="/automation-lab">Rehearse alert routing →</Link>
     </div>
-    {error && <p className="aegis-error" role="status">Feed unavailable: {error}. This is not an all-clear.</p>}
-    {status?.screen.errors?.length ? <p className="aegis-error" role="status">
-      Radar/source errors: {status.screen.errors.map((item) => `${item.site}: ${item.message}`).join("; ")}</p> : null}
+    {error && <ErrorState title="Alert feed unavailable. This is not an all-clear." details={error} onRetry={() => refreshFeed.current?.()} />}
+    {status?.screen.errors?.length ? <ErrorState title="Radar/source evidence unavailable" details={status.screen.errors.map(item => `${item.site}: ${item.message}`).join("; ")} onRetry={() => refreshFeed.current?.()} /> : null}
     <section className="aegis-panel aegis-observation" aria-label="Active Aegis observation plan">
       <div className="aegis-review__heading">
         <div><p className="aegis-review__kicker">CONTINUOUS SURVEILLANCE / READ-ONLY</p><h2>Active observation plan</h2></div>
         <span>{plan ? plan.executor.state.replaceAll("_", " ") : error ? "Core unavailable" : "Connecting to Core"}</span>
       </div>
       {plan ? <>
-        <p className="aegis-empty">Last executor check {utc(plan.executor.last_checked_at ?? undefined)} · {plan.setup_drafts.length} setup draft{plan.setup_drafts.length === 1 ? "" : "s"} under observation · {plan.live_chasers.length} live chaser{plan.live_chasers.length === 1 ? "" : "s"}.</p>
+        <p className="aegis-empty">Last executor check {when(plan.executor.last_checked_at ?? undefined)} · {plan.setup_drafts.length} setup draft{plan.setup_drafts.length === 1 ? "" : "s"} under observation · {plan.live_chasers.length} live chaser{plan.live_chasers.length === 1 ? "" : "s"}.</p>
         <div className="aegis-review__products" aria-label="Observation evidence gates">
           {Object.entries(plan.gates).map(([gate, state]) => <span key={gate} className={state.includes("ready") ? "available" : "missing"}>{gate === "radar" ? "Shadow screening gate" : gate.replaceAll("_", " ")} · {state.replaceAll("_", " ")}</span>)}
-          <span className={radarHealth?.state === "LIVE" ? "available" : "missing"}>radar · {radarHealth?.state ?? "CHECKING"} · {radarHealth?.detail ?? "Awaiting radar health"}</span>
+          <span className={radarHealth?.state === "LIVE" ? "available" : "missing"}>radar · <OpsStatusPill state={radarHealth?.state ?? "Waiting"} /> · {radarHealth?.detail ?? "Awaiting radar health"}</span>
           <span>Shadow screening · {plan.radar?.dominant_cell?.freshness_state?.replaceAll("_", " ") || "unavailable"} · not radar health</span>
           <span className={plan.satellite?.state === "available_metadata_only" ? "available" : "missing"}>satellite · {plan.satellite?.satellite || plan.satellite?.analysis_state || "unavailable"}</span>
         </div>
+        <details><summary>Source health details</summary><code>radar · {radarHealth?.state ?? "CHECKING"}</code></details>
         <p className="aegis-empty">{plan.executor.notice || "Observation evidence is recorded without routing a vehicle or issuing an official warning."}</p>
       </> : <p className="aegis-empty">{error ? "Observation plan unavailable; no current evidence has been verified." : "Loading executor, radar, satellite, and setup-surveillance state."}</p>}
     </section>
@@ -155,7 +151,7 @@ export default function AegisAlerts() {
           onClick={() => setSelectedId(item.id)}>
           <span className="aegis-alert-item__top"><b>{item.official_warning.event}</b><span>{item.rating.evidence_score}/100 evidence</span></span>
           <span>{item.official_warning.headline}</span>
-          <small>{item.radar.site} · Scan {utc(item.radar.scan_time)} · Unconfirmed radar candidate</small>
+          <small>{item.radar.site} · Scan {when(item.radar.scan_time)} · Unconfirmed radar candidate</small>
         </button>)}
       </section>
       <section className="aegis-panel" aria-label="Selected radar evidence">
@@ -177,28 +173,30 @@ export default function AegisAlerts() {
         <div><p className="aegis-review__kicker">SHADOW REVIEW / CORE RECORDS</p><h2>Recent radar screenings</h2></div>
         <span>{recorded ? `${recorded.scans_reviewed} scans · ${recorded.candidates_reviewed} captured candidates` : "Awaiting Core"}</span>
       </div>
+      <p className="aegis-empty">Replay recorded scans against the live policy.</p>
       <p className="aegis-empty">These are saved screening records, not published alerts or verified tornado reports. A missing candidate is not an all-clear.</p>
-      {recordedError && <p className="aegis-error" role="status">Recorded scans unavailable: {recordedError}</p>}
+      {recordedError && <ErrorState title="Recorded scans unavailable" details={recordedError} onRetry={() => refreshRecorded.current?.()} />}
       {recorded && recorded.scans.length === 0 && <p className="aegis-empty">No radar screenings have been recorded yet.</p>}
       {recorded && recorded.scans.length > 0 && <div className="aegis-review__grid">
         <div className="aegis-review__list" role="group" aria-label="Select a recorded scan">
-          {recorded.scans.slice().reverse().map((scan) => <button key={scan.volume_key} type="button"
+          {recorded.scans.slice().reverse().slice(0, showAll ? 10 : 5).map((scan) => <button key={scan.volume_key} type="button"
             className={selectedScan?.volume_key === scan.volume_key ? "selected" : ""}
             onClick={() => setSelectedVolume(scan.volume_key)}>
-            <b>{scan.site}</b><span>{utc(scan.scan_time)}</span>
-            <small>{scan.candidates.length} captured candidate{scan.candidates.length === 1 ? "" : "s"}</small>
+            <b>{scan.site}</b><span>{when(scan.scan_time)}</span>
+            <small>{now - Date.parse(scan.scan_time) > 24 * 3_600_000 && <>Older than 24 h · {Math.floor((now - Date.parse(scan.scan_time)) / 3_600_000)}h old · </>}{scan.candidates.length} captured candidate{scan.candidates.length === 1 ? "" : "s"}</small>
           </button>)}
+          {recorded.scans.length > 5 && <button type="button" onClick={() => setShowAll(value => !value)}>{showAll ? "Show 5" : `Show all ${Math.min(10, recorded.scans.length)}`}</button>}
         </div>
         {selectedScan && <div className="aegis-review__detail">
-          <h3>{selectedScan.site} · {utc(selectedScan.scan_time)}</h3>
-          <p>Processed {utc(selectedScan.processed_at)}</p>
+          <h3>{selectedScan.site} · {when(selectedScan.scan_time)}</h3>
+          <p>Processed {when(selectedScan.processed_at)}</p>
           <div className="aegis-review__products" aria-label="Radar product availability">
             {Object.entries(selectedScan.available_products).map(([product, available]) => <span
               key={product} className={available ? "available" : "missing"}>{product} {available ? "available" : "missing"}</span>)}
           </div>
           {selectedScan.candidates.length ? <ul className="aegis-review__candidates">
             {selectedScan.candidates.map((candidate, index) => <li key={`${candidate.warning_id || "none"}:${index}`}>
-              <b>{candidate.decision.replaceAll("_", " ")}</b> · evidence score {candidate.evidence_score ?? "not assigned"}
+              <b title={candidate.decision === "evidence_gate_failed" ? "Required radar or warning evidence was missing; this is never an all-clear." : undefined}>{candidate.decision.replaceAll("_", " ")}{candidate.decision === "evidence_gate_failed" ? " i" : ""}</b> · evidence score {candidate.evidence_score ?? "not assigned"}
               {candidate.warning_id && <span> · warning {candidate.warning_id}</span>}
               {candidate.factors.length > 0 && <small>{candidate.factors.join(" · ")}</small>}
             </li>)}
