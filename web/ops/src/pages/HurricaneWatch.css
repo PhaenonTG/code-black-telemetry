@@ -50,3 +50,10 @@
   .hurricane-watch__model-toggles { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
   .hurricane-watch__model-toggles button { flex: 0 0 auto; scroll-snap-align: start; }
 }
+
+.hurricane-watch__cached {
+  padding: 12px 16px; border: 1px solid var(--cb-line, #45474d);
+  border-left: 3px solid var(--cb-red, #ed2839); border-radius: 12px;
+  background: var(--cb-steel, linear-gradient(135deg, #292c32, #101216));
+  color: var(--cb-text, #f4f4f5);
+}

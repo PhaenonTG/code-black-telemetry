@@ -6,7 +6,8 @@ import type { MosaicStatus } from "../../../../src/map/AtlasMosaicLayer";
 import { mapboxAccessToken } from "../../../../src/services/mapTiles";
 import { fetchForecast } from "../core/client";
 import { useCoreOps } from "../core/useCoreOps";
-import { createHurricaneBriefingImage } from "./hurricaneBriefingImage";
+import { createAssessmentMemory } from "./assessmentMemory";
+import { CachedAssessmentNotice } from "./CachedAssessmentNotice";
 import { hurricaneCategory } from "../../../shared/hurricaneCategory";
 import { EmptyState, ErrorState } from "../components/AsyncViewState"
 import { PageHeader } from "../components/PageHeader";
@@ -34,6 +35,8 @@ type HurricaneSnapshot = {
   changes_since_previous?: { advisory_changed?: boolean; wind_change_mph?: number | null; pressure_change_mb?: number | null; new_alerts?: string[]; cleared_alerts?: string[]; new_reports?: string[]; model_cycle_changes?: string[] };
   history?: { checked_at?: string; advisory?: string; intensity_mph?: number; summary?: string }[];
 };
+
+const hurricaneAssessments = createAssessmentMemory<HurricaneSnapshot>();
 
 const time = (value?: string) => value ? new Date(value).toLocaleString() : "Unavailable";
 const shortTime = (value?: string) => value ? new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric" }) : "—";
@@ -234,7 +237,11 @@ function shareText(data: HurricaneSnapshot) {
 
 export default function HurricaneWatch() {
   const { config } = useCoreOps();
-  const [data, setData] = useState<HurricaneSnapshot | null>(null);
+  const [retained] = useState(() => hurricaneAssessments.read(config));
+  const [data, setData] = useState<HurricaneSnapshot | null>(() => retained?.value ?? null);
+  const [receivedAt, setReceivedAt] = useState(() => retained?.receivedAt ?? 0);
+  const [cached, setCached] = useState(() => Boolean(retained));
+  const [refreshing, setRefreshing] = useState(true);
   const [error, setError] = useState("");
   const [shareStatus, setShareStatus] = useState("");
   const [imageStatus, setImageStatus] = useState("");
@@ -255,14 +262,19 @@ export default function HurricaneWatch() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [briefingImage]);
   useEffect(() => {
-    let live = true;
+    let live = true, inFlight = false;
+    const controller = new AbortController();
     const load = async () => {
+      if (document.hidden || inFlight) return;
+      inFlight = true;
+      setRefreshing(true);
       try {
-        const next = await fetchForecast<HurricaneSnapshot>(config, "hurricane-watch");
+        const next = { ...await fetchForecast<HurricaneSnapshot>(config, "hurricane-watch", controller.signal) };
+        if (!live) return;
         if (next.watch_point) {
           const params = new URLSearchParams({ latitude: String(next.watch_point.latitude), longitude: String(next.watch_point.longitude) });
           try {
-            const warnings = await fetchForecast<{ status: string; alerts: Alert[]; queried_at?: string }>(config, `alerts?${params}`);
+            const warnings = await fetchForecast<{ status: string; alerts: Alert[]; queried_at?: string }>(config, `alerts?${params}`, controller.signal);
             next.rapid_alerts_status = warnings.status;
             next.rapid_alerts_checked_at = warnings.queried_at;
             if (warnings.status === "ready") {
@@ -279,14 +291,31 @@ export default function HurricaneWatch() {
           }
           next.alerts_checked_at = next.checked_at;
         }
-        if (live) { setData(next); setError(""); }
+        if (live) {
+          // A pending response must not erase the last successful assessment.
+          if (next.status === "pending" && hurricaneAssessments.read(config)) {
+            setCached(true);
+          } else {
+            setData(next);
+            if (next.status !== "pending") {
+              const entry = hurricaneAssessments.remember(config, next);
+              setReceivedAt(entry.receivedAt); setCached(false);
+            }
+          }
+          setError("");
+        }
       } catch (cause) {
         if (live) setError(cause instanceof Error ? cause.message : "Hurricane watch is unavailable");
+      } finally {
+        inFlight = false;
+        if (live) setRefreshing(false);
       }
     };
-    void load();
+    const cancelInitial = afterPaintIdle(() => void load());
     const timer = window.setInterval(() => void load(), 60_000);
-    return () => { live = false; window.clearInterval(timer); };
+    const visible = () => { if (!document.hidden) void load(); };
+    document.addEventListener("visibilitychange", visible);
+    return () => { live = false; controller.abort(); cancelInitial(); window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
   }, [config]);
   const a = data?.assessment;
   const category = hurricaneCategory(a?.intensity_mph, data?.storm?.classification);
@@ -302,6 +331,7 @@ export default function HurricaneWatch() {
     try {
       // The mosaic can report ready before the browser paints the new map frame.
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      const { createHurricaneBriefingImage } = await import("./hurricaneBriefingImage");
       const blob = await createHurricaneBriefingImage(data, captureMap.current?.() ?? null, exportRadarStatus);
       if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
       const url = URL.createObjectURL(blob);
@@ -345,6 +375,7 @@ export default function HurricaneWatch() {
   return <section className="hurricane-watch">
     <PageHeader routePath="/hurricane" className="hurricane-watch__header" title="" description={`${data?.storm?.name ? `${data.storm.name} · ` : ""}${category === null ? "" : `${data?.status === "active" ? "NHC Category" : "Last NHC Category"} ${category} · `}Grand Bay watch · source checks about every five minutes`} actions={<Link className="page-action-link" to="/weather">Weather Analysis</Link>} />
     {error && <ErrorState message="The hurricane assessment could not be refreshed." details={error} />}
+    {data && receivedAt > 0 && (cached || refreshing || Boolean(error)) && <CachedAssessmentNotice receivedAt={receivedAt} refreshing={refreshing} />}
     {!data && !error && <p role="status">Loading the latest assessment…</p>}
     {data?.status === "pending" && <p role="status">{data.notice}</p>}
     {data?.freshness === "stale" && <p role="alert" className="hurricane-watch__error">Source assessment is stale. Last successful check: {time(data.checked_at)}.</p>}
@@ -352,7 +383,7 @@ export default function HurricaneWatch() {
     {data?.status === "inactive" && <EmptyState title="No active storms" message="NHC no longer lists this storm as active. The last assessment remains below as history." />}
     {data?.storm && a && <>
       {data.status === "inactive" && <h2>Storm history · {data.storm.name}</h2>}
-      <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{error ? "LAST VERIFIED WATCH" : data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button className="hurricane-watch__image-action" type="button" disabled={generatingImage || exportRadarStatus === "loading" || exportRadarStatus === "unavailable" || !radarVisible} onClick={() => void createImage()}>{generatingImage ? "Creating image…" : !radarVisible ? "Show radar for image" : exportRadarStatus === "loading" ? "Waiting for radar…" : exportRadarStatus === "unavailable" ? "Image needs the radar map" : "Create one-page image"}</button><button type="button" onClick={() => void share()}>Share text</button><button type="button" onClick={printBrief}>Print / PDF</button></div>
+      <div className="hurricane-watch__toolbar"><span className="hurricane-watch__live">{error || cached || refreshing ? "CACHED WATCH" : data.status === "active" ? "● LIVE WATCH" : "LAST FORECAST"}</span><span>NHC advisory {a.advisory} · {shortTime(data.storm.lastUpdate)}</span><button className="hurricane-watch__image-action" type="button" disabled={generatingImage || exportRadarStatus === "loading" || exportRadarStatus === "unavailable" || !radarVisible} onClick={() => void createImage()}>{generatingImage ? "Creating image…" : !radarVisible ? "Show radar for image" : exportRadarStatus === "loading" ? "Waiting for radar…" : exportRadarStatus === "unavailable" ? "Image needs the radar map" : "Create one-page image"}</button><button type="button" onClick={() => void share()}>Share text</button><button type="button" onClick={printBrief}>Print / PDF</button></div>
       {shareStatus && <p role="status" className="hurricane-watch__share-status">{shareStatus}</p>}
       {imageStatus && <p role="status" className="hurricane-watch__share-status">{imageStatus}</p>}
       <section className="hurricane-watch__metrics" aria-label="Official storm status">
