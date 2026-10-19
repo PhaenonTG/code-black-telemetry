@@ -10,6 +10,7 @@ import { useCoreOps } from "../core/useCoreOps";
 import type { OpsConnectionState, SoundingPointResult, SoundingRequestState } from "../core/types";
 import { LatestRequest } from "./latestRequest";
 import { liveChaserPoint } from "../core/referenceLocation";
+import { parseSoundingPreload } from "../workspaces/chaseDay/soundingPreload";
 import "./SoundingsWorkspace.css";
 
 const RECENT_KEY = "codeblack.ops.soundings.recent-locations.v1";
@@ -104,6 +105,7 @@ export default function SoundingsWorkspace() {
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const requests = useRef(new LatestRequest());
+  const [preload] = useState(() => parseSoundingPreload(typeof window === "undefined" ? "" : window.location.search));
 
   const beginRequest = useCallback(() => {
     return requests.current.begin();
@@ -161,6 +163,12 @@ export default function SoundingsWorkspace() {
     },
     [loadSounding],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (preload) queueMicrotask(() => { if (!cancelled) selectPoint(preload); });
+    return () => { cancelled = true; };
+  }, [preload, selectPoint]);
 
   useEffect(() => {
     // Auto-becomes stale rather than silently continuing to show an old sounding as current.
