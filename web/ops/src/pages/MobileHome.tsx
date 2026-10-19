@@ -29,7 +29,12 @@ export default function MobileHome() {
           <span className="mobile-home__mark"><Icon name="ops" /></span>
           <span>CODE BLACK <b>OPS</b></span>
         </div>
-        <Link to="/system" className="mobile-home__header-link" aria-label="Open system status"><Icon name="system" /></Link>
+        <Link to="/system" className="mobile-home__header-link" aria-label="Open system status">
+          <svg viewBox="0 0 24 24" aria-hidden="true" width="1.15em" height="1.15em" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="14" rx="2" />
+            <path d="M6 10h3l2-4 2 8 2-4h3M12 17v4M8 21h8" />
+          </svg>
+        </Link>
       </header>
 
       <Link to="/system" className="mobile-home__readiness" data-state={state.core.state} aria-label={`System: Core ${state.core.state.toLowerCase()}`}>
