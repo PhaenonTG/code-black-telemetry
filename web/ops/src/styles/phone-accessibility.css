@@ -19,6 +19,59 @@
   white-space: nowrap;
 }
 
+.shell .workspace-heading :is(button, a),
+.shell .stream-health__heading button,
+.shell .page-action-link,
+.shell .producer-facebook button,
+.shell .producer-controls a {
+  min-height: 44px;
+}
+
+/* VOLT-2 / VOLT-5: one Mapbox control rule, scoped to Potential and Hurricane maps. */
+@media (pointer: coarse) {
+  .potential-map .mapboxgl-ctrl-group button,
+  .hurricane-watch__map .mapboxgl-ctrl-group button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+.automation-lab .automation-lab__check {
+  min-height: 44px;
+  cursor: pointer;
+}
+.automation-lab__feed-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* P3 / P4: after beauty.css so phone soundings size to content and skip iOS zoom. */
+@media (max-width: 767px) {
+  .soundings-workspace,
+  .shell .soundings-workspace {
+    position: relative;
+    inset: auto;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+    grid-template-rows: auto auto;
+  }
+  .soundings-main {
+    min-height: auto;
+    overflow: visible;
+  }
+  .soundings-location-form input,
+  .soundings-workspace--brand .soundings-location-form input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .soundings-location-form button {
+    font-size: 12px;
+    min-height: 44px;
+  }
+}
+
 @media (max-width: 480px) {
   /* Expand the hit box without moving text or changing its decoration. Map
      controls/markers and embedded reserved workspaces are deliberately excluded. */
@@ -67,7 +120,7 @@
   .chase-workspace :is(.chase-official small, .chase-official a, .chase-intel a,
       .chase-radar__controls button, .chase-radar__controls select),
   .page-operations :is(.page-action-link, .section-tabs > *) {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .hurricane-watch :is(.hurricane-watch__guidance-title small, .hurricane-watch__guidance-values b small,

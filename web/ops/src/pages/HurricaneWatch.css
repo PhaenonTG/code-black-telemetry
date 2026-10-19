@@ -32,3 +32,21 @@
 /* Theme variants (screen only; print keeps its own rules). Light: encoded track/category colours are darkened to keep text WCAG AA on light surfaces; map canvas, map overlays and the dark schematic/wind chart keep the dark-theme encoded colours. Night (pure black): navy/brown surfaces drop to neutral blacks. */
 @media screen{.shell[data-theme="light"] .hurricane-watch{--hw-coral:#b8321f;--hw-cyan:#006b65}.shell[data-theme="light"] .hurricane-watch__map,.shell[data-theme="light"] .hurricane-watch__radar,.shell[data-theme="light"] .hurricane-watch__legend,.shell[data-theme="light"] .hurricane-watch__diagram{--hw-coral:#ff7568;--hw-cyan:#65ded7}.shell[data-theme="light"] .hurricane-watch__header>a{color:var(--cb-muted)}.shell[data-theme="light"] .hurricane-watch__live{color:var(--cb-green)}.shell[data-theme="light"] .hurricane-watch__error{background:#fdeceb;border-color:#ae655c;color:var(--cb-text)}.shell[data-theme="light"] .hurricane-watch__chart{background:#101d29;border-color:#304453}.shell[data-theme="light"] .hurricane-watch__model-toggles strong{color:var(--cb-muted)}.shell[data-theme="light"] .hurricane-watch__model-toggles button{background:var(--cb-panel);border-color:var(--cb-line);color:var(--cb-text)}.shell[data-theme="light"] .hurricane-watch__model-toggles button[aria-pressed=true]{color:var(--cb-text)}.shell[data-theme="light"] .hurricane-watch__model-toggles button:focus-visible{outline-color:var(--cb-text)}.shell[data-theme="light"] .hurricane-watch__guidance-head>span{color:#6e4500}.shell[data-theme="light"] .hurricane-watch__coastal-context{background:#fff7ea;border-color:#c9a27e;border-left-color:#b7791f}.shell[data-theme="light"] .hurricane-watch__coastal-context h3{color:#6e4500}.shell[data-theme="light"] .hurricane-watch__coastal-context>p{color:#594630}.shell[data-theme="light"] .hurricane-watch__coastal-context details{background:#fdf0dc;border-color:#c9a27e}.shell[data-theme="light"] .hurricane-watch__coastal-context summary{color:#5c3b0f}.shell[data-theme="light"] .hurricane-watch__coastal-context details p,.shell[data-theme="light"] .hurricane-watch__coastal-context details small{color:#594630}.shell[data-theme="light"] .hurricane-watch__image-dialog>p{color:#a3301f}.shell:not([data-theme="light"]) .hurricane-watch__coastal-context a{color:var(--cb-amber)}.shell[data-theme="night"] .hurricane-watch__error{background:#240f0f}.shell[data-theme="night"] .hurricane-watch__model-toggles button{background:var(--cb-panel-hi);border-color:var(--cb-line)}.shell[data-theme="night"] .hurricane-watch__coastal-context{background:#140e0a}.shell[data-theme="night"] .hurricane-watch__coastal-context details{background:#1c1410}.shell[data-theme="night"] .hurricane-watch__image-dialog-actions a{background:var(--cb-panel-hi);border-color:var(--cb-line)}}
 @media print{.hurricane-watch{background:#fff!important}.hurricane-watch__metrics div{background:#fff!important}.hurricane-watch__panel{border-top:1px solid #888!important}.hurricane-watch__warnings details{background:#fff;color:#111}.hurricane-watch__image-modal{display:none!important}}
+
+@media (pointer: coarse) {
+  .hurricane-watch__model-toggles { gap: 8px; }
+  .hurricane-watch__model-toggles button { min-height: 44px; padding: 12px 14px; }
+  .hurricane-watch__radar button { min-height: 44px; min-width: 44px; padding: 8px 12px; }
+  .hurricane-watch__toolbar button { min-height: 44px; }
+  .hurricane-watch__sources a, .hurricane-watch__panel a, .hurricane-watch__guidance>a {
+    display: inline-flex; align-items: center; min-height: 44px; padding-inline: 12px;
+  }
+  .hurricane-watch__forecast-marker, .hurricane-watch__location-marker { position: relative; }
+  .hurricane-watch__forecast-marker::after, .hurricane-watch__location-marker::after {
+    content: ""; position: absolute; inset: -16px;
+  }
+}
+@media (max-width: 360px) {
+  .hurricane-watch__model-toggles { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+  .hurricane-watch__model-toggles button { flex: 0 0 auto; scroll-snap-align: start; }
+}
