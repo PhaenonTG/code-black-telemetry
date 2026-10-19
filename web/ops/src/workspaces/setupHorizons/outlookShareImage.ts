@@ -46,7 +46,7 @@ export function sharePlan(input:ShareInput,preset:SharePreset,zoom?:boolean,conf
  const commands:TextCommand[]=[]
  const text=(value:string,x:number,y:number,size=floor,font:TextCommand['font']='Rajdhani',color='--cb-text',maxWidth=right-x)=>commands.push({text:value,x,y,size,font,color,maxWidth})
  const map=link?{x:565,y:100,width:575,height:300}:{x:left,y:top+(story?310:240),width:right-left,height:story?680:h===1350?570:440}
- text('CODE BLACK',left,top+44,44,'Anton');text('WX',link?295:330,top+44,44,'Anton','--cb-red')
+ text('CODE BLACK',left,top+44,44,'Anton');text('WX',link?295:330,top+44,44,'Anton','--cb-outlook-laser')
  if(!link)text(date(safeDate).toUpperCase(),w-330,top+44)
  text(`DAY ${input.day} ${spec?'PATTERN':'OUTLOOK'}`,left,top+(story?180:133),link?64:story?96:72,'Anton','--cb-text',link?490:right-left)
  if(link){text(date(safeDate),left,top+175);text(`${clock(input.source?.valid_from)}`,left,top+215);text(`– ${clock(input.source?.valid_until)}`,left,top+255)}
@@ -89,7 +89,7 @@ export async function drawShareImage(input:ShareInput,preset:SharePreset,zoom?:b
  const bg=ctx.createLinearGradient(0,0,0,preset.height);bg.addColorStop(0,token('--cb-panel'));bg.addColorStop(1,token('--cb-outlook-sea'));ctx.fillStyle=bg;ctx.fillRect(0,0,preset.width,preset.height)
  ctx.strokeStyle='rgba(255,255,255,.025)';ctx.lineWidth=1
  for(let x=0;x<preset.width;x+=3){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,preset.height);ctx.stroke()}
- ctx.fillStyle=token('--cb-red');ctx.fillRect(preset.width*.05,preset.height===1920?310:Math.round(preset.height*.05)+60,preset.width*.9,2)
+ ctx.fillStyle=token('--cb-outlook-laser');ctx.fillRect(preset.width*.05,preset.height===1920?310:Math.round(preset.height*.05)+60,preset.width*.9,2)
  const m=plan.map,crop=plan.crop,scale=Math.min(m.width/crop.width,m.height/crop.height)
  ctx.fillStyle=token('--cb-panel-hi');ctx.beginPath();ctx.roundRect(m.x-7,m.y-7,m.width+14,m.height+14,20);ctx.fill()
  ctx.save();ctx.beginPath();ctx.roundRect(m.x,m.y,m.width,m.height,20);ctx.clip();ctx.fillStyle=token('--cb-outlook-sea');ctx.fillRect(m.x,m.y,m.width,m.height)
