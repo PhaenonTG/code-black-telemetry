@@ -11,6 +11,7 @@
 .ops-not-found__hint{margin:8px 0 0;color:var(--cb-muted);font-size:13px}
 .ops-not-found__actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
 .ops-not-found__actions :is(a,button){display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border:1px solid var(--cb-line);border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0));color:var(--cb-text);font:inherit;font-size:11px;font-weight:800;letter-spacing:.1em;cursor:pointer;text-decoration:none}
+.shell .ops-not-found__actions :is(a,button){min-height:44px}
 .ops-not-found__actions .ops-not-found__primary{border-color:rgba(255,42,12,.6);box-shadow:0 0 14px -5px rgba(255,42,12,.9)}
 .ops-not-found__actions :is(a,button):hover{border-color:var(--cb-red);box-shadow:0 0 16px -4px rgba(255,42,12,.9)}
 .ops-not-found__actions :is(a,button):focus-visible{outline:2px solid var(--cb-red);outline-offset:2px}
