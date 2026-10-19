@@ -61,7 +61,7 @@
 .shell .page-header::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--cb-line); pointer-events: none; }
 .shell .page-header::after { content: ""; position: absolute; left: 0; bottom: 0; width: min(280px, 45%); height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--cb-laser), rgba(255, 42, 12, 0)); box-shadow: var(--cb-laser-glow); pointer-events: none; }
 .shell .page-header > div:first-child { min-width: 0; flex: 1 1 320px; }
-.shell .page-header__kicker { margin: 0 0 var(--cb-sp-2); color: var(--cb-laser); font-size: 11px; font-weight: 700; letter-spacing: .2em; line-height: 1.2; text-transform: uppercase; text-shadow: 0 0 10px rgba(255, 42, 12, .45); }
+.shell .page-header__kicker { margin: 0 0 var(--cb-sp-2); color: var(--cb-laser); font-size: 12px; font-weight: 700; letter-spacing: .2em; line-height: 1.2; text-transform: uppercase; text-shadow: 0 0 10px rgba(255, 42, 12, .45); }
 .shell :is(.page-header h1, .coordination__header h1, .site-directory h1, .ops-not-found__title) {
   margin: 0; font-family: var(--cb-font-display); font-weight: 400; font-size: var(--cb-h1-size); line-height: 1.05; letter-spacing: .035em; text-transform: uppercase; overflow-wrap: anywhere;
 }
@@ -160,14 +160,14 @@
 .shell :is(.page, .workspace-page, .chase-workspace, .analysis-workspace) > :is(.page-header, .section-tabs) { flex-shrink: 0; }
 
 /* r2 sidebar, status and owned page chrome. No map selectors or geometry. */
-.shell :is(.ops-pill, .ops-status-badge) { font-size: var(--cb-text-min); border-radius: 999px; text-transform: none; clip-path: none; }
+.shell :is(.ops-pill, .ops-status-badge) { font-size: 12px; border-radius: 999px; text-transform: none; clip-path: none; }
 .shell :is(.ops-pill, .ops-status-badge) i { border-radius: 50%; }
 .shell :is(.sidebar__section-label, .sidebar__dev, .bottom-nav__link span, .ops-more-section > h2, .ops-more-section > summary) { font-size: var(--cb-text-min); }
 .shell .sidebar__link { text-transform: uppercase; }
 .shell .sidebar__dev { margin-left: auto; color: var(--cb-amber); }
 .shell .page-header h1 { font-family: var(--cb-h1-font); }
 .shell :is(.page-fleet, .page-operations, .page-stream, .page-settings, .page-more, .page-not-found) :is(h2, h3) { font-size: var(--cb-section-title); text-transform: none; }
-.shell :is(.page-settings .settings-toggle-list h3, .ops-more-section > h2, .ops-more-section > summary, .sidebar__section-label, .page-header__kicker) { font-size: var(--cb-panel-label); text-transform: uppercase; }
+.shell :is(.page-settings .settings-toggle-list h3, .ops-more-section > h2, .ops-more-section > summary, .sidebar__section-label, .page-header__kicker) { font-size: max(12px, var(--cb-panel-label)); text-transform: uppercase; }
 .shell :is(.page-fleet, .page-operations, .page-stream, .page-settings, .page-more, .page-not-found) :is(small, .settings-alert-copy, .status-row__detail, .page-header__kicker) { font-size: max(var(--cb-text-min), 1em); }
 .shell :is(.ops-system-grid > section, .ops-health-summary > section, .stream-health, .stream-monitor-notice, .settings-group, .ops-not-found__card, .ops-team-table-wrap) { border-radius: var(--cb-card-radius); padding: var(--cb-card-padding); background: var(--cb-steel); border: 1px solid var(--cb-line); }
 .shell :is(.page-fleet, .page-operations, .page-stream, .page-settings, .page-more, .page-not-found) button,

@@ -10,7 +10,7 @@
     height: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
-  .bottom-nav__link { min-width: 0; min-height: 0; font-size: 11px; gap: 5px; }
+  .bottom-nav__link { min-width: 0; min-height: 0; font-size: 12px; gap: 5px; }
   .bottom-nav__link svg { font-size: 22px; }
   .bottom-nav__link.active { background: rgba(255, 42, 12, .045); }
   .bottom-nav__link.active::after { bottom: 5px; }
@@ -102,6 +102,26 @@
   .auth-submit { min-height: 48px; font-size: 13px; }
   .auth-card__link { min-height: 44px; font-size: 13px; }
   .auth-card__body, .auth-card__status { font-size: 13px; }
+  .page-header__kicker, .ops-pill, .statusbar__route, .location-control__name, .bottom-nav__link, time, small {
+    font-size: 12px;
+  }
+}
+@media (pointer: coarse) {
+  .auth-field input { font-size: 16px; min-height: 48px; }
+  .auth-field__password input { padding-right: 50px; }
+  .auth-field__toggle { min-width: 44px; min-height: 44px; right: 2px; align-items: center; justify-content: center; }
+  .auth-submit { min-height: 48px; font-size: 13px; }
+  .auth-card__link { min-height: 44px; font-size: 13px; }
+}
+@media (max-height: 500px) {
+  .shell {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .sidebar {
+    padding-left: calc(10px + env(safe-area-inset-left, 0px));
+    padding-right: calc(6px + env(safe-area-inset-right, 0px));
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .auth-screen__loading-shield { animation: none; }

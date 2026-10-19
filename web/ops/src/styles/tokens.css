@@ -92,7 +92,7 @@
 
 /* r2 shared sizing contract; map geometry is owned separately. */
 :root {
-  --cb-text-min: 11px;
+  --cb-text-min: 12px;
   --cb-section-title: 18px;
   --cb-panel-label: var(--cb-text-min);
   --cb-card-radius: 14px;
