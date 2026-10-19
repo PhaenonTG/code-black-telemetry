@@ -20,3 +20,12 @@ describe("V-7 auth text minimum", () => {
     expect(mobile).toContain(".auth-screen__status { flex-shrink: 0; margin-bottom: auto; font-size: 10px; }")
   })
 })
+
+describe("RIP-14 recovery card centering", () => {
+  it("balances both card margins without depending on a status sibling", () => {
+    expect(page("UpdatePassword")).toContain('className="auth-screen auth-screen--recovery"')
+    expect(rule(".auth-screen--recovery .auth-card")).toContain("margin-block:auto")
+    expect(page("UpdatePassword")).toContain('phase === "invalid-link"')
+    expect(page("UpdatePassword")).toContain('phase === "done"')
+  })
+})

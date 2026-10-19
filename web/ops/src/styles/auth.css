@@ -92,3 +92,6 @@
 @media (max-width: 420px){
   .auth-card{padding:26px 20px 22px}
 }
+
+/* Recovery has no session-status sibling to balance its mobile auto margin. */
+.auth-screen--recovery .auth-card{margin-block:auto}

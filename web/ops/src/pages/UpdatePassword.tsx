@@ -58,7 +58,7 @@ export default function UpdatePassword() {
   if (!supabase) return <AuthUnavailable configured={false} />
 
   return (
-    <div className="auth-screen">
+    <div className="auth-screen auth-screen--recovery">
       <div className="auth-card">
         <img src={shield} alt="Code Black WX" className="auth-card__shield" />
         <p className="auth-card__kicker">CODE BLACK OPS</p>
