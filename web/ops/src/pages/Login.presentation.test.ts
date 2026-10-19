@@ -72,3 +72,12 @@ describe("RIP-18 recovery link width", () => {
     expect(link).toContain("max-width:100%")
   })
 })
+
+describe("RIP-19 auth keyboard focus", () => {
+  it("adds an offset, high contrast input outline separate from the red error border", () => {
+    const focus = rule(".auth-field input:focus-visible")
+    expect(focus).toContain("outline:2px solid var(--cb-text)")
+    expect(focus).toContain("outline-offset:2px")
+    expect(css.indexOf("input:focus-visible")).toBeGreaterThan(css.indexOf("input:focus{"))
+  })
+})

@@ -41,6 +41,7 @@
   color:var(--cb-text);font-size:14px;padding:11px 13px;transition:border-color var(--cb-fast);
 }
 .auth-field input:focus{outline:none;border-color:var(--cb-red)}
+.auth-field input:focus-visible{outline:2px solid var(--cb-text);outline-offset:2px}
 .auth-field__password{position:relative;display:flex}
 .auth-field__password input{flex:1;padding-right:42px}
 .auth-field__toggle{
