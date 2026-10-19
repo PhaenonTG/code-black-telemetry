@@ -17,6 +17,8 @@
 .shell .page-status-center--brand :is(.status-center__facts a,.status-center__muted a,.page-action-link){display:inline-flex;align-items:center;box-sizing:border-box;min-height:44px;min-width:44px;max-width:100%;padding:8px 10px;overflow-wrap:anywhere}
 .shell .page-status-center--brand .status-center__admin>summary{box-sizing:border-box;min-height:44px;padding:14px 10px}
 .shell .page-status-center--brand :is(.status-center__select select,.settings-save){box-sizing:border-box;min-height:44px;padding:8px 10px}
+/* Readable labels and values; preserve the larger Anton platform state and title. */
+.shell .page-status-center--brand :is(.page-header__kicker,.page-action-link,.status-center__overall>span,.status-center__overall small,.status-center__tile>span,.status-center__tile p,.status-center__panel>h2,.status-center__telemetry>h2,.status-center__facts span,.status-center__facts b,.status-center__muted,.status-center__select,.status-center__select select,.status-center__attention span,.status-center__attention b,.status-center__attention p,.status-center__telemetry article>span,.status-center__telemetry p,.status-center__summary .ops-status-badge,.status-center__telemetry .ops-status-badge,.status-center__admin>summary,.settings-toggle-row__description,.settings-save){font-size:var(--cb-text-min,12px)}
 @media (prefers-reduced-motion:no-preference){
 .shell .page-status-center--brand :is(.status-center__summary,.status-center__grid>section,.status-center__telemetry){animation:cb-status-in 380ms cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--cb-i,0) * 70ms)}
 .shell .page-status-center--brand :is(.settings-save,.page-action-link){transition:box-shadow 220ms cubic-bezier(.2,.8,.2,1),border-color 180ms,transform 160ms}

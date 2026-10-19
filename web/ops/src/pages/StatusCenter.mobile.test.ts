@@ -42,3 +42,26 @@ describe("SON-1 Status Center tap targets", () => {
     expect(declarations(".shell .page-status-center--brand .status-center__admin>summary")).not.toContain("display:")
   })
 })
+
+describe("SON-2 Status Center minimum text", () => {
+  it.each([
+    ".page-header__kicker", ".page-action-link",
+    ".status-center__overall>span", ".status-center__overall small",
+    ".status-center__tile>span", ".status-center__tile p",
+    ".status-center__panel>h2", ".status-center__telemetry>h2",
+    ".status-center__facts span", ".status-center__facts b", ".status-center__muted",
+    ".status-center__select", ".status-center__select select",
+    ".status-center__attention span", ".status-center__attention b", ".status-center__attention p",
+    ".status-center__telemetry article>span", ".status-center__telemetry p",
+    ".status-center__summary .ops-status-badge", ".status-center__telemetry .ops-status-badge",
+    ".status-center__admin>summary", ".settings-toggle-row__description", ".settings-save",
+  ])("keeps %s at the shared 12px minimum in portrait and landscape", selector => {
+    const rules = css.split("}").filter(rule => rule.includes("font-size:var(--cb-text-min,12px)"))
+    expect(rules).toHaveLength(1)
+    expect(rules[0]).toContain(".shell .page-status-center--brand :is(")
+    const selectors = rules[0].split(":is(")[1].split("){")[0].split(",")
+    expect(selectors).toContain(selector)
+    const tokens = readFileSync(new URL("../styles/tokens.css", import.meta.url), "utf8")
+    expect(Number(tokens.match(/--cb-text-min:\s*(\d+)px/)?.[1])).toBeGreaterThanOrEqual(12)
+  })
+})
