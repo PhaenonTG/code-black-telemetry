@@ -3,8 +3,29 @@ import { useCoreOps } from "../core/useCoreOps"
 import { isChaserUnit, liveChaserPoint, timestampMs } from "../core/referenceLocation"
 
 export function LocationControl() {
+  const chip = useRef<HTMLDetailsElement>(null)
+  const trigger = useRef<HTMLElement>(null)
   const picker = useRef<HTMLSelectElement>(null)
   const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const dismissOutside = (event: Event) => {
+      if (chip.current?.open && event.target instanceof Node && !chip.current.contains(event.target)) chip.current.open = false
+    }
+    const dismissEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !chip.current?.open) return
+      event.preventDefault()
+      chip.current.open = false
+      trigger.current?.focus()
+    }
+    document.addEventListener("pointerdown", dismissOutside)
+    document.addEventListener("click", dismissOutside)
+    document.addEventListener("keydown", dismissEscape)
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside)
+      document.removeEventListener("click", dismissOutside)
+      document.removeEventListener("keydown", dismissEscape)
+    }
+  }, [])
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000)
     return () => window.clearInterval(timer)
@@ -15,8 +36,8 @@ export function LocationControl() {
   const detail = referenceIsFallback && locationMode === "follow"
     ? deviceLocation.status === "denied" ? "Location permission denied · using Pea Ridge, AR" : "Waiting for browser GPS · using Pea Ridge, AR"
     : referenceLabel
-  return <details className="location-control location-control--chip" data-fallback={referenceIsFallback} data-stale={referenceIsStale}>
-    <summary aria-label={`Location: ${referenceLabel}. Choose location`} title={detail}><span className="location-control__indicator" aria-hidden="true" /><span>{referenceLabel}</span><span aria-hidden="true">⌄</span></summary>
+  return <details ref={chip} className="location-control location-control--chip" data-fallback={referenceIsFallback} data-stale={referenceIsStale}>
+    <summary ref={trigger} aria-label={`Location: ${referenceLabel}. Choose location`} title={detail}><span className="location-control__indicator" aria-hidden="true" /><span>{referenceLabel}</span><span aria-hidden="true">⌄</span></summary>
     <div className="location-control__sheet">
     <p role="status">{detail}{referenceIsStale ? " · Last verified chaser position" : ""}</p>
     <label className="location-control__choice"><span>Location</span><select ref={picker} aria-label="OPS location reference" value={value} onChange={(event) => {
