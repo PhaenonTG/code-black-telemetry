@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { renderToString } from "react-dom/server"
 import { describe, expect, it } from "vitest"
-import { ROUTES, ROUTE_ALIASES, routeEyebrow, routeMatchesQuery } from "./routes"
+import { ROUTES, ROUTE_ALIASES, NOT_FOUND_ROUTE, routeEyebrow, routeMatchesQuery } from "./routes"
 import { NAV_DETAILS, activePhoneRoute, PHONE_ROUTES } from "../layouts/phoneRoutes"
 import { PageHeader } from "../components/PageHeader"
 
@@ -34,6 +34,13 @@ describe("locked navigation", () => {
       expect(html).toContain(`<h1>${route.label}</h1>`)
       expect(html).not.toContain(`${route.section} · ${route.label}`)
     }
+  })
+  it("uses a neutral unmatched-route eyebrow without an Admin section", () => {
+    expect(routeEyebrow(NOT_FOUND_ROUTE)).toBe("Page not found")
+    expect(routeEyebrow(NOT_FOUND_ROUTE)).not.toMatch(/ADMIN/i)
+    const html = renderToString(<PageHeader routePath="*" title="" />)
+    expect(html).toContain("Page not found")
+    expect(html).not.toMatch(/ADMIN/)
   })
   it("keeps /field on the Field map even at a phone viewport", () => {
     // App does not branch /field by viewport; only / renders MobileHome.

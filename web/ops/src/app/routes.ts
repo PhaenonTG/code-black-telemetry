@@ -57,6 +57,7 @@ export function routeForPath(path: string): RouteDef | undefined {
 }
 
 export function routeEyebrow(route: RouteDef): string {
+  if (route.path === "*") return route.label
   return route.section.toLowerCase() === route.label.toLowerCase() ? route.section : `${route.section} · ${route.label}`
 }
 

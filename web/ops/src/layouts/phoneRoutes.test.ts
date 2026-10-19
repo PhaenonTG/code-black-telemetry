@@ -10,7 +10,21 @@ describe("phone navigation", () => {
     expect(activePhoneRoute(path)).toBe("/more")
   })
   it("does not confuse a route prefix with a child", () => {
-    expect(activePhoneRoute("/radar-other")).toBe("/more")
+    expect(activePhoneRoute("/radar-other")).not.toBe("/radar")
+    expect(activePhoneRoute("/radar-other")).toBe("")
+  })
+})
+
+describe("RIP-12 unmatched routes", () => {
+  it.each(["/zz-bogus-route", "/no-such-page", "/radar-other"])("leaves no bottom-nav tab active on %s", (path) => {
+    expect(activePhoneRoute(path)).toBe("")
+  })
+  it.each(["/settings", "/weather", "/field", "/soundings", "/producer", "/hurricane", "/directory"])("keeps More selected on known More child %s", (path) => {
+    expect(activePhoneRoute(path)).toBe("/more")
+  })
+  it("still lights Status for coordination children", () => {
+    expect(activePhoneRoute("/coordination")).toBe("/status")
+    expect(activePhoneRoute("/coordination/session")).toBe("/status")
   })
 })
 

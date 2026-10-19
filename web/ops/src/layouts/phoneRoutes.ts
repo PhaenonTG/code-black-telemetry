@@ -1,4 +1,4 @@
-import { MORE_ROUTE, ROUTES, type RouteDef } from "../app/routes"
+import { MORE_ROUTE, ROUTES, routeForPath, type RouteDef } from "../app/routes"
 
 export const PHONE_ROUTES = ["/", "/chase-desk", "/radar", "/status", "/more"].map(path => {
   const route = path === "/more" ? MORE_ROUTE : ROUTES.find(route => route.path === path)!
@@ -7,7 +7,10 @@ export const PHONE_ROUTES = ["/", "/chase-desk", "/radar", "/status", "/more"].m
 
 export function activePhoneRoute(pathname: string): string {
   if (pathname === "/coordination" || pathname.startsWith("/coordination/")) return "/status"
-  return PHONE_ROUTES.find(({ path }) => pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))?.path ?? "/more"
+  const phone = PHONE_ROUTES.find(({ path }) => pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))?.path
+  if (phone) return phone
+  // Known More children keep the More tab; unmatched routes have no active tab (RIP-12).
+  return routeForPath(pathname) ? "/more" : ""
 }
 
 export type NavSection = RouteDef["section"]
