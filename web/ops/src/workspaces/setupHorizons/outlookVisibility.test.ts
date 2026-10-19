@@ -16,6 +16,8 @@ describe('retained Outlook tab polling',()=>{
   let signal:AbortSignal|undefined
   const load=vi.fn((value:AbortSignal)=>{signal=value;return new Promise((_resolve,reject)=>value.addEventListener('abort',()=>reject(new DOMException('hidden','AbortError'))))})
   const poll=visibleSnapshotPoller({visibility,intervalMs:30000,load,onData:vi.fn(),onError:vi.fn()})
+  expect(load).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(48)
   expect(load).toHaveBeenCalledOnce()
   panelHidden=true;changed();expect(signal?.aborted).toBe(true)
   await vi.advanceTimersByTimeAsync(120000);expect(load).toHaveBeenCalledOnce()
