@@ -191,12 +191,16 @@ export default function AegisAlerts() {
           <h3>{selectedScan.site} · {when(selectedScan.scan_time)}</h3>
           <p>Processed {when(selectedScan.processed_at)}</p>
           <div className="aegis-review__products" aria-label="Radar product availability">
-            {Object.entries(selectedScan.available_products).map(([product, available]) => <span
-              key={product} className={available ? "available" : "missing"}>{product} {available ? "available" : "missing"}</span>)}
+            {Object.entries(selectedScan.available_products).sort(([a], [b]) => {
+              const order = ["REF", "VEL", "SRV", "CC"];
+              const rank = (product: string) => order.includes(product.toUpperCase()) ? order.indexOf(product.toUpperCase()) : order.length;
+              return rank(a) - rank(b);
+            }).map(([product, available]) => <span
+              key={product} className={available ? "available" : "missing"}>{product} <OpsStatusPill state={available ? "Available" : "Unavailable"} /></span>)}
           </div>
           {selectedScan.candidates.length ? <ul className="aegis-review__candidates">
             {selectedScan.candidates.map((candidate, index) => <li key={`${candidate.warning_id || "none"}:${index}`}>
-              <b title={candidate.decision === "evidence_gate_failed" ? "Required radar or warning evidence was missing; this is never an all-clear." : undefined}>{candidate.decision.replaceAll("_", " ")}{candidate.decision === "evidence_gate_failed" ? " i" : ""}</b> · evidence score {candidate.evidence_score ?? "not assigned"}
+              <b title={candidate.decision === "evidence_gate_failed" ? "Required radar or warning evidence was missing; this is never an all-clear." : undefined}>{candidate.decision.replaceAll("_", " ").replace(/^./, first => first.toUpperCase())}{candidate.decision === "evidence_gate_failed" ? " i" : ""}</b> · evidence score {candidate.evidence_score ?? "not assigned"}
               {candidate.warning_id && <span> · warning {candidate.warning_id}</span>}
               {candidate.factors.length > 0 && <small>{candidate.factors.join(" · ")}</small>}
             </li>)}
