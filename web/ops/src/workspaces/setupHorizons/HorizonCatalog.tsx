@@ -4,7 +4,10 @@ import {useCoreOps} from '../../core/useCoreOps'
 // @ts-expect-error Existing JavaScript poller has no declaration file.
 import {visibleSnapshotPoller} from '../../pages/visibleSnapshotPoller.mjs'
 import topology from './us-states.topo.json'
+import {ForecastGraphicsPanel} from './graphics/ForecastGraphicsPanel'
+import type {OpsCoreConfig} from '../../core/config'
 import './horizons.css'
+import './graphics/forecastGraphics.css'
 
 type Source={day:number;status:string;reason?:string;source_url?:string;issued_at?:string;valid_from?:string;valid_until?:string;checked_at?:string;last_success_at?:string}
 type Region={catalog_id:string;day:number;kind:string;label:string;official_code?:number;source:string;source_url:string;issued_at:string;valid_from:string;valid_until:string;data_status:string;uncertainty:string;geometry:{type:'Polygon'|'MultiPolygon';coordinates:any[]}}
@@ -25,7 +28,7 @@ function mapShape(coverage:string){
  const path=(polygons:any[])=>polygons.map(p=>p.map((ring:number[][])=>ring.map((point,i)=>{const[x,y]=project(point);return`${i?'L':'M'}${(500+(x-(minX+maxX)/2)*scale).toFixed(2)},${(300+(y-(minY+maxY)/2)*scale).toFixed(2)}`}).join('')+'Z').join('')).join('')
  return {selected,path}
 }
-export function HorizonCatalogView({catalog,error,onRefresh}:{catalog:Catalog|null;error:string|null;onRefresh:()=>void}){
+export function HorizonCatalogView({catalog,error,onRefresh,config}:{catalog:Catalog|null;error:string|null;onRefresh:()=>void;config?:OpsCoreConfig}){
  const [day,setDay]=useState(1),[selected,setSelected]=useState<string|null>(null),[coverage,setCoverage]=useState('conus'),[expanded,setExpanded]=useState(false),[origins,setOrigins]=useState({nick:'Topeka, KS',spencer:'Pea Ridge, AR'})
  const expandButton=useRef<HTMLButtonElement>(null)
  useEffect(()=>{if(!expanded)return;const close=(e:KeyboardEvent)=>{if(e.key==='Escape'){setExpanded(false);expandButton.current?.focus()}};window.addEventListener('keydown',close);return()=>window.removeEventListener('keydown',close)},[expanded])
@@ -34,6 +37,7 @@ export function HorizonCatalogView({catalog,error,onRefresh}:{catalog:Catalog|nu
   <header className="setup-horizons__heading"><div><h2>Outlook timeline</h2><p>Official Days 1–8 · separately labeled speculative Days 9–14</p></div><button type="button" onClick={onRefresh}>Refresh saved snapshot</button></header>
   <p className="setup-horizons__notice" role="status">{error?'Saved-source refresh failed; any previous snapshot retains its original time. ':''}{catalog?.acquisition_note??(error?'Saved official-source catalog unavailable.':'Loading saved official-source catalog.')}<br/>Snapshot: {time(catalog?.checked_at)} · {catalog?.cache_state??'UNAVAILABLE'}</p>
   <div className="setup-horizons__timeline" role="group" aria-label="Outlook days">{Array.from({length:14},(_,i)=>i+1).map(value=>{const s=catalog?.sources.find(r=>r.day===value);return <button key={value} type="button" aria-pressed={day===value} aria-label={`Day ${value}, ${label(s?.status)}`} onClick={()=>{setDay(value);setSelected(null)}}><strong>D{value}</strong><span>{s?.valid_from?date(s.valid_from):'—'}</span></button>})}</div>
+  {catalog&&<ForecastGraphicsPanel catalog={catalog} config={config}/>}
   <div className="setup-horizons__grid" data-expanded={expanded}>
    <section className="setup-horizons__map-panel" aria-label="Outlook map">
     <header><strong>Day {day} · {day<=8?'Official outlook':'Speculative pattern'}</strong><button ref={expandButton} type="button" aria-expanded={expanded} onClick={()=>setExpanded(v=>!v)}>{expanded?'Collapse map':'Expand map'}</button></header>
@@ -51,5 +55,5 @@ export function HorizonCatalogView({catalog,error,onRefresh}:{catalog:Catalog|nu
 export default function HorizonCatalog(){
  const {config}=useCoreOps(),[catalog,setCatalog]=useState<Catalog|null>(null),[error,setError]=useState<string|null>(null),refresh=useRef<(()=>void)|null>(null)
  useEffect(()=>{const poll=visibleSnapshotPoller({intervalMs:30000,load:(signal:AbortSignal)=>loadHorizonCatalog(config,signal),onData:(value:Catalog)=>{setCatalog(value);setError(null)},onError:()=>setError('UNAVAILABLE')});refresh.current=poll.refresh;return()=>{poll.stop();refresh.current=null}},[config])
- return <HorizonCatalogView catalog={catalog} error={error} onRefresh={()=>refresh.current?.()}/>
+ return <HorizonCatalogView catalog={catalog} error={error} onRefresh={()=>refresh.current?.()} config={config}/>
 }

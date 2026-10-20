@@ -30,6 +30,7 @@ export const ALLOWLIST: Record<string, AllowlistRoute> = {
   "/api/forecast/v1/hurricane-watch": { upstreamPath: "/api/forecast/v1/hurricane-watch", allowedQueryParams: [] },
   "/api/forecast/v1/chase-setups": { upstreamPath: "/api/forecast/v1/chase-setups", allowedQueryParams: [] },
   "/api/forecast/v1/chase-horizons": { upstreamPath: "/api/forecast/v1/chase-horizons", allowedQueryParams: [], opsSignedRead: "review" },
+  "/api/forecast/v1/spc-graphics": { upstreamPath: "/api/forecast/v1/spc-graphics", allowedQueryParams: [], opsSignedRead: "review" },
   "/api/forecast/v1/tornado-potential": { upstreamPath: "/api/forecast/v1/tornado-potential", allowedQueryParams: ["frame"] },
   "/api/forecast/v1/chase-setup": { upstreamPath: "/api/forecast/v1/chase-setup", allowedQueryParams: ["setup_id", "revision"] },
   "/api/forecast/v1/chase-setup-review": { upstreamPath: "/api/forecast/v1/chase-setup-review", allowedQueryParams: [], methods: ["POST"], opsWrite: "review" },

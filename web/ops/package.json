@@ -9,7 +9,8 @@
     "lint": "oxlint src",
     "test": "vitest run",
     "build": "vite build && node scripts/verify-pages-build.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "graphics:collect": "node scripts/collect-spc-graphics.mjs"
   },
   "dependencies": {
     "@capacitor/core": "8.5.0",

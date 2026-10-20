@@ -1,0 +1,10 @@
+import type {GraphicCoverage,GraphicDataset,GraphicProduct} from './forecastGraphicModel'
+import 'mapbox-gl/dist/mapbox-gl.css'
+import {renderForecastGraphic} from './renderForecastGraphic'
+import {FORECAST_GRAPHIC_PRESETS} from './forecastGraphicPresets'
+
+const status=document.querySelector<HTMLParagraphElement>('#status')!,grid=document.querySelector<HTMLDivElement>('#grid')!,select=document.querySelector<HTMLSelectElement>('#product')!,daySelect=document.querySelector<HTMLSelectElement>('#day')!,button=document.querySelector<HTMLButtonElement>('#render')!,preset=FORECAST_GRAPHIC_PRESETS.find(row=>row.width===1920&&row.height===1080)!
+let dataset:GraphicDataset
+async function render(){button.disabled=true;grid.replaceChildren();const product=select.value as GraphicProduct,day=Number(daySelect.value);try{for(const coverage of ['national','southern-plains'] as GraphicCoverage[]){status.textContent=`Rendering Day ${day} ${product} · ${coverage}…`;const result=await renderForecastGraphic({dataset,product,day,coverage,preset});const figure=document.createElement('figure'),caption=document.createElement('figcaption'),download=document.createElement('button');caption.textContent=result.filename;download.textContent='Download PNG';download.onclick=()=>{const url=URL.createObjectURL(result.blob),link=document.createElement('a');link.href=url;link.download=result.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};caption.append(' ',download);figure.append(result.canvas,caption);grid.append(figure)}status.textContent=`Rendered from NOAA SPC snapshot checked ${dataset.checked_at}.`}catch(error){status.textContent=error instanceof Error?error.message:'Render failed.'}finally{button.disabled=false}}
+button.onclick=()=>void render()
+fetch('/dev-data/current-spc-graphics.json',{cache:'no-store'}).then(response=>{if(!response.ok)throw Error('Run npm run graphics:collect before opening this lab.');return response.json()}).then(value=>{dataset=value as GraphicDataset;return render()}).catch(error=>{status.textContent=error instanceof Error?error.message:'Snapshot unavailable.'})
