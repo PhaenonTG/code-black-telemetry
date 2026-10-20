@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 
 export const candidateRoutes = [
   "/api/coordination/v1/snapshot",
-  "/api/v1/radar/frames?site=KSRX&product=REF&tilt=1&limit=1",
-  "/api/v1/radar/frame/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/metadata",
-  "/api/v1/radar/tiles/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/8/1/1.png",
+  "/api/ops-radar/v1/frames?site=KSRX&product=REF&tilt=1&limit=1",
+  "/api/ops-radar/v1/frame/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/metadata",
+  "/api/ops-radar/v1/tiles/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/8/1/1.png",
 ];
 
 export async function verifyWorkerDispatch(worker, { checkRetainedCorePolicy = false } = {}) {
@@ -40,7 +40,7 @@ export async function verifyWorkerDispatch(worker, { checkRetainedCorePolicy = f
   for (const route of candidateRoutes) {
     const result = await worker.fetch(request(route), configured, context);
     equal(result.status, 200);
-    equal(await result.json(), { fixtureDispatch: new URL(request(route).url).pathname });
+    equal(await result.json(), { fixtureDispatch: new URL(request(route).url).pathname.replace("/api/ops-radar/v1/", "/api/v1/radar/") });
   }
   equal(forwards, 4); equal(assets, 0);
   equal((await worker.fetch(request("/api/core/health", "GET", false), configured, context)).status, 401);
@@ -49,6 +49,10 @@ export async function verifyWorkerDispatch(worker, { checkRetainedCorePolicy = f
   equal(forwards, 4); equal(assets, 1); // Pages fallback proves non-capture, not Facebook functionality.
   equal((await worker.fetch(request("/ordinary-static-page"), configured, context)).status, 200);
   equal(assets, 2);
+  // The native upstream spelling is not a public parity route. Keep that boundary
+  // explicit instead of requiring the wrapper to capture another owner's prefix.
+  equal((await worker.fetch(request("/api/v1/radar/frames?site=KSRX&product=REF&tilt=1&limit=1"), configured, context)).status, 200);
+  equal(assets, 3); equal(forwards, 4);
   if (checkRetainedCorePolicy) {
     const originalFetch = globalThis.fetch;
     let role = "UNKNOWN", coreCalls = 0;
