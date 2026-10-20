@@ -1,5 +1,5 @@
 import shieldUrl from '../../../../../../src/assets/codeblack-shield.png'
-import {PRODUCT_META,graphicFilename,graphicTitle,highestLabel,productLegend,regionsFor,reviewedAnalysisFor,sourceFor,type GraphicRequest} from './forecastGraphicModel'
+import {PRODUCT_META,graphicFilename,graphicTitle,highestLabel,productLegend,regionsFor,reviewedAnalysisFor,sourceFor,usesAdaptiveAreaFocus,type GraphicRequest} from './forecastGraphicModel'
 import {renderMapboxBasemap} from './mapboxGraphicBasemap'
 
 const CENTRAL='America/Chicago'
@@ -15,7 +15,7 @@ function drawBrandHeader(ctx:CanvasRenderingContext2D,shield:HTMLImageElement,re
  ctx.font=`400 ${82*scale}px Anton`;ctx.fillStyle='#F4F6FA';ctx.fillText('CODE BLACK',156*scale,87*scale);ctx.fillStyle='#FF2A0C';ctx.fillText('WX',570*scale,87*scale)
  ctx.font=`700 ${22*scale}px Rajdhani`;ctx.fillStyle='#8D949B';ctx.letterSpacing=`${4*scale}px`;ctx.fillText('SEVERE WEATHER INTELLIGENCE',158*scale,119*scale);ctx.letterSpacing='0px'
  const title=graphicTitle(request),titleSize=fit(ctx,title,760*scale,48*scale,28*scale);ctx.font=`400 ${titleSize}px Anton`;ctx.fillStyle='#F4F6FA';ctx.textAlign='right';ctx.fillText(title,w-30*scale,62*scale)
- ctx.font=`700 ${24*scale}px Rajdhani`;ctx.fillText(request.coverage==='national'?'NATIONAL OUTLOOK':`SOUTHERN PLAINS · DAY ${request.day}`,w-30*scale,96*scale);ctx.textAlign='left'
+ ctx.font=`700 ${24*scale}px Rajdhani`;ctx.fillText(request.coverage==='national'?(usesAdaptiveAreaFocus(request)?'NATIONAL · AUTO AREA FOCUS':'NATIONAL OUTLOOK'):`SOUTHERN PLAINS · DAY ${request.day}`,w-30*scale,96*scale);ctx.textAlign='left'
 }
 
 function drawKeyMessages(ctx:CanvasRenderingContext2D,request:GraphicRequest,w:number,h:number,header:number,footer:number,scale:number){

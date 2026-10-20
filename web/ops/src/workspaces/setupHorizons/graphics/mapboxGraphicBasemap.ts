@@ -1,6 +1,6 @@
 import mapboxgl from 'mapbox-gl'
 import {atlasStyleUri,hasMapboxToken,mapboxAccessToken} from '../../../../../../src/services/mapTiles'
-import {COVERAGE_BOUNDS,regionColor,regionRank,regionsFor,type GraphicRequest} from './forecastGraphicModel'
+import {mapBoundsFor,regionColor,regionRank,regionsFor,type GraphicRequest} from './forecastGraphicModel'
 
 const MAP_TIMEOUT_MS=20_000
 
@@ -14,7 +14,7 @@ export async function renderMapboxBasemap(request:GraphicRequest,width:number,he
  Object.assign(host.style,{position:'fixed',left:'-100000px',top:'0',width:`${width}px`,height:`${height}px`,pointerEvents:'none'})
  document.body.append(host)
  mapboxgl.accessToken=mapboxAccessToken()
- const map=new mapboxgl.Map({container:host,style:atlasStyleUri(),bounds:COVERAGE_BOUNDS[request.coverage],fitBoundsOptions:{padding:request.coverage==='national'?44:22},attributionControl:false,interactive:false,preserveDrawingBuffer:true,fadeDuration:0})
+ const map=new mapboxgl.Map({container:host,style:atlasStyleUri(),bounds:mapBoundsFor(request),fitBoundsOptions:{padding:request.coverage==='national'?44:22},attributionControl:false,interactive:false,preserveDrawingBuffer:true,fadeDuration:0})
  try{
   await new Promise<void>((resolve,reject)=>{
    const timer=window.setTimeout(()=>reject(Error('Mapbox basemap timed out before export.')),MAP_TIMEOUT_MS)

@@ -19,7 +19,7 @@ export function ForecastGraphicsPanel({catalog,config}:{catalog:Catalog;config?:
   <div className="forecast-graphics__controls">
    <label>Day<select value={day} onChange={event=>selectDay(Number(event.target.value))}>{Array.from({length:8},(_,index)=>index+1).map(value=><option key={value} value={value}>Day {value}</option>)}</select></label>
    <label>Product<select value={product} onChange={event=>setProduct(event.target.value as GraphicProduct)}>{products.map(value=><option key={value} value={value}>{PRODUCT_META[value].short}</option>)}</select></label>
-   <label>Coverage<select value={coverage} onChange={event=>setCoverage(event.target.value as GraphicCoverage)}><option value="national">National</option><option value="southern-plains">Southern Plains</option></select></label>
+   <label>Coverage<select value={coverage} onChange={event=>setCoverage(event.target.value as GraphicCoverage)}><option value="national">Adaptive national</option><option value="southern-plains">Southern Plains</option></select></label>
    <label>Output<select value={presetIndex} onChange={event=>setPresetIndex(Number(event.target.value))}>{FORECAST_GRAPHIC_PRESETS.map((preset,index)=><option key={preset.label} value={index}>{preset.label} · {preset.width}×{preset.height}</option>)}</select></label>
    <button type="button" className="ops-button-primary" disabled={!ready||busy} onClick={()=>void render()}>{busy?'Rendering verified map…':'Export standalone PNG'}</button>
   </div>

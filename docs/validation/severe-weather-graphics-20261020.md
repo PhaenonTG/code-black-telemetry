@@ -15,7 +15,7 @@ NOAA SPC snapshot checked: `2026-10-20T22:33:27.205Z`
 - Day 1–2: categorical, tornado, damaging wind, and hail.
 - Day 3: categorical and severe probability.
 - Day 4–8: severe probability.
-- National and Southern Plains coverage use the same Mapbox rendering path.
+- Adaptive national and fixed Southern Plains coverage use the same Mapbox rendering path. One separated official outlook area receives a padded area focus; multiple separated areas retain the full contiguous-US view.
 - Independent reviewed Code Black summaries, key messages, and hazard ratings are supported but withheld unless a reviewed analysis record is supplied.
 - Square, story, portrait, link-card, 1920×1080 broadcast, and 3840×2160 4K presets remain independent PNG exports.
 
@@ -30,7 +30,7 @@ NOAA SPC snapshot checked: `2026-10-20T22:33:27.205Z`
 
 ## Validation
 
-- Focused graphics suite: 8 passing tests.
+- Focused graphics suite: 9 passing tests.
 - Full frontend suite: 445 passing tests and 31 skipped; two unrelated pre-existing browser-fixture suites did not finish their temporary Edge harness.
 - Vite development build: pass. The repository-wide TypeScript command remains blocked by five pre-existing JavaScript declaration/export errors outside this scope.
 - Browser rendering: inspected at native 1920×1080 against the supplied visual reference using the existing Mapbox token and authentic shield asset.

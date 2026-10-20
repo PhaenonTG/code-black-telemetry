@@ -117,6 +117,22 @@ export function datasetFromCatalog(catalog:Catalog):GraphicDataset{
 export function sourceFor(request:Pick<GraphicRequest,'dataset'|'product'|'day'>):GraphicSource|undefined{return request.dataset.sources.find(source=>source.day===request.day&&source.product===request.product)}
 export function regionsFor(request:Pick<GraphicRequest,'dataset'|'product'|'day'>):GraphicRegion[]{return request.dataset.regions.filter(row=>row.day===request.day&&row.hazard===request.product)}
 export function reviewedAnalysisFor(request:Pick<GraphicRequest,'dataset'|'day'>){return request.dataset.analysis?.find(item=>item.day===request.day&&item.status==='reviewed')}
+function polygonParts(row:GraphicRegion):number[][][][]{return row.geometry.type==='Polygon'?[row.geometry.coordinates as number[][][]]:row.geometry.coordinates as number[][][][]}
+export function mapBoundsFor(request:Pick<GraphicRequest,'dataset'|'product'|'day'|'coverage'>):[[number,number],[number,number]]{
+ if(request.coverage!=='national')return COVERAGE_BOUNDS[request.coverage]
+ const rows=regionsFor(request).filter(row=>!row.overlay_only)
+ if(!rows.length)return COVERAGE_BOUNDS.national
+ const lowestRank=Math.min(...rows.map(regionRank)),outerParts=rows.filter(row=>regionRank(row)===lowestRank).flatMap(polygonParts)
+ if(outerParts.length!==1)return COVERAGE_BOUNDS.national
+ const points=rows.flatMap(polygonParts).flat(2),longitudes=points.map(point=>point[0]),latitudes=points.map(point=>point[1])
+ if(!points.length||longitudes.some(value=>!Number.isFinite(value))||latitudes.some(value=>!Number.isFinite(value)))return COVERAGE_BOUNDS.national
+ let west=Math.max(-126.5,Math.min(...longitudes)-4),east=Math.min(-66,Math.max(...longitudes)+4),south=Math.max(23,Math.min(...latitudes)-3),north=Math.min(50.5,Math.max(...latitudes)+3)
+ const lonCenter=(west+east)/2,latCenter=(south+north)/2
+ if(east-west<12){west=Math.max(-126.5,lonCenter-6);east=Math.min(-66,lonCenter+6)}
+ if(north-south<8){south=Math.max(23,latCenter-4);north=Math.min(50.5,latCenter+4)}
+ return[[west,south],[east,north]]
+}
+export function usesAdaptiveAreaFocus(request:Pick<GraphicRequest,'dataset'|'product'|'day'|'coverage'>):boolean{return request.coverage==='national'&&mapBoundsFor(request)!==COVERAGE_BOUNDS.national}
 export function regionColor(row:GraphicRegion):string{
  if(row.overlay_only)return'#F4F6FA'
  if(row.hazard==='categorical')return CATEGORY_COLORS[categoryOf(row).key]
