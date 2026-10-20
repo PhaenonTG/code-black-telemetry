@@ -44,4 +44,4 @@ NOAA SPC snapshot checked: `2026-10-20T22:33:27.205Z`
 
 ## Automation and release boundary
 
-The Core candidate performs bounded NOAA acquisition, atomic last-good publication, explicit health reporting, and a 15-minute systemd timer. The frontend gateway allowlist includes the signed read route. Neither candidate has been installed on the live Core host or deployed to production. Shared map components, mobile/native applications, hurricane pages, and production configuration remain unchanged pending release-order coordination.
+The Core candidate performs bounded NOAA acquisition, atomic last-good publication, explicit health reporting, and a 15-minute systemd timer. The frontend gateway allowlist includes the signed read route. Frontend commit `257b3a128ee032cfe70fd23e61cf33ecb1e01a68` is deployed only to Pages preview `dea9a43a-ad3e-4eef-b433-95b762b05488`; the Core candidate is not installed. Shared map components, mobile/native applications, hurricane pages, and production configuration remain unchanged pending release-order coordination. Production remains deployment `d9fed2fb-472f-4583-87d7-b13f79430202`.
