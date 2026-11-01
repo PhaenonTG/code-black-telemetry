@@ -1,4 +1,5 @@
 import { handleProgramMedia } from "./program-media";
+import { validOverlayPayload } from "./overlay-payload";
 
 const STATUS_KEY = "status";
 const CAPABILITIES_KEY = "capabilities";
@@ -17,7 +18,7 @@ const MAX_FRAME_BYTES = 2 * 1024 * 1024;
 const COMMAND_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACTIONS = new Set([
   "preview.start", "preview.stop", "facebook.output.start", "facebook.output.stop",
-  "archive.camera.start", "archive.camera.stop", "lowerThird.set", "lowerThird.hide",
+  "archive.camera.start", "archive.camera.stop", "lowerThird.set", "lowerThird.hide", "overlay.set",
 ]);
 
 export interface BridgeStorage {
@@ -26,7 +27,7 @@ export interface BridgeStorage {
 }
 
 type StoredDocument = { receivedAt: string; body: Record<string, unknown> };
-type StoredFrame = { receivedAt: string; frameAt: string; bytes: ArrayBuffer };
+type StoredFrame = { receivedAt: string; frameAt: string; bytes: ArrayBuffer; compositionId?: string };
 type StoredCommand = {
   commandId: string; action: string; expectedStateRevision: number; payload?: Record<string, unknown>;
   operator: string; createdAt: string; state: "queued" | "succeeded" | "failed" | "timed_out";
@@ -256,7 +257,9 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
     if (size > MAX_FRAME_BYTES || request.headers.get("Content-Type") !== "image/jpeg") return json(413, { error: "INVALID_FRAME" });
     const bytes = await request.arrayBuffer();
     if (!bytes.byteLength || bytes.byteLength > MAX_FRAME_BYTES) return json(413, { error: "INVALID_FRAME" });
-    await storage.put(FRAME_KEY, { receivedAt: new Date().toISOString(), frameAt: request.headers.get("X-Producer-Frame-At") || new Date().toISOString(), bytes } satisfies StoredFrame);
+    const compositionId = request.headers.get("X-Producer-Composition") ?? undefined;
+    if (compositionId && !/^[a-f0-9]{24}$/.test(compositionId)) return json(400, { error: "INVALID_COMPOSITION_ID" });
+    await storage.put(FRAME_KEY, { receivedAt: new Date().toISOString(), frameAt: request.headers.get("X-Producer-Frame-At") || new Date().toISOString(), bytes, compositionId } satisfies StoredFrame);
     return json(202, { accepted: true });
   }
 
@@ -291,7 +294,9 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
     const sourceLive = status?.body.source_state === "SOURCE_LIVE";
     const current = frame && Date.now() - Date.parse(frame.receivedAt) <= 5_000;
     if (!sourceLive || !current || !frame) return json(404, { error: "PREVIEW_NOT_CURRENT" });
-    return new Response(frame.bytes, { status: 200, headers: { "Content-Type": "image/jpeg", "Cache-Control": "no-store", "X-Producer-Frame-At": frame.frameAt, "X-Content-Type-Options": "nosniff" } });
+    const expectedComposition = (status?.body.composition as { id?: string } | undefined)?.id;
+    if (expectedComposition && frame.compositionId !== expectedComposition) return json(404, { error: "PREVIEW_COMPOSITION_NOT_CURRENT" });
+    return new Response(frame.bytes, { status: 200, headers: { "Content-Type": "image/jpeg", "Cache-Control": "no-store", "X-Producer-Frame-At": frame.frameAt, "X-Content-Type-Options": "nosniff", ...(frame.compositionId ? { "X-Producer-Composition": frame.compositionId } : {}) } });
   }
 
   if (path === "/api/producer/v1/commands" && request.method === "POST") {
@@ -301,6 +306,7 @@ export async function handleProducerStateRequest(request: Request, storage: Brid
     const expected = body?.expectedStateRevision;
     if (typeof commandId !== "string" || !COMMAND_ID.test(commandId) || typeof action !== "string" || !ACTIONS.has(action) || !Number.isSafeInteger(expected)) return json(400, { error: "INVALID_COMMAND" });
     if (action === "lowerThird.set" && (typeof (body?.payload as Record<string, unknown> | undefined)?.text !== "string" || String((body?.payload as Record<string, unknown>).text).length > 120)) return json(400, { error: "INVALID_PAYLOAD" });
+    if (action === "overlay.set" && !validOverlayPayload(body?.payload)) return json(400, { error: "INVALID_OVERLAY_PAYLOAD" });
     const commands = await storage.get<StoredCommand[]>(COMMANDS_KEY) ?? [];
     const prior = commands.find((item) => item.commandId === commandId);
     if (prior) return prior.action === action && JSON.stringify(prior.payload ?? {}) === JSON.stringify(body?.payload ?? {}) ? json(200, prior) : json(409, { error: "COMMAND_ID_CONFLICT" });
