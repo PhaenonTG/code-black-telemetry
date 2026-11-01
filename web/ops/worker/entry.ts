@@ -44,6 +44,8 @@ import { ODOT_PREFIX, handleOdotRequest, type OdotEnv } from "../functions/lib/o
 import { CAMERA_HEALTH_PATH, handleCameraHealth } from "../functions/lib/cameraHealthRelay";
 import { KANDRIVE_PATH, handleKandriveRequest } from "../functions/lib/kandriveRelay";
 import { PUBLIC_HURRICANE_PATH, handlePublicHurricane } from "../functions/lib/publicHurricane";
+import { PUBLIC_TROPICAL_DISCOVERY_PATH, handlePublicTropicalDiscovery } from "../functions/lib/publicTropicalDiscovery";
+import { PUBLIC_TROPICAL_SYSTEMS_PREFIX, handlePublicTropicalSystem } from "../functions/lib/publicTropicalSystem";
 
 interface Env extends GatewayEnv, MapboxTokenEnv, OdotEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -84,6 +86,12 @@ export default {
     }
     if (url.pathname === PUBLIC_HURRICANE_PATH) {
       return handlePublicHurricane(request, env, ctx);
+    }
+    if (url.pathname === PUBLIC_TROPICAL_DISCOVERY_PATH) {
+      return handlePublicTropicalDiscovery(request, env, ctx);
+    }
+    if (url.pathname.startsWith(PUBLIC_TROPICAL_SYSTEMS_PREFIX)) {
+      return handlePublicTropicalSystem(request, env, ctx);
     }
     if (url.pathname === ARDOT_RELAY_PREFIX) {
       return handleArdotCameraStream(request);

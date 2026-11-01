@@ -3,19 +3,22 @@ import { displayTime } from "./types";
 import { fetchStormReports, timeAgo } from "./reports";
 import type { StormReport } from "./reports";
 import codeblackShield from "../../../src/assets/codeblack-shield.png";
+import { savedWatch, distanceMiles, bearingToCenter } from "./watchLocation";
 
 const ReportsMap = lazy(() => import("./ReportsMap"));
 const tokenUrl = import.meta.env.DEV ? "/api/mapbox-token" : "https://ops.codeblackwx.com/overlay-core/mapbox-token";
 type Feed = Awaited<ReturnType<typeof fetchStormReports>>;
 
 function ReportRow({ row, index, selected, now, onSelect }: { row: StormReport; index: number; selected: boolean; now: number; onSelect: () => void }) {
+  const watch=savedWatch();
+  const proximity=row.latitude!=null && row.longitude!=null ? `${distanceMiles(watch,{latitude:row.latitude,longitude:row.longitude})} mi ${bearingToCenter(watch,{latitude:row.latitude,longitude:row.longitude}).direction} of ${watch.label}` : null;
   return <button className={`report-row${selected ? " report-row--selected" : ""}`} type="button" onClick={onSelect} aria-pressed={selected}>
     <span className="report-row__number">{String(index + 1).padStart(2, "0")}</span>
     <span className="report-row__time"><b>{timeAgo(row.occurredAt, now)}</b><small>{displayTime(row.occurredAt)}</small></span>
-    <strong className="report-row__event">{row.event}</strong>
+    <strong className="report-row__event">{row.event}{row.corrected && <small> · Corrected</small>}</strong>
     <span className="report-row__location"><b>{row.location}</b><small>{row.county ? `${row.county} County` : ""}{row.state ? `, ${row.state}` : ""}</small></span>
     <span className="report-row__source">{row.source}<small>NWS {row.office}</small></span>
-    <span className="report-row__details">{row.details || "No additional remarks in the NWS product."}</span>
+    <span className="report-row__details">{proximity && <small>{proximity}<br/></small>}{row.details || "No additional remarks in the NWS product."}</span>
   </button>;
 }
 
@@ -25,7 +28,7 @@ export default function ReportsPage() {
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [hours, setHours] = useState<24 | 72 | 168>(72);
+  const [hours, setHours] = useState<24 | 72 | 168>(24);
   const [office, setOffice] = useState("ALL");
   const [event, setEvent] = useState("ALL");
   const [selectedId, setSelectedId] = useState<string | null>(null);

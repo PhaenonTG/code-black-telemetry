@@ -33,21 +33,25 @@ export function currentAdvisoryTrend(data: PublicHurricane, watch: WatchLocation
 
 export function compassDirection(degrees: number | null): string | null {
   if (degrees == null || !Number.isFinite(degrees)) return null;
-  const points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  return points[Math.round((((degrees % 360) + 360) % 360) / 45) % 8];
+  const points = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  return points[Math.round((((degrees % 360) + 360) % 360) / 22.5) % 16];
 }
 
 // Coarse open-Gulf shoreline reference for a CENTER crossing estimate. This is
 // deliberately regional: bays/barrier islands and forecast uncertainty make a
 // street-level landfall point inappropriate for this display.
 const northernGulfCoast = [
-  { longitude: -90.5, latitude: 30.03 },
-  { longitude: -89.5, latitude: 30.20 },
-  { longitude: -88.5, latitude: 30.24 },
-  { longitude: -87.5, latitude: 30.31 },
-  { longitude: -86.5, latitude: 30.36 },
-  { longitude: -85.5, latitude: 30.21 },
-  { longitude: -84.5, latitude: 29.85 },
+  { longitude: -91.40, latitude: 29.60 }, { longitude: -90.70, latitude: 29.85 },
+  { longitude: -90.10, latitude: 30.02 }, { longitude: -89.75, latitude: 30.12 },
+  { longitude: -89.39, latitude: 30.22 }, { longitude: -88.91, latitude: 30.28 },
+  { longitude: -88.64, latitude: 30.34 }, { longitude: -88.31, latitude: 30.34 },
+  { longitude: -88.11, latitude: 30.25 }, { longitude: -87.95, latitude: 30.24 },
+  { longitude: -87.77, latitude: 30.25 }, { longitude: -87.60, latitude: 30.29 },
+  { longitude: -87.37, latitude: 30.34 }, { longitude: -87.17, latitude: 30.39 },
+  { longitude: -86.88, latitude: 30.39 }, { longitude: -86.55, latitude: 30.39 },
+  { longitude: -86.20, latitude: 30.36 }, { longitude: -85.90, latitude: 30.25 },
+  { longitude: -85.60, latitude: 30.16 }, { longitude: -85.23, latitude: 30.08 },
+  { longitude: -84.95, latitude: 29.74 },
 ];
 const coastalCities = [
   { name: "Waveland, MS", latitude: 30.286, longitude: -89.377 },
@@ -99,23 +103,22 @@ export function estimateNorthernGulfLandfall(data: PublicHurricane, source: "aeg
   if (data.status !== "active") return null;
   if (source === "aegis" && data.projection.status !== "ready") return null;
   const track = source === "aegis" ? data.projection.points : data.official.track;
-  const issued = Date.parse(track.find((point) => point.hour === 0)?.valid_time ?? (source === "aegis" ? data.projection.cycle : data.official.issued_at) ?? "");
-  if (!Number.isFinite(issued)) return null;
   const points = [...track].sort((a, b) => a.hour - b.hour);
   for (let index = 1; index < points.length; index++) {
     const from = points[index - 1], to = points[index];
+    const fromTime = Date.parse(from.valid_time ?? ""), toTime = Date.parse(to.valid_time ?? "");
+    if (!Number.isFinite(fromTime) || !Number.isFinite(toTime) || toTime <= fromTime) continue;
     const fromCoast = coastLatitude(from.longitude), toCoast = coastLatitude(to.longitude);
     if (fromCoast == null || toCoast == null || from.latitude >= fromCoast || to.latitude < toCoast || to.hour <= from.hour) continue;
     const fromOffset = from.latitude - fromCoast, toOffset = to.latitude - toCoast;
     const share = -fromOffset / (toOffset - fromOffset);
-    const hour = from.hour + share * (to.hour - from.hour);
     const longitude = from.longitude + share * (to.longitude - from.longitude);
     const latitude = from.latitude + share * (to.latitude - from.latitude);
     const nearest = [...coastalCities].sort((a, b) => distanceMiles({ latitude, longitude }, a) - distanceMiles({ latitude, longitude }, b))[0];
     return {
-      centerTime: new Date(issued + Math.round(hour * 4) * 900_000).toISOString(),
-      windowStart: new Date(issued + from.hour * 3_600_000).toISOString(),
-      windowEnd: new Date(issued + to.hour * 3_600_000).toISOString(),
+      centerTime: new Date(Math.round((fromTime + share * (toTime - fromTime)) / 900_000) * 900_000).toISOString(),
+      windowStart: new Date(fromTime).toISOString(),
+      windowEnd: new Date(toTime).toISOString(),
       region: coastRegion(longitude), nearestCity: nearest && distanceMiles({ latitude, longitude }, nearest) <= 35 ? nearest.name : null,
       latitude, longitude,
       members: source === "aegis" ? Math.min((from as typeof data.projection.points[number]).members ?? 0, (to as typeof data.projection.points[number]).members ?? 0) : null,

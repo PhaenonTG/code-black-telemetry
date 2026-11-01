@@ -1,6 +1,6 @@
 export type StormReport = {
   id: string; event: string; location: string; county: string; state: string;
-  source: string; details: string; magnitude: string | null; occurredAt: string;
+  source: string; details: string; magnitude: string | null; occurredAt: string; corrected?: boolean;
   latitude: number | null; longitude: number | null; office: string; productUrl: string;
 };
 
@@ -44,7 +44,7 @@ export function parseLsrProduct(text: string, office: string, productUrl: string
       event, location, county: second.slice(29, 48).trim(), state,
       source: second.slice(53).trim() || `NWS ${office}`, details: details.join(" "),
       magnitude: second.slice(12, 29).trim() || null, occurredAt, latitude, longitude,
-      office, productUrl });
+      office, productUrl, corrected: /\bCORRECTED\b/i.test(text.slice(0,800)) || /corrects previous/i.test(details.join(" ")) });
     i = cursor - 1;
   }
   return rows;

@@ -1,183 +1,138 @@
+import QRCode from "qrcode";
 import type { PublicHurricane } from "./types";
 import { displayTime } from "./types";
-import { watchSummary } from "./watchLocation";
 import type { PointAlert, WatchLocation } from "./watchLocation";
+import { watchSummary } from "./watchLocation";
+import type { LocalForecast } from "./LocalOverview";
+import { localNarrative } from "./LocalOverview";
 import codeblackShield from "../../../src/assets/codeblack-shield.png";
+import { compassDirection, estimateNorthernGulfLandfall, reviewedLandfall } from "./stormTelemetry";
 import { hurricaneCategory } from "../../shared/hurricaneCategory";
-import { compassDirection, currentAdvisoryTrend, estimateNorthernGulfLandfall, reviewedLandfall } from "./stormTelemetry";
 
-const W = 1600;
-const black = "#050608", surface = "#11151a", white = "#f5f6f8", quiet = "#aeb7c2";
-const border = "#3d454e", red = "#ee3429", cyan = "#45d9d1";
-const localTime = (value: string) => new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", timeZoneName: "short",
-}).format(new Date(value));
+export type ExportFormat = "portrait" | "landscape";
+const palette = { black: "#06090c", panel: "#0c1318", panelAlt: "#101a20", line: "#28404b", red: "#ef4035", cyan: "#72d1ce", white: "#f3f5f7", muted: "#a9b8c4", dim: "#71838f" };
 
-function label(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, color = quiet) {
-  ctx.fillStyle = color; ctx.font = "800 19px Inter, system-ui"; ctx.fillText(value, x, y);
+function label(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, color = palette.muted, size = 19) {
+  ctx.fillStyle = color; ctx.font = `700 ${size}px "Barlow Condensed", Inter, system-ui`; ctx.fillText(value.toUpperCase(), x, y);
 }
-function type(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, font: string, color = white, maxWidth?: number) {
-  ctx.fillStyle = color; ctx.font = font; ctx.fillText(value, x, y, maxWidth);
-}
-function bar(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, color = border, height = 1) {
-  ctx.fillStyle = color; ctx.fillRect(x, y, width, height);
-}
-function wrap(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, width: number, step: number, maxLines: number) {
-  let current = "", lines = 0;
-  for (const word of value.split(/\s+/).filter(Boolean)) {
-    const next = current ? `${current} ${word}` : word;
-    if (ctx.measureText(next).width <= width || !current) { current = next; continue; }
-    if (lines + 1 >= maxLines) {
-      let truncated = current;
-      while (truncated && ctx.measureText(`${truncated}…`).width > width) truncated = truncated.slice(0, -1);
-      ctx.fillText(`${truncated}…`, x, y + lines * step);
-      return maxLines * step;
-    }
-    ctx.fillText(current, x, y + lines * step);
-    lines++;
-    current = word;
+function words(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, width: number, size: number, maxLines: number, color = palette.white, weight = 500) {
+  ctx.fillStyle = color; ctx.font = `${weight} ${size}px Inter, system-ui`;
+  const tokens = value.trim().split(/\s+/); let row = "", line = 0;
+  for (const token of tokens) {
+    const candidate = row ? `${row} ${token}` : token;
+    if (ctx.measureText(candidate).width > width && row) {
+      ctx.fillText(line === maxLines - 1 ? `${row}…` : row, x, y + line * size * 1.43);
+      if (line === maxLines - 1) return size * 1.43 * maxLines;
+      line++; row = token;
+    } else row = candidate;
   }
-  if (current && lines < maxLines) { ctx.fillText(current, x, y + lines * step); lines++; }
-  return lines * step;
+  if (row && line < maxLines) ctx.fillText(row, x, y + line * size * 1.43);
+  return (line + 1) * size * 1.43;
 }
-function stat(ctx: CanvasRenderingContext2D, x: number, heading: string, value: string, trend: string, adverse: boolean) {
-  label(ctx, heading, x, 365);
-  type(ctx, value, x, 433, "800 53px 'Barlow Condensed', system-ui", white, 430);
-  type(ctx, trend, x, 468, "800 21px Inter, system-ui", adverse ? red : "#8cdec1", 430);
+function block(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, fill = palette.panel) {
+  ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); ctx.strokeStyle = palette.line; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
 }
+async function loadImage(src: string) { const image = new Image(); image.src = src; await image.decode(); return image; }
+function alertActive(alerts: PointAlert[], expression: RegExp) { return alerts.some((alert) => expression.test(alert.event)); }
+function trend(delta: number | null | undefined, unit: string) { return delta == null ? "—" : `${delta > 0 ? "↑" : delta < 0 ? "↓" : "→"} ${Math.abs(delta)} ${unit}`; }
 
-export async function saveBriefingImage(data: PublicHurricane, mapPng: string | null, watch: WatchLocation, alerts: PointAlert[], alertsStatus: string) {
-  await Promise.all([document.fonts.load("800 82px 'Barlow Condensed'"), document.fonts.load("700 22px Inter"), document.fonts.load("500 20px Inter")]);
-  const aiSummary = (data.ai?.status === "ready" || data.ai?.status === "stale") && data.ai.summary
-    ? data.ai.summary : "Aegis interpretation unavailable. Use the official NHC forecast and NWS warnings.";
-  const alertText = alertsStatus !== "ready" ? "Alert check unavailable — verify directly with NWS."
-    : alerts.length ? [...new Set(alerts.map((item) => item.event))].join("  ·  ") : "No active NWS alerts returned at this check.";
-  const measure = document.createElement("canvas").getContext("2d"); if (!measure) throw new Error("Canvas is unavailable");
-  measure.font = "500 20px Inter, system-ui";
-  const measuredSummaryHeight = wrap(measure, aiSummary, 0, 0, 1472, 31, 20);
-  measure.font = "500 21px Inter, system-ui";
-  const measuredAlertHeight = wrap(measure, alertText, 0, 0, 1472, 34, 6);
-  const analysisFootY = 1713 + measuredSummaryHeight + 18;
-  const alertsTitleY = analysisFootY + 67, alertsBodyY = alertsTitleY + 58;
-  const footerY = alertsBodyY + measuredAlertHeight + 64, H = footerY + 240;
+export async function saveBriefingImage(data: PublicHurricane, mapPng: string | null, watch: WatchLocation, alerts: PointAlert[], alertsStatus: string, local: LocalForecast, format: ExportFormat = "portrait") {
+  await document.fonts.ready;
+  const landscape = format === "landscape", W = landscape ? 1920 : 1200, H = landscape ? 1260 : 2220;
   const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Canvas is unavailable");
-  ctx.fillStyle = black; ctx.fillRect(0, 0, W, H);
+  const ctx = canvas.getContext("2d"); if (!ctx) throw Error("Canvas unavailable");
+  ctx.fillStyle = palette.black; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "#102029"; ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 80) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 80) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
 
-  // Identity masthead
-  bar(ctx, 64, 38, 78, red, 8);
-  const shield = new Image(); shield.src = codeblackShield; await shield.decode(); ctx.drawImage(shield, 64, 56, 54, 86);
-  type(ctx, "CODE BLACK", 136, 103, "800 45px 'Barlow Condensed', system-ui");
-  type(ctx, "T R O P I C S", 139, 133, "700 18px Inter, system-ui", quiet);
-  type(ctx, "HURRICANE BRIEFING", 1290, 94, "800 17px Inter, system-ui", quiet);
-  bar(ctx, 1408, 115, 128, red, 4);
-  const prefix = "TROPICS  /  ";
-  type(ctx, prefix, 64, 248, "800 80px 'Barlow Condensed', system-ui");
-  type(ctx, `${data.storm.classification === "HU" ? "HURRICANE" : "STORM"} ${data.storm.name?.toUpperCase() ?? "WATCH"}`,
-    64 + ctx.measureText(prefix).width, 248, "800 80px 'Barlow Condensed', system-ui", red, 1460 - ctx.measureText(prefix).width);
-  type(ctx, `Updated ${displayTime(data.checked_at)}  •  NHC ${displayTime(data.storm.last_update)}`,
-    64, 293, "500 24px Inter, system-ui", quiet);
+  const pad = landscape ? 46 : 48, inner = W - pad * 2;
+  ctx.fillStyle = palette.red; ctx.fillRect(pad, 38, landscape ? 92 : 76, 6);
+  const shield = await loadImage(codeblackShield); ctx.drawImage(shield, pad, 60, 36, 56);
+  ctx.fillStyle = palette.white; ctx.font = `700 29px "Barlow Condensed", Inter, system-ui`; ctx.fillText("CODE BLACK / TROPICS", pad + 54, 98);
+  label(ctx, "LIVE TROPICAL BRIEFING", pad + 54, 126, palette.dim, 16);
 
-  // Current NHC data
-  ctx.fillStyle = surface; ctx.fillRect(64, 325, 1472, 170); bar(ctx, 64, 325, 5, red, 170);
-  bar(ctx, 552, 343, 1, border, 134); bar(ctx, 1041, 343, 1, border, 134);
   const category = hurricaneCategory(data.storm.max_wind_mph, data.storm.classification);
-  const trend = currentAdvisoryTrend(data, watch);
-  stat(ctx, 94, category == null ? "MAXIMUM SUSTAINED WIND" : `MAX WIND · NHC CATEGORY ${category}`,
-    data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`,
-    trend.wind == null ? "Prior value unavailable" : `${trend.wind > 0 ? "↑ +" : trend.wind < 0 ? "↓ " : "→ "}${trend.wind} mph / ${trend.elapsedHours}h`,
-    trend.wind != null && trend.wind > 0);
-  stat(ctx, 582, "MINIMUM PRESSURE", data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`,
-    trend.pressure == null ? "Prior value unavailable" : `${trend.pressure > 0 ? "↑ +" : trend.pressure < 0 ? "↓ " : "→ "}${trend.pressure} mb / ${trend.elapsedHours}h`,
-    trend.pressure != null && trend.pressure < 0);
-  stat(ctx, 1072, "MOVEMENT · NHC",
-    data.storm.movement_mph == null ? "—" : `${compassDirection(data.storm.movement_degrees) ?? "—"} · ${data.storm.movement_mph} mph`,
-    data.storm.movement_degrees == null ? "Direction unavailable" : `${data.storm.movement_degrees}° from north`, false);
+  const categoryText = category ? `CATEGORY ${category}` : data.storm.classification === "TS" ? "TROPICAL STORM" : "TROPICAL CYCLONE";
+  const nameY = landscape ? 200 : 212;
+  ctx.fillStyle = palette.white; ctx.font = `700 ${landscape ? 73 : 76}px "Barlow Condensed", Inter, system-ui`; ctx.fillText((data.storm.name ?? "Storm").toUpperCase(), pad, nameY);
+  block(ctx, landscape ? 1374 : pad, landscape ? 145 : 242, landscape ? 500 : inner, 82, "#0b1015");
+  label(ctx, "NHC", landscape ? 1400 : pad + 20, landscape ? 177 : 274, palette.red, 18);
+  ctx.fillStyle = palette.white; ctx.font = `700 ${landscape ? 37 : 34}px "Barlow Condensed", Inter, system-ui`; ctx.fillText(categoryText, landscape ? 1400 : pad + 20, landscape ? 213 : 309);
+  const issueY = landscape ? 257 : 352;
+  label(ctx, `NHC ${displayTime(data.storm.last_update)}`, pad, issueY, palette.muted, 18);
+  label(ctx, `SOURCES ${displayTime(data.checked_at)}`, pad, issueY + 29, palette.dim, 15);
 
-  // Comparable centerline estimates, with their distinct issuance times
-  const reviewed = reviewedLandfall(data);
-  const modelBlend = estimateNorthernGulfLandfall(data, "aegis");
-  const blend = reviewed ?? modelBlend;
-  const nhc = estimateNorthernGulfLandfall(data, "nhc");
-  const selectedNhc = Boolean(reviewed && data.ai?.landfall?.source === "NHC");
-  const comparison = selectedNhc ? modelBlend : nhc;
-  label(ctx, reviewed ? "AEGIS REVIEWED · EXPERIMENTAL" : blend ? "CODE BLACK EXPERIMENTAL" : "CENTERLINE ESTIMATE", 64, 540, red);
-  type(ctx, blend ? `~${localTime(blend.centerTime)} · ${blend.nearestCity ? `near ${blend.nearestCity}` : blend.region}` : "Unavailable",
-    64, 581, "800 37px 'Barlow Condensed', system-ui", white, 696);
-  type(ctx, reviewed ? `Aegis reviewed ${displayTime(data.ai?.reviewed_at)} · selected ${data.ai?.landfall?.source}` : blend && data.projection.cycle ? `Model cycle ${localTime(data.projection.cycle)}` : "Experimental track unavailable",
-    64, 611, "500 18px Inter, system-ui", quiet);
-  bar(ctx, 799, 520, 1, border, 109);
-  label(ctx, selectedNhc ? "MODEL-BLEND COMPARISON" : "NHC OFFICIAL CENTERLINE", 829, 540);
-  type(ctx, comparison ? `~${localTime(comparison.centerTime)} · ${comparison.region}` : "Unavailable",
-    829, 581, "800 37px 'Barlow Condensed', system-ui", white, 707);
-  type(ctx, selectedNhc ? `Model cycle ${displayTime(data.projection.cycle)}` : `Forecast issued ${displayTime(data.official.issued_at)}`,
-    829, 611, "500 18px Inter, system-ui", quiet);
-  bar(ctx, 64, 639, 1472, red, 3);
-
-  // Supporting map; the live track map supplies the pixels at export time.
-  const mapY = 659, mapH = 670;
-  ctx.fillStyle = surface; ctx.fillRect(64, mapY, 1472, mapH);
-  if (mapPng) {
-    const map = new Image(); map.src = mapPng; await map.decode();
-    ctx.drawImage(map, 64, mapY, 1472, mapH);
-  } else {
-    type(ctx, "Map image unavailable — use the live Tropics track map.", 125, 1000, "600 27px Inter, system-ui", quiet);
-  }
-  ctx.fillStyle = "#050608ee"; ctx.fillRect(64, mapY, 1472, 76);
-  type(ctx, "GULF TRACK OVERVIEW", 90, mapY + 50, "800 37px 'Barlow Condensed', system-ui");
-  bar(ctx, 877, mapY + 39, 24, red, 3); type(ctx, "CODE BLACK EXPERIMENTAL", 913, mapY + 47, "800 16px Inter, system-ui", red);
-  bar(ctx, 1235, mapY + 39, 24, white, 3); type(ctx, "NHC OFFICIAL", 1271, mapY + 47, "800 16px Inter, system-ui", white);
-  ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.strokeRect(64, mapY, 1472, mapH);
-
-  // Evidence and local watch in paired columns
-  const left = 64, right = 818, rightWidth = 718;
-  type(ctx, "MODEL GUIDANCE · +24 HOURS", left, 1394, "800 37px 'Barlow Condensed', system-ui");
-  type(ctx, "Each aid’s own cycle · peak storm wind, not wind at this location", left, 1428, "500 16px Inter, system-ui", quiet);
-  ["HFAI", "HFBI", "AVNI"].forEach((id, index) => {
-    const model = data.guidance.models.find((item) => item.id === id);
-    const point = model?.points.find((item) => item.hour === 24);
-    const x = left + index * 241;
-    ctx.fillStyle = surface; ctx.fillRect(x, 1451, 228, 139); bar(ctx, x, 1451, 228);
-    type(ctx, model?.name ?? id, x + 15, 1488, "800 20px Inter, system-ui", cyan, 197);
-    type(ctx, point?.wind_mph == null ? "Unavailable" : `${point.wind_mph} mph`,
-      x + 15, 1537, "800 37px 'Barlow Condensed', system-ui", white, 197);
-    type(ctx, `Cycle ${displayTime(model?.cycle)}`, x + 15, 1570, "500 15px Inter, system-ui", quiet, 197);
-  });
-  bar(ctx, 790, 1360, 1, border, 252);
-  type(ctx, "WATCH LOCATION", right, 1394, "800 37px 'Barlow Condensed', system-ui");
-  bar(ctx, 1107, 1386, 429, red, 3);
-  ctx.fillStyle = white; ctx.font = "800 38px 'Barlow Condensed', system-ui";
-  const locationLines = wrap(ctx, watch.label, right, 1452, rightWidth, 43, 2);
-  const shift = Math.max(0, locationLines - 43);
+  const metricY = landscape ? 315 : 405, metricH = 132, metricW = inner / 4;
   const proximity = watchSummary(data, watch);
-  const distances = [
-    `Current center: ${proximity.currentMiles == null ? "unavailable" : `${proximity.currentMiles} mi away`}`,
-    `Gulf radar: ${data.monitoring.radar_analysis === "ready" ? "MRMS current" : data.monitoring.radar_analysis === "partial" ? "partial" : "unavailable"}`,
+  const metrics = [
+    ["SUSTAINED WIND", data.storm.max_wind_mph == null ? "—" : `${data.storm.max_wind_mph} mph`, trend(data.observed.trend.wind_change_mph, "mph")],
+    ["MINIMUM PRESSURE", data.storm.pressure_mb == null ? "—" : `${data.storm.pressure_mb} mb`, trend(data.observed.trend.pressure_change_mb, "mb")],
+    ["MOVEMENT", `${compassDirection(data.storm.movement_degrees) ?? "—"} · ${data.storm.movement_mph ?? "—"} mph`, data.storm.movement_degrees == null ? "Bearing unavailable" : `${data.storm.movement_degrees}° from north`],
+    [`CENTER TO ${watch.label}`, proximity.currentMiles == null ? "—" : `${proximity.currentMiles} mi`, proximity.centerBearing ? `${proximity.centerBearing.direction} · ${proximity.centerBearing.degrees}° bearing` : "Bearing unavailable"],
   ];
-  distances.forEach((value, index) => type(ctx, value, right, 1500 + shift + index * 32, "600 20px Inter, system-ui", quiet, rightWidth));
+  metrics.forEach(([heading, value, detail], index) => {
+    block(ctx, pad + index * metricW, metricY, metricW - 2, metricH, index === 0 ? "#11191f" : palette.panel);
+    label(ctx, heading, pad + index * metricW + 17, metricY + 30, palette.muted, 14);
+    ctx.fillStyle = palette.white; ctx.font = `700 ${landscape ? 34 : 31}px "Barlow Condensed", Inter, system-ui`; ctx.fillText(value, pad + index * metricW + 17, metricY + 74);
+    label(ctx, detail, pad + index * metricW + 17, metricY + 109, index < 2 ? palette.red : palette.dim, 13);
+  });
 
-  type(ctx, "AEGIS ANALYSIS", left, 1653, "800 37px 'Barlow Condensed', system-ui"); bar(ctx, left, 1666, 83, red, 3);
-  ctx.fillStyle = white; ctx.font = "500 20px Inter, system-ui";
-  wrap(ctx, aiSummary, left, 1713, 1472, 31, 20);
-  type(ctx, `${data.ai?.analyzed_at ? `${data.ai.status === "stale" ? "Earlier review" : "Aegis analyzed"} ${displayTime(data.ai.analyzed_at)} · ` : ""}Sources ${displayTime(data.checked_at)}`,
-    left, analysisFootY, "500 16px Inter, system-ui", quiet, 1472);
-  type(ctx, "NWS ALERTS AT WATCH LOCATION", left, alertsTitleY, "800 34px 'Barlow Condensed', system-ui");
-  bar(ctx, left, alertsTitleY + 13, 83, red, 3);
-  ctx.fillStyle = white; ctx.font = "500 21px Inter, system-ui";
-  wrap(ctx, alertText, left, alertsBodyY, 1472, 34, 6);
+  const estimate = reviewedLandfall(data) ?? estimateNorthernGulfLandfall(data, "aegis") ?? estimateNorthernGulfLandfall(data, "nhc");
+  const confirmed = data.official.landfall?.status === "confirmed" ? data.official.landfall : null;
+  const landfallY = metricY + metricH + 24;
+  block(ctx, pad, landfallY, inner, landscape ? 128 : 184, "#10171d"); ctx.fillStyle = palette.red; ctx.fillRect(pad, landfallY, 6, landscape ? 128 : 184);
+  label(ctx, confirmed ? "NHC confirmed landfall" : "Landfall estimate", pad + 24, landfallY + 34, palette.red, 20);
+  const destination = confirmed ? `Near ${confirmed.location}` : estimate ? `Near ${estimate.nearestCity ?? estimate.region}` : "Estimate unavailable";
+  ctx.fillStyle = palette.white; ctx.font = `700 ${landscape ? 42 : 46}px "Barlow Condensed", Inter, system-ui`; ctx.fillText(destination.toUpperCase(), pad + 24, landfallY + 82);
+  const estimateTime = confirmed ? displayTime(confirmed.at) : estimate ? displayTime(estimate.centerTime) : "Awaiting guidance";
+  label(ctx, `${confirmed ? "CONFIRMED" : "ESTIMATED"} ${estimateTime}`, pad + 24, landfallY + 116, palette.muted, 16);
+  if (!confirmed && estimate?.windowStart && estimate.windowEnd) label(ctx, `WINDOW ${displayTime(estimate.windowStart)} – ${displayTime(estimate.windowEnd)}`, pad + 24, landfallY + 151, palette.dim, 14);
+  if (confirmed || estimate) {
+    const minutes = confirmed ? Math.max(0, Math.floor((Date.now() - Date.parse(confirmed.at)) / 60_000)) : Math.max(0, Math.ceil((Date.parse(estimate!.centerTime) - Date.now()) / 60_000));
+    const countdown = `${Math.floor(minutes / 1440)}D ${Math.floor(minutes % 1440 / 60)}H ${minutes % 60}M`;
+    const right = landscape ? W - 360 : pad + 24;
+    if (landscape) { label(ctx, confirmed ? "SINCE LANDFALL" : "COUNTDOWN", right, landfallY + 42, palette.cyan, 18); ctx.fillStyle = palette.white; ctx.font = `700 47px "Barlow Condensed", Inter, system-ui`; ctx.fillText(countdown, right, landfallY + 91); }
+    else { label(ctx, confirmed ? "SINCE LANDFALL" : "COUNTDOWN", right, landfallY + 158, palette.cyan, 15); ctx.fillStyle = palette.white; ctx.font = `700 32px "Barlow Condensed", Inter, system-ui`; ctx.fillText(countdown, right + 166, landfallY + 162); }
+  }
 
-  // Compact provenance footer, never mistaken for an official bulletin
-  bar(ctx, 64, footerY, 1472, red, 3);
-  type(ctx, "EXPERIMENTAL — NOT AN OFFICIAL FORECAST", 64, footerY + 46, "800 23px Inter, system-ui", red);
-  ctx.fillStyle = quiet; ctx.font = "500 19px Inter, system-ui";
-  wrap(ctx, data.disclosure, 64, footerY + 85, 1080, 30, 4);
-  bar(ctx, 1206, footerY + 35, 1, border, 136);
-  type(ctx, "Official: nhc.noaa.gov", 1234, footerY + 80, "600 18px Inter, system-ui", quiet);
-  type(ctx, "Alerts: weather.gov", 1234, footerY + 116, "600 18px Inter, system-ui", quiet);
-  type(ctx, "tropics.codeblackwx.com", 1234, footerY + 152, "700 18px Inter, system-ui", white);
+  const mapY = landfallY + (landscape ? 152 : 208), mapH = landscape ? 446 : 574;
+  block(ctx, pad, mapY, inner, mapH, "#0a1116");
+  if (mapPng) {
+    const map = await loadImage(mapPng); const scale = Math.max(inner / map.width, mapH / map.height); const drawW = map.width * scale, drawH = map.height * scale;
+    ctx.save(); ctx.beginPath(); ctx.rect(pad + 2, mapY + 2, inner - 4, mapH - 4); ctx.clip(); ctx.drawImage(map, pad + (inner - drawW) / 2, mapY + (mapH - drawH) / 2, drawW, drawH); ctx.restore();
+    ctx.fillStyle = "rgba(6,9,12,.62)"; ctx.fillRect(pad + 18, mapY + 18, landscape ? 355 : 390, 62);
+    label(ctx, "LIVE STORM POSITION + PROJECTED PATH", pad + 32, mapY + 45, palette.white, 15);
+    label(ctx, "NHC OFFICIAL · CODE BLACK EXPERIMENTAL", pad + 32, mapY + 68, palette.cyan, 12);
+  } else { ctx.fillStyle = palette.dim; ctx.font = "500 26px Inter, system-ui"; ctx.fillText("Map capture unavailable — open tropics.codeblackwx.com for live map", pad + 32, mapY + mapH / 2); }
+  ctx.fillStyle = palette.red; ctx.fillRect(pad, mapY, 5, mapH);
 
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Image generation failed")), "image/png"));
-  const url = URL.createObjectURL(blob), link = document.createElement("a");
-  link.href = url; link.download = `codeblack-tropics-${data.storm.name?.toLowerCase() ?? "watch"}.png`;
-  document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  const impactY = mapY + mapH + 24, impactH = landscape ? 126 : 192;
+  block(ctx, pad, impactY, inner, impactH, "#0e161b"); label(ctx, `LOCAL HAZARDS · ${watch.label}`, pad + 20, impactY + 32, palette.red, 17);
+  const impacts: [string, RegExp][] = [["WIND", /Hurricane Warning|Tropical Storm Warning/i], ["FLOOD", /Flood Warning|Flood Watch/i], ["SURGE", /Storm Surge Warning|High Surf Warning/i], ["TORNADO", /Tornado Warning|Tornado Watch/i]];
+  impacts.forEach(([name, test], index) => {
+    const x = pad + index * inner / 4 + 20, active = alertActive(alerts, test);
+    label(ctx, name, x, impactY + 72, palette.muted, 15); ctx.fillStyle = active ? palette.red : palette.dim; ctx.fillRect(x, impactY + 87, landscape ? 180 : 195, 9); label(ctx, active ? "ACTIVE" : "MONITORING", x, impactY + 120, active ? palette.red : palette.dim, 14);
+  });
+
+  const briefingY = impactY + impactH + 30, briefingH = landscape ? 205 : 395;
+  const reviewCutoff = confirmed?.observed_at ?? confirmed?.at;
+  const reviewed = (data.ai?.status === "ready" || data.ai?.status === "stale") && (!confirmed || Boolean(reviewCutoff && data.ai?.reviewed_at && data.ai?.analyzed_at && Date.parse(data.ai.reviewed_at) >= Date.parse(reviewCutoff) && Date.parse(data.ai.analyzed_at) >= Date.parse(reviewCutoff)));
+  block(ctx, pad, briefingY, inner, briefingH, "#0c1419"); label(ctx, reviewed ? "Aegis analysis" : "Aegis review pending", pad + 22, briefingY + 34, palette.cyan, 20);
+  const summary = reviewed && data.ai?.summary ? data.ai.summary : "Aegis review is pending. Use the latest official NHC forecast and local NWS alerts.";
+  const textWidth = landscape ? inner * .62 : inner - 44;
+  words(ctx, summary, pad + 22, briefingY + 72, textWidth, landscape ? 23 : 27, landscape ? 3 : 4, palette.white);
+  const nextHour = reviewed && data.ai?.next_hour_outlook ? data.ai.next_hour_outlook : localNarrative(watch, alerts, alertsStatus, local);
+  if (landscape) {
+    ctx.strokeStyle = palette.line; ctx.beginPath(); ctx.moveTo(pad + inner * .66, briefingY + 20); ctx.lineTo(pad + inner * .66, briefingY + briefingH - 20); ctx.stroke();
+    label(ctx, "NEXT HOUR", pad + inner * .69, briefingY + 45, palette.cyan, 17); words(ctx, nextHour, pad + inner * .69, briefingY + 79, inner * .28, 21, 3, palette.muted);
+  } else { label(ctx, "NEXT HOUR", pad + 22, briefingY + 255, palette.cyan, 17); words(ctx, nextHour, pad + 22, briefingY + 286, inner - 44, 22, 2, palette.muted); }
+  label(ctx, reviewed ? `REVIEW ${displayTime(data.ai?.reviewed_at)} · ${data.ai?.review_model ?? "LOCAL ANALYSIS"}` : "AWAITING POST-LANDFALL ANALYSIS", pad + 22, briefingY + briefingH - 22, palette.dim, 13);
+
+  const footerY = H - 164;
+  ctx.fillStyle = palette.red; ctx.fillRect(pad, footerY, inner, 3); label(ctx, "CODE BLACK / TROPICS", pad, footerY + 40, palette.white, 19); label(ctx, "EXPERIMENTAL ANALYSIS · FOLLOW NHC AND NWS GUIDANCE", pad, footerY + 72, palette.red, 15); label(ctx, `SNAPSHOT ${displayTime(data.checked_at)}`, pad, footerY + 105, palette.muted, 14);
+  const qr = await loadImage(await QRCode.toDataURL("https://tropics.codeblackwx.com/", { margin: 1, width: 160, color: { dark: palette.white, light: palette.black } })); ctx.drawImage(qr, W - pad - 120, footerY + 22, 112, 112); label(ctx, "SCAN FOR LIVE VIEW", W - pad - 352, footerY + 92, palette.cyan, 15);
+
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(Error("Export failed")), "image/png"));
+  const url = URL.createObjectURL(blob), link = document.createElement("a"); link.href = url; link.download = `codeblack-tropics-${format}.png`; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

@@ -1,7 +1,7 @@
 export type NwsAlert = {
   id: string;
   geometry: { type: string; coordinates: unknown } | null;
-  properties: { event?: string; headline?: string; severity?: string; expires?: string; web?: string };
+  properties: { event?: string; headline?: string; severity?: string; expires?: string; ends?: string; onset?: string; areaDesc?: string; web?: string };
 };
 
 export type RegionalWarnings = { features: NwsAlert[]; total: number; checkedAt: number };
