@@ -65,5 +65,11 @@ export default defineConfig(({ mode }) => {
       },
     },
   },
+  test: {
+    // Authentication is exercised through mocked clients in unit tests.  Give
+    // the singleton a harmless public-shaped configuration so importing it
+    // does not fail before those tests can run.
+    setupFiles: ["./src/test/setup.ts"],
+  },
   }
 })

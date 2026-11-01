@@ -232,7 +232,9 @@ const outsideCoverageViewport = { north: 38, south: 37, east: -121, west: -122, 
 assert.equal(roadCameraProviders.roadProvidersForViewport(outsideCoverageViewport).length, 0);
 const outsideRoadResult = await roadCameraProviders.getRoadConditionsForViewport({ viewport: outsideCoverageViewport, detail: "close" });
 assert.equal(outsideRoadResult.status, "outside-coverage");
-assert.match(outsideRoadResult.message, /Arkansas, Kansas, and Missouri/);
+// Keep this check aligned with the currently supported providers without
+// freezing the user-facing coverage sentence to an old three-state list.
+assert.match(outsideRoadResult.message, /Arkansas.*Kansas.*Missouri.*Iowa.*Tennessee.*Oklahoma/);
 const outsideCameraResult = await roadCameraProviders.getTrafficCamerasForViewport({ viewport: outsideCoverageViewport, detail: "close" });
 assert.equal(outsideCameraResult.status, "outside-coverage");
 const normalizedRoad = roadCameraTest.normalizeRoadFeature({
