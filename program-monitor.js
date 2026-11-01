@@ -30,6 +30,8 @@ class ProgramMediaUploader {
       if (info.mtimeMs === this.manifestMtime) return;
       const text = fs.readFileSync(file, 'utf8'); const names = programSegments(text);
       if (!names) { this.state = 'WAITING_FOR_MEDIA'; return; }
+      const preview = status.previews.program;
+      if (preview.generation && names.some(name => !name.startsWith(`program-${preview.generation}-`))) { this.state = 'WAITING_FOR_MEDIA'; return; }
       await Promise.all(names.filter(name => !this.uploaded.has(name)).map(async name => {
         const segment = path.join(this.directory, name); const stat = fs.statSync(segment);
         if (stat.size <= 0 || stat.size > 512 * 1024 || Date.now() - stat.mtimeMs > 15000) throw new Error('PROGRAM media is outside the bounded live window.');
@@ -37,7 +39,7 @@ class ProgramMediaUploader {
         await this.request(`/workstation/preview/hls/${name}`, { method: 'POST', headers: { 'Content-Type': 'video/mp2t', 'Content-Length': String(bytes.length), 'X-Producer-Frame-At': stat.mtime.toISOString() }, body: bytes, signal: AbortSignal.timeout(2500) });
         this.uploaded.add(name);
       }));
-      await this.request('/workstation/preview/hls/index.m3u8', { method: 'POST', headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'X-Producer-Frame-At': info.mtime.toISOString() }, body: text, signal: AbortSignal.timeout(2500) });
+      await this.request('/workstation/preview/hls/index.m3u8', { method: 'POST', headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'X-Producer-Frame-At': info.mtime.toISOString(), ...(preview.compositionId ? { 'X-Producer-Composition': preview.compositionId } : {}) }, body: text, signal: AbortSignal.timeout(2500) });
       this.uploaded = new Set(names); this.manifestMtime = info.mtimeMs;
       this.state = 'CURRENT'; this.lastError = null; this.lastSuccessAt = new Date().toISOString();
     } catch { this.state = 'UNAVAILABLE'; this.lastError = 'PROGRAM monitor upload failed; command bridge remains independent.'; }

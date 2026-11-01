@@ -62,6 +62,12 @@ class ProducerBridgeClient {
       metrics: status.metrics,
       broadcast: status.broadcast,
       overlays: status.overlays,
+      formats: status.formats,
+      composition: status.composition,
+      encoder: { codec: status.encoder?.codec, bitrateKbps: status.encoder?.bitrateKbps },
+      cameraArchive: { state: status.cleanSink?.state },
+      capabilities: this.engine.producerCommands?.capabilities(),
+      monitor: this.media.status(),
       observedAt: new Date().toISOString(),
     };
   }
@@ -73,12 +79,13 @@ class ProducerBridgeClient {
   async pushFrame() {
     const status = this.engine.status();
     if (status.source_state !== 'SOURCE_LIVE' || status.previews.program.state !== 'ACTIVE') return;
+    if (status.composition?.id && status.previews.program.frameCompositionId !== status.composition.id) return;
     const file = path.join(this.root, 'runtime', 'previews', 'program', 'latest.jpg');
     let info;
     try { info = fs.statSync(file); } catch { return; }
     if (info.mtimeMs <= this.lastFrameMtime || Date.now() - info.mtimeMs > 5000 || info.size > 2 * 1024 * 1024) return;
     const bytes = fs.readFileSync(file);
-    await this.request('/workstation/preview/program.jpg', { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'Content-Length': String(bytes.length), 'X-Producer-Frame-At': info.mtime.toISOString() }, body: bytes });
+    await this.request('/workstation/preview/program.jpg', { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'Content-Length': String(bytes.length), 'X-Producer-Frame-At': info.mtime.toISOString(), ...(status.composition?.id ? { 'X-Producer-Composition': status.composition.id } : {}) }, body: bytes });
     this.lastFrameMtime = info.mtimeMs;
   }
 

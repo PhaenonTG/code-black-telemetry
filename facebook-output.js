@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const childProcess = require('child_process');
 const crypto = require('crypto');
+const { programCanvas } = require('./program-composition');
 
 function redact(value) {
   return String(value || '').replace(/(?:srt|rtmps?):\/\/[^\s'"\\]+/gi, '[stream endpoint redacted]');
@@ -112,7 +113,7 @@ class FacebookOutput {
 
   args(target) {
     const { width, height, fps } = this.engine.config.source;
-    const filter = `fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,${this.engine.overlayFilter()}`;
+    const filter = programCanvas({ width, height, fps }, this.engine.overlayFilter());
     return ['-hide_banner', '-nostdin', '-loglevel', 'warning', '-progress', 'pipe:1', '-nostats',
       '-rw_timeout', '8000000', '-fflags', '+genpts+discardcorrupt', '-i', this.engine.config.source.endpoint,
       '-vf', filter, '-map', '0:v:0', '-map', '0:a?', ...this.engine.encoderArgs(),

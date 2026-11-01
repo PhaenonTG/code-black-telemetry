@@ -7,6 +7,7 @@ const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { validateOverlayPatch, canvasBase, programCanvas, compositionId, overlayFilter } = require('./program-composition');
 
 function processStartUtc(pid) {
   try { return childProcess.execFileSync('powershell.exe', ['-NoProfile','-Command',`(Get-Process -Id ${Number(pid)}).StartTime.ToUniversalTime().ToString('o')`], { windowsHide:true, encoding:'utf8' }).trim(); } catch { return null; }
@@ -24,9 +25,9 @@ function prunePreviewSegments(directory, kind, now = Date.now()) {
     try { if (now - fs.statSync(file).mtimeMs > 30000) fs.unlinkSync(file); } catch { /* A preview encoder may still own the file. */ }
   }
 }
-function hlsArgs(ffmpeg, endpoint, directory, program, filter, generation = crypto.randomUUID().replace(/-/g, '')) {
+function hlsArgs(ffmpeg, endpoint, directory, program, filter, generation = crypto.randomUUID().replace(/-/g, ''), profile = { width: 1920, height: 1080, fps: 30 }) {
   ensure(directory);
-  const vf = program ? `scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black,${filter}` :
+  const vf = program ? `${programCanvas(profile, filter)},scale=640:360,setsar=1` :
     'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black';
   return [
     '-hide_banner', '-nostdin', '-loglevel', 'warning', '-y', '-rw_timeout', '5000000', '-fflags', '+genpts+discardcorrupt', '-i', endpoint,
@@ -38,21 +39,36 @@ function hlsArgs(ffmpeg, endpoint, directory, program, filter, generation = cryp
 }
 
 class PreviewManager {
-  constructor(engine, root) { this.engine = engine; this.root = root; this.processes = new Map(); this.restartTimers = new Map(); this.snapshotTimers = new Map(); }
+  constructor(engine, root) { this.engine = engine; this.root = root; this.processes = new Map(); this.restartTimers = new Map(); this.snapshotTimers = new Map(); this.generations = new Map(); this.frameCompositions = new Map(); }
   start() { this.startOne('clean'); this.startOne('program'); this.startSnapshots('clean'); this.startSnapshots('program'); }
   startSnapshots(kind) { if (this.snapshotTimers.has(kind)) return; this.snapshotTimers.set(kind, setInterval(() => this.snapshot(kind), 1500)); }
-  snapshot(kind) { if (kind === 'program' && this.engine.sourceState !== 'SOURCE_LIVE') { this.statePlate(); return; } const dir = path.join(base(this.root), kind); const segment = fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.ts')).map((e) => path.join(dir,e.name)).sort((a,b)=>fs.statSync(b).mtimeMs-fs.statSync(a).mtimeMs)[0]; if (!segment) return; const tmp=path.join(dir,`snapshot-${process.pid}.jpg`); const target=path.join(dir,'latest.jpg'); childProcess.execFile(this.engine.ffmpeg,['-y','-v','error','-i',segment,'-frames:v','1','-q:v','3',tmp],{windowsHide:true},()=>{ if(!fs.existsSync(tmp))return; try{fs.renameSync(tmp,target);}catch{try{fs.copyFileSync(tmp,target);fs.unlinkSync(tmp);}catch{}} }); }
-  statePlate() { const dir=path.join(base(this.root),'program'); ensure(dir); const tmp=path.join(dir,`state-${process.pid}.jpg`); const target=path.join(dir,'latest.jpg'); childProcess.execFile(this.engine.ffmpeg,['-y','-v','error','-f','lavfi','-i','color=c=black:s=640x360:r=1','-vf',this.engine.overlayFilter(),'-frames:v','1','-q:v','3',tmp],{windowsHide:true},()=>{if(!fs.existsSync(tmp))return;try{fs.renameSync(tmp,target);}catch{try{fs.copyFileSync(tmp,target);fs.unlinkSync(tmp);}catch{}}}); }
+  snapshot(kind) {
+    if (kind === 'program' && this.engine.sourceState !== 'SOURCE_LIVE') { this.statePlate(); return; }
+    const generation = this.generations.get(kind); if (!generation) return;
+    const dir = path.join(base(this.root), kind);
+    const segment = fs.readdirSync(dir, { withFileTypes: true }).filter(e => e.isFile() && e.name.startsWith(`${kind}-${generation.generation}-`) && e.name.endsWith('.ts')).map(e => path.join(dir, e.name)).sort((a,b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+    if (!segment) return;
+    const tmp = path.join(dir, `snapshot-${process.pid}-${generation.generation}.jpg`), target = path.join(dir, 'latest.jpg');
+    childProcess.execFile(this.engine.ffmpeg, ['-y','-v','error','-i',segment,'-frames:v','1','-q:v','3',tmp], { windowsHide:true }, () => {
+      if (!fs.existsSync(tmp)) return;
+      if (this.generations.get(kind) !== generation) { try { fs.unlinkSync(tmp); } catch {} return; }
+      try { fs.renameSync(tmp, target); this.frameCompositions.set(kind, generation.compositionId); } catch {}
+    });
+  }
+  statePlate() { const dir=path.join(base(this.root),'program'); ensure(dir); const tmp=path.join(dir,`state-${process.pid}.jpg`); const target=path.join(dir,'latest.jpg'); const p=this.engine.config.source; childProcess.execFile(this.engine.ffmpeg,['-y','-v','error','-f','lavfi','-i',`color=c=black:s=${p.width}x${p.height}:r=1`,'-vf',`${this.engine.programCanvas()},scale=640:360`,'-frames:v','1','-q:v','3',tmp],{windowsHide:true},()=>{if(!fs.existsSync(tmp))return;try{fs.renameSync(tmp,target);}catch{try{fs.copyFileSync(tmp,target);fs.unlinkSync(tmp);}catch{}}}); }
   startOne(kind) {
     if (this.processes.has(kind) || !this.engine.recordingRequested) return;
     const dir = path.join(base(this.root), kind);
     prunePreviewSegments(dir, kind);
-    const args = hlsArgs(this.engine.ffmpeg, this.engine.config.source.endpoint, dir, kind === 'program', this.engine.overlayFilter());
+    const generation = crypto.randomUUID().replace(/-/g, '');
+    this.generations.set(kind, { generation, compositionId: this.engine.compositionId() });
+    const args = hlsArgs(this.engine.ffmpeg, this.engine.config.source.endpoint, dir, kind === 'program', this.engine.overlayFilter(), generation, this.engine.config.source);
     const proc = childProcess.spawn(this.engine.ffmpeg, args, { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     this.processes.set(kind, proc);
     proc.stderr.setEncoding('utf8');
     proc.stderr.on('data', (data) => { if (/error|failed/i.test(data)) this.engine.logger.write('preview_diagnostic', { kind, message: data }); });
     proc.on('exit', (code) => {
+      if (this.processes.get(kind) !== proc) return;
       this.processes.delete(kind);
       this.engine.emit('output.error', { output: `${kind}_preview`, code });
       if (this.engine.recordingRequested) this.restartTimers.set(kind, setTimeout(() => this.startOne(kind), 2000));
@@ -61,7 +77,7 @@ class PreviewManager {
   restartProgram() { this.stopOne('program'); if (this.engine.recordingRequested) setTimeout(() => { this.startOne('program'); this.startSnapshots('program'); }, 500); }
   stopOne(kind) { const proc = this.processes.get(kind); if (proc) proc.kill('SIGINT'); this.processes.delete(kind); const timer = this.restartTimers.get(kind); if (timer) clearTimeout(timer); const snapshotTimer=this.snapshotTimers.get(kind);if(snapshotTimer)clearInterval(snapshotTimer);this.snapshotTimers.delete(kind); }
   stop() { this.stopOne('clean'); this.stopOne('program'); }
-  status() { const out = {}; for (const name of ['clean', 'program']) { const dir = path.join(base(this.root), name); out[name] = { state: this.processes.has(name) ? 'ACTIVE' : 'STANDBY', hls: `/preview/${name}/index.m3u8`, snapshot: `/preview/${name}/latest.jpg`, available: fs.existsSync(path.join(dir, 'latest.jpg')) }; } return out; }
+  status() { const out = {}; for (const name of ['clean', 'program']) { const dir = path.join(base(this.root), name); out[name] = { state: this.processes.has(name) ? 'ACTIVE' : 'STANDBY', hls: `/preview/${name}/index.m3u8`, snapshot: `/preview/${name}/latest.jpg`, available: fs.existsSync(path.join(dir, 'latest.jpg')), width: 640, height: 360, frameCompositionId: this.frameCompositions.get(name) || null, ...(this.generations.get(name) || {}) }; } return out; }
 }
 
 class AudioProbe {
@@ -158,25 +174,18 @@ function enableMilestone2(engine, root) {
   };
   engine.videoAgeMs = () => engine.lastFreshVideoAt ? Math.max(0, Date.now() - Date.parse(engine.lastFreshVideoAt)) : null;
   engine.onFreshVideo = () => { engine.lastFreshVideoAt = iso(); if (engine.sourceState !== 'SOURCE_LIVE') engine.setSourceState('SOURCE_LIVE', 'fresh video frame received'); };
-  engine.overlayFilter = () => {
-    const o = engine.overlays; const font = 'fontfile=C\\\\:/Windows/Fonts/arial.ttf'; const pieces = [];
-    if (o.bug.enabled) pieces.push(`drawbox=x=20:y=20:w=250:h=55:color=black@0.65:t=fill,drawtext=${font}:text='${o.bug.text.replace(/'/g, '')}':fontcolor=white:fontsize=24:x=38:y=35`);
-    if (o.live.enabled && engine.sourceState === 'SOURCE_LIVE') pieces.push(`drawbox=x=275:y=20:w=95:h=55:color=0xD60000@1:t=fill,drawtext=${font}:text='${o.live.text.replace(/'/g, '')}':fontcolor=white:fontsize=22:x=293:y=36`);
-    if (o.lowerThird.enabled && o.lowerThird.text) pieces.push(`drawbox=x=28:y=h-130:w=900:h=85:color=black@0.72:t=fill,drawtext=${font}:text='${o.lowerThird.text.replace(/'/g, '')}':fontcolor=white:fontsize=32:x=55:y=h-100`);
-    if (o.sourceName.enabled) pieces.push(`drawtext=${font}:text='${o.callsign.replace(/'/g, '')} / ${o.vehicle.replace(/'/g, '')}':fontcolor=white@0.85:fontsize=18:x=w-220:y=h-40`);
-    if (engine.sourceState === 'SOURCE_STALE') pieces.push(`drawbox=x=0:y=0:w=iw:h=ih:color=0xD08A00@0.20:t=fill,drawbox=x=25:y=h-115:w=640:h=74:color=0xA86E00@0.88:t=fill,drawtext=${font}:text='SIGNAL DELAYED - SOURCE STALE':fontcolor=white:fontsize=28:x=50:y=h-88`);
-    if (engine.sourceState === 'SOURCE_LOST') pieces.push(`drawbox=x=0:y=0:w=iw:h=ih:color=black@0.65:t=fill,drawtext=${font}:text='SOURCE LOST':fontcolor=white:fontsize=42:x=(w-text_w)/2:y=(h-text_h)/2`);
-    return pieces.join(',') || 'null';
-  };
+  engine.overlayFilter = () => overlayFilter(root, engine.overlays, engine.sourceState);
+  engine.compositionId = () => compositionId(engine.overlays, engine.sourceState, engine.config.source);
+  engine.programCanvas = () => programCanvas(engine.config.source, engine.overlayFilter());
   engine.programFilter = () => {
     const { width, height, fps } = engine.config.source;
-    return `[0:v]fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,split=2[clean][program_base];[program_base]${engine.overlayFilter()}[program]`;
+    return `[0:v]${canvasBase({ width, height, fps })},split=2[clean][program_base];[program_base]${engine.overlayFilter()}[program]`;
   };
   engine.previews = new PreviewManager(engine, root); engine.audioProbe = new AudioProbe(engine);
   engine.privateOutput = new PrivateOutput(engine); engine.cleanSink = new CleanSink(engine, root);
   const start = engine.startRecording.bind(engine); engine.startRecording = () => { const result = start(); if (result.changed) { engine.session = { session_id: crypto.randomUUID(), created_at: iso(), source: 'nick', vehicle: engine.overlays.vehicle, callsign: engine.overlays.callsign, source_state: engine.state, recording_state: engine.config.recording.writeToDisk === false ? 'DISABLED' : 'STARTING', output_state: 'OFF', started_at: iso(), ended_at: null, reconnect_count: 0, errors: [] }; engine.previews.start(); engine.audioProbe.start(); engine.emit('recording.started', { session_id: engine.session.session_id, write_to_disk: engine.config.recording.writeToDisk !== false }); } return result; };
   const stop = engine.stopRecording.bind(engine); engine.stopRecording = () => { const result = stop(); if (result.changed) { engine.previews.stop(); engine.audioProbe.stop(); engine.sourceState = 'WAITING_FOR_SOURCE'; engine.transportState = 'DISCONNECTED'; engine.lastFreshVideoAt = null; if (engine.session) { engine.session.recording_state = 'STOPPED'; engine.session.source_state = 'WAITING_FOR_SOURCE'; engine.session.ended_at = iso(); } engine.emit('recording.stopped'); } return result; };
-  engine.setOverlays = (value) => { if (!value || typeof value !== 'object') throw new Error('overlay payload must be an object'); const allowed = ['bug', 'live', 'lowerThird', 'sourceName', 'connection', 'clock', 'vehicle', 'callsign']; for (const key of Object.keys(value)) if (!allowed.includes(key)) throw new Error(`unsupported overlay field: ${key}`); if (value.lowerThird && typeof value.lowerThird.text === 'string' && value.lowerThird.text.length > 120) throw new Error('lower third text exceeds 120 characters'); for (const key of allowed) if (value[key] !== undefined) { if (typeof engine.overlays[key] === 'object' && typeof value[key] === 'object') Object.assign(engine.overlays[key], value[key]); else engine.overlays[key] = value[key]; } engine.previews.restartProgram(); engine.emit('overlay.changed', { overlays: engine.overlays }); return engine.overlays; };
+  engine.setOverlays = (value) => { validateOverlayPatch(value); for (const key of Object.keys(value)) { if (typeof value[key] === 'object') Object.assign(engine.overlays[key], value[key]); else engine.overlays[key] = value[key].trim(); } engine.previews.restartProgram(); engine.emit('overlay.changed', { overlays: engine.overlays }); return engine.overlays; };
   engine.getMetrics = () => { const audioAt = engine.audioProbe.status().lastAudioAt; const age = engine.videoAgeMs(); return { video_fps: engine.lastProgress.fps || null, encode_fps: engine.lastProgress.fps || null, output_bitrate: engine.lastProgress.bitrate || null, dropped_frames: null, source_bitrate: null, last_video_timestamp: engine.lastFreshVideoAt, video_age_ms: age, source_age_seconds: age === null ? null : age / 1000, last_audio_timestamp: audioAt, audio_age_ms: audioAt ? Math.max(0, Date.now()-Date.parse(audioAt)) : null, av_delta_ms: null, reconnect_count: engine.retryCount, unavailable: ['dropped_frames', 'source_bitrate', 'av_delta_ms'] }; };
   engine.healthTimer = setInterval(() => { if (!engine.recordingRequested || !engine.lastFreshVideoAt) return; const age = engine.videoAgeMs(); const health = engine.config.sourceHealth; if (age >= health.lostAfterMs) engine.setSourceState('SOURCE_LOST', `no fresh video for ${Math.round(age)}ms`); else if (age >= health.staleAfterMs) engine.setSourceState('SOURCE_STALE', `no fresh video for ${Math.round(age)}ms`); }, 250);
   engine.ownershipPath = path.join(root, 'runtime', 'output-ownership.json');
@@ -186,7 +195,7 @@ function enableMilestone2(engine, root) {
   engine.lockHolder = null;
   engine.startLockHolder = () => { if (engine.lockHolder) throw new Error('test lock holder already running'); engine.releaseTestOwnership(); const helper=path.join(root,'test','lock-holder.js'); engine.lockHolder=childProcess.spawn(process.execPath,[helper,engine.ownershipPath],{windowsHide:true,stdio:'ignore'}); return { pid:engine.lockHolder.pid }; };
   engine.crashLockHolder = () => { if (!engine.lockHolder) throw new Error('test lock holder is not running'); engine.lockHolder.kill('SIGKILL'); engine.lockHolder=null; return { crashed:true }; };
-  const priorStatus = engine.status.bind(engine); engine.status = () => ({ ...priorStatus(), stateRevision: engine.stateRevision, transport_state: engine.transportState, source_state: engine.sourceState, previews: engine.previews.status(), overlays: engine.overlays, audio: engine.audioProbe.status(), metrics: engine.getMetrics(), session: engine.session, ownership: engine.ownership(), privateOutput: engine.privateOutput.status(), cleanSink: engine.cleanSink.status() });
+  const priorStatus = engine.status.bind(engine); engine.status = () => ({ ...priorStatus(), stateRevision: engine.stateRevision, transport_state: engine.transportState, source_state: engine.sourceState, previews: engine.previews.status(), overlays: engine.overlays, audio: engine.audioProbe.status(), metrics: engine.getMetrics(), session: engine.session, ownership: engine.ownership(), privateOutput: engine.privateOutput.status(), cleanSink: engine.cleanSink.status(), formats: { source: engine.inputVideo || null, program: { width: engine.config.source.width, height: engine.config.source.height, fps: engine.config.source.fps, codec: engine.config.encoder.codec, bitrateKbps: engine.config.encoder.bitrateKbps, basis: 'configured_encoder_canvas' }, monitor: { width: 640, height: 360, fps: 30, basis: 'configured_private_monitor' } }, composition: { id: engine.compositionId(), source: 'nick', policy: 'compose_at_program_resolution_then_downscale_monitor' } });
   return { html };
 }
 
